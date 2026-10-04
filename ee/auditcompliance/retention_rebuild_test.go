@@ -129,6 +129,33 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 		}
 	}
 	assertCheckpoint("live")
+	assertAuditReadback := func(stage string) {
+		t.Helper()
+		records, err := svc.Search(ctx, audit.Query{TenantID: scope})
+		if err != nil || len(records) != 1 || records[0].Type != audit.EventTypeArchived || records[0].TenantID != scope {
+			t.Fatalf("%s scoped audit search = %+v, err = %v", stage, records, err)
+		}
+		if _, err := svc.VerifyChain(ctx, scope); err != nil {
+			t.Fatalf("%s scoped audit chain: %v", stage, err)
+		}
+		signed, err := svc.Export(ctx, audit.Query{TenantID: scope})
+		if err != nil {
+			t.Fatalf("%s scoped audit export: %v", stage, err)
+		}
+		bundle, err := audit.VerifyBundle(signed, key.JWKS())
+		if err != nil || bundle.TenantID != scope || bundle.Count != 1 || bundle.PrevHash == "" {
+			t.Fatalf("%s scoped audit export = %+v, err = %v", stage, bundle, err)
+		}
+	}
+	assertAuditReadback("live")
+	if _, err := st.SystemPool().Exec(ctx, `TRUNCATE audit_checkpoints`); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("catch up legacy archive checkpoint: %v", err)
+	}
+	assertCheckpoint("catch-up")
+	assertAuditReadback("catch-up")
 	if _, err := st.SystemPool().Exec(ctx, `TRUNCATE audit_checkpoints`); err != nil {
 		t.Fatal(err)
 	}
@@ -136,6 +163,21 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 		t.Fatalf("rebuild legacy archive checkpoint: %v", err)
 	}
 	assertCheckpoint("replayed")
+	assertAuditReadback("replayed")
+}
+
+func TestLegacyAdministrativeAuditScopeRejectsUnknownCoreEvent(t *testing.T) {
+	ctx := context.Background()
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
+	if _, err := log.Append(ctx, events.Event{
+		Type: "identity.issued", TenantID: "provider-control-plane",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).ProjectCatchUp(ctx, log); err == nil {
+		t.Fatal("unknown core event under textual Provider audit scope bypassed tenant isolation")
+	}
 }
 
 func TestAuditRetentionRebuildRejectsLostSourceBeforeReadModelMutation(t *testing.T) {

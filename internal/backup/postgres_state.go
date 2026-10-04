@@ -416,9 +416,10 @@ func latestAuditCheckpointBoundaries(rows []json.RawMessage) ([]AuditCheckpointB
 	latest := make(map[string]AuditCheckpointBoundary)
 	for index, raw := range rows {
 		var row struct {
-			TenantID    string `json:"tenant_id"`
-			BoundarySeq int64  `json:"boundary_seq"`
-			RecordCount int64  `json:"record_count"`
+			TenantID    string  `json:"tenant_id"`
+			ScopeID     *string `json:"scope_id"`
+			BoundarySeq int64   `json:"boundary_seq"`
+			RecordCount int64   `json:"record_count"`
 		}
 		if err := json.Unmarshal(raw, &row); err != nil {
 			return nil, fmt.Errorf("backup: decode audit_checkpoints row %d: %w", index+1, err)
@@ -426,12 +427,23 @@ func latestAuditCheckpointBoundaries(rows []json.RawMessage) ([]AuditCheckpointB
 		if row.TenantID == "" || row.BoundarySeq <= 0 || row.RecordCount <= 0 {
 			return nil, fmt.Errorf("backup: audit_checkpoints row %d is incomplete", index+1)
 		}
+		// PostgreSQL stores a historical textual audit scope under a derived UUID
+		// for RLS. The event backup still carries the original immutable scope.
+		// Source-continuity proof must count that event scope, while rejecting a
+		// row that claims an unrelated scope under another RLS partition.
+		scope := row.TenantID // pre-scope_id UUID tenant checkpoint
+		if row.ScopeID != nil {
+			scope = *row.ScopeID
+		}
+		if scope == "" || store.AuditCheckpointRLSID(scope) != row.TenantID {
+			return nil, fmt.Errorf("backup: audit_checkpoints row %d storage tenant does not match event scope", index+1)
+		}
 		candidate := AuditCheckpointBoundary{
-			TenantID: row.TenantID, BoundarySeq: uint64(row.BoundarySeq),
+			TenantID: scope, BoundarySeq: uint64(row.BoundarySeq),
 			RecordCount: int(row.RecordCount),
 		}
-		if prior, ok := latest[row.TenantID]; !ok || candidate.BoundarySeq > prior.BoundarySeq {
-			latest[row.TenantID] = candidate
+		if prior, ok := latest[scope]; !ok || candidate.BoundarySeq > prior.BoundarySeq {
+			latest[scope] = candidate
 		}
 	}
 	out := make([]AuditCheckpointBoundary, 0, len(latest))
@@ -1261,6 +1273,10 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// a partial restore reads as a working plane that refuses some
 		// operators rather than as an incomplete restore.
 		"provider_operator_delegations",
+		// Append-only grant episodes are an audit view, not live permission.
+		// Restore them with the tuple projection so the operator can inspect
+		// superseded grants even if the licensed projector is absent on boot.
+		"provider_operator_grant_episodes",
 		// L3: the provider tenant registry. No foreign key requires it, but the
 		// registry restores before the break-glass ledger that scopes to its
 		// tenants, and with the other provider authority data: a missing

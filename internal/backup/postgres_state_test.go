@@ -11,7 +11,52 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestPostgresBackupCheckpointUsesLegacyEventScopeForRestoreProof(t *testing.T) {
+	ctx := context.Background()
+	const scope = "provider-control-plane"
+	storageTenant := store.AuditCheckpointRLSID(scope)
+	row, err := json.Marshal(map[string]any{
+		"tenant_id": storageTenant, "scope_id": scope,
+		"boundary_seq": 1, "record_count": 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundaries, err := latestAuditCheckpointBoundaries([]json.RawMessage{row})
+	if err != nil || len(boundaries) != 1 || boundaries[0].TenantID != scope {
+		t.Fatalf("backup checkpoint boundaries = %+v, err = %v; want original event scope", boundaries, err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	if _, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: scope}); err != nil {
+		t.Fatal(err)
+	}
+	var saved bytes.Buffer
+	if _, err := WriteLog(ctx, log, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyEventLogBackupWithAuditCheckpoints(bytes.NewReader(saved.Bytes()), nil, boundaries); err != nil {
+		t.Fatalf("complete legacy Provider archive rejected for restore: %v", err)
+	}
+
+	for _, bad := range []json.RawMessage{
+		json.RawMessage(`{"tenant_id":"` + storageTenant + `","scope_id":"unrelated-scope","boundary_seq":1,"record_count":1}`),
+		json.RawMessage(`{"tenant_id":"` + storageTenant + `","scope_id":"","boundary_seq":1,"record_count":1}`),
+	} {
+		if _, err := latestAuditCheckpointBoundaries([]json.RawMessage{bad}); err == nil {
+			t.Fatalf("backup accepted storage/scope mismatch: %s", bad)
+		}
+	}
+}
 
 func TestPostgresStateRestoreOrderReturnsErrors(t *testing.T) {
 	order, err := postgresStateRestoreOrder()

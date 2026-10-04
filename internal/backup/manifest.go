@@ -161,6 +161,11 @@ var RecoveredFromPostgresBackup = []string{
 	// grants did not come back". Failing safe is not the same as failing
 	// visibly.
 	"provider_operator_delegations",
+	// Grant episodes are an event-projected history view in the fixed Provider
+	// authority partition. Keep the SQL copy beside delegations for a full
+	// restore that boots core before the licensed Provider projector attaches.
+	// Dropping it would hide superseded grants from the operator's audit view.
+	"provider_operator_grant_episodes",
 	// Provider's licensed projection can rebuild completion receipts and upgrade
 	// state from captured history. A full restore may initially run without that
 	// projection, so preserve them alongside the authority rows: losing receipts

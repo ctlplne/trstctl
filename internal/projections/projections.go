@@ -3126,7 +3126,10 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 }
 
 func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
-	if events.IsLegacyProviderGlobalAudit(e) {
+	// Legacy Provider events without a tenant UUID have no tenant read model.
+	// audit.archived is the exception: it seals the served audit boundary and
+	// must rebuild under its dedicated UUID RLS partition.
+	if events.IsLegacyProviderCoreProjectionNoop(e) {
 		return ValidateSchemaVersion(e)
 	}
 	if e.Type == EventTenantRegistered {
@@ -7460,7 +7463,7 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 //     rebuilt from the log.
 //   - everything else    -> set the tenant GUC on the tx, then ApplyTx.
 func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Event) error {
-	if events.IsLegacyProviderGlobalAudit(e) {
+	if events.IsLegacyProviderCoreProjectionNoop(e) {
 		return ValidateSchemaVersion(e)
 	}
 	switch e.Type {

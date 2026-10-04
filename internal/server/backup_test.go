@@ -285,6 +285,49 @@ func TestBackupHistoryReadRejectsLegacyCheckpointedPruneWithoutDeletingMore(t *t
 	}
 }
 
+func TestBackupHistoryReadAcceptsRetainedLegacyProviderArchiveScope(t *testing.T) {
+	ctx := context.Background()
+	const scope = "provider-control-plane"
+	log, err := events.Open(ctx, config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	old, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: scope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = log.Append(ctx, events.Event{Type: audit.EventTypeArchived, TenantID: scope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoints := &backupCheckpointSource{byTenant: map[string]audit.Checkpoint{
+		scope: {TenantID: scope, BoundarySeq: old.Sequence, BoundaryHash: "signed-archive-head", RecordCount: 1, ArchiveURI: "memory://legacy-provider-archive"},
+	}}
+	called := false
+	if err := withRecoveredBackupHistoryRead(ctx, log, checkpoints, func(readCtx context.Context) error {
+		called = true
+		seen := 0
+		if err := log.Replay(readCtx, old.Sequence, func(event events.Event) error {
+			seen++
+			if event.TenantID != scope || (seen == 1 && event.Sequence != old.Sequence) {
+				return errors.New("backup changed the legacy Provider partition")
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if seen != 2 {
+			return fmt.Errorf("backup kept %d of 2 legacy Provider events", seen)
+		}
+		return nil
+	}); err != nil || !called || len(checkpoints.queried) != 1 || checkpoints.queried[0] != scope {
+		t.Fatalf("legacy Provider backup history: called=%v queried=%v err=%v", called, checkpoints.queried, err)
+	}
+}
+
 type backupCheckpointSource struct {
 	byTenant map[string]audit.Checkpoint
 	queried  []string
