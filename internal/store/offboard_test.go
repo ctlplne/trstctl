@@ -87,7 +87,7 @@ func newStore(t *testing.T) *store.Store {
 		`TRUNCATE approved_target_event_fences, code_signing_operations,
 		          application_secret_mutation_fences,
 		          application_secret_tenant_epochs, application_secret_mutation_receipts,
-		          privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
+		          privacy_subject_erasures, privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
 		          secret_rotation_schedule_ticks, tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics, migration_runs,
@@ -107,7 +107,7 @@ func newStore(t *testing.T) *store.Store {
 		          secret_rotation_schedule_scan_cursors, secret_rotation_schedule_commands, secret_rotation_schedules, read_model_snapshots,
 			          operation_approval_decisions, operation_approval_requests,
 			          issuance_approval_requests, issuance_approvals,
-			          access_change_requests, access_change_request_decisions, compliance_report_schedules
+			          access_change_requests, access_change_request_decisions, compliance_report_runs, compliance_report_schedules
 			 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
