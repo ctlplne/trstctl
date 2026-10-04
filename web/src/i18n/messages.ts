@@ -11821,6 +11821,10 @@ export const messages = {
     defaultMessage: "Next run",
     description: "Compliance report schedule table heading for next run time.",
   },
+  "policy.reporting.noDueWhilePaused": {
+    defaultMessage: "Paused — no run due",
+    description: "Paused compliance report schedule has no active next run, even if a stored timestamp remains.",
+  },
   "policy.reporting.empty": {
     defaultMessage: "No report schedules yet.",
     description: "Empty state for compliance report schedules.",

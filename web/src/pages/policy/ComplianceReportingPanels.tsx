@@ -80,7 +80,7 @@ export function ComplianceInventoryReportPanel({
                   <td>{schedule.framework}</td>
                   <td>{reportTypeLabel(schedule.report_type, t)}</td>
                   <td>{formatScheduleCadence(schedule.interval_seconds)}</td>
-                  <td>{formatDateTime(schedule.next_run_at)}</td>
+                  <td>{schedule.enabled ? formatDateTime(schedule.next_run_at) : t("policy.reporting.noDueWhilePaused")}</td>
                   <td>
                     <Button type="button" variant="outline" onClick={() => onToggleSchedule(schedule)} disabled={scheduleAction !== null}>
                       {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`

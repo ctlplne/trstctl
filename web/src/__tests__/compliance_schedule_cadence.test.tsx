@@ -57,4 +57,14 @@ describe("compliance report schedule cadence and due time", () => {
     expect(formatScheduleCadence(90061)).toBe("1d 1h 1m 1s");
     expect(formatScheduleCadence(0)).toBe("-");
   });
+
+  it("does not promise a next run while the schedule is paused", () => {
+    const paused = { ...hourly, enabled: false };
+    render(<ComplianceInventoryReportPanel report={report} schedules={[paused]} scheduleAction={null} onToggleSchedule={() => {}} />);
+    const row = screen.getByText("Hourly signed pack").closest("tr");
+    expect(row).not.toBeNull();
+    const cells = within(row!).getAllByRole("cell");
+    expect(cells[4]).toHaveTextContent("Paused — no run due");
+    expect(cells[4]).not.toHaveTextContent(/Oct 4, 2026/);
+  });
 });
