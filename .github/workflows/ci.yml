@@ -1534,6 +1534,26 @@ jobs:
           docker run --rm --entrypoint /usr/local/bin/trstctl trstctl:ci-fips --check-config \
             | grep -qx 'crypto.fips.module_active: true'
 
+      # The final distroless stage copies only the four stripped binaries and
+      # empty owned mount points. Build tools, npm, Go caches, and source files
+      # remain in earlier stages. Measure the exported runtime filesystem so
+      # compressed-layer retention in Docker's containerd store cannot change
+      # the result across builders. The trimmed amd64 export was 141838848
+      # bytes; +5% is 148930790 bytes, below the owner's 180 MB cap.
+      # This is separate from release.yml's unchanged 80 MiB standard image gate.
+      - name: FIPS image size budget
+        env:
+          MAX_FIPS_IMAGE_BYTES: "148930790"
+        run: |
+          container="$(docker create trstctl:ci-fips)"
+          trap 'docker rm "$container" >/dev/null' EXIT
+          size="$(docker export "$container" | wc -c | tr -d ' ')"
+          echo "FIPS runtime image payload: ${size} bytes (budget ${MAX_FIPS_IMAGE_BYTES})"
+          if [ "$size" -gt "$MAX_FIPS_IMAGE_BYTES" ]; then
+            echo "::error::FIPS runtime image payload is ${size} bytes, over its ${MAX_FIPS_IMAGE_BYTES}-byte budget"
+            exit 1
+          fi
+
   windows:
     name: windows / test + MSI
     runs-on: windows-latest

@@ -2,7 +2,10 @@
 
 # trstctl control-plane image.
 #
-# Reproducible, minimal (distroless "static", under 80 MB), and
+# Reproducible and minimal: distroless "static" with separate standard-image
+# and FIPS-image size gates in CI. The standard release budget is 80 MiB;
+# the FIPS image carries the regulated Go module and has its own 180 MB cap.
+# Both run
 # unprivileged. It carries the control plane, the isolated signing service
 # (AN-4), the in-network agent, AND the Kubernetes Operator: in single-node mode
 # trstctl supervises trstctl-signer as a child process; the Kubernetes
@@ -36,7 +39,10 @@ COPY . /context
 # ---- web build stage ------------------------------------------------------
 # Build the React console from the same source context as the Go binaries. The
 # Go embed below must never freeze a stale, previously generated dist directory.
-FROM ${WEB_BUILD_IMAGE} AS web-build
+# Run build tools on the builder's native architecture. GOOS/GOARCH below
+# select the target for the shipped binaries; cross-image builds should not
+# emulate Node and the Go compiler for every source file.
+FROM --platform=$BUILDPLATFORM ${WEB_BUILD_IMAGE} AS web-build
 WORKDIR /src
 
 # Keep npm's dependency layer independent of application-source changes.
@@ -50,7 +56,7 @@ COPY . .
 RUN npm --prefix web run build
 
 # ---- build stage ----------------------------------------------------------
-FROM ${BUILD_IMAGE} AS build
+FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS build
 WORKDIR /src
 
 # Resolve modules first so they cache independently of source changes.
@@ -96,8 +102,10 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstc
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-agent    ./cmd/trstctl-agent
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-operator ./cmd/trstctl-operator
 RUN if [ "${GOFIPS140}" != "off" ]; then \
-      /out/trstctl --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
-        || { echo 'FIPS image control plane did not activate the Go module' >&2; exit 1; }; \
+      if [ "${TARGETOS}/${TARGETARCH}" = "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" ]; then \
+        /out/trstctl --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
+          || { echo 'FIPS image control plane did not activate the Go module' >&2; exit 1; }; \
+      fi; \
       for binary in trstctl trstctl-signer trstctl-agent trstctl-operator; do \
         go version -m "/out/${binary}" | grep -Fq "GOFIPS140=${GOFIPS140}" \
           || { echo "FIPS image ${binary} lacks the selected Go module" >&2; exit 1; }; \
