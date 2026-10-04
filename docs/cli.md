@@ -113,6 +113,9 @@ offline verifiers reject the added selector even when the signature is valid.
 does not need `TRSTCTL_SERVER`, a token, or a running control plane. It verifies
 the canonical JWS envelope and the exact CSV, NDJSON, Splunk HEC (`splunk-hec`),
 and Microsoft Sentinel (`sentinel`) record-stream shapes served by `audit export`.
+It also verifies signed retention archive files with explicit `--format
+retention-jws`; these files are a different signer domain from interactive
+exports, so automatic format detection never treats one as the other.
 
 A JWS export accepts at most 512 KiB of serialized audit payload. Larger queries
 return HTTP 413 with code `audit_export_too_large`. Choose `--format ndjson` to
@@ -154,6 +157,31 @@ record chain and signed head. It does not establish an independent time or prove
 that the selected export contains every tenant event. The verifier supplies its
 own `anchor_detail`; explanatory text carried by the file is not a trust input.
 The unsigned CSV/JSON record streams cannot use this signature-only path.
+
+Verify an archived retention segment recovered from the configured archive
+directory with the separately pinned audit JWK set:
+
+```bash
+trstctl-cli audit verify --artifact audit-00000000000000000120.jws \
+  --format retention-jws --audit-jwks audit.jwks.json \
+  --expected-tenant <tenant-id>
+
+# For the next segment, copy chain_head from the preceding verified receipt.
+trstctl-cli audit verify --artifact audit-00000000000000000240.jws \
+  --format retention-jws --audit-jwks audit.jwks.json \
+  --expected-tenant <tenant-id> --previous-head <verified-prior-head>
+```
+
+The receipt identifies the tenant, first and last tenant-local sequences,
+record count, previous hash and signed chain head. It verifies the archive
+signature, record links, sequence continuity within the segment and tenant
+scope. To prove two segments connect, supply the preceding verified
+`chain_head` as `--previous-head`; independently keep the expected tenant and
+the ordered archive inventory. A single segment cannot prove that no earlier
+or later segment is missing. Retention archives carry no independent timestamp:
+the receipt reports `anchor_verified: false`, and timestamp-policy flags are
+rejected rather than silently reported as verified. Obtain a separately
+timestamped export when an external time assertion is required.
 
 Use `--require-anchor` when your workflow requires timestamp evidence. Supplying
 `--tsa-root` or a positive `--max-anchor-delay` also requires an anchor. An explicitly

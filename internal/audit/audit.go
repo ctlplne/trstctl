@@ -447,7 +447,25 @@ func VerifyBundle(signed string, keys *jose.JWKSet) (Bundle, error) {
 // domain. Retention and interactive exports share a payload schema but are not
 // interchangeable statements.
 func VerifyRetentionBundle(signed string, keys *jose.JWKSet) (Bundle, error) {
-	return verifyBundle(signed, keys, jose.ArtifactAuditRetention)
+	b, err := verifyBundle(signed, keys, jose.ArtifactAuditRetention)
+	if err != nil {
+		return Bundle{}, err
+	}
+	if b.TenantID == "" || b.Query.TenantID != b.TenantID {
+		return Bundle{}, errors.New("audit: retention bundle has an inconsistent tenant scope")
+	}
+	if b.Count == 0 || b.Count != len(b.Records) {
+		return Bundle{}, errors.New("audit: retention bundle record count does not match its records")
+	}
+	for i, r := range b.Records {
+		if r.TenantID != b.TenantID {
+			return Bundle{}, errors.New("audit: retention bundle contains a foreign tenant record")
+		}
+		if r.Sequence == 0 || (i > 0 && r.Sequence != b.Records[i-1].Sequence+1) {
+			return Bundle{}, errors.New("audit: retention bundle records are not a contiguous tenant sequence")
+		}
+	}
+	return b, nil
 }
 
 func verifyBundle(signed string, keys *jose.JWKSet, artifact string) (Bundle, error) {

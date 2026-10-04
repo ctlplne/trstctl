@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -22,8 +23,10 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 	fs := flag.NewFlagSet("trstctl audit verify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	artifactPath := fs.String("artifact", "-", "saved audit export path, or - for stdin")
-	formatName := fs.String("format", string(auditanchor.FormatAuto), "artifact format: auto, jws, ndjson, csv, splunk-hec, or sentinel")
+	formatName := fs.String("format", string(auditanchor.FormatAuto), "artifact format: auto, jws, retention-jws, ndjson, csv, splunk-hec, or sentinel")
 	auditJWKSPath := fs.String("audit-jwks", "", "separately pinned audit signing public JWK set (required for jws)")
+	expectedTenant := fs.String("expected-tenant", "", "expected tenant scope of a retention archive")
+	previousHead := fs.String("previous-head", "", "verified chain head of the preceding retention archive")
 	tsaRootPath := fs.String("tsa-root", "", "separately pinned TSA root certificate in PEM or DER form")
 	requireAnchor := fs.Bool("require-anchor", false, "require an independently verified external timestamp; needs --tsa-root")
 	maxAnchorDelay := fs.Duration("max-anchor-delay", 0, "optional maximum delay between the newest record and its authority timestamp")
@@ -58,7 +61,16 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 	}
 
 	format := auditanchor.Format(strings.ToLower(strings.TrimSpace(*formatName)))
-	if format != auditanchor.FormatAuto {
+	retention := format == "retention-jws"
+	if !retention && (strings.TrimSpace(*expectedTenant) != "" || strings.TrimSpace(*previousHead) != "") {
+		_, _ = fmt.Fprintln(stderr, "error: --expected-tenant and --previous-head require --format retention-jws")
+		return 2
+	}
+	if retention && (tsaRootSupplied || *requireAnchor || *maxAnchorDelay != 0) {
+		_, _ = fmt.Fprintln(stderr, "error: retention archives are signed but unanchored; timestamp policy cannot be applied to them")
+		return 2
+	}
+	if !retention && format != auditanchor.FormatAuto {
 		parsed, err := auditanchor.ParseFormat(string(format))
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
@@ -92,6 +104,46 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 		if err != nil {
 			return auditVerifyFailure(stderr, fmt.Errorf("parse audit JWK set: %w", err))
 		}
+	}
+	if retention {
+		if auditKeys == nil {
+			_, _ = fmt.Fprintln(stderr, "error: --audit-jwks is required for a retention archive")
+			return 2
+		}
+		bundle, err := audit.VerifyRetentionBundle(strings.TrimSpace(string(artifact)), auditKeys)
+		if err != nil {
+			return auditVerifyFailure(stderr, err)
+		}
+		if *expectedTenant != "" && bundle.TenantID != *expectedTenant {
+			return auditVerifyFailure(stderr, fmt.Errorf("archive tenant %q differs from expected tenant %q", bundle.TenantID, *expectedTenant))
+		}
+		if *previousHead != "" && bundle.PrevHash != *previousHead {
+			return auditVerifyFailure(stderr, fmt.Errorf("archive previous head differs from the independently verified preceding head"))
+		}
+		receipt := struct {
+			ArtifactType           string `json:"artifact_type"`
+			TenantID               string `json:"tenant_id"`
+			Count                  int    `json:"count"`
+			FirstSequence          uint64 `json:"first_sequence"`
+			LastSequence           uint64 `json:"last_sequence"`
+			PrevHash               string `json:"prev_hash"`
+			ChainHead              string `json:"chain_head"`
+			AuditSignatureVerified bool   `json:"audit_signature_verified"`
+			ChainVerified          bool   `json:"chain_verified"`
+			AnchorVerified         bool   `json:"anchor_verified"`
+		}{
+			ArtifactType: "audit.retention", TenantID: bundle.TenantID, Count: bundle.Count,
+			FirstSequence: bundle.Records[0].Sequence, LastSequence: bundle.Records[len(bundle.Records)-1].Sequence,
+			PrevHash: bundle.PrevHash, ChainHead: bundle.ChainHead,
+			AuditSignatureVerified: true, ChainVerified: true,
+		}
+		encoded, err := json.MarshalIndent(receipt, "", "  ")
+		if err != nil {
+			return auditVerifyFailure(stderr, fmt.Errorf("encode verification receipt: %w", err))
+		}
+		_, _ = stdout.Write(encoded)
+		_, _ = fmt.Fprintln(stdout)
+		return 0
 	}
 
 	result, err := auditanchor.VerifyArtifact(artifact, auditanchor.VerificationOptions{
@@ -154,9 +206,10 @@ func auditVerifyFailure(stderr io.Writer, err error) int {
 }
 
 func auditVerifyUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: trstctl audit verify --artifact <file|-> [--tsa-root <root.pem|root.der>] [--require-anchor] [--audit-jwks <audit.jwks.json>] [--format auto|jws|ndjson|csv|splunk-hec|sentinel] [--max-anchor-delay 24h]")
+	_, _ = fmt.Fprintln(w, "Usage: trstctl audit verify --artifact <file|-> [--tsa-root <root.pem|root.der>] [--require-anchor] [--audit-jwks <audit.jwks.json>] [--format auto|jws|retention-jws|ndjson|csv|splunk-hec|sentinel] [--max-anchor-delay 24h]")
 	_, _ = fmt.Fprintln(w, "\nVerify a saved audit export completely offline. The TSA root may be PEM or DER. The audit JWK set and TSA root are external trust inputs; keys carried only by an artifact are never trusted.")
 	_, _ = fmt.Fprintln(w, "\nPlain JWS exports need --audit-jwks and report signature/chain verification without an external timestamp. Timestamped exports and record streams require --tsa-root. --require-anchor, a supplied TSA root, or a positive --max-anchor-delay refuses unanchored evidence; timestamp failures never fall back to signature-only verification.")
 	_, _ = fmt.Fprintln(w, "\nPlain export: trstctl audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json")
+	_, _ = fmt.Fprintln(w, "\nRetention archive: trstctl audit verify --artifact audit-00001.jws --format retention-jws --audit-jwks audit.jwks.json --expected-tenant <tenant-id> [--previous-head <verified-prior-head>]. A retention receipt has no independent timestamp; use a separately timestamped export when your policy requires one.")
 	_, _ = fmt.Fprintln(w, "\nExample: trstctl audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json --tsa-root tsa-root.pem --max-anchor-delay 24h")
 }

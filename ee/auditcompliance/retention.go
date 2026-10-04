@@ -28,8 +28,8 @@ type Archiver interface {
 
 // DirArchiver writes each segment as <dir>/<tenant>/audit-<boundarySeq>.jws with
 // owner-only permissions. The file is a compact JWS — the offline-verifiable
-// evidence an auditor recovers and checks with VerifyBundle and the service's
-// verification keys.
+// evidence an auditor recovers and checks with VerifyRetentionBundle and a
+// separately pinned copy of the service's verification keys.
 type DirArchiver struct{ Dir string }
 
 // Archive writes the signed bundle and returns its path.
