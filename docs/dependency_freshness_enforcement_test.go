@@ -113,12 +113,10 @@ func TestDependencyFreshnessFailsWhenBehindSinceExceedsTheClassBudget(t *testing
 // a hard failure rather than an unmeasurable row that passes.
 func TestDependencyFreshnessRejectsANonCurrentRowWithNoBehindSince(t *testing.T) {
 	body := mutateFreshnessReport(t, func(row map[string]any) bool {
-		if row["name"] != "github.com/open-policy-agent/opa" {
+		if row["name"] != "github.com/fergusstrange/embedded-postgres" {
 			return false
 		}
-		if row["status"] == "current" {
-			t.Fatalf("CODE-111: this guard assumes the OPA row is not yet current, status=%v", row["status"])
-		}
+		row["status"] = "planned"
 		delete(row, "behind_since")
 		return true
 	})
@@ -354,6 +352,7 @@ func TestFreshnessRejectsAReviewScheduledAfterItsDeferralLapses(t *testing.T) {
 			return false
 		}
 		row["status"] = "accepted_deferral"
+		row["behind_since"] = time.Now().UTC().AddDate(0, 0, -10).Format(time.DateOnly)
 		row["deferral_until"] = until
 		row["next_review_by"] = late
 		return true

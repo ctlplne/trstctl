@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,9 +13,11 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/reportarchive"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -100,6 +103,52 @@ func (a *API) BuildScheduledComplianceArtifact(ctx context.Context, tenantID str
 		return nil, err
 	}
 	return signer.SignScheduledManifest(ctx, manifest)
+}
+
+// VerifyScheduledComplianceArtifact checks the purpose-bound current key for
+// an uncommitted archive candidate, and checks the signature plus due-edge
+// binding for every read. A completed event already pins the exact archive
+// digest, so older signed reports survive an authorized signing-key rotation.
+func (a *API) VerifyScheduledComplianceArtifact(artifact []byte, run store.ComplianceReportRun) error {
+	if a == nil {
+		return errors.New("compliance: scheduled-report verifier is unavailable")
+	}
+	var currentKey []byte
+	if run.Status != "completed" {
+		signer, ok := a.complianceEvidence.(ComplianceScheduledSigner)
+		if !ok {
+			return errors.New("compliance: scheduled-report verifier is not attached")
+		}
+		currentKey = signer.ScheduledVerificationKeyDER()
+	} else {
+		ref, err := reportarchive.Reference(run.TenantID, run.ID, run.ArtifactDigest)
+		if err != nil || ref != run.ArtifactRef || crypto.SHA256Hex(artifact) != run.ArtifactDigest {
+			return errors.New("compliance: completed report artifact differs from the event-backed digest")
+		}
+	}
+	var envelope struct {
+		Manifest     json.RawMessage `json:"manifest"`
+		Signature    []byte          `json:"signature"`
+		PublicKeyDER []byte          `json:"public_key_der"`
+	}
+	if len(artifact) == 0 || !json.Valid(artifact) || json.Unmarshal(artifact, &envelope) != nil ||
+		len(envelope.Manifest) == 0 || len(envelope.Signature) == 0 || len(envelope.PublicKeyDER) == 0 ||
+		(run.Status != "completed" && !bytes.Equal(envelope.PublicKeyDER, currentKey)) {
+		return errors.New("compliance: scheduled artifact has no trusted signing envelope")
+	}
+	if err := crypto.VerifyMessage(envelope.PublicKeyDER, envelope.Manifest, envelope.Signature); err != nil {
+		return fmt.Errorf("compliance: scheduled artifact signature: %w", err)
+	}
+	var manifest ScheduledComplianceManifest
+	if err := json.Unmarshal(envelope.Manifest, &manifest); err != nil ||
+		manifest.Format != ScheduledComplianceReportFormat ||
+		manifest.TenantID != run.TenantID || manifest.ScheduleID != run.ScheduleID ||
+		manifest.RunID != run.ID || !manifest.DueAt.Equal(run.DueAt) ||
+		manifest.Framework != run.Framework || manifest.ReportType != run.ReportType ||
+		manifest.GeneratedAt.IsZero() || len(manifest.Payload) == 0 || !json.Valid(manifest.Payload) {
+		return errors.New("compliance: scheduled artifact does not match the exact report due edge")
+	}
+	return nil
 }
 
 func (a *API) scheduledCompliancePayload(ctx context.Context, tenantID string, schedule store.ComplianceReportSchedule, framework ComplianceFramework) (json.RawMessage, error) {

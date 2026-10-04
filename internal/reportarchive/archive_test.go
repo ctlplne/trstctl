@@ -4,6 +4,7 @@ package reportarchive_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,6 +40,12 @@ func TestArchiveRetainsExactSignedBytesAndRefusesTamper(t *testing.T) {
 		t.Fatal("another tenant read the report")
 	}
 	path := filepath.Join(root, ref)
+	if err := os.Truncate(path, reportarchive.MaxArtifactBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := archive.Read(tenantID, runID, digest); !errors.Is(err, reportarchive.ErrArtifactTooLarge) {
+		t.Fatalf("oversized artifact read = %v, want ErrArtifactTooLarge", err)
+	}
 	if err := os.WriteFile(path, []byte(`{"signed_export":"altered"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}

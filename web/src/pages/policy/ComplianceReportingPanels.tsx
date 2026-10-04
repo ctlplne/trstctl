@@ -1,8 +1,10 @@
+import { Fragment, useState } from "react";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
-import type { ComplianceInventoryReport, ComplianceReportSchedule, NHIComplianceReport } from "@/lib/api";
+import { api, type ComplianceInventoryReport, type ComplianceReportSchedule, type NHIComplianceReport } from "@/lib/api";
+import { useApiQuery, useQueryClient } from "@/lib/query";
 
 const reportTypeMessageKeys: Record<string, MessageKey> = {
   inventory_snapshot: "policy.reportType.inventorySnapshot",
@@ -25,6 +27,7 @@ export function ComplianceInventoryReportPanel({
 }) {
   const { formatDate, formatDateTime, t } = useTranslation();
   const rows = schedules.length > 0 ? schedules : report.schedules;
+  const [expandedSchedule, setExpandedSchedule] = useState<string | null>(null);
 
   return (
     <section aria-labelledby="compliance-inventory-report-heading" className="ui-panel min-w-0 p-comfortable text-sm">
@@ -74,30 +77,48 @@ export function ComplianceInventoryReportPanel({
               {rows.map((schedule) => {
                 const overdue = scheduleOverdueAtReportTime(schedule, report.generated_at);
                 return (
-                  <tr key={schedule.id}>
-                    <td>
-                      <p className="font-medium">{schedule.name}</p>
-                      {schedule.recipient_ref && <p className="mt-1 font-mono text-xs text-muted-foreground">{schedule.recipient_ref}</p>}
-                    </td>
-                    <td>{schedule.framework}</td>
-                    <td>{reportTypeLabel(schedule.report_type, t)}</td>
-                    <td>{formatScheduleCadence(schedule.interval_seconds)}</td>
-                    <td>
-                      {schedule.enabled ? formatDateTime(schedule.next_run_at) : t("policy.reporting.noDueWhilePaused")}
-                      {overdue && <strong className="mt-1 block text-destructive">{t("policy.reporting.overdue")}</strong>}
-                    </td>
-                    <td>
-                      <Button type="button" variant="outline" onClick={() => onToggleSchedule(schedule)} disabled={scheduleAction !== null}>
-                        {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`
-                          ? schedule.enabled
-                            ? t("policy.reporting.pausing")
-                            : t("policy.reporting.resuming")
-                          : schedule.enabled
-                            ? t("policy.reporting.pause")
-                            : t("policy.reporting.resume")}
-                      </Button>
-                    </td>
-                  </tr>
+                  <Fragment key={schedule.id}>
+                    <tr>
+                      <td>
+                        <p className="font-medium">{schedule.name}</p>
+                        {schedule.recipient_ref && <p className="mt-1 font-mono text-xs text-muted-foreground">{schedule.recipient_ref}</p>}
+                      </td>
+                      <td>{schedule.framework}</td>
+                      <td>{reportTypeLabel(schedule.report_type, t)}</td>
+                      <td>{formatScheduleCadence(schedule.interval_seconds)}</td>
+                      <td>
+                        {schedule.enabled ? formatDateTime(schedule.next_run_at) : t("policy.reporting.noDueWhilePaused")}
+                        {overdue && <strong className="mt-1 block text-destructive">{t("policy.reporting.overdue")}</strong>}
+                      </td>
+                      <td>
+                        <Button type="button" variant="outline" onClick={() => onToggleSchedule(schedule)} disabled={scheduleAction !== null}>
+                          {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`
+                            ? schedule.enabled
+                              ? t("policy.reporting.pausing")
+                              : t("policy.reporting.resuming")
+                            : schedule.enabled
+                              ? t("policy.reporting.pause")
+                              : t("policy.reporting.resume")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="ml-2"
+                          aria-expanded={expandedSchedule === schedule.id}
+                          onClick={() => setExpandedSchedule(expandedSchedule === schedule.id ? null : schedule.id)}
+                        >
+                          {t("policy.reporting.runs")}
+                        </Button>
+                      </td>
+                    </tr>
+                    {expandedSchedule === schedule.id && (
+                      <tr>
+                        <td colSpan={6}>
+                          <ScheduledReportRuns schedule={schedule} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -118,6 +139,100 @@ export function scheduleOverdueAtReportTime(schedule: ComplianceReportSchedule, 
   const due = Date.parse(schedule.next_run_at);
   const observed = Date.parse(reportGeneratedAt);
   return Number.isFinite(due) && Number.isFinite(observed) && due < observed;
+}
+
+function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule }) {
+  const { formatDateTime, t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [cursors, setCursors] = useState<string[]>([""]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const cursor = cursors[cursors.length - 1];
+  const key = ["compliance-report-runs", schedule.id, cursor];
+  const runs = useApiQuery(key, () => api.complianceReportRuns(schedule.id, { limit: 10, cursor: cursor || undefined }), { live: { intervalMs: 60_000 } });
+
+  async function act(id: string, action: "requeue" | "download") {
+    setBusy(id);
+    setNotice(null);
+    try {
+      if (action === "requeue") {
+        await api.requeueComplianceReportRun(id);
+        await queryClient.invalidateQueries({ queryKey: ["compliance-report-runs", schedule.id] });
+        setNotice(t("policy.reporting.requeued"));
+      } else {
+        setNotice(t("policy.reporting.downloaded", { filename: await api.downloadScheduledReport(id) }));
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section aria-label={t("policy.reporting.runs")} className="rounded-md border border-border bg-muted/30 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="font-semibold">{t("policy.reporting.runs")}</h4>
+        <Button type="button" variant="outline" onClick={runs.refetch}>
+          {t("policy.reporting.refreshRuns")}
+        </Button>
+      </div>
+      {runs.loading && <p role="status">{t("policy.reporting.loadingRuns")}</p>}
+      {runs.error && (
+        <p role="alert" className="text-destructive">
+          {runs.error}
+        </p>
+      )}
+      {runs.data && runs.data.items.length === 0 && <p>{t("policy.reporting.noRuns")}</p>}
+      {runs.data?.items.map((run) => (
+        <div key={run.id} className="mt-2 grid gap-2 border-t border-border pt-2 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
+          <div>
+            <strong>{formatDateTime(run.due_at)}</strong>
+            <p className="font-mono text-xs">{run.id}</p>
+          </div>
+          <div>
+            <p>{t("policy.reporting.runState", { status: run.status, attempt: run.attempt })}</p>
+            {run.error_code && <p className="text-destructive">{run.error_code}</p>}
+            {run.next_attempt_at && <p>{t("policy.reporting.retryAt", { date: formatDateTime(run.next_attempt_at) })}</p>}
+            {run.artifact_digest && (
+              <p className="break-all font-mono text-xs">
+                {t("policy.reporting.digest")}: {run.artifact_digest}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {run.status === "completed" && (
+              <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void act(run.id, "download")}>
+                {t("policy.reporting.downloadRun")}
+              </Button>
+            )}
+            {run.status === "failed" && (
+              <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void act(run.id, "requeue")}>
+                {t("policy.reporting.requeueRun")}
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="mt-2 flex gap-2">
+        {cursors.length > 1 && (
+          <Button type="button" variant="outline" onClick={() => setCursors(cursors.slice(0, -1))}>
+            {t("policy.reporting.previousRuns")}
+          </Button>
+        )}
+        {runs.data?.next_cursor && (
+          <Button type="button" variant="outline" onClick={() => setCursors([...cursors, runs.data!.next_cursor!])}>
+            {t("policy.reporting.nextRuns")}
+          </Button>
+        )}
+      </div>
+      {notice && (
+        <p role="status" className="mt-2">
+          {notice}
+        </p>
+      )}
+    </section>
+  );
 }
 
 export function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {

@@ -24,14 +24,15 @@ const (
 // Command maps a CLI invocation to one API operation, so the command set is
 // data-driven and provably at parity with the API route table.
 type Command struct {
-	Name     []string // command words, e.g. ["certificates","list"]
-	Method   string   // HTTP method
-	Path     string   // API path template, with {param} placeholders
-	Query    []string // accepted query-parameter flag names
-	Body     bodyMode
-	ReadOnly bool   // true for POST-shaped reads that accept a structured body
-	Action   string // fixed action validated for bodyApprovalFile commands
-	Summary  string
+	Name        []string // command words, e.g. ["certificates","list"]
+	Method      string   // HTTP method
+	Path        string   // API path template, with {param} placeholders
+	Query       []string // accepted query-parameter flag names
+	Body        bodyMode
+	ReadOnly    bool   // true for POST-shaped reads that accept a structured body
+	RawResponse bool   // preserve exact signed/downloaded bytes; do not pretty-print JSON
+	Action      string // fixed action validated for bodyApprovalFile commands
+	Summary     string
 	// RequestTimeout raises the default HTTP deadline for a command whose
 	// synchronous, recoverable server operation can legitimately take longer.
 	// Zero keeps the ordinary 30-second CLI bound.
@@ -377,6 +378,10 @@ var coreCommandTable = []Command{
 	{Name: []string{"compliance", "report-schedules", "list"}, Method: "GET", Path: "/api/v1/compliance/report-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled compliance and inventory reports"},
 	{Name: []string{"compliance", "report-schedules", "pause"}, Method: "POST", Path: "/api/v1/compliance/report-schedules/{id}/pause", Summary: "Pause a report schedule while retaining its definition and evidence"},
 	{Name: []string{"compliance", "report-schedules", "resume"}, Method: "POST", Path: "/api/v1/compliance/report-schedules/{id}/resume", Summary: "Resume a report schedule with a fresh full interval"},
+	{Name: []string{"compliance", "report-schedules", "runs"}, Method: "GET", Path: "/api/v1/compliance/report-schedules/{id}/runs", Query: []string{"limit", "cursor"}, Summary: "List signed-report runs for one schedule"},
+	{Name: []string{"compliance", "report-runs", "get"}, Method: "GET", Path: "/api/v1/compliance/report-runs/{id}", Summary: "Read one scheduled-report run receipt"},
+	{Name: []string{"compliance", "report-runs", "download"}, Method: "GET", Path: "/api/v1/compliance/report-runs/{id}/artifact", RawResponse: true, Summary: "Write exact signed report bytes to stdout"},
+	{Name: []string{"compliance", "report-runs", "requeue"}, Method: "POST", Path: "/api/v1/compliance/report-runs/{id}/requeue", Summary: "Requeue one failed report due edge"},
 	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},
 
 	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data", RequestTimeout: 10 * time.Minute},

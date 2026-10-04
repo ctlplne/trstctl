@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/privacy"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/reportarchive"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
@@ -144,6 +145,7 @@ type API struct {
 	coreRoutes                         []LicensedRoute
 	licensedSchemas                    map[string]*Schema
 	complianceEvidence                 ComplianceEvidenceService
+	complianceReportArchive            reportarchive.Dir
 	license                            *license.Manager
 	fipsRequired                       bool
 	remediation                        bool
@@ -264,6 +266,7 @@ type config struct {
 	coreRoutes                  []LicensedRoute
 	licensedSchemas             map[string]*Schema
 	complianceEvidence          ComplianceEvidenceService
+	complianceReportArchive     reportarchive.Dir
 	license                     *license.Manager
 	fipsRequired                bool
 	remediation                 bool
@@ -574,6 +577,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		coreRoutes:                  append([]LicensedRoute(nil), cfg.coreRoutes...),
 		licensedSchemas:             copySchemaMap(cfg.licensedSchemas),
 		complianceEvidence:          cfg.complianceEvidence,
+		complianceReportArchive:     cfg.complianceReportArchive,
 		license:                     cfg.license,
 		fipsRequired:                cfg.fipsRequired,
 		remediation:                 cfg.remediation,
@@ -1365,6 +1369,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/compliance/report-schedules", opID: "listComplianceReportSchedules", summary: "List scheduled compliance and inventory reports", handler: a.listComplianceReportSchedules, query: page, resSchema: "ComplianceReportScheduleList", successCode: "200", perm: authz.AuditRead},
 		{method: "POST", path: "/api/v1/compliance/report-schedules/{id}/pause", opID: "pauseComplianceReportSchedule", summary: "Pause a compliance report schedule while retaining its definition and evidence", handler: a.pauseComplianceReportSchedule, pathParams: idPath, resSchema: "ComplianceReportSchedule", successCode: "200", mutation: true, perm: authz.AuditWrite},
 		{method: "POST", path: "/api/v1/compliance/report-schedules/{id}/resume", opID: "resumeComplianceReportSchedule", summary: "Resume a compliance report schedule with a fresh full interval", handler: a.resumeComplianceReportSchedule, pathParams: idPath, resSchema: "ComplianceReportSchedule", successCode: "200", mutation: true, perm: authz.AuditWrite},
+		{method: "GET", path: "/api/v1/compliance/report-schedules/{id}/runs", opID: "listComplianceReportRuns", summary: "List exact signed-report run receipts for one schedule, newest due edge first", handler: a.listComplianceReportRuns, pathParams: idPath, query: page, resSchema: "ComplianceReportRunList", successCode: "200", perm: authz.AuditRead},
+		{method: "GET", path: "/api/v1/compliance/report-runs/{id}", opID: "getComplianceReportRun", summary: "Read one event-backed scheduled-report run and recovery state", handler: a.getComplianceReportRun, pathParams: idPath, resSchema: "ComplianceReportRun", successCode: "200", perm: authz.AuditRead},
+		{method: "GET", path: "/api/v1/compliance/report-runs/{id}/artifact", opID: "downloadComplianceReportArtifact", summary: "Download exact signed scheduled-report bytes after archive and signer verification", handler: a.downloadComplianceReportArtifact, pathParams: idPath, resSchema: "ScheduledComplianceArtifact", successCode: "200", perm: authz.AuditRead},
+		{method: "POST", path: "/api/v1/compliance/report-runs/{id}/requeue", opID: "requeueComplianceReportRun", summary: "Requeue a failed scheduled report under the same exact due edge", handler: a.requeueComplianceReportRun, pathParams: idPath, resSchema: "ComplianceReportRun", successCode: "200", mutation: true, perm: authz.AuditWrite},
 		{method: "GET", path: "/api/v1/compliance/evidence-packs/{framework}", opID: "getComplianceEvidencePack", summary: "Export a signed framework compliance evidence pack", handler: a.getComplianceEvidencePack, pathParams: complianceFrameworkPath, resSchema: "ComplianceEvidencePack", successCode: "200", perm: authz.AuditRead},
 
 		{method: "POST", path: "/api/v1/privacy/subject-erasures/preview", opID: "previewPrivacySubjectErasure", summary: "Review exact tenant-scoped direct-data erasure effects, archive evidence, and recovery without writing state", handler: a.previewPrivacySubjectErasure, reqSchema: "PrivacySubjectErasureRequest", resSchema: "PrivacySubjectErasurePreview", successCode: "200", perm: authz.PrivacyWrite},

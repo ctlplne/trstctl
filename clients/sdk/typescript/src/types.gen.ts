@@ -1715,6 +1715,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/report-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one event-backed scheduled-report run and recovery state */
+        get: operations["getComplianceReportRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compliance/report-runs/{id}/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download exact signed scheduled-report bytes after archive and signer verification */
+        get: operations["downloadComplianceReportArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compliance/report-runs/{id}/requeue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Requeue a failed scheduled report under the same exact due edge */
+        post: operations["requeueComplianceReportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/compliance/report-schedules": {
         parameters: {
             query?: never;
@@ -1778,6 +1829,23 @@ export interface paths {
         put?: never;
         /** Resume a compliance report schedule with a fresh full interval */
         post: operations["resumeComplianceReportSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compliance/report-schedules/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List exact signed-report run receipts for one schedule, newest due edge first */
+        get: operations["listComplianceReportRuns"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9208,6 +9276,38 @@ export interface components {
             report_schedules: number;
             report_types_supported: number;
         };
+        ComplianceReportRun: {
+            artifact_digest?: string;
+            artifact_ref?: string;
+            attempt: number;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            due_at: string;
+            error_code?: string;
+            event_sequence: number;
+            framework: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            next_attempt_at?: string;
+            report_type: string;
+            retry_generation: number;
+            /** Format: uuid */
+            schedule_id: string;
+            /** @enum {string} */
+            status: "queued" | "retrying" | "failed" | "completed";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ComplianceReportRunList: {
+            items: components["schemas"]["ComplianceReportRun"][];
+            next_cursor?: string;
+        };
         ComplianceReportSchedule: {
             /** Format: date-time */
             created_at: string;
@@ -14441,6 +14541,13 @@ export interface components {
             events_per_day: number;
             jetstream_gib_30_day: number;
             postgres_gib_30_day: number;
+        };
+        ScheduledComplianceArtifact: {
+            manifest: Record<string, never>;
+            /** Format: byte */
+            public_key_der: string;
+            /** Format: byte */
+            signature: string;
         };
         SecretAccessPreview: {
             api_request: {
@@ -20310,6 +20417,129 @@ export interface operations {
             };
         };
     };
+    getComplianceReportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    downloadComplianceReportArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledComplianceArtifact"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requeueComplianceReportRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listComplianceReportSchedules: {
         parameters: {
             query?: {
@@ -20504,6 +20734,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComplianceReportSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listComplianceReportRuns: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportRunList"];
                 };
             };
             /** @description client error */

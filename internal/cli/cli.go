@@ -154,7 +154,11 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		return 1
 	}
 
-	writeJSON(stdout, respBody)
+	if cmd.RawResponse {
+		_, _ = stdout.Write(respBody)
+	} else {
+		writeJSON(stdout, respBody)
+	}
 	if status/100 != 2 {
 		_, _ = fmt.Fprintf(stderr, "error: server returned status %d\n", status)
 		return 1
@@ -578,9 +582,13 @@ func do(ctx context.Context, client *http.Client, server, method, path string, q
 		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	const maxResponseBytes = 64 << 20
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		return resp.StatusCode, nil, err
+	}
+	if len(data) > maxResponseBytes {
+		return resp.StatusCode, nil, errors.New("response exceeds 64 MiB CLI limit")
 	}
 	return resp.StatusCode, data, nil
 }

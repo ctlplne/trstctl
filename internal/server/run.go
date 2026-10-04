@@ -1252,6 +1252,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunDispatcher),
 			startRuntimeWorker(workCtx, srv.RunRetention),
 			startRuntimeWorker(workCtx, srv.RunPrivacyRetention),
+			startRuntimeWorker(workCtx, srv.RunComplianceReportScheduler),
 			startRuntimeWorker(workCtx, srv.RunApplicationSecretMutationReconciler),
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),

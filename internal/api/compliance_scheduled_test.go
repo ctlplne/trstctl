@@ -3,6 +3,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
@@ -10,11 +11,12 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
-type scheduledReportTestSigner struct{}
+type scheduledReportTestSigner struct{ signer crypto.DigestSigner }
 
 func (scheduledReportTestSigner) ExportEvidencePack(_ context.Context, _ string, framework api.ComplianceFramework) (api.ComplianceEvidencePack, error) {
 	return api.ComplianceEvidencePack{
@@ -24,10 +26,20 @@ func (scheduledReportTestSigner) ExportEvidencePack(_ context.Context, _ string,
 	}, nil
 }
 
-func (scheduledReportTestSigner) SignScheduledManifest(_ context.Context, manifest json.RawMessage) (json.RawMessage, error) {
+func (s scheduledReportTestSigner) SignScheduledManifest(_ context.Context, manifest json.RawMessage) (json.RawMessage, error) {
+	signature, err := crypto.SignMessage(s.signer, manifest)
+	if err != nil {
+		return nil, err
+	}
 	return json.Marshal(struct {
-		Manifest json.RawMessage `json:"manifest"`
-	}{Manifest: manifest})
+		Manifest     json.RawMessage `json:"manifest"`
+		Signature    []byte          `json:"signature"`
+		PublicKeyDER []byte          `json:"public_key_der"`
+	}{Manifest: manifest, Signature: signature, PublicKeyDER: s.signer.Public().DER})
+}
+
+func (s scheduledReportTestSigner) ScheduledVerificationKeyDER() []byte {
+	return s.signer.Public().DER
 }
 
 func TestScheduledReportProducerBindsAllAdvertisedTypesToTenantRunAndDue(t *testing.T) {
@@ -59,7 +71,12 @@ func TestScheduledReportProducerBindsAllAdvertisedTypesToTenantRunAndDue(t *test
 	if _, err := log.Append(ctx, events.Event{TenantID: tenantID, Type: "policy.decision", Time: due.Add(-time.Minute), Data: []byte(`{"result":"allow"}`)}); err != nil {
 		t.Fatal(err)
 	}
-	a := api.New(st, nil, nil, api.WithComplianceEvidence(scheduledReportTestSigner{}), api.WithEventLog(log))
+	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(signer.Destroy)
+	a := api.New(st, nil, nil, api.WithComplianceEvidence(scheduledReportTestSigner{signer: signer}), api.WithEventLog(log))
 	for _, reportType := range []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"} {
 		schedule := store.ComplianceReportSchedule{
 			ID: "33333333-3333-4333-8333-333333333333", TenantID: tenantID,
@@ -70,6 +87,17 @@ func TestScheduledReportProducerBindsAllAdvertisedTypesToTenantRunAndDue(t *test
 		wire, err := a.BuildScheduledComplianceArtifact(ctx, tenantID, schedule, runID, due.Add(time.Minute))
 		if err != nil {
 			t.Fatalf("%s: %v", reportType, err)
+		}
+		run := store.ComplianceReportRun{
+			ID: runID, TenantID: tenantID, ScheduleID: schedule.ID, DueAt: due,
+			Framework: schedule.Framework, ReportType: reportType,
+		}
+		if err := a.VerifyScheduledComplianceArtifact(wire, run); err != nil {
+			t.Fatalf("%s: signed artifact verification: %v", reportType, err)
+		}
+		tampered := bytes.Replace(wire, []byte(reportType), []byte("wrong_report_type"), 1)
+		if err := a.VerifyScheduledComplianceArtifact(tampered, run); err == nil {
+			t.Fatalf("%s: tampered report type verified", reportType)
 		}
 		var envelope struct {
 			Manifest api.ScheduledComplianceManifest `json:"manifest"`

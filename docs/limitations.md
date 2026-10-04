@@ -1249,8 +1249,13 @@ never live in the API process. What you can do end to end against the running bi
   /api/v1/compliance/report-schedules` and `trstctl-cli compliance
   report-schedules create` record idempotent, event-sourced audit-export
   schedule definitions; `GET /api/v1/compliance/report-schedules` and
-  `trstctl-cli compliance report-schedules list` read them back. Delivery is
-  `audit_export` only; email/webhook/ticket dispatch is not served or implied.
+  `trstctl-cli compliance report-schedules list` read them back. The licensed
+  governance signer and a private mounted `audit.archive_dir` are prerequisites
+  to enable them. The local scheduler creates signed artifacts and event-backed
+  run receipts with bounded retry and requeue. `audit_export` means local archive;
+  email/webhook/ticket dispatch is not served or implied. Report files can
+  contain tenant metadata and remain under the operator's backup, retention,
+  access-control, and erasure policy; a log-only restore cannot recover them.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
   streams. The JWS response and browser download are one versioned JSON envelope

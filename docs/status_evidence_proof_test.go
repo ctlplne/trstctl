@@ -32,6 +32,16 @@ type highRiskVerdictProof struct {
 // declaration-checked below, so renaming or deleting a proof fails CI.
 var highRiskVerdictProofs = []highRiskVerdictProof{
 	{
+		Verdict: "ComplianceReportRun.status",
+		NegativeTests: []negativeProofReference{
+			{Test: "internal/server/compliance_report_worker_test.go:TestComplianceReportScheduleRefusesUnconfiguredExecution", RequiredTokens: []string{"unconfigured schedule appended an event", "http.StatusServiceUnavailable"}},
+			{Test: "internal/server/compliance_report_worker_test.go:TestComplianceReportWorkerSignsArchivesAndRecoversExactDueEdge", RequiredTokens: []string{"served artifact changed signed bytes", "non-auditor downloaded signed report"}},
+			{Test: "internal/server/compliance_report_worker_test.go:TestComplianceReportWorkerDeadLetterRequeueAndRecover", RequiredTokens: []string{"dead-letter receipt", "idempotent requeue replay"}},
+		},
+		Console:       "web/src/pages/policy/ComplianceReportingPanels.tsx:ScheduledReportRuns",
+		ConsoleTokens: []string{"run.status", "run.error_code", "run.artifact_digest"},
+	},
+	{
 		Verdict: "CryptoReadinessAction.status",
 		NegativeTests: []negativeProofReference{
 			{

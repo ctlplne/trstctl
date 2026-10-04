@@ -3803,6 +3803,19 @@ func componentSchemas() map[string]*Schema {
 		"created_at":       timestamp(),
 		"updated_at":       timestamp(),
 	}, "id", "tenant_id", "framework", "name", "report_type", "interval_seconds", "enabled", "delivery", "next_run_at", "created_at", "updated_at")
+	complianceReportRun := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "schedule_id": uuid(),
+		"due_at": timestamp(), "framework": str(), "report_type": str(),
+		"status":           {Type: "string", Enum: []string{"queued", "retrying", "failed", "completed"}},
+		"retry_generation": {Type: "integer"}, "attempt": {Type: "integer"},
+		"next_attempt_at": timestamp(), "error_code": str(),
+		"artifact_ref": str(), "artifact_digest": str(), "completed_at": timestamp(),
+		"event_sequence": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "tenant_id", "schedule_id", "due_at", "framework", "report_type", "status", "retry_generation", "attempt", "event_sequence", "created_at", "updated_at")
+	scheduledComplianceArtifact := object(map[string]*Schema{
+		"manifest": {Type: "object"}, "signature": {Type: "string", Format: "byte"},
+		"public_key_der": {Type: "string", Format: "byte"},
+	}, "manifest", "signature", "public_key_der")
 	complianceInventorySummary := object(map[string]*Schema{
 		"certificates":             {Type: "integer"},
 		"crypto_assets":            {Type: "integer"},
@@ -6580,6 +6593,9 @@ func componentSchemas() map[string]*Schema {
 		"ComplianceReportSchedulePreview":          complianceReportSchedulePreview,
 		"ComplianceReportSchedule":                 complianceReportSchedule,
 		"ComplianceReportScheduleList":             list("ComplianceReportSchedule"),
+		"ComplianceReportRun":                      complianceReportRun,
+		"ComplianceReportRunList":                  list("ComplianceReportRun"),
+		"ScheduledComplianceArtifact":              scheduledComplianceArtifact,
 		"ComplianceInventorySummary":               complianceInventorySummary,
 		"ComplianceInventoryReport":                complianceInventoryReport,
 		"NHIComplianceSummary":                     nhiComplianceSummary,

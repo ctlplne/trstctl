@@ -98,6 +98,16 @@ type scheduledSignedEnvelope struct {
 	PublicKeyDER []byte          `json:"public_key_der"`
 }
 
+// ScheduledVerificationKeyDER pins archive recovery to this deployment's
+// purpose-bound governance key. An arbitrary JSON file carrying its own public
+// key cannot become a completed report merely by being placed in the archive.
+func (s *evidenceService) ScheduledVerificationKeyDER() []byte {
+	if s == nil || s.signer == nil {
+		return nil
+	}
+	return append([]byte(nil), s.signer.Public().DER...)
+}
+
 // SignScheduledManifest binds an already assembled tenant/run/due manifest to
 // the same purpose-bound, isolated signer as on-demand governance exports.
 // The signed bytes can be verified offline without contacting this service.

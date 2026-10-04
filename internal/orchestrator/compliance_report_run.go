@@ -102,3 +102,57 @@ func (o *Orchestrator) RecordComplianceReportRun(ctx context.Context, run store.
 	}
 	return o.store.GetComplianceReportRun(ctx, run.TenantID, run.ID)
 }
+
+// RecoverComplianceReportNextTransition checks all possible outcomes of the
+// next bounded attempt before another signer call. An event append can be
+// acknowledged while its SQL projection rolls back; only the retained source
+// event may decide whether that attempt completed, needs backoff or failed.
+func (o *Orchestrator) RecoverComplianceReportNextTransition(ctx context.Context, current store.ComplianceReportRun) (store.ComplianceReportRun, bool, error) {
+	if o == nil || o.store == nil || o.log == nil || o.proj == nil {
+		return store.ComplianceReportRun{}, false, errors.New("orchestrator: report run spine is not configured")
+	}
+	if current.ID != ComplianceReportRunID(current.TenantID, current.ScheduleID, current.DueAt) ||
+		(current.Status != "queued" && current.Status != "retrying") || current.Attempt >= 5 {
+		return store.ComplianceReportRun{}, false, errors.New("orchestrator: report recovery requires an unfinished due edge")
+	}
+	next := current
+	next.Attempt++
+	var retained events.Event
+	retainedStatus := ""
+	foundCount := 0
+	for _, status := range []string{"completed", "retrying", "failed"} {
+		next.Status = status
+		candidate, found, err := o.log.EventByID(ctx, ComplianceReportRunEventID(next))
+		if err != nil {
+			return store.ComplianceReportRun{}, false, err
+		}
+		if !found {
+			continue
+		}
+		foundCount++
+		if foundCount > 1 {
+			return store.ComplianceReportRun{}, false, errors.New("orchestrator: conflicting retained outcomes for one report attempt")
+		}
+		retained = candidate
+		retainedStatus = status
+	}
+	if foundCount == 0 {
+		return current, false, nil
+	}
+	var payload projections.ComplianceReportRunRecorded
+	if retained.Type != projections.EventComplianceReportRunRecorded || retained.TenantID != current.TenantID ||
+		retained.SchemaVersion != 1 || json.Unmarshal(retained.Data, &payload) != nil ||
+		payload.ID != current.ID || payload.ScheduleID != current.ScheduleID ||
+		!payload.DueAt.Equal(current.DueAt) || payload.Framework != current.Framework ||
+		payload.ReportType != current.ReportType || payload.Status != retainedStatus || payload.RetryGeneration != current.RetryGeneration ||
+		payload.Attempt != current.Attempt+1 || !payload.CreatedAt.Equal(current.CreatedAt) {
+		return store.ComplianceReportRun{}, false, errors.New("orchestrator: retained report outcome conflicts with due-edge identity")
+	}
+	if err := o.withTenantCommand(ctx, current.TenantID, func(ctx context.Context, tx pgx.Tx) error {
+		return o.proj.ApplyTx(ctx, tx, retained)
+	}); err != nil {
+		return store.ComplianceReportRun{}, false, err
+	}
+	recovered, err := o.store.GetComplianceReportRun(ctx, current.TenantID, current.ID)
+	return recovered, true, err
+}

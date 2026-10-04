@@ -347,8 +347,11 @@ compliance mapping below are all live REST/CLI/console routes. `GET
 routes, evidence references, schedule rows, and inventory counts across certificates,
 CBOM assets, and discovery/report schedules; `POST`/`GET
 /api/v1/compliance/report-schedules` record and list idempotent, event-sourced
-schedules, with compliance-report delivery limited to `audit_export` until a served
-report runner exists. `POST /api/v1/compliance/report-schedules/preview` validates and
+schedules. With the licensed governance signer and a private mounted
+`audit.archive_dir`, the leader now generates one signed local artifact per due
+edge and exposes event-backed run receipts, exact downloads, bounded retry,
+dead-letter and requeue through `/api/v1/compliance/report-runs`. `audit_export`
+means local archive, not email, webhook, or ticket delivery. `POST /api/v1/compliance/report-schedules/preview` validates and
 fingerprints the exact unsaved definition without appending an event, projecting a row,
 generating a report, or calling a destination. The console invalidates that review after
 any edit and keeps **Create schedule** disabled until the exact draft is ready. Saved
@@ -481,6 +484,10 @@ trstctl-cli compliance report-schedules preview -f soc2-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
 trstctl-cli --idempotency-key pause-weekly-soc2 compliance report-schedules pause SCHEDULE_ID
 trstctl-cli --idempotency-key resume-weekly-soc2 compliance report-schedules resume SCHEDULE_ID
+trstctl-cli compliance report-schedules runs SCHEDULE_ID
+trstctl-cli compliance report-runs get RUN_ID
+trstctl-cli compliance report-runs download RUN_ID > signed-report.json
+trstctl-cli --idempotency-key retry-run-1 compliance report-runs requeue FAILED_RUN_ID
 
 # start and decide an NHI access certification campaign
 trstctl-cli access reviews start -f nhi-review.json
@@ -558,8 +565,9 @@ auth:
   external call occurs only from the `audit.feed.*` outbox worker.
 - **Compliance reporting (served):** `GET /api/v1/compliance/evidence-packs/{framework}`,
   `GET /api/v1/compliance/inventory-report`, `GET /api/v1/compliance/nhi-report`,
-  `POST|GET /api/v1/compliance/report-schedules`; report-schedule delivery is
-  `audit_export` only.
+  `POST|GET /api/v1/compliance/report-schedules`, schedule run receipts and exact
+  signed artifacts under `/api/v1/compliance/report-runs`; report delivery is
+  local `audit_export` only.
 - **Access-change approvals (served):** `POST|GET /api/v1/access/requests[/{id}]`, and
   `POST /api/v1/access/requests/{id}/decisions`; CLI: `access requests create|list|get|decide`.
 - **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook

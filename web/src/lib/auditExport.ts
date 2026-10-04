@@ -28,22 +28,25 @@ function fileExtension(format: string): string {
  * export is exactly the download large enough for that to matter.
  */
 export async function downloadAuditExport(options: AuditQuery | undefined, format: string, signal?: AbortSignal): Promise<string> {
-  if (previewTransportIsIsolated()) throw previewRefusal();
   const params = auditQueryParams(options);
   params.set("format", format);
+  return downloadSameOriginFile(`/api/v1/audit/export?${params.toString()}`, `trstctl-audit.${fileExtension(format)}`, auditReadSignal(signal));
+}
 
-  const readSignal = auditReadSignal(signal);
-  const res = await fetch(`/api/v1/audit/export?${params.toString()}`, {
+// Both audit streams and signed scheduled reports keep their exact response
+// bytes. This one path also enforces preview isolation and releases Blob URLs.
+export async function downloadSameOriginFile(path: string, filename: string, signal?: AbortSignal): Promise<string> {
+  if (previewTransportIsIsolated()) throw previewRefusal();
+  const res = await fetch(path, {
     credentials: "include",
     headers: { ...csrfHeaders("GET") },
-    signal: readSignal,
+    signal,
   });
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) throw new ApiError(res.status, await res.text());
 
-  const filename = `trstctl-audit.${fileExtension(format)}`;
   const blob = await res.blob();
-  readSignal.throwIfAborted();
+  signal?.throwIfAborted();
   const url = URL.createObjectURL(blob);
   try {
     const a = document.createElement("a");

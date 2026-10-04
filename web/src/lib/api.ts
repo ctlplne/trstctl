@@ -25,7 +25,7 @@ export {
 } from "./apiTransport";
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
-import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
+import { downloadAuditExport as downloadAuditExportImpl, downloadSameOriginFile } from "./auditExport";
 import { auditQueryParams, auditReadSignal } from "./auditQuery";
 import type {
   CapabilityView,
@@ -173,6 +173,8 @@ import type {
   ComplianceReportScheduleList,
   ComplianceReportSchedulePreview,
   ComplianceReportScheduleRequest,
+  ComplianceReportRun,
+  ComplianceReportRunList,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -879,6 +881,8 @@ export type {
   ComplianceReportScheduleList,
   ComplianceReportSchedulePreview,
   ComplianceReportScheduleRequest,
+  ComplianceReportRun,
+  ComplianceReportRunList,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -1761,6 +1765,10 @@ export interface Api {
   createComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedule>;
   pauseComplianceReportSchedule(id: string): Promise<ComplianceReportSchedule>;
   resumeComplianceReportSchedule(id: string): Promise<ComplianceReportSchedule>;
+  complianceReportRuns(id: string, options?: { limit?: number; cursor?: string }): Promise<ComplianceReportRunList>;
+  complianceReportRun(id: string): Promise<ComplianceReportRun>;
+  requeueComplianceReportRun(id: string): Promise<ComplianceReportRun>;
+  downloadScheduledReport(id: string): Promise<string>;
   policyVersions(): Promise<PolicyVersionList>;
   createPolicyVersion(input: PolicyVersionRequest): Promise<PolicyVersion>;
   activatePolicyVersion(id: string, input: PolicyVersionActionRequest): Promise<PolicyVersion>;
@@ -2367,6 +2375,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   createComplianceReportSchedule: (input) => mutate<ComplianceReportSchedule>("POST", "/api/v1/compliance/report-schedules", input),
   pauseComplianceReportSchedule: (id) => mutate<ComplianceReportSchedule>("POST", `/api/v1/compliance/report-schedules/${encodeURIComponent(id)}/pause`),
   resumeComplianceReportSchedule: (id) => mutate<ComplianceReportSchedule>("POST", `/api/v1/compliance/report-schedules/${encodeURIComponent(id)}/resume`),
+  complianceReportRuns: (id, options) =>
+    req<ComplianceReportRunList>(`/api/v1/compliance/report-schedules/${encodeURIComponent(id)}/runs${pageQueryString(options)}`),
+  complianceReportRun: (id) => req<ComplianceReportRun>(`/api/v1/compliance/report-runs/${encodeURIComponent(id)}`),
+  requeueComplianceReportRun: (id) => mutate<ComplianceReportRun>("POST", `/api/v1/compliance/report-runs/${encodeURIComponent(id)}/requeue`),
+  downloadScheduledReport: (id) => downloadSameOriginFile(`/api/v1/compliance/report-runs/${encodeURIComponent(id)}/artifact`, `trstctl-report-${id}.json`),
   policyVersions: () => req<PolicyVersionList>("/api/v1/policy/versions"),
   createPolicyVersion: (input) => mutate<PolicyVersion>("POST", "/api/v1/policy/versions", input),
   activatePolicyVersion: (id, input) => mutate<PolicyVersion>("POST", `/api/v1/policy/versions/${encodeURIComponent(id)}/activate`, input),

@@ -13,6 +13,9 @@ const { apiMock } = vi.hoisted(() => ({
     createAccessChangeRequest: vi.fn(),
     nhiComplianceReport: vi.fn(),
     complianceReportSchedules: vi.fn(),
+    complianceReportRuns: vi.fn(),
+    requeueComplianceReportRun: vi.fn(),
+    downloadScheduledReport: vi.fn(),
     createComplianceReportSchedule: vi.fn(),
     previewComplianceReportSchedule: vi.fn(),
     pauseComplianceReportSchedule: vi.fn(),
@@ -240,7 +243,7 @@ function complianceSchedulePreview() {
     execute_external_effects: [],
     recovery_steps: ["Pause the schedule before its next run; resume it after correcting the definition."],
     verification_steps: ["Read the schedule list and confirm its exact enabled state and next run."],
-    secret_data_handling: "Recipient references are metadata locators. Preview reads and returns no credential value.",
+    secret_data_handling: "recipient_ref is a correlation label only. Preview reads and returns no credential value.",
   };
 }
 
@@ -404,6 +407,9 @@ describe("policy governance surface", () => {
     apiMock.createAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.nhiComplianceReport.mockReset().mockResolvedValue(nhiComplianceReport());
     apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
+    apiMock.complianceReportRuns.mockReset().mockResolvedValue({ items: [] });
+    apiMock.requeueComplianceReportRun.mockReset();
+    apiMock.downloadScheduledReport.mockReset().mockResolvedValue("trstctl-report-run.json");
     apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule("Quarterly SOC 2 inventory"));
     apiMock.previewComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedulePreview());
     apiMock.pauseComplianceReportSchedule.mockReset().mockResolvedValue({ ...complianceSchedule(), enabled: false });
@@ -1084,6 +1090,53 @@ describe("policy governance surface", () => {
     await user.click(screen.getByRole("button", { name: "Pause schedule" }));
     await waitFor(() => expect(apiMock.pauseComplianceReportSchedule).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333"));
     expect(screen.queryByRole("button", { name: /generate report|attest compliance/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a failed signed run, requeues it, and downloads a completed artifact", async () => {
+    const user = userEvent.setup();
+    const failed = {
+      id: "44444444-4444-4444-8444-444444444444",
+      tenant_id: "tenant-1",
+      schedule_id: complianceSchedule().id,
+      due_at: "2026-06-27T12:00:00Z",
+      framework: "soc2",
+      report_type: "inventory_snapshot",
+      status: "failed",
+      retry_generation: 0,
+      attempt: 5,
+      error_code: "producer_failed",
+      event_sequence: 70,
+      created_at: "2026-06-27T12:00:00Z",
+      updated_at: "2026-06-27T12:05:00Z",
+    };
+    const completed = { ...failed, status: "completed", attempt: 6, error_code: "", artifact_digest: "a".repeat(64) };
+    apiMock.complianceReportRuns.mockResolvedValueOnce({ items: [failed] }).mockResolvedValue({ items: [completed] });
+    apiMock.requeueComplianceReportRun.mockResolvedValue({ ...failed, status: "retrying" });
+    renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
+    await screen.findByRole("heading", { name: "Compliance inventory report" });
+    await user.click(screen.getByRole("button", { name: "Signed runs" }));
+    expect(await screen.findByText("producer_failed")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Requeue failed run" }));
+    await waitFor(() => expect(apiMock.requeueComplianceReportRun).toHaveBeenCalledWith(failed.id));
+    await user.click(await screen.findByRole("button", { name: "Download signed report" }));
+    expect(apiMock.downloadScheduledReport).toHaveBeenCalledWith(failed.id);
+  });
+
+  it("explains signer and archive setup blockers before schedule creation", async () => {
+    const user = userEvent.setup();
+    apiMock.previewComplianceReportSchedule.mockResolvedValue({
+      ...complianceSchedulePreview(),
+      ready: false,
+      blockers: ["The licensed governance signer is unavailable.", "Configure audit.archive_dir as a private 0700 directory."],
+    });
+    renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
+    await screen.findByRole("heading", { name: "Compliance inventory report" });
+    await user.click(screen.getByRole("button", { name: "Review exact schedule" }));
+    expect(await screen.findByText("The licensed governance signer is unavailable.")).toBeInTheDocument();
+    expect(screen.getByText("Configure audit.archive_dir as a private 0700 directory.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create schedule" })).toBeDisabled();
   });
 
   it("invalidates an exact compliance schedule review after the draft changes", async () => {

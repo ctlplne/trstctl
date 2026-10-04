@@ -242,8 +242,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// The requester-visible issuer roster adds one read-only operation to F33.
 	// Four F39 decoy-credential lifecycle operations extend exposure detection.
 	// F26 adds durable managed-key inventory and exact provider/handle recovery.
-	if len(out) != 457 {
-		t.Fatalf("OpenAPI operationIds = %d, want 457", len(out))
+	// F62 adds four signed scheduled-report run, artifact and recovery operations.
+	if len(out) != 461 {
+		t.Fatalf("OpenAPI operationIds = %d, want 461", len(out))
 	}
 	return out
 }

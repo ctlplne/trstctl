@@ -35,11 +35,12 @@ Non-audit privacy retention is independent and stays in the core.
   [Framework evidence packs](#framework-evidence-packs) below). Each report
   evaluates one explicit 90-day window; it does not treat “some audit data
   exists” as proof of an unrelated control.
-- Compliance inventory reporting and recoverable schedule definitions. `GET
+- Compliance inventory reporting and signed scheduled reports. `GET
   /api/v1/compliance/inventory-report`, effect-free `POST
   /api/v1/compliance/report-schedules/preview`, and the create/list/pause/resume
   schedule routes expose supported frameworks, report types, evidence references,
-  exact-draft review, and idempotent event-sourced recovery.
+  exact-draft review, and idempotent event-sourced recovery. Run receipts and
+  exact signed artifacts are available under `/api/v1/compliance/report-runs`.
 - Tenant isolation. Every audit query is tenant-scoped.
 
 ## The tamper-evidence trust model (read this)
@@ -172,7 +173,7 @@ still attest:
   opinion and ETSI conformity assessment as external residuals — trstctl
   serves the evidence pack; it does not self-award the certification.
 
-## Compliance inventory report and schedule definitions
+## Compliance inventory report and signed schedules
 
 An auditor or operator with `audit:read` can read the served reporting
 coverage:
@@ -188,19 +189,32 @@ The response is intentionally mechanical: framework ids, report types
 `audit_summary`, `nhi_compliance_mapping`), served routes, evidence
 references, inventory counts, and the first page of tenant report schedules.
 
+Before enabling a schedule, set `audit.archive_dir` (or
+`TRSTCTL_AUDIT_ARCHIVE_DIR`) to a durable, mounted 0700 directory writable by
+the control plane. The licensed governance signer must be attached. Preview
+returns `ready=false` with blockers if either prerequisite is absent; create
+and resume return 503. Back up this directory with the event log and PostgreSQL.
+Its `reports/` subtree contains tenant-scoped signed artifacts that can include
+inventory and audit metadata. Access, retention, and erasure of those files are
+operator responsibilities; an event-log backup alone is not a report backup.
+
 An operator with `audit:write` first reviews the exact definition and then records it.
 Review returns a tenant-bound SHA-256 fingerprint, normalized definition, later writes,
 recovery steps, and verification steps. It appends no event, projects no row, generates
 no report, resolves no credential, and calls no destination. Creation is a
-tenant-scoped, idempotent event that does not claim email, webhook, or ticket dispatch:
+tenant-scoped, idempotent event. The leader later archives a signed artifact
+for each due edge; it sends no email, webhook, or ticket:
 
 ```sh
 cat > soc2-schedule.json <<'JSON'
-{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
+{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"weekly-soc2"}
 JSON
 trstctl-cli compliance report-schedules preview -f soc2-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
 trstctl-cli compliance report-schedules list
+trstctl-cli compliance report-schedules runs SCHEDULE_ID
+trstctl-cli compliance report-runs get RUN_ID
+trstctl-cli compliance report-runs download RUN_ID > signed-report.json
 ```
 
 `delivery` is `audit_export` only; any other value is rejected, so an
@@ -208,6 +222,21 @@ unserved email/webhook delivery can never look like a category met. Cadence is b
 to one hour through 366 days, preventing a malformed definition from becoming a tight
 unbounded loop. The console intentionally accepts whole days from one through 366;
 API and CLI automation may use the finer one-hour minimum.
+`recipient_ref` is an optional non-secret correlation label in the schedule;
+it does not route the report or override `audit.archive_dir`.
+
+The worker checks due schedules every minute, bounds each sweep to 100
+attempts and each tenant to five, and locks the exact due edge in PostgreSQL.
+Each receipt is `queued`, `retrying`, `failed`, or `completed`; failures retry
+with bounded backoff and stop after five attempts. A completed receipt pins
+the signed artifact's SHA-256 digest. The download returns the exact signed
+bytes. Verify its embedded signature and compare the file's SHA-256 to
+`artifact_digest` in the run receipt. Run reads need `audit:read`; a failed
+run can be requeued with `audit:write`:
+
+```sh
+trstctl-cli --idempotency-key retry-soc2-run-1 compliance report-runs requeue RUN_ID
+```
 
 Recovery preserves evidence instead of erasing history:
 
@@ -223,9 +252,9 @@ delete the definition or prior evidence. Resume writes `enabled=true` and calcul
 fresh full interval. Read the schedule list and inventory report after either action to
 verify both the exact row and the aggregate enabled-schedule count.
 The console marks an enabled schedule **Overdue** when the server's latest inventory
-report was generated after its `next_run_at`. This is a missed deadline signal, not
-evidence of a run or delivery. Inspect the signed export separately and pause the
-definition if an operator is relying on unattended delivery.
+report was generated after its `next_run_at`. This is a missed deadline signal;
+open **Signed runs** for the receipt and artifact. A completed receipt means
+the signed artifact is archived locally, not delivered to a third party.
 
 ## What the operator must still do
 

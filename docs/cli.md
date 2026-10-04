@@ -285,7 +285,7 @@ exhaustive subcommand list:
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
 | `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                                                                                                                                                                                |
 | `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `preview` · `sign` · `keyless-preview` · `keyless`)                                                                                                                                                                               |
-| `compliance`                      | Compliance/inventory reporting, exact schedule review/recovery, and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules preview/create/list/pause/resume` · `evidence-pack`)                                                                                                                                                                           |
+| `compliance`                      | Compliance/inventory reporting, signed schedule runs, exact artifact download, recovery, and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules preview/create/list/pause/resume/runs` · `report-runs get/download/requeue` · `evidence-pack`)                                                                                                                                                                           |
 | `connector target`                | Deployment connector targets: create, bind, test, deploy, roll back (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback`)                                                                                                                                                     |
 | `connectors`                      | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                                                                                                                                                                                   |
 | `discovery`                       | Discovery segments, sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`segments create` · `sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`)                                                                          |
@@ -835,14 +835,18 @@ trstctl-cli --idempotency-key audit-feed-production audit feeds set 52525252-525
 # state. This is read-only and sends no Idempotency-Key.
 trstctl-cli audit feeds list
 
-# Record and list an audit-export report schedule definition. The delivery value is
-# metadata for the audit-export workflow; email/webhook delivery is not implied.
+# Record an archive-backed signed report schedule. The licensed governance signer
+# and a private mounted audit.archive_dir are required; no email/webhook is sent.
 cat > compliance-schedule.json <<'JSON'
-{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
+{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"weekly-soc2"}
 JSON
 trstctl-cli compliance report-schedules preview -f compliance-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f compliance-schedule.json
 trstctl-cli compliance report-schedules list
+trstctl-cli compliance report-schedules runs SCHEDULE_ID
+trstctl-cli compliance report-runs get RUN_ID
+trstctl-cli compliance report-runs download RUN_ID > signed-report.json
+trstctl-cli --idempotency-key retry-report-1 compliance report-runs requeue FAILED_RUN_ID
 
 # Recovery retains the definition and evidence, stops future due work, and resumes
 # with a fresh full interval after the problem is corrected.

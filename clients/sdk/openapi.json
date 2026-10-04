@@ -9397,6 +9397,107 @@
         ],
         "type": "object"
       },
+      "ComplianceReportRun": {
+        "properties": {
+          "artifact_digest": {
+            "type": "string"
+          },
+          "artifact_ref": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "event_sequence": {
+            "type": "integer"
+          },
+          "framework": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "next_attempt_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report_type": {
+            "type": "string"
+          },
+          "retry_generation": {
+            "type": "integer"
+          },
+          "schedule_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "retrying",
+              "failed",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "schedule_id",
+          "due_at",
+          "framework",
+          "report_type",
+          "status",
+          "retry_generation",
+          "attempt",
+          "event_sequence",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ComplianceReportRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceReportRun"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ComplianceReportSchedule": {
         "properties": {
           "created_at": {
@@ -29548,6 +29649,27 @@
         ],
         "type": "object"
       },
+      "ScheduledComplianceArtifact": {
+        "properties": {
+          "manifest": {
+            "type": "object"
+          },
+          "public_key_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "signature": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "manifest",
+          "signature",
+          "public_key_der"
+        ],
+        "type": "object"
+      },
       "SecretAccessPreview": {
         "properties": {
           "api_request": {
@@ -40775,6 +40897,189 @@
         "x-trstctl-permission": "audit:read"
       }
     },
+    "/api/v1/compliance/report-runs/{id}": {
+      "get": {
+        "operationId": "getComplianceReportRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one event-backed scheduled-report run and recovery state",
+        "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/report-runs/{id}/artifact": {
+      "get": {
+        "operationId": "downloadComplianceReportArtifact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledComplianceArtifact"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Download exact signed scheduled-report bytes after archive and signer verification",
+        "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/report-runs/{id}/requeue": {
+      "post": {
+        "operationId": "requeueComplianceReportRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Requeue a failed scheduled report under the same exact due edge",
+        "x-trstctl-permission": "audit:write"
+      }
+    },
     "/api/v1/compliance/report-schedules": {
       "get": {
         "operationId": "listComplianceReportSchedules",
@@ -41095,6 +41400,80 @@
         ],
         "summary": "Resume a compliance report schedule with a fresh full interval",
         "x-trstctl-permission": "audit:write"
+      }
+    },
+    "/api/v1/compliance/report-schedules/{id}/runs": {
+      "get": {
+        "operationId": "listComplianceReportRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List exact signed-report run receipts for one schedule, newest due edge first",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/connectors/catalog": {

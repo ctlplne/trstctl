@@ -3190,6 +3190,39 @@ ComplianceInventorySummary = TypedDict(
     total=False,
 )
 
+ComplianceReportRun = TypedDict(
+    'ComplianceReportRun',
+    {
+        'artifact_digest': str,
+        'artifact_ref': str,
+        'attempt': int,
+        'completed_at': str,
+        'created_at': str,
+        'due_at': str,
+        'error_code': str,
+        'event_sequence': int,
+        'framework': str,
+        'id': str,
+        'next_attempt_at': str,
+        'report_type': str,
+        'retry_generation': int,
+        'schedule_id': str,
+        'status': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+ComplianceReportRunList = TypedDict(
+    'ComplianceReportRunList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 ComplianceReportSchedule = TypedDict(
     'ComplianceReportSchedule',
     {
@@ -9913,6 +9946,16 @@ ScaleUnitEconomics = TypedDict(
         'events_per_day': int,
         'jetstream_gib_30_day': float,
         'postgres_gib_30_day': float,
+    },
+    total=False,
+)
+
+ScheduledComplianceArtifact = TypedDict(
+    'ScheduledComplianceArtifact',
+    {
+        'manifest': dict[str, Any],
+        'public_key_der': str,
+        'signature': str,
     },
     total=False,
 )

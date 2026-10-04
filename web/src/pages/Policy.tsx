@@ -227,7 +227,7 @@ function PolicyContent() {
     framework: "soc2" as ComplianceFramework,
     reportType: "inventory_snapshot" as ComplianceReportType,
     intervalDays: "90",
-    recipientRef: "audit-vault",
+    recipientRef: "",
   });
   const [dryRunKind, setDryRunKind] = useState<PolicyDryRunKind>("lifecycle");
   const [dryRunModule, setDryRunModule] = useState(lifecycleDryRunModule);
@@ -1107,6 +1107,8 @@ function PolicyContent() {
                     <dd className="mt-1 font-mono text-xs">{schedulePreview.required_permission}</dd>
                   </div>
                 </dl>
+                {schedulePreview.blockers.length > 0 && <EvidenceList title={t("policy.reporting.blockers")} items={schedulePreview.blockers} />}
+                {schedulePreview.warnings.length > 0 && <EvidenceList title={t("policy.reporting.warnings")} items={schedulePreview.warnings} />}
                 <div className="mt-3 grid gap-3 lg:grid-cols-3">
                   <EvidenceList title={t("policy.reporting.executeWrites")} items={schedulePreview.execute_writes} />
                   <EvidenceList title={t("policy.reporting.recovery")} items={schedulePreview.recovery_steps} />

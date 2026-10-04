@@ -1073,6 +1073,30 @@ func TestComplianceScheduleReviewAndRecoveryCommands(t *testing.T) {
 	}
 }
 
+func TestComplianceReportRunCommandsPreserveExactSignedDownload(t *testing.T) {
+	const runID = "33333333-3333-4333-8333-333333333333"
+	const wire = `{"manifest":{"report_type":"audit_summary","n":1},"signature":"AQ==","public_key_der":"Ag=="}`
+	var captured capture
+	srv := mockServer(t, http.StatusOK, wire, &captured)
+	env := cli.Env{Server: srv.URL, HTTPClient: srv.Client()}
+	code, stdout, stderr := run(t, []string{"compliance", "report-runs", "download", runID}, env, "")
+	if code != 0 || stderr != "" || stdout != wire {
+		t.Fatalf("signed report CLI changed exact bytes: exit %d output %q stderr %q", code, stdout, stderr)
+	}
+	if captured.Method != http.MethodGet || captured.Path != "/api/v1/compliance/report-runs/"+runID+"/artifact" {
+		t.Fatalf("signed report download request = %s %s", captured.Method, captured.Path)
+	}
+	for _, tc := range []struct{ words, path, method string }{
+		{"get", "/api/v1/compliance/report-runs/" + runID, http.MethodGet},
+		{"requeue", "/api/v1/compliance/report-runs/" + runID + "/requeue", http.MethodPost},
+	} {
+		code, _, stderr = run(t, []string{"compliance", "report-runs", tc.words, runID}, env, "")
+		if code != 0 || stderr != "" || captured.Method != tc.method || captured.Path != tc.path {
+			t.Fatalf("report run %s = exit %d request %s %s stderr %q", tc.words, code, captured.Method, captured.Path, stderr)
+		}
+	}
+}
+
 func TestIdentityTransitionPreviewSendsExactBodyWithoutMutationHeader(t *testing.T) {
 	body := `{"to":"issued","reason":"reviewed issuance","subject_csr_pem":"public-csr"}`
 	var captured capture

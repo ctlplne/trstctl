@@ -10,9 +10,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/reportarchive"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -91,5 +93,43 @@ func TestComplianceReportRunCommandRecoversRetainedAppendAndBindsDueEdge(t *test
 	conflict.ErrorCode = "archive_unavailable"
 	if _, err := command.RecordComplianceReportRun(ctx, conflict); err == nil {
 		t.Fatal("same deterministic event identity accepted different failure metadata")
+	}
+	completed := got
+	completed.Status = "completed"
+	completed.Attempt++
+	completed.NextAttemptAt = time.Time{}
+	completed.ErrorCode = ""
+	completed.CompletedAt = now.Add(2 * time.Minute)
+	completed.ArtifactDigest = crypto.SHA256Hex([]byte(`{"signed":"report"}`))
+	completed.ArtifactRef, err = reportarchive.Reference(tenantA, run.ID, completed.ArtifactDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completedEventID := orchestrator.ComplianceReportRunEventID(completed)
+	completedPayload, err := json.Marshal(projections.ComplianceReportRunRecorded{
+		ID: completed.ID, ScheduleID: completed.ScheduleID, DueAt: completed.DueAt,
+		Framework: completed.Framework, ReportType: completed.ReportType, Status: completed.Status,
+		RetryGeneration: completed.RetryGeneration, Attempt: completed.Attempt,
+		ArtifactRef: completed.ArtifactRef, ArtifactDigest: completed.ArtifactDigest,
+		CompletedAt: completed.CompletedAt, CreatedAt: completed.CreatedAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = log.Append(ctx, events.Event{
+		ID: completedEventID, TenantID: tenantA, Type: projections.EventComplianceReportRunRecorded,
+		SchemaVersion: 1, Data: completedPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, found, err := command.RecoverComplianceReportNextTransition(ctx, got)
+	if err != nil || !found || recovered.Status != "completed" ||
+		recovered.ArtifactDigest != completed.ArtifactDigest {
+		t.Fatalf("recover signed completion after append/projection crash = %+v, found %t, err %v", recovered, found, err)
+	}
+	updated, err := st.GetComplianceReportSchedule(ctx, tenantA, scheduleID)
+	if err != nil || !updated.NextRunAt.Equal(completed.CompletedAt.Add(24*time.Hour)) {
+		t.Fatalf("recovered completion did not advance exact schedule due edge: %+v, %v", updated, err)
 	}
 }

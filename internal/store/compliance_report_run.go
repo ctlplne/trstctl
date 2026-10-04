@@ -207,6 +207,43 @@ func (s *Store) GetComplianceReportRunByDue(ctx context.Context, tenantID, sched
 	return out, err
 }
 
+// ListComplianceReportRunsPage returns one schedule's receipts newest due edge
+// first. DueAt is unique within a tenant/schedule, so it is a stable keyset
+// cursor even when a retry changes the receipt's update time.
+func (s *Store) ListComplianceReportRunsPage(ctx context.Context, tenantID, scheduleID string, before time.Time, limit int) ([]ComplianceReportRun, error) {
+	if limit < 1 || limit > 101 {
+		return nil, errors.New("store: report run page query limit must be 1-101")
+	}
+	var cutoff any
+	if !before.IsZero() {
+		cutoff = before
+	}
+	var out []ComplianceReportRun
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
+			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at
+			   FROM compliance_report_runs
+			  WHERE tenant_id = $1 AND schedule_id = $2
+			    AND ($3::timestamptz IS NULL OR due_at < $3)
+			  ORDER BY due_at DESC LIMIT $4`, tenantID, scheduleID, cutoff, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var run ComplianceReportRun
+			if err := scanComplianceReportRun(rows, &run); err != nil {
+				return err
+			}
+			out = append(out, run)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func scanComplianceReportRun(row rowScanner, run *ComplianceReportRun) error {
 	var nextAttempt, completed *time.Time
 	var sequence int64

@@ -24,9 +24,28 @@ import (
 
 var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
+// MaxArtifactBytes bounds memory, disk and the stock CLI's exact-response path.
+// Oversized reports fail visibly; they are never silently truncated.
+const MaxArtifactBytes = 64 << 20
+
+var ErrArtifactTooLarge = errors.New("reportarchive: signed artifact exceeds 64 MiB")
+
 // Dir is an operator-controlled private archive root. It may be mounted on
 // shared durable storage, but must be writable only by the control-plane user.
 type Dir struct{ Root string }
+
+// ValidateRoot is an effect-free startup/preview check. The operator creates
+// and mounts this private directory before enabling scheduled exports.
+func (d Dir) ValidateRoot() error {
+	if d.Root == "" {
+		return errors.New("reportarchive: archive root is required")
+	}
+	root, err := filepath.Abs(d.Root)
+	if err != nil {
+		return err
+	}
+	return checkPrivateDirectory(root)
+}
 
 // Reference binds a report to canonical tenant/run UUIDs and its exact digest.
 // It is always relative to the configured archive root.
@@ -49,6 +68,9 @@ func Reference(tenantID, runID, digest string) (string, error) {
 // before returning a reference suitable for the immutable completion event.
 // Retrying the same write is safe; different bytes can never replace the file.
 func (d Dir) Put(tenantID, runID string, artifact []byte) (ref, digest string, err error) {
+	if len(artifact) > MaxArtifactBytes {
+		return "", "", ErrArtifactTooLarge
+	}
 	if !json.Valid(artifact) {
 		return "", "", errors.New("reportarchive: signed report is not JSON")
 	}
@@ -222,9 +244,20 @@ func readExact(path, digest string) ([]byte, error) {
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return nil, errors.New("reportarchive: artifact is not a private regular file")
 	}
-	data, err := os.ReadFile(path) // #nosec G304 -- fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components.
+	if info.Size() > MaxArtifactBytes {
+		return nil, ErrArtifactTooLarge
+	}
+	file, err := os.Open(path) // #nosec G304 -- fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components.
 	if err != nil {
 		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, MaxArtifactBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxArtifactBytes {
+		return nil, ErrArtifactTooLarge
 	}
 	if !json.Valid(data) || !strings.EqualFold(crypto.SHA256Hex(data), digest) {
 		return nil, errors.New("reportarchive: artifact failed digest or JSON validation")

@@ -128,6 +128,7 @@ type ComplianceEvidenceService interface {
 // licensed signer makes scheduled execution fail closed.
 type ComplianceScheduledSigner interface {
 	SignScheduledManifest(ctx context.Context, manifest json.RawMessage) (json.RawMessage, error)
+	ScheduledVerificationKeyDER() []byte
 }
 
 // ComplianceEvidencePack is the served response for a signed framework export.
@@ -269,6 +270,24 @@ func WithComplianceEvidence(svc ComplianceEvidenceService) Option {
 	return func(c *config) { c.complianceEvidence = svc }
 }
 
+// WithComplianceReportArchive binds scheduled reports to a private durable
+// directory under the operator's audit archive mount.
+func WithComplianceReportArchive(root string) Option {
+	return func(c *config) { c.complianceReportArchive.Root = root }
+}
+
+func (a *API) complianceReportBlockers() []string {
+	blockers := []string{}
+	signer, ok := a.complianceEvidence.(ComplianceScheduledSigner)
+	if !ok || len(signer.ScheduledVerificationKeyDER()) == 0 {
+		blockers = append(blockers, "The licensed, isolated governance report signer is not attached.")
+	}
+	if err := a.complianceReportArchive.ValidateRoot(); err != nil {
+		blockers = append(blockers, "Configure audit.archive_dir as a mounted private 0700 directory writable by the control plane.")
+	}
+	return blockers
+}
+
 // previewComplianceReportSchedule is a POST-shaped read because the exact
 // unsaved definition is structured. It calls the execution validator but does
 // not append an event, reserve an idempotency key, project a row, generate a
@@ -301,13 +320,14 @@ func (a *API) previewComplianceReportSchedule(w http.ResponseWriter, r *http.Req
 		return
 	}
 	warnings := []string{}
+	blockers := a.complianceReportBlockers()
 	if normalized.Enabled != nil && !*normalized.Enabled {
 		warnings = append(warnings, "This definition will be saved paused, so no run becomes due until an operator resumes it.")
 	}
 	a.writeJSON(w, http.StatusOK, complianceReportSchedulePreviewResponse{
-		Capability: "F62", Operation: "create_report_schedule", Ready: true, EffectFree: true,
+		Capability: "F62", Operation: "create_report_schedule", Ready: len(blockers) == 0, EffectFree: true,
 		RequestFingerprint: crypto.SHA256Hex(fingerprintBody), RequiredPermission: string(authz.AuditWrite),
-		NormalizedRequest: normalized, Blockers: []string{}, Warnings: warnings,
+		NormalizedRequest: normalized, Blockers: blockers, Warnings: warnings,
 		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
 		ExecuteWrites: []string{
 			"Append one tenant-scoped compliance.report_schedule.upserted event.",
@@ -316,13 +336,15 @@ func (a *API) previewComplianceReportSchedule(w http.ResponseWriter, r *http.Req
 		ExecuteExternalEffects: []string{},
 		RecoverySteps: []string{
 			"Pause the schedule before its next run; already retained evidence is not deleted.",
+			"Inspect failed run receipts, correct the signer or archive dependency, then requeue the exact due edge with an Idempotency-Key.",
 			"Correct the definition by creating a reviewed replacement, then resume only the intended schedule.",
 		},
 		VerificationSteps: []string{
 			"Read GET /api/v1/compliance/report-schedules and match the exact definition and enabled state.",
 			"Read GET /api/v1/compliance/inventory-report and confirm schedule and enabled-schedule totals.",
+			"After the due time, read the schedule's run receipts and download the exact signed artifact; compare its SHA-256 with the completed receipt.",
 		},
-		SecretDataHandling: "recipient_ref is an opaque metadata locator. Preview neither resolves nor returns a credential, report body, private key, or secret value.",
+		SecretDataHandling: "recipient_ref is an optional correlation label only; it does not route or change the archive destination. Preview neither resolves nor returns a credential, report body, private key, or secret value.",
 	})
 }
 
@@ -337,6 +359,9 @@ func (a *API) createComplianceReportSchedule(w http.ResponseWriter, r *http.Requ
 		normalized, err := normalizeComplianceReportScheduleRequest(req)
 		if err != nil {
 			return 0, nil, err
+		}
+		if blockers := a.complianceReportBlockers(); len(blockers) != 0 {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(blockers, " "))
 		}
 		sched, err := a.orch.UpsertComplianceReportSchedule(ctx, tenantID, store.ComplianceReportSchedule{
 			Framework: normalized.Framework, Name: normalized.Name, ReportType: normalized.ReportType,
@@ -419,6 +444,11 @@ func (a *API) setComplianceReportScheduleEnabled(w http.ResponseWriter, r *http.
 		if current.Enabled == enabled {
 			return http.StatusOK, toComplianceReportScheduleResponse(current), nil
 		}
+		if enabled {
+			if blockers := a.complianceReportBlockers(); len(blockers) != 0 {
+				return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(blockers, " "))
+			}
+		}
 		current.Enabled = enabled
 		updated, err := a.orch.UpsertComplianceReportSchedule(ctx, tenantID, current)
 		if err != nil {
@@ -499,6 +529,10 @@ func (a *API) getComplianceInventoryReport(w http.ResponseWriter, r *http.Reques
 			"GET /api/v1/compliance/report-schedules",
 			"POST /api/v1/compliance/report-schedules/{id}/pause",
 			"POST /api/v1/compliance/report-schedules/{id}/resume",
+			"GET /api/v1/compliance/report-schedules/{id}/runs",
+			"GET /api/v1/compliance/report-runs/{id}",
+			"GET /api/v1/compliance/report-runs/{id}/artifact",
+			"POST /api/v1/compliance/report-runs/{id}/requeue",
 			"GET /api/v1/compliance/evidence-packs/{framework}",
 		},
 		EvidenceRefs: []string{

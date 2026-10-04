@@ -45,6 +45,13 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
+              name: "transport",
+              // Auth and byte-preserving downloads share one compression
+              // dictionary without pulling the full API client into entry.
+              test: (id) => ["/src/lib/apiTransport.ts", "/src/lib/auditExport.ts", "/src/lib/auditQuery.ts"].some((path) => id.includes(path)),
+              priority: 3,
+            },
+            {
               name: "icons",
               test: /node_modules[\\/]lucide-react[\\/]/,
               priority: 2,

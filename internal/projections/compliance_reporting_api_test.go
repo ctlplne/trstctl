@@ -3,16 +3,51 @@
 package projections_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto"
 )
+
+type inventoryScheduleSigner struct{ key crypto.DigestSigner }
+
+func (s inventoryScheduleSigner) ExportEvidencePack(_ context.Context, _ string, framework api.ComplianceFramework) (api.ComplianceEvidencePack, error) {
+	return api.ComplianceEvidencePack{Format: api.ComplianceEvidencePackFormat, Framework: string(framework)}, nil
+}
+
+func (s inventoryScheduleSigner) SignScheduledManifest(_ context.Context, manifest json.RawMessage) (json.RawMessage, error) {
+	signature, err := crypto.SignMessage(s.key, manifest)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		Manifest     json.RawMessage `json:"manifest"`
+		Signature    []byte          `json:"signature"`
+		PublicKeyDER []byte          `json:"public_key_der"`
+	}{Manifest: manifest, Signature: signature, PublicKeyDER: s.key.Public().DER})
+}
+
+func (s inventoryScheduleSigner) ScheduledVerificationKeyDER() []byte { return s.key.Public().DER }
 
 // TestComplianceInventoryReportingCAPOBS02 proves CAP-OBS-02 is served: report
 // schedules are tenant-scoped, idempotent mutations, and the inventory report
 // enumerates the served API/CLI evidence instead of relying on documentation.
 func TestComplianceInventoryReportingCAPOBS02(t *testing.T) {
-	srv, _ := newGraphAPI(t)
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	archive := filepath.Join(t.TempDir(), "audit-archive")
+	if err := os.Mkdir(archive, 0700); err != nil {
+		t.Fatal(err)
+	}
+	srv, _ := newGraphAPI(t, api.WithComplianceEvidence(inventoryScheduleSigner{key: key}), api.WithComplianceReportArchive(archive))
 
 	req := map[string]any{
 		"name":             "Quarterly SOC 2 inventory",

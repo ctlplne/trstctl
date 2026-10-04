@@ -21,11 +21,11 @@ import (
 
 // newGraphAPI builds an API server over a fresh store and returns both, so the
 // test can seed the inventory the graph is built from.
-func newGraphAPI(t *testing.T) (*httptest.Server, *store.Store) {
+func newGraphAPI(t *testing.T, options ...api.Option) (*httptest.Server, *store.Store) {
 	t.Helper()
 	s := newStore(t)
 	log := openLog(t)
-	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)), api.WithInsecureHeaderResolver())
+	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)), append([]api.Option{api.WithInsecureHeaderResolver()}, options...)...)
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
 	return srv, s

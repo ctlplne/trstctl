@@ -2300,6 +2300,31 @@ export interface ComplianceInventorySummary {
   report_types_supported: number;
 }
 
+export interface ComplianceReportRun {
+  artifact_digest?: string;
+  artifact_ref?: string;
+  attempt: number;
+  completed_at?: string;
+  created_at: string;
+  due_at: string;
+  error_code?: string;
+  event_sequence: number;
+  framework: string;
+  id: string;
+  next_attempt_at?: string;
+  report_type: string;
+  retry_generation: number;
+  schedule_id: string;
+  status: "queued" | "retrying" | "failed" | "completed";
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface ComplianceReportRunList {
+  items: ComplianceReportRun[];
+  next_cursor?: string;
+}
+
 export interface ComplianceReportSchedule {
   created_at: string;
   delivery: "audit_export";
@@ -7213,6 +7238,12 @@ export interface ScaleUnitEconomics {
   events_per_day: number;
   jetstream_gib_30_day: number;
   postgres_gib_30_day: number;
+}
+
+export interface ScheduledComplianceArtifact {
+  manifest: Record<string, unknown>;
+  public_key_der: string;
+  signature: string;
 }
 
 export interface SecretAccessPreview {

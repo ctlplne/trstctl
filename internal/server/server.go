@@ -59,6 +59,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	sshca "trstctl.com/trstctl/internal/protocols/ssh"
+	"trstctl.com/trstctl/internal/reportarchive"
 	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/signing"
@@ -638,6 +639,9 @@ type Server struct {
 	store              *store.Store
 	log                *events.Log
 	audit              *audit.Service
+	reportArchive      reportarchive.Dir
+	reportSweepMu      sync.Mutex
+	reportTenantOffset int
 	outbox             *orchestrator.Outbox
 	outboxWake         chan struct{}
 	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
@@ -979,6 +983,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		tenantServiceCheck:        d.TenantServiceCheck,
 		store:                     d.Store,
 		log:                       d.Log,
+		reportArchive:             reportarchive.Dir{Root: d.AuditArchiveDir},
 		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
 		signerTopology:            d.SignerMode,
@@ -1374,6 +1379,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// through the public auth bootstrap so the browser can fail closed without
 	// probing the intentionally dark /provider/v1 namespace.
 	defaults = append(defaults, api.WithProviderPlaneAvailable(d.ProviderHandler != nil))
+	defaults = append(defaults, api.WithComplianceReportArchive(d.AuditArchiveDir))
 	defaults = append(defaults, api.WithFirstIssuanceRetry(s))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
