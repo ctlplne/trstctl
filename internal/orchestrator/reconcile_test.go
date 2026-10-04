@@ -157,11 +157,11 @@ func TestReconcileOutboxRetainsLegacyProviderAuditWithoutTenantFence(t *testing.
 	if checkpoint, err := s.OutboxReconciliationCheckpoint(ctx); err != nil || checkpoint != archive.Sequence {
 		t.Fatalf("outbox checkpoint after archive = %d, err %v; want %d", checkpoint, err, archive.Sequence)
 	}
-	if _, err := log.Append(ctx, events.Event{Type: "unexpected.core.event", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
+	if _, err := log.Append(ctx, events.Event{Type: "provider.future.state_changed", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := orch.ReconcileOutbox(ctx, log); err == nil {
-		t.Fatal("unrelated malformed tenant event bypassed outbox admission")
+		t.Fatal("unknown Provider event in legacy partition bypassed outbox admission")
 	}
 }
 

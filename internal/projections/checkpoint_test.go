@@ -104,11 +104,11 @@ func TestProjectCatchUpAcceptsLegacyProviderAuditPartitionOnlyForProviderEvents(
 	if err := p.Rebuild(ctx, log); err != nil {
 		t.Fatalf("legacy and current Provider audits blocked full core rebuild: %v", err)
 	}
-	if _, err := log.Append(ctx, events.Event{Type: "unexpected.core.event", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
+	if _, err := log.Append(ctx, events.Event{Type: "provider.future.state_changed", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.ProjectCatchUp(ctx, log); err == nil {
-		t.Fatal("non-Provider event with invalid tenant bypassed core tenant validation")
+		t.Fatal("unknown Provider event in legacy partition bypassed core tenant validation")
 	}
 }
 

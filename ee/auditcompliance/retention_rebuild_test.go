@@ -185,31 +185,37 @@ func TestLegacyAdministrativeAuditScopeRejectsUnknownCoreEvent(t *testing.T) {
 }
 
 func TestLegacyAdministrativeAuditScopeRejectsUnknownRetentionPartitionBeforeArchive(t *testing.T) {
-	ctx := context.Background()
+	for _, eventType := range []string{"identity.issued", "provider.future.state_changed"} {
+		t.Run(eventType, func(t *testing.T) {
+			ctx := context.Background()
+			st := newAuditTestStore(t)
+			log := openTestLog(t)
+			if _, err := log.Append(ctx, events.Event{
+				Type: eventType, TenantID: events.LegacyProviderGlobalAuditScope,
+				Time: time.Now().Add(-48 * time.Hour),
+			}); err != nil {
+				t.Fatal(err)
+			}
+			key, err := jose.GenerateRSASigningKey("audit-export")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			svc := audit.NewService(log, key, audit.WithCheckpoints(st), audit.WithPrivacyErasures(st))
+			worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: dir}, st, time.Hour, key)
+			if _, err := worker.RunOnce(ctx); err == nil || !strings.Contains(err.Error(), "unsupported non-UUID event partition") {
+				t.Fatalf("retention accepted unknown event in legacy partition: %v", err)
+			}
+			if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
+				t.Fatalf("refused retention wrote archive entries %v, err %v", entries, err)
+			}
+			if _, ok, err := st.LatestAuditCheckpoint(ctx, events.LegacyProviderGlobalAuditScope); err != nil || ok {
+				t.Fatalf("refused retention sealed checkpoint: %v, %v", ok, err)
+			}
+		})
+	}
 	st := newAuditTestStore(t)
-	log := openTestLog(t)
-	if _, err := log.Append(ctx, events.Event{
-		Type: "identity.issued", TenantID: events.LegacyProviderGlobalAuditScope,
-		Time: time.Now().Add(-48 * time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	key, err := jose.GenerateRSASigningKey("audit-export")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	svc := audit.NewService(log, key, audit.WithCheckpoints(st), audit.WithPrivacyErasures(st))
-	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: dir}, st, time.Hour, key)
-	if _, err := worker.RunOnce(ctx); err == nil || !strings.Contains(err.Error(), "unsupported non-UUID event partition") {
-		t.Fatalf("retention accepted unknown event in legacy partition: %v", err)
-	}
-	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
-		t.Fatalf("refused retention wrote archive entries %v, err %v", entries, err)
-	}
-	if _, ok, err := st.LatestAuditCheckpoint(ctx, events.LegacyProviderGlobalAuditScope); err != nil || ok {
-		t.Fatalf("refused retention sealed checkpoint: %v, %v", ok, err)
-	}
+	ctx := context.Background()
 	if _, err := st.ListPrivacyErasureRefs(ctx, "another-administrative-scope"); err == nil {
 		t.Fatal("privacy lookup mapped an unknown textual scope into RLS")
 	}
