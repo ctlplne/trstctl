@@ -58,9 +58,12 @@ type API struct {
 	// mdmTelemetryMemo memoizes the MDM SCEP challenge telemetry fold the same
 	// way (F5/V21) — its cost grew with the very traffic it reports on.
 	mdmTelemetryMemo headMemo[mdmSCEPTelemetryResponse]
-	idem             *orchestrator.Idempotency
-	orch             *orchestrator.Orchestrator
-	tenantFn         func(*http.Request) (string, error)
+	// One audit-window result is reused across retries at the same event head.
+	// Old due edges are evicted so hourly schedules cannot grow this cache forever.
+	scheduledAuditMemo headMemo[scheduledAuditSummary]
+	idem               *orchestrator.Idempotency
+	orch               *orchestrator.Orchestrator
+	tenantFn           func(*http.Request) (string, error)
 	// drVerify re-hashes the configured backup directory (J2). Nil means no
 	// backup directory is configured, which the surface reports as such rather
 	// than as a failure — plenty of deployments back up through infrastructure

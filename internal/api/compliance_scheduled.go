@@ -165,22 +165,45 @@ func (a *API) buildScheduledAuditSummary(ctx context.Context, tenantID string, s
 		return nil, errors.New("compliance: event log is not configured")
 	}
 	from := schedule.NextRunAt.Add(-time.Duration(schedule.IntervalSeconds) * time.Second)
+	var summary scheduledAuditSummary
+	err := a.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		stream, generation, err := a.log.ActiveHistoryIdentity(readCtx)
+		if err != nil {
+			return err
+		}
+		key := tenantID + "\x00" + schedule.ID + "\x00" + schedule.NextRunAt.UTC().Format(time.RFC3339Nano) +
+			"\x00" + stream + "\x00" + generation
+		summary, err = a.scheduledAuditMemo.get(readCtx, a.log, key,
+			func(ctx context.Context) (scheduledAuditSummary, uint64, error) {
+				return a.replayScheduledAuditSummary(ctx, tenantID, from, schedule.NextRunAt)
+			}, nil)
+		a.scheduledAuditMemo.prune(64)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compliance: summarize event window: %w", err)
+	}
+	return json.Marshal(summary)
+}
+
+// replayScheduledAuditSummary is the headMemo rebuild for one tenant's exact
+// due window. ReplayThrough pins the signed source head; retries at that head
+// reuse the result, while a later append invalidates it.
+func (a *API) replayScheduledAuditSummary(ctx context.Context, tenantID string, from, through time.Time) (scheduledAuditSummary, uint64, error) {
 	summary := scheduledAuditSummary{
 		Format: "trstctl.compliance.audit-summary.v1", WindowFrom: from,
-		WindowThrough: schedule.NextRunAt,
+		WindowThrough: through,
 	}
+	head, err := a.log.LastSequence(ctx)
+	if err != nil {
+		return scheduledAuditSummary{}, 0, err
+	}
+	summary.SourceHeadSequence = head
 	counts := map[string]int{}
-	err := a.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		var headErr error
-		summary.SourceHeadSequence, headErr = a.log.LastSequence(readCtx)
-		if headErr != nil {
-			return headErr
-		}
-		return a.log.Replay(readCtx, 0, func(event events.Event) error {
-			if event.Sequence > summary.SourceHeadSequence {
-				return nil
-			}
-			if event.TenantID != tenantID || event.Time.Before(from) || event.Time.After(schedule.NextRunAt) {
+	if head > 0 {
+		err = a.log.ReplayThrough(ctx, 1, head, func(event events.Event) error {
+			a.scheduledAuditMemo.scannedEvents.Add(1)
+			if event.TenantID != tenantID || event.Time.Before(from) || event.Time.After(through) {
 				return nil
 			}
 			if summary.RecordCount == 0 {
@@ -193,9 +216,9 @@ func (a *API) buildScheduledAuditSummary(ctx context.Context, tenantID string, s
 			counts[event.Type]++
 			return nil
 		})
-	})
+	}
 	if err != nil {
-		return nil, fmt.Errorf("compliance: summarize event window: %w", err)
+		return scheduledAuditSummary{}, 0, err
 	}
 	types := make([]string, 0, len(counts))
 	for typ := range counts {
@@ -206,5 +229,5 @@ func (a *API) buildScheduledAuditSummary(ctx context.Context, tenantID string, s
 	for _, typ := range types {
 		summary.TypeCounts = append(summary.TypeCounts, scheduledAuditTypeCount{Type: typ, Count: counts[typ]})
 	}
-	return json.Marshal(summary)
+	return summary, head, nil
 }

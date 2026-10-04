@@ -122,3 +122,19 @@ func (m *headMemo[T]) store(tenantID string, value T, head uint64) {
 func (m *headMemo[T]) prime(tenantID string, value T, head uint64) {
 	m.store(tenantID, value, head)
 }
+
+// prune keeps short-lived, window-keyed projections bounded. Eviction is safe:
+// the event log remains the source of truth and a miss simply rebuilds.
+func (m *headMemo[T]) prune(maxEntries int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if maxEntries <= 0 {
+		return
+	}
+	for len(m.byTenant) > maxEntries {
+		for key := range m.byTenant {
+			delete(m.byTenant, key)
+			break
+		}
+	}
+}
