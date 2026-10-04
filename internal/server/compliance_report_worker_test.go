@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -22,9 +25,10 @@ import (
 )
 
 type reportWorkerSigner struct {
-	key   crypto.DigestSigner
-	calls atomic.Int32
-	fail  atomic.Bool
+	key         crypto.DigestSigner
+	calls       atomic.Int32
+	fail        atomic.Bool
+	unavailable atomic.Bool
 }
 
 func (s *reportWorkerSigner) ExportEvidencePack(context.Context, string, api.ComplianceFramework) (api.ComplianceEvidencePack, error) {
@@ -33,6 +37,9 @@ func (s *reportWorkerSigner) ExportEvidencePack(context.Context, string, api.Com
 
 func (s *reportWorkerSigner) SignScheduledManifest(_ context.Context, manifest json.RawMessage) (json.RawMessage, error) {
 	s.calls.Add(1)
+	if s.unavailable.Load() {
+		return nil, status.Error(codes.Unavailable, "test isolated signer unavailable")
+	}
 	if s.fail.Load() {
 		return nil, errors.New("test signer unavailable")
 	}
@@ -104,16 +111,16 @@ func TestComplianceReportWorkerSignsArchivesAndRecoversExactDueEdge(t *testing.T
 	}
 	// The first attempt fails while the signer is unavailable. The retry is
 	// event-backed and exposes a bounded reason rather than a secret/error body.
-	signer.fail.Store(true)
+	signer.unavailable.Store(true)
 	processed, err := h.srv.RunComplianceReportsOnce(ctx)
 	if err != nil || processed != 1 {
 		t.Fatalf("first due sweep = %d, %v", processed, err)
 	}
 	run, err := h.store.GetComplianceReportRunByDue(ctx, h.tenant, scheduleID, due)
-	if err != nil || run.Status != "retrying" || run.Attempt != 1 || run.ErrorCode != "producer_failed" {
+	if err != nil || run.Status != "retrying" || run.Attempt != 1 || run.ErrorCode != "signer_unavailable" {
 		t.Fatalf("failed signer receipt = %+v, %v", run, err)
 	}
-	signer.fail.Store(false)
+	signer.unavailable.Store(false)
 	didProcess, err := h.srv.runComplianceReportDue(ctx, selected, time.Now().UTC().Add(2*time.Minute))
 	if err != nil || !didProcess {
 		t.Fatalf("retry due edge = %t, %v", didProcess, err)

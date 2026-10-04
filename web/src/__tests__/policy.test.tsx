@@ -1104,7 +1104,7 @@ describe("policy governance surface", () => {
       status: "failed",
       retry_generation: 0,
       attempt: 5,
-      error_code: "producer_failed",
+      error_code: "signer_unavailable",
       event_sequence: 70,
       created_at: "2026-06-27T12:00:00Z",
       updated_at: "2026-06-27T12:05:00Z",
@@ -1116,7 +1116,8 @@ describe("policy governance surface", () => {
     await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
     await screen.findByRole("heading", { name: "Compliance inventory report" });
     await user.click(screen.getByRole("button", { name: "Signed runs" }));
-    expect(await screen.findByText("producer_failed")).toBeInTheDocument();
+    expect(await screen.findByText("signer_unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Restore the isolated signer before requeuing/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Requeue failed run" }));
     await waitFor(() => expect(apiMock.requeueComplianceReportRun).toHaveBeenCalledWith(failed.id));
     await user.click(await screen.findByRole("button", { name: "Download signed report" }));

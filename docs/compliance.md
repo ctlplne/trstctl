@@ -234,6 +234,13 @@ bytes. Verify its embedded signature and compare the file's SHA-256 to
 `artifact_digest` in the run receipt. Run reads need `audit:read`; a failed
 run can be requeued with `audit:write`:
 
+If the receipt says `signer_unavailable`, restore the isolated signer and
+confirm the control-plane health endpoint before requeuing. Other failure
+codes require checking signer and private archive health for the named code;
+requeue only after the dependency is healthy, then verify the signed download.
+The run ID and due edge stay the same across requeue, and its retry generation
+advances so an operator can distinguish recovery from the original attempts.
+
 ```sh
 trstctl-cli --idempotency-key retry-soc2-run-1 compliance report-runs requeue RUN_ID
 ```

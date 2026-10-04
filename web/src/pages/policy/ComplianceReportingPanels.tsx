@@ -192,7 +192,14 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
           </div>
           <div>
             <p>{t("policy.reporting.runState", { status: run.status, attempt: run.attempt })}</p>
-            {run.error_code && <p className="text-destructive">{run.error_code}</p>}
+            {run.error_code && (
+              <>
+                <p className="text-destructive">{run.error_code}</p>
+                <p className="text-sm text-muted-foreground">
+                  {run.error_code === "signer_unavailable" ? t("policy.reporting.signerUnavailableRecovery") : t("policy.reporting.runFailureRecovery")}
+                </p>
+              </>
+            )}
             {run.next_attempt_at && <p>{t("policy.reporting.retryAt", { date: formatDateTime(run.next_attempt_at) })}</p>}
             {run.artifact_digest && (
               <p className="break-all font-mono text-xs">

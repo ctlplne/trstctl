@@ -11836,6 +11836,14 @@ export const messages = {
   "policy.reporting.digest": { defaultMessage: "SHA-256", description: "Exact signed report artifact digest." },
   "policy.reporting.runState": { defaultMessage: "{status} · attempt {attempt}", description: "Scheduled report state and attempt count." },
   "policy.reporting.retryAt": { defaultMessage: "Retry after {date}", description: "Next automatic scheduled report attempt." },
+  "policy.reporting.signerUnavailableRecovery": {
+    defaultMessage: "Restore the isolated signer before requeuing this run. Check the control-plane health endpoint, then refresh the run receipt.",
+    description: "Operator recovery when the scheduled report signer is unavailable.",
+  },
+  "policy.reporting.runFailureRecovery": {
+    defaultMessage: "Check signer and archive health for this error code. Fix the dependency, then requeue this run and verify the signed download.",
+    description: "Operator recovery for other scheduled report failures.",
+  },
   "policy.reporting.downloadRun": { defaultMessage: "Download signed report", description: "Download the exact signed report artifact." },
   "policy.reporting.requeueRun": { defaultMessage: "Requeue failed run", description: "Retry the same failed report due edge." },
   "policy.reporting.requeued": { defaultMessage: "Run requeued.", description: "Successful manual recovery of a failed report run." },

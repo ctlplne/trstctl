@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/reportarchive"
@@ -140,7 +142,11 @@ func (s *Server) produceComplianceReportRun(ctx context.Context, schedule store.
 	if errors.Is(err, os.ErrNotExist) {
 		artifact, err = s.api.BuildScheduledComplianceArtifact(ctx, run.TenantID, schedule, run.ID, time.Now().UTC())
 		if err != nil {
-			return s.recordComplianceReportFailure(ctx, run, "producer_failed", false)
+			code := "producer_failed"
+			if status.Code(err) == codes.Unavailable {
+				code = "signer_unavailable"
+			}
+			return s.recordComplianceReportFailure(ctx, run, code, false)
 		}
 		if len(artifact) > reportarchive.MaxArtifactBytes {
 			return s.recordComplianceReportFailure(ctx, run, "artifact_too_large", true)
