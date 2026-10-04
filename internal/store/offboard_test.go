@@ -53,6 +53,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	testDSN = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
+	if err := os.Setenv("TRSTCTL_STORE_TEST_DSN", testDSN); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	_ = pg.Stop()
 	_ = os.RemoveAll(dir)

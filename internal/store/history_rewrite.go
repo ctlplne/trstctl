@@ -255,7 +255,18 @@ func (c *PostgresHistoryRewriteCoordinator) withLock(
 		return fmt.Errorf("store: acquire %s connection: %w", label, err)
 	}
 	locked := false
+	acquireUncertain := false
 	defer func() {
+		if acquireUncertain {
+			// QueryRow may return a canceled transport error after PostgreSQL
+			// granted a session lock but before we received the boolean. Never
+			// return that ambiguous session to the pool: the next borrower could
+			// inherit an exclusive grant and block every privacy reader.
+			if err := discardHistoryRewriteSession(conn); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("store: discard ambiguous %s session: %w", label, err))
+			}
+			return
+		}
 		if !locked {
 			conn.Release()
 			return
@@ -264,10 +275,7 @@ func (c *PostgresHistoryRewriteCoordinator) withLock(
 			// Returning a session to the pool with a live advisory lock would make
 			// a future, unrelated borrower inherit the grant. Destroy the session
 			// instead; PostgreSQL releases every session lock when it closes.
-			raw := conn.Hijack()
-			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			closeErr := raw.Close(closeCtx)
-			cancel()
+			closeErr := discardHistoryRewriteSession(conn)
 			unlockErr := err
 			if closeErr != nil {
 				unlockErr = errors.Join(unlockErr, fmt.Errorf("close poisoned history-lock session: %w", closeErr))
@@ -283,6 +291,7 @@ func (c *PostgresHistoryRewriteCoordinator) withLock(
 	}()
 
 	if err := acquireHistoryRewriteLock(ctx, conn, key, shared); err != nil {
+		acquireUncertain = true
 		return fmt.Errorf("store: acquire %s: %w", label, err)
 	}
 	locked = true
@@ -290,6 +299,13 @@ func (c *PostgresHistoryRewriteCoordinator) withLock(
 		return context.Cause(ctx)
 	}
 	return fn(ctx)
+}
+
+func discardHistoryRewriteSession(conn *pgxpool.Conn) error {
+	raw := conn.Hijack()
+	closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return raw.Close(closeCtx)
 }
 
 func acquireHistoryRewriteLock(
