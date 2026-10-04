@@ -37,6 +37,9 @@ func (a DirArchiver) Archive(_ context.Context, tenantID string, boundarySeq uin
 	if a.Dir == "" {
 		return "", errors.New("audit: archive dir is empty")
 	}
+	if tenantID == "" || tenantID == "." || tenantID == ".." || filepath.Base(tenantID) != tenantID {
+		return "", errors.New("audit: archive scope is not a single path component")
+	}
 	dir := filepath.Join(a.Dir, tenantID)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("audit: create archive dir: %w", err)

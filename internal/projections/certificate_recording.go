@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -57,7 +58,11 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	// All existing event families enter this transaction boundary. The narrow
 	// certificate trigger records their actual sequence when they touch a leaf;
 	// a later ownership/privacy/migration write cannot go unnoticed by recovery.
-	return p.store.WithCertificateProjectionOrderTx(ctx, tx, e.TenantID, e.Sequence, func() error {
+	projectionTenant := e.TenantID
+	if e.Type == audit.EventTypeArchived {
+		projectionTenant = store.AuditCheckpointRLSID(e.TenantID)
+	}
+	return p.store.WithCertificateProjectionOrderTx(ctx, tx, projectionTenant, e.Sequence, func() error {
 		if e.Type == EventCAEndEntityIssued || e.Type == EventCAIssuedCertificate {
 			return p.store.WithResponderIssuanceReceiptTx(ctx, tx, e, func() error {
 				return p.applyCoreEventTx(ctx, tx, e)

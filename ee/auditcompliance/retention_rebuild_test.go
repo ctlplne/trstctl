@@ -97,6 +97,47 @@ func TestAuditRetentionPreservesProjectionRebuild(t *testing.T) {
 	}
 }
 
+func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
+	ctx := context.Background()
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
+	const scope = "provider-control-plane"
+	if _, err := log.Append(ctx, events.Event{
+		Type: "provider.isolation.drill", TenantID: scope,
+		Time: time.Now().Add(-48 * time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := audit.NewService(log, key, audit.WithCheckpoints(st))
+	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, st, time.Hour, key)
+	if sum, err := worker.RunOnce(ctx); err != nil || sum.RecordsArchived != 1 {
+		t.Fatalf("legacy retention = %+v, err = %v", sum, err)
+	}
+	assertCheckpoint := func(stage string) {
+		t.Helper()
+		cp, ok, err := st.LatestAuditCheckpoint(ctx, scope)
+		if err != nil || !ok || cp.TenantID != scope || cp.RecordCount != 1 {
+			t.Fatalf("%s checkpoint = %+v, ok = %v, err = %v", stage, cp, ok, err)
+		}
+		inventory, err := st.ListAuditCheckpointTenants(ctx)
+		if err != nil || len(inventory) != 1 || inventory[0] != scope {
+			t.Fatalf("%s scope inventory = %v, err = %v", stage, inventory, err)
+		}
+	}
+	assertCheckpoint("live")
+	if _, err := st.SystemPool().Exec(ctx, `TRUNCATE audit_checkpoints`); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Rebuild(ctx, log); err != nil {
+		t.Fatalf("rebuild legacy archive checkpoint: %v", err)
+	}
+	assertCheckpoint("replayed")
+}
+
 func TestAuditRetentionRebuildRejectsLostSourceBeforeReadModelMutation(t *testing.T) {
 	ctx := context.Background()
 	st := newAuditTestStore(t)

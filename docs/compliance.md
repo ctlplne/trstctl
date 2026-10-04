@@ -290,6 +290,12 @@ complete tenant source prefix and fails before mutation if a legacy or
 externally damaged source has gaps. Archiving to immutable/WORM storage
 remains the operator's responsibility.
 
+Historical administrative audit scopes that predate UUID tenant IDs retain
+their original scope in the signed event and checkpoint. A deterministic,
+separate UUID partitions their checkpoint rows under PostgreSQL RLS; it does
+not merge them with customer or current Provider audit history. Backup and
+rebuild use the preserved original scope to verify the retained event source.
+
 ## Framework mapping — *enables* vs. operator responsibility
 
 This maps the controls trstctl's audit/identity subsystems help satisfy. It

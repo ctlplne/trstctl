@@ -6,11 +6,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
 )
+
+// AuditCheckpointRLSID maps historical non-UUID audit scopes to a stable RLS
+// partition. The original scope is retained in scope_id and in the event. A
+// namespace-bound UUID keeps the RLS contract without relabeling old evidence
+// as an unrelated customer tenant.
+func AuditCheckpointRLSID(scope string) string {
+	if strings.TrimSpace(scope) == "" {
+		return ""
+	}
+	if parsed, err := uuid.Parse(scope); err == nil {
+		return parsed.String()
+	}
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl.audit.checkpoint.scope.v1\x00"+scope)).String()
+}
 
 // SaveAuditCheckpoint persists a sealed retention boundary for a tenant (R4.4):
 // every audit record up to BoundarySeq has been archived to cold storage and
@@ -18,17 +34,26 @@ import (
 // source envelopes remain present for rebuild. Re-sealing the same boundary
 // updates it in place, so a retried run is idempotent.
 func (s *Store) SaveAuditCheckpoint(ctx context.Context, cp audit.Checkpoint) error {
-	return s.WithTenant(ctx, cp.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO audit_checkpoints (tenant_id, boundary_seq, boundary_hash, record_count, archive_uri)
-			 VALUES ($1, $2, $3, $4, $5)
+	storageTenant := AuditCheckpointRLSID(cp.TenantID)
+	return s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx,
+			`INSERT INTO audit_checkpoints (tenant_id, scope_id, boundary_seq, boundary_hash, record_count, archive_uri)
+			 VALUES ($1, $2, $3, $4, $5, $6)
 			 ON CONFLICT (tenant_id, boundary_seq)
-			 DO UPDATE SET boundary_hash = EXCLUDED.boundary_hash,
+			 DO UPDATE SET scope_id      = EXCLUDED.scope_id,
+			               boundary_hash = EXCLUDED.boundary_hash,
 			               record_count  = EXCLUDED.record_count,
 			               archive_uri   = EXCLUDED.archive_uri,
-			               created_at    = now()`,
-			cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
-		return err
+			               created_at    = now()
+			 WHERE COALESCE(audit_checkpoints.scope_id, audit_checkpoints.tenant_id::text) = EXCLUDED.scope_id`,
+			storageTenant, cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return errors.New("store: audit checkpoint scope storage collision")
+		}
+		return nil
 	})
 }
 
@@ -42,15 +67,24 @@ func (s *Store) ApplyAuditCheckpointTx(ctx context.Context, tx pgx.Tx, cp audit.
 		cp.BoundaryHash == "" || cp.ArchiveURI == "" {
 		return errors.New("store: audit checkpoint event is incomplete")
 	}
-	_, err := tx.Exec(ctx,
-		`INSERT INTO audit_checkpoints (tenant_id, boundary_seq, boundary_hash, record_count, archive_uri)
-		 VALUES ($1, $2, $3, $4, $5)
+	storageTenant := AuditCheckpointRLSID(cp.TenantID)
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO audit_checkpoints (tenant_id, scope_id, boundary_seq, boundary_hash, record_count, archive_uri)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (tenant_id, boundary_seq)
-		 DO UPDATE SET boundary_hash = EXCLUDED.boundary_hash,
+		 DO UPDATE SET scope_id      = EXCLUDED.scope_id,
+		               boundary_hash = EXCLUDED.boundary_hash,
 		               record_count  = EXCLUDED.record_count,
-		               archive_uri   = EXCLUDED.archive_uri`,
-		cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
-	return err
+		               archive_uri   = EXCLUDED.archive_uri
+		 WHERE COALESCE(audit_checkpoints.scope_id, audit_checkpoints.tenant_id::text) = EXCLUDED.scope_id`,
+		storageTenant, cp.TenantID, int64(cp.BoundarySeq), cp.BoundaryHash, int64(cp.RecordCount), cp.ArchiveURI) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("store: audit checkpoint scope storage collision")
+	}
+	return nil
 }
 
 // LatestAuditCheckpoint returns the tenant's most recent sealed boundary (the
@@ -59,14 +93,15 @@ func (s *Store) ApplyAuditCheckpointTx(ctx context.Context, tx pgx.Tx, cp audit.
 func (s *Store) LatestAuditCheckpoint(ctx context.Context, tenantID string) (audit.Checkpoint, bool, error) {
 	cp := audit.Checkpoint{TenantID: tenantID}
 	found := false
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	storageTenant := AuditCheckpointRLSID(tenantID)
+	err := s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
 		var bseq, count int64
 		row := tx.QueryRow(ctx,
 			`SELECT boundary_seq, boundary_hash, record_count, archive_uri
 			   FROM audit_checkpoints
-			  WHERE tenant_id = $1
+			  WHERE tenant_id = $1 AND COALESCE(scope_id, tenant_id::text) = $2
 			  ORDER BY boundary_seq DESC
-			  LIMIT 1`, tenantID)
+			  LIMIT 1`, storageTenant, tenantID)
 		switch err := row.Scan(&bseq, &cp.BoundaryHash, &count, &cp.ArchiveURI); {
 		case err == nil:
 			cp.BoundarySeq = uint64(bseq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
@@ -91,8 +126,8 @@ func (s *Store) LatestAuditCheckpoint(ctx context.Context, tenantID string) (aud
 // from retained-source validation.
 func (s *Store) ListAuditCheckpointTenants(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		//trstctl:system-query — cross-tenant by design: backup/DR must inventory every audit checkpoint before selecting each tenant under tenant_id-scoped RLS; this query returns ordered tenant ids only and no checkpoint contents.
-		`SELECT DISTINCT tenant_id FROM audit_checkpoints ORDER BY tenant_id`)
+		//trstctl:system-query — cross-tenant by design: backup/DR must inventory every audit checkpoint before selecting each scope under tenant_id-scoped RLS; this query returns ordered scope ids only and no checkpoint contents.
+		`SELECT DISTINCT COALESCE(scope_id, tenant_id::text) AS scope FROM audit_checkpoints ORDER BY scope`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list audit checkpoint tenants: %w", err)
 	}

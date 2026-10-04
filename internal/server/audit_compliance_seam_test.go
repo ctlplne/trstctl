@@ -5,8 +5,12 @@ package server
 import (
 	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,9 +19,37 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+type partialAuditRetentionWorker struct{}
+
+func (partialAuditRetentionWorker) RunOnce(context.Context) (audit.Summary, error) {
+	return audit.Summary{SegmentsArchived: 2, RecordsArchived: 7, RecordsSourceRetained: 7}, errors.New("later scope refused")
+}
+
+func TestAuditRetentionMetricsKeepCommittedPartialProgressOnFailure(t *testing.T) {
+	srv := &Server{retention: partialAuditRetentionWorker{}, registry: observ.NewRegistry(), logger: slog.Default()}
+	srv.configureAuditRetentionMetrics()
+	if _, err := srv.RunRetentionOnce(t.Context()); err == nil {
+		t.Fatal("partial sweep failure was hidden")
+	}
+	recorder := httptest.NewRecorder()
+	srv.registry.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	for _, want := range []string{
+		"trstctl_audit_records_archived_total 7",
+		"trstctl_audit_source_records_retained_total 7",
+		"trstctl_audit_retention_runs_total 1",
+		"trstctl_audit_retention_failures_total 1",
+		"trstctl_audit_retention_last_success_timestamp_seconds 0",
+	} {
+		if !strings.Contains(recorder.Body.String(), want) {
+			t.Errorf("partial failure metrics omit %q", want)
+		}
+	}
+}
 
 func TestCoreAuditExportsExplainUnlicensedAnchoring(t *testing.T) {
 	ts, token, _ := newAuditExportHarness(t)

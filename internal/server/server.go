@@ -3747,6 +3747,17 @@ func (s *Server) RunRetentionOnce(ctx context.Context) (audit.Summary, error) {
 		return audit.Summary{}, nil
 	}
 	sum, err := s.retention.RunOnce(ctx)
+	// A later tenant may fail after earlier signed segments were durably sealed.
+	// Count those committed segments even when the overall sweep fails, or the
+	// counters permanently disagree with the archive and checkpoint history.
+	if s.mRetArchived != nil {
+		s.mRetArchived.Add(float64(sum.RecordsArchived))
+		s.mRetPruned.Add(float64(sum.RecordsPruned))
+		s.mRetRetained.Add(float64(sum.RecordsSourceRetained))
+		if sum.SegmentsArchived > 0 {
+			s.mRetRuns.Inc()
+		}
+	}
 	if err != nil {
 		if s.mRetFailures != nil {
 			s.mRetFailures.Inc()
@@ -3756,14 +3767,6 @@ func (s *Server) RunRetentionOnce(ctx context.Context) (audit.Summary, error) {
 	}
 	if s.mRetLastOK != nil {
 		s.mRetLastOK.Set(float64(time.Now().Unix()))
-	}
-	if s.mRetArchived != nil {
-		s.mRetArchived.Add(float64(sum.RecordsArchived))
-		s.mRetPruned.Add(float64(sum.RecordsPruned))
-		s.mRetRetained.Add(float64(sum.RecordsSourceRetained))
-		if sum.SegmentsArchived > 0 {
-			s.mRetRuns.Inc()
-		}
 	}
 	if sum.RecordsArchived > 0 {
 		s.logger.Info("audit retention archived records and retained AN-2 source envelopes",

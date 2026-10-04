@@ -3170,8 +3170,14 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 			return p.ApplyTx(ctx, tx, e)
 		})
 	}
+	// Archive checkpoints retain legacy administrative scope strings in their
+	// signed event while the SQL receiver uses a stable UUID RLS partition.
+	storageTenant := e.TenantID
+	if e.Type == audit.EventTypeArchived {
+		storageTenant = store.AuditCheckpointRLSID(e.TenantID)
+	}
 	// Domain entity events apply under the tenant's RLS context.
-	return p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
+	return p.store.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
 		return p.ApplyTx(ctx, tx, e)
 	})
 }
@@ -7485,7 +7491,11 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 		// the live OffboardTenant) rather than re-running the full cross-table erase.
 		return p.store.DeleteTenantReadModelTx(ctx, tx, e.TenantID)
 	default:
-		if err := p.store.SetTenantGUCTx(ctx, tx, e.TenantID); err != nil {
+		storageTenant := e.TenantID
+		if e.Type == audit.EventTypeArchived {
+			storageTenant = store.AuditCheckpointRLSID(e.TenantID)
+		}
+		if err := p.store.SetTenantGUCTx(ctx, tx, storageTenant); err != nil {
 			return err
 		}
 		return p.ApplyTx(ctx, tx, e)

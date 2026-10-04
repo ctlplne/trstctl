@@ -370,6 +370,15 @@ func TestRetentionWorkerChunksLargeHistoryForIsolatedSigner(t *testing.T) {
 	}
 }
 
+func TestDirArchiverRejectsScopePathTraversal(t *testing.T) {
+	archiver := auditcompliance.DirArchiver{Dir: t.TempDir()}
+	for _, scope := range []string{"", ".", "..", "../outside", "nested/scope"} {
+		if _, err := archiver.Archive(t.Context(), scope, 1, "signed"); err == nil {
+			t.Fatalf("archive accepted unsafe scope %q", scope)
+		}
+	}
+}
+
 // TestRetentionWorkerDoesNothingWithoutWindow confirms an unconfigured worker is a
 // no-op (Retention=0): nothing is archived or pruned.
 func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {
