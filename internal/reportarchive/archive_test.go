@@ -21,7 +21,7 @@ func TestArchiveRetainsExactSignedBytesAndRefusesTamper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ref != "reports/"+tenantID+"/"+runID+"-"+digest+".json" {
+	if ref != "reports/"+tenantID+"/"+runID+"/"+digest+".json" {
 		t.Fatalf("unexpected archive ref %s", ref)
 	}
 	got, err := archive.Read(tenantID, runID, digest)
@@ -30,6 +30,10 @@ func TestArchiveRetainsExactSignedBytesAndRefusesTamper(t *testing.T) {
 	}
 	if _, _, err := archive.Put(tenantID, runID, artifact); err != nil {
 		t.Fatalf("idempotent write: %v", err)
+	}
+	foundRef, foundDigest, foundBytes, err := archive.FindRun(tenantID, runID)
+	if err != nil || foundRef != ref || foundDigest != digest || !bytes.Equal(foundBytes, artifact) {
+		t.Fatalf("crash-window recovery = %s %s %q, %v", foundRef, foundDigest, foundBytes, err)
 	}
 	if _, err := archive.Read("33333333-3333-4333-8333-333333333333", runID, digest); err == nil {
 		t.Fatal("another tenant read the report")
@@ -43,6 +47,22 @@ func TestArchiveRetainsExactSignedBytesAndRefusesTamper(t *testing.T) {
 	}
 	if _, _, err := archive.Put(tenantID, runID, artifact); err == nil {
 		t.Fatal("idempotent write replaced a tampered artifact")
+	}
+}
+
+func TestArchiveFindRunRejectsConflictingSignedCandidates(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "archive")
+	archive := reportarchive.Dir{Root: root}
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	const runID = "22222222-2222-4222-8222-222222222222"
+	if _, _, err := archive.Put(tenantID, runID, []byte(`{"signed_export":"first"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := archive.Put(tenantID, runID, []byte(`{"signed_export":"second"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := archive.FindRun(tenantID, runID); err == nil {
+		t.Fatal("ambiguous crash-window artifact was selected")
 	}
 }
 

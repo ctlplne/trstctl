@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/reportarchive"
 )
 
 // ComplianceReportRun is a read-model receipt for one immutable due edge. The
@@ -38,7 +40,6 @@ type ComplianceReportRun struct {
 }
 
 var complianceReportErrorCode = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-var complianceReportDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func validateComplianceReportRun(run ComplianceReportRun) error {
 	if _, err := uuid.Parse(run.ID); err != nil {
@@ -73,9 +74,9 @@ func validateComplianceReportRun(run ComplianceReportRun) error {
 			return errors.New("store: failed report run needs an attempt and code")
 		}
 	case "completed":
-		wantRef := fmt.Sprintf("reports/%s/%s-%s.json", run.TenantID, run.ID, run.ArtifactDigest)
+		wantRef, refErr := reportarchive.Reference(run.TenantID, run.ID, run.ArtifactDigest)
 		if run.Attempt == 0 || run.CompletedAt.IsZero() || !run.NextAttemptAt.IsZero() || run.ErrorCode != "" ||
-			!complianceReportDigest.MatchString(run.ArtifactDigest) || run.ArtifactRef != wantRef {
+			refErr != nil || run.ArtifactRef != wantRef {
 			return errors.New("store: completed report run needs exact retained artifact and digest")
 		}
 	default:

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -41,7 +42,7 @@ func Reference(tenantID, runID, digest string) (string, error) {
 	if !digestPattern.MatchString(digest) {
 		return "", errors.New("reportarchive: digest must be lowercase SHA-256 hex")
 	}
-	return filepath.Join("reports", tenantID, runID+"-"+digest+".json"), nil
+	return path.Join("reports", tenantID, runID, digest+".json"), nil
 }
 
 // Put stores exact JSON wire bytes once. It fsyncs the file and directory
@@ -64,13 +65,14 @@ func (d Dir) Put(tenantID, runID string, artifact []byte) (ref, digest string, e
 		return "", "", err
 	}
 	reports := filepath.Join(root, "reports")
-	dir := filepath.Join(reports, tenantID)
-	for _, path := range []string{root, reports, dir} {
+	tenantDir := filepath.Join(reports, tenantID)
+	dir := filepath.Join(tenantDir, runID)
+	for _, path := range []string{root, reports, tenantDir, dir} {
 		if err := ensurePrivateDirectory(path); err != nil {
 			return "", "", err
 		}
 	}
-	final := filepath.Join(root, ref)
+	final := filepath.Join(root, filepath.FromSlash(ref))
 	if existing, readErr := readExact(final, digest); readErr == nil {
 		if !bytes.Equal(existing, artifact) {
 			return "", "", errors.New("reportarchive: digest collision")
@@ -126,12 +128,65 @@ func (d Dir) Read(tenantID, runID, digest string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, path := range []string{root, filepath.Join(root, "reports"), filepath.Join(root, "reports", tenantID)} {
+	for _, path := range []string{root, filepath.Join(root, "reports"), filepath.Join(root, "reports", tenantID), filepath.Join(root, "reports", tenantID, runID)} {
 		if err := checkPrivateDirectory(path); err != nil {
 			return nil, err
 		}
 	}
-	return readExact(filepath.Join(root, ref), digest)
+	return readExact(filepath.Join(root, filepath.FromSlash(ref)), digest)
+}
+
+// FindRun recovers an archived candidate after a crash between durable Put and
+// the completion event. More than one digest for the same run is ambiguous and
+// must be resolved by an operator; recovery never chooses one arbitrarily.
+func (d Dir) FindRun(tenantID, runID string) (ref, digest string, artifact []byte, err error) {
+	if _, err = Reference(tenantID, runID, strings.Repeat("0", 64)); err != nil {
+		return "", "", nil, err
+	}
+	if d.Root == "" {
+		return "", "", nil, errors.New("reportarchive: archive root is required")
+	}
+	root, err := filepath.Abs(d.Root)
+	if err != nil {
+		return "", "", nil, err
+	}
+	tenantDir := filepath.Join(root, "reports", tenantID)
+	dir := filepath.Join(tenantDir, runID)
+	for _, path := range []string{root, filepath.Join(root, "reports"), tenantDir, dir} {
+		if err := checkPrivateDirectory(path); err != nil {
+			return "", "", nil, err
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", "", nil, err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		candidateDigest := strings.TrimSuffix(name, ".json")
+		if !digestPattern.MatchString(candidateDigest) {
+			return "", "", nil, errors.New("reportarchive: malformed artifact for run")
+		}
+		if ref != "" {
+			return "", "", nil, errors.New("reportarchive: multiple signed artifacts for one run")
+		}
+		ref, err = Reference(tenantID, runID, candidateDigest)
+		if err != nil {
+			return "", "", nil, err
+		}
+		digest = candidateDigest
+	}
+	if ref == "" {
+		return "", "", nil, os.ErrNotExist
+	}
+	artifact, err = d.Read(tenantID, runID, digest)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return ref, digest, artifact, nil
 }
 
 func ensurePrivateDirectory(path string) error {

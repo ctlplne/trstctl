@@ -35,7 +35,7 @@ func TestComplianceReportRunRetainedThroughCatchUpAndFullRebuild(t *testing.T) {
 	mustAppend(t, log, events.Event{Type: projections.EventComplianceReportScheduleUpserted,
 		TenantID: tenantA, Time: createdAt, Data: schedulePayload})
 	digest := crypto.SHA256Hex([]byte(`{"signed_export":{"signature":"AQ=="}}`))
-	artifactRef := "reports/" + tenantA + "/" + runID + "-" + digest + ".json"
+	artifactRef := "reports/" + tenantA + "/" + runID + "/" + digest + ".json"
 	runPayload, err := json.Marshal(projections.ComplianceReportRunRecorded{
 		ID: runID, ScheduleID: scheduleID, DueAt: due, Framework: "soc2",
 		ReportType: "framework_evidence_pack", Status: "completed", Attempt: 1,

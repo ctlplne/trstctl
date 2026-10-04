@@ -270,7 +270,7 @@ func TestComplianceReportArchiveReferenceSurvivesSnapshotRestore(t *testing.T) {
 		return s.ApplyComplianceReportRunTx(ctx, tx, store.ComplianceReportRun{
 			ID: runID, TenantID: tenantA, ScheduleID: scheduleID, DueAt: due,
 			Framework: "soc2", ReportType: "framework_evidence_pack", Status: "completed", Attempt: 1,
-			ArtifactRef: fmt.Sprintf("reports/%s/%s-%s.json", tenantA, runID, digest), ArtifactDigest: digest,
+			ArtifactRef: fmt.Sprintf("reports/%s/%s/%s.json", tenantA, runID, digest), ArtifactDigest: digest,
 			CompletedAt: due.Add(time.Minute), EventSequence: 17,
 			CreatedAt: due, UpdatedAt: due.Add(time.Minute),
 		})
@@ -287,7 +287,7 @@ func TestComplianceReportArchiveReferenceSurvivesSnapshotRestore(t *testing.T) {
 		t.Fatalf("restore report run snapshot: %v", err)
 	}
 	got, err := s.GetComplianceReportRun(ctx, tenantA, runID)
-	if err != nil || got.ArtifactRef != fmt.Sprintf("reports/%s/%s-%s.json", tenantA, runID, digest) ||
+	if err != nil || got.ArtifactRef != fmt.Sprintf("reports/%s/%s/%s.json", tenantA, runID, digest) ||
 		got.ArtifactDigest != digest {
 		t.Fatalf("restored archive receipt = %+v, %v", got, err)
 	}
@@ -297,5 +297,5 @@ func TestComplianceReportArchiveReferenceSurvivesSnapshotRestore(t *testing.T) {
 }
 
 func reportArtifactRef(run store.ComplianceReportRun) string {
-	return fmt.Sprintf("reports/%s/%s-%s.json", run.TenantID, run.ID, run.ArtifactDigest)
+	return fmt.Sprintf("reports/%s/%s/%s.json", run.TenantID, run.ID, run.ArtifactDigest)
 }
