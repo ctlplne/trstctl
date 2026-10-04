@@ -22,7 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     auditEvents: vi.fn(),
     exportAudit: vi.fn(),
     downloadAuditExport: vi.fn(),
-  } as Record<string, ReturnType<typeof vi.fn>>,
+  },
 }));
 
 vi.mock("@/lib/bootstrapApi", async (orig) => {
