@@ -19,14 +19,33 @@ import (
 // Provider provisioning precedes enrollment. Removing that metadata does not
 // invent a core tenant lifecycle. Check the complete core table inventory under
 // the registration fence; unexpected workload data requires a real erasure, not
-// a metadata-only success. Only the four views owned by this projection may be
-// present. Recheck at completion because enrollment could win between phases.
+// a metadata-only success. Only Provider-owned views and completed HTTP retry
+// receipts may be present. Recheck at completion because enrollment could win
+// between phases.
 func (o *TenantOffboarder) withUnregisteredCustomer(ctx context.Context, tenantID string, fn func(context.Context, pgx.Tx) error) error {
 	err := o.log.WithHistoryRead(ctx, func(ctx context.Context) error {
 		return o.store.WithTenantRegistrationFence(ctx, tenantID, func(tx pgx.Tx) error {
 			for _, table := range corestore.TenantScopedTables {
 				switch table {
 				case "provider_tenants", "provider_breakglass_grants", "provider_tenant_quotas", "tenant_branding":
+					continue
+				case "idempotency_keys":
+					// Served Provider mutations are receipt-wrapped before a
+					// customer has enrolled. A successful provision, suspend or
+					// resume therefore leaves customer-scoped retry receipts even
+					// though no core tenancy exists. Preserve completed receipts:
+					// they still bind an old key to its first outcome after erase.
+					// An unfinished receiver may still be acting, so refuse the
+					// metadata-only erase until it settles.
+					var unfinished bool
+					if err := tx.QueryRow(ctx, `SELECT EXISTS (
+						SELECT 1 FROM idempotency_keys WHERE tenant_id=$1 AND status <> 'completed'
+					)`, tenantID).Scan(&unfinished); err != nil {
+						return err
+					}
+					if unfinished {
+						return fmt.Errorf("%w: customer has an unfinished idempotency receipt", ErrTenantStateConflict)
+					}
 					continue
 				}
 				var exists bool

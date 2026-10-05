@@ -275,6 +275,11 @@ to whoever held access on the old customer. This applies to database-backed
 grants; a deployment still keeping grants in a static configuration file must
 remove those lines itself, since rewriting an operator's config file from the
 running process would put the file out of step with the system it describes.
+Before a customer workspace is initialized, offboarding removes Provider
+metadata without inventing a core tenant deletion. Completed HTTP retry
+receipts remain until their normal expiry so an old key keeps its first result;
+an unfinished receipt or any workload row stops this metadata-only path. Once
+the workspace exists, offboarding uses the full tenant erasure flow.
 
 This is a local command rather than a served route because of the bootstrap
 problem: a route that hands out provider authority must itself be authorized by

@@ -22,7 +22,7 @@ import (
 )
 
 func TestProviderOffboardUnregisteredCustomer(t *testing.T) {
-	for _, stage := range []string{"normal", "projection", "after-erase", "core-data", "enrollment-race"} {
+	for _, stage := range []string{"normal", "http-receipt", "pending-receipt", "projection", "after-erase", "core-data", "enrollment-race"} {
 		t.Run(stage, func(t *testing.T) { testProviderOffboardUnregisteredCustomer(t, stage) })
 	}
 }
@@ -46,7 +46,25 @@ func testProviderOffboardUnregisteredCustomer(t *testing.T, stage string) {
 	orch := orchestrator.NewOrchestrator(log, st, nil, orchestrator.WithProjector(projector))
 	offboarding := NewTenantOffboarder(st, log, orch, runtime.Mutations)
 	var lateRegistration events.Event
+	const priorHTTPKey = "provider-browser-provision-receipt"
+	priorHTTPResult := []byte(`{"status":201,"provider_customer":"unregistered"}`)
+	var storedHTTPResult []byte
 	switch stage {
+	case "http-receipt":
+		result, err := orchestrator.NewIdempotency(st).DoDurableEffectBound(ctx, id, priorHTTPKey,
+			"sha256:"+crypto.SHA256Hex([]byte(priorHTTPKey)),
+			func(context.Context) ([]byte, error) { return priorHTTPResult, nil })
+		if err != nil || len(result) == 0 {
+			t.Fatalf("record prior Provider HTTP result: %q %v", result, err)
+		}
+		storedHTTPResult = result
+	case "pending-receipt":
+		if err := st.WithTenant(ctx, id, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO idempotency_keys (tenant_id,key,status) VALUES ($1,$2,'pending')`, id, priorHTTPKey)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
 	case "projection":
 		runtime.Projection.applyHook = func(_ context.Context, event events.Event) error {
 			if event.Type == AuditUnregisteredTenantOffboarded {
@@ -87,16 +105,20 @@ func testProviderOffboardUnregisteredCustomer(t *testing.T, stage string) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	if stage == "core-data" || stage == "enrollment-race" {
+	if stage == "core-data" || stage == "enrollment-race" || stage == "pending-receipt" {
 		if w := request(); w.Code != http.StatusConflict {
-			t.Fatalf("metadata-only erase accepted workload data: %d %s", w.Code, w.Body.String())
+			t.Fatalf("metadata-only erase accepted workload data or unfinished receipt: %d %s", w.Code, w.Body.String())
 		}
-		if stage == "enrollment-race" {
+		switch stage {
+		case "enrollment-race":
 			if got, err := st.GetTenant(ctx, id); err != nil || got.EventSeq != lateRegistration.Sequence {
 				t.Fatalf("metadata-only erase changed new registration: %+v %v", got, err)
 			}
-		} else if got, err := st.ListOwners(ctx, id); err != nil || len(got) != 1 {
-			t.Fatalf("metadata-only erase changed workload data: %+v %v", got, err)
+		case "core-data":
+			got, err := st.ListOwners(ctx, id)
+			if err != nil || len(got) != 1 {
+				t.Fatalf("metadata-only erase changed workload data: %+v %v", got, err)
+			}
 		}
 		if err := log.Replay(ctx, 0, func(event events.Event) error {
 			if event.TenantID == id && (event.Type == AuditUnregisteredTenantOffboarded || event.Type == projections.EventTenantOffboarded) {
@@ -134,7 +156,7 @@ func testProviderOffboardUnregisteredCustomer(t *testing.T, stage string) {
 		}
 		return
 	}
-	if stage != "normal" {
+	if stage != "normal" && stage != "http-receipt" {
 		if w := request(); w.Code != http.StatusInternalServerError {
 			t.Fatalf("interruption response=%d %s", w.Code, w.Body.String())
 		}
@@ -156,6 +178,18 @@ func testProviderOffboardUnregisteredCustomer(t *testing.T, stage string) {
 	}
 	if got, err := NewPGStore(st).Tenant(ctx, id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("offboard retained registry: %+v %v", got, err)
+	}
+	if stage == "http-receipt" {
+		called := false
+		result, err := orchestrator.NewIdempotency(st).DoDurableEffectBound(ctx, id, priorHTTPKey,
+			"sha256:"+crypto.SHA256Hex([]byte(priorHTTPKey)),
+			func(context.Context) ([]byte, error) {
+				called = true
+				return nil, errors.New("replayed prior Provider HTTP effect")
+			})
+		if err != nil || called || string(result) != string(storedHTTPResult) {
+			t.Fatalf("prior Provider HTTP receipt lost on offboard: result=%q called=%v err=%v", result, called, err)
+		}
 	}
 	if set, err := NewPGDelegationSource(st).Delegations(ctx); err != nil || set.Authorize(providerOperator("op-1"), id, OpOffboard) == nil {
 		t.Fatalf("offboard retained authority: %v", err)
