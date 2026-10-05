@@ -990,8 +990,8 @@ not this file.
 | `internal/crypto/secretfile/secretfile_test.go:67` | restores the fixture dir so t.TempDir cleanup can remove it (CWE-276) |
 | `internal/server/bundled_pg_start_test.go:30` | adversarial test anchor must be writable to prove the verifier rejects it (CWE-732) |
 | `internal/server/bundled_pg_start_test.go:33` | restore the private directory's required execute bit (CWE-732) |
-| `internal/server/compliance_report_worker_test.go:60` | owner execute is required to traverse this private test directory. |
-| `internal/server/compliance_report_worker_test.go:214` | owner execute is required to traverse this private test directory. |
+| `internal/server/compliance_report_worker_test.go:67` | owner execute is required to traverse this private test directory. |
+| `internal/server/compliance_report_worker_test.go:221` | owner execute is required to traverse this private test directory. |
 | `internal/server/external_ca_config_test.go:121` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
