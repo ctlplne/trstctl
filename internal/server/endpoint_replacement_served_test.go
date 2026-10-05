@@ -131,6 +131,25 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 	if err != nil || originalState.Status != "deployed" {
 		t.Fatalf("original not deployed: %+v %v", originalState, err)
 	}
+	warningStatus, warningBody := secretsReq(t, h, http.MethodPost,
+		"/api/v1/identities/"+original.ID+"/transitions/preview", tok,
+		map[string]any{"to": "revoked", "reason": "keyCompromise"})
+	if warningStatus != http.StatusOK {
+		t.Fatalf("live-target revocation preview: %d %s", warningStatus, warningBody)
+	}
+	var revocationPlan struct {
+		Ready             bool     `json:"ready"`
+		Warnings          []string `json:"warnings"`
+		VerificationSteps []string `json:"verification_steps"`
+	}
+	if err := json.Unmarshal(warningBody, &revocationPlan); err != nil {
+		t.Fatal(err)
+	}
+	if revocationPlan.Ready || !strings.Contains(strings.Join(revocationPlan.Warnings, " "), target) ||
+		!strings.Contains(strings.Join(revocationPlan.Warnings, " "), "may still serve") ||
+		!strings.Contains(strings.Join(revocationPlan.VerificationSteps, " "), "fresh connection") {
+		t.Fatalf("external-CA refusal or live-target containment warning missing: %s", warningBody)
+	}
 	before := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated)
 	create("/api/v1/profiles", map[string]any{"name": "replacement-web", "spec": map[string]any{
 		"max_validity": "24h", "allowed_protocols": []string{"api"}, "allowed_dns_suffixes": []string{"replace.served.test"},

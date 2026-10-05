@@ -238,6 +238,26 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			plan.VerificationSteps = append(plan.VerificationSteps,
 				"Confirm every exact certificate with its issuing CA and verify upstream revocation evidence; identity status alone is not certificate revocation.")
 		}
+		if identity.Status == "deployed" || identity.Status == "renewing" || identity.Status == "renewal_failed" {
+			var binding struct {
+				TargetID string `json:"deployment_target_id"`
+			}
+			if len(identity.Attributes) != 0 {
+				if err := json.Unmarshal(identity.Attributes, &binding); err != nil {
+					a.writeError(w, err)
+					return
+				}
+			}
+			target := "a bound serving workload"
+			if binding.TargetID != "" {
+				target = "deployment target " + binding.TargetID
+			}
+			plan.Warnings = append(plan.Warnings,
+				"CA revocation and this identity state change do not stop "+target+
+					". It may still serve the revoked certificate to clients that do not enforce CRLs or OCSP. For key compromise, stop or replace the serving credential immediately; never roll back to a revoked predecessor.")
+			plan.VerificationSteps = append(plan.VerificationSteps,
+				"Open a fresh connection to the serving target and confirm that no revoked serial or fingerprint is served. Confirm a verified replacement delivery or independently verify service refusal; CA revocation alone is not endpoint containment.")
+		}
 	}
 	a.writeJSON(w, http.StatusOK, plan)
 }

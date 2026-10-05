@@ -961,6 +961,20 @@ func endpointBindingReason(req endpointBindingRequest) string {
 	return "endpoint binding automation"
 }
 
+// endpointReplacementGuidance keeps the operator's plan tied to the source's
+// actual lifecycle state. A revoked source may still be on a listener, but it
+// cannot be revoked a second time or restored as a recovery predecessor.
+func endpointReplacementGuidance(source store.Identity, name, ownerName, ownerID string) (change, recovery string) {
+	change = "Create a separate replacement for X.509 identity " + source.ID + " at " + name +
+		" owned by " + strings.TrimSpace(ownerName) + " (" + ownerID + "). "
+	if source.Status == "revoked" {
+		return change + "The original is already revoked and may still be served until the replacement is verified on a fresh connection. Retire it after confirming issuing-CA revocation and target readback. Never restore a revoked certificate.",
+			"Do not roll back to the revoked predecessor. If replacement deployment fails, stop or disable the destination through its host-owned procedure until a fresh valid certificate is verified."
+	}
+	return change + "Keep the original until the replacement is verified, then revoke and retire it. Renewal of the original is held once replacement issuance is queued.",
+		"Use the connector delivery receipt and predecessor fingerprint for supported rollback."
+}
+
 func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req endpointBindingRequest) (endpointBindingPreviewResponse, error) {
 	owner, err := a.store.GetOwner(ctx, tenantID, req.OwnerID)
 	if err != nil {
@@ -1019,6 +1033,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	var replaced store.Identity
 	var replacedVersion uint64
 	identityChange := "Create one X.509 identity for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ")."
+	recoveryStep := "Use the connector delivery receipt and predecessor fingerprint for supported rollback."
 	if req.ReplaceIdentityID != "" {
 		replaced, replacedVersion, err = a.store.IdentityApprovalTarget(ctx, tenantID, req.ReplaceIdentityID)
 		if err != nil {
@@ -1029,7 +1044,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		}
 		resp := toIdentityResponse(replaced)
 		replacedResp = &resp
-		identityChange = "Create a separate replacement for X.509 identity " + replaced.ID + " at " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + "). Keep the original until the replacement is verified, then revoke and retire it. Renewal of the original is held once replacement issuance is queued."
+		identityChange, recoveryStep = endpointReplacementGuidance(replaced, req.IdentityName, owner.Name, req.OwnerID)
 	} else if existing, found, err := a.store.FindIdentityByName(ctx, tenantID, req.IdentityName); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	} else if found {
@@ -1149,7 +1164,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		QueuedLifecycleIntents: []string{"ca.issue", "connector.deploy"},
 		RecoverySteps: []string{
 			"Stop or disable the destination before retrying if deployment is unsafe.",
-			"Use the connector delivery receipt and predecessor fingerprint for supported rollback.",
+			recoveryStep,
 		},
 		VerificationSteps: []string{
 			"Wait for the issuance and connector delivery receipts to reach a terminal state.",
