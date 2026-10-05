@@ -39,6 +39,10 @@ export const messages = {
   "provider.emergency.state.awaiting": { defaultMessage: "Awaiting second approval", description: "Provider emergency state." },
   "provider.emergency.state.active": { defaultMessage: "Approved for requester", description: "Provider emergency state." },
   "provider.emergency.state.denied": { defaultMessage: "Denied", description: "Provider emergency state." },
+  "provider.emergency.state.withdrawn": {
+    defaultMessage: "Withdrawn by requester",
+    description: "Requester closed their own pending Provider emergency request.",
+  },
   "provider.emergency.state.revoked": { defaultMessage: "Revoked", description: "Provider emergency state." },
   "provider.emergency.state.expired": { defaultMessage: "Expired", description: "Provider emergency state." },
   "provider.emergency.approve": { defaultMessage: "Approve", description: "Approve one Provider emergency request as a distinct operator." },

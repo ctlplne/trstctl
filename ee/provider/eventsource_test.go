@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	corestore "trstctl.com/trstctl/internal/store"
@@ -118,6 +119,64 @@ func TestProviderAuthorityRebuildsExactlyFromOneEventHistory(t *testing.T) {
 	}
 	if got := providerAuthoritySnapshot(t, st, tenantID, grant.ID); got != want {
 		t.Fatalf("rebuilt authority = %+v, want exact pre-erase state %+v", got, want)
+	}
+}
+
+func TestProviderWithdrawalEventRebuildsDistinctClosedState(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	truncateProviderAuthority(t, st)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	projection := NewAuthorityProjection(st)
+	mutations := NewEventMutationSink(log, projection)
+	customer := CustomerID("withdrawn-event-test")
+	now := time.Date(2026, 10, 5, 16, 0, 0, 0, time.UTC)
+	grant := BreakGlassGrant{ID: "withdrawn-event-grant", TenantID: customer, OperatorID: "requester", RequestedAt: now, ExpiresAt: now.Add(time.Hour)}
+	for _, step := range []struct {
+		key, typ string
+		state    BreakGlassGrant
+	}{
+		{"request", AuditBreakGlassRequested, grant},
+		{"withdraw", AuditBreakGlassWithdrawn, func() BreakGlassGrant {
+			g := grant
+			g.DeniedAt = now.Add(time.Minute)
+			g.DeniedBy = "requester"
+			return g
+		}()},
+	} {
+		if _, err := mutations.Append(ctx, step.key, step.typ, customer, AuthorityEvent{Grant: &step.state,
+			Audit: AuditEvent{Type: step.typ, TenantID: customer, OperatorID: "requester", Subject: "requester", GrantID: grant.ID, At: now}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(stage string) {
+		t.Helper()
+		read, err := NewPGStore(st).BreakGlassGrant(ctx, grant.ID)
+		if err != nil || read.State(now.Add(2*time.Minute)) != GrantWithdrawn {
+			t.Fatalf("%s withdrawal state = %+v, %v", stage, read, err)
+		}
+	}
+	check("hot")
+	truncateProviderAuthority(t, st)
+	if err := projections.New(st, projections.WithEventProjection(NewAuthorityProjection(st))).Project(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	check("cold")
+}
+
+func TestProviderWithdrawalEventRequiresRequesterEvidence(t *testing.T) {
+	now := time.Date(2026, 10, 5, 16, 0, 0, 0, time.UTC)
+	for _, deniedBy := range []string{"", "different-approver"} {
+		grant := BreakGlassGrant{ID: "withdraw-test", TenantID: "customer", OperatorID: "requester", DeniedAt: now, DeniedBy: deniedBy}
+		payload := AuthorityEvent{Grant: &grant, Audit: AuditEvent{Type: AuditBreakGlassWithdrawn,
+			TenantID: "customer", Subject: "requester", At: now}}
+		if err := validateAuthorityEvent(eventspec.Event{Type: AuditBreakGlassWithdrawn, TenantID: "customer"}, payload); err == nil {
+			t.Fatalf("withdrawal event accepted denied_by=%q", deniedBy)
+		}
 	}
 }
 

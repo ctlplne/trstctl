@@ -119,4 +119,18 @@ describe("Provider exact-customer emergency console", () => {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
   });
+
+  it("names a requester withdrawal separately from an approver denial", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.startsWith("/provider/v1/tenants/alpha/breakglass?")) return json({ items: [{ ...grant, state: "withdrawn", denied_by: "requester" }] });
+        throw new Error("unexpected path " + url);
+      }),
+    );
+    renderPanel("requester");
+    const row = await screen.findByRole("article", { name: "grant-1" });
+    expect(within(row).getByText("Withdrawn by requester")).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Withdraw request" })).not.toBeInTheDocument();
+  });
 });

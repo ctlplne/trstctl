@@ -31,6 +31,7 @@ const (
 	AuditBreakGlassRequested          = "provider.breakglass_request"
 	AuditBreakGlassConsented          = "provider.breakglass_consent"
 	AuditBreakGlassDenied             = "provider.breakglass_deny"
+	AuditBreakGlassWithdrawn          = "provider.breakglass_withdrawn"
 	AuditBreakGlassAccessed           = "provider.breakglass_access"
 	providerAuditTenant               = providerAuthorityTenant
 	legacyProviderAuditTenant         = events.LegacyProviderGlobalAuditScope
@@ -628,15 +629,20 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, actor Operator, tenantI
 		return BreakGlassGrant{}, ErrForbidden
 	}
 
-	// A denial by ANY approver, at either stage, kills the grant. One person
-	// refusing is enough to stop emergency access even if another already
-	// consented — two-person control protects access, not denial.
+	// The requester may withdraw a pending grant. An approver may deny it;
+	// both close access, but they are distinct operator decisions and must be
+	// distinguishable in the immutable audit history and derived queue state.
+	// One approver's denial is enough even after the first consent.
 	if !approve {
 		grant.DeniedAt = now
 		grant.DeniedBy = subject
+		eventType := AuditBreakGlassDenied
+		if subject == grant.OperatorID {
+			eventType = AuditBreakGlassWithdrawn
+		}
 		if s.mutations != nil {
-			canonical, emitErr := s.emit(ctx, AuditBreakGlassDenied, grant.TenantID, AuthorityEvent{Grant: &grant,
-				Audit: AuditEvent{Type: AuditBreakGlassDenied, TenantID: grant.TenantID,
+			canonical, emitErr := s.emit(ctx, eventType, grant.TenantID, AuthorityEvent{Grant: &grant,
+				Audit: AuditEvent{Type: eventType, TenantID: grant.TenantID,
 					GrantID: grant.ID, Subject: subject, At: now}})
 			if emitErr != nil {
 				return BreakGlassGrant{}, emitErr
@@ -654,7 +660,7 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, actor Operator, tenantI
 			if err != nil {
 				return BreakGlassGrant{}, err
 			}
-			if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassDenied, TenantID: grant.TenantID,
+			if err := s.record(ctx, AuditEvent{Type: eventType, TenantID: grant.TenantID,
 				GrantID: grant.ID, Subject: subject, At: now}); err != nil {
 				return BreakGlassGrant{}, err
 			}

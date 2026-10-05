@@ -113,7 +113,7 @@ export interface ProviderBreakGlassGrant {
   revoked_at?: string;
 }
 
-export type ProviderBreakGlassState = "pending" | "awaiting_co_consent" | "active" | "denied" | "revoked" | "expired";
+export type ProviderBreakGlassState = "pending" | "awaiting_co_consent" | "active" | "denied" | "withdrawn" | "revoked" | "expired";
 
 export interface ProviderBreakGlassGrantView extends ProviderBreakGlassGrant {
   state: ProviderBreakGlassState;

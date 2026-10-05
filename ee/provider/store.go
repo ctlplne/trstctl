@@ -139,6 +139,7 @@ const (
 	GrantAwaitingCoConsent GrantState = "awaiting_co_consent"
 	GrantActive            GrantState = "active"
 	GrantDenied            GrantState = "denied"
+	GrantWithdrawn         GrantState = "withdrawn"
 	GrantRevoked           GrantState = "revoked"
 	GrantExpired           GrantState = "expired"
 )
@@ -183,6 +184,9 @@ func (g BreakGlassGrant) State(now time.Time) GrantState {
 	case !g.RevokedAt.IsZero():
 		return GrantRevoked
 	case !g.DeniedAt.IsZero():
+		if g.DeniedBy == g.OperatorID {
+			return GrantWithdrawn
+		}
 		return GrantDenied
 	case !g.ConsentedAt.IsZero() && !g.SecondConsentedAt.IsZero() && now.Before(g.ExpiresAt):
 		// Active requires BOTH consents. A single consent never opens the

@@ -146,3 +146,23 @@ func TestBreakGlassSecondApproverCanDeny(t *testing.T) {
 		t.Fatal("a denied grant still granted access")
 	}
 }
+
+func TestBreakGlassRequesterWithdrawalIsDistinctFromApproverDenial(t *testing.T) {
+	ctx := context.Background()
+	svc := breakGlassService(t)
+	grant := requestGrant(t, svc)
+	closed, err := svc.ConsentBreakGlass(ctx, providerOperator("op-1"), "tenant-x", grant.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closed.State(fixedClock()()) != GrantWithdrawn || closed.DeniedBy != "op-1" {
+		t.Fatalf("requester withdrawal looked like an approver denial: %+v", closed)
+	}
+	audit := svc.audit.(*captureAudit)
+	if !audit.Contains(AuditBreakGlassWithdrawn) || audit.Contains(AuditBreakGlassDenied) {
+		t.Fatalf("withdrawal audit was mislabeled: %v", audit.Types())
+	}
+	if _, err := svc.BreakGlassResults(ctx, providerOperator("op-1"), grant.ID); err == nil {
+		t.Fatal("withdrawn grant still allowed result access")
+	}
+}

@@ -589,7 +589,7 @@ func providerAuthorityEvent(typ string) bool {
 	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded, AuditTenantErasureRequested, AuditUnregisteredTenantOffboarded, AuditTenantErasureFailed, AuditTenantErasureCompleted,
 		EventOperatorUpserted, EventOperatorOffboarded,
 		EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
-		AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassAccessed:
+		AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassWithdrawn, AuditBreakGlassAccessed:
 		return true
 	default:
 		return false
@@ -597,6 +597,13 @@ func providerAuthorityEvent(typ string) bool {
 }
 
 func validateAuthorityEvent(event eventspec.Event, payload AuthorityEvent) error {
+	if event.Type == AuditBreakGlassWithdrawn {
+		if payload.Grant == nil || payload.Grant.DeniedAt.IsZero() ||
+			payload.Grant.DeniedBy == "" || payload.Grant.DeniedBy != payload.Grant.OperatorID ||
+			payload.Audit.Subject != payload.Grant.OperatorID {
+			return errors.New("provider: withdrawal requires the exact requester and closed grant state")
+		}
+	}
 	if event.Type == AuditTenantErasureRequested || event.Type == AuditUnregisteredTenantOffboarded || event.Type == AuditTenantErasureFailed || event.Type == AuditTenantErasureCompleted {
 		status := TenantOffboarding
 		switch event.Type {
@@ -874,7 +881,7 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			updated_at = EXCLUDED.updated_at, revision = EXCLUDED.revision`, b.TenantID, b.ProductName, b.LogoDataURI,
 			b.LoginMessage, tokens, b.EmailFromName, b.EmailFooter, b.CustomDomain, effectiveAt, event.ID)
 		return err
-	case AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassAccessed:
+	case AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassWithdrawn, AuditBreakGlassAccessed:
 		if payload.Grant == nil {
 			return fmt.Errorf("provider: %s needs break-glass state", event.Type)
 		}

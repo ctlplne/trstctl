@@ -25,6 +25,7 @@ const stateKeys: Record<ProviderBreakGlassState, MessageKey> = {
   awaiting_co_consent: "provider.emergency.state.awaiting",
   active: "provider.emergency.state.active",
   denied: "provider.emergency.state.denied",
+  withdrawn: "provider.emergency.state.withdrawn",
   revoked: "provider.emergency.state.revoked",
   expired: "provider.emergency.state.expired",
 };

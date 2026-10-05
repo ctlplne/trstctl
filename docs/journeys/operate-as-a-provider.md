@@ -510,7 +510,7 @@ opens **Emergency access** on the exact customer, and uses **Requests for this
 customer**. The requester enters an incident reason and a duration no longer
 than two hours. Two other delegated operators approve from their own sessions;
 either can deny. The requester may withdraw a pending request. The queue shows
-the derived pending, one-approval, active, denied, revoked, or expired state,
+the derived pending, one-approval, active, denied, withdrawn, revoked, or expired state,
 the two-approval count, and bounded older/newer pages. Only the requester sees
 **View authorized result** after both approvals. It returns a narrow customer
 health snapshot, not a customer credential or a lifecycle permission. Refresh
@@ -531,6 +531,12 @@ the server derives the approver from the verified identity. Each mutation needs
 its own `Idempotency-Key`. Approval and denial both require current MFA,
 customer delegation, and a writable license. `approve:false` denies the request
 and stops it from being used, even after the first approval.
+When the requester sends `approve:false` on their own pending request, the
+server records `provider.breakglass_withdrawn` and the queue shows
+**Withdrawn by requester**. A different delegated operator's refusal records
+`provider.breakglass_deny` and shows **Denied**. Historical withdrawal records
+keep their original immutable event type; their derived queue state uses the
+recorded requester identity to distinguish them from approver denials.
 
 After both approvals, only the requester can send
 `POST /provider/v1/breakglass/{grant_id}/results` to obtain the customer snapshot.
