@@ -395,6 +395,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
     }
   }, [customers.errorValue, activityQuery.errorValue, onSignOut]);
   const [error, setError] = useState<string | null>(null);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const provision = useForm<{ slug: string; name: string }>({
     resolver: zodResolver(
@@ -463,9 +464,10 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   }, [queryClient]);
 
   const act = useCallback(
-    async (fn: () => Promise<void>) => {
+    async (fn: () => Promise<void>, options?: { provisionSlug: string }) => {
       setBusy(true);
       setError(null);
+      setProvisionError(null);
       try {
         await fn();
         await load();
@@ -475,7 +477,11 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
           onSignOut("authentication");
           return;
         }
-        setError(err instanceof Error ? err.message : String(err));
+        if (options && err instanceof ProviderApiError && err.status === 403 && err.code === "forbidden") {
+          setProvisionError(translateNow("provider.provision.exactGrantRefused", { slug: options.provisionSlug }));
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+        }
         // A rejected or interrupted response can still have retained an
         // offboarding request. Show the server's current state immediately.
         await load();
@@ -713,35 +719,51 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
         }}
       />
 
-      {authority?.provision ? (
+      {authority?.provision || authority?.access_write ? (
         <section className="mt-5">
           <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>
-          <form
-            className="mt-2 flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              void provision.handleSubmit(async (values) => {
-                await act(async () => {
-                  const created = await providerApi.provisionTenant(values);
-                  queryClient.setQueryData<ProviderTenant[]>(["provider", "customers", session.data?.id, authority ?? null], (current) => [
-                    ...(current ?? []).filter((tenant) => tenant.id !== created.id),
-                    created,
-                  ]);
-                  setSetupCustomerId(created.id);
-                  provision.reset();
-                });
-              })(event);
-            }}
-          >
-            <Field label={translateNow("source.provider.slug.l3prov0008")} error={provision.formState.errors.slug?.message}>
-              {(control) => <Input {...control} {...provision.register("slug")} />}
-            </Field>
-            <Field label={translateNow("source.provider.name.l3prov0009")} error={provision.formState.errors.name?.message}>
-              {(control) => <Input {...control} {...provision.register("name")} />}
-            </Field>
-            <Button type="submit" loading={busy} disabled={busy || !slug.trim() || !name.trim()}>
-              {translateNow("source.provider.provision.action.l3prov0010")}
-            </Button>
-          </form>
+          <p className="mt-1 text-caption text-muted-foreground">{translateNow("provider.provision.exactGrantHelp")}</p>
+          {session.data?.id ? (
+            <p className="mt-1 text-caption text-muted-foreground">{translateNow("provider.provision.operatorId", { operatorId: session.data.id })}</p>
+          ) : null}
+          {authority.provision ? (
+            <form
+              className="mt-2 flex flex-wrap items-end gap-2"
+              onSubmit={(event) => {
+                void provision.handleSubmit(async (values) => {
+                  await act(
+                    async () => {
+                      const created = await providerApi.provisionTenant(values);
+                      queryClient.setQueryData<ProviderTenant[]>(["provider", "customers", session.data?.id, authority ?? null], (current) => [
+                        ...(current ?? []).filter((tenant) => tenant.id !== created.id),
+                        created,
+                      ]);
+                      setSetupCustomerId(created.id);
+                      provision.reset();
+                    },
+                    { provisionSlug: values.slug },
+                  );
+                })(event);
+              }}
+            >
+              <Field label={translateNow("source.provider.slug.l3prov0008")} error={provision.formState.errors.slug?.message}>
+                {(control) => <Input {...control} {...provision.register("slug")} />}
+              </Field>
+              <Field label={translateNow("source.provider.name.l3prov0009")} error={provision.formState.errors.name?.message}>
+                {(control) => <Input {...control} {...provision.register("name")} />}
+              </Field>
+              <Button type="submit" loading={busy} disabled={busy || !slug.trim() || !name.trim()}>
+                {translateNow("source.provider.provision.action.l3prov0010")}
+              </Button>
+            </form>
+          ) : (
+            <p className="mt-2 text-caption text-muted-foreground">{translateNow("provider.provision.awaitExactGrant")}</p>
+          )}
+          {provisionError ? (
+            <p role="alert" className="mt-2 text-caption text-status-danger">
+              {provisionError}
+            </p>
+          ) : null}
         </section>
       ) : null}
 

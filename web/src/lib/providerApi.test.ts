@@ -5,11 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalProviderUsageEvidence,
   clearProviderToken,
+  ProviderApiError,
   providerApi,
   setProviderToken,
   verifyProviderUsageEvidence,
   type ProviderUsageEvidence,
 } from "./providerApi";
+
+describe("Provider problem rendering", () => {
+  it("uses the structured detail and code without showing raw JSON or proxy text", () => {
+    const forbidden = new ProviderApiError(403, JSON.stringify({ code: "forbidden", detail: "An exact customer grant is required" }));
+    expect(forbidden.code).toBe("forbidden");
+    expect(forbidden.message).toBe("An exact customer grant is required");
+    const proxy = new ProviderApiError(502, "<html>private proxy diagnostics</html>");
+    expect(proxy.code).toBeNull();
+    expect(proxy.message).toBe("Provider request failed (HTTP 502).");
+  });
+});
 
 function response(status = 204, body: unknown = undefined): Response {
   return {

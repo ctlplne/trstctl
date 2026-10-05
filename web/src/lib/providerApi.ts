@@ -195,11 +195,25 @@ export interface ProviderEvidenceVerification {
 export class ProviderAuthError extends Error {}
 
 export class ProviderApiError extends Error {
+  readonly code: string | null;
+
   constructor(
     public status: number,
     public body: string,
   ) {
-    super(`provider api ${status}: ${body}`);
+    let code: string | null = null;
+    let detail: string | null = null;
+    try {
+      const problem: unknown = JSON.parse(body);
+      if (problem && typeof problem === "object") {
+        if ("code" in problem && typeof problem.code === "string") code = problem.code;
+        if ("detail" in problem && typeof problem.detail === "string") detail = problem.detail;
+      }
+    } catch {
+      // Do not render raw upstream HTML or proxy diagnostics in the console.
+    }
+    super(detail || `Provider request failed (HTTP ${status}).`);
+    this.code = code;
   }
 }
 

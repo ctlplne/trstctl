@@ -269,6 +269,13 @@ trstctl provider-grant -operator op-1 -customer acme \
   -idempotency-key acme-op-1-offboard-revoke-v1
 ```
 
+The Provider console displays the current operator ID next to its provision
+form. A provision grant for one existing customer can make that form visible,
+but it does not authorize a different new slug. A host administrator must grant
+that exact future slug to the displayed operator with `provision` (and `read`
+to see it afterward) before the operator submits the form. A 403 keeps the
+form values and shows this recovery step; it does not create the customer.
+
 Offboarding a customer clears every grant over it. Tenant ids are derived from
 the customer slug, so a grant that outlived the tenancy would hand a reused slug
 to whoever held access on the old customer. This applies to database-backed

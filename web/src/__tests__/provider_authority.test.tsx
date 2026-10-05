@@ -47,7 +47,8 @@ describe("Provider controls follow effective server authority", () => {
       vi.fn(async (url: string) => {
         requests.push(url);
         if (url === "/auth/methods") return json({ provider_plane: true });
-        if (url === "/provider/v1/auth/session") return delayedSession ?? json({ id: "op-1", role: "operator", mfa: true, authority });
+        if (url === "/provider/v1/auth/session")
+          return delayedSession ?? json({ id: "op-1", role: authority.access_write ? "admin" : "operator", mfa: true, authority });
         if (url === "/provider/v1/tenants") return delayedRoster ?? json({ tenants: [alpha] });
         if (url.startsWith("/provider/v1/activity")) return json({ items: [] });
         if (url === "/provider/v1/tenants/alpha/quota") return json({ tenant_id: "alpha", max_agents: 3 });
@@ -78,6 +79,15 @@ describe("Provider controls follow effective server authority", () => {
     });
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     expect(providerToken()).toBe("limited");
+  });
+
+  it("shows host-admin bootstrap guidance before any customer has a provision grant", async () => {
+    authority = { ...readOnlyAuthority, access_read: true, access_write: true };
+    renderProvider();
+    await screen.findByRole("heading", { name: "Provision a customer" });
+    expect(screen.getByText(/Your Provider operator ID: op-1/)).toBeInTheDocument();
+    expect(screen.getByText(/exact slug with provision and read/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Provision" })).not.toBeInTheDocument();
   });
 
   it("does not expose controls while authority is pending or unavailable", async () => {

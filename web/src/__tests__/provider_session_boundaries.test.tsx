@@ -74,7 +74,8 @@ describe("Provider authentication boundaries with the real transport client", ()
           if (admin && delayAdminRoster) return delayAdminRoster();
           return admin ? json({ tenants: [alpha, beta] }) : json({ detail: "Provider administrator required" }, 403);
         }
-        if (url === "/provider/v1/tenants" && init?.method === "POST" && rejectProvision) return json({ detail: "Customer delegation is required" }, 403);
+        if (url === "/provider/v1/tenants" && init?.method === "POST" && rejectProvision)
+          return json({ code: "forbidden", detail: "Customer delegation is required" }, 403);
         if (url === "/provider/v1/tenants") return json({ tenants: admin ? [alpha, beta] : [alpha] });
         if (url.startsWith("/provider/v1/activity")) return json({ items: [] });
         throw new Error("Unexpected Provider request " + url);
@@ -167,7 +168,10 @@ describe("Provider authentication boundaries with the real transport client", ()
     fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "new-customer" } });
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New customer" } });
     fireEvent.click(screen.getByRole("button", { name: "Provision" }));
-    expect(await screen.findByText(/Customer delegation is required/)).toBeInTheDocument();
+    expect(await screen.findByText(/Provisioning new-customer was refused/)).toBeInTheDocument();
+    expect(screen.getAllByText(/trstctl provider-grant/)).toHaveLength(2);
+    expect(screen.getByText(/Your Provider operator ID: admin/)).toBeInTheDocument();
+    expect(screen.queryByText(/Customer delegation is required/)).not.toBeInTheDocument();
     expect(providerToken()).toBe("admin");
     expect(screen.getByLabelText("Slug")).toHaveValue("new-customer");
     expect(screen.getByLabelText("Name")).toHaveValue("New customer");

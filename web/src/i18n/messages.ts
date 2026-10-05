@@ -15790,6 +15790,24 @@ export const messages = {
     defaultMessage: "Provision",
     description: "L3: provision button.",
   },
+  "provider.provision.exactGrantHelp": {
+    defaultMessage:
+      "A new customer slug needs its own host-admin grant before provisioning. Ask a Provider host administrator to run trstctl provider-grant for your operator ID and the exact slug with provision and read. A grant for another customer does not apply.",
+    description: "Explain exact-slug bootstrap authority without offering a self-grant.",
+  },
+  "provider.provision.operatorId": {
+    defaultMessage: "Your Provider operator ID: {operatorId}",
+    description: "Identity the host administrator must grant for a new customer slug.",
+  },
+  "provider.provision.awaitExactGrant": {
+    defaultMessage: "The provision form appears after a customer-specific provision grant becomes active.",
+    description: "Bootstrap state for a Provider administrator with no provisioning delegation.",
+  },
+  "provider.provision.exactGrantRefused": {
+    defaultMessage:
+      "Provisioning {slug} was refused (HTTP 403). Ask a Provider host administrator to check the exact-slug provision grant using trstctl provider-grant, then retry. No customer was created.",
+    description: "Recovery from a Provider forbidden problem during new-customer provisioning.",
+  },
   "source.provider.customers.l3prov0011": {
     defaultMessage: "Customers",
     description: "L3: customer list heading.",
