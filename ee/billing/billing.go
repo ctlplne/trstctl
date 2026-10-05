@@ -70,8 +70,11 @@ type CounterDelta struct {
 type TenantCounts map[string]int64
 
 type Quota struct {
-	TenantID              string `json:"tenant_id"`
-	MaxAgents             *int   `json:"max_agents,omitempty"`
+	TenantID  string `json:"tenant_id"`
+	MaxAgents *int   `json:"max_agents,omitempty"`
+	// Historical event/projection compatibility only. Each customer has one
+	// tenant; the licensed managed-customer band is checked by Provider
+	// provisioning, never by a customer resource quota.
 	MaxTenants            *int   `json:"max_tenants,omitempty"`
 	MaxCertificatesStored *int   `json:"max_certificates_stored,omitempty"`
 	MaxSecretsStored      *int   `json:"max_secrets_stored,omitempty"`
@@ -82,8 +85,6 @@ func (q Quota) LimitFor(resource string) *int {
 	switch resource {
 	case usage.MeterAgents:
 		return q.MaxAgents
-	case usage.MeterTenants:
-		return q.MaxTenants
 	case usage.MeterCertificatesStored:
 		return q.MaxCertificatesStored
 	case usage.MeterSecretsStored:

@@ -343,6 +343,16 @@ events and require the customer's `provision` delegation.
 An already admitted first write can finish while a lower cap is being saved;
 the next admission reads the new projected limit.
 
+Customer quota writes support `max_agents`, `max_certificates_stored`, and
+`max_secrets_stored`; a blank cap means no customer resource limit and zero
+refuses new objects. `max_tenants` is not a customer quota: each customer is
+one tenant, and the signed Provider license's managed-customer band limits
+new customer provisioning across the deployment. The API rejects
+`max_tenants` in new quota writes. Older authority events and quota rows may
+contain that field for replay compatibility, but reads omit it and it never
+enforces a limit. The `tenants` usage gauge still records one for each active
+customer and is separate from customer resource caps.
+
 Customer lifecycle, delegation, quota, white-label branding, and break-glass
 grant/use state share one tenant-scoped immutable authority history. The
 `provider_tenants`, `provider_operators`, `provider_operator_delegations`,

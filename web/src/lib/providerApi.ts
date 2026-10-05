@@ -47,7 +47,6 @@ export interface ProviderTenant {
 export interface ProviderQuota {
   tenant_id: string;
   max_agents?: number;
-  max_tenants?: number;
   max_certificates_stored?: number;
   max_secrets_stored?: number;
   updated_by?: string;

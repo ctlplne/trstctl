@@ -94,6 +94,17 @@ func TestProviderOpenAPIReflectsAttachedRoutes(t *testing.T) {
 	}
 }
 
+func TestProviderQuotaSchemaDoesNotPromisePerCustomerTenantCap(t *testing.T) {
+	doc := providerOpenAPIDocument(false, false)
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	for _, name := range []string{"ProviderQuota", "ProviderQuotaRequest"} {
+		properties := schemas[name].(map[string]any)["properties"].(map[string]any)
+		if _, ok := properties["max_tenants"]; ok {
+			t.Errorf("%s promises an unenforced per-customer tenant cap", name)
+		}
+	}
+}
+
 func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 	doc := providerOpenAPIDocument(true, true)
 	paths, ok := doc["paths"].(map[string]map[string]any)

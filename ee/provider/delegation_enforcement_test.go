@@ -461,6 +461,31 @@ func TestQuotaAdministrationObeysTheDelegationPartition(t *testing.T) {
 	}
 }
 
+// A customer is one tenant. The licensed managed-customer band is enforced
+// when a Provider provisions customers, not by a per-customer quota row. An
+// accepted max_tenants value falsely tells the operator a cap is active.
+func TestProviderQuotaRefusesUnsupportedTenantCapAndHidesLegacyValue(t *testing.T) {
+	t.Parallel()
+	legacy := 0
+	quotas := &memQuotaStore{byTenant: map[string]*billing.Quota{
+		"tenant-alpha": {TenantID: "tenant-alpha", MaxTenants: &legacy},
+	}}
+	h, _ := twoCustomerHandlerWithQuotas(t, fullyDelegated("op-1", "tenant-alpha"), quotas)
+	for _, body := range []string{`{"max_tenants":0}`, `{"max_tenants":null}`} {
+		rec := providerRequest(t, h, http.MethodPut, "/provider/v1/tenants/tenant-alpha/quota", body)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "max_tenants") {
+			t.Fatalf("unsupported cap %s = %d: %s", body, rec.Code, rec.Body.String())
+		}
+		if quotas.byTenant["tenant-alpha"].MaxTenants == nil {
+			t.Fatal("a rejected write changed the legacy row")
+		}
+	}
+	rec := providerRequest(t, h, http.MethodGet, "/provider/v1/tenants/tenant-alpha/quota", "")
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "max_tenants") {
+		t.Fatalf("legacy cap disclosed by GET = %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // memQuotaStore records what the plane wrote, keyed by tenant.
 type memQuotaStore struct {
 	byTenant map[string]*billing.Quota

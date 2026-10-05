@@ -690,11 +690,34 @@ func (h *handler) setQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/quota")
-	var q billing.Quota
-	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+	// max_tenants was historically accepted but can never cap a single
+	// customer's tenant count. Reject it, including explicit null, instead
+	// of recording a quota the Provider cannot enforce.
+	var input struct {
+		TenantID              string          `json:"tenant_id"`
+		MaxAgents             *int            `json:"max_agents"`
+		MaxTenants            json.RawMessage `json:"max_tenants"`
+		MaxCertificatesStored *int            `json:"max_certificates_stored"`
+		MaxSecretsStored      *int            `json:"max_secrets_stored"`
+		UpdatedBy             string          `json:"updated_by"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		writeProviderError(w, err)
 		return
 	}
+	if len(input.MaxTenants) != 0 {
+		writeProviderError(w, errors.New("max_tenants is not a per-customer quota; the licensed managed-customer band is enforced when provisioning customers"))
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		writeProviderError(w, errors.New("quota request must contain exactly one JSON object"))
+		return
+	}
+	q := billing.Quota{MaxAgents: input.MaxAgents, MaxCertificatesStored: input.MaxCertificatesStored,
+		MaxSecretsStored: input.MaxSecretsStored}
 	if err := h.svc.SetTenantQuota(r.Context(), op, customerID, q); err != nil {
 		writeProviderError(w, err)
 		return
@@ -798,6 +821,9 @@ func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
 		writeProviderError(w, err)
 		return
 	}
+	// Keep the historical column for event replay, but do not publish a cap
+	// that was never enforced. A customer always contributes one tenant meter.
+	q.MaxTenants = nil
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(q)
 }

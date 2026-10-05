@@ -93,6 +93,13 @@ Customers is the first working list. Pending or failed deletion work appears in
 Offboarding needs attention, including requests whose customer has left the
 roster. Recent activity shows ten returned records at a time; use Older activity
 and Newer activity to move through them.
+
+Quota controls apply to resources inside one customer: agents, stored
+certificates, and stored secrets. A customer always has one tenant. The
+licensed managed-customer band controls how many customers the Provider can
+provision; setting a customer quota cannot raise or lower that band. The
+Provider API refuses the historical `max_tenants` quota field because it never
+enforced a per-customer capacity limit.
 Under Operator access, choose View delegations for an operator to inspect active,
 expired and revoked grants. Use Next delegations and Previous delegations to
 reach every returned grant. Closing the details returns to that operator's row;

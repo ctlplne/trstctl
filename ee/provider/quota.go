@@ -4,6 +4,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/ee/billing"
@@ -41,6 +42,9 @@ func (s *Service) SetTenantQuota(ctx context.Context, actor Operator, customerID
 	}
 	if err := s.authorize(ctx, actor, customerID, OpProvision); err != nil {
 		return err
+	}
+	if q.MaxTenants != nil {
+		return errors.New("provider: max_tenants is not a per-customer quota; the licensed managed-customer band is enforced when provisioning customers")
 	}
 	if s.quotas == nil {
 		// Fail closed AND say which piece is missing: a provider who wires
