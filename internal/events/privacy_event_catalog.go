@@ -484,6 +484,15 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("vault.compat.policy.deleted", catalogPrivacyRule("/name", token), catalogPrivacyRule("/policy", opaque)),
 		entry("vault.compat.policy.put", catalogPrivacyRule("/name", token), catalogPrivacyRule("/policy", clear)),
 	}
+	catalog = append(catalog, productionPrivacyEventPolicy{
+		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "ai.query.answered", SchemaVersion: 2},
+		Policy: catalogPrivacyPolicy(aiQueryAnsweredV2PrivacyPayloadShape(),
+			catalogPrivacyRule("/subject", token), catalogPrivacyRule("/rows", opaque),
+			catalogPrivacyRule("/citations", opaque), catalogPrivacyRule("/grounded", opaque),
+			catalogPrivacyRule("/sufficient", opaque), catalogPrivacyRule("/expiry_days", opaque),
+			catalogPrivacyRule("/window_after", opaque), catalogPrivacyRule("/window_before", opaque),
+			catalogPrivacyRule("/truncated", opaque)),
+	})
 	sort.Slice(catalog, func(i, j int) bool {
 		if catalog[i].EventType == catalog[j].EventType {
 			return catalog[i].SchemaVersion < catalog[j].SchemaVersion

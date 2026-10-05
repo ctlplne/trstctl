@@ -447,3 +447,10 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return PrivacyPayloadShape{}, false
 	}
 }
+
+// The v1 AI answer has a retained four-field payload. Its v2 successor records
+// the interpreted time window and whether the bounded result was complete.
+// Keeping the shapes separate lets old history remain valid without widening v1.
+func aiQueryAnsweredV2PrivacyPayloadShape() PrivacyPayloadShape {
+	return catalogPrivacyPayloadShape(`{"subject":"","rows":1,"citations":1,"grounded":true,"sufficient":true,"expiry_days":1,"window_after":"","window_before":"","truncated":false}`, catalogPrivacyShapeOptions{})
+}

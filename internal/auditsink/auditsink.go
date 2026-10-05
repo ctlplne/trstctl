@@ -28,23 +28,30 @@ type Auditor interface {
 	Audit(ctx context.Context, eventType, tenantID string, data []byte) error
 }
 
-// droppedEvents counts audit/event-emit writes that failed and were NOT
-// propagated to the caller — i.e. an AN-2 source-of-truth/audit event that the
-// event log could not accept (NATS down, backpressure, marshal error) while the
-// local side-effect already happened. A non-zero value is a lost-event integrity
-// signal an operator must alarm on (CODE-001). It is process-wide and is surfaced
-// as a metric by the control plane.
+// VersionedAuditor appends an evolved event payload under its declared schema
+// version. The original Auditor method keeps historical v1 producers unchanged.
+// A caller requiring v2 must fail closed if its adapter cannot preserve that
+// version, rather than putting new fields into an old privacy schema.
+type VersionedAuditor interface {
+	Auditor
+	AuditVersioned(ctx context.Context, eventType, tenantID string, schemaVersion int, data []byte) error
+}
+
+// droppedEvents counts audit/event-emit writes that failed, including missing
+// versioned adapters. The caller may also propagate the failure and withhold its
+// response. A non-zero value is an audit-integrity signal an operator must alarm
+// on (CODE-001). It is process-wide and is surfaced as a metric by the control plane.
 var droppedEvents atomic.Int64
 
-// DroppedEvents returns the running count of dropped audit/event-emit writes
+// DroppedEvents returns the running count of failed audit/event-emit writes
 // (CODE-001). The control plane exports it as a gauge/counter; a test asserts it
 // increments when an emit is dropped rather than silently swallowed.
 func DroppedEvents() int64 { return droppedEvents.Load() }
 
 // Emit records an audited event through a, and — crucially — does NOT silently
 // discard a failed write the way a bare `_ = a.Audit(...)` does (CODE-001). On
-// failure it increments the process-wide dropped-event counter and logs at WARN
-// (when logger is non-nil) so a lost AN-2 source-of-truth/audit record is visible
+// failure it increments the process-wide failed-event counter and logs at WARN
+// so an unavailable AN-2 audit record is visible
 // to operators. It returns the underlying error so a caller on a critical path
 // can additionally fail closed; telemetry-grade callers may ignore the return,
 // having already accounted for the drop via the counter+log.
@@ -57,8 +64,27 @@ func Emit(ctx context.Context, a Auditor, logger *slog.Logger, eventType, tenant
 	if a == nil {
 		return nil
 	}
+	return emit(ctx, logger, eventType, tenantID, data, func(payload []byte) error {
+		return a.Audit(ctx, eventType, tenantID, payload)
+	})
+}
+
+// EmitVersioned preserves a producer's explicit event schema version. Missing
+// adapters are errors, and append failures get the same metric and safe log as
+// Emit. Critical callers must return the error to the requester.
+func EmitVersioned(ctx context.Context, a Auditor, logger *slog.Logger, eventType, tenantID string, schemaVersion int, data []byte) error {
+	return emit(ctx, logger, eventType, tenantID, data, func(payload []byte) error {
+		versioned, ok := a.(VersionedAuditor)
+		if !ok || schemaVersion < 1 {
+			return fmt.Errorf("audit event %s v%d requires a versioned auditor", eventType, schemaVersion)
+		}
+		return versioned.AuditVersioned(ctx, eventType, tenantID, schemaVersion, payload)
+	})
+}
+
+func emit(ctx context.Context, logger *slog.Logger, eventType, tenantID string, data []byte, appendEvent func([]byte) error) error {
 	data = wellFormedPayload(ctx, logger, eventType, tenantID, data)
-	err := a.Audit(ctx, eventType, tenantID, data)
+	err := appendEvent(data)
 	if err != nil {
 		droppedEvents.Add(1)
 		if logger == nil {

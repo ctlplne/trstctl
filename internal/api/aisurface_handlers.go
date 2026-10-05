@@ -313,9 +313,28 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 		windowAfter = spec.CertificateExpiryWindow.After.Format(time.RFC3339Nano)
 		windowBefore = spec.CertificateExpiryWindow.Before.Format(time.RFC3339Nano)
 	}
-	_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "ai.query.answered", principal.TenantID,
-		[]byte(fmt.Sprintf(`{"subject":%q,"rows":%d,"citations":%d,"grounded":%t,"sufficient":%t,"expiry_days":%d,"window_after":%q,"window_before":%q,"truncated":%t}`,
-			req.Subject, len(res.Rows), len(ans.Citations), ans.Grounded, ans.Sufficient, days, windowAfter, windowBefore, res.Truncated)))
+	auditPayload, err := json.Marshal(struct {
+		Subject      string `json:"subject"`
+		Rows         int    `json:"rows"`
+		Citations    int    `json:"citations"`
+		Grounded     bool   `json:"grounded"`
+		Sufficient   bool   `json:"sufficient"`
+		ExpiryDays   int    `json:"expiry_days"`
+		WindowAfter  string `json:"window_after"`
+		WindowBefore string `json:"window_before"`
+		Truncated    bool   `json:"truncated"`
+	}{req.Subject, len(res.Rows), len(ans.Citations), ans.Grounded, ans.Sufficient, days, windowAfter, windowBefore, res.Truncated})
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusInternalServerError, "cannot encode AI query audit"))
+		return
+	}
+	// A successful answer without its immutable tenant audit record is a false
+	// success for an enterprise investigation. Preserve the v1 history shape and
+	// append this richer record as v2 before sending the answer.
+	if err := auditsink.EmitVersioned(r.Context(), a.ai.be.Audit, nil, "ai.query.answered", principal.TenantID, 2, auditPayload); err != nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "AI query audit is unavailable; retry the question"))
+		return
+	}
 
 	a.writeJSON(w, http.StatusOK, ans)
 }

@@ -83,6 +83,13 @@ history, and returns deliberately coarse errors so a caller can't tell "out of s
 used by MCP tools; the standalone Go API stays available for embedded consumers. Saved
 prompts and richer analysis workspaces remain roadmap residuals, not hidden GA scope.
 
+An AI query answer is returned only after its `ai.query.answered` event is stored in
+the immutable audit log. Operators can read that receipt through
+`GET /api/v1/audit/events?type=ai.query.answered&window=latest`. The v2 receipt records
+row and citation counts, sufficiency, truncation, and the exact interpreted expiry
+window; retained v1 receipts keep their original smaller shape. If the audit append
+is unavailable, the query returns a retryable `503` instead of an unaudited answer.
+
 ### The pluggable AI model adapter (F76)
 
 trstctl's AI features are model-agnostic: a thin adapter routes reasoning to a cloud LLM

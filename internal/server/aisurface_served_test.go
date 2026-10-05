@@ -170,7 +170,8 @@ func TestServedAIQueryGroundedAndScoped(t *testing.T) {
 // future window. A cited inventory row outside that window is a wrong answer even
 // though the citation itself is real.
 func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, withAIEnabled())
+	registerServedTenant(t, h, "AI expiry audit fixture")
 	now := time.Now().UTC().Truncate(time.Second)
 	tenantB := "22222222-2222-2222-2222-222222222222"
 	registerServedTenantID(t, h, tenantB, "AI neighboring tenant")
@@ -196,7 +197,7 @@ func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
 	if err := h.srv.orch.SupersedeCertificate(t.Context(), h.tenant, strings.Repeat("e", 64), "superseded", "replacement", now); err != nil {
 		t.Fatal(err)
 	}
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "owners:read", "graph:read")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "owners:read", "graph:read", "audit:read")
 	status, body := aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
 		"surfaces": []string{"certificates", "owners", "graph"},
 		"question": "Which certificates expire within 30 days?",
@@ -215,6 +216,38 @@ func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
 	}
 	if !ans.Sufficient || len(ans.Citations) != 2 || !strings.Contains(ans.Text, "serial=within") || !strings.Contains(ans.Text, "serial=within-20") || !strings.Contains(ans.Text, "not_after=") {
 		t.Fatalf("expected two dated, sufficient active certificates: %+v", ans)
+	}
+	status, auditBody := aiReq(t, h, http.MethodGet, "/api/v1/audit/events?type=ai.query.answered&window=latest&limit=1", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("expiry query audit readback: HTTP %d %s", status, auditBody)
+	}
+	var auditResult struct {
+		Events []struct {
+			ID   string          `json:"id"`
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(auditBody, &auditResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(auditResult.Events) != 1 || auditResult.Events[0].Type != "ai.query.answered" ||
+		!bytes.Contains(auditResult.Events[0].Data, []byte(`"expiry_days":30`)) ||
+		!bytes.Contains(auditResult.Events[0].Data, []byte(`"sufficient":true`)) ||
+		!bytes.Contains(auditResult.Events[0].Data, []byte(`"window_after":`)) {
+		t.Fatalf("missing versioned, durable expiry audit: %s", auditBody)
+	}
+	var auditVersion int
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID == h.tenant && event.ID == auditResult.Events[0].ID {
+			auditVersion = event.SchemaVersion
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if auditVersion != 2 {
+		t.Fatalf("AI expiry audit payload version = %d, want 2", auditVersion)
 	}
 	for _, excluded := range []string{"later", "expired", "revoked", "superseded", "other-tenant"} {
 		if strings.Contains(string(body), excluded) {
@@ -250,6 +283,28 @@ func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
 	})
 	if status != http.StatusOK || !strings.Contains(string(body), `"sufficient":false`) || !strings.Contains(string(body), "not a complete answer") {
 		t.Fatalf("unsupported question must not claim sufficiency: HTTP %d %s", status, body)
+	}
+}
+
+func TestServedAIQueryRefusesUnauditedAnswer(t *testing.T) {
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, withAIEnabled())
+	registerServedTenant(t, h, "AI audit outage fixture")
+	expiry := time.Now().UTC().Add(5 * 24 * time.Hour)
+	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, store.Certificate{
+		Subject: "CN=audit-outage.example.test", Serial: "audit-outage", Fingerprint: strings.Repeat("a", 64),
+		Source: "issued", NotAfter: &expiry,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "graph:read")
+	if err := h.log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	status, body := aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates"}, "question": "Which certificates expire within 30 days?",
+	})
+	if status != http.StatusServiceUnavailable || !bytes.Contains(body, []byte("AI query audit is unavailable")) || bytes.Contains(body, []byte("audit-outage")) {
+		t.Fatalf("answer exposed without durable audit: HTTP %d %s", status, body)
 	}
 }
 

@@ -36,10 +36,13 @@ func NewAuditor(log *events.Log) auditsink.Auditor {
 // Audit implements auditsink.Auditor by appending the event to the log. It
 // returns the append error verbatim (CODE-001): callers must not discard it.
 func (a *logAuditor) Audit(ctx context.Context, eventType, tenantID string, data []byte) error {
+	return a.AuditVersioned(ctx, eventType, tenantID, events.DefaultSchemaVersion, data)
+}
+
+// AuditVersioned keeps the event schema version on the immutable log envelope.
+func (a *logAuditor) AuditVersioned(ctx context.Context, eventType, tenantID string, schemaVersion int, data []byte) error {
 	_, err := a.log.Append(ctx, events.Event{
-		Type:     eventType,
-		TenantID: tenantID,
-		Data:     data,
+		Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: data,
 	})
 	return err
 }

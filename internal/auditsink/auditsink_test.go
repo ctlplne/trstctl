@@ -4,8 +4,20 @@ package auditsink
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
+
+func TestEmitVersionedRejectsAdapterThatCannotPreserveSchema(t *testing.T) {
+	before := DroppedEvents()
+	err := EmitVersioned(context.Background(), Nop{}, nil, "ai.query.answered", "tenant-1", 2, []byte(`{}`))
+	if err == nil || !strings.Contains(err.Error(), "versioned auditor") {
+		t.Fatalf("unversioned adapter error = %v", err)
+	}
+	if DroppedEvents() != before+1 {
+		t.Fatalf("dropped audit count = %d, want %d", DroppedEvents(), before+1)
+	}
+}
 
 func TestRecorderCountsAndCopies(t *testing.T) {
 	r := &Recorder{}

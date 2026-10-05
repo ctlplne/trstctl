@@ -33,6 +33,36 @@ func TestNewAuditorAppendsToTheLog(t *testing.T) {
 	}
 }
 
+func TestNewAuditorPreservesExplicitPayloadVersion(t *testing.T) {
+	log := openLog(t)
+	a := audit.NewAuditor(log)
+	versioned, ok := a.(interface {
+		AuditVersioned(context.Context, string, string, int, []byte) error
+	})
+	if !ok {
+		t.Fatal("log-backed audit adapter does not support versioned payloads")
+	}
+	if err := versioned.AuditVersioned(context.Background(), "ai.query.answered", tenantA, 2,
+		[]byte(`{"subject":"","rows":1,"citations":1,"grounded":true,"sufficient":true,"expiry_days":30,"window_after":"2026-10-05T00:00:00Z","window_before":"2026-11-04T00:00:00Z","truncated":false}`)); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	if err := log.Replay(context.Background(), 0, func(event events.Event) error {
+		if event.Type == "ai.query.answered" && event.TenantID == tenantA {
+			found = true
+			if event.SchemaVersion != 2 {
+				t.Errorf("payload version = %d, want 2", event.SchemaVersion)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("versioned audit event absent from log")
+	}
+}
+
 // TestNewAuditorReturnsAppendError is the CODE-001 acceptance for error
 // propagation: when the underlying log cannot accept the append (here, a closed
 // log), the adapter RETURNS the error rather than swallowing it — which is what

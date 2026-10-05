@@ -432,6 +432,27 @@ func TestCoreProductionPrivacyCatalogExercisesEverySubjectBearingPath(t *testing
 	}
 }
 
+func TestAIQueryAnsweredPayloadVersionsStayClosed(t *testing.T) {
+	const kind = "ai.query.answered"
+	v1 := []byte(`{"subject":"workload","rows":1,"citations":1,"grounded":true}`)
+	v2 := []byte(`{"subject":"workload","rows":1,"citations":1,"grounded":true,"sufficient":true,"expiry_days":30,"window_after":"2026-10-05T00:00:00Z","window_before":"2026-11-04T00:00:00Z","truncated":false}`)
+	if err := validateRegisteredPrivacyEventPayload(v1, kind, 1); err != nil {
+		t.Fatalf("retained v1 event rejected: %v", err)
+	}
+	if err := validateRegisteredPrivacyEventPayload(v2, kind, 2); err != nil {
+		t.Fatalf("v2 event rejected: %v", err)
+	}
+	if err := validateRegisteredPrivacyEventPayload(v2, kind, 1); err == nil {
+		t.Fatal("v2 fields accepted under old v1 schema")
+	}
+	if err := validateRegisteredPrivacyEventPayload(v1, kind, 2); err == nil {
+		t.Fatal("v2 schema accepted an incomplete v1 payload")
+	}
+	if err := validateRegisteredPrivacyEventPayload(append(v2[:len(v2)-1:len(v2)-1], []byte(`,"secret":"forbidden"}`)...), kind, 2); err == nil {
+		t.Fatal("v2 schema accepted an undeclared field")
+	}
+}
+
 func TestLiveWorkloadAndSSHProducerPayloadsFitTheClosedPrivacyCatalog(t *testing.T) {
 	valid := map[string]string{
 		"connector.rollback.requested": `{"connector":"apache","target":"payments listener","target_id":"target-1","identity_id":"identity-1","target_config":{"cert_path":"/etc/apache/payments.crt","verify_server_name":"payments.example.test"},"predecessor_fingerprint":"old-fingerprint","predecessor_serial":"01","successor_fingerprint":"new-fingerprint","reason":"restore after failed listener check","requested_by":"operator@example.test","required_agent_id":"agent-1","required_agent_role":"host"}`,
