@@ -125,6 +125,64 @@ Use an operator-managed KEK Secret in production. `kek.generate=true` is only fo
 short-lived evaluation because losing that generated key makes the sealed CA key
 unrecoverable.
 
+## Install a host agent from the same transferred image
+
+The image in this bundle also contains `trstctl-agent` at
+`/usr/local/bin/trstctl-agent`. A web server or other host-executed connector needs
+that agent **on the target host**: loading the control-plane image onto a cluster
+does not install an agent beside the target service. In the disconnected network,
+copy the verified bundle to each Linux target host whose architecture matches
+`images/trstctl-image.platform`. Run this block from the extracted bundle directory
+after checking the outer archive and `CHECKSUMS.txt` as above:
+
+```bash
+(
+set -eu
+case "$(uname -s)/$(uname -m)" in
+  Linux/x86_64) host_platform=linux/amd64 ;;
+  Linux/aarch64|Linux/arm64) host_platform=linux/arm64 ;;
+  *) echo "unsupported host architecture for this bundle" >&2; exit 1 ;;
+esac
+test "$(cat images/trstctl-image.platform)" = "$host_platform"
+sha256sum -c CHECKSUMS.txt
+docker load -i images/trstctl-image.tar
+image="$(cat images/trstctl-image.ref)"
+docker image inspect "$image" >/dev/null  # requires the exact locally loaded tag
+mkdir -p ./agent-install
+(
+  container="$(docker create --pull never --entrypoint /usr/local/bin/trstctl-agent "$image" --version)"
+  trap 'docker rm "$container" >/dev/null 2>&1 || true' EXIT
+  docker cp "$container:/usr/local/bin/trstctl-agent" ./agent-install/trstctl-agent
+)
+chmod 0755 ./agent-install/trstctl-agent
+docker run --rm --pull never --network none --entrypoint /usr/local/bin/trstctl-agent "$image" --version
+./agent-install/trstctl-agent --version  # full source commit must match the line above
+sha256sum ./agent-install/trstctl-agent
+sudo install -m 0755 ./agent-install/trstctl-agent /usr/local/bin/trstctl-agent
+)
+```
+
+This uses only the checksummed transferred image; the host does not download an
+agent from GitHub or rebuild it from source. Keep the image's release signature
+verification and the bundle's checksum verification in the transfer record. The
+printed executable hash identifies the exact installed agent. For a containerized
+target, run the same image with `trstctl-agent` as its entrypoint and mount only
+the target's approved credential paths and persistent agent state; the
+[Kubernetes agent example](install.md#kubernetes-agent) uses this same image path.
+
+In the console, mint a one-time **host** enrollment token. Save it to a 0600 file
+on the target, pin the control-plane and agent-channel CA certificates in a local
+bundle, and run the agent with `--bootstrap-token-file`, `--ca-bundle`, persistent
+`--cert` and `--key` paths, `--server-name`, `--relay-claim`, a host execution
+profile, and a persistent encrypted rollback directory. Enable only the intended
+connector and claimable job kinds (`endpoint.renew`, `connector.test`, and
+`connector.rollback` for a host-generated certificate). The full target schema and
+host allowlist are in [Deployment connectors](features/deployment-connectors.md#host-executed-keys).
+Treat agent enrollment, target test, served-certificate verification, and a cold
+agent restart as part of installation; possession of the binary is not deployment
+proof. Remove the consumed bootstrap-token file after the enrolled certificate is
+persisted and reconnects successfully.
+
 ## Verify zero public egress
 
 Before opening the service to users, prove the no-phone-home posture:
