@@ -189,7 +189,56 @@ describe("fleet re-issuance configuration", () => {
     );
 
     expect(await screen.findByText("Fleet setup is incomplete")).toBeInTheDocument();
+    expect(screen.getByText("Add an X.509 issuer.")).toBeInTheDocument();
+    expect(screen.getByText("Add an active replacement CA authority.")).toBeInTheDocument();
+    expect(screen.getByText("Enroll an agent.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Build migration waves" })).toBeDisabled();
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("names only the missing prerequisite when an issuer and agent are already present", async () => {
+    vi.spyOn(api, "issuers").mockResolvedValue([{ id: "issuer-old", kind: "x509_ca", name: "Existing X.509 CA" }]);
+    vi.spyOn(api, "caAuthorities").mockResolvedValue({ items: [] });
+    vi.spyOn(api, "identities").mockResolvedValue([]);
+    vi.spyOn(api, "agents").mockResolvedValue([
+      {
+        id: "agent-a",
+        name: "Existing agent",
+        status: "active",
+        discovery_capabilities: [],
+        inventory_report_path: "",
+        presence: { state: "online", online: true, detail: "fresh", evaluated_at: "2026-09-04T00:00:00Z" },
+        relay_capabilities: [],
+        role_source: "certificate",
+        roles: ["host"],
+        workload_api: { state: "unreported", detail: "not configured", svids_issued: 0 },
+        enrollment_proxy: {
+          state: "unreported",
+          detail: "not configured",
+          forwarded_requests: 0,
+          healthy_upstreams: 0,
+          refused_requests: 0,
+          reported_at: "2026-09-04T00:00:00Z",
+          unhealthy_upstreams: 0,
+          unknown_upstreams: 0,
+          upstream_failures: 0,
+        },
+      },
+    ]);
+    render(
+      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+        <AppQueryProvider>
+          <CapabilityFixtureProvider view={runtime(fleetCapability(true))}>
+            <FleetReissuanceConfiguration running={false} onStart={vi.fn()} />
+          </CapabilityFixtureProvider>
+        </AppQueryProvider>
+      </IntlProvider>,
+    );
+
+    expect(await screen.findByText("Fleet setup is incomplete")).toBeInTheDocument();
+    expect(screen.getByText("Add an active replacement CA authority.")).toBeInTheDocument();
+    expect(screen.queryByText("Add an X.509 issuer.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enroll an agent.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build migration waves" })).toBeDisabled();
   });
 });

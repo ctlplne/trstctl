@@ -169,7 +169,13 @@ function FleetReissuanceConfigurationBody({ initialReason, running, onStart }: F
       {loading ? <LoadingState>{t("incidents.fleet.loadingSetup")}</LoadingState> : null}
       {rosterError ? <ErrorState title={t("incidents.fleet.setupUnavailable")}>{rosterError}</ErrorState> : null}
       {!loading && !rosterError && setupBlocked ? (
-        <UnavailableState title={t("incidents.fleet.setupIncomplete")}>{t("incidents.fleet.setupNeeds")}</UnavailableState>
+        <UnavailableState title={t("incidents.fleet.setupIncomplete")}>
+          <ul className="list-disc ps-5">
+            {issuers.length === 0 ? <li>{t("incidents.fleet.addIssuer")}</li> : null}
+            {authorities.length === 0 ? <li>{t("incidents.fleet.addAuthority")}</li> : null}
+            {agents.length === 0 ? <li>{t("incidents.fleet.enrollAgent")}</li> : null}
+          </ul>
+        </UnavailableState>
       ) : null}
 
       <StepShell

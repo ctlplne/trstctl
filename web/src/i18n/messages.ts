@@ -1507,10 +1507,12 @@ export const messages = {
     defaultMessage: "Give every wave a unique name, positive order, and at least one complete member.",
     description: "Fleet wave validation.",
   },
-  "incidents.fleet.setupNeeds": {
-    defaultMessage: "Add an X.509 issuer, an active replacement CA, and an enrolled agent before starting.",
-    description: "Fleet configuration prerequisites.",
+  "incidents.fleet.addIssuer": { defaultMessage: "Add an X.509 issuer.", description: "Missing fleet issuer prerequisite." },
+  "incidents.fleet.addAuthority": {
+    defaultMessage: "Add an active replacement CA authority.",
+    description: "Missing fleet replacement CA prerequisite.",
   },
+  "incidents.fleet.enrollAgent": { defaultMessage: "Enroll an agent.", description: "Missing fleet agent prerequisite." },
   "incidents.fleet.scopeStep": { defaultMessage: "Choose the affected CA", description: "Fleet configuration first step." },
   "incidents.fleet.cohortStep": { defaultMessage: "Build migration waves", description: "Fleet configuration second step." },
   "incidents.fleet.reviewStep": { defaultMessage: "Review before estate work", description: "Fleet configuration review step." },
