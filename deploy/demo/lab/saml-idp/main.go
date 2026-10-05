@@ -77,6 +77,7 @@ func (l *labIDP) GetServiceProvider(_ *http.Request, entityID string) (*saml.Ent
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:18481", "loopback listener")
+	identityFile := flag.String("identity-file", "", "owner-only persistent lab IdP certificate and signing key PEM")
 	metadataFile := flag.String("metadata-file", "", "path for public IdP metadata XML")
 	spMetadataFile := flag.String("sp-metadata-file", "", "path for trusted trstctl SP metadata XML")
 	spEntityID := flag.String("sp-entity-id", "", "exact trstctl SP entity ID")
@@ -91,15 +92,18 @@ func main() {
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
 		log.Fatal("saml-idp requires an explicit loopback IP listener")
 	}
-	if *metadataFile == "" || *spMetadataFile == "" || *spEntityID == "" || *subject == "" || *email == "" || *tenant == "" {
-		log.Fatal("metadata-file, sp-metadata-file, sp-entity-id, subject, email, and tenant are required")
+	if *identityFile == "" || *metadataFile == "" || *spMetadataFile == "" || *spEntityID == "" || *subject == "" || *email == "" || *tenant == "" {
+		log.Fatal("identity-file, metadata-file, sp-metadata-file, sp-entity-id, subject, email, and tenant are required")
+	}
+	if filepath.Clean(*identityFile) == filepath.Clean(*metadataFile) {
+		log.Fatal("identity-file and public metadata-file must be different")
 	}
 	if _, err := url.ParseRequestURI(*spEntityID); err != nil {
 		log.Fatalf("invalid SP entity ID: %v", err)
 	}
-	key, cert, err := samltest.NewIdentityProviderMaterial("trstctl-partner-lab-saml-idp")
+	key, cert, err := samltest.LoadOrCreateIdentityProviderMaterial(*identityFile, *spEntityID)
 	if err != nil {
-		log.Fatalf("generate local IdP signing material: %v", err)
+		log.Fatalf("load local IdP signing material: %v", err)
 	}
 	base := "http://" + *addr
 	metadataURL, _ := url.Parse(base + "/metadata")

@@ -106,8 +106,14 @@ The optional `saml-idp` fixture is a real SAML HTTP-POST identity provider for
 an owned, disposable lab identity. It signs assertions and serves metadata on
 an explicit loopback listener. It authenticates its configured actor without a
 password, so never expose it outside a lab or register a real operator. The
-identity provider's signing key lives only in its process; restarting it creates
-new metadata and requires the control plane to pin that new metadata and restart.
+identity provider's signing key and certificate live in one owner-only PEM file.
+Restarting the fixture reuses the same signing identity and pinned metadata.
+Keep the file under the task's private directory; never copy it into reports or
+container images. To rotate deliberately, stop the fixture, move the private
+identity file into a secure task archive, and start it again to generate a new
+one. Repin the generated public metadata, then restart the control plane and
+signer together. A malformed, expired, or over-permissive identity file causes
+startup to fail instead of silently changing the trust anchor.
 
 From the repository root, set a private task directory and the exact tenant ID:
 
@@ -117,6 +123,7 @@ install -d -m 700 "$LAB_SAML_DIR"
 go build -o "$LAB_SAML_DIR/saml-idp" ./deploy/demo/lab/saml-idp
 "$LAB_SAML_DIR/saml-idp" \
   -addr 127.0.0.1:18481 \
+  -identity-file "$LAB_SAML_DIR/idp-identity.pem" \
   -metadata-file "$LAB_SAML_DIR/idp-metadata.xml" \
   -sp-metadata-file "$LAB_SAML_DIR/sp-metadata.xml" \
   -sp-entity-id https://127.0.0.1:9443/auth/saml/metadata \
