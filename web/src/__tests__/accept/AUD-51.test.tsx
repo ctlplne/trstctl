@@ -7,7 +7,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { me: vi.fn(), authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }), auditEvents: vi.fn(), exportAudit: vi.fn() },
+  apiMock: { me: vi.fn(), authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }), auditWindow: vi.fn(), exportAudit: vi.fn() },
 }));
 
 vi.mock("@/lib/bootstrapApi", async (orig) => {
@@ -60,7 +60,7 @@ function renderAudit() {
 describe("AUD-51 self-contained audit downloads", () => {
   beforeEach(() => {
     apiMock.me.mockReset().mockResolvedValue({ subject: "auditor", tenant_id: "t1", email: "auditor@example.test" });
-    apiMock.auditEvents.mockReset().mockResolvedValue([]);
+    apiMock.auditWindow.mockReset().mockResolvedValue({ events: [] });
     apiMock.exportAudit.mockReset().mockResolvedValue(envelope);
   });
 

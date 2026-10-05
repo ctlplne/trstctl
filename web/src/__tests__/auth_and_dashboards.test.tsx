@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     nhiInventory: vi.fn(),
     auditEvents: vi.fn(),
+    auditWindow: vi.fn(),
     risk: vi.fn(),
     contextualRiskPriorities: vi.fn(),
     rotationRuns: vi.fn(),
@@ -230,6 +231,7 @@ describe("auth + dashboards", () => {
     apiMock.identities.mockReset();
     apiMock.nhiInventory.mockReset();
     apiMock.auditEvents.mockReset();
+    apiMock.auditWindow.mockReset();
     apiMock.risk.mockReset();
     apiMock.contextualRiskPriorities.mockReset();
     apiMock.certificates.mockResolvedValue([]);
@@ -252,6 +254,7 @@ describe("auth + dashboards", () => {
       },
     });
     apiMock.auditEvents.mockResolvedValue([]);
+    apiMock.auditWindow.mockResolvedValue({ events: [] });
     apiMock.risk.mockResolvedValue([]);
     apiMock.contextualRiskPriorities.mockResolvedValue(contextualRiskFixture(0, 0));
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
@@ -574,14 +577,14 @@ describe("auth + dashboards", () => {
   it("keeps backend 403 handling for direct denied routes", async () => {
     const user = userEvent.setup();
     apiMock.me.mockResolvedValue(sessionForRole("viewer"));
-    apiMock.auditEvents.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "missing audit:read" })));
+    apiMock.auditWindow.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "missing audit:read" })));
 
     renderAt("/audit");
 
     expect(await screen.findByRole("heading", { name: "Change history is unavailable" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("Your session cannot read tenant audit evidence.")).toBeInTheDocument();
-    expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 50, window: "latest" }, expect.any(AbortSignal));
+    expect(apiMock.auditWindow).toHaveBeenCalledWith({ limit: 50, window: "latest" }, expect.any(AbortSignal));
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
   });

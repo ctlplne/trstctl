@@ -590,10 +590,11 @@ describe("exported API surface census", () => {
       if (readInputs[name]) expect(transport.mock.calls.at(-1)?.[1]?.signal, `api.${name} lost cancellation`).toBeInstanceOf(AbortSignal);
     }
 
-    expect(downloadClick).toHaveBeenCalledOnce();
-    const downloadAnchor = downloadClick.mock.instances[0] as HTMLAnchorElement;
-    expect(downloadAnchor.download).toBe("trstctl-audit.ndjson");
-    expect(downloadAnchor.href).toMatch(/^blob:/);
+    expect(downloadClick).toHaveBeenCalledTimes(2);
+    const downloadAnchors = downloadClick.mock.instances as HTMLAnchorElement[];
+    expect(downloadAnchors.map((anchor) => anchor.download)).toContain("trstctl-audit.ndjson");
+    expect(downloadAnchors.map((anchor) => anchor.download)).toContain("trstctl-report-item/id.json");
+    for (const anchor of downloadAnchors) expect(anchor.href).toMatch(/^blob:/);
 
     const readOnlyPosts = new Set([
       // H2: assess enumerates what a migration WOULD touch and writes nothing.

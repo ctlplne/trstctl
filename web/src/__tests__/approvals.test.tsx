@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     approveEphemeralCredential: vi.fn(),
     approveIdentityAction: vi.fn(),
     auditEvents: vi.fn(),
+    auditWindow: vi.fn(),
     exportAudit: vi.fn(),
   },
 }));
@@ -139,6 +140,7 @@ describe("dedicated approvals inbox", () => {
     });
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });
     apiMock.auditEvents.mockResolvedValue([]);
+    apiMock.auditWindow.mockResolvedValue({ events: [] });
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "sealed" });
   });
 
@@ -499,7 +501,7 @@ describe("dedicated approvals inbox", () => {
 
     await screen.findByRole("heading", { name: "Change history" });
     await waitFor(() =>
-      expect(apiMock.auditEvents).toHaveBeenCalledWith(
+      expect(apiMock.auditWindow).toHaveBeenCalledWith(
         {
           type: "identity.approval",
           q: "jit-1 issue",
