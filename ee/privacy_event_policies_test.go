@@ -43,6 +43,12 @@ func TestLicensedProductionPrivacyCatalogIsRegistered(t *testing.T) {
 	}
 }
 
+func TestProviderWithdrawalHasPrivacyPolicy(t *testing.T) {
+	if !events.HasPrivacyEventPolicy(provider.AuditBreakGlassWithdrawn, 1) {
+		t.Fatal("requester withdrawal cannot be appended without its licensed privacy policy")
+	}
+}
+
 // fullBinaryProducerPrivacyCoordinates is intentionally maintained separately
 // from ee.LicensedProductionPrivacyEventSchemas. It is the test-side census of
 // every full-binary producer family, so adding a catalog row cannot make its own
@@ -66,6 +72,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: provider.AuditBreakGlassRequested, SchemaVersion: 1},
 		{EventType: provider.AuditBreakGlassConsented, SchemaVersion: 1},
 		{EventType: provider.AuditBreakGlassDenied, SchemaVersion: 1},
+		{EventType: provider.AuditBreakGlassWithdrawn, SchemaVersion: 1},
 		{EventType: provider.AuditBreakGlassAccessed, SchemaVersion: 1},
 		{EventType: "provider.isolation.drill", SchemaVersion: 1},
 		{EventType: pqcmigration.EventTLSFindingPrepared, SchemaVersion: 1},

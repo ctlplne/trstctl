@@ -297,6 +297,7 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		entry(provider.AuditBreakGlassRequested, 1, breakGlassPolicy),
 		entry(provider.AuditBreakGlassConsented, 1, breakGlassPolicy),
 		entry(provider.AuditBreakGlassDenied, 1, breakGlassPolicy),
+		entry(provider.AuditBreakGlassWithdrawn, 1, breakGlassPolicy),
 		entry(provider.AuditBreakGlassAccessed, 1, breakGlassAccessPolicy),
 		entry("provider.isolation.drill", 1, providerPolicy[providerIsolationDrillAuthorityPayload](
 			licensedPrivacyRule("/isolation_drill/checks/*/detail", events.PrivacyFieldFreeTextClear),
