@@ -11,8 +11,9 @@ model adapter, grounded root-cause analysis with natural-language questions, and
 read-only interface.
 
 The mental model: the graph maps roads between credential "buildings"; the query layer
-is the one inspector's desk every question must pass through; and the AI layer is an
-analyst who answers only from evidence pulled there, always citing sources.
+is the one inspector's desk every question must pass through. Product help uses that
+desk for exact questions it understands and shows cited, scoped evidence for other
+questions without calling it a complete answer.
 
 ## Why it exists
 
@@ -153,7 +154,16 @@ prompt or tenant evidence to a model. The page also reads the served support ent
 only to decide whether to show the contract-owned licensed-support handoff.
 
 When the help backend is ready, select **Ask a question** to open the read-only
-workspace, then ask in plain language. Open **Evidence and request details** only when
+workspace. For an exact expiry worklist, ask **“Which certificates expire within 30 days?”**
+(replace 30 with 1–365), with **Certificates** selected as an evidence surface.
+The query uses the caller's tenant, checks every selected surface's read permission,
+and returns only active certificates whose expiry is after the query time and before
+the requested cutoff. Each result includes its expiry time and inventory citation.
+When a row limit hides more matches, the answer says so and is marked insufficient;
+page through certificate inventory for a complete worklist. Unsupported certificate
+expiry wording returns a usable error. Other questions may show scoped evidence,
+but an unplanned question is marked insufficient rather than claiming the records
+answer it. Open **Evidence and request details** only when
 you need an exact subject or source scope. **Investigate a cause** uses the same
 tenant-scoped evidence path for root-cause analysis. **Use read-only tools** still loads
 its MCP catalog only when selected, and **Runtime and privacy details** reuses the status
@@ -176,6 +186,14 @@ trstctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHE
 
 Those map to the served `/api/v1/graph*` routes. When `ai.enable_api` is on, grounded
 RCA (and `GET /api/v1/mcp/tools`) are served too:
+
+```sh
+printf '%s\n' '{"surfaces":["certificates"],"question":"Which certificates expire within 30 days?","limit":25}' \
+  | trstctl-cli ai query -f -
+```
+
+The response is a dated, cited window. If `sufficient` is false because the limit
+was reached, use certificate inventory pagination to get the remaining matches.
 
 ```sh
 curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \

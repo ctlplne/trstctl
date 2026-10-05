@@ -3235,9 +3235,13 @@ the guarded MCP tool server (F78) — is served, mounted under `/api/v1/ai/*`
 and `/api/v1/mcp/*` (off by default — `ai.enable_api` — and fail-closed when
 off, so an upgrade does not silently expose it):
 
-- `POST /api/v1/ai/query` answers a typed semantic / natural-language query
-  over the tenant's own data surfaces (owners, certificates, the credential
-  graph, the CBOM, the event log), grounded and citing real records (F75).
+- `POST /api/v1/ai/query` reads typed, tenant-scoped evidence from owners,
+  certificates, the graph, CBOM, and the event log (F75). An exact certificate
+  expiry question such as “Which certificates expire within 30 days?” filters
+  active inventory rows by a typed time window and returns dated citations.
+  Other question text has no general semantic planner: it returns scoped evidence
+  marked insufficient, not a claimed complete answer. A bounded result also
+  declares when more matches may exist.
 - `POST /api/v1/ai/rca` answers a grounded root-cause / NL question from
   cited real records gathered through the tenant-then-RBAC scoping seam,
   preferring "insufficient evidence" to a guess (F77).

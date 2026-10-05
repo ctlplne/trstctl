@@ -5,6 +5,7 @@ package query
 import (
 	"context"
 	"errors"
+	"time"
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/graph"
@@ -33,11 +34,24 @@ func (e *Engine) readOwners(ctx context.Context, tenant string, eq map[Field]str
 	return nil
 }
 
-func (e *Engine) readCertificates(ctx context.Context, tenant string, eq map[Field]string, add func(Row) bool) error {
-	certs, err := e.store.ListCertificatesPage(ctx, tenant, store.ZeroUUID, nil, e.cfg.MaxRows, nil)
-	if err != nil {
-		return err
+func (e *Engine) readCertificates(ctx context.Context, tenant string, eq map[Field]string, window *CertificateExpiryWindow, limit int, add func(Row) bool) (bool, error) {
+	pageSize := e.cfg.MaxRows
+	var after, before *time.Time
+	if window != nil {
+		// Fetch one extra row to know whether the answer is complete. An exact
+		// serial predicate may skip rows, so cap its scan at MaxRows+1 and report
+		// that limit rather than making an unsupported completeness claim.
+		pageSize = limit + 1
+		if _, bySerial := eq[FieldCertSerial]; bySerial {
+			pageSize = e.cfg.MaxRows + 1
+		}
+		after, before = &window.After, &window.Before
 	}
+	certs, err := e.store.ListCertificatesPage(ctx, tenant, store.ZeroUUID, after, pageSize, before)
+	if err != nil {
+		return false, err
+	}
+	scanTruncated := window != nil && pageSize == e.cfg.MaxRows+1 && len(certs) == pageSize
 	wantOwner, byOwner := eq[FieldOwnerID]
 	wantSerial, bySerial := eq[FieldCertSerial]
 	for _, c := range certs {
@@ -53,12 +67,20 @@ func (e *Engine) readCertificates(ctx context.Context, tenant string, eq map[Fie
 		}
 		if !add(Row{Surface: SurfaceCertificates, Columns: map[string]string{
 			"id": c.ID, "owner_id": owner, "serial": c.Serial,
-			"subject": c.Subject, "fingerprint": c.Fingerprint,
+			"subject": c.Subject, "fingerprint": c.Fingerprint, "status": c.Status,
+			"not_after": certificateExpiry(c.NotAfter),
 		}}) {
-			return nil
+			return true, nil
 		}
 	}
-	return nil
+	return scanTruncated, nil
+}
+
+func certificateExpiry(t *time.Time) string {
+	if t == nil {
+		return "unknown"
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 func (e *Engine) readGraph(ctx context.Context, tenant string, eq map[Field]string, add func(Row) bool) error {

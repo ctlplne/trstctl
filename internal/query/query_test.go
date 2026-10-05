@@ -87,6 +87,25 @@ func TestPredicateOnUnselectedSurfaceFailsClosed(t *testing.T) {
 	}
 }
 
+func TestCertificateExpiryWindowFailsClosed(t *testing.T) {
+	e := newValidationEngine()
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name string
+		spec query.Spec
+	}{
+		{"missing certificate surface", query.Spec{Select: []query.Surface{query.SurfaceOwners}, CertificateExpiryWindow: &query.CertificateExpiryWindow{After: now, Before: now.Add(time.Hour)}}},
+		{"reversed window", query.Spec{Select: []query.Surface{query.SurfaceCertificates}, CertificateExpiryWindow: &query.CertificateExpiryWindow{After: now, Before: now.Add(-time.Hour)}}},
+		{"zero lower bound", query.Spec{Select: []query.Surface{query.SurfaceCertificates}, CertificateExpiryWindow: &query.CertificateExpiryWindow{Before: now.Add(time.Hour)}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := e.Query(context.Background(), adminPrincipal("t1"), tc.spec); !errors.Is(err, query.ErrMalformed) {
+				t.Fatalf("bad expiry window must fail before a store read: %v", err)
+			}
+		})
+	}
+}
+
 func TestEmptySelectFailsClosed(t *testing.T) {
 	e := newValidationEngine()
 	if _, err := e.Query(context.Background(), adminPrincipal("t1"), query.Spec{}); !errors.Is(err, query.ErrMalformed) {

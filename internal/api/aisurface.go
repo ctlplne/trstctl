@@ -260,7 +260,8 @@ func rowSummary(row query.Row) string {
 	case query.SurfaceCBOM:
 		return "crypto asset algorithm=" + row.Columns["algorithm"] + " location=" + row.Columns["location"] + " strength=" + row.Columns["strength"]
 	case query.SurfaceCertificates:
-		return "certificate serial=" + row.Columns["serial"] + " subject=" + row.Columns["subject"]
+		return "certificate serial=" + row.Columns["serial"] + " subject=" + row.Columns["subject"] +
+			" status=" + row.Columns["status"] + " not_after=" + row.Columns["not_after"]
 	case query.SurfaceOwners:
 		return "owner name=" + row.Columns["name"]
 	default:

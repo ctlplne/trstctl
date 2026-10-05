@@ -10692,8 +10692,8 @@ export const messages = {
     description: "Calm page title for grounded product help.",
   },
   "assistant.design.answer": {
-    defaultMessage: "How to complete a task or understand a term without leaving context.",
-    description: "Answer-first summary for Product help.",
+    defaultMessage: "Check certificate expiry and tenant evidence without changes.",
+    description: "Scope of the served, read-only Product help query.",
   },
   "assistant.design.technicalDetails": {
     defaultMessage: "Sources, permissions, privacy boundary, exact references.",
@@ -10708,15 +10708,19 @@ export const messages = {
     description: "Product help overview heading.",
   },
   "assistant.design.startBody": {
-    defaultMessage: "Ask in your own words. Product help can explain a term, find tenant evidence, or show why something needs attention without changing it.",
-    description: "Plain-language overview of Product help capabilities and read-only behavior.",
+    defaultMessage: "Ask which certificates expire within 1–365 days. Other questions show scoped evidence, not a complete answer.",
+    description: "Honest boundary for deterministic Product help queries in an air-gapped deployment.",
+  },
+  "assistant.design.expiryQuestionExample": {
+    defaultMessage: "Which certificates expire within 30 days?",
+    description: "Example of the supported, exact certificate-expiry question.",
   },
   "assistant.design.sourcesTitle": {
     defaultMessage: "Sources",
     description: "Product help source-boundary label.",
   },
   "assistant.design.sourcesBody": {
-    defaultMessage: "Answers can use certificates, owners, dependency links, cryptography inventory, and change history.",
+    defaultMessage: "Sources: certificates, owners, dependency links, cryptography inventory, and events.",
     description: "Plain-language list of grounded Product help sources.",
   },
   "assistant.design.permissionsTitle": {
@@ -10732,7 +10736,7 @@ export const messages = {
     description: "Product help evidence-reference label.",
   },
   "assistant.design.referencesBody": {
-    defaultMessage: "Each grounded answer keeps the record references needed to check the result yourself.",
+    defaultMessage: "Answers cite exact records for independent checks.",
     description: "Plain-language explanation of citations retained with answers.",
   },
   "assistant.design.workspaceTitle": {
@@ -10740,7 +10744,7 @@ export const messages = {
     description: "Focused Product help query-workspace heading.",
   },
   "assistant.design.workspaceBoundary": {
-    defaultMessage: "Product help reads only evidence your role can access. It does not issue, rotate, revoke, deploy, or change a credential.",
+    defaultMessage: "Product help reads evidence your role can access. It cannot change credentials.",
     description: "Read-only and permission boundary shown before Product help controls.",
   },
   "assistant.design.workflowLabel": {
@@ -26361,10 +26365,6 @@ export const messages = {
   "source.what.happened.483bd49023": {
     defaultMessage: "What happened",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.which.certificates.should.rotate.first.218489c622": {
-    defaultMessage: "Which certificates should rotate first?",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.why.did.this.identity.become.high.risk.d0f95f73e1": {
     defaultMessage: "Why did this identity become high risk?",

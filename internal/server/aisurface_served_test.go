@@ -166,6 +166,93 @@ func TestServedAIQueryGroundedAndScoped(t *testing.T) {
 	}
 }
 
+// An expiry question must be answered from active certificates in the requested
+// future window. A cited inventory row outside that window is a wrong answer even
+// though the citation itself is real.
+func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
+	now := time.Now().UTC().Truncate(time.Second)
+	tenantB := "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "AI neighboring tenant")
+	seed := func(tenant, serial, fingerprint string, expiry time.Time) {
+		t.Helper()
+		if _, err := h.srv.orch.RecordCertificate(t.Context(), tenant, store.Certificate{
+			Subject: "CN=" + serial + ".example.test", Serial: serial, Fingerprint: fingerprint,
+			Source: "issued", NotAfter: &expiry,
+		}); err != nil {
+			t.Fatalf("record %s: %v", serial, err)
+		}
+	}
+	seed(h.tenant, "within", strings.Repeat("a", 64), now.Add(5*24*time.Hour))
+	seed(h.tenant, "within-20", strings.Repeat("1", 64), now.Add(20*24*time.Hour))
+	seed(h.tenant, "later", strings.Repeat("b", 64), now.Add(40*24*time.Hour))
+	seed(h.tenant, "expired", strings.Repeat("c", 64), now.Add(-24*time.Hour))
+	seed(h.tenant, "revoked", strings.Repeat("d", 64), now.Add(6*24*time.Hour))
+	seed(h.tenant, "superseded", strings.Repeat("e", 64), now.Add(7*24*time.Hour))
+	seed(tenantB, "other-tenant", strings.Repeat("f", 64), now.Add(8*24*time.Hour))
+	if err := h.srv.orch.RevokeCertificate(t.Context(), h.tenant, strings.Repeat("d", 64), "revoked", "test", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.srv.orch.SupersedeCertificate(t.Context(), h.tenant, strings.Repeat("e", 64), "superseded", "replacement", now); err != nil {
+		t.Fatal(err)
+	}
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "owners:read", "graph:read")
+	status, body := aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates", "owners", "graph"},
+		"question": "Which certificates expire within 30 days?",
+		"limit":    25,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("expiry query: HTTP %d %s", status, body)
+	}
+	var ans struct {
+		Text       string   `json:"text"`
+		Citations  []string `json:"citations"`
+		Sufficient bool     `json:"sufficient"`
+	}
+	if err := json.Unmarshal(body, &ans); err != nil {
+		t.Fatal(err)
+	}
+	if !ans.Sufficient || len(ans.Citations) != 2 || !strings.Contains(ans.Text, "serial=within") || !strings.Contains(ans.Text, "serial=within-20") || !strings.Contains(ans.Text, "not_after=") {
+		t.Fatalf("expected two dated, sufficient active certificates: %+v", ans)
+	}
+	for _, excluded := range []string{"later", "expired", "revoked", "superseded", "other-tenant"} {
+		if strings.Contains(string(body), excluded) {
+			t.Fatalf("expiry response included %s: %s", excluded, body)
+		}
+	}
+	status, body = aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates"}, "question": "Which certificates expire within 7 days?", "limit": 25,
+	})
+	if status != http.StatusOK || !strings.Contains(string(body), "serial=within ") || strings.Contains(string(body), "serial=within-20") {
+		t.Fatalf("seven-day window = HTTP %d %s", status, body)
+	}
+	status, body = aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates"}, "question": "Which certificates expire within 1 day?",
+	})
+	if status != http.StatusOK || !strings.Contains(string(body), `"sufficient":true`) || !strings.Contains(string(body), "0 shown") || strings.Contains(string(body), "serial=") {
+		t.Fatalf("empty exact window must answer zero without inventing a citation: HTTP %d %s", status, body)
+	}
+	status, body = aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates"}, "question": "Which certificates expire within 30 days?", "limit": 1,
+	})
+	if status != http.StatusOK || !strings.Contains(string(body), `"sufficient":false`) || !strings.Contains(string(body), "More matching certificates may exist") {
+		t.Fatalf("limited answer must declare incompleteness: HTTP %d %s", status, body)
+	}
+	status, body = aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates"}, "question": "Which certificates do not expire within 30 days?",
+	})
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "Which certificates expire within 30 days") {
+		t.Fatalf("unsupported expiry grammar must explain exact form: HTTP %d %s", status, body)
+	}
+	status, body = aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{
+		"surfaces": []string{"certificates"}, "question": "Which certificates should rotate first?",
+	})
+	if status != http.StatusOK || !strings.Contains(string(body), `"sufficient":false`) || !strings.Contains(string(body), "not a complete answer") {
+		t.Fatalf("unsupported question must not claim sufficiency: HTTP %d %s", status, body)
+	}
+}
+
 // TestServedRCAGroundedAndCited is the F77 grounded-RCA proof: a served RCA question is
 // answered from cited real records gathered through the tenant-scoped query seam.
 func TestServedRCAGroundedAndCited(t *testing.T) {

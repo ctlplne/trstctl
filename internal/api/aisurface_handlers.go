@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
@@ -47,6 +50,25 @@ type aiQueryRequest struct {
 	Question string `json:"question,omitempty"`
 	// Limit caps returned rows; hard-capped by the engine's MaxRows.
 	Limit int `json:"limit,omitempty"`
+}
+
+// Keep deterministic question handling deliberately narrow. In model-off mode a
+// pile of cited rows cannot prove an arbitrary natural-language claim. This
+// grammar recognizes the precise expiry window an operator can verify in the
+// certificate inventory; other wording is never silently treated as a filter.
+var certificateExpiryQuestion = regexp.MustCompile(`(?i)^\s*(?:(?:which|what)\s+|(?:show|list)(?:\s+me)?\s+)(?:certificates|certs)\s+(?:are\s+)?(?:expire|expires|expiring)\s+(?:within|in(?:\s+the)?\s+next)\s+([0-9]{1,3})\s+days?\s*[?.]?\s*$`)
+var workloadListQuestion = regexp.MustCompile(`(?i)^\s*(?:which|what)\s+workloads\s+exist\s*[?.]?\s*$`)
+
+func certificateExpiryDays(question string) (int, bool) {
+	match := certificateExpiryQuestion.FindStringSubmatch(question)
+	if match == nil {
+		return 0, false
+	}
+	days, err := strconv.Atoi(match[1])
+	if err != nil || days < 1 || days > 365 {
+		return 0, false
+	}
+	return days, true
 }
 
 // aiAnswer is a grounded, cited answer (F75/F77). Text is grounded in Citations, which
@@ -220,6 +242,14 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "at least one surface is required"))
 		return
 	}
+	days, expiryQuestion := certificateExpiryDays(req.Question)
+	if !expiryQuestion {
+		q := strings.ToLower(req.Question)
+		if (strings.Contains(q, "certificate") || strings.Contains(q, "certs")) && strings.Contains(q, "expir") {
+			a.writeError(w, errStatus(http.StatusUnprocessableEntity, "For a certificate expiry window, ask 'Which certificates expire within 30 days?' (1 to 365 days)."))
+			return
+		}
+	}
 	spec := query.Spec{Limit: req.Limit}
 	for _, name := range req.Surfaces {
 		surf, ok := surfaceByName[strings.ToLower(strings.TrimSpace(name))]
@@ -233,6 +263,18 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 				spec.Where = append(spec.Where, query.Predicate{Field: field, Op: query.OpEq, Value: req.Subject})
 			}
 		}
+	}
+	if expiryQuestion {
+		selectedCertificates := false
+		for _, surface := range spec.Select {
+			selectedCertificates = selectedCertificates || surface == query.SurfaceCertificates
+		}
+		if !selectedCertificates {
+			a.writeError(w, errStatus(http.StatusBadRequest, "select certificates to answer an expiry question"))
+			return
+		}
+		asOf := time.Now().UTC()
+		spec.CertificateExpiryWindow = &query.CertificateExpiryWindow{After: asOf, Before: asOf.Add(time.Duration(days) * 24 * time.Hour)}
 	}
 
 	res, err := a.ai.be.Query.Query(r.Context(), principal, spec)
@@ -249,15 +291,48 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 	for _, row := range res.Rows {
 		ev.Items = append(ev.Items, rca.EvidenceItem{
 			Citation: string(row.Surface) + "#" + recordID(row),
-			Summary:  rowSummary(row), // pre-scoped, non-secret columns; redacted again below
+			Summary:  aimodel.DefaultRedactor(rowSummary(row)),
 		})
 	}
-	ans := a.synthesize(r, ev)
+	var ans aiAnswer
+	if expiryQuestion {
+		ans = exactCertificateExpiryAnswer(ev, spec.CertificateExpiryWindow, days, res.Truncated)
+	} else {
+		// The typed surface/subject filters may gather useful evidence, but they
+		// do not interpret arbitrary question text. Never label a raw evidence
+		// list as a complete answer to an unplanned question.
+		ans = a.synthesize(r, ev)
+		if !workloadListQuestion.MatchString(req.Question) || res.Truncated {
+			ans.Sufficient = false
+			ans.Text = "The question was not fully interpreted. These are scoped evidence records, not a complete answer.\n" + ans.Text
+		}
+	}
 
+	windowAfter, windowBefore := "", ""
+	if spec.CertificateExpiryWindow != nil {
+		windowAfter = spec.CertificateExpiryWindow.After.Format(time.RFC3339Nano)
+		windowBefore = spec.CertificateExpiryWindow.Before.Format(time.RFC3339Nano)
+	}
 	_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "ai.query.answered", principal.TenantID,
-		[]byte(fmt.Sprintf(`{"subject":%q,"rows":%d,"citations":%d,"grounded":%t}`, req.Subject, len(res.Rows), len(ans.Citations), ans.Grounded)))
+		[]byte(fmt.Sprintf(`{"subject":%q,"rows":%d,"citations":%d,"grounded":%t,"sufficient":%t,"expiry_days":%d,"window_after":%q,"window_before":%q,"truncated":%t}`,
+			req.Subject, len(res.Rows), len(ans.Citations), ans.Grounded, ans.Sufficient, days, windowAfter, windowBefore, res.Truncated)))
 
 	a.writeJSON(w, http.StatusOK, ans)
+}
+
+func exactCertificateExpiryAnswer(ev rca.Evidence, window *query.CertificateExpiryWindow, days int, truncated bool) aiAnswer {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Active certificates expiring within %d days (after %s and before %s UTC): %d shown.\n",
+		days, window.After.Format(time.RFC3339Nano), window.Before.Format(time.RFC3339Nano), len(ev.Items))
+	if truncated {
+		b.WriteString("More matching certificates may exist. Page through the certificate inventory for the complete set.\n")
+	}
+	cites := make([]string, 0, len(ev.Items))
+	for _, item := range ev.Items {
+		cites = append(cites, item.Citation)
+		fmt.Fprintf(&b, "- [%s] %s\n", item.Citation, item.Summary)
+	}
+	return aiAnswer{Text: b.String(), Citations: cites, Sufficient: !truncated, Grounded: len(cites) > 0}
 }
 
 // aiRCA answers a grounded root-cause / NL question over the tenant's data (F77). The

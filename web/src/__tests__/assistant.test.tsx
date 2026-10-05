@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -87,7 +88,7 @@ describe("assistant console workflow", () => {
 
     expect(await screen.findByRole("heading", { name: "Product help" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Product help" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText("How to complete a task or understand a term without leaving context.")).toBeInTheDocument();
+    expect(screen.getByText("Check certificate expiry and tenant evidence without changes.")).toBeInTheDocument();
     expect(screen.getByText("Sources, permissions, privacy boundary, exact references.")).toBeInTheDocument();
     const askButton = await screen.findByRole("button", { name: "Ask a question" });
     expect(askButton).toBeInTheDocument();
@@ -101,7 +102,7 @@ describe("assistant console workflow", () => {
 
     expect(await screen.findByRole("heading", { name: "Ask Product help" })).toHaveFocus();
     expect(screen.getByLabelText("Question")).toBeInTheDocument();
-    expect(screen.getByText(/reads only evidence your role can access/i)).toBeInTheDocument();
+    expect(screen.getByText(/reads evidence your role can access/i)).toBeInTheDocument();
     expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.mcpTools).not.toHaveBeenCalled();
   });
@@ -189,8 +190,8 @@ describe("assistant console workflow", () => {
 
   it("routes operators to a grounded query workflow with cited evidence", async () => {
     apiMock.aiQuery.mockResolvedValue({
-      text: "CN=payments.example.com should rotate first.",
-      citations: ["certificates#cert-1", "owners#owner-7"],
+      text: "Active certificates expiring within 30 days: [certificates#cert-1] not_after=2026-10-20T00:00:00Z",
+      citations: ["certificates#cert-1"],
       sufficient: true,
       grounded: true,
     });
@@ -206,21 +207,33 @@ describe("assistant console workflow", () => {
     expect(await screen.findByText("not configured")).toBeInTheDocument();
     expect(screen.getByText(/Redaction boundary: default-redactor/)).toBeInTheDocument();
     expect(screen.getByText("Structured query preview")).toBeInTheDocument();
-    expect(screen.getByText(/Tenant\/RBAC filtering is applied/)).toBeInTheDocument();
+    expect(screen.getByText(/Surfaces: certificates, owners, graph/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Which certificates expire within 30 days?")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Question"), "What should rotate first?");
+    await user.type(screen.getByLabelText("Question"), "Which certificates expire within 30 days?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
 
-    expect(await screen.findByText("CN=payments.example.com should rotate first.")).toBeInTheDocument();
+    expect(await screen.findByText(/Active certificates expiring within 30 days/)).toBeInTheDocument();
     expect(screen.getByText("certificates#cert-1")).toBeInTheDocument();
-    expect(screen.getByText("owners#owner-7")).toBeInTheDocument();
     expect(apiMock.aiQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        question: "What should rotate first?",
+        question: "Which certificates expire within 30 days?",
         surfaces: expect.arrayContaining(["certificates", "owners", "graph"]),
         limit: 25,
       }),
     );
+  });
+
+  it("shows the exact supported wording when the server refuses an ambiguous expiry question", async () => {
+    apiMock.aiQuery.mockRejectedValue(
+      new ApiError(422, JSON.stringify({ detail: "For a certificate expiry window, ask 'Which certificates expire within 30 days?' (1 to 365 days)." })),
+    );
+    const user = userEvent.setup();
+    renderAssistant();
+    await openProductHelp(user);
+    await user.type(screen.getByLabelText("Question"), "Which certificates do not expire within 30 days?");
+    await user.click(screen.getByRole("button", { name: /^Ask$/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Which certificates expire within 30 days?");
   });
 
   it("shows served AI model mode, endpoint host, and egress posture", async () => {

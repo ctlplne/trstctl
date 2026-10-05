@@ -97,14 +97,23 @@ type Predicate struct {
 	Value string
 }
 
+// CertificateExpiryWindow selects active certificates whose not_after is after
+// After and before Before. The reader sends both bounds as typed values through
+// the tenant-scoped store; callers cannot supply SQL or a tenant selector.
+type CertificateExpiryWindow struct {
+	After  time.Time
+	Before time.Time
+}
+
 // Spec is a typed, parameterized query plan. It has NO tenant or scope field:
 // the tenant and RBAC scope come from the authenticated Principal, so a caller
 // cannot widen its own scope. Field/operator names are allow-listed enums.
 type Spec struct {
-	Select   []Surface
-	Where    []Predicate
-	Limit    int // hard-capped by Config.MaxRows
-	MaxDepth int // graph traversal bound, hard-capped by Config.MaxDepth
+	Select                  []Surface
+	Where                   []Predicate
+	CertificateExpiryWindow *CertificateExpiryWindow
+	Limit                   int // hard-capped by Config.MaxRows
+	MaxDepth                int // graph traversal bound, hard-capped by Config.MaxDepth
 }
 
 // Row is one result row: the surface it came from and its typed columns.
@@ -117,8 +126,9 @@ type Row struct {
 // consistent with (AN-2): callers can tell which point in their own event-sourced
 // model they reflect without seeing the global stream head.
 type Result struct {
-	Rows   []Row
-	Offset uint64
+	Rows      []Row
+	Offset    uint64
+	Truncated bool // the row or scan budget prevents a complete-result claim
 }
 
 // Config sets the cost/timeout guards.
@@ -230,6 +240,11 @@ func (e *Engine) validate(spec Spec) error {
 			return fmt.Errorf("%w: predicate on field %q whose surface %q is not selected", ErrMalformed, pr.Field, surf)
 		}
 	}
+	if window := spec.CertificateExpiryWindow; window != nil {
+		if !selected[SurfaceCertificates] || window.After.IsZero() || window.Before.IsZero() || !window.After.Before(window.Before) {
+			return fmt.Errorf("%w: invalid certificate expiry window", ErrMalformed)
+		}
+	}
 	if spec.Limit < 0 || spec.Limit > e.cfg.MaxRows {
 		return fmt.Errorf("%w: limit %d exceeds max %d", ErrCostExceeded, spec.Limit, e.cfg.MaxRows)
 	}
@@ -262,9 +277,11 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 	eq := predicateIndex(spec.Where)
 	var rows []Row
 	var offset uint64
+	var truncated bool
 
 	add := func(r Row) bool {
 		if len(rows) >= limit {
+			truncated = true
 			return false
 		}
 		rows = append(rows, r)
@@ -275,12 +292,20 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 		if err := ctx.Err(); err != nil {
 			return nil, ErrDeadline
 		}
+		// A certificate expiry question is a certificate-only answer. Keep every
+		// requested surface in authorize() above so a caller cannot smuggle an
+		// unauthorized selection through the narrowing step.
+		if spec.CertificateExpiryWindow != nil && surf != SurfaceCertificates {
+			continue
+		}
 		var err error
 		switch surf {
 		case SurfaceOwners:
 			err = e.readOwners(ctx, p.TenantID, eq, add)
 		case SurfaceCertificates:
-			err = e.readCertificates(ctx, p.TenantID, eq, add)
+			var scanTruncated bool
+			scanTruncated, err = e.readCertificates(ctx, p.TenantID, eq, spec.CertificateExpiryWindow, limit, add)
+			truncated = truncated || scanTruncated
 		case SurfaceGraph:
 			err = e.readGraph(ctx, p.TenantID, eq, add)
 		case SurfaceCBOM:
@@ -296,7 +321,7 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 		}
 	}
 
-	return &Result{Rows: rows, Offset: offset}, nil
+	return &Result{Rows: rows, Offset: offset, Truncated: truncated}, nil
 }
 
 // predicateIndex collapses equality predicates to a field→value lookup. With OpEq

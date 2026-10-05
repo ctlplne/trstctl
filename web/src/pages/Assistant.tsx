@@ -45,7 +45,7 @@ function formatError(err: unknown): string {
       return err.retryAfterSeconds != null ? `Rate limited. Try again in ${err.retryAfterSeconds}s.` : "Rate limited. Try again later.";
     }
     if (err.status === 503) return "Product help is not enabled.";
-    return `Request failed (${err.status}).`;
+    return apiProblemMessage(err, "Product help could not answer the question.");
   }
   return err instanceof Error ? err.message : String(err);
 }
@@ -332,21 +332,11 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
       <h3 id="query-preview-heading" className="font-semibold">
         {translateNow("source.structured.query.preview.706d53d9be")}
       </h3>
-      <dl className="mt-2 grid gap-2 md:grid-cols-3">
-        <div>
-          <dt className="text-caption text-muted-foreground">{translateNow("source.surfaces.fbb4dbb2d8")}</dt>
-          <dd>{surfaces.join(", ") || translateNow("source.none.selected.d2a589f7f4")}</dd>
-        </div>
-        <div>
-          <dt className="text-caption text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
-          <dd>{subject.trim() || translateNow("source.not.scoped.dcd55e3956")}</dd>
-        </div>
-        <div>
-          <dt className="text-caption text-muted-foreground">{translateNow("source.limit.674b0ed54b")}</dt>
-          <dd>{translateNow("source.25.cited.records.8fedaba2c8")}</dd>
-        </div>
-      </dl>
-      <p className="mt-2 text-muted-foreground">Tenant/RBAC filtering is applied below this request; a prompt cannot ask for another tenant.</p>
+      <p className="mt-2">
+        {translateNow("source.surfaces.fbb4dbb2d8")}: {surfaces.join(", ") || translateNow("source.none.selected.d2a589f7f4")};{" "}
+        {translateNow("source.subject.6897128384")}: {subject.trim() || translateNow("source.not.scoped.dcd55e3956")}; {translateNow("source.limit.674b0ed54b")}
+        : {translateNow("source.25.cited.records.8fedaba2c8")}.
+      </p>
     </section>
   );
 }
@@ -692,7 +682,7 @@ export function Assistant() {
                       className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
-                      placeholder={translateNow("source.which.certificates.should.rotate.first.218489c622")}
+                      placeholder={t("assistant.design.expiryQuestionExample")}
                       required
                     />
                   </label>
