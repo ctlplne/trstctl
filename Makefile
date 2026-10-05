@@ -199,8 +199,6 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@mkdir -p $(BIN_DIR)
 	@$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer
 	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
-	@echo ">> go test live mutation SLO (uninstrumented measurement lane)"
-	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
 	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
@@ -214,6 +212,8 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 		SERVER_LIFECYCLE_FUNCS='$(SERVER_LIFECYCLE_FUNCS)' SERVER_FUNC_COVERAGE_MIN=$(SERVER_FUNC_COVERAGE_MIN) \
 		bash scripts/ci/coverage-server-lifecycle.sh
 	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) CRITICAL_COVERAGE_MIN_TIER2=$(CRITICAL_COVERAGE_MIN_TIER2) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
+	@echo ">> go test live mutation SLO (uninstrumented measurement lane; functional coverage already checked)"
+	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
 
 .PHONY: perf-live-wall
 perf-live-wall: ## Run the serialized live-performance SLO wall for iteration tips, batch tips, and release candidates

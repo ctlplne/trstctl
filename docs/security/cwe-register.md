@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1469 annotated sites across 26 rules. Each row is
+1472 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -969,7 +969,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:198` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (39 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (40 sites)
 
 | Location | Reason |
 |---|---|
@@ -984,6 +984,7 @@ not this file.
 | `internal/agent/relay/selfupgrade.go:206` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
 | `internal/agent/workloadapi/attest.go:141` | a DIRECTORY, not a file. 0700 is the tightest mode that |
 | `internal/crypto/mtls/custody_other_test.go:36` | deliberate over-permissive negative fixture (CWE-276) |
+| `internal/crypto/samltest/material_test.go:50` | deliberately unsafe test fixture must be refused |
 | `internal/crypto/secretfile/custody_unix.go:16` | this is a directory; owner execute is required to traverse it, and 0700 grants nothing to group/other (CWE-276) |
 | `internal/crypto/secretfile/custody_unix.go:23` | this is public certificate/trust material; group/other may read it but only the owner may write it (CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:64` | deliberately loose fixture mode; secretfile must refuse it (CWE-276) |
@@ -1013,7 +1014,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (399 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (401 sites)
 
 | Location | Reason |
 |---|---|
@@ -1202,6 +1203,8 @@ not this file.
 | `internal/crypto/pfx/alias_test.go:120` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/samltest/material.go:142` | operator-selected private identity directory, secured above |
+| `internal/crypto/samltest/material_test.go:46` | test-owned temporary identity file |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
 | `internal/dynsecret/providers_real_test.go:258` | test reads its own fixture/tempdir path (CWE-22) |

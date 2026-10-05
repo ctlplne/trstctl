@@ -264,6 +264,13 @@ func TestMakeTestMeasuresLiveSLOWithoutInstrumentation(t *testing.T) {
 	if got := strings.Count(testBlock, "-run '$(LIVE_PERF_SLO_TEST)'"); got != 1 {
 		t.Fatalf("live SLO exact measurement lanes = %d, want one uninstrumented run", got)
 	}
+	// A noisy host must not prevent the functional coverage floors from running.
+	// The unchanged throughput budget is still measured, after those floors.
+	slo := strings.Index(testBlock, "TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf")
+	functionalFloor := strings.Index(testBlock, "bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen")
+	if slo < 0 || functionalFloor < 0 || slo < functionalFloor {
+		t.Fatal("live throughput SLO must run after the functional coverage floors")
+	}
 }
 
 func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
