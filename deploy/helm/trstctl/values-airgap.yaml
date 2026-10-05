@@ -19,6 +19,9 @@ airGap:
 telemetry:
   enabled: false
 
+secrets:
+  enableAPI: true
+
 networkPolicy:
   enabled: true
   egress:

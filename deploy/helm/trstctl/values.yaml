@@ -115,6 +115,12 @@ airGap:
   allowHosts: []
   allowCIDRs: []
 
+# The native secret API is deliberately off in a standard install. The air-gap
+# overlay opts in so offline secret operations are actually served; keep an
+# authenticated operator path and a persistent, operator-owned KEK in place.
+secrets:
+  enableAPI: false
+
 # Product telemetry is opt-in. The air-gap overlay pins this to false so the
 # rendered posture says exactly what the disconnected install enforces.
 telemetry:

@@ -70,17 +70,17 @@ not this file.
 | `deploy/deploycheck_test.go:1562` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/docker/dist_test.go:386` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:600` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:802` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:811` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:827` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:887` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1085` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1188` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1495` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1526` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/helm/helm_test.go:1528` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:603` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:805` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:814` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:830` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:890` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1088` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1191` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1199` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1498` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1529` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/helm/helm_test.go:1531` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_subject_binding_served_test.go:38` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
@@ -408,7 +408,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/main.go:448` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
-| `deploy/helm/helm_test.go:1705` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:269` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
 | `internal/agent/relay/adcsscan_wire_test.go:217` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
@@ -648,7 +648,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/events/privacy_erasure_test.go:1434` | test goroutine lifecycle is managed by the test (CWE-664) |
+| `internal/events/privacy_erasure_test.go:1455` | test goroutine lifecycle is managed by the test (CWE-664) |
 | `internal/server/agenthttprenewal.go:71` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
 ### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (24 sites)
@@ -772,7 +772,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:111` | test executes a fixed local tool (CWE-78). |
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:113` | executes the repo's own documented helm command under test (CWE-78) |
-| `deploy/helm/helm_test.go:1115` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/helm/helm_test.go:1118` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:416` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:79` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
@@ -1082,8 +1082,8 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:179` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:225` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_docs_commands_test.go:130` | reads the repo's own docs pages from a walked list (CWE-22) |
-| `deploy/helm/helm_test.go:1077` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/helm/helm_test.go:1138` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/helm_test.go:1080` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/helm_test.go:1141` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:477` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:494` | test reads its own fixture/tempdir path (CWE-22) |

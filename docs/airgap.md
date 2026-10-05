@@ -16,6 +16,12 @@ Air-gap mode also fails closed for product telemetry and cloud AI model egress:
 air-gap is enabled. Local OTLP collectors, local AI runtimes, PostgreSQL, and NATS
 can still be used when they live on private addresses or explicit allowlists.
 
+The native secret store is opt-in in the standard Helm chart
+(`secrets.enableAPI=false`). The air-gap overlay sets `secrets.enableAPI=true`,
+which renders `TRSTCTL_SECRETS_ENABLE_API=true` so the documented offline
+store and rotation APIs are served. Keep operator authentication and a durable
+operator-owned KEK configured before using this surface.
+
 ## What runs inside, and what needs a path out
 
 Air-gap mode denies public destinations by default. The rows below that need a
@@ -112,6 +118,7 @@ TRSTCTL_AIRGAP_ENABLED=true
 TRSTCTL_AIRGAP_ALLOW_PRIVATE=true
 TRSTCTL_AIRGAP_ALLOW_CIDRS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 TRSTCTL_TELEMETRY_ENABLED=false
+TRSTCTL_SECRETS_ENABLE_API=true
 ```
 
 Use an operator-managed KEK Secret in production. `kek.generate=true` is only for

@@ -103,6 +103,7 @@ turn off certificate verification to force a localhost port-forward to work.
 | `persistence.enabled` | `true` | PVCs for the CA cert/control data and the sealed signer key store (CA + audit evidence). |
 | `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
 | `airGap.enabled` | `false` | Enables the runtime no-phone-home egress guard. Use `values-airgap.yaml` for disconnected installs. |
+| `secrets.enableAPI` | `false` | Enables the native Secrets API. The air-gap overlay sets it to `true` for local store and rotation. |
 | `telemetry.enabled` | `false` | Explicit product telemetry opt-in. `values-airgap.yaml` pins it to `false`. |
 | `signer.auth.tokenCommand` | `""` | Independent production signer-token executable inside the control-plane container; required with production-style external NATS. |
 | `signer.auth.allowCoResidentAuthorizer` | `false` | Eval-only authorizer; requires `nats.replicas=1` and `nats.allowSingleReplica=true`. |

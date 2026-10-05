@@ -353,6 +353,8 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 }
 
 func TestAirGapValuesWireNoPhoneHomeGuard(t *testing.T) {
+	defaultData := renderConfigMapData(t)
+	requireLoaderKey(t, defaultData, "TRSTCTL_SECRETS_ENABLE_API", "false")
 	values := read(t, "values-airgap.yaml")
 	var v map[string]any
 	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
@@ -362,6 +364,7 @@ func TestAirGapValuesWireNoPhoneHomeGuard(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_AIRGAP_ENABLED", "true")
 	requireLoaderKey(t, cmData, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", "true")
 	requireLoaderKey(t, cmData, "TRSTCTL_AIRGAP_ALLOW_CIDRS", "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
+	requireLoaderKey(t, cmData, "TRSTCTL_SECRETS_ENABLE_API", "true")
 	if got := cmData["TRSTCTL_AIRGAP_ALLOW_HOSTS"]; got != "" {
 		t.Fatalf("air-gap overlay should not allowlist public hosts by default, got %q", got)
 	}
