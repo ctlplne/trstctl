@@ -104,6 +104,13 @@ Under Operator access, choose View delegations for an operator to inspect active
 expired and revoked grants. Use Next delegations and Previous delegations to
 reach every returned grant. Closing the details returns to that operator's row;
 retained evidence is not removed when a grant stops authorizing access.
+**Maximum Provider role** is the directory ceiling, not a claim of the
+operator's current privilege. Each signed OIDC/SAML session is limited to the
+lower of this setting and the IdP's signed role. Setting the ceiling to admin
+while the IdP asserts operator leaves the session at operator. A later IdP
+group change to admin can activate an already-stored admin ceiling, so review
+both sources when changing access. The Provider API's `role` field has the same
+ceiling meaning.
 The roster's **Identity source** identifies the operator's IdP or SCIM record.
 The detail drawer's **Grant source** identifies the authority entry point:
 `provider_api` means the Provider HTTP API, including calls made by the console.

@@ -130,6 +130,10 @@ export const messages = {
     defaultMessage: "Legacy HTTP (console or API)",
     description: "Historical console source values cannot distinguish browser and direct API callers.",
   },
+  "provider.access.role.ceiling": {
+    defaultMessage: "Maximum role is a ceiling. The signed IdP role may further restrict access; a later IdP role change can activate a stored admin ceiling.",
+    description: "The Provider workforce row stores a maximum role, not the operator's current effective signed role.",
+  },
   "provider.access.delegations.evidence": {
     defaultMessage: "Grant history",
     description: "Provider customer operations and retained delegation or activity evidence.",
@@ -15931,7 +15935,7 @@ export const messages = {
     description: "AUD-58: Empty workforce directory.",
   },
   "source.provider.access.identity.aud580009": { defaultMessage: "Identity", description: "AUD-58: Operator identity column." },
-  "source.provider.access.role.aud580010": { defaultMessage: "Provider role", description: "AUD-58: Provider role column/control." },
+  "source.provider.access.role.aud580010": { defaultMessage: "Maximum Provider role", description: "AUD-58: Stored Provider role ceiling column/control." },
   "source.provider.access.source.aud580011": { defaultMessage: "Identity source", description: "AUD-58: IdP/SCIM source column." },
   "source.provider.access.scope.aud580012": { defaultMessage: "Customer authority", description: "AUD-58: Exact grants column." },
   "source.provider.access.active.aud580013": { defaultMessage: "active", description: "AUD-58: Active operator lifecycle." },

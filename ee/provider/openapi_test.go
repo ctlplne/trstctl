@@ -105,6 +105,24 @@ func TestProviderQuotaSchemaDoesNotPromisePerCustomerTenantCap(t *testing.T) {
 	}
 }
 
+func TestProviderRoleContractExplainsSignedIdentityCeiling(t *testing.T) {
+	doc := providerOpenAPIDocument(false, false)
+	paths := doc["paths"].(map[string]map[string]any)
+	op := paths["/provider/v1/operators/{id}/role"]["post"].(map[string]any)
+	if !strings.Contains(op["summary"].(string), "maximum") {
+		t.Fatalf("role operation hides its ceiling semantics: %v", op["summary"])
+	}
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	for _, name := range []string{"ProviderOperatorIdentity", "ProviderRoleRequest"} {
+		properties := schemas[name].(map[string]any)["properties"].(map[string]any)
+		role := properties["role"].(map[string]any)
+		description, _ := role["description"].(string)
+		if !strings.Contains(description, "signed IdP role") || !strings.Contains(description, "lower") {
+			t.Errorf("%s.role omits the effective signed-role restriction: %q", name, description)
+		}
+	}
+}
+
 func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 	doc := providerOpenAPIDocument(true, true)
 	paths, ok := doc["paths"].(map[string]map[string]any)

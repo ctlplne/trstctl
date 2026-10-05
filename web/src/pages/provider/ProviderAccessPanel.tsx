@@ -125,6 +125,7 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
         {translateNow("source.provider.access.title.aud580001")}
       </h2>
       <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.access.intro.aud580002")}</p>
+      <p className="mt-1 text-caption text-muted-foreground">{translateNow("provider.access.role.ceiling")}</p>
 
       {canWrite ? (
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => void grant(event)}>

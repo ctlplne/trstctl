@@ -600,6 +600,12 @@ describe("provider console (L3)", () => {
     renderProvider();
 
     expect(await screen.findByRole("heading", { name: "Operator access" })).toBeInTheDocument();
+    expect(await screen.findByRole("columnheader", { name: "Maximum Provider role" })).toBeVisible();
+    expect(
+      screen.getByText(
+        "Maximum role is a ceiling. The signed IdP role may further restrict access; a later IdP role change can activate a stored admin ceiling.",
+      ),
+    ).toBeVisible();
     const operatorRow = (await screen.findByText("Casey")).closest("tr")!;
     expect(screen.getByText("scim:entra")).toBeInTheDocument();
     fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
