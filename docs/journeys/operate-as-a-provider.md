@@ -104,6 +104,12 @@ Under Operator access, choose View delegations for an operator to inspect active
 expired and revoked grants. Use Next delegations and Previous delegations to
 reach every returned grant. Closing the details returns to that operator's row;
 retained evidence is not removed when a grant stops authorizing access.
+The roster's **Identity source** identifies the operator's IdP or SCIM record.
+The detail drawer's **Grant source** identifies the authority entry point:
+`provider_api` means the Provider HTTP API, including calls made by the console.
+Historical `console` values are shown as legacy HTTP grants because those rows
+cannot distinguish a browser from a direct API client. Use the immutable grant
+event and authenticated `granted_by` operator for attribution.
 
 ### 3. Bootstrap delegation once
 

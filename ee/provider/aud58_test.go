@@ -271,7 +271,7 @@ func TestAUD58AdminAPIGrantsListsAndRevokesExactAuthority(t *testing.T) {
 	}
 	if rec := call(http.MethodGet, "/provider/v1/operators", "", ""); rec.Code != http.StatusOK {
 		t.Fatalf("inventory status = %d body=%s", rec.Code, rec.Body.String())
-	} else if got := rec.Body.String(); !strings.Contains(got, `"source":"console"`) || !strings.Contains(got, expires) || !strings.Contains(got, `"operator_id":"worker-1"`) {
+	} else if got := rec.Body.String(); !strings.Contains(got, `"source":"provider_api"`) || !strings.Contains(got, expires) || !strings.Contains(got, `"operator_id":"worker-1"`) {
 		t.Fatalf("inventory omitted source/expiry/operator: %s", got)
 	}
 	if rec := call(http.MethodPost, "/provider/v1/operators/worker-1/role", `{"role":"admin"}`, "promote-worker"); rec.Code != http.StatusOK {
@@ -284,6 +284,15 @@ func TestAUD58AdminAPIGrantsListsAndRevokesExactAuthority(t *testing.T) {
 	revokeBody := `{"customer_id":"` + customerID + `","operations":["suspend"],"reason":"IdP role changed"}`
 	if rec := call(http.MethodPost, "/provider/v1/operators/worker-1/revocations", revokeBody, "revoke-worker-suspend"); rec.Code != http.StatusOK {
 		t.Fatalf("revoke status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	revokeEvent, ok := mutations.seen[string(customerID)+"\x00revoke-worker-suspend"]
+	if !ok {
+		t.Fatal("revoke did not append an authority event")
+	}
+	var revokeAuthority AuthorityEvent
+	if err := json.Unmarshal(revokeEvent.Data, &revokeAuthority); err != nil || len(revokeAuthority.Delegations) != 1 ||
+		revokeAuthority.Delegations[0].Source != providerHTTPDelegationSource {
+		t.Fatalf("revoke event did not name its Provider API entry point: %+v, %v", revokeAuthority, err)
 	}
 	rows, err := access.ListOperatorAccess(t.Context())
 	if err != nil {

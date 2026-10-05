@@ -118,6 +118,18 @@ export const messages = {
     defaultMessage: "Review active, expired and revoked customer grants. Retained records remain available after access ends.",
     description: "Provider customer operations and retained delegation or activity evidence.",
   },
+  "provider.access.delegations.source": {
+    defaultMessage: "Grant source",
+    description: "Delegation entry point, separate from the operator's SCIM or IdP identity source.",
+  },
+  "provider.access.delegations.source.http": {
+    defaultMessage: "Provider API / console",
+    description: "Both stock HTTP clients and the Provider console use the Provider API.",
+  },
+  "provider.access.delegations.source.legacy": {
+    defaultMessage: "Legacy HTTP (console or API)",
+    description: "Historical console source values cannot distinguish browser and direct API callers.",
+  },
   "provider.access.delegations.evidence": {
     defaultMessage: "Grant history",
     description: "Provider customer operations and retained delegation or activity evidence.",

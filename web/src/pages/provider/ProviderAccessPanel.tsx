@@ -17,6 +17,12 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 
 const operations = ["read", "provision", "suspend", "resume", "offboard", "break-glass"] as const satisfies readonly ProviderOperation[];
 
+function grantSourceLabel(source: string): string {
+  if (source === "provider_api") return translateNow("provider.access.delegations.source.http");
+  if (source === "console") return translateNow("provider.access.delegations.source.legacy");
+  return source;
+}
+
 const grantSchema = z.object({
   operatorId: z.string().trim().min(1, translateNow("source.provider.access.operator.aud580003")),
   customerId: z.string().trim().min(1, translateNow("source.provider.access.customer.aud580004")),
@@ -292,7 +298,7 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
               ),
             },
             { id: "operation", header: translateNow("source.provider.access.operation.aud580005"), cell: (grant) => grant.operation },
-            { id: "source", header: translateNow("source.provider.access.source.aud580011"), cell: (grant) => grant.source },
+            { id: "source", header: translateNow("provider.access.delegations.source"), cell: (grant) => grantSourceLabel(grant.source) },
             {
               id: "evidence",
               header: translateNow("provider.access.delegations.evidence"),

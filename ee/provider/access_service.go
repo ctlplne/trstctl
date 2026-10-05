@@ -12,6 +12,10 @@ import (
 	"trstctl.com/trstctl/internal/license"
 )
 
+// The console uses this same HTTP API. Record the authenticated entry point,
+// rather than claiming a request came from a browser based on client input.
+const providerHTTPDelegationSource = "provider_api"
+
 // ListOperatorAccess returns the full Provider authority inventory only to a
 // currently MFA-authenticated Provider admin. Ordinary delegated operators do
 // not get to enumerate their coworkers or other customers' historical grants.
@@ -89,7 +93,7 @@ func (s *Service) GrantDelegations(
 	for _, operation := range operations {
 		delegations = append(delegations, DelegationMutation{
 			OperatorID: identity.ID, CustomerID: customerID, Operation: operation,
-			GrantedBy: actor.ID, Source: "console", ExpiresAt: expiresAt,
+			GrantedBy: actor.ID, Source: providerHTTPDelegationSource, ExpiresAt: expiresAt,
 		})
 	}
 	if _, err := s.emit(ctx, EventDelegationGranted, customerID, AuthorityEvent{
@@ -132,7 +136,7 @@ func (s *Service) RevokeDelegations(
 	delegations := make([]DelegationMutation, 0, len(operations))
 	for _, operation := range operations {
 		delegations = append(delegations, DelegationMutation{
-			OperatorID: identity.ID, CustomerID: customerID, Operation: operation, Source: "console",
+			OperatorID: identity.ID, CustomerID: customerID, Operation: operation, Source: providerHTTPDelegationSource,
 		})
 	}
 	if _, err := s.emit(ctx, EventDelegationRevoked, customerID, AuthorityEvent{

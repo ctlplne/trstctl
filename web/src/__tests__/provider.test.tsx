@@ -570,7 +570,7 @@ describe("provider console (L3)", () => {
             operator_id: "op-2",
             customer_id: "tenant-acme",
             operation: "read",
-            source: "console",
+            source: "provider_api",
             granted_by: "admin-1",
             granted_at: "2026-08-13T12:01:00Z",
             last_used_at: "2026-08-13T12:02:00Z",
@@ -603,7 +603,9 @@ describe("provider console (L3)", () => {
     const operatorRow = (await screen.findByText("Casey")).closest("tr")!;
     expect(screen.getByText("scim:entra")).toBeInTheDocument();
     fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
-    await screen.findByRole("dialog", { name: /Casey/ });
+    const drawer = await screen.findByRole("dialog", { name: /Casey/ });
+    expect(within(drawer).getByRole("columnheader", { name: "Grant source" })).toBeVisible();
+    expect(within(drawer).getByText("Provider API / console")).toBeVisible();
     expect(screen.getByText("tenant-acme")).toBeInTheDocument();
     expect(screen.getByText(/Last used/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
@@ -883,6 +885,8 @@ describe("provider console (L3)", () => {
     opener.focus();
     fireEvent.click(opener);
     const drawer = await screen.findByRole("dialog", { name: /Retained Operator/ });
+    expect(within(drawer).getByRole("columnheader", { name: "Grant source" })).toBeVisible();
+    expect(within(drawer).getAllByText("Legacy HTTP (console or API)")).toHaveLength(10);
     let activeActions = 0;
     for (let page = 0; page < 3; page += 1) {
       for (const grant of delegations.slice(page * 10, (page + 1) * 10)) expect(within(drawer).getByText(grant.customer_id)).toBeVisible();
