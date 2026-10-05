@@ -166,6 +166,18 @@ type BreakGlassGrant struct {
 	UseCount          int       `json:"use_count"`
 }
 
+// BreakGlassGrantView is a stored grant with its state derived at read time.
+// State is never written to the read model: expiry changes it without an event.
+type BreakGlassGrantView struct {
+	BreakGlassGrant
+	State GrantState `json:"state"`
+}
+
+type BreakGlassGrantPage struct {
+	Items      []BreakGlassGrantView `json:"items"`
+	NextCursor string                `json:"next_cursor,omitempty"`
+}
+
 func (g BreakGlassGrant) State(now time.Time) GrantState {
 	switch {
 	case !g.RevokedAt.IsZero():
@@ -202,6 +214,7 @@ type Store interface {
 	Tenant(context.Context, string) (Tenant, error)
 	DirectTenantSnapshot(context.Context, string) (TenantSnapshot, error)
 	BreakGlassGrant(context.Context, string) (BreakGlassGrant, error)
+	ListBreakGlassGrants(context.Context, string, int, string) ([]BreakGlassGrant, error)
 }
 
 // legacyMutableStore is intentionally package-private. It exists only so
@@ -321,6 +334,41 @@ func (s *MemStore) BreakGlassGrant(_ context.Context, id string) (BreakGlassGran
 		return BreakGlassGrant{}, ErrNotFound
 	}
 	return grant, nil
+}
+
+func (s *MemStore) ListBreakGlassGrants(_ context.Context, tenantID string, limit int, before string) ([]BreakGlassGrant, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if before != "" {
+		cursor, ok := s.grants[before]
+		if !ok || cursor.TenantID != tenantID {
+			return nil, ErrNotFound
+		}
+	}
+	rows := make([]BreakGlassGrant, 0)
+	for _, grant := range s.grants {
+		if grant.TenantID == tenantID {
+			rows = append(rows, grant)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].RequestedAt.Equal(rows[j].RequestedAt) {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].RequestedAt.After(rows[j].RequestedAt)
+	})
+	if before != "" {
+		for index := range rows {
+			if rows[index].ID == before {
+				rows = rows[index+1:]
+				break
+			}
+		}
+	}
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows, nil
 }
 
 func (s *MemStore) UpdateBreakGlassGrant(_ context.Context, grant BreakGlassGrant) (BreakGlassGrant, error) {

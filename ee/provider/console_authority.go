@@ -21,12 +21,14 @@ type ConsoleAuthority struct {
 }
 
 type ConsoleCustomerAuthority struct {
-	ReadQuota  bool `json:"read_quota"`
-	WriteQuota bool `json:"write_quota"`
-	WriteBrand bool `json:"write_brand"`
-	Suspend    bool `json:"suspend"`
-	Resume     bool `json:"resume"`
-	Offboard   bool `json:"offboard"`
+	ReadQuota       bool `json:"read_quota"`
+	WriteQuota      bool `json:"write_quota"`
+	WriteBrand      bool `json:"write_brand"`
+	Suspend         bool `json:"suspend"`
+	Resume          bool `json:"resume"`
+	Offboard        bool `json:"offboard"`
+	BreakGlass      bool `json:"break_glass"`
+	BreakGlassWrite bool `json:"break_glass_write"`
 }
 
 func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleAuthority {
@@ -47,6 +49,7 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 	}
 	a.Available = true
 	canWrite := s.requireMutation(actor, true) == nil
+	canBreakGlassWrite := s.requireMutation(actor, false) == nil
 	a.AccessRead = s.requireAdminAccessRead(actor) == nil && s.access != nil
 	a.AccessWrite = a.AccessRead && canWrite
 	a.IsolationDrill = canWrite && s.drills != nil
@@ -55,12 +58,14 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 		provision := canWrite && set.Authorize(actor, customer, OpProvision) == nil
 		a.Provision = a.Provision || provision
 		a.Customers[customer] = ConsoleCustomerAuthority{
-			ReadQuota:  read && s.quotas != nil,
-			WriteQuota: provision && s.quotas != nil,
-			WriteBrand: provision && s.brands != nil,
-			Suspend:    canWrite && set.Authorize(actor, customer, OpSuspend) == nil,
-			Resume:     canWrite && set.Authorize(actor, customer, OpResume) == nil,
-			Offboard:   canWrite && set.Authorize(actor, customer, OpOffboard) == nil,
+			ReadQuota:       read && s.quotas != nil,
+			WriteQuota:      provision && s.quotas != nil,
+			WriteBrand:      provision && s.brands != nil,
+			Suspend:         canWrite && set.Authorize(actor, customer, OpSuspend) == nil,
+			Resume:          canWrite && set.Authorize(actor, customer, OpResume) == nil,
+			Offboard:        canWrite && set.Authorize(actor, customer, OpOffboard) == nil,
+			BreakGlass:      s.store != nil && set.Authorize(actor, customer, OpBreakGlass) == nil,
+			BreakGlassWrite: canBreakGlassWrite && set.Authorize(actor, customer, OpBreakGlass) == nil,
 		}
 	}
 	return a

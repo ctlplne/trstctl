@@ -18,6 +18,7 @@ import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
 import { ProviderBillingPanel } from "@/pages/provider/ProviderBillingPanel";
 import { ProviderSetupPanel } from "@/pages/provider/ProviderSetupPanel";
 import { ProviderActivityPanel, ProviderOffboardingAttention } from "@/pages/provider/ProviderActivityPanel";
+import { ProviderBreakGlassPanel } from "@/pages/provider/ProviderBreakGlassPanel";
 import {
   providerApi,
   providerToken,
@@ -414,6 +415,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   const [quotaView, setQuotaView] = useState<QuotaViewState | null>(null);
   // The customer whose current brand is read before an ETag-bound edit.
   const [brandFor, setBrandFor] = useState<string | null>(null);
+  const [breakGlassFor, setBreakGlassFor] = useState<string | null>(null);
   // The last isolation-drill result, or "running" while one is in flight. The
   // drill is deployment-wide, not per-customer, so it stays in its own section.
   const [drill, setDrill] = useState<ProviderDrillReport | "running" | null>(null);
@@ -635,6 +637,11 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
                       {translateNow("source.provider.brand.l3prov0030")}
                     </Button>
                   ) : null}
+                  {authority?.customers[tenant.id]?.break_glass ? (
+                    <Button type="button" variant="outline" onClick={() => setBreakGlassFor((current) => (current === tenant.id ? null : tenant.id))}>
+                      {translateNow("provider.emergency.open")}
+                    </Button>
+                  ) : null}
                 </div>
               ),
             },
@@ -675,6 +682,20 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
               }}
             />
           </section>
+        ) : null}
+        {breakGlassFor && session.data?.id && tenants?.some((tenant) => tenant.id === breakGlassFor) && authority?.customers[breakGlassFor]?.break_glass ? (
+          <ProviderBreakGlassPanel
+            key={`${session.data.id}:${breakGlassFor}`}
+            customerId={breakGlassFor}
+            customerName={tenants.find((tenant) => tenant.id === breakGlassFor)?.name ?? breakGlassFor}
+            operatorId={session.data.id}
+            canWrite={authority.customers[breakGlassFor].break_glass_write}
+            onAuthError={() => {
+              clearProviderToken();
+              onSignOut("authentication");
+            }}
+            onClose={() => setBreakGlassFor(null)}
+          />
         ) : null}
       </section>
 

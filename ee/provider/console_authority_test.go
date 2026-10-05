@@ -19,11 +19,13 @@ type consoleAuthorityResponse struct {
 	Provision      bool `json:"provision"`
 	IsolationDrill bool `json:"isolation_drill"`
 	Customers      map[string]struct {
-		ReadQuota  bool `json:"read_quota"`
-		WriteQuota bool `json:"write_quota"`
-		WriteBrand bool `json:"write_brand"`
-		Suspend    bool `json:"suspend"`
-		Offboard   bool `json:"offboard"`
+		ReadQuota       bool `json:"read_quota"`
+		WriteQuota      bool `json:"write_quota"`
+		WriteBrand      bool `json:"write_brand"`
+		Suspend         bool `json:"suspend"`
+		Offboard        bool `json:"offboard"`
+		BreakGlass      bool `json:"break_glass"`
+		BreakGlassWrite bool `json:"break_glass_write"`
 	} `json:"customers"`
 }
 
@@ -71,6 +73,31 @@ func TestConsoleAuthorityLimitedOperatorCannotInheritAdministrativeActions(t *te
 	c := a.Customers["alpha"]
 	if len(a.Customers) != 1 || !c.ReadQuota || c.WriteQuota || c.WriteBrand || c.Suspend || c.Offboard {
 		t.Fatalf("role ceiling was not applied to customer grants: %+v", a.Customers)
+	}
+}
+
+func TestConsoleAuthorityShowsOnlyCurrentEmergencyDelegation(t *testing.T) {
+	grants := &mutableDelegations{set: StaticDelegations{{OperatorID: "op-1", CustomerID: "alpha", Operations: []Operation{OpBreakGlass}}}}
+	h := NewHandler(Config{License: providerLicense(t, 10),
+		Authenticator: consoleAuthorityAuth{Operator{ID: "op-1", Role: OperatorOperator, MFA: true}},
+		Delegations:   grants})
+	a := readConsoleAuthority(t, h)
+	if !a.Available || len(a.Customers) != 1 || !a.Customers["alpha"].BreakGlass || !a.Customers["alpha"].BreakGlassWrite || a.Customers["alpha"].ReadQuota {
+		t.Fatalf("current exact emergency delegation hidden or widened: %+v", a)
+	}
+	grants.set = StaticDelegations{}
+	if after := readConsoleAuthority(t, h); len(after.Customers) != 0 {
+		t.Fatalf("revoked emergency delegation stayed in session: %+v", after)
+	}
+}
+
+func TestConsoleAuthorityKeepsEmergencyQueueReadableWhenLicenseIsReadOnly(t *testing.T) {
+	h := NewHandler(Config{License: readOnlyConsentLicense(t),
+		Authenticator: consoleAuthorityAuth{Operator{ID: "op-1", Role: OperatorOperator, MFA: true}},
+		Delegations:   StaticDelegations{{OperatorID: "op-1", CustomerID: "alpha", Operations: []Operation{OpBreakGlass}}}})
+	a := readConsoleAuthority(t, h)
+	if !a.Customers["alpha"].BreakGlass || a.Customers["alpha"].BreakGlassWrite {
+		t.Fatalf("read-only entitlement must expose only the queue, not emergency mutations: %+v", a.Customers["alpha"])
 	}
 }
 

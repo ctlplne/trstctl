@@ -72,6 +72,25 @@ func TestBreakGlassRequiresTwoDistinctApprovers(t *testing.T) {
 	}
 }
 
+func TestBreakGlassResultUseStopsWhenLicenseBecomesReadOnly(t *testing.T) {
+	ctx := context.Background()
+	svc := breakGlassService(t)
+	grant := requestGrant(t, svc)
+	for _, approver := range []string{"approver-a", "approver-b"} {
+		if _, err := svc.ConsentBreakGlass(ctx, providerOperator(approver), "tenant-x", grant.ID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc.license = readOnlyConsentLicense(t)
+	if _, err := svc.BreakGlassResults(ctx, providerOperator("op-1"), grant.ID); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("read-only commercial mode allowed result use: %v", err)
+	}
+	after, err := svc.store.BreakGlassGrant(ctx, grant.ID)
+	if err != nil || after.UseCount != 0 {
+		t.Fatalf("refused result use changed grant: %+v, %v", after, err)
+	}
+}
+
 // The requester cannot approve their own request — the person asking for
 // emergency access is not one of the two independent approvers it requires.
 func TestBreakGlassRequesterCannotApprove(t *testing.T) {

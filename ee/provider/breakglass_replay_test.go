@@ -31,7 +31,7 @@ func (r *replaySnapshotReader) TenantSnapshot(_ context.Context, tenantID string
 // Real PostgreSQL idempotency and JetStream authority events must preserve an
 // authorized retry without turning its key into permanent customer access.
 func TestBreakGlassCachedResultsRequireCurrentAuthority(t *testing.T) {
-	for _, change := range []string{"delegation-revoked", "delegations-unavailable", "mfa-lost", "role-lost", "grant-expired", "grant-revoked"} {
+	for _, change := range []string{"delegation-revoked", "delegations-unavailable", "mfa-lost", "role-lost", "grant-expired", "grant-revoked", "license-read-only"} {
 		t.Run(change, func(t *testing.T) {
 			ctx := context.Background()
 			st := openProviderStore(t)
@@ -124,6 +124,8 @@ func TestBreakGlassCachedResultsRequireCurrentAuthority(t *testing.T) {
 					AuthorityEvent{Grant: &current, Audit: AuditEvent{Type: AuditBreakGlassDenied, TenantID: customer, GrantID: grant.ID, Subject: "approver-a", At: now}}); err != nil {
 					t.Fatal(err)
 				}
+			case "license-read-only":
+				h.svc.license = readOnlyConsentLicense(t)
 			}
 			before, err = log.LastSequence(ctx)
 			if err != nil {

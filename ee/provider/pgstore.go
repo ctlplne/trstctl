@@ -158,6 +158,45 @@ func (p *PGStore) BreakGlassGrant(ctx context.Context, id string) (BreakGlassGra
 	return g, err
 }
 
+// ListBreakGlassGrants never performs a cross-customer registry scan. The
+// cursor lookup is also bound to tenant_id, so another customer's grant ID
+// cannot reveal its timestamp or shift this customer's page.
+func (p *PGStore) ListBreakGlassGrants(ctx context.Context, tenantID string, limit int, before string) ([]BreakGlassGrant, error) {
+	var cursorAt time.Time
+	if before != "" {
+		if err := p.store.SystemPool().QueryRow(ctx,
+			`SELECT requested_at FROM provider_breakglass_grants WHERE tenant_id = $1 AND id = $2`, tenantID, before).Scan(&cursorAt); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, ErrNotFound
+			}
+			return nil, err
+		}
+	}
+	var rows pgx.Rows
+	var err error
+	if before != "" {
+		rows, err = p.store.SystemPool().Query(ctx,
+			breakGlassSelect+` WHERE tenant_id = $1 AND (requested_at, id) < ($2, $3)
+			ORDER BY requested_at DESC, id DESC LIMIT $4`, tenantID, cursorAt, before, limit)
+	} else {
+		rows, err = p.store.SystemPool().Query(ctx,
+			breakGlassSelect+` WHERE tenant_id = $1 ORDER BY requested_at DESC, id DESC LIMIT $2`, tenantID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]BreakGlassGrant, 0, limit)
+	for rows.Next() {
+		grant, err := scanBreakGlassGrant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, grant)
+	}
+	return out, rows.Err()
+}
+
 const breakGlassSelect = `SELECT id, tenant_id::text, operator_id, operator_email, reason,
 	requested_at, expires_at, consented_at, consented_by, denied_at, denied_by, revoked_at, use_count,
 	consented_at_2, COALESCE(consented_by_2, '')

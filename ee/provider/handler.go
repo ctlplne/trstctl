@@ -60,6 +60,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeProviderError(w, ErrForbidden)
 			return
 		}
+		// Durable idempotency returns stored bytes without invoking the service.
+		// Apply the current entitlement before that shortcut, including for an
+		// exact replay of a previously successful customer-data result. Logout
+		// remains available so an operator can clear a browser session.
+		if r.URL.Path != "/provider/v1/auth/logout" && h.svc.license.Mode(license.FeatureProviderPlane) == license.ModeReadOnly {
+			writeProviderError(w, ErrReadOnly)
+			return
+		}
 		if h.idem != nil {
 			h.serveIdempotentMutation(w, r)
 			return
@@ -181,6 +189,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.serveEvidenceVerificationKeys(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/health"):
 		h.serveTenantHealth(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/breakglass"):
+		h.listBreakGlassGrants(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/usage-evidence"):
 		h.serveUsageEvidence(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/delegations"):
@@ -954,6 +964,30 @@ func (h *handler) requestBreakGlass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, grant)
+}
+
+func (h *handler) listBreakGlassGrants(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/breakglass")
+	limit := 25
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProviderError(w, errors.New("provider: emergency queue limit must be an integer from 1 to 100"))
+			return
+		}
+		limit = parsed
+	}
+	page, err := h.svc.ListBreakGlassGrants(r.Context(), op, customerID, limit, r.URL.Query().Get("before"))
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
 }
 
 // consentBreakGlass records one operator's consent to a break-glass grant.

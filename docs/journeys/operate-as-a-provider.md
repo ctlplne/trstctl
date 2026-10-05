@@ -501,8 +501,27 @@ Do not create a new registration merely to bypass this refusal.
 Emergency access requires a requester and two distinct approvers. All three
 must authenticate with MFA and hold the customer's `break-glass` operation;
 ordinary `read` authority is insufficient. The requester cannot approve their
-own request. The Provider console does not yet offer this workflow; use the
-Provider API with each person's own short-lived operator credential.
+own request. The host administrator first grants that exact operation to each
+operator with `trstctl provider-grant`, naming the signed IdP subject and
+customer. Avoid a broad grant or a shared sign-in.
+
+In the Provider console, each person signs in with their own Provider identity,
+opens **Emergency access** on the exact customer, and uses **Requests for this
+customer**. The requester enters an incident reason and a duration no longer
+than two hours. Two other delegated operators approve from their own sessions;
+either can deny. The requester may withdraw a pending request. The queue shows
+the derived pending, one-approval, active, denied, revoked, or expired state,
+the two-approval count, and bounded older/newer pages. Only the requester sees
+**View authorized result** after both approvals. It returns a narrow customer
+health snapshot, not a customer credential or a lifecycle permission. Refresh
+the queue after a delegation or identity change; the server rechecks current
+authority on each action. A visible button is never an authorization grant.
+
+The same workflow is available to API clients with each person's own short-lived
+operator credential. A delegated operator lists a customer's queue with
+`GET /provider/v1/tenants/{id}/breakglass?limit=25`; use the returned
+`next_cursor` as `before` for the next page. The cursor must belong to that
+same customer. The queue does not expose another customer's requests.
 
 The requester sends `POST /provider/v1/breakglass` with
 `{"tenant_id":"CUSTOMER_ID","reason":"Incident diagnosis","ttl":"15m"}`.

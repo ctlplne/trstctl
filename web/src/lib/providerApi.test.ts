@@ -52,7 +52,8 @@ describe("provider API idempotency", () => {
     await providerApi.runIsolationDrill();
     await providerApi.requestBreakGlass({ tenant_id: "tenant-acme", reason: "incident", ttl: "15m" });
     await providerApi.consentBreakGlass("grant-1", "tenant-acme");
-    await providerApi.breakGlassResults("grant-1");
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { tenant_id: "tenant-acme", health: "healthy", active_certificates: 0 }));
+    await providerApi.breakGlassResults("grant-1", "tenant-acme");
     await providerApi.signOut();
 
     const calls = vi.mocked(fetch).mock.calls;
@@ -69,10 +70,19 @@ describe("provider API idempotency", () => {
     await providerApi.listTenants();
     vi.mocked(fetch).mockResolvedValueOnce(response(200, { items: [] }));
     await providerApi.listActivity();
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { items: [] }));
+    await providerApi.listBreakGlass("tenant-acme");
     for (const [, init] of vi.mocked(fetch).mock.calls) {
       const headers = init?.headers as Record<string, string>;
       expect(headers["Idempotency-Key"]).toBeUndefined();
     }
+  });
+
+  it("refuses cross-customer emergency queue and result responses", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { items: [{ id: "grant-1", tenant_id: "tenant-beta" }] }));
+    await expect(providerApi.listBreakGlass("tenant-alpha")).rejects.toThrow("does not match");
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { tenant_id: "tenant-beta", health: "healthy", active_certificates: 1 }));
+    await expect(providerApi.breakGlassResults("grant-1", "tenant-alpha")).rejects.toThrow("does not match");
   });
 
   it("binds a brand read to the requested customer and exact revision", async () => {

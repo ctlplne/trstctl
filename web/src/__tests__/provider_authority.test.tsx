@@ -16,7 +16,9 @@ const readOnlyAuthority = {
   access_write: false,
   provision: false,
   isolation_drill: false,
-  customers: { alpha: { read_quota: true, write_quota: false, write_brand: false, suspend: false, offboard: false } },
+  customers: {
+    alpha: { read_quota: true, write_quota: false, write_brand: false, suspend: false, offboard: false, break_glass: false, break_glass_write: false },
+  },
 };
 let authority: typeof readOnlyAuthority;
 let delayedSession: Promise<Response> | undefined;
@@ -114,6 +116,16 @@ describe("Provider controls follow effective server authority", () => {
     expect(screen.queryByRole("button", { name: "Offboard" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Brand" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Provision" })).not.toBeInTheDocument();
+  });
+  it("shows emergency access only when the current exact-customer authority permits it", async () => {
+    const first = renderProvider();
+    await screen.findByRole("cell", { name: "Alpha customer" });
+    expect(screen.queryByRole("button", { name: "Emergency access" })).not.toBeInTheDocument();
+    first.unmount();
+    authority.customers.alpha.break_glass = true;
+    authority.customers.alpha.break_glass_write = true;
+    renderProvider();
+    expect(await screen.findByRole("button", { name: "Emergency access" })).toBeInTheDocument();
   });
   it("drops an expired customer's roster and billing choice while keeping the valid login", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });

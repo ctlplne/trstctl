@@ -392,6 +392,17 @@ increments use count and is therefore `POST
 /provider/v1/breakglass/{grant}/results`, not a read-looking GET. The provider
 console generates a distinct key for every mutation it submits.
 
+The Provider console's exact-customer emergency queue uses
+`GET /provider/v1/tenants/{id}/breakglass` with a bounded `limit` and
+customer-bound `before` cursor. The read requires the authenticated operator's
+current MFA and `break-glass` delegation for that customer. Its state is
+derived at read time so expiry is visible even without a new event. Listing a
+request never grants access to its result; that separate POST rechecks requester
+identity, current delegation, both distinct consents, and expiry.
+After the license grace period, the same queue remains readable for operators
+with current delegation; the console hides request, consent, withdrawal, and
+result-use controls because those actions mutate commercial state.
+
 `GET /provider/v1/activity?limit=100` derives a newest-first authority evidence
 view directly from that same immutable history. It returns event identity,
 sequence, type, time, customer, actor, grant, subject, and reason only: request

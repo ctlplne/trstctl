@@ -119,6 +119,7 @@ func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 		"patch /provider/scim/v2/Users/{id}", "delete /provider/scim/v2/Users/{id}",
 		"get /provider/scim/v2/Groups", "get /provider/scim/v2/Groups/{id}",
 		"patch /provider/scim/v2/Groups/{id}",
+		"get /provider/v1/tenants/{id}/breakglass",
 	} {
 		method, path, _ := strings.Cut(target, " ")
 		if _, ok := paths[path][method]; !ok {
@@ -129,8 +130,8 @@ func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 	for _, methods := range paths {
 		operationCount += len(methods)
 	}
-	if len(paths) != 30 || operationCount != 38 {
-		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 30 / 38", len(paths), operationCount)
+	if len(paths) != 31 || operationCount != 39 {
+		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 31 / 39", len(paths), operationCount)
 	}
 	components := doc["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)

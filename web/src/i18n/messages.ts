@@ -10,6 +10,51 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "provider.emergency.open": { defaultMessage: "Emergency access", description: "Open one customer's Provider emergency workflow." },
+  "provider.emergency.title": { defaultMessage: "Emergency customer access", description: "Provider emergency workflow title." },
+  "provider.emergency.help": {
+    defaultMessage:
+      "One operator requests access. Two other operators with this customer's emergency delegation must approve before the requester can see the narrow health result.",
+    description: "Explain Provider two-person control.",
+  },
+  "provider.emergency.close": { defaultMessage: "Close emergency access", description: "Close Provider emergency panel." },
+  "provider.emergency.reason": { defaultMessage: "Incident reason", description: "Reason for Provider emergency request." },
+  "provider.emergency.reasonRequired": {
+    defaultMessage: "Give an incident reason of at least 10 characters.",
+    description: "Provider emergency form validation.",
+  },
+  "provider.emergency.duration": { defaultMessage: "Access duration", description: "Provider emergency request TTL." },
+  "provider.emergency.minutes": { defaultMessage: "minutes", description: "Provider emergency TTL unit." },
+  "provider.emergency.hour": { defaultMessage: "hour", description: "Provider emergency TTL unit." },
+  "provider.emergency.hours": { defaultMessage: "hours", description: "Provider emergency TTL unit." },
+  "provider.emergency.request": { defaultMessage: "Request emergency access", description: "Submit Provider emergency request." },
+  "provider.emergency.queue": { defaultMessage: "Requests for this customer", description: "Exact-customer Provider emergency queue." },
+  "provider.emergency.refresh": { defaultMessage: "Refresh requests", description: "Refresh Provider emergency queue." },
+  "provider.emergency.empty": { defaultMessage: "No emergency requests for this customer.", description: "Empty Provider emergency queue." },
+  "provider.emergency.requestedBy": { defaultMessage: "Requested by {operator}", description: "Identity on Provider emergency request." },
+  "provider.emergency.expires": { defaultMessage: "Expires {at}", description: "Expiry on Provider emergency request." },
+  "provider.emergency.grantId": { defaultMessage: "Request ID: {id}", description: "Provider emergency request identifier." },
+  "provider.emergency.approvals": { defaultMessage: "{count} of 2 approvals", description: "Provider emergency approval progress." },
+  "provider.emergency.state.pending": { defaultMessage: "Awaiting two approvals", description: "Provider emergency state." },
+  "provider.emergency.state.awaiting": { defaultMessage: "Awaiting second approval", description: "Provider emergency state." },
+  "provider.emergency.state.active": { defaultMessage: "Approved for requester", description: "Provider emergency state." },
+  "provider.emergency.state.denied": { defaultMessage: "Denied", description: "Provider emergency state." },
+  "provider.emergency.state.revoked": { defaultMessage: "Revoked", description: "Provider emergency state." },
+  "provider.emergency.state.expired": { defaultMessage: "Expired", description: "Provider emergency state." },
+  "provider.emergency.approve": { defaultMessage: "Approve", description: "Approve one Provider emergency request as a distinct operator." },
+  "provider.emergency.deny": { defaultMessage: "Deny", description: "Deny one Provider emergency request." },
+  "provider.emergency.withdraw": { defaultMessage: "Withdraw request", description: "Requester closes their pending emergency request." },
+  "provider.emergency.viewResult": { defaultMessage: "View authorized result", description: "Requester reads the approved narrow customer result." },
+  "provider.emergency.newer": { defaultMessage: "Newer requests", description: "Previous Provider emergency queue page." },
+  "provider.emergency.older": { defaultMessage: "Older requests", description: "Next Provider emergency queue page." },
+  "provider.emergency.result": { defaultMessage: "Customer health result", description: "Authorized Provider emergency response." },
+  "provider.emergency.health": { defaultMessage: "Health: {health}", description: "Provider emergency customer health." },
+  "provider.emergency.certificates": { defaultMessage: "Active certificates: {count}", description: "Provider emergency customer count." },
+  "provider.emergency.workspace": { defaultMessage: "Workspace: {status}", description: "Provider emergency customer setup state." },
+  "provider.emergency.mismatchedCustomer": {
+    defaultMessage: "Emergency response does not match this customer.",
+    description: "Provider emergency response safety check.",
+  },
   "provider.setup.fieldRequired": { defaultMessage: "This field is required.", description: "Required Provider provisioning field." },
   "provider.setup.open": { defaultMessage: "View setup", description: "Inspect the selected customer's access setup." },
   "provider.setup.title": { defaultMessage: "Customer setup: {customer}", description: "Setup panel bound to one delegated customer." },
@@ -731,10 +776,6 @@ export const messages = {
     defaultMessage: "trstctl",
     description: "Product wordmark in the global shell.",
   },
-  "app.brand.subtitle": {
-    defaultMessage: "control plane",
-    description: "Short product descriptor under the wordmark.",
-  },
   "app.skipToMain": {
     defaultMessage: "Skip to main content",
     description: "Keyboard skip-link label.",
@@ -1223,14 +1264,6 @@ export const messages = {
   "incidents.workspace.tabs.fleet": {
     defaultMessage: "Fleet & break-glass",
     description: "Incident workspace tab for fleet reissuance and break-glass operations.",
-  },
-  "incidents.workspace.overviewHeading": {
-    defaultMessage: "Active incidents and evidence",
-    description: "Heading for the overview-first incident response summary.",
-  },
-  "incidents.workspace.overviewSummary": {
-    defaultMessage: "Review {executions} incident executions and {runs} remediation runs before starting a new action.",
-    description: "Incident overview summary of the evidence records already served.",
   },
   "incidents.page.title": {
     defaultMessage: "Security incidents",
@@ -4161,10 +4194,6 @@ export const messages = {
     defaultMessage: "Some expert evidence could not be loaded. No configuration change was made. Check the control-plane logs, then retry.",
     description: "Sanitized error for an expert evidence read.",
   },
-  "admin.system.provisionFailed": {
-    defaultMessage: "The managed tenant was not confirmed. Check the provider-plane logs before retrying with a new request.",
-    description: "Fail-safe managed-tenant provisioning error.",
-  },
   "platform.idempotency.heading": {
     defaultMessage: "Idempotency result protection",
     description: "Platform system panel heading for encrypted mutation-result cache posture.",
@@ -4598,20 +4627,12 @@ export const messages = {
   "secrets.dynamic.issueReviewed": { defaultMessage: "Create reviewed credential", description: "Dynamic lease reviewed execution action." },
   "secrets.dynamic.retry": { defaultMessage: "Retry the exact request", description: "Dynamic lease stable-key retry action." },
   "secrets.dynamic.issuedTitle": { defaultMessage: "Credential created; verify it now", description: "Active dynamic lease result heading." },
-  "secrets.dynamic.verifyHelp": {
-    defaultMessage: "The lease below is durable metadata. The secret itself exists only in the reveal-once panel until you dismiss or leave it.",
-    description: "Dynamic lease result evidence help.",
-  },
   "secrets.dynamic.credentialTitle": { defaultMessage: "Reveal-once credential for {id}", description: "Dynamic lease credential reveal title." },
   "secrets.dynamic.credentialHelp": {
     defaultMessage: "Copy this directly to the workload. Do not put it in tickets, chat, logs, screenshots, or browser storage.",
     description: "Dynamic lease credential custody warning.",
   },
   "secrets.dynamic.extend": { defaultMessage: "Extend by seconds", description: "Dynamic lease renewal duration label." },
-  "secrets.dynamic.extendHelp": {
-    defaultMessage: "Renewal can never pass the provider's original hard expiry.",
-    description: "Dynamic lease renewal bound help.",
-  },
   "secrets.dynamic.extendAvailable": {
     defaultMessage: "You can extend this lease by up to {seconds}s within its original renewal limit.",
     description: "Dynamic lease remaining renewal headroom.",
@@ -4888,37 +4909,13 @@ export const messages = {
     defaultMessage: "Name the accountable owner",
     description: "Heading for ownership metadata required before the first certificate can be issued.",
   },
-  "wizard.certificate.ownerHelp": {
-    defaultMessage: "Deployment is allowed only when trstctl knows which application owns this certificate and where it runs.",
-    description: "Plain-language reason the first-run certificate requires owner metadata.",
-  },
   "wizard.certificate.ownerConfirm": {
     defaultMessage: "I confirm this application owns the certificate",
     description: "Explicit human ownership confirmation before first-run issuance.",
   },
-  "wizard.certificate.ownerConfirmHelp": {
-    defaultMessage: "trstctl records a current ownership attestation so deployment and renewal can fail closed if accountability later becomes stale.",
-    description: "Technical ELI5 explanation of the ownership attestation created by the wizard.",
-  },
   "wizard.certificate.ownerAlertContact": {
     defaultMessage: "Alert contact",
     description: "Wizard owner step: email that receives expiry and failure alerts for this certificate's owner.",
-  },
-  "wizard.certificate.ownerAlertContactHelp": {
-    defaultMessage: "Expiry and failure alerts for this certificate go here. Without it the owner counts as unreachable.",
-    description: "Wizard owner step: alert contact help.",
-  },
-  "wizard.certificate.ownerAlertContactRequired": {
-    defaultMessage: "Enter an alert contact email for the owner before issuing.",
-    description: "Wizard owner step: validation when the alert contact is missing.",
-  },
-  "wizard.certificate.ownerRequired": {
-    defaultMessage: "Add an application ID and environment, then confirm ownership before issuing.",
-    description: "Recovery instruction when owner fields are missing from first-run issuance.",
-  },
-  "wizard.certificate.ownerNotReady": {
-    defaultMessage: "The owner record is not complete and currently attested. Fix ownership before issuing this certificate.",
-    description: "Fail-closed error when first-run owner creation or attestation does not produce a deployment-ready owner.",
   },
   "wizard.protocols.summaryOperator": {
     defaultMessage: "Operator-configured profile",
@@ -4940,22 +4937,9 @@ export const messages = {
     defaultMessage: "Confirm certificate signing",
     description: "Heading for the first-run signer and issuer health proof.",
   },
-  "wizard.issuer.description": {
-    defaultMessage:
-      "trstctl includes a built-in setup issuer. Check the separate signer now; the next certificate step proves the complete signing path. Connect your production certificate authority later.",
-    description: "Explains exactly what the first-run signer check does and does not prove.",
-  },
   "wizard.issuer.check": {
     defaultMessage: "Check signing health",
     description: "Button that reads the served signer health and issuer catalog.",
-  },
-  "wizard.issuer.readyNamed": {
-    defaultMessage: "{name} is listed, and the signer health check passed.",
-    description: "Confirmation when a named issuer exists and the separate signer is healthy.",
-  },
-  "wizard.issuer.readyBuiltIn": {
-    defaultMessage: "Signer health passed. The built-in setup issuer is selected; the next certificate step proves end-to-end signing.",
-    description: "Bounded confirmation when the issuer catalog is empty but the built-in signer path is healthy.",
   },
   "wizard.issuer.signerUnhealthy": {
     defaultMessage: "the separate signer is not healthy: {error}",
@@ -4968,10 +4952,6 @@ export const messages = {
   "wizard.issuer.error": {
     defaultMessage: "Could not prove signing is ready: {error}",
     description: "Error shown when the first-run signing proof cannot pass.",
-  },
-  "wizard.issuer.builtinName": {
-    defaultMessage: "Built-in setup issuer",
-    description: "Completion-summary name for the built-in setup issuer when no catalog row exists.",
   },
   "wizard.header.description": {
     defaultMessage: "Take the next safe step toward one healthy test certificate.",
@@ -10213,10 +10193,6 @@ export const messages = {
     defaultMessage: "This form records your reviewed rollout evidence. It does not run commands or change sshd on any host.",
     description: "Safety boundary for the SSH rollout evidence form.",
   },
-  "sshTrust.advanced.revocationSummary": {
-    defaultMessage: "Revocation and host retirement",
-    description: "Disclosure label for advanced SSH revocation and retirement controls.",
-  },
   "sshTrust.advanced.authorityKeySummary": {
     defaultMessage: "Show SSH CA public key",
     description: "Disclosure label for the exact SSH CA public key.",
@@ -11478,14 +11454,6 @@ export const messages = {
   "policy.versions.lifecycleModule": {
     defaultMessage: "Lifecycle Rego module",
     description: "Label for the lifecycle policy Rego module editor.",
-  },
-  "policy.versions.authoring": {
-    defaultMessage: "Authoring...",
-    description: "Busy state while a policy version is being authored.",
-  },
-  "policy.versions.authorVersion": {
-    defaultMessage: "Author version",
-    description: "Button label to author a policy version.",
   },
   "policy.versions.activePolicy": {
     defaultMessage: "Active policy",
@@ -12785,10 +12753,6 @@ export const messages = {
     defaultMessage: "{critical} critical / {high} high",
     description: "Critical and high source counts beneath one canonical risk projection tile.",
   },
-  "risk.contextual.summary": {
-    defaultMessage: "CAP-POST-05: {priorities} prioritized of {total} credentials; {highBlast} high-blast-radius, {weakCrypto} with weak crypto context.",
-    description: "Risk page summary for contextual risk priorities.",
-  },
   "risk.contextual.loading": {
     defaultMessage: "Loading contextual priorities.",
     description: "Loading text for contextual risk priorities.",
@@ -12809,10 +12773,6 @@ export const messages = {
     defaultMessage: "Credential",
     description: "Contextual risk table column for the credential.",
   },
-  "risk.contextual.priority": {
-    defaultMessage: "Priority",
-    description: "Contextual risk table column for priority score and reasons.",
-  },
   "risk.contextual.blastRadius": {
     defaultMessage: "Known affected items",
     description: "Contextual risk table column for the number of items known to be affected.",
@@ -12820,14 +12780,6 @@ export const messages = {
   "risk.contextual.action": {
     defaultMessage: "Action",
     description: "Contextual risk table column for recommended action.",
-  },
-  "risk.contextual.scoreValue": {
-    defaultMessage: "{contextual} contextual / {base} base",
-    description: "Contextual risk score comparison value.",
-  },
-  "risk.contextual.blastValue": {
-    defaultMessage: "{total} affected; {resources} resources, {cryptoAssets} crypto assets",
-    description: "Contextual risk blast-radius count value.",
   },
   "risk.nhiStatic.heading": {
     defaultMessage: "Static credentials",
@@ -14998,17 +14950,9 @@ export const messages = {
       "Leave this off while the destination is only prepared. Turn it on after the agent or relay, endpoint address, credential reference, and rollback path have been reviewed.",
     description: "Technical ELI5 readiness boundary beside the destination enabled checkbox.",
   },
-  "connectors.targetReadiness.enrollmentDestination": {
-    defaultMessage: "Destination for enrollment",
-    description: "Existing enabled destination selected for compound endpoint enrollment.",
-  },
   "connectors.targetReadiness.enrollmentReason": {
     defaultMessage: "Enrollment reason",
     description: "Required operator reason for compound endpoint enrollment.",
-  },
-  "connectors.deliveryEvidence": {
-    defaultMessage: "Connector delivery evidence",
-    description: "Heading for served connector registry and delivery receipt evidence.",
   },
   "platform.editions.useRights": {
     defaultMessage: "Use rights",
@@ -15203,38 +15147,6 @@ export const messages = {
   "platform.ha.health": {
     defaultMessage: "Health signal",
     description: "Regional issuance table health-signal column.",
-  },
-  "platform.ha.fenceCaption": {
-    defaultMessage: "Regional issuance write-fence table",
-    description: "Accessible caption for regional issuance write fences.",
-  },
-  "platform.ha.fence": {
-    defaultMessage: "Fence",
-    description: "Regional issuance fence table fence column.",
-  },
-  "platform.ha.scope": {
-    defaultMessage: "Scope",
-    description: "Regional issuance fence table scope column.",
-  },
-  "platform.ha.mechanism": {
-    defaultMessage: "Mechanism",
-    description: "Regional issuance fence table mechanism column.",
-  },
-  "platform.ha.failoverCaption": {
-    defaultMessage: "Regional issuance failover table",
-    description: "Accessible caption for regional issuance failover steps.",
-  },
-  "platform.ha.step": {
-    defaultMessage: "Step",
-    description: "Regional issuance failover table step column.",
-  },
-  "platform.ha.action": {
-    defaultMessage: "Action",
-    description: "Regional issuance failover table action column.",
-  },
-  "platform.ha.gate": {
-    defaultMessage: "Gate",
-    description: "Regional issuance failover table gate column.",
   },
   "protocols.ari.heading": {
     defaultMessage: "ACME Renewal Information (ARI)",
@@ -18644,10 +18556,6 @@ export const messages = {
     defaultMessage: "Workload attestation chain",
     description: "Heading for workload attestation and trust-source controls.",
   },
-  "workloads.page.answerReady": {
-    defaultMessage: "See where each app runs, how that location is proved, and which short-lived identity the app receives from an enabled trust source.",
-    description: "Plain-language workload identity answer when an attester is enabled.",
-  },
   "workloads.overview.answer": {
     defaultMessage: "See which machine identities may stop working, which agents are stale, where standing SSH keys remain, and where delivery failed.",
     description: "Machine and Workload Trust workspace opening answer.",
@@ -18787,15 +18695,6 @@ export const messages = {
     description: "Plain consequence of persistent SSH access.",
   },
   "workloads.overview.reviewSSH": { defaultMessage: "Review SSH trust", description: "Action opening SSH trust coverage." },
-  "workloads.page.answerNeedsTrust": {
-    defaultMessage: "Choose what may prove where an app runs. After that, the app can receive a short-lived identity instead of a standing secret.",
-    description: "Plain-language workload identity answer when no attester is enabled.",
-  },
-  "workloads.page.details": {
-    defaultMessage:
-      "Tenant-scoped attester trust sources verify Kubernetes, cloud, GitHub, or TPM evidence before the server mints an X.509-SVID. Proof payloads and private keys are not retained in browser evidence.",
-    description: "Technical proof summary for the workload identity page.",
-  },
   "workloads.page.setupAction": {
     defaultMessage: "Set up workload identity",
     description: "Primary action that jumps to workload attester setup.",
@@ -18827,10 +18726,6 @@ export const messages = {
   "workloads.advanced.leasesSummary": {
     defaultMessage: "Dynamic secret leases",
     description: "Disclosure label for just-in-time dynamic secret lease controls.",
-  },
-  "workloads.advanced.brokerSummary": {
-    defaultMessage: "AI-agent identity broker",
-    description: "Disclosure label for advanced brokered agent identity controls.",
   },
   "workloads.attestation.description": {
     defaultMessage:
@@ -19181,10 +19076,6 @@ export const messages = {
     defaultMessage: "Step 3",
     description: "Eyebrow for understanding the API response.",
   },
-  "apiExplorer.operations": {
-    defaultMessage: "Operations",
-    description: "Heading for API operation selector.",
-  },
   "apiExplorer.searchLabel": {
     defaultMessage: "Filter operations",
     description: "Accessible label for API operation search.",
@@ -19196,10 +19087,6 @@ export const messages = {
   "apiExplorer.operationCount": {
     defaultMessage: "{count} operations",
     description: "Count of API operations.",
-  },
-  "apiExplorer.operationDetails": {
-    defaultMessage: "Operation details",
-    description: "Heading for selected API operation details.",
   },
   "apiExplorer.noMatches": {
     defaultMessage: "No operations match this filter.",
@@ -20044,10 +19931,6 @@ export const messages = {
     defaultMessage: "Erasing...",
     description: "Busy text while submitting a subject erasure.",
   },
-  "privacy.erasure.submit": {
-    defaultMessage: "Erase subject",
-    description: "Button label for submitting a subject erasure.",
-  },
   "privacy.erasure.empty": {
     defaultMessage: "No subject erasures recorded yet.",
     description: "Empty state for subject erasures.",
@@ -20131,10 +20014,6 @@ export const messages = {
   "privacy.retention.busy": {
     defaultMessage: "Enforcing...",
     description: "Busy text while enforcing retention.",
-  },
-  "privacy.retention.submit": {
-    defaultMessage: "Enforce retention now",
-    description: "Button label for enforcing retention.",
   },
   "privacy.retention.empty": {
     defaultMessage: "No retention runs recorded yet.",
@@ -20244,10 +20123,6 @@ export const messages = {
     defaultMessage: "backup",
     description: "CLI-parity console flow copy.",
   },
-  "parity.brokerEvidenceForThisJustIn_44ca48": {
-    defaultMessage: "Broker evidence for this just-in-time access session, including attestation and audit records.",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.builtInGuarantees_21db16": {
     defaultMessage: "Built-in guarantees",
     description: "CLI-parity console flow copy.",
@@ -20274,10 +20149,6 @@ export const messages = {
   },
   "parity.challengeDomainOptional_d7bed2": {
     defaultMessage: "Challenge domain (optional)",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.challengeMode_1c8fbd": {
-    defaultMessage: "Challenge mode",
     description: "CLI-parity console flow copy.",
   },
   "parity.challengeRecord_320513": {
@@ -20314,10 +20185,6 @@ export const messages = {
   },
   "parity.closePreflightDialog_97a0fb": {
     defaultMessage: "Close preflight dialog",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.closeScepPolicyForm_ae9570": {
-    defaultMessage: "Close SCEP policy form",
     description: "CLI-parity console flow copy.",
   },
   "parity.closeSignIntermediateCsrForm_162507": {
@@ -20366,11 +20233,6 @@ export const messages = {
   },
   "parity.credentialReferencesJsonOptional_faddae": {
     defaultMessage: "Credential references JSON (optional)",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.cryptoAgilityMeansTheSystemCan_20c325": {
-    defaultMessage:
-      "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.",
     description: "CLI-parity console flow copy.",
   },
   "parity.cryptographicShred_caafb7": {
@@ -20453,10 +20315,6 @@ export const messages = {
     defaultMessage: "Evidence references (one per line)",
     description: "CLI-parity console flow copy.",
   },
-  "parity.expectedAudienceOptional_51c8b7": {
-    defaultMessage: "Expected audience (optional)",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.expectedTxtValueOptional_c4e94f": {
     defaultMessage: "Expected TXT value (optional)",
     description: "CLI-parity console flow copy.",
@@ -20493,10 +20351,6 @@ export const messages = {
     defaultMessage: "Held until",
     description: "CLI-parity console flow copy.",
   },
-  "parity.hmacDynamic_cb11c5": {
-    defaultMessage: "hmac-dynamic",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.iUnderstandThisRevocationCannotBe_92d164": {
     defaultMessage: "I understand this revocation cannot be undone.",
     description: "CLI-parity console flow copy.",
@@ -20513,28 +20367,12 @@ export const messages = {
     defaultMessage: "Intermediate CSR signing failed",
     description: "CLI-parity console flow copy.",
   },
-  "parity.intuneJws_b47f57": {
-    defaultMessage: "intune-jws",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.intune_2c4886": {
-    defaultMessage: "intune",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.issueLeafCertificate_bddf5d": {
     defaultMessage: "Issue leaf certificate",
     description: "CLI-parity console flow copy.",
   },
   "parity.issueLeaf_f1c3ee": {
     defaultMessage: "Issue leaf…",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.jamf_489375": {
-    defaultMessage: "jamf",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.justInTimeOperatorSessionsBrokered_df233f": {
-    defaultMessage: "Just-in-time operator sessions brokered for PostgreSQL roles and SSH principals.",
     description: "CLI-parity console flow copy.",
   },
   "parity.lastError_5e4df8": {
@@ -20589,14 +20427,6 @@ export const messages = {
     defaultMessage: "Old reference",
     description: "CLI-parity console flow copy.",
   },
-  "parity.openPrivilegedSession_78a445": {
-    defaultMessage: "Open privileged session",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.openSession_73b3ca": {
-    defaultMessage: "Open session…",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.openUntil_5c3e00": {
     defaultMessage: "Open until",
     description: "CLI-parity console flow copy.",
@@ -20629,14 +20459,6 @@ export const messages = {
     defaultMessage: "Parent authority",
     description: "CLI-parity console flow copy.",
   },
-  "parity.parseError_387dc4": {
-    defaultMessage: "parse error",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.payloadBase64_738cc4": {
-    defaultMessage: "Payload (base64)",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.paymentsDbMonthly_b690bc": {
     defaultMessage: "payments-db-monthly",
     description: "CLI-parity console flow copy.",
@@ -20657,18 +20479,6 @@ export const messages = {
     defaultMessage: "Policy default",
     description: "CLI-parity console flow copy.",
   },
-  "parity.policyName_101bf6": {
-    defaultMessage: "Policy name",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.postgres_afc848": {
-    defaultMessage: "postgres",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.postgresql_519968": {
-    defaultMessage: "postgresql",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.preflightCheck_4a464a": {
     defaultMessage: "Preflight check…",
     description: "CLI-parity console flow copy.",
@@ -20677,24 +20487,12 @@ export const messages = {
     defaultMessage: "Preflight request failed",
     description: "CLI-parity console flow copy.",
   },
-  "parity.privilegedAccessSessions_368da5": {
-    defaultMessage: "Privileged access sessions",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.productionMode_1737a4": {
     defaultMessage: "Production mode",
     description: "CLI-parity console flow copy.",
   },
-  "parity.profileGuidanceJsonOptional_fd4738": {
-    defaultMessage: "Profile guidance JSON (optional)",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.providerConfigJsonOptional_02753c": {
     defaultMessage: "Provider config JSON (optional)",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.providerDefault_f75bf4": {
-    defaultMessage: "Provider default",
     description: "CLI-parity console flow copy.",
   },
   "parity.publicKeyPem_10749e": {
@@ -20772,10 +20570,6 @@ export const messages = {
     defaultMessage: "Run due rotations failed",
     description: "CLI-parity console flow copy.",
   },
-  "parity.runModes_6fced8": {
-    defaultMessage: "Run modes",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.runRollbackSafeRotation_5a7f2d": {
     defaultMessage: "Run connector rotation",
     description: "CLI-parity console flow copy.",
@@ -20788,10 +20582,6 @@ export const messages = {
     defaultMessage: "Save owner",
     description: "CLI-parity console flow copy.",
   },
-  "parity.savePolicy_77d67c": {
-    defaultMessage: "Save policy",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.saveTarget_fa5df1": {
     defaultMessage: "Save target",
     description: "CLI-parity console flow copy.",
@@ -20800,24 +20590,12 @@ export const messages = {
     defaultMessage: "SCEP challenge rotated",
     description: "CLI-parity console flow copy.",
   },
-  "parity.scepEndpoint_f4bb21": {
-    defaultMessage: "SCEP endpoint",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.scepPolicyDeleted_45064c": {
     defaultMessage: "SCEP policy deleted",
     description: "CLI-parity console flow copy.",
   },
-  "parity.scepPolicyUpdateFailed_f92dc7": {
-    defaultMessage: "SCEP policy update failed",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.scepPolicyUpdated_3a2953": {
     defaultMessage: "SCEP policy updated",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.scepProfile_315862": {
-    defaultMessage: "SCEP profile",
     description: "CLI-parity console flow copy.",
   },
   "parity.scheduleName_fb63dc": {
@@ -20848,10 +20626,6 @@ export const messages = {
     defaultMessage: "Available authorities",
     description: "CLI-parity console flow copy.",
   },
-  "parity.sessionOpened_368838": {
-    defaultMessage: "Session opened.",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.signIntermediateCsr_cf1361": {
     defaultMessage: "Sign intermediate CSR…",
     description: "CLI-parity console flow copy.",
@@ -20873,20 +20647,8 @@ export const messages = {
     defaultMessage: "Spec JSON",
     description: "CLI-parity console flow copy.",
   },
-  "parity.sshPrincipal_8d0a6c": {
-    defaultMessage: "SSH principal",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.ssh_e8b9f6": {
-    defaultMessage: "ssh",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.subjectFilter_ae9f99": {
     defaultMessage: "Subject filter",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.supportedHostArchives_38c6c0": {
-    defaultMessage: "Supported host archives",
     description: "CLI-parity console flow copy.",
   },
   "parity.syncTargetOptional_189fc7": {
@@ -20901,21 +20663,8 @@ export const messages = {
     defaultMessage: "Target connector",
     description: "CLI-parity console flow copy.",
   },
-  "parity.targetId_00960a": {
-    defaultMessage: "Target ID",
-    description: "CLI-parity console flow copy.",
-  },
   "parity.targetName_f2f724": {
     defaultMessage: "Target name",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.targetType_a45f80": {
-    defaultMessage: "Target type",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.theCbomScannerInventoriesAlgorithmsKey_777219": {
-    defaultMessage:
-      "The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.",
     description: "CLI-parity console flow copy.",
   },
   "parity.theProviderWasRolledBackCleanly_3c888a": {
@@ -20928,10 +20677,6 @@ export const messages = {
   },
   "parity.tpmQuote_f72300": {
     defaultMessage: "tpm-quote",
-    description: "CLI-parity console flow copy.",
-  },
-  "parity.trustAnchorReferencesJsonOptional_f5ea80": {
-    defaultMessage: "Trust anchor references JSON (optional)",
     description: "CLI-parity console flow copy.",
   },
   "parity.ttlSecondsOptional_68f1c5": {

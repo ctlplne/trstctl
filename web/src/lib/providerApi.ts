@@ -104,6 +104,24 @@ export interface ProviderBreakGlassGrant {
   requested_at: string;
   expires_at: string;
   use_count: number;
+  consented_at?: string;
+  consented_by?: string;
+  second_consented_at?: string;
+  second_consented_by?: string;
+  denied_at?: string;
+  denied_by?: string;
+  revoked_at?: string;
+}
+
+export type ProviderBreakGlassState = "pending" | "awaiting_co_consent" | "active" | "denied" | "revoked" | "expired";
+
+export interface ProviderBreakGlassGrantView extends ProviderBreakGlassGrant {
+  state: ProviderBreakGlassState;
+}
+
+export interface ProviderBreakGlassGrantPage {
+  items: ProviderBreakGlassGrantView[];
+  next_cursor?: string;
 }
 
 export interface ProviderTenantSnapshot {
@@ -123,6 +141,8 @@ export interface ProviderConsoleCustomerAuthority {
   suspend: boolean;
   resume: boolean;
   offboard: boolean;
+  break_glass: boolean;
+  break_glass_write: boolean;
 }
 
 export interface ProviderConsoleAuthority {
@@ -465,14 +485,28 @@ export const providerApi = {
     providerReq<ProviderDrillReport>("/provider/v1/isolation-drill", { method: "POST", body: JSON.stringify({}) }),
   requestBreakGlass: (input: { tenant_id: string; reason: string; ttl: string }): Promise<ProviderBreakGlassGrant> =>
     providerReq<ProviderBreakGlassGrant>("/provider/v1/breakglass", { method: "POST", body: JSON.stringify(input) }),
+  listBreakGlass: async (customerId: string, before = ""): Promise<ProviderBreakGlassGrantPage> => {
+    const query = new URLSearchParams({ limit: "25" });
+    if (before) query.set("before", before);
+    const page = await providerReq<ProviderBreakGlassGrantPage>(`/provider/v1/tenants/${encodeURIComponent(customerId)}/breakglass?${query.toString()}`);
+    if (!Array.isArray(page.items) || page.items.some((grant) => grant.tenant_id !== customerId)) {
+      throw new Error("provider: emergency queue does not match the selected customer");
+    }
+    return page;
+  },
   consentBreakGlass: (grantId: string, tenantId: string, approve = true): Promise<ProviderBreakGlassGrant> =>
     providerReq<ProviderBreakGlassGrant>(`/provider/v1/breakglass/${encodeURIComponent(grantId)}/consent`, {
       method: "POST",
       body: JSON.stringify({ tenant_id: tenantId, approve }),
     }),
-  breakGlassResults: (grantId: string): Promise<ProviderTenantSnapshot> =>
-    providerReq<ProviderTenantSnapshot>(`/provider/v1/breakglass/${encodeURIComponent(grantId)}/results`, {
+  breakGlassResults: async (grantId: string, customerId: string): Promise<ProviderTenantSnapshot> => {
+    const snapshot = await providerReq<ProviderTenantSnapshot>(`/provider/v1/breakglass/${encodeURIComponent(grantId)}/results`, {
       method: "POST",
       body: JSON.stringify({}),
-    }),
+    });
+    if (snapshot.tenant_id !== customerId || !Number.isSafeInteger(snapshot.active_certificates) || snapshot.active_certificates < 0) {
+      throw new Error("provider: emergency result does not match the selected customer");
+    }
+    return snapshot;
+  },
 };

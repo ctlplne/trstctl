@@ -5,6 +5,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -187,6 +188,46 @@ func TestProviderRegistrySurvivesARestart(t *testing.T) {
 	}
 	if got.TenantID != id || got.Reason != grant.Reason {
 		t.Fatalf("break-glass grant after restart = %+v, want the recorded grant", got)
+	}
+}
+
+func TestProviderBreakGlassQueueColdReadIsTenantFiltered(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	now := time.Date(2026, 10, 5, 14, 0, 0, 0, time.UTC)
+	alpha := CustomerID("queue-alpha")
+	beta := CustomerID("queue-beta")
+	for _, grant := range []BreakGlassGrant{
+		{ID: "alpha-older", TenantID: alpha, OperatorID: "requester", RequestedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)},
+		{ID: "alpha-newer", TenantID: alpha, OperatorID: "requester", RequestedAt: now, ExpiresAt: now.Add(time.Hour)},
+		{ID: "beta-private", TenantID: beta, OperatorID: "other", RequestedAt: now.Add(time.Minute), ExpiresAt: now.Add(time.Hour), Reason: "private beta"},
+	} {
+		payload, err := json.Marshal(AuthorityEvent{Grant: &grant, Audit: AuditEvent{Type: AuditBreakGlassRequested, TenantID: grant.TenantID, GrantID: grant.ID, At: grant.RequestedAt}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := NewAuthorityProjection(st).Apply(ctx, events.Event{ID: "queue-" + grant.ID, Type: AuditBreakGlassRequested,
+			TenantID: grant.TenantID, Time: grant.RequestedAt, Data: payload}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st.Close()
+	cold, err := corestore.Open(ctx, providerTestDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cold.Close() })
+	reader := NewPGStore(cold)
+	first, err := reader.ListBreakGlassGrants(ctx, alpha, 1, "")
+	if err != nil || len(first) != 1 || first[0].ID != "alpha-newer" {
+		t.Fatalf("cold first page = %+v, %v", first, err)
+	}
+	second, err := reader.ListBreakGlassGrants(ctx, alpha, 2, first[0].ID)
+	if err != nil || len(second) != 1 || second[0].ID != "alpha-older" {
+		t.Fatalf("cold second page = %+v, %v", second, err)
+	}
+	if _, err := reader.ListBreakGlassGrants(ctx, alpha, 2, "beta-private"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another customer's cursor = %v, want not found", err)
 	}
 }
 

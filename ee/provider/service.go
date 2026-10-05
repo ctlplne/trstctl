@@ -409,6 +409,38 @@ func (s *Service) ListTenants(ctx context.Context, actor Operator) ([]Tenant, er
 	return out, nil
 }
 
+// ListBreakGlassGrants gives only an exact customer's delegated emergency
+// operators a bounded, stable queue. It does not grant use of any listed
+// request; results still require the requester, two consents, and live access.
+func (s *Service) ListBreakGlassGrants(ctx context.Context, actor Operator, customerID string, limit int, before string) (BreakGlassGrantPage, error) {
+	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
+		return BreakGlassGrantPage{}, ErrUnlicensed
+	}
+	if err := s.requireOperator(actor); err != nil {
+		return BreakGlassGrantPage{}, err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpBreakGlass); err != nil {
+		return BreakGlassGrantPage{}, err
+	}
+	if limit < 1 || limit > 100 || len(before) > 128 {
+		return BreakGlassGrantPage{}, errors.New("provider: emergency queue limit or cursor is invalid")
+	}
+	grants, err := s.store.ListBreakGlassGrants(ctx, customerID, limit+1, before)
+	if err != nil {
+		return BreakGlassGrantPage{}, err
+	}
+	page := BreakGlassGrantPage{Items: make([]BreakGlassGrantView, 0, limit)}
+	now := s.clock()
+	if len(grants) > limit {
+		page.NextCursor = grants[limit-1].ID
+		grants = grants[:limit]
+	}
+	for _, grant := range grants {
+		page.Items = append(page.Items, BreakGlassGrantView{BreakGlassGrant: grant, State: grant.State(now)})
+	}
+	return page, nil
+}
+
 // RunIsolationDrill runs the on-demand tenant-isolation drill and records an
 // attestation of the outcome.
 //
@@ -708,6 +740,9 @@ func (s *Service) authorizeBreakGlassResults(ctx context.Context, actor Operator
 }
 
 func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID string) (TenantSnapshot, error) {
+	if err := s.requireMutation(actor, false); err != nil {
+		return TenantSnapshot{}, err
+	}
 	grant, err := s.authorizeBreakGlassResults(ctx, actor, grantID)
 	if err != nil {
 		return TenantSnapshot{}, err
