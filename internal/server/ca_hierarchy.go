@@ -338,6 +338,55 @@ func (h *caHierarchyService) ApproveCeremony(ctx context.Context, tenantID, id s
 	return h.GetCeremony(ctx, tenantID, id)
 }
 
+func (h *caHierarchyService) CancelCeremony(ctx context.Context, tenantID, id, reason string) (api.CAKeyCeremony, error) {
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || strings.TrimSpace(actor.Subject) == "" {
+		return api.CAKeyCeremony{}, api.ErrCAHierarchyConflict
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" || len(reason) > 512 {
+		return api.CAKeyCeremony{}, api.ErrCAHierarchyInvalid
+	}
+	var appended events.Event
+	err := h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := h.store.LockPendingKeyCeremonyTx(ctx, tx, tenantID, id); err != nil {
+			return err
+		}
+		ev, err := h.appendEvent(ctx, tenantID, projections.EventCACeremonyCancelled, projections.CACeremonyCancelled{
+			CeremonyID: id, Actor: actor.Subject, Reason: reason,
+		})
+		if err != nil {
+			return err
+		}
+		appended = ev
+		return projections.New(h.store).ApplyTx(ctx, tx, ev)
+	})
+	// Once the immutable cancellation event exists, a client disconnect cannot
+	// turn a successful mutation into a false rollback response. Finish its
+	// projection and exact readback with a bounded detached context.
+	readCtx := ctx
+	if appended.ID != "" {
+		var cancel context.CancelFunc
+		readCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		defer cancel()
+	}
+	if err != nil {
+		if appended.ID == "" {
+			return api.CAKeyCeremony{}, caHierarchyConflict(err)
+		}
+		// The terminal event is already durable even if SQL rolled back. Confirm
+		// the exact projection before reporting success; otherwise fence retry.
+		if applyErr := projections.New(h.store).Apply(readCtx, appended); applyErr != nil {
+			return api.CAKeyCeremony{}, fmt.Errorf("%w: ceremony cancellation event %s appended but projection unresolved: %v", orchestrator.ErrEffectIndeterminate, appended.ID, applyErr)
+		}
+	}
+	closed, err := h.store.GetKeyCeremony(readCtx, tenantID, id)
+	if err != nil || closed.Status != "cancelled" || closed.ClosedBy != actor.Subject || closed.CloseReason != reason {
+		return api.CAKeyCeremony{}, fmt.Errorf("%w: ceremony cancellation event %s lacks exact terminal readback: %v", orchestrator.ErrEffectIndeterminate, appended.ID, err)
+	}
+	return ceremonyResponse(closed), nil
+}
+
 func (h *caHierarchyService) ListAuthorities(ctx context.Context, tenantID string) ([]api.CAAuthority, error) {
 	rows, err := h.store.ListCAAuthorities(ctx, tenantID)
 	if err != nil {
@@ -1802,6 +1851,7 @@ func ceremonyResponse(c store.KeyCeremony) api.CAKeyCeremony {
 	return api.CAKeyCeremony{
 		ID: c.ID, TenantID: c.TenantID, Purpose: c.Purpose, Threshold: c.Threshold,
 		Status: c.Status, Approvals: c.Approvals, Opener: c.Opener, CreatedAt: c.CreatedAt,
+		ClosedAt: c.ClosedAt, ClosedBy: c.ClosedBy, CloseReason: c.CloseReason,
 	}
 }
 

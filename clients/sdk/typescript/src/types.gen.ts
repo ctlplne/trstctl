@@ -1408,6 +1408,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/ceremonies/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending CA key ceremony with an audit reason */
+        post: operations["cancelCACeremony"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/discovery": {
         parameters: {
             query?: never;
@@ -8568,6 +8585,9 @@ export interface components {
             /** Format: uuid */
             successor_id: string;
         };
+        CACeremonyCancelRequest: {
+            reason: string;
+        };
         CACeremonyPlanAuthority: {
             common_name: string;
             /** Format: uuid */
@@ -8724,6 +8744,10 @@ export interface components {
         };
         CAKeyCeremony: {
             approvals: number;
+            close_reason?: string;
+            /** Format: date-time */
+            closed_at?: string;
+            closed_by?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: uuid */
@@ -19757,6 +19781,53 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAKeyCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cancelCACeremony: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACeremonyCancelRequest"];
+            };
+        };
         responses: {
             /** @description success */
             200: {

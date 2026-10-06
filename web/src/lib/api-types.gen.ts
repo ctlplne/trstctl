@@ -1548,6 +1548,10 @@ export interface CAAuthorityRotationRequest {
   successor_id: string;
 }
 
+export interface CACeremonyCancelRequest {
+  reason: string;
+}
+
 export interface CACeremonyPlanAuthority {
   common_name: string;
   id: string;
@@ -1698,6 +1702,9 @@ export interface CAIssuedLeaf {
 
 export interface CAKeyCeremony {
   approvals: number;
+  close_reason?: string;
+  closed_at?: string;
+  closed_by?: string;
   created_at: string;
   id: string;
   opener?: string;

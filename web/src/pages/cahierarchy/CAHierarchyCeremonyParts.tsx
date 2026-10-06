@@ -331,11 +331,13 @@ export function CeremonyPanel({
   busy,
   ceremony,
   onApprove,
+  onCancel,
   onView,
 }: {
   busy: boolean;
   ceremony: CAKeyCeremony;
   onApprove: (id: string) => void;
+  onCancel: (ceremony: CAKeyCeremony) => void;
   onView: (id: string) => void;
 }) {
   const { t } = useTranslation();
@@ -350,6 +352,11 @@ export function CeremonyPanel({
           <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {ceremony.status === "pending" && (
+            <Button type="button" variant="outline" disabled={busy} onClick={() => onCancel(ceremony)}>
+              {t("caHierarchy.ceremonyCancel.action")}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -375,8 +382,89 @@ export function CeremonyPanel({
         <CeremonyValue label="Approvals" value={`${ceremony.approvals} / ${ceremony.threshold} approvals`} />
         <CeremonyValue label="Status" value={ceremony.status} />
         <CeremonyValue label="Opened by" value={ceremony.opener || "-"} />
+        {ceremony.closed_by && <CeremonyValue label={t("caHierarchy.ceremonyCancel.closedBy")} value={ceremony.closed_by} />}
+        {ceremony.close_reason && <CeremonyValue label={t("caHierarchy.ceremonyCancel.reason")} value={ceremony.close_reason} />}
       </dl>
     </section>
+  );
+}
+
+const cancellationSchema = z.object({
+  reason: z.string().trim().min(1).max(512),
+});
+
+export function CancelCeremonyDialog({
+  ceremony,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  ceremony: CAKeyCeremony;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const { t } = useTranslation();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<z.infer<typeof cancellationSchema>>({
+    resolver: zodResolver(cancellationSchema),
+    defaultValues: { reason: "" },
+  });
+  const titleId = "ca-ceremony-cancel-heading";
+  return (
+    <Dialog
+      open
+      onClose={busy ? () => undefined : onClose}
+      titleId={titleId}
+      closeOnBackdropClick={!busy}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative w-full max-w-xl rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <div className="grid gap-4 p-5 text-sm">
+        <h2 id={titleId} className="text-title font-semibold">
+          {t("caHierarchy.ceremonyCancel.title")}
+        </h2>
+        <p className="text-muted-foreground">{t("caHierarchy.ceremonyCancel.help")}</p>
+        <p className="break-all font-mono text-xs">{ceremony.id}</p>
+        <form className="grid gap-4" onSubmit={handleSubmit((values) => onConfirm(values.reason))}>
+          <div className="grid gap-1 font-medium">
+            <label htmlFor="ca-ceremony-cancel-reason">{t("caHierarchy.ceremonyCancel.reason")}</label>
+            <textarea
+              id="ca-ceremony-cancel-reason"
+              rows={3}
+              className="ui-input"
+              aria-invalid={Boolean(errors.reason)}
+              aria-describedby={errors.reason ? "ca-ceremony-cancel-reason-error" : undefined}
+              {...register("reason")}
+            />
+            {errors.reason && (
+              <span id="ca-ceremony-cancel-reason-error" className="text-destructive">
+                {t("caHierarchy.ceremonyCancel.reasonRequired")}
+              </span>
+            )}
+          </div>
+          {error && (
+            <p role="alert" className="text-destructive">
+              {error}
+            </p>
+          )}
+          <footer className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+              {t("caHierarchy.ceremonyCancel.keep")}
+            </Button>
+            <Button type="submit" loading={busy} disabled={busy}>
+              {t("caHierarchy.ceremonyCancel.confirm")}
+            </Button>
+          </footer>
+        </form>
+      </div>
+    </Dialog>
   );
 }
 
@@ -447,6 +535,9 @@ export function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCer
           <CeremonyValue label="Opened by" value={ceremony.opener || "-"} />
           <CeremonyValue label="Created" value={ceremony.created_at} />
           <CeremonyValue label="Threshold" value={`${ceremony.threshold} approvals required`} />
+          {ceremony.closed_at && <CeremonyValue label={t("caHierarchy.ceremonyCancel.closedAt")} value={ceremony.closed_at} />}
+          {ceremony.closed_by && <CeremonyValue label={t("caHierarchy.ceremonyCancel.closedBy")} value={ceremony.closed_by} />}
+          {ceremony.close_reason && <CeremonyValue label={t("caHierarchy.ceremonyCancel.reason")} value={ceremony.close_reason} />}
         </dl>
         <footer className="flex justify-end border-t border-border pt-4">
           <Button type="button" variant="outline" onClick={onClose}>

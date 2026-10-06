@@ -33,6 +33,7 @@ import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
 import {
   CACeremonyReviewDialog,
+  CancelCeremonyDialog,
   CARotationReviewDialog,
   CeremonyDetailDialog,
   CeremonyLookupForm,
@@ -413,6 +414,9 @@ export function CAHierarchy() {
   const [leafTarget, setLeafTarget] = useState<CAAuthority | null>(null);
   const [signTarget, setSignTarget] = useState<CAAuthority | null>(null);
   const [ceremonyDetail, setCeremonyDetail] = useState<CAKeyCeremony | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<CAKeyCeremony | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [ceremonyReview, setCeremonyReview] = useState<CeremonyReviewState | null>(null);
   const [ceremonyReviewBusy, setCeremonyReviewBusy] = useState(false);
   const [ceremonyReviewError, setCeremonyReviewError] = useState<string | null>(null);
@@ -582,6 +586,22 @@ export function CAHierarchy() {
       setCeremonyError(errorText(err, "Could not approve ceremony"));
     } finally {
       setCeremonyBusy(false);
+    }
+  }
+
+  async function cancelCeremony(reason: string) {
+    if (!cancelTarget) return;
+    setCancelBusy(true);
+    setCancelError(null);
+    try {
+      const closed = await api.cancelCACeremony(cancelTarget.id, { reason });
+      setCeremony(closed);
+      setCeremonyDetail((current) => (current?.id === closed.id ? closed : current));
+      setCancelTarget(null);
+    } catch (err) {
+      setCancelError(errorText(err, t("caHierarchy.ceremonyCancel.failed")));
+    } finally {
+      setCancelBusy(false);
     }
   }
 
@@ -1084,7 +1104,13 @@ export function CAHierarchy() {
         />
         {ceremonyError && <ErrorState title={translateNow("source.ceremony.action.failed.974d5f2180")}>{ceremonyError}</ErrorState>}
         {ceremony ? (
-          <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} onView={(id) => void readCeremony(id, true)} />
+          <CeremonyPanel
+            ceremony={ceremony}
+            busy={ceremonyBusy}
+            onApprove={(id) => void approveCeremony(id)}
+            onCancel={setCancelTarget}
+            onView={(id) => void readCeremony(id, true)}
+          />
         ) : (
           <EmptyState title={translateNow("source.no.ceremony.loaded.3e9d28986c")}>{t("caHierarchy.ceremonyLookup.empty")}</EmptyState>
         )}
@@ -1152,6 +1178,17 @@ export function CAHierarchy() {
         />
       )}
       {leafTarget && <IssueLeafDialog authority={leafTarget} onClose={() => setLeafTarget(null)} />}
+      {cancelTarget && (
+        <CancelCeremonyDialog
+          ceremony={cancelTarget}
+          busy={cancelBusy}
+          error={cancelError}
+          onClose={() => {
+            if (!cancelBusy) setCancelTarget(null);
+          }}
+          onConfirm={(reason) => void cancelCeremony(reason)}
+        />
+      )}
       {signTarget && <SignIntermediateCSRDialog authority={signTarget} onClose={() => setSignTarget(null)} />}
       {authorityDetail && (
         <AuthorityDetailDialog

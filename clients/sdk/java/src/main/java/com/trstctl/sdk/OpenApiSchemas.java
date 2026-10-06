@@ -161,6 +161,7 @@ public final class OpenApiSchemas {
       "CAAuthorityRotationIssuer",
       "CAAuthorityRotationPlanPreview",
       "CAAuthorityRotationRequest",
+      "CACeremonyCancelRequest",
       "CACeremonyPlanAuthority",
       "CACeremonyPlanPreview",
       "CACeremonyStartRequest",

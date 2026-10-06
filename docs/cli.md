@@ -278,7 +278,7 @@ exhaustive subcommand list:
 | `audit`                           | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `verify` · `feeds set` · `feeds list`)                                                                                        |
 | `breakglass`                      | Effect-free emergency-request preview, ceremony-gated online issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-preview` · `issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`)                                                                        |
 | `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                                                                                                                                                                                |
-| `ca ceremonies`                   | Effect-free review, start, inspect, and approve m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve`)                                                                                                                                                                                                  |
+| `ca ceremonies`                   | Effect-free review, start, inspect, approve, and reasoned cancellation of m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve` · `cancel`)                                                                                                                                                                                                  |
 | `ca authorities`                  | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`)                |
 | `ca discovery`                    | List public and private CA discovery inventory (`list`)                                                                                                                                                                                                                                                             |
 | `cbom`                            | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                                                                                                                                                                                   |
@@ -681,6 +681,10 @@ trstctl-cli ca ceremonies start -f root-ceremony.json
 # Run each approval with a distinct custodian token.
 trstctl-cli ca ceremonies approve <ceremony-id>
 trstctl-cli ca ceremonies approve <ceremony-id>
+
+# If the reviewed work is withdrawn before the CA action consumes the ceremony:
+# printf '{"reason":"change window closed"}\n' > cancel-ceremony.json
+# trstctl-cli ca ceremonies cancel <ceremony-id> -f cancel-ceremony.json
 
 cat > root-create.json <<'JSON'
 {"ceremony_id":"<ceremony-id>","spec":{"common_name":"Example Root CA","ttl_seconds":315360000,"signature_algorithm":"ECDSA-P256","max_path_len":1,"permitted_dns_domains":["example.internal"]}}

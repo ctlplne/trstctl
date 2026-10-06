@@ -6340,6 +6340,17 @@
         ],
         "type": "object"
       },
+      "CACeremonyCancelRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "CACeremonyPlanAuthority": {
         "properties": {
           "common_name": {
@@ -6903,6 +6914,16 @@
         "properties": {
           "approvals": {
             "type": "integer"
+          },
+          "close_reason": {
+            "type": "string"
+          },
+          "closed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "closed_by": {
+            "type": "string"
           },
           "created_at": {
             "format": "date-time",
@@ -40129,6 +40150,83 @@
           }
         ],
         "summary": "Approve a CA key ceremony",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/ceremonies/{id}/cancel": {
+      "post": {
+        "operationId": "cancelCACeremony",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CACeremonyCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAKeyCeremony"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Cancel a pending CA key ceremony with an audit reason",
         "x-trstctl-permission": "issuers:write"
       }
     },

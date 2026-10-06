@@ -8343,6 +8343,22 @@ export const messages = {
     defaultMessage: "Start or load a ceremony to inspect its approval state.",
     description: "Empty state for an opener or a separately signed-in custodian on the CA lifecycle tab.",
   },
+  "caHierarchy.ceremonyCancel.action": { defaultMessage: "Cancel ceremony", description: "Open the reasoned cancellation review for a pending CA ceremony." },
+  "caHierarchy.ceremonyCancel.title": { defaultMessage: "Cancel pending ceremony", description: "Heading for a terminal CA ceremony action." },
+  "caHierarchy.ceremonyCancel.help": {
+    defaultMessage: "This ends the approval window. The ceremony cannot create or change a CA afterward; its audit history remains.",
+    description: "Explains the permanent effect before cancellation.",
+  },
+  "caHierarchy.ceremonyCancel.reason": { defaultMessage: "Reason", description: "Operator reason recorded in the CA ceremony cancellation audit event." },
+  "caHierarchy.ceremonyCancel.reasonRequired": {
+    defaultMessage: "Enter a reason of 1 to 512 characters.",
+    description: "Validation feedback for a ceremony cancellation.",
+  },
+  "caHierarchy.ceremonyCancel.keep": { defaultMessage: "Keep ceremony", description: "Dismiss cancellation without changing the ceremony." },
+  "caHierarchy.ceremonyCancel.confirm": { defaultMessage: "Confirm cancellation", description: "Submit a reviewed and reasoned CA ceremony cancellation." },
+  "caHierarchy.ceremonyCancel.failed": { defaultMessage: "Could not cancel ceremony", description: "Fallback error for a failed CA ceremony cancellation." },
+  "caHierarchy.ceremonyCancel.closedBy": { defaultMessage: "Closed by", description: "Authenticated actor who cancelled the ceremony." },
+  "caHierarchy.ceremonyCancel.closedAt": { defaultMessage: "Closed at", description: "Time of the ceremony cancellation event." },
   "caHierarchy.rotationPreview.title": {
     defaultMessage: "Review CA rotation",
     description: "Heading for the server-owned effect-free review shown before activating a CA successor.",

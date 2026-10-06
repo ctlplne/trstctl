@@ -208,7 +208,7 @@ successor (re-key from a fresh `rotation:<ca-id>` ceremony), mark the predecesso
 `superseded`, record `replaces_id`, and keep both issue URLs live while new
 certificates chain to the successor; offline-root re-key works the same way but stays
 an operator ceremony since the offline key never enters trstctl. Every served step
-(`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
+(`ca.ceremony.started`, `ca.ceremony.approved`, `ca.ceremony.cancelled`, `ca.root.created`,
 `ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
 `ca.authority.rotated`, `ca.authority.rekeyed`, `ca.cross_signed`,
 `ca.endentity.issued`) is a tenant-scoped event recorded immutably in the

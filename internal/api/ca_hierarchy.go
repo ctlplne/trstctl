@@ -29,6 +29,7 @@ type CAHierarchyService interface {
 	StartCeremony(ctx context.Context, tenantID string, req CACeremonyStartRequest) (CAKeyCeremony, error)
 	GetCeremony(ctx context.Context, tenantID, id string) (CAKeyCeremony, error)
 	ApproveCeremony(ctx context.Context, tenantID, id string) (CAKeyCeremony, error)
+	CancelCeremony(ctx context.Context, tenantID, id, reason string) (CAKeyCeremony, error)
 	ListAuthorities(ctx context.Context, tenantID string) ([]CAAuthority, error)
 	CreateRoot(ctx context.Context, tenantID string, req CACreateRootRequest) (CAAuthority, error)
 	ImportOfflineRoot(ctx context.Context, tenantID string, req CAImportOfflineRootRequest) (CAAuthority, error)
@@ -224,14 +225,21 @@ type CAIntermediateCSR struct {
 }
 
 type CAKeyCeremony struct {
-	ID        string    `json:"id"`
-	TenantID  string    `json:"tenant_id"`
-	Purpose   string    `json:"purpose"`
-	Threshold int       `json:"threshold"`
-	Status    string    `json:"status"`
-	Approvals int       `json:"approvals"`
-	Opener    string    `json:"opener,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string     `json:"id"`
+	TenantID    string     `json:"tenant_id"`
+	Purpose     string     `json:"purpose"`
+	Threshold   int        `json:"threshold"`
+	Status      string     `json:"status"`
+	Approvals   int        `json:"approvals"`
+	Opener      string     `json:"opener,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ClosedAt    *time.Time `json:"closed_at,omitempty"`
+	ClosedBy    string     `json:"closed_by,omitempty"`
+	CloseReason string     `json:"close_reason,omitempty"`
+}
+
+type caCeremonyCancelJSON struct {
+	Reason string `json:"reason"`
 }
 
 type CAAuthority struct {
@@ -395,6 +403,30 @@ func (a *API) approveCACeremony(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, ErrCAHierarchyUnavailable
 		}
 		c, err := a.caHierarchy.ApproveCeremony(ctx, tenantID, id)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, c, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) cancelCACeremony(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req caCeremonyCancelJSON
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		reason := strings.TrimSpace(req.Reason)
+		if reason == "" || len(reason) > 512 {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, "reason must be 1-512 characters")
+		}
+		c, err := a.caHierarchy.CancelCeremony(ctx, tenantID, id, reason)
 		if err != nil {
 			return 0, nil, err
 		}

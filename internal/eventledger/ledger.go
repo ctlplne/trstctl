@@ -42,6 +42,7 @@ const (
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
 	EventCACeremonyApproved                       = "ca.ceremony.approved"
+	EventCACeremonyCancelled                      = "ca.ceremony.cancelled"
 	EventCARootCreated                            = "ca.root.created"
 	EventCAAuthorityImported                      = "ca.authority.imported"
 	EventCAAuthorityRotated                       = "ca.authority.rotated"
@@ -252,6 +253,7 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "create_issuer", "createIssuer", []string{EventIssuerCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "start_ceremony", "createCACeremony", []string{EventCACeremonyStarted}},
 	{"F48", "Private/enterprise CA hierarchy management", "approve_ceremony", "approveCACeremony", []string{EventCACeremonyApproved}},
+	{"F48", "Private/enterprise CA hierarchy management", "cancel_ceremony", "cancelCACeremony", []string{EventCACeremonyCancelled}},
 	{"F48", "Private/enterprise CA hierarchy management", "create_root", "createRootCA", []string{EventCARootCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "import_offline_root", "importOfflineRootCA", []string{EventCARootCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "import_existing_ca", "importExistingCA", []string{EventCAAuthorityImported}},

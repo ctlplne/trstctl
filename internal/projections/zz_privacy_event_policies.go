@@ -1685,6 +1685,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventCACertificateRevoked, 1}:                                              privacyPayloadShape[CACertificateRevoked](),
 		{EventCACeremonyStarted, 1}:                                                 privacyPayloadShape[CACeremonyStarted](),
 		{EventCACeremonyApproved, 1}:                                                privacyPayloadShape[CACeremonyApproved](),
+		{EventCACeremonyCancelled, 1}:                                               privacyPayloadShape[CACeremonyCancelled](),
 		{EventCARootCreated, 1}: events.PrivacyPayloadShapeOneOf(
 			privacyPayloadShape[privacyLegacyCARootCreated](),
 			privacyPayloadShape[privacyLegacyCARootCreatedWithSigner](),

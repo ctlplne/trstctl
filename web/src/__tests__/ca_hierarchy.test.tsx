@@ -19,6 +19,7 @@ const { apiMock } = vi.hoisted(() => ({
     createCACeremony: vi.fn(),
     caCeremony: vi.fn(),
     approveCACeremony: vi.fn(),
+    cancelCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
     importExistingCA: vi.fn(),
     createOfflineIntermediateCSR: vi.fn(),
@@ -911,6 +912,44 @@ describe("CA hierarchy and custody surface", () => {
     await waitFor(() => expect(apiMock.caCeremony).toHaveBeenCalledWith(id));
     expect(await screen.findByRole("button", { name: `Approve ceremony ${id}` })).toBeEnabled();
     expect(screen.getByText("eval-admin")).toBeInTheDocument();
+  });
+
+  it("requires a reason before cancelling an exact pending ceremony and shows terminal readback", async () => {
+    const user = userEvent.setup();
+    const id = "a6e2d916-0d8a-4e3d-8a06-222fe0f60b80";
+    const pending = {
+      id,
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      purpose: "root:reviewed-spec",
+      threshold: 2,
+      approvals: 0,
+      status: "pending",
+      opener: "eval-admin",
+      created_at: "2026-10-06T16:42:00Z",
+    };
+    apiMock.caCeremony.mockResolvedValue(pending);
+    apiMock.cancelCACeremony.mockResolvedValue({
+      ...pending,
+      status: "cancelled",
+      closed_by: "eval-admin",
+      closed_at: "2026-10-06T19:00:00Z",
+      close_reason: "change window closed",
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+    const lifecycle = screen.getByRole("heading", { name: "CA key ceremony" }).closest("section");
+    expect(lifecycle).not.toBeNull();
+    await user.type(within(lifecycle!).getByLabelText("Find ceremony by ID"), id);
+    await user.click(screen.getByRole("button", { name: "Load ceremony" }));
+    await user.click(await screen.findByRole("button", { name: "Cancel ceremony" }));
+    const dialog = await screen.findByRole("dialog", { name: "Cancel pending ceremony" });
+    await user.click(within(dialog).getByRole("button", { name: "Confirm cancellation" }));
+    expect(apiMock.cancelCACeremony).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByRole("textbox", { name: "Reason" }), "change window closed");
+    await user.click(within(dialog).getByRole("button", { name: "Confirm cancellation" }));
+    await waitFor(() => expect(apiMock.cancelCACeremony).toHaveBeenCalledWith(id, { reason: "change window closed" }));
+    expect(await screen.findByText("cancelled")).toBeInTheDocument();
+    expect(screen.getByText("change window closed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel ceremony" })).not.toBeInTheDocument();
   });
 
   it("configures, previews, then generates managed-key custody without private key bytes", async () => {

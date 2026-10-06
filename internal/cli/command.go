@@ -112,6 +112,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ca", "ceremonies", "start"}, Method: "POST", Path: "/api/v1/ca/ceremonies", Body: bodyFile, Summary: "Start an m-of-n CA key ceremony"},
 	{Name: []string{"ca", "ceremonies", "get"}, Method: "GET", Path: "/api/v1/ca/ceremonies/{id}", Summary: "Get a CA key ceremony"},
 	{Name: []string{"ca", "ceremonies", "approve"}, Method: "POST", Path: "/api/v1/ca/ceremonies/{id}/approvals", Body: bodyNone, Summary: "Approve a CA key ceremony"},
+	{Name: []string{"ca", "ceremonies", "cancel"}, Method: "POST", Path: "/api/v1/ca/ceremonies/{id}/cancel", Body: bodyFile, Summary: "Cancel a pending CA key ceremony with an audit reason"},
 	{Name: []string{"ca", "discovery", "list"}, Method: "GET", Path: "/api/v1/ca/discovery", Summary: "List public and private CA discovery inventory"},
 	{Name: []string{"ca", "authorities", "list"}, Method: "GET", Path: "/api/v1/ca/authorities", Summary: "List private CA authorities"},
 	{Name: []string{"ca", "authorities", "create-root"}, Method: "POST", Path: "/api/v1/ca/authorities/roots", Body: bodyFile, Summary: "Create a signer-backed root CA after ceremony quorum"},

@@ -21,6 +21,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventCertificateSuperseded:                    "EventCertificateSuperseded",
 	projections.EventCACeremonyStarted:                        "EventCACeremonyStarted",
 	projections.EventCACeremonyApproved:                       "EventCACeremonyApproved",
+	projections.EventCACeremonyCancelled:                      "EventCACeremonyCancelled",
 	projections.EventCARootCreated:                            "EventCARootCreated",
 	projections.EventCAAuthorityImported:                      "EventCAAuthorityImported",
 	projections.EventCAAuthorityRotated:                       "EventCAAuthorityRotated",

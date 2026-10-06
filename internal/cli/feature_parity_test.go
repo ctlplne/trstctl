@@ -290,8 +290,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// 475, closing the gap between the served API and the documented CLI path.
 	// The compound key-compromise preview, execute, and original-key status
 	// commands bring the downloadable client to parity with the served routes.
-	if len(out) != 478 {
-		t.Fatalf("CLI commands = %d, want 478", len(out))
+	// F48 adds the matching reasoned terminal CA ceremony cancellation command.
+	if len(out) != 479 {
+		t.Fatalf("CLI commands = %d, want 479", len(out))
 	}
 	return out
 }

@@ -1725,6 +1725,7 @@ export interface Api {
   previewCACeremony(input: CACeremonyStartRequest): Promise<CACeremonyPlanPreview>;
   createCACeremony(input: CACeremonyStartRequest): Promise<CAKeyCeremony>;
   approveCACeremony(id: string): Promise<CAKeyCeremony>;
+  cancelCACeremony(id: string, input: { reason: string }): Promise<CAKeyCeremony>;
   importOfflineRootCA(input: CAImportOfflineRootRequest): Promise<CAAuthority>;
   importExistingCA(input: CAImportExistingRequest): Promise<CAAuthority>;
   createOfflineIntermediateCSR(id: string, input: CACreateOfflineIntermediateCSRRequest): Promise<CAIntermediateCSR>;
@@ -2340,6 +2341,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewCACeremony: (input) => postRead<CACeremonyPlanPreview>("/api/v1/ca/ceremonies/preview", input),
   createCACeremony: (input) => mutate<CAKeyCeremony>("POST", "/api/v1/ca/ceremonies", input),
   approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),
+  cancelCACeremony: (id, input) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/cancel`, input),
   importOfflineRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/offline-roots", input),
   importExistingCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/imported", input),
   createOfflineIntermediateCSR: (id, input) =>

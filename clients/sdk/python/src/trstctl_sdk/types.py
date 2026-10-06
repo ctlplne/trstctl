@@ -2142,6 +2142,14 @@ CAAuthorityRotationRequest = TypedDict(
     total=False,
 )
 
+CACeremonyCancelRequest = TypedDict(
+    'CACeremonyCancelRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
 CACeremonyPlanAuthority = TypedDict(
     'CACeremonyPlanAuthority',
     {
@@ -2370,6 +2378,9 @@ CAKeyCeremony = TypedDict(
     'CAKeyCeremony',
     {
         'approvals': int,
+        'close_reason': str,
+        'closed_at': str,
+        'closed_by': str,
         'created_at': str,
         'id': str,
         'opener': str,

@@ -3831,7 +3831,7 @@
             "backend_status": "served",
             "current_frontend_mapping": "CAHierarchy at /ca-hierarchy exposes public/private CA discovery inventory, ceremonies, existing signer-backed CA import, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, signer-backed leaf issuance, zero-downtime CA rotation activation, and signer-backed CA renewal/re-key; Migration at /migration reviews exact-authority manifests and operates durable trust-before-leaf waves with per-wave verification and rollback",
             "target_gui_mapping": "CA hierarchy UI for roots, offline roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution.",
-            "acceptance_test": "TestServedMigrationTrustBeforeLeafAndRollbackAUD40 drives a reviewed CA migration through authenticated REST, real PostgreSQL, file-backed JetStream, an out-of-process UDS signer, an enrolled exact host agent, host trust readback, and live TLS verification; it proves trust-before-leaf, pause/resume, replay recovery, tenant isolation, exact-authority issuance, manual rollback, and automatic rollback on a signed failed live gate. Existing served tests create online root/intermediate authorities, import an existing signer-backed CA chain, drive the offline-root import plus offline-signed intermediate workflow through /api/v1/ca/*, prove /api/v1/ca/discovery enumerates public upstream CAs, private upstream CAs, and imported CA hierarchy authorities, prove CAP-CA-03 zero-downtime rotation keeps the predecessor issue URL live while signing through the successor, and prove CAP-CA-06 CA renewal/re-key mints a fresh signer-backed CA while keeping both old and new issue URLs live.",
+            "acceptance_test": "TestServedMigrationTrustBeforeLeafAndRollbackAUD40 drives a reviewed CA migration through authenticated REST, real PostgreSQL, file-backed JetStream, an out-of-process UDS signer, an enrolled exact host agent, host trust readback, and live TLS verification; it proves trust-before-leaf, pause/resume, replay recovery, tenant isolation, exact-authority issuance, manual rollback, and automatic rollback on a signed failed live gate. Existing served tests create online root/intermediate authorities, import an existing signer-backed CA chain, drive the offline-root import plus offline-signed intermediate workflow through /api/v1/ca/*, prove /api/v1/ca/discovery enumerates public upstream CAs, private upstream CAs, and imported CA hierarchy authorities, prove CAP-CA-03 zero-downtime rotation keeps the predecessor issue URL live while signing through the successor, and prove CAP-CA-06 CA renewal/re-key mints a fresh signer-backed CA while keeping both old and new issue URLs live. TestServedCACeremonyCancelIsTerminalAndAudited proves RBAC, reason validation, idempotent terminal cancellation, audit, tenant isolation, and refusal of later approval or CA creation.",
             "source_docs": [
                 "docs/features/issuance-and-cas.md",
                 "docs/runbooks/key-ceremony.md"
@@ -3859,6 +3859,7 @@
                 "createCACeremony",
                 "getCACeremony",
                 "approveCACeremony",
+                "cancelCACeremony",
                 "listCADiscoveryInventory",
                 "listCAAuthorities",
                 "createRootCA",
@@ -3895,6 +3896,7 @@
                 "ca ceremonies start",
                 "ca ceremonies get",
                 "ca ceremonies approve",
+                "ca ceremonies cancel",
                 "ca discovery list",
                 "ca authorities list",
                 "ca authorities create-root",

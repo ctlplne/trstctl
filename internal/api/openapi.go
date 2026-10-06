@@ -461,7 +461,9 @@ func componentSchemas() map[string]*Schema {
 	caCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
 		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),
+		"closed_at": timestamp(), "closed_by": str(), "close_reason": str(),
 	}, "id", "tenant_id", "purpose", "threshold", "status", "approvals", "created_at")
+	caCeremonyCancelReq := object(map[string]*Schema{"reason": str()}, "reason")
 	caCeremonyPlanAuthority := object(map[string]*Schema{
 		"id": uuid(), "common_name": str(), "kind": str(), "status": str(),
 	}, "id", "common_name", "kind", "status")
@@ -6826,6 +6828,7 @@ func componentSchemas() map[string]*Schema {
 		"CASpec":                                   caSpec,
 		"CACeremonyStartRequest":                   caCeremonyStartReq,
 		"CAKeyCeremony":                            caCeremony,
+		"CACeremonyCancelRequest":                  caCeremonyCancelReq,
 		"CACeremonyPlanAuthority":                  caCeremonyPlanAuthority,
 		"CACeremonyPlanPreview":                    caCeremonyPlanPreview,
 		"CACreateRootRequest":                      caCreateRootReq,

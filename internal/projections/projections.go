@@ -160,6 +160,7 @@ const (
 	EventCACertificateRevoked                     = "ca.certificate.revoked"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
 	EventCACeremonyApproved                       = "ca.ceremony.approved"
+	EventCACeremonyCancelled                      = "ca.ceremony.cancelled"
 	EventCARootCreated                            = "ca.root.created"
 	EventCAAuthorityImported                      = "ca.authority.imported"
 	EventCAAuthorityRotated                       = "ca.authority.rotated"
@@ -1569,6 +1570,14 @@ type CACeremonyApproved struct {
 	CeremonyID string `json:"ceremony_id"`
 	Custodian  string `json:"custodian"`
 	Approvals  int    `json:"approvals,omitempty"`
+}
+
+// CACeremonyCancelled permanently closes a pending ceremony without consuming
+// its purpose. Its actor and reason remain in the immutable audit event.
+type CACeremonyCancelled struct {
+	CeremonyID string `json:"ceremony_id"`
+	Actor      string `json:"actor"`
+	Reason     string `json:"reason"`
 }
 
 // BreakglassCeremonyCompleted is the projector-owned portion shared by online
@@ -3494,6 +3503,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCACertificateRevoked:                     {1: true},
 	EventCACeremonyStarted:                        {1: true},
 	EventCACeremonyApproved:                       {1: true},
+	EventCACeremonyCancelled:                      {1: true},
 	EventCARootCreated:                            {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAAuthorityImported:                      {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAIntermediateCreated:                    {1: true, CAAuthorityCreatedEventSchemaVersion: true},
@@ -4359,6 +4369,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: %s requires ceremony_id and custodian", e.Type)
 		}
 		return p.store.ApplyKeyCeremonyApprovedTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Custodian, e.ID, e.Sequence, e.Time)
+	case EventCACeremonyCancelled:
+		var pl CACeremonyCancelled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyKeyCeremonyCancelledTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Actor, pl.Reason, e.ID, e.Time)
 	case EventCARootCreated, EventCAAuthorityImported, EventCAIntermediateCreated:
 		if schemaVersionOf(e) == 1 {
 			// Legacy v1 create/import events were audit-only breadcrumbs emitted

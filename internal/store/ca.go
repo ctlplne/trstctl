@@ -316,14 +316,17 @@ func applyCAAuthorityUpsertTx(ctx context.Context, tx pgx.Tx, authority CAAuthor
 // unattributed), used to enforce opener != approver separation of duties
 // (PKIGOV-006).
 type KeyCeremony struct {
-	ID        string
-	TenantID  string
-	Purpose   string
-	Threshold int
-	Status    string // pending | completed
-	Approvals int
-	Opener    string
-	CreatedAt time.Time
+	ID          string
+	TenantID    string
+	Purpose     string
+	Threshold   int
+	Status      string // pending | completed | cancelled
+	Approvals   int
+	Opener      string
+	CreatedAt   time.Time
+	ClosedAt    *time.Time
+	ClosedBy    string
+	CloseReason string
 }
 
 // KeyCeremonyApprovalEvidence is one distinct custodian approval that is bound
@@ -552,11 +555,54 @@ func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCer
 			`SELECT id::text, tenant_id::text, purpose, threshold, status, opener, created_at,
 			        (SELECT count(*) FROM ca_ceremony_approvals a
 			          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id
-			            AND a.approval_event_id IS NOT NULL)
+			            AND a.approval_event_id IS NOT NULL),
+			        c.closed_at, COALESCE(c.closed_by, ''), COALESCE(c.close_reason, '')
 			   FROM ca_key_ceremonies c WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals)
+			Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals,
+				&c.ClosedAt, &c.ClosedBy, &c.CloseReason)
 	})
 	return c, err
+}
+
+// LockPendingKeyCeremonyTx serializes a terminal decision with CA consumption
+// and approval projection. A caller must hold this tenant transaction through
+// event append and inline projection; the read model is never mutated here.
+func (s *Store) LockPendingKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
+	var status string
+	if err := tx.QueryRow(ctx,
+		`SELECT status FROM ca_key_ceremonies WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+		tenantID, id).Scan(&status); err != nil {
+		return err
+	}
+	if status != "pending" {
+		return ErrKeyCeremonyNotPending
+	}
+	return nil
+}
+
+// ApplyKeyCeremonyCancelledTx projects one immutable terminal event. A replay
+// of that exact event is idempotent; another terminal event cannot overwrite it.
+func (s *Store) ApplyKeyCeremonyCancelledTx(ctx context.Context, tx pgx.Tx, tenantID, id, actor, reason, eventID string, closedAt time.Time) error {
+	if id == "" || actor == "" || reason == "" || eventID == "" {
+		return errors.New("store: cancelled ceremony requires id, actor, reason and event id")
+	}
+	if closedAt.IsZero() {
+		return errors.New("store: cancelled ceremony requires event time")
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_key_ceremonies
+		    SET status = 'cancelled', closed_at = $3, closed_by = $4,
+		        close_reason = $5, close_event_id = $6
+		  WHERE tenant_id = $1 AND id = $2
+		    AND (status = 'pending' OR (status = 'cancelled' AND close_event_id = $6))`,
+		tenantID, id, closedAt, actor, reason, eventID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrKeyCeremonyNotPending
+	}
+	return nil
 }
 
 // ListKeyCeremonyApprovalEvidence returns only event-backed, tenant-scoped

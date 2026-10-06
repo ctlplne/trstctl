@@ -128,6 +128,16 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
 6. **Record the ceremony** in your change-management system alongside the audit
    trail.
 
+If a pending ceremony is no longer authorized, open it in **Certificate
+authorities → Lifecycle**, select **Cancel ceremony**, review its ID, and enter a
+reason. The API and CLI use `POST /api/v1/ca/ceremonies/{id}/cancel` with
+`{"reason":"change window closed"}` and an `Idempotency-Key`; the CLI form is
+`trstctl-cli ca ceremonies cancel <id> -f cancel-ceremony.json`. An
+`issuers:write` principal can cancel only a still-pending tenant ceremony. The
+result is terminal `cancelled`, preserves all approvals, records the actor and
+reason in `ca.ceremony.cancelled`, and cannot be approved or consumed afterward.
+Read back the exact ceremony and audit event before opening a replacement.
+
 Leaf issuance (once an intermediate exists) is served at
 `POST /api/v1/ca/authorities/{id}/issue` (CSR PEM, validity, a `certs:issue`
 token); the CA key still signs inside the isolated signer process.
