@@ -4832,7 +4832,10 @@
                 "revocation caches",
                 "revocation health",
                 "revocation ct-submit",
-                "revocation rogue-certificates"
+                "revocation rogue-certificates",
+                "identities compromise-preview",
+                "identities compromise",
+                "identities compromise-status"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -4898,7 +4901,10 @@
                         "CLI command: revocation caches",
                         "CLI command: revocation health",
                         "CLI command: revocation ct-submit",
-                        "CLI command: revocation rogue-certificates"
+                        "CLI command: revocation rogue-certificates",
+                        "CLI command: identities compromise-preview",
+                        "CLI command: identities compromise",
+                        "CLI command: identities compromise-status"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -12153,6 +12159,9 @@
                 "connector target rollback",
                 "connector target contain-preview",
                 "connector target contain",
+                "identities compromise-preview",
+                "identities compromise",
+                "identities compromise-status",
                 "connectors deliveries list",
                 "connectors deliveries get",
                 "connectors outbox-circuits",
@@ -12199,11 +12208,14 @@
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl connector target exposes list/get/create/update/delete/bind/test/deploy/rollback against the same served API with tenant/auth/idempotency headers; target test is the effect-free preview command."
+                        "trstctl connector target exposes list/get/create/update/delete/bind/test/deploy/rollback against the same served API with tenant/auth/idempotency headers; target test is the effect-free preview command.",
+                        "trstctl-cli identities compromise-preview, compromise, and compromise-status cover the compound CA/host response with explicit destructive confirmation and original-key readback."
                     ],
                     "refs": [
                         "cmd/trstctl/connector.go",
-                        "cmd/trstctl/main_test.go"
+                        "cmd/trstctl/main_test.go",
+                        "internal/cli/command.go",
+                        "internal/cli/key_compromise_command_test.go"
                     ]
                 },
                 "api": {

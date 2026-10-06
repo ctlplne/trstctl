@@ -288,8 +288,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F26 adds paginated managed-key inventory and exact key recovery commands.
 	// F7's reviewed host-containment preview and submit commands raise it to
 	// 475, closing the gap between the served API and the documented CLI path.
-	if len(out) != 475 {
-		t.Fatalf("CLI commands = %d, want 475", len(out))
+	// The compound key-compromise preview, execute, and original-key status
+	// commands bring the downloadable client to parity with the served routes.
+	if len(out) != 478 {
+		t.Fatalf("CLI commands = %d, want 478", len(out))
 	}
 	return out
 }

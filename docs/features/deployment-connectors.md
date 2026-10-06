@@ -377,16 +377,34 @@ the lifecycle state but proves neither CA publication nor host stop. A host
 agent outage does not delay the CA dispatcher, and a CA outage does not delay
 the host agent. Never restore a revoked predecessor during recovery.
 
-The CLI uses the same reviewed API command. Keep one incident key through
+The downloadable `trstctl-cli` uses the same reviewed API command. Save its
+effect-free preview, inspect every authority and host binding, then copy only
+the exact reviewed fields into the execute body. Keep one incident key through
 retry and status readback:
 
 ```sh
-trstctl-cli connector target compromise-preview \
-  --identity "$IDENTITY_ID" --target "$TARGET_ID" > reviewed-compromise.json
+printf '{"target_id":"%s"}\n' "$TARGET_ID" |
+  trstctl-cli identities compromise-preview "$IDENTITY_ID" -f - > reviewed-compromise.json
 # Inspect every certificate/authority and the exact target, leaf, agent and version.
+jq '{target_id: .target.target_id, target_revision: .target.target_revision,
+     target_name: .target.target_name, connector: .target.connector, identity_id,
+     expected_fingerprint: .target.expected_fingerprint,
+     required_agent_id: .target.required_agent_id, expected_version,
+     preview_fingerprint}' reviewed-compromise.json > execute-compromise.json
 trstctl-cli --idempotency-key "$INCIDENT_KEY" --force \
-  connector target compromise --preview-file reviewed-compromise.json
-trstctl-cli connector target compromise-status \
+  identities compromise "$IDENTITY_ID" -f execute-compromise.json
+trstctl-cli identities compromise-status "$IDENTITY_ID" --request_key "$INCIDENT_KEY"
+```
+
+The server binary's direct admin command can instead consume the reviewed
+preview file without the `jq` copy step:
+
+```sh
+trstctl connector target compromise-preview \
+  --identity "$IDENTITY_ID" --target "$TARGET_ID" > reviewed-compromise.json
+trstctl connector target compromise --preview-file reviewed-compromise.json \
+  --idempotency-key "$INCIDENT_KEY"
+trstctl connector target compromise-status \
   --identity "$IDENTITY_ID" --request-key "$INCIDENT_KEY"
 ```
 

@@ -63,7 +63,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `cmd/trstctl/main_test.go:619` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `cmd/trstctl/main_test.go:622` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:233` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1540` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1542` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1051,9 +1051,9 @@ not this file.
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |
-| `cmd/trstctl/connector.go:153` | the operator names their reviewed public preview file (CWE-22) |
-| `cmd/trstctl/connector.go:248` | the operator names their reviewed public preview file (CWE-22) |
-| `cmd/trstctl/connector.go:380` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `cmd/trstctl/connector.go:155` | the operator names their reviewed public preview file (CWE-22) |
+| `cmd/trstctl/connector.go:250` | the operator names their reviewed public preview file (CWE-22) |
+| `cmd/trstctl/connector.go:382` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `cmd/trstctl/ee_attach.go:318` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:346` | operator-pinned local IdP metadata, validated as configuration. |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
@@ -1698,8 +1698,8 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl/connector.go:424` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
-| `cmd/trstctl/connector.go:444` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
+| `cmd/trstctl/connector.go:426` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
+| `cmd/trstctl/connector.go:446` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1751` | developer tool calling the endpoint it was pointed at (CWE-918) |

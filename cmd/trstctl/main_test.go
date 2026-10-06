@@ -333,8 +333,7 @@ func TestConnectorCompromiseCLIUsesOneReviewedCommand(t *testing.T) {
 	defer ts.Close()
 	env := envFunc(map[string]string{
 		"TRSTCTL_URL": ts.URL, "TRSTCTL_TOKEN": "local-test-token",
-		"TRSTCTL_TENANT":          "44444444-4444-4444-8444-444444444444",
-		"TRSTCTL_IDEMPOTENCY_KEY": "compromise-incident-1",
+		"TRSTCTL_TENANT": "44444444-4444-4444-8444-444444444444",
 	})
 	var stdout, stderr bytes.Buffer
 	if err := run(context.Background(), []string{"connector", "target", "compromise-preview",
@@ -347,7 +346,11 @@ func TestConnectorCompromiseCLIUsesOneReviewedCommand(t *testing.T) {
 	}
 	stdout.Reset()
 	if err := run(context.Background(), []string{"connector", "target", "compromise",
-		"--preview-file", previewFile}, env, &stdout, &stderr); err != nil {
+		"--preview-file", previewFile}, env, &stdout, &stderr); err == nil || posted != nil {
+		t.Fatalf("compromise without a stable incident key dispatched work: %v %+v", err, posted)
+	}
+	if err := run(context.Background(), []string{"connector", "target", "compromise",
+		"--preview-file", previewFile, "--idempotency-key", "compromise-incident-1"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	stdout.Reset()
@@ -376,7 +379,7 @@ func TestConnectorCompromiseCLIUsesOneReviewedCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := run(context.Background(), []string{"connector", "target", "compromise",
-		"--preview-file", previewFile}, env, &stdout, &stderr); err == nil || posted != nil {
+		"--preview-file", previewFile, "--idempotency-key", "compromise-incident-1"}, env, &stdout, &stderr); err == nil || posted != nil {
 		t.Fatalf("unready review dispatched command: %v %+v", err, posted)
 	}
 }

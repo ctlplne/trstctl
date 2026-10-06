@@ -138,15 +138,17 @@ func runConnectorCompromisePreview(ctx context.Context, stdout, stderr io.Writer
 // reviewed. It copies only public exact bindings; the server repeats all CA,
 // identity, target, agent, and leaf checks under the mutation boundary.
 func runConnectorCompromise(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {
-	if cfg.idempotencyKey == "" {
-		return errors.New("connector target compromise: set --idempotency-key or TRSTCTL_IDEMPOTENCY_KEY so both effects can be followed")
-	}
 	fs := flag.NewFlagSet("trstctl connector target compromise", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	previewFile := fs.String("preview-file", "", "path to reviewed compromise-preview JSON")
+	requestKey := fs.String("idempotency-key", cfg.idempotencyKey, "stable key for this reviewed incident and status readback")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if strings.TrimSpace(*requestKey) == "" {
+		return errors.New("connector target compromise: set --idempotency-key or TRSTCTL_IDEMPOTENCY_KEY so both effects can be followed")
+	}
+	cfg.idempotencyKey = strings.TrimSpace(*requestKey)
 	if strings.TrimSpace(*previewFile) == "" {
 		return errors.New("connector target compromise: --preview-file is required")
 	}
