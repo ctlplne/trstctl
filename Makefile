@@ -51,6 +51,10 @@ GO_BUILD_TF     := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -C $(TF_PROVIDER_DIR) 
 GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
 GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
+# The first lane runs hundreds of functional tests under race and whole-tree
+# atomic coverage. Its package clock must allow loaded-host instrumentation to
+# finish; the separate uninstrumented live wall retains every performance SLO.
+PACKAGE_TEST_TIMEOUT := 20m
 # These packages boot real embedded PostgreSQL/JetStream spines. Run them in a
 # serial lane so the all-package race/coverage gate does not make independent
 # database bootstraps contend for the same host resources. The live mutation
@@ -190,7 +194,7 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test (race + merged first-party coverage)"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
 	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$' )"; \
-	$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
+	$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
 	@echo ">> go test internal/server complementary shard (race + merged first-party coverage)"
 	@python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server
 	@echo ">> go test internal/server row-501 fairness shard (race + merged first-party coverage)"
