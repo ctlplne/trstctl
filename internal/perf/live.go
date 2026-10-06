@@ -82,7 +82,7 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	if err := validateObservations(observations); err != nil {
 		return Report{}, err
 	}
-	timeout, err := liveHarnessTimeout()
+	timeout, err := LiveHarnessTimeout()
 	if err != nil {
 		return Report{}, err
 	}
@@ -149,9 +149,11 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	return report, nil
 }
 
-// liveHarnessTimeout permits extra startup time only in explicitly instrumented
+// LiveHarnessTimeout permits extra startup time only in explicitly instrumented
 // correctness lanes. The uninstrumented release wall keeps the original 90s.
-func liveHarnessTimeout() (time.Duration, error) {
+// Developer-tool tests use this same deadline so race/coverage load cannot make
+// an otherwise healthy embedded service appear broken.
+func LiveHarnessTimeout() (time.Duration, error) {
 	raw := strings.TrimSpace(os.Getenv("TRSTCTL_PERF_INSTRUMENTED_TIMEOUT"))
 	if raw == "" {
 		return 90 * time.Second, nil

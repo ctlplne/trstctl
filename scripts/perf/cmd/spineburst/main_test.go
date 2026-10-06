@@ -10,10 +10,15 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/perf"
 )
 
 func TestCaptureBurstExercisesEmbeddedEventAndOutboxSpine(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	timeout, err := perf.LiveHarnessTimeout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cfg := defaultProfile("cap-small")
@@ -24,7 +29,7 @@ func TestCaptureBurstExercisesEmbeddedEventAndOutboxSpine(t *testing.T) {
 	cfg.Samples = 2
 	cfg.Step = time.Second
 	cfg.SlowUpstream = 0
-	cfg.Timeout = 90 * time.Second
+	cfg.Timeout = timeout
 
 	const generatedAt = "2026-07-11T12:00:00Z"
 	report, err := captureBurst(ctx, cfg, generatedAt, false)

@@ -9,13 +9,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"trstctl.com/trstctl/internal/perf"
 )
 
 func TestCapacityCalibrationMeasuresEmbeddedStorage(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	timeout, err := perf.LiveHarnessTimeout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	const samples = 4

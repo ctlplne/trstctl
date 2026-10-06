@@ -176,7 +176,7 @@ func TestPerfLiveMutationHotPathsMeetSLOFromFreshStack(t *testing.T) {
 	for _, hotPath := range []string{"api.issuance", "api.secrets", "revocation.ocsp_crl"} {
 		hotPath := hotPath
 		t.Run(hotPath, func(t *testing.T) {
-			timeout, err := liveHarnessTimeout()
+			timeout, err := LiveHarnessTimeout()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -211,17 +211,17 @@ func TestPerfLiveMutationHotPathsMeetSLOFromFreshStack(t *testing.T) {
 
 func TestLiveHarnessTimeoutRequiresExplicitInstrumentedSetting(t *testing.T) {
 	t.Setenv("TRSTCTL_PERF_INSTRUMENTED_TIMEOUT", "")
-	got, err := liveHarnessTimeout()
+	got, err := LiveHarnessTimeout()
 	if err != nil || got != 90*time.Second {
 		t.Fatalf("default harness timeout = %s, %v; want 90s", got, err)
 	}
 	t.Setenv("TRSTCTL_PERF_INSTRUMENTED_TIMEOUT", "4m")
-	got, err = liveHarnessTimeout()
+	got, err = LiveHarnessTimeout()
 	if err != nil || got != 4*time.Minute {
 		t.Fatalf("instrumented harness timeout = %s, %v; want 4m", got, err)
 	}
 	t.Setenv("TRSTCTL_PERF_INSTRUMENTED_TIMEOUT", "89s")
-	if _, err := liveHarnessTimeout(); err == nil {
+	if _, err := LiveHarnessTimeout(); err == nil {
 		t.Fatal("shorter harness timeout accepted")
 	}
 }

@@ -77,7 +77,7 @@ func CaptureSoakSeries(opts SoakCaptureOptions) (SoakSeries, error) {
 	// correctness runs. Race and repository-wide coverage instrumentation can
 	// spend most of the default 90 seconds starting the signer and embedded
 	// stack; the uninstrumented release wall keeps that default unchanged.
-	timeout, err := liveHarnessTimeout()
+	timeout, err := LiveHarnessTimeout()
 	if err != nil {
 		return SoakSeries{}, err
 	}
