@@ -293,6 +293,9 @@ func authorizationCode(t *testing.T, client *http.Client, issuer, subject, passw
 
 func loginChallenge(t *testing.T, resp *http.Response) string {
 	t.Helper()
+	if got := resp.Header.Get("Content-Security-Policy"); !strings.Contains(got, "form-action 'self' https://localhost:8443") {
+		t.Fatalf("authorization form CSP = %q, want exact registered callback origin", got)
+	}
 	body := readBody(resp)
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || strings.Contains(body, "name=\"code\"") {

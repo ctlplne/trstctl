@@ -19,6 +19,7 @@ const maxFormBytes = 16 * 1024;
 if (!configuredRedirectURI) {
   throw new Error("OIDC_REDIRECT_URI is required; the local IdP must allow exactly one callback");
 }
+const callbackOrigin = new URL(configuredRedirectURI).origin;
 
 const privateKey = createPrivateKey(readFileSync(keyPath, "utf8"));
 const jwks = readFileSync(jwksPath, "utf8");
@@ -86,7 +87,9 @@ function responseHeaders(contentType) {
     pragma: "no-cache",
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
-    "content-security-policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'",
+    // Chromium checks form-action against every redirect in the submission.
+    // The code response must travel from this IdP to its one registered client.
+    "content-security-policy": `default-src 'none'; form-action 'self' ${callbackOrigin}; frame-ancestors 'none'`,
   };
 }
 
