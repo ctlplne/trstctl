@@ -123,7 +123,11 @@ func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string
 	if err != nil {
 		return nil, err
 	}
-	chainPEM, err := c.signer.Sign(ctx, csrDER)
+	ttl, err := kubernetesCSRRequestedTTL(spec)
+	if err != nil {
+		return nil, err
+	}
+	chainPEM, err := c.signer.Sign(ctx, csrDER, ttl)
 	if err != nil {
 		return nil, fmt.Errorf("k8s: sign CertificateSigningRequest: %w", err)
 	}

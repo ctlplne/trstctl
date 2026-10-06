@@ -39,11 +39,17 @@ spec:
     group: trstctl.com
 ```
 
-cert-manager creates the `CertificateRequest`; the trstctl agent observes the
-request, confirms the named trstctl issuer resource exists, forwards the CSR to
-the configured signer URL, and sets the request `Ready=True` with the issued
-certificate. cert-manager then writes `Secret/web-tls`. Only a CSR crosses the
-wire to the control plane — never a private key.
+cert-manager creates the `CertificateRequest`. A separate Kubernetes approver
+must set `Approved=True` first; the trstctl agent does not approve its own
+requests and ignores unapproved or denied requests. The agent confirms the named
+trstctl issuer resource exists, forwards the CSR and requested
+`CertificateRequest.spec.duration` to the configured issuance endpoint, and sets
+the request `Ready=True` with the issued certificate. When duration is absent,
+the agent requests 24 hours; the CA profile may cap the issued lifetime. cert-manager
+then writes `Secret/web-tls`. Only a CSR crosses the wire to the control plane —
+never a private key. Give the separate approver permission for the exact
+`clusterissuers.trstctl.com/<name>` or `issuers.trstctl.com/<name>` signer it
+reviews; the agent service account needs no `approve` verb.
 
 ## Native Kubernetes CertificateSigningRequest
 
@@ -175,5 +181,6 @@ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
 
 The controller merges into a request's status (it preserves conditions such as
 cert-manager's `Approved`, upserting `Ready`), so it composes with cert-manager's
-approval flow. The platform-neutral logic is covered on every platform by unit
-tests against an in-process Kubernetes API double.
+approval flow. The kind test's separate admin fixture explicitly approves each
+request before the restricted agent signs it. The platform-neutral logic is
+covered on every platform by unit tests against an in-process Kubernetes API double.

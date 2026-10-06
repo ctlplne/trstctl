@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // Signer signs a CSR (DER) and returns the issued certificate chain (PEM). The
@@ -17,14 +18,16 @@ import (
 // backed by the control plane's issuance, and in tests by the crypto boundary's
 // CA.
 type Signer interface {
-	Sign(ctx context.Context, csrDER []byte) (chainPEM []byte, err error)
+	Sign(ctx context.Context, csrDER []byte, ttl time.Duration) (chainPEM []byte, err error)
 }
 
 // SignerFunc adapts a function to the Signer interface.
-type SignerFunc func(ctx context.Context, csrDER []byte) ([]byte, error)
+type SignerFunc func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error)
 
 // Sign calls f.
-func (f SignerFunc) Sign(ctx context.Context, csrDER []byte) ([]byte, error) { return f(ctx, csrDER) }
+func (f SignerFunc) Sign(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	return f(ctx, csrDER, ttl)
+}
 
 // Bridge is a cert-manager external issuer: it signs CertificateRequests that
 // name trstctl as their issuer and writes the issued certificate back to each
@@ -134,7 +137,11 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 	if block == nil {
 		return fmt.Errorf("k8s: CertificateRequest.spec.request is not a PEM CSR")
 	}
-	chainPEM, err := b.signer.Sign(ctx, block.Bytes)
+	ttl, err := certificateRequestTTL(spec)
+	if err != nil {
+		return err
+	}
+	chainPEM, err := b.signer.Sign(ctx, block.Bytes, ttl)
 	if err != nil {
 		return fmt.Errorf("k8s: sign CertificateRequest: %w", err)
 	}

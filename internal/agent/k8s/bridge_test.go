@@ -27,8 +27,8 @@ func caSigner(t *testing.T) (k8s.Signer, *mtls.CA) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return k8s.SignerFunc(func(_ context.Context, csrDER []byte) ([]byte, error) {
-		return ca.SignClientCSR(csrDER, time.Hour)
+	return k8s.SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		return ca.SignClientCSR(csrDER, ttl)
 	}), ca
 }
 
@@ -142,11 +142,17 @@ func readyCondition(t *testing.T, obj map[string]any) (status, certificate strin
 // cert-manager"): a pending CertificateRequest naming our issuer is signed and
 // its status is updated to Ready with the issued certificate.
 func TestBridgeSignsPendingRequest(t *testing.T) {
-	signer, _ := caSigner(t)
+	baseSigner, _ := caSigner(t)
+	var gotTTL time.Duration
+	signer := k8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		gotTTL = ttl
+		return baseSigner.Sign(ctx, csrDER, ttl)
+	})
 	cm := &fakeCertManager{items: []map[string]any{
 		func() map[string]any {
 			cr := certRequest("req-1", "trstctl", "trstctl.com", false)
 			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
+			cr["spec"].(map[string]any)["duration"] = "2h0m0s"
 			return approveCertRequest(cr)
 		}(),
 	}}
@@ -162,6 +168,9 @@ func TestBridgeSignsPendingRequest(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("signed %d requests, want 1", n)
+	}
+	if gotTTL != 2*time.Hour {
+		t.Fatalf("signer TTL = %s, want 2h", gotTTL)
 	}
 	obj, ok := cm.statusPut["req-1"]
 	if !ok {
@@ -192,7 +201,7 @@ func TestBridgeRejectsEmptySignerCertificate(t *testing.T) {
 	srv := httptest.NewServer(cm.handler())
 	defer srv.Close()
 
-	signer := k8s.SignerFunc(func(context.Context, []byte) ([]byte, error) {
+	signer := k8s.SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		return []byte(" \n"), nil
 	})
 	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl", "trstctl.com")
@@ -221,7 +230,7 @@ func TestBridgeRefusesUnapprovedCertificateRequest(t *testing.T) {
 	}()}}
 	srv := httptest.NewServer(cm.handler())
 	defer srv.Close()
-	signer := k8s.SignerFunc(func(context.Context, []byte) ([]byte, error) {
+	signer := k8s.SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		calls++
 		return []byte("unexpected certificate"), nil
 	})

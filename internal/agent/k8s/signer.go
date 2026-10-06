@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 const signerResponseLimit = 1 << 20
@@ -57,10 +59,14 @@ func NewHTTPSigner(url string, client *http.Client, opts ...HTTPSignerOption) *H
 }
 
 // Sign forwards the CSR to the control plane and returns the issued chain.
-func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte) ([]byte, error) {
-	body, err := json.Marshal(map[string]string{
-		"csr":     base64.StdEncoding.EncodeToString(csrDER),
-		"csr_pem": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})),
+func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	if ttl < time.Second || ttl%time.Second != 0 {
+		return nil, fmt.Errorf("k8s: requested certificate lifetime must be positive whole seconds")
+	}
+	body, err := json.Marshal(map[string]any{
+		"csr":         base64.StdEncoding.EncodeToString(csrDER),
+		"csr_pem":     string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})),
+		"ttl_seconds": int64(ttl / time.Second),
 	})
 	if err != nil {
 		return nil, err
@@ -70,7 +76,7 @@ func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", signerIdempotencyKey(csrDER))
+	req.Header.Set("Idempotency-Key", signerIdempotencyKey(s.url, csrDER, ttl))
 	if len(s.bearerToken) > 0 {
 		req.Header.Set("Authorization", "Bearer "+string(s.bearerToken))
 	}
@@ -107,10 +113,12 @@ func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte) ([]byte, error) {
 	return []byte(cert), nil
 }
 
-func signerIdempotencyKey(csrDER []byte) string {
-	h := fnv.New64a()
-	_, _ = h.Write(csrDER)
-	return fmt.Sprintf("k8s-cert-manager-%016x", h.Sum64())
+func signerIdempotencyKey(endpoint string, csrDER []byte, ttl time.Duration) string {
+	// Idempotency is scoped by tenant, not by CA endpoint. Bind the selected
+	// authority as well as the CSR and lifetime to prevent a retry against a
+	// different CA from receiving the original authority's certificate.
+	identity := endpoint + "\x00" + crypto.SHA256Hex(csrDER) + "\x00" + strconv.FormatInt(int64(ttl/time.Second), 10)
+	return "k8s-cert-manager-" + crypto.SHA256Hex([]byte(identity))
 }
 
 func signerErrorContext(data []byte, apiError string) string {

@@ -488,8 +488,8 @@ func dodReconcileAndReportKubernetesPosture(t *testing.T, srv *Server, agentAddr
 	kind := dodKindClientFromSubstrate(t, external)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	controller := agentk8s.NewIssuerController(kind.client, agentk8s.SignerFunc(func(ctx context.Context, csrDER []byte) ([]byte, error) {
-		return srv.IssueLeaf(ctx, csrDER, time.Hour)
+	controller := agentk8s.NewIssuerController(kind.client, agentk8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		return srv.IssueLeaf(ctx, csrDER, ttl)
 	}), agentk8s.DefaultIssuerGroup)
 	result, err := controller.Reconcile(ctx, kind.namespace)
 	if err != nil {

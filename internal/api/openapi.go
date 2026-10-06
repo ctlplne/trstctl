@@ -809,7 +809,7 @@ func componentSchemas() map[string]*Schema {
 	}, "items", "summary")
 	caIssueLeafReq := object(map[string]*Schema{
 		"csr_pem": str(), "ttl_seconds": {Type: "integer"},
-	}, "csr_pem")
+	}, "csr_pem", "ttl_seconds")
 	caIssuedLeaf := object(map[string]*Schema{
 		"certificate_pem": str(), "serial": str(), "not_after": timestamp(),
 	}, "certificate_pem", "serial", "not_after")

@@ -125,9 +125,10 @@ func TestSecretDestinationWritesToCluster(t *testing.T) {
 	}
 }
 
-// TestCertManagerBridgeInCluster: a pending cert-manager CertificateRequest is
-// signed by the bridge and its status goes Ready with an issued certificate.
+// TestCertManagerBridgeInCluster: a separately approved cert-manager
+// CertificateRequest is signed by the bridge and its status goes Ready.
 func TestCertManagerBridgeInCluster(t *testing.T) {
+	requireIndependentApprover(t)
 	client, raw, ns := cluster(t)
 
 	ca, err := mtls.NewCA("trstctl e2e issuer")
@@ -159,9 +160,10 @@ func TestCertManagerBridgeInCluster(t *testing.T) {
 	t.Cleanup(func() {
 		raw(http.MethodDelete, "/apis/cert-manager.io/v1/namespaces/"+ns+"/certificaterequests/"+name, nil)
 	})
+	approveCertificateRequest(t, raw, ns, name)
 
-	bridge := k8s.NewBridge(client, k8s.SignerFunc(func(_ context.Context, csrDER []byte) ([]byte, error) {
-		return ca.SignClientCSR(csrDER, time.Hour)
+	bridge := k8s.NewBridge(client, k8s.SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		return ca.SignClientCSR(csrDER, ttl)
 	}), "trstctl", "trstctl.com")
 
 	n, err := bridge.Reconcile(context.Background(), ns)
@@ -194,14 +196,15 @@ func TestCertManagerBridgeInCluster(t *testing.T) {
 // CertificateRequest, the trstctl ClusterIssuer controller signs it, and
 // cert-manager writes the resulting tls Secret.
 func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
+	requireIndependentApprover(t)
 	client, raw, ns := cluster(t)
 
 	ca, err := mtls.NewCA("trstctl dist-01 issuer")
 	if err != nil {
 		t.Fatal(err)
 	}
-	signer := k8s.SignerFunc(func(_ context.Context, csrDER []byte) ([]byte, error) {
-		return ca.SignClientCSR(csrDER, time.Hour)
+	signer := k8s.SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		return ca.SignClientCSR(csrDER, ttl)
 	})
 	controller := k8s.NewIssuerController(client, signer, "trstctl.com")
 
@@ -252,6 +255,8 @@ func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	for {
+		// Approval uses the admin fixture identity, never the agent token.
+		approvePendingCertificateRequests(t, raw, ns, issuerName)
 		result, err := controller.Reconcile(ctx, ns)
 		if err != nil {
 			t.Fatalf("trstctl ClusterIssuer reconcile: %v", err)
@@ -287,6 +292,75 @@ func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+func requireIndependentApprover(t *testing.T) {
+	t.Helper()
+	approver := env(t, "K8S_ADMIN_TOKEN")
+	if approver == os.Getenv("K8S_TOKEN") {
+		t.Fatal("K8S_ADMIN_TOKEN must be distinct from the agent service-account token")
+	}
+}
+
+func approveCertificateRequest(t *testing.T, raw func(string, string, any) (int, []byte), namespace, name string) {
+	t.Helper()
+	path := "/apis/cert-manager.io/v1/namespaces/" + namespace + "/certificaterequests/" + name
+	st, body := raw(http.MethodGet, path, nil)
+	if st != http.StatusOK {
+		t.Fatalf("get CertificateRequest for independent approval: status %d: %s", st, body)
+	}
+	var request map[string]any
+	if err := json.Unmarshal(body, &request); err != nil {
+		t.Fatalf("decode CertificateRequest for approval: %v", err)
+	}
+	status, _ := request["status"].(map[string]any)
+	if status == nil {
+		status = map[string]any{}
+	}
+	conditions, _ := status["conditions"].([]any)
+	for _, condition := range conditions {
+		item, _ := condition.(map[string]any)
+		if item["type"] == "Approved" && item["status"] == "True" {
+			return
+		}
+	}
+	status["conditions"] = append(conditions, map[string]any{
+		"type": "Approved", "status": "True", "reason": "E2EFixtureApproval",
+		"message":            "Approved by the independent e2e fixture administrator",
+		"lastTransitionTime": time.Now().UTC().Format(time.RFC3339),
+	})
+	request["status"] = status
+	if st, body := raw(http.MethodPut, path+"/approval", request); st/100 != 2 {
+		t.Fatalf("approve CertificateRequest as fixture administrator: status %d: %s", st, body)
+	}
+}
+
+func approvePendingCertificateRequests(t *testing.T, raw func(string, string, any) (int, []byte), namespace, issuerName string) {
+	t.Helper()
+	path := "/apis/cert-manager.io/v1/namespaces/" + namespace + "/certificaterequests"
+	st, body := raw(http.MethodGet, path, nil)
+	if st != http.StatusOK {
+		t.Fatalf("list CertificateRequests for independent approval: status %d: %s", st, body)
+	}
+	var list struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatalf("decode CertificateRequest list: %v", err)
+	}
+	for _, request := range list.Items {
+		spec, _ := request["spec"].(map[string]any)
+		ref, _ := spec["issuerRef"].(map[string]any)
+		if ref["name"] == issuerName && ref["group"] == "trstctl.com" && ref["kind"] == "ClusterIssuer" {
+			approveCertificateRequest(t, raw, namespace, objectName(request))
+		}
+	}
+}
+
+func objectName(object map[string]any) string {
+	metadata, _ := object["metadata"].(map[string]any)
+	name, _ := metadata["name"].(string)
+	return name
 }
 
 func TestDaemonSetPodRescheduleRecoversHeartbeat(t *testing.T) {

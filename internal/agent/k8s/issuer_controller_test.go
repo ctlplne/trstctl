@@ -350,7 +350,7 @@ func TestIssuerControllerRefusesUnapprovedCertificateRequest(t *testing.T) {
 		return cr
 	}()}
 	var calls int
-	signer := k8s.SignerFunc(func(context.Context, []byte) ([]byte, error) {
+	signer := k8s.SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
 		calls++
 		return []byte("unexpected certificate"), nil
 	})
@@ -389,7 +389,7 @@ func TestIssuerControllerRetriesTransientSafeRead(t *testing.T) {
 
 	controller := k8s.NewIssuerController(
 		k8s.New(srv.URL, "tok", "apps", srv.Client()),
-		k8s.SignerFunc(func(_ context.Context, _ []byte) ([]byte, error) { return nil, nil }),
+		k8s.SignerFunc(func(_ context.Context, _ []byte, _ time.Duration) ([]byte, error) { return nil, nil }),
 		"trstctl.com",
 	)
 	result, err := controller.Reconcile(context.Background(), "apps")
@@ -462,9 +462,9 @@ func TestIssuerControllerSupportsNamespacedIssuer(t *testing.T) {
 func TestIssuerControllerServesNativeCertificateCRDCAPK8S02(t *testing.T) {
 	baseSigner, _ := caSigner(t)
 	var gotCSR []byte
-	signer := k8s.SignerFunc(func(ctx context.Context, csrDER []byte) ([]byte, error) {
+	signer := k8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
 		gotCSR = append([]byte(nil), csrDER...)
-		return baseSigner.Sign(ctx, csrDER)
+		return baseSigner.Sign(ctx, csrDER, ttl)
 	})
 	api := newFakeIssuerAPI()
 	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
@@ -507,13 +507,19 @@ func TestIssuerControllerServesNativeCertificateCRDCAPK8S02(t *testing.T) {
 }
 
 func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *testing.T) {
-	signer, _ := caSigner(t)
+	baseSigner, _ := caSigner(t)
+	var gotTTL time.Duration
+	signer := k8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		gotTTL = ttl
+		return baseSigner.Sign(ctx, csrDER, ttl)
+	})
 	api := newFakeIssuerAPI()
 	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
 	requestField := csrDERRequestField(t)
 	api.kubernetesCSRs = []map[string]any{func() map[string]any {
 		csr := kubernetesCSR("native-csr", "trstctl.com/trstctl", true)
 		csr["spec"].(map[string]any)["request"] = requestField
+		csr["spec"].(map[string]any)["expirationSeconds"] = float64(5400)
 		return csr
 	}()}
 	srv := httptest.NewServer(api.handler())
@@ -526,6 +532,9 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 	}
 	if result.KubernetesCSRsSigned != 1 {
 		t.Fatalf("KubernetesCSRsSigned = %d, want 1", result.KubernetesCSRsSigned)
+	}
+	if gotTTL != 90*time.Minute {
+		t.Fatalf("signer TTL = %s, want 90m", gotTTL)
 	}
 	if !result.KubernetesCSRComplete || len(result.KubernetesCSRPosture) != 1 {
 		t.Fatalf("Kubernetes CSR posture = %+v complete=%v, want one completed object", result.KubernetesCSRPosture, result.KubernetesCSRComplete)

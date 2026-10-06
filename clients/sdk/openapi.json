@@ -6866,7 +6866,8 @@
           }
         },
         "required": [
-          "csr_pem"
+          "csr_pem",
+          "ttl_seconds"
         ],
         "type": "object"
       },

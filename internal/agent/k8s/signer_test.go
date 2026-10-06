@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/k8s"
 )
@@ -32,7 +33,7 @@ func TestHTTPSignerRejectsMalformedSuccessResponses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			signer := k8s.NewHTTPSigner("https://trstctl.example/sign", httpClientReturning(http.StatusOK, tc.body))
-			_, err := signer.Sign(context.Background(), []byte("csr-der"))
+			_, err := signer.Sign(context.Background(), []byte("csr-der"), time.Hour)
 			if err == nil {
 				t.Fatal("Sign succeeded on a malformed successful response")
 			}
@@ -51,15 +52,18 @@ func TestHTTPSignerPostsServedIssuanceCSRAndAcceptsCertificatePEM(t *testing.T) 
 		if got := req.Header.Get("Idempotency-Key"); !strings.HasPrefix(got, "k8s-cert-manager-") {
 			t.Fatalf("Idempotency-Key = %q, want stable cert-manager key", got)
 		}
-		var body map[string]string
+		var body map[string]any
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
 		if body["csr"] == "" {
 			t.Fatal("request did not include legacy base64 csr")
 		}
-		if !strings.Contains(body["csr_pem"], "BEGIN CERTIFICATE REQUEST") {
+		if !strings.Contains(body["csr_pem"].(string), "BEGIN CERTIFICATE REQUEST") {
 			t.Fatalf("request csr_pem = %q, want a PEM CSR for served issuance routes", body["csr_pem"])
+		}
+		if body["ttl_seconds"] != float64(7200) {
+			t.Fatalf("request ttl_seconds = %v, want 7200", body["ttl_seconds"])
 		}
 		return &http.Response{
 			StatusCode: http.StatusCreated,
@@ -69,12 +73,43 @@ func TestHTTPSignerPostsServedIssuanceCSRAndAcceptsCertificatePEM(t *testing.T) 
 		}, nil
 	})}
 	signer := k8s.NewHTTPSigner("https://trstctl.example/api/v1/ca/authorities/root/issue", httpClient, k8s.WithBearerToken([]byte("trst-token")))
-	cert, err := signer.Sign(context.Background(), []byte("csr-der"))
+	cert, err := signer.Sign(context.Background(), []byte("csr-der"), 2*time.Hour)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
 	if !strings.Contains(string(cert), "BEGIN CERTIFICATE") {
 		t.Fatalf("certificate = %q, want served certificate_pem response", cert)
+	}
+}
+
+func TestHTTPSignerLifetimeIsRequiredAndPartOfIdempotency(t *testing.T) {
+	var keys []string
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		keys = append(keys, req.Header.Get("Idempotency-Key"))
+		return &http.Response{StatusCode: http.StatusCreated,
+			Body:   io.NopCloser(strings.NewReader(`{"certificate_pem":"issued"}`)),
+			Header: make(http.Header), Request: req}, nil
+	})}
+	signer := k8s.NewHTTPSigner("https://trstctl.example/api/v1/ca/authorities/root/issue", client)
+	for _, ttl := range []time.Duration{time.Hour, time.Hour, 2 * time.Hour} {
+		if _, err := signer.Sign(context.Background(), []byte("same-csr"), ttl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	otherAuthority := k8s.NewHTTPSigner("https://trstctl.example/api/v1/ca/authorities/other/issue", client)
+	if _, err := otherAuthority.Sign(context.Background(), []byte("same-csr"), time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 4 || keys[0] != keys[1] || keys[0] == keys[2] || keys[0] == keys[3] {
+		t.Fatalf("idempotency keys did not bind authority, CSR, and lifetime: %v", keys)
+	}
+	for _, ttl := range []time.Duration{0, -time.Second, time.Millisecond} {
+		if _, err := signer.Sign(context.Background(), []byte("same-csr"), ttl); err == nil {
+			t.Fatalf("accepted invalid lifetime %s", ttl)
+		}
+	}
+	if len(keys) != 4 {
+		t.Fatalf("invalid lifetime reached the issuance endpoint: %d requests", len(keys))
 	}
 }
 
@@ -89,7 +124,7 @@ func TestHTTPSignerRejectsReadErrors(t *testing.T) {
 			}, nil
 		}),
 	})
-	_, err := signer.Sign(context.Background(), []byte("csr-der"))
+	_, err := signer.Sign(context.Background(), []byte("csr-der"), time.Hour)
 	if err == nil {
 		t.Fatal("Sign succeeded when reading the response body failed")
 	}
@@ -101,7 +136,7 @@ func TestHTTPSignerRejectsReadErrors(t *testing.T) {
 func TestHTTPSignerNon2xxIncludesBoundedResponseContext(t *testing.T) {
 	body := strings.Repeat("x", 600) + "tail"
 	signer := k8s.NewHTTPSigner("https://trstctl.example/sign", httpClientReturning(http.StatusBadGateway, body))
-	_, err := signer.Sign(context.Background(), []byte("csr-der"))
+	_, err := signer.Sign(context.Background(), []byte("csr-der"), time.Hour)
 	if err == nil {
 		t.Fatal("Sign succeeded on a non-2xx signer response")
 	}

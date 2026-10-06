@@ -8728,7 +8728,7 @@ export interface components {
         };
         CAIssueLeafRequest: {
             csr_pem: string;
-            ttl_seconds?: number;
+            ttl_seconds: number;
         };
         CAIssuedIntermediate: {
             certificate_pem: string;

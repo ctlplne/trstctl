@@ -87,7 +87,7 @@ func (c *IssuerController) issueNativeCertificate(ctx context.Context, namespace
 	if err != nil {
 		return fmt.Errorf("k8s: build CSR for trstctl Certificate %s: %w", name, err)
 	}
-	chainPEM, err := c.signer.Sign(ctx, csrDER)
+	chainPEM, err := c.signer.Sign(ctx, csrDER, defaultCertificateTTL)
 	if err != nil {
 		return fmt.Errorf("k8s: sign trstctl Certificate %s: %w", name, err)
 	}
