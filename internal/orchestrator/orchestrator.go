@@ -994,6 +994,45 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed = healedBefore
 			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
 		}()
+		if ev.Type == EventEndpointContainmentRequested && ev.SchemaVersion == endpointContainmentRequestSchemaVersion {
+			var requested endpointContainmentRequestedV2
+			if err := json.Unmarshal(ev.Data, &requested); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode containment request (seq %d): %w", ev.Sequence, err)
+			}
+			if requested.OutboxID <= 0 || requested.ReceiptID == "" || requested.IdempotencyKey == "" ||
+				requested.TargetID == "" || requested.TargetRevision == "" || requested.IdentityID == "" ||
+				requested.RequiredAgentID == "" || requested.Connector == "" || requested.Target == "" ||
+				endpointContainmentEventID(ev.TenantID, requested.TargetID, requested.IdempotencyKey) != ev.ID ||
+				endpointContainmentReceiptID(ev.TenantID, requested.TargetID, requested.IdempotencyKey) != requested.ReceiptID {
+				return fmt.Errorf("orchestrator: reconcile containment request (seq %d): retained authority is incomplete", ev.Sequence)
+			}
+			command, err := json.Marshal(requested.request())
+			if err != nil {
+				return err
+			}
+			key := "endpoint-contain:" + requested.TargetID + ":" + requested.IdempotencyKey
+			var restored bool
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+					ReservedID: requested.OutboxID, TenantID: ev.TenantID,
+					Destination: DestinationEndpointContainment, IdempotencyKey: key,
+					Payload: command, EffectLane: ConnectorTargetEffectLane(requested.TargetID),
+					RequiredAgentRole: "host", RequiredAgentID: requested.RequiredAgentID,
+				})
+				if err != nil {
+					return err
+				}
+				restored = inserted
+				_, err = o.recordQueuedContainmentReceiptTx(ctx, tx, ev.TenantID, requested, true)
+				return err
+			}); err != nil {
+				return err
+			}
+			if restored {
+				healed++
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventAuditFeedBatchQueued {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

@@ -490,6 +490,16 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("vault.compat.policy.put", catalogPrivacyRule("/name", token), catalogPrivacyRule("/policy", clear)),
 	}
 	catalog = append(catalog, productionPrivacyEventPolicy{
+		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "endpoint.containment.requested", SchemaVersion: 2},
+		Policy: catalogPrivacyPolicy(endpointContainmentRequestedV2PrivacyPayloadShape(),
+			catalogPrivacyRule("/target_id", opaque), catalogPrivacyRule("/target_revision", opaque),
+			catalogPrivacyRule("/identity_id", opaque), catalogPrivacyRule("/expected_fingerprint", opaque),
+			catalogPrivacyRule("/required_agent_id", opaque), catalogPrivacyRule("/connector", opaque),
+			catalogPrivacyRule("/target", token), catalogPrivacyRule("/reason", clear),
+			catalogPrivacyRule("/requested_by", exact), catalogPrivacyRule("/idempotency_key", opaque),
+			catalogPrivacyRule("/outbox_id", opaque), catalogPrivacyRule("/receipt_id", opaque)),
+	})
+	catalog = append(catalog, productionPrivacyEventPolicy{
 		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "ai.query.answered", SchemaVersion: 2},
 		Policy: catalogPrivacyPolicy(aiQueryAnsweredV2PrivacyPayloadShape(),
 			catalogPrivacyRule("/subject", token), catalogPrivacyRule("/rows", opaque),

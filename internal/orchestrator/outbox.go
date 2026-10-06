@@ -44,6 +44,10 @@ type Message struct {
 
 // Entry is a new outbox row to enqueue alongside a state change.
 type Entry struct {
+	// ReservedID is used only when replaying an event whose original SQL
+	// transaction rolled back after the event append. It preserves the exact
+	// outbox identity already named by immutable receipt evidence.
+	ReservedID     int64
 	TenantID       string
 	Destination    string
 	IdempotencyKey string
@@ -561,13 +565,27 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 		"outbox-enqueue-if-absent\x1f"+e.TenantID+"\x1f"+e.IdempotencyKey); err != nil {
 		return false, fmt.Errorf("orchestrator: lock enqueue-if-absent outbox: %w", err)
 	}
-	tag, err := tx.Exec(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+	insertSQL := `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
 		 SELECT $1, $2, $3, $4, $5, $6, nullif($7, '')::uuid
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
-		 )`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole, e.RequiredAgentID)
+		 )`
+	if e.ReservedID < 0 {
+		return false, fmt.Errorf("orchestrator: negative reserved outbox id")
+	}
+	if e.ReservedID != 0 {
+		insertSQL = `INSERT INTO outbox (id, tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+		 OVERRIDING SYSTEM VALUE
+		 SELECT $8, $1, $2, $3, $4, $5, $6, nullif($7, '')::uuid
+		 WHERE NOT EXISTS (
+		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
+		 )`
+	}
+	args := []any{e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole, e.RequiredAgentID}
+	if e.ReservedID != 0 {
+		args = append(args, e.ReservedID)
+	}
+	tag, err := tx.Exec(ctx, insertSQL, args...)
 	if err != nil {
 		return false, fmt.Errorf("orchestrator: enqueue-if-absent outbox: %w", err)
 	}
@@ -593,7 +611,8 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 		e.TenantID, e.IdempotencyKey).Scan(&existingID, &destination, &payload, &existingLane, &existingRole, &existingAgentID); err != nil {
 		return false, fmt.Errorf("orchestrator: load enqueue-if-absent outbox replay: %w", err)
 	}
-	if destination != e.Destination || existingLane != lane || !bytes.Equal(payload, e.Payload) ||
+	if (e.ReservedID != 0 && existingID != e.ReservedID) ||
+		destination != e.Destination || existingLane != lane || !bytes.Equal(payload, e.Payload) ||
 		existingRole != e.RequiredAgentRole || existingAgentID != e.RequiredAgentID {
 		return false, &OutboxCommandConflictError{
 			TenantID: e.TenantID, IdempotencyKey: e.IdempotencyKey,

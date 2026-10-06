@@ -3537,6 +3537,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDeploymentTargetDeleted:                  {1: true},
 	EventIdentityConnectorTargetBound:             {1: true, 2: true},
 	EventConnectorDeliveryRecorded:                {1: true, ConnectorReceiverCompletionSchemaVersion: true},
+	"endpoint.containment.requested":              {1: true, 2: true},
 	EventLifecycleRotationRecorded:                {1: true},
 	EventOutboxReconciliationConflictRecorded:     {1: true},
 	EventIncidentExecutionRecorded:                {1: true},

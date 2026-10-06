@@ -314,6 +314,10 @@ local TLS probes that cannot observe a serving leaf. The same signed receipt
 reports queued, stopped, different-leaf, unverified, or failed; only stopped
 describes an executed action with repeated local TLS refusal. Check from the
 client segment with a stock TLS client and verify CA revocation separately.
+The immutable request records the exact host command, outbox ID and receipt ID.
+If its event append survives a failed database transaction, startup recovery
+restores that same job and receipt; retrying the same idempotency key cannot
+silently allocate a different host action.
 If the host is unreachable, inspect Jobs and queues and restore the exact
 agent/profile path. After a terminal non-success, review a new attempt; the
 old idempotency key must not be reused for a changed target or reason.

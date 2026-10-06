@@ -450,6 +450,11 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	}
 }
 
+func endpointContainmentRequestedV2PrivacyPayloadShape() PrivacyPayloadShape {
+	return catalogPrivacyPayloadShape(`{"target_id":"","target_revision":"","identity_id":"","expected_fingerprint":"","required_agent_id":"","connector":"","target":"","reason":"","requested_by":"","idempotency_key":"","outbox_id":1,"receipt_id":""}`,
+		catalogPrivacyShapeOptions{})
+}
+
 // The v1 AI answer has a retained four-field payload. Its v2 successor records
 // the interpreted time window and whether the bounded result was complete.
 // Keeping the shapes separate lets old history remain valid without widening v1.
