@@ -145,8 +145,16 @@ func TestLookupAndValues(t *testing.T) {
 		t.Fatalf("Values() returned %d entries for %d writable + %d retired",
 			len(values), len(ConnectorDelivery.Claims), len(ConnectorDelivery.Retired))
 	}
-	if values[0] != ConnectorQueued {
-		t.Errorf("Values() lost declaration order: first entry is %q", values[0])
+	for index, claim := range ConnectorDelivery.Claims {
+		if values[index] != claim.Value {
+			t.Errorf("Values() lost writable declaration order at %d: got %q, want %q", index, values[index], claim.Value)
+		}
+	}
+	for index, retired := range ConnectorDelivery.Retired {
+		got := values[len(ConnectorDelivery.Claims)+index]
+		if got != retired.Value {
+			t.Errorf("Values() lost retired declaration order at %d: got %q, want %q", index, got, retired.Value)
+		}
 	}
 	claim, ok := ConnectorDelivery.Lookup(ConnectorConfigValidated)
 	if !ok {
