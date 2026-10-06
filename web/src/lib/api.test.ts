@@ -708,6 +708,9 @@ describe("exported API surface census", () => {
       // F80: validates the exact decoy request and caller-bound fingerprint
       // against local account configuration without calling IAM or CloudTrail.
       "/api/v1/secrets/honeytokens/aws/preview",
+      // The exact key-compromise plan only reads identity and target evidence.
+      // The separate /compromise command performs the idempotent mutation.
+      "/api/v1/identities/item%2Fid/compromise/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);

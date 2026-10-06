@@ -7099,7 +7099,8 @@ export const messages = {
     description: "Exact deployment target selector for combined CA revocation and host containment.",
   },
   "certificates.revocation.compromiseTargetHelp": {
-    defaultMessage: "Choose the registered host target. The preview verifies its last served certificate, agent, and target revision before anything changes.",
+    defaultMessage:
+      "Choose the registered host target. The preview checks the certificate last seen on its listener, the agent, and the target revision before anything changes.",
     description: "Explains the evidence required before a combined key-compromise command.",
   },
   "certificates.revocation.compromiseTargetRequired": {
@@ -15053,14 +15054,14 @@ export const messages = {
   },
   "connectors.containment.stopped": { defaultMessage: "Host agent stopped TLS on the pinned listener", description: "Signed repeated local refusal status." },
   "connectors.containment.differentLeaf": {
-    defaultMessage: "Different certificate served — no stop attempted",
+    defaultMessage: "Different certificate on the listener — no stop attempted",
     description: "Safe changed-leaf refusal status.",
   },
   "connectors.containment.unverified": {
     defaultMessage: "Listener unverified — no stop attempted",
     description: "Unreachable or unobservable listener status.",
   },
-  "connectors.containment.failed": { defaultMessage: "Host stop failed or the listener still served TLS", description: "Failed containment status." },
+  "connectors.containment.failed": { defaultMessage: "Host stop failed or the listener still accepts TLS", description: "Failed containment status." },
   "connectors.containment.noProof": {
     defaultMessage:
       "Check the signed host report and the live listener before declaring this credential contained. Retry with a new reviewed request after fixing the cause.",
