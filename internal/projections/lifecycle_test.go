@@ -269,7 +269,9 @@ func TestHistoryIsTenantScopedAndBounded(t *testing.T) {
 		orchestrator.StateIssued, orchestrator.StateDeployed, orchestrator.StateRenewing, orchestrator.StateDeployed,
 		orchestrator.StateRenewing, orchestrator.StateDeployed,
 	}
-	const bIdentities = 40
+	// Keep enough unrelated rows for the real planner to prefer the hot-path
+	// tenant/identity index. A 241-row table is legitimately cheaper to scan.
+	const bIdentities = 400
 	for i := 0; i < bIdentities; i++ {
 		bid := fmt.Sprintf("b0000000-0000-0000-0000-%012d", i+1)
 		seedIdentityID(t, s, tenantB, ownerB, bid)
@@ -290,6 +292,14 @@ func TestHistoryIsTenantScopedAndBounded(t *testing.T) {
 				}
 			}
 		}
+	}
+	// This package reuses and truncates one PostgreSQL database across tests.
+	// Refresh planner statistics after constructing this larger fixture so
+	// statistics left by an earlier, differently sized test do not choose the
+	// wrong plan. Production autovacuum also refreshes statistics as table size
+	// changes.
+	if _, err := s.SystemPool().Exec(ctx, `ANALYZE identity_transitions`); err != nil {
+		t.Fatalf("analyze transition fixture: %v", err)
 	}
 
 	// History/State for A return exactly A's data, independent of B's volume.
