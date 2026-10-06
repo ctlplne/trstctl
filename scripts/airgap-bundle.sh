@@ -162,8 +162,10 @@ version: ${version}
 image: ${image}
 image_source: ${image_source}
 image_id: ${image_id}
+image_id_scope: build-host tag before platform-specific docker save
 platform: ${platform}
 created_by: scripts/airgap-bundle.sh
+standalone_cli: separate exact-commit release asset; see docs/airgap.md
 
 install entrypoints:
 - docs/airgap.md
@@ -180,7 +182,13 @@ EOF
 )
 
 tar -C "$out_root" -czf "$archive" "$bundle_name"
-shasum -a 256 "$archive" > "${archive}.sha256"
+# Write the archive basename into the outer checksum. An absolute build-host
+# path can appear to verify on the staging host while the received copy remains
+# unchecked, then fail entirely on a disconnected machine.
+(
+  cd "$out_root"
+  shasum -a 256 "${bundle_name}.tar.gz" > "${bundle_name}.tar.gz.sha256"
+)
 
 echo "bundle: $archive"
 echo "checksum: ${archive}.sha256"

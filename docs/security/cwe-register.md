@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1477 annotated sites across 26 rules. Each row is
+1480 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -656,7 +656,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `deploy/deploycheck_test.go:599` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `deploy/helm/airgap_bundle_test.go:251` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/helm/airgap_bundle_test.go:278` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
 | `docs/docs_test.go:2562` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
@@ -738,7 +738,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (173 sites)
+### G204 — CWE-78 OS command injection (174 sites)
 
 | Location | Reason |
 |---|---|
@@ -771,6 +771,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:111` | test executes a fixed local tool (CWE-78). |
 | `deploy/helm/airgap_bundle_test.go:168` | fixed repository script under test. |
+| `deploy/helm/airgap_bundle_test.go:232` | fixed stock checksum command over test-owned archive names. |
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:113` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_test.go:1118` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1015,7 +1016,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (404 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (405 sites)
 
 | Location | Reason |
 |---|---|
@@ -1082,9 +1083,10 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:69` | bundle is created inside this test's TempDir (CWE-22). |
 | `deploy/helm/airgap_bundle_test.go:186` | the call log path is created inside this test's private temporary directory. |
 | `deploy/helm/airgap_bundle_test.go:200` | the bundle path is created inside this test's private temporary directory. |
-| `deploy/helm/airgap_bundle_test.go:251` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `deploy/helm/airgap_bundle_test.go:267` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/helm/airgap_bundle_test.go:313` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/airgap_bundle_test.go:218` | the archive is produced inside this test's private temporary directory. |
+| `deploy/helm/airgap_bundle_test.go:278` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/helm/airgap_bundle_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/airgap_bundle_test.go:340` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_docs_commands_test.go:130` | reads the repo's own docs pages from a walked list (CWE-22) |
 | `deploy/helm/helm_test.go:1080` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_test.go:1141` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1613,13 +1615,14 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (72 sites)
+### G703 — CWE-22 Path traversal (taint) (73 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
 | `cmd/trstctl/ssh.go:189` | operator-selected local proof file is checked for regular type and private permissions before reading |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
+| `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/relay/hostrollback.go:309` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sshkrl/install.go:245` | staged path is created in the bound target directory by CreateTemp |

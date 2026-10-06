@@ -201,11 +201,38 @@ esac
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(manifest), "image_id: "+imageID) || !strings.Contains(string(manifest), "image_source: local") {
+			if !strings.Contains(string(manifest), "image_id: "+imageID) || !strings.Contains(string(manifest), "image_source: local") ||
+				!strings.Contains(string(manifest), "image_id_scope: build-host tag before platform-specific docker save") {
 				t.Fatalf("bundle does not bind its local source image:\n%s", manifest)
 			}
 			if _, err := os.Stat(filepath.Join(bundle, "images", "trstctl-image.tar")); err != nil {
 				t.Fatal(err)
+			}
+			// A copied archive must verify with its build-host directory absent.
+			// Checking only beside the original file would miss absolute paths in
+			// the outer checksum and falsely qualify a disconnected transfer.
+			archiveName := "trstctl-0.5.4-qa-local-linux-arm64-airgap.tar.gz"
+			checksumName := archiveName + ".sha256"
+			receiver := t.TempDir()
+			for _, name := range []string{archiveName, checksumName} {
+				body, err := os.ReadFile(filepath.Join(out, name)) // #nosec G304 -- the archive is produced inside this test's private temporary directory.
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(receiver, name), body, 0o600); err != nil { // #nosec G703 -- receiver is a private test directory and name ranges over two fixed archive basenames.
+					t.Fatal(err)
+				}
+			}
+			original := filepath.Join(out, archiveName)
+			held := original + ".held"
+			if err := os.Rename(original, held); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Rename(held, original) })
+			verify := exec.Command("shasum", "-a", "256", "-c", checksumName) // #nosec G204 -- fixed stock checksum command over test-owned archive names.
+			verify.Dir = receiver
+			if output, err := verify.CombinedOutput(); err != nil {
+				t.Fatalf("received archive did not verify without staging path: %v\n%s", err, output)
 			}
 		})
 	}

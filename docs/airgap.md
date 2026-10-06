@@ -69,6 +69,11 @@ ID proves local byte identity, not publisher identity: verify the release
 signature and provenance before staging it. Obtain the expected ID from that
 verification record rather than recomputing the expected value from the same
 mutable image tag at bundle time.
+The manifest's `image_id` identifies the build-host tag before `docker save`.
+Some Docker image stores change the displayed ID when loading the selected
+single-platform image from a multi-platform tag. The received archive checksum
+and executable commit checks below qualify the transferred artifact; comparing
+the two Docker IDs as strings is not a portable transfer test.
 
 The output is
 `dist/airgap/trstctl-<version>-<os>-<architecture>-airgap.tar.gz` plus a
@@ -94,6 +99,21 @@ shasum -a 256 -c CHECKSUMS.txt
 cat images/trstctl-image.platform # must match the disconnected nodes
 ```
 
+The outer `.sha256` names only the archive basename, so this check verifies
+the **received copy** even when the connected build host is unavailable. Keep
+the original staging directory inaccessible during a restore rehearsal to
+catch a checksum that accidentally points back to that directory.
+
+The server image carries the signer, agent, and operator binaries. The
+standalone `trstctl-cli` is a separate release asset, so transfer its exact
+platform archive, manifest, `SHA256SUMS`, and provenance alongside the server
+bundle when operators need CLI access inside the gap. Verify those assets on
+the connected side as described in [Install the exact API client](install.md#install-the-exact-api-client),
+then check the transferred archive and manifest again inside the gap after
+loading the server image below. Keep the CLI assets in `../cli-assets` beside
+the extracted server bundle. The archive includes no API token or CA trust
+file; supply those separately when connecting.
+
 For a disconnected Compose evaluation, use the exact transferred image in the
 [one-shot backup worker](../deploy/docker/README.md#back-up-the-evaluation-stack).
 It attaches the live signer custody volume only while writing the encrypted full
@@ -107,9 +127,34 @@ Load the image into the offline registry or directly onto each node:
 
 ```bash
 docker load -i images/trstctl-image.tar
-docker image inspect "$(cat images/trstctl-image.ref)" --format '{{.Id}}' # compare with MANIFEST.txt image_id
-docker tag ghcr.io/ctlplne/trstctl:v0.5.4 registry.airgap.local/trstctl:v0.5.4
+docker tag "$(cat images/trstctl-image.ref)" registry.airgap.local/trstctl:v0.5.4
 docker push registry.airgap.local/trstctl:v0.5.4
+```
+
+Install the separately transferred CLI for the operator host. This example
+uses `linux_amd64`; choose the matching archive for another architecture.
+The full source commit in its manifest must match both executable versions:
+
+```bash
+cli_dir=../cli-assets
+version=0.5.4
+platform=linux_amd64
+archive="trstctl-cli_${version}_${platform}.tar.gz"
+manifest="trstctl-cli_${version}_manifest.json"
+checksums="trstctl-cli_${version}_SHA256SUMS"
+grep -E " (${archive}|${manifest})$" "$cli_dir/$checksums" |
+  ( cd "$cli_dir" && sha256sum -c - )
+expected_commit="$(jq -r .source_commit "$cli_dir/$manifest")"
+case "$expected_commit" in (*[!0-9a-f]*|'') exit 1;; esac
+[ "${#expected_commit}" -eq 40 ]
+docker run --rm --pull never --network none \
+  --entrypoint /usr/local/bin/trstctl "$(cat images/trstctl-image.ref)" --version |
+  grep -F "commit ${expected_commit}"
+(
+  cd "$cli_dir"
+  tar -xzf "$archive"
+  ./trstctl-cli --version | grep -F "commit ${expected_commit}"
+)
 ```
 
 Install with private PostgreSQL and NATS endpoints. Replace the CIDRs in
