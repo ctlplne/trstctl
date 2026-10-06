@@ -109,12 +109,9 @@ type agentResponse struct {
 	// RoleSource says where the roles above came from, so the console never
 	// presents a projection as if it were the authority.
 	RoleSource string `json:"role_source"`
-	// RelayCapabilities is what a network relay build can actually execute
-	// (epic A3), derived from the agent package's own shipped census — the same
-	// C1a discipline as the discovery capabilities above. It is what THIS
-	// server's agent build ships, not what a given enrolled agent is running:
-	// an agent reports its version, and matching that to capability is the
-	// fleet-drift question, not this one.
+	// RelayCapabilities is what this server's agent build can claim for the
+	// roles last reported from this agent's certificate. It is not a report of
+	// the enrolled binary's version, configured flags, or completed work.
 	RelayCapabilities []agentRelayCapabilityResponse `json:"relay_capabilities"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	WorkloadAPI agentWorkloadAPIStatus `json:"workload_api"`
@@ -328,14 +325,31 @@ type agentListResponse struct {
 // binary does not carry (C1a) — and here the stakes are higher, because a
 // falsely advertised relay capability would take a claim and burn a credential
 // redemption before failing.
-func agentRelayCapabilities() []agentRelayCapabilityResponse {
+func agentRelayCapabilities(roles []string) []agentRelayCapabilityResponse {
 	shipped := relay.ShippedJobKinds()
 	out := make([]agentRelayCapabilityResponse, 0, len(shipped))
 	for _, kind := range shipped {
+		if !slices.ContainsFunc(roles, func(role string) bool { return slices.Contains(kind.Roles, role) }) {
+			continue
+		}
+		connectors := make([]string, 0, len(kind.Connectors))
+		for _, connector := range kind.Connectors {
+			if (slices.Contains(roles, mtls.AgentRoleHost) && relay.ExecutesOnHost(connector)) ||
+				(slices.Contains(roles, mtls.AgentRoleNetwork) && relay.Executes(connector)) {
+				connectors = append(connectors, connector)
+			}
+		}
+		flags := make([]string, 0, len(kind.Flags))
+		for _, flag := range kind.Flags {
+			if slices.Contains(roles, mtls.AgentRoleHost) ||
+				(flag != "--host-exec-profile" && flag != "--host-rollback-dir") {
+				flags = append(flags, flag)
+			}
+		}
 		out = append(out, agentRelayCapabilityResponse{
 			Kind:        kind.Kind,
-			Connectors:  append([]string(nil), kind.Connectors...),
-			EnableFlags: append([]string(nil), kind.Flags...),
+			Connectors:  connectors,
+			EnableFlags: flags,
 		})
 	}
 	return out
@@ -353,7 +367,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		DiscoveryCapabilities: agentDiscoveryCapabilities(),
 		Roles:                 a.Roles,
 		RoleSource:            agentRoleSourceCertificate,
-		RelayCapabilities:     agentRelayCapabilities(),
+		RelayCapabilities:     agentRelayCapabilities(a.Roles),
 		WorkloadAPI:           agentWorkloadAPIFor(a),
 		EnrollmentProxy:       agentEnrollmentProxyFor(a),
 	}

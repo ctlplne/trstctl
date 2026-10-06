@@ -220,9 +220,14 @@ memory, and the console does not persist it.
 Exact work remains in three closed disclosures:
 
 - **Fleet status and safe actions** contains heartbeat and version rows, exact agent
-  details, certificate revocation, and offboarding. Revocation takes effect after
-  revocation data propagates. Offboarding leaves a tombstone instead of erasing the
-  record.
+  details, certificate revocation, and offboarding. Each host or network agent's
+  detail shows the job kinds this server build supports for the roles on its last
+  reported certificate, including the matching connector families and required
+  flags. This is a capability list, not proof that the enrolled binary has those
+  flags or that a job ran; use its reported version, queue, and receipt evidence
+  for those questions. An agent with no reported roles has no claimed job list.
+  Revocation takes effect after revocation data propagates. Offboarding leaves a
+  tombstone instead of erasing the record.
 - **Enrollment and trust evidence** shows the roles each agent reported from its
   signed certificate. Missing evidence stays missing; the console never guesses
   that an old agent has host access.

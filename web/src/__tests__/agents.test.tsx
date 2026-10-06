@@ -192,6 +192,33 @@ describe("agent fleet surface", () => {
     expect(screen.getByRole("button", { name: "Refresh fleet" })).toBeInTheDocument();
   });
 
+  it("shows a host agent's served job capabilities and distinguishes them from completed work", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "host-agent-1",
+        name: "apache-host",
+        status: "active",
+        roles: ["host"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-06T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [
+          { kind: "endpoint.contain", connectors: [], enable_flags: ["--relay-claim", "--host-exec-profile"] },
+          { kind: "connector.deploy", connectors: ["apache"], enable_flags: ["--relay-claim", "--host-exec-profile"] },
+        ],
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    const detail = await screen.findByRole("heading", { name: "apache-host" });
+    expect(detail.closest("section")?.textContent).toContain("Agent job capabilities");
+    expect(screen.getByText("endpoint.contain")).toBeInTheDocument();
+    expect(screen.getByText("apache")).toBeInTheDocument();
+    expect(screen.getByText(/Queue status and completed receipts are separate evidence/i)).toBeInTheDocument();
+    expect(screen.queryByText("discovery.run")).not.toBeInTheDocument();
+  });
+
   it("renders heartbeat, service, and queue evidence in the selected console time zone", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {

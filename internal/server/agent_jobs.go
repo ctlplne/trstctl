@@ -107,62 +107,10 @@ const agentJobKindUpgrade = "agent.upgrade"
 // agentJobKindEndpointRenew is the host-generated renewal kind (epic B2).
 const agentJobKindEndpointRenew = "endpoint.renew"
 
-// agentJobKindVantage declares, per job kind, which agent roles can execute it
-// (epic A2). This is what makes the role stamped in an agent's certificate mean
-// something at claim time rather than just being a label on the Agents page.
-//
-// The cut follows what the work physically is, not what it is called:
-//
-//   - trust.distribute acts on the machine the agent runs on — install these
-//     roots in this trust store. A relay sitting in front of an F5 has no
-//     filesystem of the F5's and no business installing roots on its own box.
-//   - discovery.run, endpoint.verify, and revocation.probe are observations made from a vantage:
-//     connect to this listener as a client would, reach this responder across the
-//     segment. That vantage is the entire reason a network agent exists.
-//   - connector.deploy and connector.rollback are legitimately both. A host agent
-//     deploys to the services on its own machine; a network agent deploys to an
-//     appliance it can reach. Which one a given job needs is a property of the
-//     connector's target, not of the kind — so the kind-level gate cannot decide
-//     it. Narrowing this to per-target locality is A3's job, once connectors
-//     declare whether their target can host an agent at all. Until then this is
-//     open at the kind level and the honest thing is to say so rather than to
-//     invent a restriction that does not hold.
-var agentJobKindVantage = map[string][]string{
-	// C2 changed this. discovery.run was host work when it meant "enumerate this
-	// machine's filesystem"; it is now a SEGMENT sweep, which is a vantage
-	// question — the ranges worth scanning are the ones behind a firewall that
-	// only a relay sits inside. A host agent's own filesystem inventory travels
-	// on the inventory path, not as a claimed job.
-	"discovery.run":         {mtls.AgentRoleNetwork},
-	relay.KindADCSInventory: {mtls.AgentRoleNetwork},
-	"trust.distribute":      {mtls.AgentRoleHost},
-	"endpoint.verify":       {mtls.AgentRoleNetwork},
-	// R1: reads public distribution points from a vantage inside the segment,
-	// because the CDPs that matter most are internal ones a SaaS control plane
-	// cannot reach by design.
-	"revocation.probe":        {mtls.AgentRoleNetwork},
-	"connector.deploy":        {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	"connector.rollback":      {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	relay.KindEndpointContain: {mtls.AgentRoleHost},
-	"connector.test":          {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	// B2: HOST ONLY, and this one is not a judgment call. The kind exists so a
-	// private key is generated on the machine that will serve it; a network
-	// relay generating a key for an appliance it merely reaches would recreate
-	// the exact custody hop the epic removes, with an extra machine in the
-	// chain instead of one fewer.
-	agentJobKindEndpointRenew: {mtls.AgentRoleHost},
-	// A5: any enrolled agent may upgrade ITSELF — the row's required_agent_id
-	// is what narrows the work to one machine, and a relay's binary needs
-	// rings exactly as much as a host's. Role is the wrong axis here; identity
-	// is the right one, and the claim SQL enforces it.
-	agentJobKindUpgrade: {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	// I2: a CMDB read is a vantage question — the instance worth relaying to
-	// is the one behind a firewall only the in-segment relay sits inside.
-	agentJobKindCMDBSync: {mtls.AgentRoleNetwork},
-	// I5: identical reasoning for an on-prem MDM.
-	agentJobKindMDMSync:    {mtls.AgentRoleNetwork},
-	agentJobKindTicketSync: {mtls.AgentRoleNetwork},
-}
+// The claim role gate and API capability census share the executable agent's
+// role declarations. A kind omitted there is refused at claim time.
+// Connector-specific host/appliance locality remains a separate target gate.
+var agentJobKindVantage = relay.ShippedJobVantages()
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.
 // A kind with no declared vantage is refused rather than allowed: adding a job

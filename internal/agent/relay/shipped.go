@@ -2,6 +2,8 @@
 
 package relay
 
+import "trstctl.com/trstctl/internal/crypto/mtls"
+
 // What this build can actually execute (epic A3, the C1a discipline).
 //
 // C1a's rule: a capability the product advertises must be one the shipped
@@ -29,6 +31,9 @@ type ShippedJobKind struct {
 	// executes nothing until an operator sets them, so advertising it without
 	// naming them would read as coverage that is not running.
 	Flags []string
+	// Roles are the certificate-bound agent roles the server permits to claim
+	// this kind. The API filters the advertised census using the same values.
+	Roles []string
 }
 
 // ShippedJobKinds is what this build performs.
@@ -39,6 +44,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// anchor bytes travel in the job; no credential is redeemed.
 			Kind:  KindTrustDistribute,
 			Flags: []string{"--relay-claim", "--host-exec-profile"},
+			Roles: []string{mtls.AgentRoleHost},
 		},
 		{
 			Kind: "connector.deploy",
@@ -49,6 +55,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// plane's per-row role demand decides which agent may claim it.
 			Connectors: append(append([]string(nil), RelayConnectorKinds()...), HostConnectorKinds()...),
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
+			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
 			// B2: host-generated renewal. HOST connectors only, and that is the
@@ -63,6 +70,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			Kind:       KindEndpointRenew,
 			Connectors: HostConnectorKinds(),
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
+			Roles:      []string{mtls.AgentRoleHost},
 		},
 		{
 			// D5: the dry-run. Appliance relays resolve their management credential
@@ -73,6 +81,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			Kind:       KindConnectorTest,
 			Connectors: append(append([]string(nil), RelayConnectorKinds()...), HostConnectorKinds()...),
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
+			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
 			// An exact compromised leaf is stopped only by its enrolled host
@@ -80,6 +89,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// work: the host profile supplies the one listener and executable.
 			Kind:  KindEndpointContain,
 			Flags: []string{"--relay-claim", "--host-exec-profile"},
+			Roles: []string{mtls.AgentRoleHost},
 		},
 		{
 			// D4/G1: appliances re-bind an installed object; host agents restore
@@ -88,6 +98,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			Kind:       KindConnectorRollback,
 			Connectors: RollbackExecutableKinds(),
 			Flags:      []string{"--relay-claim", "--host-exec-profile", "--host-rollback-dir"},
+			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
 			// R1: revocation distribution-point health. It carries no credential
@@ -96,6 +107,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// exactly that reason.
 			Kind:  KindRevocationProbe,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// C2: segment sweeps. Like the revocation probe this reads publicly
@@ -105,6 +117,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// estate has.
 			Kind:  KindDiscoveryRun,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// D2: the network vantage. It carries no credential — a listener's
@@ -119,6 +132,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// that no claim protocol serves.
 			Kind:  KindEndpointVerify,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// F1: AD CS template posture. It must run in-domain — a domain
@@ -128,6 +142,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// unlike the other read-only kinds.
 			Kind:  KindADCSInventory,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// I2: the CMDB read from inside the segment. Redeems the ServiceNow
@@ -135,6 +150,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			// The reconcile stays in the control plane.
 			Kind:  KindCMDBSync,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// I5: the MDM read from inside the segment, for the on-prem Jamf
@@ -143,12 +159,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			// correlation stays in the control plane.
 			Kind:  KindMDMSync,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// I3: ServiceNow ticket intake. Only mapped request fields return;
 			// the bearer token is redeemed for this one attempt.
 			Kind:  KindTicketSync,
 			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
 			// A5: this agent's own staged upgrade. It redeems nothing — the
@@ -159,8 +177,20 @@ func ShippedJobKinds() []ShippedJobKind {
 			// machine's operator gives separately from executing connector work.
 			Kind:  KindAgentUpgrade,
 			Flags: []string{"--self-upgrade"},
+			Roles: []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 	}
+}
+
+// ShippedJobVantages is the server's fail-closed role gate for claimed work.
+// Building it from the advertised census keeps the console and claim path in
+// agreement when a new executable kind is added.
+func ShippedJobVantages() map[string][]string {
+	out := make(map[string][]string)
+	for _, shipped := range ShippedJobKinds() {
+		out[shipped.Kind] = append([]string(nil), shipped.Roles...)
+	}
+	return out
 }
 
 // UnshippedJobKinds are kinds the control plane's allowlist recognizes that this

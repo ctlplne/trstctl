@@ -10,7 +10,24 @@ import (
 
 	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
+
+func TestClaimRoleGateMatchesShippedAgentJobs(t *testing.T) {
+	for _, shipped := range agentrelay.ShippedJobKinds() {
+		if len(shipped.Roles) == 0 {
+			t.Errorf("shipped job %s has no certificate-role grant", shipped.Kind)
+		}
+		for _, role := range []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork} {
+			if got, want := agentRolePermitsKind([]string{role}, shipped.Kind), slices.Contains(shipped.Roles, role); got != want {
+				t.Errorf("claim gate for %s with role %s = %t, shipped agent declares %t", shipped.Kind, role, got, want)
+			}
+		}
+	}
+	if agentRolePermitsKind([]string{mtls.AgentRoleHost, mtls.AgentRoleNetwork}, "unknown.job") {
+		t.Fatal("unknown job kind must fail closed")
+	}
+}
 
 // TestVantageCensusCoversEveryShippedConnector: a connector that can be enabled
 // in production must have a hand-written vantage answer. The census switch has a

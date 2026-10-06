@@ -1946,8 +1946,12 @@ denial is reported as a failure, not as a deploy with a footnote.
 
 Seven connectors are relay-executable — `f5`, `netscaler`, `a10`, `kemp`,
 `cisco`, `fortigate`, `paloalto` — and the Agents console shows exactly that set
-per relay, derived from the agent package's own census so the console cannot
-advertise an executor the binary lacks.
+for network-role agents, derived from the agent package's own census so the console
+cannot advertise an executor the binary lacks. Host-role agents see their host job
+kinds and host connector families instead. The server uses that same job-kind role
+census at claim time. The list describes this server build and certificate roles;
+the enrolled binary's version, configured flags, and terminal receipts must still
+be checked before calling work ready or complete.
 
 **Host connector execution ships too.** The thirteen file/exec connectors —
 nginx, Apache, Caddy, HAProxy, IIS, Postfix, Traefik, Java keystore, PostgreSQL,

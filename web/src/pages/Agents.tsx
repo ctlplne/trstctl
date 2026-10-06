@@ -937,7 +937,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
             <AgentRoleBadges agent={agent} />
             <span className="mt-1 block text-xs text-muted-foreground">{translateNow("source.agent.role.source.a2r0le0010")}</span>
           </dd>
-          {agent.roles?.includes("network") ? (
+          {agent.roles?.some((role) => role === "host" || role === "network") ? (
             <>
               <dt className="font-medium text-muted-foreground">{translateNow("source.relay.executes.a3rel0001")}</dt>
               <dd>
