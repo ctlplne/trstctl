@@ -404,25 +404,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	artifacts := []backup.Artifact{eventArtifact}
-
-	pgPath := filepath.Join(dir, "postgres-state.jsonl")
-	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
-	if err != nil {
-		return backup.FullManifest{}, fmt.Errorf("create postgres state backup: %w", err)
-	}
-	// Key the artifact's integrity trailer so a forged postgres-state file
-	// cannot verify on restore (it was an unkeyed SHA-256 anyone could recompute).
-	if _, err := backup.WritePostgresStateTxWithKey(ctx, tx, pgFile, eventCut, key, manifestIdentity); err != nil {
-		_ = pgFile.Close()
-		return backup.FullManifest{}, err
-	}
-	if err := pgFile.Close(); err != nil {
-		return backup.FullManifest{}, fmt.Errorf("close postgres state backup: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return backup.FullManifest{}, fmt.Errorf("finish full backup postgres snapshot: %w", err)
-	}
-	a, err := fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true, dir, nil)
+	a, err := captureFullBackupPostgresState(ctx, tx, eventCut, key, manifestIdentity, dir)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
@@ -440,6 +422,33 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		return backup.FullManifest{}, err
 	}
 	return manifest, nil
+}
+
+// captureFullBackupPostgresState writes and commits the database snapshot only
+// after its keyed integrity trailer is complete. The caller retains the rollback
+// defer for every error path before this stage commits.
+func captureFullBackupPostgresState(
+	ctx context.Context, tx *backup.PostgresStateSnapshot, eventCut uint64,
+	key []byte, identity backup.PostgresStateIdentity, dir string,
+) (backup.Artifact, error) {
+	pgPath := filepath.Join(dir, "postgres-state.jsonl")
+	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
+	if err != nil {
+		return backup.Artifact{}, fmt.Errorf("create postgres state backup: %w", err)
+	}
+	// Key the artifact's integrity trailer so a forged postgres-state file
+	// cannot verify on restore (it was an unkeyed SHA-256 anyone could recompute).
+	if _, err := backup.WritePostgresStateTxWithKey(ctx, tx, pgFile, eventCut, key, identity); err != nil {
+		_ = pgFile.Close()
+		return backup.Artifact{}, err
+	}
+	if err := pgFile.Close(); err != nil {
+		return backup.Artifact{}, fmt.Errorf("close postgres state backup: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return backup.Artifact{}, fmt.Errorf("finish full backup postgres snapshot: %w", err)
+	}
+	return fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true, dir, nil)
 }
 
 func captureFullBackupFiles(
