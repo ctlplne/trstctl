@@ -3,6 +3,7 @@
 package projections
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -1522,6 +1523,30 @@ type AccessChangeRequestDecided struct {
 
 // CAIssuedCertificateEvidenceSchemaVersion declares retained public leaf proof.
 const CAIssuedCertificateEvidenceSchemaVersion = 2
+
+// CAEndEntityInventorySchemaVersion makes one managed leaf event the authority
+// for both inventory and the CA responder serial. Older responder-only events
+// retain their original projection contract during replay.
+const CAEndEntityInventorySchemaVersion = 3
+
+type CAEndEntityInventoried struct {
+	ID                      string     `json:"id"`
+	CAID                    string     `json:"ca_id"`
+	Subject                 string     `json:"subject"`
+	SANs                    []string   `json:"sans"`
+	Issuer                  string     `json:"issuer"`
+	Serial                  string     `json:"serial"`
+	Fingerprint             string     `json:"fingerprint"`
+	KeyAlgorithm            string     `json:"key_algorithm"`
+	NotBefore               *time.Time `json:"not_before"`
+	NotAfter                *time.Time `json:"not_after"`
+	CertificateDER          []byte     `json:"certificate_der"`
+	CertificatePEM          []byte     `json:"certificate_pem"`
+	KeyOrigin               string     `json:"key_origin"`
+	RequestedCAID           string     `json:"requested_ca_id,omitempty"`
+	RotationRouted          bool       `json:"rotation_routed,omitempty"`
+	MigrationExactAuthority bool       `json:"migration_exact_authority,omitempty"`
+}
 
 // CAIssuedCertificate is a responder-only issued-serial event. It is used by
 // issuance surfaces that do not create an inventory certificate row (for example
@@ -3507,7 +3532,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCARootCreated:                            {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAAuthorityImported:                      {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAIntermediateCreated:                    {1: true, CAAuthorityCreatedEventSchemaVersion: true},
-	EventCAEndEntityIssued:                        {1: true, CAIssuedCertificateEvidenceSchemaVersion: true},
+	EventCAEndEntityIssued:                        {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CAEndEntityInventorySchemaVersion: true},
 	EventCAAuthorityRotated:                       {1: true},
 	EventCAAuthorityRekeyed:                       {1: true},
 	EventCACrossSigned:                            {1: true},
@@ -4323,6 +4348,60 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt)
 	case EventCAEndEntityIssued:
+		if schemaVersionOf(e) == CAEndEntityInventorySchemaVersion {
+			var pl CAEndEntityInventoried
+			if err := decode(e, &pl); err != nil {
+				return err
+			}
+			info, err := certinfo.Inspect(pl.CertificateDER)
+			if err != nil {
+				return fmt.Errorf("projections: managed CA leaf proof: %w", err)
+			}
+			publicDER, err := certinfo.LeafDER(pl.CertificatePEM)
+			if err != nil {
+				return fmt.Errorf("projections: managed CA public PEM: %w", err)
+			}
+			expectedSANs := append([]string{}, info.DNSNames...)
+			expectedSANs = append(expectedSANs, info.IPAddresses...)
+			expectedSANs = append(expectedSANs, info.EmailAddresses...)
+			expectedSANs = append(expectedSANs, info.URIs...)
+			if _, err := uuid.Parse(pl.ID); err != nil {
+				return fmt.Errorf("projections: managed CA inventory ID: %w", err)
+			}
+			if pl.ID == "" || pl.CAID == "" || pl.Subject != info.Subject ||
+				!reflect.DeepEqual(pl.SANs, expectedSANs) ||
+				pl.Issuer != info.Issuer || pl.Serial != info.SerialNumber ||
+				pl.Fingerprint != info.SHA256Fingerprint || pl.KeyAlgorithm != info.KeyAlgorithm ||
+				pl.NotBefore == nil || !pl.NotBefore.Equal(info.NotBefore) ||
+				pl.NotAfter == nil || !pl.NotAfter.Equal(info.NotAfter) ||
+				!bytes.Equal(publicDER, pl.CertificateDER) || info.IsCA || pl.KeyOrigin != string(custody.OriginRequester) ||
+				(pl.RotationRouted != (pl.RequestedCAID != "" && pl.RequestedCAID != pl.CAID)) ||
+				(pl.MigrationExactAuthority && pl.RotationRouted) {
+				return fmt.Errorf("projections: managed CA leaf inventory differs from signed public evidence")
+			}
+			caPEM, err := p.store.CAAuthorityCertificateTx(ctx, tx, e.TenantID, pl.CAID)
+			if err != nil {
+				return fmt.Errorf("projections: managed CA issuer: %w", err)
+			}
+			caDER, err := certinfo.LeafDER(caPEM)
+			if err != nil {
+				return fmt.Errorf("projections: managed CA issuer certificate: %w", err)
+			}
+			if err := cryptoboundary.VerifyLeafSignedByCA(pl.CertificateDER, caDER); err != nil {
+				return fmt.Errorf("projections: managed CA leaf signature disagrees with issuer: %w", err)
+			}
+			if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
+				ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID,
+				Subject: pl.Subject, SANs: pl.SANs, Issuer: pl.Issuer, Serial: pl.Serial,
+				Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
+				NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, Source: "issued",
+				CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
+				KeyOrigin: pl.KeyOrigin, CreatedAt: e.Time,
+			}); err != nil {
+				return err
+			}
+			return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time)
+		}
 		var pl CAIssuedCertificate
 		if err := decode(e, &pl); err != nil {
 			return err

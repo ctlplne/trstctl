@@ -23,6 +23,16 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 		return store.Certificate{}, false, err
 	}
 	switch e.Type {
+	case EventCAEndEntityIssued:
+		if schemaVersionOf(e) != CAEndEntityInventorySchemaVersion {
+			return store.Certificate{}, false, nil
+		}
+		var p CAEndEntityInventoried
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return store.Certificate{}, true, err
+		}
+		return store.Certificate{Fingerprint: p.Fingerprint, Source: "issued",
+			CertificateDER: p.CertificateDER, CertificatePEM: p.CertificatePEM}, true, nil
 	case EventCertificateRecorded:
 		var p CertificateRecorded
 		if err := json.Unmarshal(e.Data, &p); err != nil {
@@ -67,7 +77,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 	}
 	return p.store.WithCertificateProjectionOrderTx(ctx, tx, projectionTenant, e.Sequence, func() error {
-		if e.Type == EventCAEndEntityIssued || e.Type == EventCAIssuedCertificate {
+		if e.Type == EventCAIssuedCertificate ||
+			(e.Type == EventCAEndEntityIssued && schemaVersionOf(e) != CAEndEntityInventorySchemaVersion) {
 			return p.store.WithResponderIssuanceReceiptTx(ctx, tx, e, func() error {
 				return p.applyCoreEventTx(ctx, tx, e)
 			}, func() (store.CertificateIssuanceReceipt, error) {
@@ -130,9 +141,9 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 	if err := p.applyCoreEventTx(ctx, tx, e); err != nil {
 		return err
 	}
-	issued := e.Type == EventCertificateRecorded && material.Source == "issued" &&
-		strings.HasPrefix(material.IssuanceIdempotencyKey, "issue:transition:") &&
-		len(material.CertificateDER) > 0 && len(material.CertificatePEM) > 0
+	issued := material.Source == "issued" && len(material.CertificateDER) > 0 && len(material.CertificatePEM) > 0 &&
+		((e.Type == EventCertificateRecorded && strings.HasPrefix(material.IssuanceIdempotencyKey, "issue:transition:")) ||
+			(e.Type == EventCAEndEntityIssued && schemaVersionOf(e) == CAEndEntityInventorySchemaVersion))
 	return p.store.ApplyCertificateRecordingHeadTx(ctx, tx, e.TenantID, material.Fingerprint, e.ID, e.Sequence, issued)
 }
 
@@ -147,11 +158,14 @@ func CertificateMetadataEvent(e events.Event) (bool, error) {
 		return false, err
 	}
 	switch e.Type {
-	case EventCertificateRecorded, EventEdgeIssuanceReconciled,
+	case EventCertificateRecorded, EventCAEndEntityIssued, EventEdgeIssuanceReconciled,
 		EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
 		EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,
 		EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
 		EventEndpointVerified:
+		if e.Type == EventCAEndEntityIssued {
+			return schemaVersionOf(e) == CAEndEntityInventorySchemaVersion, nil
+		}
 		return true, nil
 	case EventOwnershipAssigned:
 		var assignment OwnershipAssigned

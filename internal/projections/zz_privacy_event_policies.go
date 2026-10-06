@@ -155,6 +155,27 @@ type privacyHierarchyRoutedLeafIssuedV2 struct {
 	RotationRouted bool   `json:"rotation_routed"`
 }
 
+// Keep the inventory-bearing event closed even if its projector type later
+// grows. It contains public certificate material, never a private key or CSR.
+type privacyHierarchyInventoriedLeafV3 struct {
+	ID                      string     `json:"id"`
+	CAID                    string     `json:"ca_id"`
+	Subject                 string     `json:"subject"`
+	SANs                    []string   `json:"sans"`
+	Issuer                  string     `json:"issuer"`
+	Serial                  string     `json:"serial"`
+	Fingerprint             string     `json:"fingerprint"`
+	KeyAlgorithm            string     `json:"key_algorithm"`
+	NotBefore               *time.Time `json:"not_before"`
+	NotAfter                *time.Time `json:"not_after"`
+	CertificateDER          []byte     `json:"certificate_der"`
+	CertificatePEM          []byte     `json:"certificate_pem"`
+	KeyOrigin               string     `json:"key_origin"`
+	RequestedCAID           string     `json:"requested_ca_id,omitempty"`
+	RotationRouted          bool       `json:"rotation_routed,omitempty"`
+	MigrationExactAuthority bool       `json:"migration_exact_authority,omitempty"`
+}
+
 func privacyRules(rules ...events.PrivacyFieldRule) events.PrivacyEventPolicy {
 	return events.PrivacyEventPolicy{Rules: rules}
 }
@@ -915,7 +936,17 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/items/*/ca_id", opaque),
 			privacyRule("/items/*/external_ca_id", opaque),
 		),
-		{EventCertificateRecorded, 1}:                                                certificateRecorded,
+		{EventCertificateRecorded, 1}: certificateRecorded,
+		{EventCAEndEntityIssued, CAEndEntityInventorySchemaVersion}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/ca_id", opaque),
+			privacyRule("/subject", token), privacyRule("/sans/*", token),
+			privacyRule("/issuer", opaque), privacyRule("/serial", opaque),
+			privacyRule("/fingerprint", opaque), privacyRule("/key_algorithm", opaque),
+			privacyRule("/not_before", opaque), privacyRule("/not_after", opaque),
+			privacyRule("/certificate_der", opaque), privacyRule("/certificate_pem", opaque),
+			privacyRule("/key_origin", opaque), privacyRule("/requested_ca_id", opaque),
+			privacyRule("/rotation_routed", opaque), privacyRule("/migration_exact_authority", opaque),
+		),
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            approvedCertificate,
 		{EventCertificateRecorded, CertificateValidityEventSchemaVersion}:            anchoredCertificate,
 		{EventCertificateRecorded, CertificateObservationEventSchemaVersion}:         observedCertificate,
@@ -1595,6 +1626,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventCertificateRevocationBatchApplied, 1}:                       privacyPayloadShape[CertificateRevocationBatchApplied](),
 		{EventCertificateRevocationBatchApplied, CertificateExternalRevocationSchemaVersion}: privacyPayloadShape[CertificateRevocationBatchApplied](),
 		{EventCertificateRecorded, 1}:                                                privacyPayloadShape[privacyCertificateRecordedV1](),
+		{EventCAEndEntityIssued, CAEndEntityInventorySchemaVersion}:                  privacyPayloadShape[privacyHierarchyInventoriedLeafV3](),
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            privacyPayloadShape[privacyCertificateRecordedV3](),
 		{EventCertificateRecorded, CertificateValidityEventSchemaVersion}:            privacyPayloadShape[privacyCertificateRecordedV4](),
 		{EventCertificateRecorded, CertificateObservationEventSchemaVersion}:         privacyPayloadShape[privacyCertificateObservedV5](),

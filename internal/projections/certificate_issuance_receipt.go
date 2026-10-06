@@ -38,7 +38,8 @@ func (p *Projector) backfillCertificateIssuanceReceipts(ctx context.Context, log
 // create mints. Public DER binds the fingerprint; no private key is inspected.
 func certificateIssuanceReceipt(e events.Event) (store.CertificateIssuanceReceipt, error) {
 	summary := store.CertificateIssuanceReceipt{Status: "not_mint"}
-	if e.Type == EventCAEndEntityIssued || e.Type == EventCAIssuedCertificate {
+	if e.Type == EventCAIssuedCertificate ||
+		(e.Type == EventCAEndEntityIssued && schemaVersionOf(e) != CAEndEntityInventorySchemaVersion) {
 		summary.Status = "unverifiable"
 		if schemaVersionOf(e) != CAIssuedCertificateEvidenceSchemaVersion {
 			return summary, nil

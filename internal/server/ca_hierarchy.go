@@ -25,6 +25,7 @@ import (
 	libhierarchy "trstctl.com/trstctl/internal/ca/hierarchy"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -250,11 +251,9 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
-	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAIssuedCertificateEvidenceSchemaVersion, map[string]any{
-		"ca_id": authority.ID, "serial": info.SerialNumber, "subject": info.Subject,
-		"certificate_der": issued.DER, "fingerprint": info.SHA256Fingerprint,
-		"migration_exact_authority": true,
-	})
+	evidence := managedCALeafEvent(authority.ID, issued.DER, info)
+	evidence.MigrationExactAuthority = true
+	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAEndEntityInventorySchemaVersion, evidence)
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
@@ -865,16 +864,12 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	}
 	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
 	out = append(out, []byte(ca.CertificatePEM)...)
-	event := map[string]any{
-		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject,
-		"certificate_der": leafDER, "fingerprint": info.SHA256Fingerprint,
-	}
+	event := managedCALeafEvent(ca.ID, leafDER, info)
 	if requestedCA.ID != ca.ID {
-		event["ca_id"] = ca.ID
-		event["requested_ca_id"] = requestedCA.ID
-		event["rotation_routed"] = true
+		event.RequestedCAID = requestedCA.ID
+		event.RotationRouted = true
 	}
-	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAIssuedCertificateEvidenceSchemaVersion, event)
+	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAEndEntityInventorySchemaVersion, event)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
@@ -882,6 +877,16 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 		return api.CAIssuedLeaf{}, err
 	}
 	return api.CAIssuedLeaf{CertificatePEM: string(out), Serial: info.SerialNumber, NotAfter: info.NotAfter}, nil
+}
+
+func managedCALeafEvent(caID string, der []byte, info certinfo.Info) projections.CAEndEntityInventoried {
+	return projections.CAEndEntityInventoried{
+		ID: uuid.NewString(), CAID: caID, Subject: info.Subject, SANs: sansOf(info),
+		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
+		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &info.NotBefore, NotAfter: &info.NotAfter,
+		CertificateDER: der, CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		KeyOrigin: string(custody.OriginRequester),
+	}
 }
 
 func (h *caHierarchyService) RotateAuthority(ctx context.Context, tenantID, caID string, req api.CAAuthorityRotationRequest) (api.CAAuthorityRotation, error) {

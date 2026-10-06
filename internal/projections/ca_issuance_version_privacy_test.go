@@ -3,7 +3,9 @@
 package projections
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
@@ -41,5 +43,43 @@ func TestCAIssuancePublicEvidenceRequiresVersionedPrivacyPayload(t *testing.T) {
 				t.Error("v2 accepted a serial without public certificate evidence")
 			}
 		})
+	}
+}
+
+func TestManagedCAInventoryEventHasClosedPublicEvidenceSchema(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	before, after := time.Now().UTC().Add(-time.Minute), time.Now().UTC().Add(time.Hour)
+	payload, err := json.Marshal(CAEndEntityInventoried{
+		ID: "c58ae608-c544-426a-8a7a-8ec42c895a63", CAID: "b2ad98c3-cb5f-4b7f-a86b-b747c9fb16b2",
+		Subject: "CN=managed.example.test", SANs: []string{"managed.example.test"},
+		Issuer: "CN=managed CA", Serial: "12", Fingerprint: "public-fingerprint",
+		KeyAlgorithm: "ECDSA", NotBefore: &before, NotAfter: &after,
+		CertificateDER: []byte{1, 2, 3}, CertificatePEM: []byte("public certificate"),
+		KeyOrigin: "requester",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := events.Event{ID: "inventory-v3", TenantID: "11111111-1111-4111-8111-111111111111",
+		Type: EventCAEndEntityIssued, SchemaVersion: CAEndEntityInventorySchemaVersion, Data: payload}
+	if _, err := log.Append(t.Context(), event); err != nil {
+		t.Fatalf("closed managed CA inventory evidence rejected: %v", err)
+	}
+	var expanded map[string]any
+	if err := json.Unmarshal(payload, &expanded); err != nil {
+		t.Fatal(err)
+	}
+	expanded["private_key"] = "must never enter the log"
+	event.ID = "inventory-v3-undeclared"
+	event.Data, err = json.Marshal(expanded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), event); err == nil {
+		t.Fatal("managed CA inventory event accepted an undeclared private key field")
 	}
 }

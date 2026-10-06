@@ -95,6 +95,17 @@ func (s *Store) GetCAAuthority(ctx context.Context, tenantID, id string) (CAAuth
 	return c, err
 }
 
+// CAAuthorityCertificateTx returns only the public certificate needed to
+// verify a managed leaf event against its claimed issuing authority. It uses
+// the caller's tenant transaction and does not lock the authority row, keeping
+// the certificate metadata projection's lock order stable during replay.
+func (s *Store) CAAuthorityCertificateTx(ctx context.Context, tx pgx.Tx, tenantID, id string) ([]byte, error) {
+	var certificate string
+	err := tx.QueryRow(ctx, `SELECT certificate_pem FROM ca_authorities
+		WHERE tenant_id = $1 AND id = $2`, tenantID, id).Scan(&certificate)
+	return []byte(certificate), err
+}
+
 // GetCAAuthorityForUpdateTx loads and row-locks a CA authority in the caller's
 // tenant transaction. Rotation uses this to make the predecessor/successor state
 // transition one atomic decision under PostgreSQL RLS.

@@ -457,6 +457,19 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if info.Subject != "CN=leaf.svc.example.test" || len(info.DNSNames) != 1 || info.DNSNames[0] != "leaf.svc.example.test" {
 		t.Fatalf("leaf identity = subject %q DNS %v; want hierarchy-issued leaf.svc.example.test", info.Subject, info.DNSNames)
 	}
+	inventoried, err := h.store.GetCertificateByFingerprint(t.Context(), h.tenant, info.SHA256Fingerprint)
+	if err != nil {
+		t.Fatalf("managed CA leaf missing from exact-revocation inventory: %v", err)
+	}
+	if inventoried.ID == "" || inventoried.Serial != info.SerialNumber || inventoried.Issuer != info.Issuer ||
+		inventoried.Subject != info.Subject || inventoried.Source != "issued" ||
+		inventoried.KeyOrigin != "requester" || inventoried.IssuanceEventID == "" ||
+		len(inventoried.CertificateDER) == 0 {
+		t.Fatalf("managed CA inventory omitted signed identity, issuer or custody: %+v", inventoried)
+	}
+	if _, err := h.store.GetCertificateByFingerprint(t.Context(), "11111111-1111-4111-8111-111111111112", info.SHA256Fingerprint); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("another tenant read the managed CA leaf: %v", err)
+	}
 	if rec, found, err := h.store.LookupIssuedCert(context.Background(), h.tenant, inter.ID, issued.Serial); err != nil {
 		t.Fatalf("lookup hierarchy issued serial: %v", err)
 	} else if !found || rec.Revoked() {
@@ -542,6 +555,16 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	}
 	if !h.hasEvent(t, "ca.root.created") || !h.hasEvent(t, "ca.intermediate.created") || !h.hasEvent(t, "ca.endentity.issued") {
 		t.Fatal("hierarchy create/issue events were not recorded")
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("managed CA inventory and responder rebuild: %v", err)
+	}
+	replayed, err := h.store.GetCertificateByFingerprint(t.Context(), h.tenant, info.SHA256Fingerprint)
+	if err != nil || replayed.ID != inventoried.ID || replayed.IssuanceEventID != inventoried.IssuanceEventID {
+		t.Fatalf("rebuild changed the exact managed leaf inventory identity: %+v, %v", replayed, err)
+	}
+	if rec, found, err := h.store.LookupIssuedCert(t.Context(), h.tenant, inter.ID, issued.Serial); err != nil || !found || !rec.Revoked() {
+		t.Fatalf("rebuild lost the authority's revoked serial: found=%v record=%+v error=%v", found, rec, err)
 	}
 }
 
