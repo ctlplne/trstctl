@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/observ"
@@ -16,7 +17,10 @@ import (
 )
 
 func TestLiveSoakSamplerCapturesRealSpineMetrics(t *testing.T) {
-	sampler, cleanup, err := newLiveSoakSampler()
+	// A real PostgreSQL/JetStream startup under -race plus whole-tree atomic
+	// coverage may exceed the shipped command's 90-second failure bound.
+	// This only bounds the instrumented correctness test, not a live SLO.
+	sampler, cleanup, err := newLiveSoakSamplerWithStartupTimeout(4 * time.Minute)
 	if err != nil {
 		t.Fatalf("newLiveSoakSampler with embedded PostgreSQL and JetStream: %v", err)
 	}

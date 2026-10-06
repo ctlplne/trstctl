@@ -606,10 +606,10 @@ not this file.
 | `internal/tsa/fuzz_test.go:135` | crafted DER length byte for fuzz corpus (CWE-190) |
 | `internal/tsa/fuzz_test.go:137` | crafted DER length bytes for fuzz corpus (CWE-190) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:217` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `scripts/perf/cmd/soakcapture/main.go:236` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `scripts/perf/cmd/soakcapture/main.go:237` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `scripts/perf/cmd/soakcapture/main.go:335` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `scripts/perf/cmd/soakcapture/main.go:415` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `scripts/perf/cmd/soakcapture/main.go:244` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `scripts/perf/cmd/soakcapture/main.go:245` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `scripts/perf/cmd/soakcapture/main.go:343` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `scripts/perf/cmd/soakcapture/main.go:423` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `scripts/perf/cmd/spineburst/main.go:479` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `scripts/perf/cmd/spineburst/main.go:675` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `scripts/perf/cmd/spineburst/main.go:676` | bounded value packing in a developer tool, not a served binary (CWE-190) |
@@ -894,7 +894,7 @@ not this file.
 | `internal/tsa/http_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/tsa/tsa_rfc3161_test.go:128` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `scripts/perf/cmd/perfgate/main_test.go:28` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `scripts/perf/cmd/soakcapture/main_test.go:62` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `scripts/perf/cmd/soakcapture/main_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `scripts/perf/cmd/soakgate/main_test.go:133` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/connector_substrate_test.go:114` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/external_ca_substrate_test.go:168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1350,7 +1350,7 @@ not this file.
 | `internal/webui/source_digest_test.go:63` | console build inputs inside the repository (CWE-22) |
 | `internal/webui/source_digest_test.go:70` | fixed repository path (CWE-22) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:350` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `scripts/perf/cmd/soakcapture/main_test.go:68` | test reads its own fixture/tempdir path (CWE-22) |
+| `scripts/perf/cmd/soakcapture/main_test.go:72` | test reads its own fixture/tempdir path (CWE-22) |
 | `scripts/perf/cmd/soakgate/main.go:130` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `scripts/perf/cmd/soakgate/main_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `scripts/perf/cmd/soakgate/main_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |

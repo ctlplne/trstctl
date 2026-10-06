@@ -118,7 +118,15 @@ type liveSoakSampler struct {
 }
 
 func newLiveSoakSampler() (*liveSoakSampler, func(), error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	return newLiveSoakSamplerWithStartupTimeout(90 * time.Second)
+}
+
+// The shipped command keeps a short failure bound. Race and whole-tree atomic
+// coverage can make the real embedded PostgreSQL bootstrap take longer on a
+// loaded CI host, so its correctness test supplies a larger startup bound
+// without changing the command's deadline or any measurement budget.
+func newLiveSoakSamplerWithStartupTimeout(startupTimeout time.Duration) (*liveSoakSampler, func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), startupTimeout)
 	defer cancel()
 
 	st, pgCleanup, err := startEmbeddedPostgres(ctx)
