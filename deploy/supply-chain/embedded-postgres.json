@@ -1,10 +1,10 @@
 {
-  "_comment": "Provenance and vulnerability policy for the served single-node/evaluation PostgreSQL archive, acquired from Maven Central outside go.sum. Runtime execution requires a committed independent TXZ pin (SUPPLY-003). Explicit V16=16.4.0 integration-test fixtures are a separate scope. See deploy/supply-chain/README.md and docs/supply-chain.md.",
+  "_comment": "Provenance and vulnerability policy for the served single-node/evaluation PostgreSQL archive, acquired from Maven Central outside go.sum. Runtime execution requires a committed independent TXZ pin (SUPPLY-003). Explicit V16=16.15.0 legacy integration-test fixtures are a separate acquisition scope. See deploy/supply-chain/README.md and docs/supply-chain.md.",
   "module": "github.com/fergusstrange/embedded-postgres",
-  "moduleVersion": "v1.29.0",
+  "moduleVersion": "v1.34.0",
   "modulePatch": "third_party/embedded-postgres is compiled inside the root module. It uses github.com/jackc/pgx/v5/stdlib, requires bounded Maven transport-integrity checks, routes SHA-256 through internal/crypto, and provides the served authenticated acquisition/extraction/publication path. See PATCHES.md and the shipped dependency-closure gate.",
   "postgresVersion": "16.15.0",
-  "pinnedBy": "internal/server/bundled_pg_pins.go supplies bundledPGVersion and the per-platform TXZ digest. The served path resolves that exact identity before acquisition and execution; the archive cache is keyed by platform, version and digest, and existing extracted binaries are never trusted. SCOPE: tests and developer performance tools explicitly selecting embeddedpostgres.V16 use 16.4.0; they may run locally or in CI and are NOT covered by this 16.15.0 manifest.",
+  "pinnedBy": "internal/server/bundled_pg_pins.go supplies bundledPGVersion and the per-platform TXZ digest. The served path resolves that exact identity before acquisition and execution; the archive cache is keyed by platform, version and digest, and existing extracted binaries are never trusted. SCOPE: tests and developer performance tools explicitly selecting embeddedpostgres.V16 now request 16.15.0, but their legacy NewDatabase acquisition does not enforce the served manifest's independent runtime pin.",
   "runtimeEnforced": true,
   "shippedInReleaseImage": false,
   "source": {

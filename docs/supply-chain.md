@@ -157,8 +157,8 @@ HIGH/CRITICAL advisory fixed after that exact pin.
 The served single-node/evaluation path downloads the pinned PostgreSQL 16.15.0
 archive from Maven Central, outside `go.sum`. Its committed checksum is a runtime
 execution gate. Tests and developer performance tools that explicitly select
-the library's `V16` constant still use 16.4.0; those separate fixtures are not
-covered by the served 16.15.0 manifest or its assurance claims. Tests can run on a
+the library's `V16` constant now request 16.15.0; those legacy acquisition paths are not
+covered by the served archive pin or its assurance claims. Tests can run on a
 developer's machine as well as in CI.
 
 - `deploy/supply-chain/embedded-postgres.json` records the exact version,

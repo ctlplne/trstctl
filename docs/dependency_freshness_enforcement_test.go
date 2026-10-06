@@ -401,7 +401,7 @@ func TestFreshnessRejectsVendoredSourceVersionDrift(t *testing.T) {
 	if !failed {
 		t.Fatalf("CODE-111: a vendored-source/report version mismatch must fail, got success:\n%s", out)
 	}
-	if !strings.Contains(out, "source manifest has v1.29.0") {
+	if !strings.Contains(out, "source manifest has v1.34.0") {
 		t.Errorf("CODE-111: vendored-source drift failure did not name the manifest version:\n%s", out)
 	}
 }

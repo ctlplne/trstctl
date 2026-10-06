@@ -19,6 +19,11 @@ import (
 
 var mu sync.Mutex
 
+var (
+	ErrServerNotStarted     = errors.New("server has not been started")
+	ErrServerAlreadyStarted = errors.New("server is already started")
+)
+
 // EmbeddedPostgres maintains all configuration and runtime functions for maintaining the lifecycle of one Postgres process.
 type EmbeddedPostgres struct {
 	config                 Config
@@ -74,7 +79,7 @@ func newDatabaseWithConfig(config Config) *EmbeddedPostgres {
 //nolint:funlen
 func (ep *EmbeddedPostgres) Start() (err error) {
 	if ep.started {
-		return errors.New("server is already started")
+		return ErrServerAlreadyStarted
 	}
 	if ep.archiveIdentity != nil {
 		if err := ep.prepareVerifiedBinary(); err != nil {
@@ -198,7 +203,7 @@ func (ep *EmbeddedPostgres) downloadAndExtractBinary(cacheExists bool, cacheLoca
 	mu.Lock()
 	defer mu.Unlock()
 
-	_, binDirErr := os.Stat(filepath.Join(ep.config.binariesPath, "bin"))
+	_, binDirErr := os.Stat(filepath.Join(ep.config.binariesPath, "bin", "pg_ctl"))
 	if os.IsNotExist(binDirErr) {
 		if !cacheExists {
 			if err := ep.remoteFetchStrategy(); err != nil {
@@ -231,7 +236,7 @@ func (ep *EmbeddedPostgres) cleanDataDirectoryAndInit() error {
 // Stop will try to stop the Postgres process gracefully returning an error when there were any problems.
 func (ep *EmbeddedPostgres) Stop() error {
 	if !ep.started {
-		return errors.New("server has not been started")
+		return ErrServerNotStarted
 	}
 
 	if err := stopPostgres(ep); err != nil {
@@ -250,8 +255,8 @@ func (ep *EmbeddedPostgres) Stop() error {
 func encodeOptions(port uint32, parameters map[string]string) string {
 	options := []string{fmt.Sprintf("-p %d", port)}
 	for k, v := range parameters {
-		// Single-quote parameter values - they may have spaces.
-		options = append(options, fmt.Sprintf("-c %s='%s'", k, v))
+		// pg_ctl on Windows treats double quotes, not single quotes, as delimiters.
+		options = append(options, fmt.Sprintf("-c %s=\"%s\"", k, v))
 	}
 	return strings.Join(options, " ")
 }

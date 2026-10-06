@@ -54,17 +54,15 @@
     {
       "ecosystem": "vendored-go",
       "name": "github.com/fergusstrange/embedded-postgres",
-      "current_version": "v1.29.0",
+      "current_version": "v1.34.0",
       "latest_observed_version": "v1.34.0",
-      "update_type": "minor",
+      "update_type": "none",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Store/Operations",
-      "status": "accepted_deferral",
-      "behind_since": "2026-06-21",
-      "next_review_by": "2026-10-05",
-      "deferral_until": "2026-10-05",
-      "rationale": "AUD-15 dated deferral. The 2026-09-06 review downloaded the authoritative latest Go module v1.34.0 (sum h1:c6RKhPKFsLVU+Tdxsx8q0UxCHsvZZ/iShAnljRBXs6s=) and reconfirmed that its go.mod and prepare_database.go still import github.com/lib/pq, so it cannot replace the security-maintained source fork without restoring the dependency the fork removes. The fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, preserve the pgx and mandatory-checksum-through-internal/crypto repairs, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump. The deferral is bounded to 29 days and must be reviewed again by 2026-10-05.",
-      "last_reviewed_at": "2026-09-14",
+      "status": "current",
+      "next_review_by": "2026-10-20",
+      "rationale": "2026-10-06 source-fork rebase to upstream v1.34.0 (Go module sum h1:c6RKhPKFsLVU+Tdxsx8q0UxCHsvZZ/iShAnljRBXs6s=). Upstream still imports unfixed lib/pq, so the compiled fork retains reviewed pgx, public-HTTPS bounded acquisition, mandatory sidecar, independent internal/crypto SHA-256 pin, verified private extraction and safe publication. The upstream v1.34 source changes were compared file by file; pg_ctl existence and lifecycle error contracts were adopted, while the default and V16 fixture select the existing independently pinned 16.15.0 archive instead of upstream's unpinned 18.3.0 and 16.9.0 defaults. The served archive identity and per-platform hashes did not change with this source-only rebase; native runtime and vulnerability receipts remain separate release gates. See third_party/embedded-postgres/PATCHES.md and campaign evidence. No age budget or deferral was extended.",
+      "last_reviewed_at": "2026-10-06",
       "version_source": "https://proxy.golang.org/github.com/fergusstrange/embedded-postgres/@latest"
     },
     {

@@ -78,7 +78,7 @@ func TestVerifiedArchiveIdentityRejectsMissingAndWrongScope(t *testing.T) {
 			case "digest-uppercase":
 				identity.SHA256 = strings.ToUpper(good.SHA256)
 			case "version":
-				identity.Version = V16
+				identity.Version = V15
 			case "os":
 				identity.OS = "unknown"
 			case "arch":
@@ -91,8 +91,8 @@ func TestVerifiedArchiveIdentityRejectsMissingAndWrongScope(t *testing.T) {
 			}
 		})
 	}
-	if V16 != "16.4.0" {
-		t.Fatal("legacy fixture version must not be relabelled as served version")
+	if V16 != "16.15.0" {
+		t.Fatal("default and fixture version must match the independently pinned archive")
 	}
 }
 

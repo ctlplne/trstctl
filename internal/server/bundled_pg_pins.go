@@ -35,8 +35,7 @@ var bundledPGTxzSHA256 = map[string]string{
 //
 // startBundledPostgres passes this constant to embeddedpostgres.Version()
 // DIRECTLY, and deliberately not the library's embeddedpostgres.V16 constant.
-// V16 is frozen at 16.4.0 in v1.29.0 — a release affected by CVE-2024-10979
-// (CVSS 8.8) — and, worse, it is a SECOND source of truth: bundledPGCacheArchive
+// The fork's V16 now also names 16.15.0, but it remains a SECOND source of truth: bundledPGCacheArchive
 // builds the cache filename from bundledPGVersion, so if the two ever disagreed
 // the library would download and cache under a different name, the provenance
 // check would find nothing at the pinned path. A missing archive is explicitly
