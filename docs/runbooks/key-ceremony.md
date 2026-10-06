@@ -113,6 +113,9 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
    `POST /api/v1/ca/authorities/intermediates` with the `ceremony_id` and the same
    reviewed spec. Before quorum this fails closed with `ErrQuorumNotMet`; for a
    mismatched resource it fails closed with `ErrKeyCeremonyPurposeMismatch`.
+   In the console, a successful create closes the form and opens **Overview**
+   with the new authority in **Served CA authorities**. Open its details to
+   inspect the public certificate, serial, status, and signer reference.
 5. **Distribute trust.** Publish the new CA certificate to relying parties.
    Verify: for an intermediate, the chain resolves to its parent.
 6. **Record the ceremony** in your change-management system alongside the audit

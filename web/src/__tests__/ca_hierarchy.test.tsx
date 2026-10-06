@@ -36,6 +36,7 @@ const { apiMock } = vi.hoisted(() => ({
     zeroizeManagedKey: vi.fn(),
     issueExternalCA: vi.fn(),
     caAuthorities: vi.fn(),
+    createRootCA: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
     caRetirementChecklist: vi.fn(),
@@ -572,6 +573,41 @@ describe("CA hierarchy and custody surface", () => {
 
     renderCAHierarchy("/ca-hierarchy?tab=custody");
     expect(screen.getAllByRole("tab", { name: "Key custody" })[1]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows a newly created root in the served inventory without an Overview detour", async () => {
+    const user = userEvent.setup();
+    const root = {
+      id: "ca-created-root",
+      tenant_id: "tenant-1",
+      common_name: "Trust Root CA",
+      kind: "root",
+      status: "active",
+      certificate_pem: "public certificate",
+      signer_handle: "ca/root/created",
+      serial: "42",
+      max_path_len: 1,
+      created_at: "2026-10-06T17:00:00Z",
+    };
+    apiMock.caAuthorities.mockResolvedValueOnce({ items: [] }).mockResolvedValue({ items: [root] });
+    apiMock.createRootCA.mockResolvedValue(root);
+    renderCAHierarchy("/ca-hierarchy?tab=authorities");
+
+    await user.click(await screen.findByRole("button", { name: "Create root CA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Create root CA" });
+    await user.type(within(dialog).getByLabelText(/Ceremony ID/), "ceremony-reviewed-root");
+    await user.click(within(dialog).getByRole("button", { name: "Create root CA" }));
+
+    await waitFor(() =>
+      expect(apiMock.createRootCA).toHaveBeenCalledWith({
+        ceremony_id: "ceremony-reviewed-root",
+        spec: { common_name: "Trust Root CA", max_path_len: 1, signature_algorithm: "ECDSA-P256", ttl_seconds: 315_360_000 },
+      }),
+    );
+    await waitFor(() => expect(apiMock.caAuthorities).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    expect(document.getElementById("ca-panel-overview")).not.toHaveClass("hidden");
+    expect(await screen.findByRole("table", { name: "Served CA authorities" })).toHaveTextContent("Trust Root CA");
   });
 
   it("renders issuers with kind, chain, public key, and certificate links", async () => {

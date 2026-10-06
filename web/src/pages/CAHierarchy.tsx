@@ -502,6 +502,8 @@ export function CAHierarchy() {
 
   function handleAuthorityCreated(authority: CAAuthority) {
     setCreateAuthorityKind(null);
+    setAuthorities((current) => [authority, ...current.filter((item) => item.id !== authority.id)]);
+    selectTab("overview");
     toast({
       kind: "success",
       title: authority.kind === "root" ? "Root CA created" : "Intermediate CA created",
