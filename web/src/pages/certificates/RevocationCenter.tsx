@@ -446,6 +446,7 @@ export function RevocationCenter({
                       {eligibleIdentities.map((identity) => (
                         <option key={identity.id} value={identity.id}>
                           {identity.name} · {identity.status}
+                          {t("certificates.revocation.duplicateIdentitySuffix", { id: identity.id })}
                         </option>
                       ))}
                     </optgroup>
@@ -725,7 +726,11 @@ export function RevocationCenter({
           <div role="region" aria-label={t("certificates.revocation.confirmRegion")} className="grid max-w-2xl gap-4">
             <div className="rounded-control border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
               <p className="font-semibold">{t("certificates.revocation.irreversibleTitle")}</p>
-              <p className="mt-1">{t("certificates.revocation.irreversibleBody", { identity: selected.name, reason })}</p>
+              <p className="mt-1">
+                {review.kind === "compromise"
+                  ? t("certificates.revocation.compromiseIrreversibleBody", { identity: selected.name, target: review.plan.target.target_name })
+                  : t("certificates.revocation.irreversibleBody", { identity: selected.name, reason })}
+              </p>
             </div>
             <Field label={t("certificates.revocation.confirmName")} controlId="revocation-center-confirm-name">
               {(control) => <Input {...control} value={confirmName} onChange={(event) => setConfirmName(event.target.value)} placeholder={selected.name} />}
@@ -755,7 +760,7 @@ export function RevocationCenter({
               disabled={selected.name.length === 0 || confirmName.trim() !== selected.name || executeLoading}
               onClick={() => void execute()}
             >
-              {t("certificates.revocation.executeAction")}
+              {t(review.kind === "compromise" ? "certificates.revocation.compromiseExecuteAction" : "certificates.revocation.executeAction")}
             </Button>
           </div>
         ) : null}

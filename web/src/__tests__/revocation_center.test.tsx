@@ -146,9 +146,7 @@ describe("RevocationCenter", () => {
     await user.type(screen.getByLabelText("Compromised identity ID"), identities[0].id);
     await user.type(screen.getByLabelText("Original incident request key"), "original-incident-91");
     await user.click(screen.getByRole("button", { name: "Read both incident results" }));
-    expect(
-      await screen.findByText("The CA command was delivered. Verify each exact serial through signed CRL or OCSP and a client that enforces revocation."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("CA job delivered. Verify each serial in signed CRL or OCSP with a client that checks revocation.")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Exact host containment job" })).toHaveTextContent("signed exact-leaf stop");
     expect(apiMock.readKeyCompromise).toHaveBeenCalledWith(identities[0].id, "original-incident-91");
     expect(apiMock.executeKeyCompromise).not.toHaveBeenCalled();
@@ -223,8 +221,11 @@ describe("RevocationCenter", () => {
     expect(apiMock.previewIdentityTransition).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));
+    const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
+    expect(confirmation).toHaveTextContent("queues CA publication and an exact stop of “payments-apache”");
+    expect(confirmation).toHaveTextContent("before claiming either result");
     await user.type(screen.getByLabelText("Type the exact credential label"), identities[0].name);
-    await user.click(screen.getByRole("button", { name: "Revoke reviewed credential" }));
+    await user.click(within(confirmation).getByRole("button", { name: "Revoke and contain host" }));
     await waitFor(() =>
       expect(apiMock.executeKeyCompromise).toHaveBeenCalledWith(
         identities[0].id,
@@ -242,13 +243,23 @@ describe("RevocationCenter", () => {
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(await screen.findByText("CA revocation and host containment were queued separately.")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Follow both jobs. Confirm signed CRL or OCSP status for each certificate and use a fresh client to prove this host no longer serves the compromised leaf.",
-      ),
+      screen.getByText("Verify each serial in signed CRL or OCSP and use a fresh client to prove the host stopped serving the compromised leaf."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Issuing CA revocation job" })).toHaveTextContent("The issuing CA has not completed this command");
+    expect(screen.getByRole("region", { name: "Issuing CA revocation job" })).toHaveTextContent("CA job pending; trust may be unchanged.");
     await waitFor(() => expect(apiMock.readKeyCompromise).toHaveBeenCalledWith(identities[0].id, "identity-compromise:reviewed-compromise-7"));
     expect(screen.getAllByText("Host stop queued — listener may still be serving").length).toBeGreaterThan(0);
+  });
+
+  it("distinguishes same-name deployed identities by their exact IDs", async () => {
+    const first = { ...identities[0], id: "11111111-1111-4111-8111-111111111111" };
+    const second = { ...identities[0], id: "22222222-2222-4222-8222-222222222222" };
+    renderWithApp(
+      <MemoryRouter>
+        <RevocationCenter identities={[first, second]} distributions={[]} health={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("option", { name: `payments.example.test · deployed · ${first.id}` })).toHaveValue(first.id);
+    expect(screen.getByRole("option", { name: `payments.example.test · deployed · ${second.id}` })).toHaveValue(second.id);
   });
 
   it("requires an effect-free, version-bound review before one exact revoke", async () => {
