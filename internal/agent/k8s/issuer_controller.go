@@ -197,7 +197,7 @@ func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, nam
 	bridge := &Bridge{client: c.client, signer: c.signer, issuerGroup: c.group}
 	signed := 0
 	for _, cr := range list.Items {
-		if isFinished(cr) || !c.requestBackedByIssuer(cr, issuers, clusterIssuers) {
+		if isFinished(cr) || !isApproved(cr) || !c.requestBackedByIssuer(cr, issuers, clusterIssuers) {
 			continue
 		}
 		if err := bridge.fulfil(ctx, namespace, cr); err != nil {

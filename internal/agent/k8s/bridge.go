@@ -65,7 +65,7 @@ func (b *Bridge) Reconcile(ctx context.Context, namespace string) (int, error) {
 
 	signed := 0
 	for _, cr := range list.Items {
-		if !b.isOurs(cr) || isFinished(cr) {
+		if !b.isOurs(cr) || isFinished(cr) || !isApproved(cr) {
 			continue
 		}
 		if err := b.fulfil(ctx, namespace, cr); err != nil {
@@ -106,7 +106,24 @@ func isFinished(cr map[string]any) bool {
 	return false
 }
 
+// cert-manager's approval is a separate trust decision. A matching issuerRef
+// is never enough authority to mint a certificate.
+func isApproved(cr map[string]any) bool {
+	status, _ := cr["status"].(map[string]any)
+	conditions, _ := status["conditions"].([]any)
+	for _, condition := range conditions {
+		item, _ := condition.(map[string]any)
+		if item["type"] == "Approved" && item["status"] == "True" {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any) error {
+	if !isApproved(cr) || isFinished(cr) {
+		return fmt.Errorf("k8s: CertificateRequest is not approved and pending")
+	}
 	spec, _ := cr["spec"].(map[string]any)
 	reqB64, _ := spec["request"].(string)
 	pemCSR, err := base64.StdEncoding.DecodeString(reqB64)

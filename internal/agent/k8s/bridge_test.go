@@ -112,6 +112,13 @@ func certRequest(name, issuer, group string, ready bool) map[string]any {
 	return cr
 }
 
+func approveCertRequest(cr map[string]any) map[string]any {
+	cr["status"] = map[string]any{"conditions": []any{
+		map[string]any{"type": "Approved", "status": "True", "reason": "qa-policy"},
+	}}
+	return cr
+}
+
 func readyCondition(t *testing.T, obj map[string]any) (status, certificate string) {
 	t.Helper()
 	st, _ := obj["status"].(map[string]any)
@@ -140,7 +147,7 @@ func TestBridgeSignsPendingRequest(t *testing.T) {
 		func() map[string]any {
 			cr := certRequest("req-1", "trstctl", "trstctl.com", false)
 			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
-			return cr
+			return approveCertRequest(cr)
 		}(),
 	}}
 	srv := httptest.NewServer(cm.handler())
@@ -179,7 +186,7 @@ func TestBridgeRejectsEmptySignerCertificate(t *testing.T) {
 		func() map[string]any {
 			cr := certRequest("req-empty", "trstctl", "trstctl.com", false)
 			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
-			return cr
+			return approveCertRequest(cr)
 		}(),
 	}}
 	srv := httptest.NewServer(cm.handler())
@@ -202,6 +209,26 @@ func TestBridgeRejectsEmptySignerCertificate(t *testing.T) {
 	}
 	if len(cm.statusPut) != 0 {
 		t.Fatalf("empty signer certificate wrote Ready status: %#v", cm.statusPut)
+	}
+}
+
+func TestBridgeRefusesUnapprovedCertificateRequest(t *testing.T) {
+	var calls int
+	cm := &fakeCertManager{items: []map[string]any{func() map[string]any {
+		cr := certRequest("unapproved", "trstctl", "trstctl.com", false)
+		cr["spec"].(map[string]any)["request"] = csrRequestField(t)
+		return cr
+	}()}}
+	srv := httptest.NewServer(cm.handler())
+	defer srv.Close()
+	signer := k8s.SignerFunc(func(context.Context, []byte) ([]byte, error) {
+		calls++
+		return []byte("unexpected certificate"), nil
+	})
+	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl", "trstctl.com")
+	n, err := bridge.Reconcile(context.Background(), "apps")
+	if err != nil || n != 0 || calls != 0 || len(cm.statusPut) != 0 {
+		t.Fatalf("unapproved request reached signer/status: signed=%d calls=%d status=%v err=%v", n, calls, cm.statusPut, err)
 	}
 }
 

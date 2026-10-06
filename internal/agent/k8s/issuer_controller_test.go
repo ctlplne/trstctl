@@ -307,7 +307,7 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 		cr := certRequest("cm-generated", "trstctl", "trstctl.com", false)
 		cr["spec"].(map[string]any)["request"] = csrRequestField(t)
 		cr["spec"].(map[string]any)["issuerRef"].(map[string]any)["kind"] = "ClusterIssuer"
-		return cr
+		return approveCertRequest(cr)
 	}()}
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
@@ -338,6 +338,28 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 	}
 	if block, _ := pem.Decode(decoded); block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("status.certificate does not contain a PEM certificate")
+	}
+}
+
+func TestIssuerControllerRefusesUnapprovedCertificateRequest(t *testing.T) {
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	api.certificateRequests = []map[string]any{func() map[string]any {
+		cr := certRequest("unapproved", "trstctl", "trstctl.com", false)
+		cr["spec"].(map[string]any)["request"] = csrRequestField(t)
+		return cr
+	}()}
+	var calls int
+	signer := k8s.SignerFunc(func(context.Context, []byte) ([]byte, error) {
+		calls++
+		return []byte("unexpected certificate"), nil
+	})
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil || result.SignedRequests != 0 || calls != 0 || len(api.requestStatus) != 0 {
+		t.Fatalf("unapproved request reached signer/status: result=%+v calls=%d status=%v err=%v", result, calls, api.requestStatus, err)
 	}
 }
 
@@ -415,7 +437,7 @@ func TestIssuerControllerSupportsNamespacedIssuer(t *testing.T) {
 		cr := certRequest("team-leaf", "team-ca", "trstctl.com", false)
 		cr["spec"].(map[string]any)["request"] = csrRequestField(t)
 		cr["spec"].(map[string]any)["issuerRef"].(map[string]any)["kind"] = "Issuer"
-		return cr
+		return approveCertRequest(cr)
 	}()}
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
