@@ -75,6 +75,13 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
 		},
 		{
+			// An exact compromised leaf is stopped only by its enrolled host
+			// agent under an operator-pinned local action. This is not connector
+			// work: the host profile supplies the one listener and executable.
+			Kind:  KindEndpointContain,
+			Flags: []string{"--relay-claim", "--host-exec-profile"},
+		},
+		{
 			// D4/G1: appliances re-bind an installed object; host agents restore
 			// their one encrypted predecessor bundle, reload, and reverify.
 			// Every other family is refused at the API rather than advertised.

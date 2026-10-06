@@ -5,12 +5,31 @@ package relay
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 )
+
+func TestContainmentIsClaimedAndAdvertisedWithItsHostProfile(t *testing.T) {
+	if !slices.Contains(ClaimableKinds(), KindEndpointContain) {
+		t.Fatal("the host agent never asks for endpoint.contain")
+	}
+	for _, shipped := range ShippedJobKinds() {
+		if shipped.Kind != KindEndpointContain {
+			continue
+		}
+		if len(shipped.Connectors) != 0 ||
+			!slices.Contains(shipped.Flags, "--relay-claim") ||
+			!slices.Contains(shipped.Flags, "--host-exec-profile") {
+			t.Fatalf("containment must advertise the host profile and claim flags without connector work: %+v", shipped)
+		}
+		return
+	}
+	t.Fatal("the agent claims and executes endpoint.contain but its advertised shipped capabilities omit it")
+}
 
 func TestContainmentNeverStopsAnUnobservedOrReplacedLeaf(t *testing.T) {
 	const compromised = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
