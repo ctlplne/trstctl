@@ -59,6 +59,9 @@ func NewIssuerController(client *Client, signer Signer, group string) *IssuerCon
 }
 
 func issuerCollectionPath(namespace string) string {
+	if namespace == "" {
+		return fmt.Sprintf("/apis/%s/%s", trstctlAPIVersion, issuersPlural)
+	}
 	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", trstctlAPIVersion, namespace, issuersPlural)
 }
 
@@ -67,6 +70,9 @@ func clusterIssuerCollectionPath() string {
 }
 
 func nativeCertificateCollectionPath(namespace string) string {
+	if namespace == "" {
+		return fmt.Sprintf("/apis/%s/%s", trstctlAPIVersion, certificatesPlural)
+	}
 	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", trstctlAPIVersion, namespace, certificatesPlural)
 }
 
@@ -89,19 +95,19 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 	}
 	result.ClusterIssuersReady = len(clusterIssuers)
 
-	issuers, err := c.reconcileIssuerResources(ctx, issuerCollectionPath(namespace), "Issuer")
+	issuers, err := c.reconcileIssuerResources(ctx, issuerCollectionPath(""), "Issuer")
 	if err != nil {
 		return result, err
 	}
 	result.IssuersReady = len(issuers)
 
-	signed, err := c.reconcileCertificateRequests(ctx, namespace, issuers, clusterIssuers)
+	signed, err := c.reconcileCertificateRequests(ctx, issuers, clusterIssuers)
 	if err != nil {
 		return result, err
 	}
 	result.SignedRequests = signed
 
-	nativeIssued, err := c.reconcileNativeCertificates(ctx, namespace, issuers, clusterIssuers)
+	nativeIssued, err := c.reconcileNativeCertificates(ctx, issuers, clusterIssuers)
 	if err != nil {
 		return result, err
 	}
@@ -149,11 +155,21 @@ func (c *IssuerController) reconcileIssuerResources(ctx context.Context, collect
 		if name == "" {
 			continue
 		}
-		out[name] = true
+		statusCollectionPath := collectionPath
+		key := name
+		if kind == "Issuer" {
+			namespace := objectNamespace(obj)
+			if namespace == "" {
+				continue
+			}
+			key = namespace + "/" + name
+			statusCollectionPath = issuerCollectionPath(namespace)
+		}
+		out[key] = true
 		if isReady(obj) {
 			continue
 		}
-		if err := c.markIssuerReady(ctx, collectionPath, kind, obj); err != nil {
+		if err := c.markIssuerReady(ctx, statusCollectionPath, kind, obj); err != nil {
 			return out, err
 		}
 	}
@@ -179,8 +195,10 @@ func (c *IssuerController) markIssuerReady(ctx context.Context, collectionPath, 
 	return nil
 }
 
-func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, namespace string, issuers, clusterIssuers map[string]bool) (int, error) {
-	st, body, err := c.client.request(ctx, http.MethodGet, certificateRequestsPath(namespace), nil)
+func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, error) {
+	// ClusterIssuer is cluster-scoped: a CertificateRequest may live in any
+	// namespace, including one other than the agent pod's namespace.
+	st, body, err := c.client.request(ctx, http.MethodGet, "/apis/cert-manager.io/v1/certificaterequests", nil)
 	if err != nil {
 		return 0, err
 	}
@@ -197,10 +215,14 @@ func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, nam
 	bridge := &Bridge{client: c.client, signer: c.signer, issuerGroup: c.group}
 	signed := 0
 	for _, cr := range list.Items {
+		requestNamespace := objectNamespace(cr)
+		if requestNamespace == "" {
+			continue // refuse an object with no namespace instead of misrouting its status
+		}
 		if isFinished(cr) || !isApproved(cr) || !c.requestBackedByIssuer(cr, issuers, clusterIssuers) {
 			continue
 		}
-		if err := bridge.fulfil(ctx, namespace, cr); err != nil {
+		if err := bridge.fulfil(ctx, requestNamespace, cr); err != nil {
 			return signed, err
 		}
 		signed++
@@ -222,7 +244,7 @@ func (c *IssuerController) requestBackedByIssuer(cr map[string]any, issuers, clu
 	}
 	switch kind {
 	case "", "Issuer":
-		return issuers[name]
+		return issuers[objectNamespace(cr)+"/"+name]
 	case "ClusterIssuer":
 		return clusterIssuers[name]
 	default:
@@ -234,6 +256,12 @@ func objectName(obj map[string]any) string {
 	meta, _ := obj["metadata"].(map[string]any)
 	name, _ := meta["name"].(string)
 	return name
+}
+
+func objectNamespace(obj map[string]any) string {
+	meta, _ := obj["metadata"].(map[string]any)
+	namespace, _ := meta["namespace"].(string)
+	return namespace
 }
 
 func isReady(obj map[string]any) bool {

@@ -17,8 +17,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
-func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, namespace string, issuers, clusterIssuers map[string]bool) (int, error) {
-	st, body, err := c.client.request(ctx, http.MethodGet, nativeCertificateCollectionPath(namespace), nil)
+func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, error) {
+	st, body, err := c.client.request(ctx, http.MethodGet, nativeCertificateCollectionPath(""), nil)
 	if err != nil {
 		return 0, err
 	}
@@ -37,6 +37,10 @@ func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, name
 
 	issued := 0
 	for _, cert := range list.Items {
+		namespace := objectNamespace(cert)
+		if namespace == "" {
+			continue
+		}
 		if isFinished(cert) || !c.requestBackedByIssuer(cert, issuers, clusterIssuers) {
 			continue
 		}

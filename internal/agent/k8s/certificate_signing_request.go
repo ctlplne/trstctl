@@ -15,9 +15,10 @@ import (
 const (
 	kubernetesCSRAPIVersion = "certificates.k8s.io/v1"
 
-	kubernetesCSRAnnotationIssuerName  = "trstctl.com/issuer-name"
-	kubernetesCSRAnnotationIssuerKind  = "trstctl.com/issuer-kind"
-	kubernetesCSRAnnotationIssuerGroup = "trstctl.com/issuer-group"
+	kubernetesCSRAnnotationIssuerName      = "trstctl.com/issuer-name"
+	kubernetesCSRAnnotationIssuerKind      = "trstctl.com/issuer-kind"
+	kubernetesCSRAnnotationIssuerGroup     = "trstctl.com/issuer-group"
+	kubernetesCSRAnnotationIssuerNamespace = "trstctl.com/issuer-namespace"
 )
 
 func certificateSigningRequestsPath() string {
@@ -88,13 +89,16 @@ func (c *IssuerController) csrBackedByIssuer(csr map[string]any, issuers, cluste
 		case "", "ClusterIssuer":
 			return clusterIssuers[issuerName]
 		case "Issuer":
-			return issuers[issuerName]
+			issuerNamespace, _ := annotations[kubernetesCSRAnnotationIssuerNamespace].(string)
+			return issuerNamespace != "" && issuers[issuerNamespace+"/"+issuerName]
 		default:
 			return false
 		}
 	}
 
-	return clusterIssuers[issuerName] || issuers[issuerName]
+	// A Kubernetes CSR has no namespace of its own. Without an explicit
+	// annotation, only a cluster-scoped issuer is unambiguous.
+	return clusterIssuers[issuerName]
 }
 
 func signerNameIssuer(signerName, group string) string {

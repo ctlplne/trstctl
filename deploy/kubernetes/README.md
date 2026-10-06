@@ -128,7 +128,9 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
 3. if `--cert-manager-controller`, `--bridge-signer-url`, and
    `--bridge-signer-token-file` are set, reconciles trstctl `Issuer` and
    `ClusterIssuer` CRDs, marks them Ready, signs matching cert-manager
-   `CertificateRequest`s, signs approved native Kubernetes
+   `CertificateRequest`s across namespaces only after a separate approver has
+   set `Approved=True` (a namespaced `Issuer` can sign only in its own namespace),
+   signs approved native Kubernetes
    `CertificateSigningRequest`s, fulfills trstctl-native `Certificate` resources
    into their requested TLS Secrets, and writes status back to the owning
    resource.

@@ -42,7 +42,9 @@ spec:
 cert-manager creates the `CertificateRequest`. A separate Kubernetes approver
 must set `Approved=True` first; the trstctl agent does not approve its own
 requests and ignores unapproved or denied requests. The agent confirms the named
-trstctl issuer resource exists, forwards the CSR and requested
+trstctl issuer resource exists in the correct scope: a `ClusterIssuer` can serve
+requests in any namespace, while an `Issuer` serves only requests in its own
+namespace. It forwards the CSR and requested
 `CertificateRequest.spec.duration` to the configured issuance endpoint, and sets
 the request `Ready=True` with the issued certificate. When duration is absent,
 the agent requests 24 hours; the CA profile may cap the issued lifetime. cert-manager
@@ -56,16 +58,22 @@ reviews; the agent service account needs no `approve` verb.
 Kubernetes clients can use the built-in `certificates.k8s.io/v1`
 `CertificateSigningRequest` API without cert-manager. The request must be
 approved by Kubernetes policy first; the trstctl agent does not approve requests.
-When `spec.signerName` maps to an existing trstctl `Issuer` or `ClusterIssuer`,
-the agent forwards only the CSR bytes to the served trstctl issue endpoint with a
-stable idempotency key, then writes `status.certificate` and Ready=True on the
-CSR status subresource.
+When `spec.signerName` maps to a trstctl `ClusterIssuer`, the agent forwards only
+the CSR bytes and `spec.expirationSeconds` to the configured issue endpoint with
+a stable idempotency key, then writes `status.certificate` on the CSR status
+subresource. Kubernetes CSRs have no namespace. To choose a namespaced trstctl
+`Issuer`, set `trstctl.com/issuer-kind: Issuer` and
+`trstctl.com/issuer-namespace: <namespace>` annotations; otherwise the agent
+will not infer a namespaced issuer from a same-named resource. The agent requests
+24 hours if `spec.expirationSeconds` is absent, subject to the CA profile.
 
 ```yaml
 apiVersion: certificates.k8s.io/v1
 kind: CertificateSigningRequest
 metadata:
   name: web
+  annotations:
+    trstctl.com/issuer-kind: ClusterIssuer
 spec:
   signerName: trstctl.com/trstctl
   request: <base64-der-csr>

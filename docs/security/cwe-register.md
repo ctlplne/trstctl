@@ -492,7 +492,7 @@ not this file.
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:467` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:4728` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:4744` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -546,8 +546,8 @@ not this file.
 | `internal/store/audit_feed.go:419` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_feed.go:420` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_retention_scope.go:22` | PostgreSQL advisory keys are signed bit patterns. |
-| `internal/store/ca.go:463` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/ca.go:533` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:466` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:536` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/compliance_report_run.go:280` | event sequence is a positive PostgreSQL bigint. |
 | `internal/store/compliance_report_run_lock.go:33` | advisory-lock keys intentionally use all 64 hash bits, including the sign bit. |
 | `internal/store/connector_lifecycle.go:463` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |

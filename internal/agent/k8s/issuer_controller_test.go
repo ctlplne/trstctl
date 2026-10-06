@@ -30,26 +30,34 @@ type fakeIssuerAPI struct {
 	kubernetesCSRs      []map[string]any
 	trustBundles        []map[string]any
 
-	clusterIssuerStatus map[string]map[string]any
-	issuerStatus        map[string]map[string]any
-	requestStatus       map[string]map[string]any
-	certificateStatus   map[string]map[string]any
-	kubernetesCSRStatus map[string]map[string]any
-	trustBundleStatus   map[string]map[string]any
-	secrets             map[string]map[string]any
-	configMaps          map[string]map[string]any
+	clusterIssuerStatus   map[string]map[string]any
+	issuerStatus          map[string]map[string]any
+	issuerStatusPath      map[string]string
+	requestStatus         map[string]map[string]any
+	requestStatusPath     map[string]string
+	certificateStatus     map[string]map[string]any
+	certificateStatusPath map[string]string
+	kubernetesCSRStatus   map[string]map[string]any
+	trustBundleStatus     map[string]map[string]any
+	secrets               map[string]map[string]any
+	secretWritePath       map[string]string
+	configMaps            map[string]map[string]any
 }
 
 func newFakeIssuerAPI() *fakeIssuerAPI {
 	return &fakeIssuerAPI{
-		clusterIssuerStatus: map[string]map[string]any{},
-		issuerStatus:        map[string]map[string]any{},
-		requestStatus:       map[string]map[string]any{},
-		certificateStatus:   map[string]map[string]any{},
-		kubernetesCSRStatus: map[string]map[string]any{},
-		trustBundleStatus:   map[string]map[string]any{},
-		secrets:             map[string]map[string]any{},
-		configMaps:          map[string]map[string]any{},
+		clusterIssuerStatus:   map[string]map[string]any{},
+		issuerStatus:          map[string]map[string]any{},
+		issuerStatusPath:      map[string]string{},
+		requestStatus:         map[string]map[string]any{},
+		requestStatusPath:     map[string]string{},
+		certificateStatus:     map[string]map[string]any{},
+		certificateStatusPath: map[string]string{},
+		kubernetesCSRStatus:   map[string]map[string]any{},
+		trustBundleStatus:     map[string]map[string]any{},
+		secrets:               map[string]map[string]any{},
+		secretWritePath:       map[string]string{},
+		configMaps:            map[string]map[string]any{},
 	}
 }
 
@@ -73,29 +81,31 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			_ = json.Unmarshal(body, &obj)
 			f.clusterIssuerStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
-		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/namespaces/apps/issuers":
+		case r.Method == http.MethodGet && (path == "/apis/trstctl.com/v1alpha1/namespaces/apps/issuers" || path == "/apis/trstctl.com/v1alpha1/issuers"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"apiVersion": "trstctl.com/v1alpha1",
 				"kind":       "IssuerList",
 				"items":      f.issuers,
 			})
-		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/trstctl.com/v1alpha1/namespaces/apps/issuers/") && strings.HasSuffix(path, "/status"):
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/trstctl.com/v1alpha1/namespaces/") && strings.Contains(path, "/issuers/") && strings.HasSuffix(path, "/status"):
 			name := nameBeforeStatus(path)
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
 			f.issuerStatus[name] = obj
+			f.issuerStatusPath[name] = path
 			_ = json.NewEncoder(w).Encode(obj)
-		case r.Method == http.MethodGet && path == "/apis/cert-manager.io/v1/namespaces/apps/certificaterequests":
+		case r.Method == http.MethodGet && (path == "/apis/cert-manager.io/v1/namespaces/apps/certificaterequests" || path == "/apis/cert-manager.io/v1/certificaterequests"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"apiVersion": "cert-manager.io/v1",
 				"kind":       "CertificateRequestList",
 				"items":      f.certificateRequests,
 			})
-		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/cert-manager.io/v1/namespaces/apps/certificaterequests/") && strings.HasSuffix(path, "/status"):
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/cert-manager.io/v1/namespaces/") && strings.Contains(path, "/certificaterequests/") && strings.HasSuffix(path, "/status"):
 			name := nameBeforeStatus(path)
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
 			f.requestStatus[name] = obj
+			f.requestStatusPath[name] = path
 			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodGet && path == "/apis/certificates.k8s.io/v1/certificatesigningrequests":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -123,19 +133,20 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			obj["metadata"].(map[string]any)["resourceVersion"] = "31"
 			f.trustBundleStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
-		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates":
+		case r.Method == http.MethodGet && (path == "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates" || path == "/apis/trstctl.com/v1alpha1/certificates"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"apiVersion": "trstctl.com/v1alpha1",
 				"kind":       "CertificateList",
 				"items":      f.certificates,
 			})
-		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates/") && strings.HasSuffix(path, "/status"):
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/trstctl.com/v1alpha1/namespaces/") && strings.Contains(path, "/certificates/") && strings.HasSuffix(path, "/status"):
 			name := nameBeforeStatus(path)
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
 			f.certificateStatus[name] = obj
+			f.certificateStatusPath[name] = path
 			_ = json.NewEncoder(w).Encode(obj)
-		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/namespaces/apps/secrets/"):
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.Contains(path, "/secrets/"):
 			parts := strings.Split(strings.Trim(path, "/"), "/")
 			name := parts[len(parts)-1]
 			obj := f.secrets[name]
@@ -144,7 +155,7 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(obj)
-		case r.Method == http.MethodPost && path == "/api/v1/namespaces/apps/secrets":
+		case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.HasSuffix(path, "/secrets"):
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
 			meta, _ := obj["metadata"].(map[string]any)
@@ -155,14 +166,16 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			}
 			meta["resourceVersion"] = "1"
 			f.secrets[name] = obj
+			f.secretWritePath[name] = path
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(obj)
-		case r.Method == http.MethodPut && strings.HasPrefix(path, "/api/v1/namespaces/apps/secrets/"):
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.Contains(path, "/secrets/"):
 			parts := strings.Split(strings.Trim(path, "/"), "/")
 			name := parts[len(parts)-1]
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
 			f.secrets[name] = obj
+			f.secretWritePath[name] = path
 			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.Contains(path, "/configmaps/"):
 			key := configMapKeyFromPath(path)
@@ -341,6 +354,61 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 	}
 }
 
+func TestClusterIssuerSignsApprovedRequestOutsideAgentNamespace(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	request := certRequest("remote-namespace", "trstctl", "trstctl.com", false)
+	request["metadata"].(map[string]any)["namespace"] = "payments"
+	request["spec"].(map[string]any)["request"] = csrRequestField(t)
+	api.certificateRequests = []map[string]any{approveCertRequest(request)}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.SignedRequests != 1 {
+		t.Fatalf("signed %d remote CertificateRequests, want 1", result.SignedRequests)
+	}
+	if got := api.requestStatusPath["remote-namespace"]; got != "/apis/cert-manager.io/v1/namespaces/payments/certificaterequests/remote-namespace/status" {
+		t.Fatalf("status written to %q, want originating payments namespace", got)
+	}
+}
+
+func TestNamespacedIssuerSignsOnlyRequestsInItsOwnNamespace(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.issuers = []map[string]any{trstctlIssuer("team-ca", "payments")}
+	makeRequest := func(name, namespace string) map[string]any {
+		request := certRequest(name, "team-ca", "trstctl.com", false)
+		request["metadata"].(map[string]any)["namespace"] = namespace
+		request["spec"].(map[string]any)["request"] = csrRequestField(t)
+		request["spec"].(map[string]any)["issuerRef"].(map[string]any)["kind"] = "Issuer"
+		return approveCertRequest(request)
+	}
+	api.certificateRequests = []map[string]any{makeRequest("same-namespace", "payments"), makeRequest("other-namespace", "apps")}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.IssuersReady != 1 || result.SignedRequests != 1 || api.requestStatus["other-namespace"] != nil {
+		t.Fatalf("namespace isolation failed: result=%+v statuses=%v", result, api.requestStatus)
+	}
+	if got := api.issuerStatusPath["team-ca"]; got != "/apis/trstctl.com/v1alpha1/namespaces/payments/issuers/team-ca/status" {
+		t.Fatalf("Issuer status path %q, want payments namespace", got)
+	}
+	if got := api.requestStatusPath["same-namespace"]; got != "/apis/cert-manager.io/v1/namespaces/payments/certificaterequests/same-namespace/status" {
+		t.Fatalf("CertificateRequest status path %q, want payments namespace", got)
+	}
+}
+
 func TestIssuerControllerRefusesUnapprovedCertificateRequest(t *testing.T) {
 	api := newFakeIssuerAPI()
 	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
@@ -503,6 +571,58 @@ func TestIssuerControllerServesNativeCertificateCRDCAPK8S02(t *testing.T) {
 	keyPEM := decodeSecretData(t, secretObj, "tls.key")
 	if err := crypto.VerifyCertKeyMatchPEM(certPEM, keyPEM); err != nil {
 		t.Fatalf("Secret/web-tls certificate and key do not match: %v", err)
+	}
+}
+
+func TestClusterIssuerFulfillsNativeCertificateOutsideAgentNamespace(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	api.certificates = []map[string]any{trstctlCertificate("remote-native", "payments", "remote-native-tls")}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.NativeCertificatesIssued != 1 {
+		t.Fatalf("issued %d native Certificates, want 1", result.NativeCertificatesIssued)
+	}
+	if got := api.secretWritePath["remote-native-tls"]; got != "/api/v1/namespaces/payments/secrets" {
+		t.Fatalf("Secret write path %q, want payments namespace", got)
+	}
+	if got := api.certificateStatusPath["remote-native"]; got != "/apis/trstctl.com/v1alpha1/namespaces/payments/certificates/remote-native/status" {
+		t.Fatalf("Certificate status path %q, want payments namespace", got)
+	}
+}
+
+func TestNativeKubernetesCSRRequiresExplicitNamespacedIssuerBinding(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.issuers = []map[string]any{trstctlIssuer("team-ca", "payments")}
+	makeCSR := func(name string, namespaceAnnotation bool) map[string]any {
+		csr := kubernetesCSR(name, "trstctl.com/team-ca", true)
+		csr["spec"].(map[string]any)["request"] = csrDERRequestField(t)
+		annotations := map[string]any{"trstctl.com/issuer-kind": "Issuer"}
+		if namespaceAnnotation {
+			annotations["trstctl.com/issuer-namespace"] = "payments"
+		}
+		csr["metadata"].(map[string]any)["annotations"] = annotations
+		return csr
+	}
+	api.kubernetesCSRs = []map[string]any{makeCSR("explicit-ns", true), makeCSR("missing-ns", false)}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.KubernetesCSRsSigned != 1 || api.kubernetesCSRStatus["explicit-ns"] == nil || api.kubernetesCSRStatus["missing-ns"] != nil {
+		t.Fatalf("native CSR namespace binding: signed=%d statuses=%v", result.KubernetesCSRsSigned, api.kubernetesCSRStatus)
 	}
 }
 
