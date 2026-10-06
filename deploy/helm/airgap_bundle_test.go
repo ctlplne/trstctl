@@ -123,6 +123,94 @@ func TestAirGapBundleRequiresSupportedPlatform(t *testing.T) {
 	}
 }
 
+func TestAirGapBundleUsesPinnedLocalImageWithoutPull(t *testing.T) {
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	log := filepath.Join(bin, "docker.log")
+	const imageID = "sha256:9538a65497203467f056d2b9e89c13cf856bdd49bd827fd45ed40020c0929372"
+	fakeDocker := `#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> "$AIRGAP_DOCKER_LOG"
+case "$*" in
+  *'image inspect'*'{{.Id}}'*) printf '%s\n' "$AIRGAP_DOCKER_IMAGE_ID" ;;
+  *'image inspect'*'{{.Os}}/{{.Architecture}}'*) printf '%s\n' "$AIRGAP_DOCKER_PLATFORM" ;;
+  *'image save'*)
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = '-o' ]; then shift; printf 'saved pinned image\n' > "$1"; exit 0; fi
+      shift
+    done
+    exit 42 ;;
+  *) exit 43 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "docker"), []byte(fakeDocker), 0o755); err != nil { // #nosec G306 -- the executable is a disposable fake Docker client inside this test's private temporary directory.
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		pinned   string
+		platform string
+		ok       bool
+	}{
+		{"exact image", imageID, "linux/arm64", true},
+		{"wrong image id", "sha256:0000000000000000000000000000000000000000000000000000000000000000", "linux/arm64", false},
+		{"missing pin", "", "linux/arm64", false},
+		{"wrong platform", imageID, "linux/amd64", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(log, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out := t.TempDir()
+			cmd := exec.Command(filepath.Join(repo, "scripts", "airgap-bundle.sh")) // #nosec G204 -- fixed repository script under test.
+			cmd.Dir = repo
+			cmd.Env = append(os.Environ(),
+				"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"AIRGAP_DOCKER_LOG="+log,
+				"AIRGAP_DOCKER_IMAGE_ID="+imageID,
+				"AIRGAP_DOCKER_PLATFORM="+tc.platform,
+				"VERSION=v0.5.4-qa-local",
+				"PLATFORM=linux/arm64",
+				"IMAGE=trstctl-goal-airgap-backup:local",
+				"OUT_DIR="+out,
+				"TRSTCTL_AIRGAP_IMAGE_SOURCE=local",
+				"TRSTCTL_AIRGAP_IMAGE_ID="+tc.pinned,
+			)
+			output, err := cmd.CombinedOutput()
+			if (err == nil) != tc.ok {
+				t.Fatalf("bundle result = %v, want success %v:\n%s", err, tc.ok, output)
+			}
+			calls, err := os.ReadFile(log) // #nosec G304 -- the call log path is created inside this test's private temporary directory.
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(calls), "pull") {
+				t.Fatalf("local artifact path attempted a pull:\n%s", calls)
+			}
+			if !tc.ok {
+				if strings.Contains(string(calls), "image save") {
+					t.Fatalf("wrong image was saved:\n%s", calls)
+				}
+				return
+			}
+			bundle := filepath.Join(out, "trstctl-0.5.4-qa-local-linux-arm64-airgap")
+			manifest, err := os.ReadFile(filepath.Join(bundle, "MANIFEST.txt")) // #nosec G304 -- the bundle path is created inside this test's private temporary directory.
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(manifest), "image_id: "+imageID) || !strings.Contains(string(manifest), "image_source: local") {
+				t.Fatalf("bundle does not bind its local source image:\n%s", manifest)
+			}
+			if _, err := os.Stat(filepath.Join(bundle, "images", "trstctl-image.tar")); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func assertTrackedTree(t *testing.T, root string, tracked map[string]bool) {
 	t.Helper()
 	seen := map[string]bool{}

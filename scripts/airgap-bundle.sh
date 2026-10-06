@@ -12,6 +12,8 @@ Required:
 Optional:
   IMAGE=ghcr.io/ctlplne/trstctl:vX.Y.Z
   OUT_DIR=dist/airgap
+  TRSTCTL_AIRGAP_IMAGE_SOURCE=local  # use a pre-staged image; never pull
+  TRSTCTL_AIRGAP_IMAGE_ID=sha256:... # required with local; pin exact image
   TRSTCTL_AIRGAP_SKIP_IMAGES=1   # test-only: write the bundle without docker save
 
 The bundle contains the Helm chart, values-airgap.yaml, customer docs, checksums,
@@ -45,6 +47,18 @@ case "$platform" in
 esac
 
 image="${IMAGE:-ghcr.io/ctlplne/trstctl:${version}}"
+image_source="${TRSTCTL_AIRGAP_IMAGE_SOURCE:-registry}"
+case "$image_source" in
+  registry|local) ;;
+  *) echo "unsupported TRSTCTL_AIRGAP_IMAGE_SOURCE: $image_source" >&2; exit 2 ;;
+esac
+if [[ "$image_source" == local && "${TRSTCTL_AIRGAP_SKIP_IMAGES:-0}" != 1 ]]; then
+  expected_image_id="${TRSTCTL_AIRGAP_IMAGE_ID:-}"
+  if [[ ! "$expected_image_id" =~ ^sha256:[[:xdigit:]]{64}$ ]]; then
+    echo "local image source requires a pinned TRSTCTL_AIRGAP_IMAGE_ID=sha256:<64 hex digits>" >&2
+    exit 2
+  fi
+fi
 out_root="${OUT_DIR:-${repo_root}/dist/airgap}"
 platform_slug="${platform//\//-}"
 bundle_name="trstctl-${version#v}-${platform_slug}-airgap"
@@ -114,10 +128,30 @@ fi
 
 if [[ "${TRSTCTL_AIRGAP_SKIP_IMAGES:-0}" == "1" ]]; then
   printf 'image save skipped by TRSTCTL_AIRGAP_SKIP_IMAGES=1; do not use this bundle for production install\n' > "$bundle_dir/images/README.txt"
+  image_source=skipped
+  image_id=none
 else
   require docker
-  docker pull --platform "$platform" "$image"
+  if [[ "$image_source" == registry ]]; then
+    docker pull --platform "$platform" "$image"
+  else
+    local_image_id="$(docker image inspect --format '{{.Id}}' "$image")"
+    if [[ "$local_image_id" != "$expected_image_id" ]]; then
+      echo "staged image ID differs from TRSTCTL_AIRGAP_IMAGE_ID" >&2
+      exit 2
+    fi
+    local_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")"
+    if [[ "$local_platform" != "$platform" ]]; then
+      echo "staged image platform $local_platform differs from requested $platform" >&2
+      exit 2
+    fi
+  fi
+  image_id="$(docker image inspect --format '{{.Id}}' "$image")"
   docker image save --platform "$platform" "$image" -o "$bundle_dir/images/trstctl-image.tar"
+  if [[ ! -s "$bundle_dir/images/trstctl-image.tar" || "$(docker image inspect --format '{{.Id}}' "$image")" != "$image_id" ]]; then
+    echo "image save was empty or image tag changed during assembly" >&2
+    exit 2
+  fi
   printf '%s\n' "$image" > "$bundle_dir/images/trstctl-image.ref"
 fi
 printf '%s\n' "$platform" > "$bundle_dir/images/trstctl-image.platform"
@@ -126,6 +160,8 @@ cat > "$bundle_dir/MANIFEST.txt" <<EOF
 trstctl air-gap bundle
 version: ${version}
 image: ${image}
+image_source: ${image_source}
+image_id: ${image_id}
 platform: ${platform}
 created_by: scripts/airgap-bundle.sh
 

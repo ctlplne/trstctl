@@ -53,6 +53,23 @@ scripts/verify-image.sh "$IMAGE"
 make airgap-bundle VERSION="$VERSION" IMAGE="$IMAGE" PLATFORM="$PLATFORM"
 ```
 
+If the release image is already staged on the build host, pin the image ID from
+the trusted release verification record and use the local source mode:
+
+```bash
+export TRSTCTL_AIRGAP_IMAGE_SOURCE=local
+export TRSTCTL_AIRGAP_IMAGE_ID=sha256:<the-verified-image-id>
+make airgap-bundle VERSION="$VERSION" IMAGE="$IMAGE" PLATFORM="$PLATFORM"
+```
+
+This mode never calls `docker pull`. It refuses a missing ID, a different local
+image ID, or a different image platform. The bundle manifest records the exact
+image ID and source, and `CHECKSUMS.txt` covers the saved image tarball. An image
+ID proves local byte identity, not publisher identity: verify the release
+signature and provenance before staging it. Obtain the expected ID from that
+verification record rather than recomputing the expected value from the same
+mutable image tag at bundle time.
+
 The output is
 `dist/airgap/trstctl-<version>-<os>-<architecture>-airgap.tar.gz` plus a
 `.sha256` checksum. A bundle contains exactly the named platform so a build host
@@ -90,6 +107,7 @@ Load the image into the offline registry or directly onto each node:
 
 ```bash
 docker load -i images/trstctl-image.tar
+docker image inspect "$(cat images/trstctl-image.ref)" --format '{{.Id}}' # compare with MANIFEST.txt image_id
 docker tag ghcr.io/ctlplne/trstctl:v0.5.4 registry.airgap.local/trstctl:v0.5.4
 docker push registry.airgap.local/trstctl:v0.5.4
 ```
@@ -252,3 +270,5 @@ checksum and internal `CHECKSUMS.txt`, load the new image into the offline regis
 then run a normal Helm upgrade with the same `values-airgap.yaml`. Do not let cluster
 nodes pull directly from a public registry; the point of the bundle is that all
 artifact movement is explicit, checked, and auditable.
+When the exact replacement image is already staged, use the pinned local source
+mode above and compare the loaded image ID with the manifest before upgrading.
