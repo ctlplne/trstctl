@@ -1260,11 +1260,11 @@ not this file.
 | `internal/server/backup.go:138` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:202` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:374` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:409` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:518` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:760` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:862` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:866` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:435` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:527` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:769` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:871` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:875` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup_test.go:387` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:435` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:574` | test reads its own fixture/tempdir path (CWE-22) |
