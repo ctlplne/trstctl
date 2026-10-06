@@ -1,0 +1,33 @@
+# Evaluation-only one-shot backup worker. Include this overlay only for a DR run;
+# the continuously serving control plane never receives the signer key volume.
+services:
+  dr-backup:
+    profiles: [dr]
+    image: ${TRSTCTL_DR_IMAGE:-trstctl-eval:local}
+    pull_policy: never
+    entrypoint: [/usr/local/bin/trstctl]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      TRSTCTL_POSTGRES_MODE: external
+      TRSTCTL_POSTGRES_DSN: ${TRSTCTL_DR_POSTGRES_DSN:?set the source PostgreSQL DSN}
+      TRSTCTL_NATS_MODE: external
+      TRSTCTL_NATS_URL: ${TRSTCTL_DR_NATS_URL:?set the source NATS URL}
+      TRSTCTL_NATS_REPLICAS: "1"
+      TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
+      TRSTCTL_SIGNER_MODE: external
+      TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock
+      TRSTCTL_SIGNER_KEY_STORE_DIR: /data/signer/keys
+      TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
+      TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER: "true"
+      TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
+      TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE: /backup/key.bin
+    volumes:
+      - signerkeys:/data/signer:ro
+      - trstctldata:/data:ro
+      - secrets:/data/secrets:ro
+      - signersock:/run/trstctl:ro
+      - ${TRSTCTL_DR_BACKUP_KEY_FILE:?set a private backup key file}:/backup/key.bin:ro
+      - ${TRSTCTL_DR_OUTPUT_DIR:?set a private backup output directory}:/backups

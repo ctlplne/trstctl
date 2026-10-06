@@ -767,6 +767,19 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	if _, err := RunFullBackup(ctx, cfg, backupDir); err != nil {
 		t.Fatalf("RunFullBackup: %v", err)
 	}
+	// A backup worker can see a directory at the same path as the signer's
+	// keystore while its container has mounted a different volume there. It must
+	// refuse a plausible manifest when that directory lacks the live CA handle.
+	wrongCfg := *cfg
+	wrongCfg.Signer.KeyStoreDir = filepath.Join(dir, "unrelated-signer-keystore")
+	wrongCfg.Signer.Socket = filepath.Join(socketDir, "wrong.sock")
+	wrongDir := filepath.Join(dir, "wrong-backup")
+	if _, err := RunFullBackup(ctx, &wrongCfg, wrongDir); err == nil || !strings.Contains(err.Error(), "issuing-ca.key") {
+		t.Fatalf("full backup with unrelated signer custody error = %v, want missing CA-key refusal", err)
+	}
+	if _, err := os.Stat(filepath.Join(wrongDir, backup.FullManifestName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("wrong-custody backup published a manifest: %v", err)
+	}
 	assertNoSourceTreeSignerAuthSecret(t, "full backup")
 	att, err := RunRestoreDrill(ctx, cfg, backupDir)
 	if err != nil {

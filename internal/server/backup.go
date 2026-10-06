@@ -300,6 +300,11 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
 		return backup.FullManifest{}, errors.New("full backup requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
+	// Refuse a control-plane-only volume view before creating any artifact bytes
+	// or asking the signer to create an audit handle.
+	if err := requireFullBackupSignerCustody(cfg.Signer.KeyStoreDir, issuingCAHandle); err != nil {
+		return backup.FullManifest{}, err
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return backup.FullManifest{}, fmt.Errorf("create full backup dir: %w", err)
 	}
@@ -323,6 +328,9 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		return backup.FullManifest{}, err
 	}
 	defer signerRuntime.Close()
+	if err := requireFullBackupSignerCustody(cfg.Signer.KeyStoreDir, issuingCAHandle, "audit-export"); err != nil {
+		return backup.FullManifest{}, err
+	}
 	log, err := openSanitizedHistoryAwareEventLog(
 		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
 	)
@@ -439,6 +447,9 @@ func captureFullBackupFiles(
 	dir string,
 	enc *fullBackupEncryption,
 ) ([]backup.Artifact, error) {
+	if err := requireFullBackupSignerCustody(cfg.Signer.KeyStoreDir, issuingCAHandle, "audit-export"); err != nil {
+		return nil, err
+	}
 	var artifacts []backup.Artifact
 	for _, spec := range []struct {
 		name      string
@@ -465,6 +476,25 @@ func captureFullBackupFiles(
 	}
 	artifacts = append(artifacts, keyStoreArtifact)
 	return artifacts, nil
+}
+
+// A directory at the configured path is not proof that the backup worker sees
+// the live signer's custody volume. A control-plane-only mount can contain an
+// unrelated journal and otherwise produce a self-consistent, unrestorable full
+// manifest. Both handles are minted by every initialized local signer; the
+// issuing CA certificate and audit-export key must be recoverable together.
+func requireFullBackupSignerCustody(dir string, handles ...string) error {
+	for _, handle := range handles {
+		path := filepath.Join(dir, handle+".key")
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("full backup: signer custody at %s is missing %s: %w; mount the live signer key store into a dedicated backup process", dir, handle+".key", err)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			return fmt.Errorf("full backup: signer custody at %s has an empty or non-regular %s; mount the live signer key store into a dedicated backup process", dir, handle+".key")
+		}
+	}
+	return nil
 }
 
 // RunRestore restores the event log from a backup at path and rebuilds the read

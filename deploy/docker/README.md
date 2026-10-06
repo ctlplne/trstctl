@@ -74,6 +74,41 @@ bundled NATS service is still one server, so Compose explicitly sets
 external NATS should leave the default three replicas and will fail
 startup/readiness if JetStream cannot honor them.
 
+## Back up the evaluation stack
+
+The full backup must see the signer's sealed key-store volume as well as the
+control-plane data, PostgreSQL and JetStream. Run the opt-in backup worker from
+the exact local image; the continuously serving control plane keeps its narrower
+mounts. A backup refuses to publish a manifest if either the issuing-CA or audit
+signing handle is absent from the worker's key-store view.
+
+Create an owner-readable `0600` environment file with these five variables:
+
+| Variable | Value |
+| --- | --- |
+| `TRSTCTL_DR_IMAGE` | Exact locally loaded trstctl image reference; defaults to `trstctl-eval:local`. |
+| `TRSTCTL_DR_POSTGRES_DSN` | DSN for this evaluation stack's PostgreSQL service. |
+| `TRSTCTL_DR_NATS_URL` | URL for this evaluation stack's NATS service. |
+| `TRSTCTL_DR_BACKUP_KEY_FILE` | Absolute path to a separate, owner-readable raw backup encryption key file. |
+| `TRSTCTL_DR_OUTPUT_DIR` | Absolute path to a private, writable host directory for the artifact. |
+
+With the seven evaluation services already running, use the same Compose project
+name and files that started them. For the default project:
+
+```bash
+docker compose --env-file /secure/trstctl-dr.env \
+  -f deploy/docker/docker-compose.yml \
+  -f deploy/docker/docker-compose.backup.yml \
+  --profile dr run --rm --no-deps dr-backup \
+  --full-backup-dir=/backups/trstctl-eval-2026-10-06
+```
+
+The backup overlay pulls no image, publishes no port, and mounts signer custody
+read-only into that short-lived worker. Keep the key outside the artifact
+directory. Verify the manifest and perform an isolated full restore before
+treating the artifact as a recovery point; see [Backup and disaster
+recovery](../../docs/disaster-recovery.md).
+
 > **Not for production (OPS-007).** The Compose stack bakes a static Postgres
 > password (`trstctl`/`trstctl`) and connects with `sslmode=disable` so it comes
 > up with zero setup — convenient for a throwaway eval, unacceptable for a real

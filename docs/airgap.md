@@ -77,6 +77,13 @@ shasum -a 256 -c CHECKSUMS.txt
 cat images/trstctl-image.platform # must match the disconnected nodes
 ```
 
+For a disconnected Compose evaluation, use the exact transferred image in the
+[one-shot backup worker](../deploy/docker/README.md#back-up-the-evaluation-stack).
+It attaches the live signer custody volume only while writing the encrypted full
+artifact, uses the same internal-only Docker network as the running stack, and
+pulls no image. Keep the backup encryption key in separate local custody and
+rehearse a restore into fresh, isolated datastores before relying on the archive.
+
 ## Load and install
 
 Load the image into the offline registry or directly onto each node:

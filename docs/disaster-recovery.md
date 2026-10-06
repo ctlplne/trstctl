@@ -171,6 +171,15 @@ that head and writes `postgres-state.jsonl` from the pinned snapshot with the sa
 event-cut sequence in its header and trailer. Mutations after that cut are
 intentionally absent from both artifacts and are captured by a later backup.
 
+In the Docker Compose evaluation topology, the serving control plane deliberately
+does not mount signer custody. Run the [dedicated one-shot backup
+worker](../deploy/docker/README.md#back-up-the-evaluation-stack) with the exact
+image and a read-only signer-key volume. The command checks for the issuing-CA
+and audit-export sealed handles before exporting the event and PostgreSQL state;
+a directory that merely exists at the expected path is insufficient. A successful
+manifest still needs an isolated restore drill to qualify all captured keys and
+independent state. Keep the encryption key outside the artifact directory.
+
 A subject erasure can briefly have sanitized replacement history ready while its
 final PostgreSQL projection is still recoverable from a durable preparation row.
 Every PostgreSQL-state export checks for that row inside the pinned snapshot and

@@ -345,6 +345,8 @@ func containsStr(ss []string, want string) bool {
 type composeFile struct {
 	Services map[string]struct {
 		Image       string         `yaml:"image"`
+		PullPolicy  string         `yaml:"pull_policy"`
+		Profiles    []string       `yaml:"profiles"`
 		Entrypoint  []string       `yaml:"entrypoint"`
 		Command     yaml.Node      `yaml:"command"`
 		Environment map[string]any `yaml:"environment"`
@@ -360,6 +362,43 @@ type composeFile struct {
 		} `yaml:"healthcheck"`
 	} `yaml:"services"`
 	Volumes map[string]any `yaml:"volumes"`
+}
+
+func TestComposeFullBackupUsesDedicatedSignerCustodyMount(t *testing.T) {
+	raw := readArtifact(t, "docker-compose.backup.yml")
+	var cf composeFile
+	if err := yaml.Unmarshal([]byte(raw), &cf); err != nil {
+		t.Fatalf("parse backup overlay: %v", err)
+	}
+	worker, ok := cf.Services["dr-backup"]
+	if !ok {
+		t.Fatal("backup overlay has no dedicated dr-backup service")
+	}
+	if worker.PullPolicy != "never" || !containsStr(worker.Profiles, "dr") || len(worker.Ports) != 0 {
+		t.Fatalf("backup worker must be offline, opt-in and portless: policy=%q profiles=%v ports=%v", worker.PullPolicy, worker.Profiles, worker.Ports)
+	}
+	for _, want := range []string{
+		"signerkeys:/data/signer:ro",
+		"trstctldata:/data:ro",
+		"secrets:/data/secrets:ro",
+		"signersock:/run/trstctl:ro",
+		"${TRSTCTL_DR_BACKUP_KEY_FILE:?set a private backup key file}:/backup/key.bin:ro",
+		"${TRSTCTL_DR_OUTPUT_DIR:?set a private backup output directory}:/backups",
+	} {
+		if !containsStr(worker.Volumes, want) {
+			t.Errorf("dedicated backup worker lacks exact mount %q: %v", want, worker.Volumes)
+		}
+	}
+	for key, want := range map[string]string{
+		"TRSTCTL_SIGNER_MODE":                "external",
+		"TRSTCTL_SIGNER_SOCKET":              "/run/trstctl/signer.sock",
+		"TRSTCTL_SIGNER_KEY_STORE_DIR":       "/data/signer/keys",
+		"TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE": "/backup/key.bin",
+	} {
+		if got := asEnvString(worker.Environment[key]); got != want {
+			t.Errorf("backup worker %s=%q, want %q", key, got, want)
+		}
+	}
 }
 
 // TestComposeBlankEvaluationHasASafeFirstOperatorLogin closes the cold-install
