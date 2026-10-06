@@ -32,20 +32,19 @@ spec:
           properties:
             spec:
               type: object
+              required: [signerURL]
               properties:
                 signerURL:
                   type: string
-                  description: trstctl served issuance endpoint that receives the CSR.
+                  pattern: '^https://'
+                  description: Exact operator-configured trstctl HTTPS issuance endpoint; a mismatch leaves this Issuer NotReady.
                 caAuthorityID:
                   type: string
-                  description: Human-readable trstctl CA authority identifier used by operators and docs.
-                profileName:
-                  type: string
-                  description: Optional trstctl certificate profile name applied by the signer endpoint.
+                  description: Optional exact CA authority ID, checked against signerURL before issuance.
                 ttlSeconds:
                   type: integer
                   minimum: 1
-                  description: Requested leaf lifetime in seconds when the signer endpoint honors it.
+                  description: Maximum requested leaf lifetime in seconds; shorter CertificateRequest or CSR durations are preserved.
             status:
               type: object
               properties:
@@ -290,20 +289,19 @@ spec:
           properties:
             spec:
               type: object
+              required: [signerURL]
               properties:
                 signerURL:
                   type: string
-                  description: trstctl served issuance endpoint that receives the CSR.
+                  pattern: '^https://'
+                  description: Exact operator-configured trstctl HTTPS issuance endpoint; a mismatch leaves this ClusterIssuer NotReady.
                 caAuthorityID:
                   type: string
-                  description: Human-readable trstctl CA authority identifier used by operators and docs.
-                profileName:
-                  type: string
-                  description: Optional trstctl certificate profile name applied by the signer endpoint.
+                  description: Optional exact CA authority ID, checked against signerURL before issuance.
                 ttlSeconds:
                   type: integer
                   minimum: 1
-                  description: Requested leaf lifetime in seconds when the signer endpoint honors it.
+                  description: Maximum requested leaf lifetime in seconds; shorter CertificateRequest or CSR durations are preserved.
             status:
               type: object
               properties:

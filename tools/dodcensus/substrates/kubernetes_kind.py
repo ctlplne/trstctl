@@ -290,7 +290,8 @@ def prepare_fixtures(api: KubernetesAPI, root: Path) -> tuple[str, str, str]:
 
     api.create("/apis/trstctl.com/v1alpha1/clusterissuers", {
         "apiVersion": "trstctl.com/v1alpha1", "kind": "ClusterIssuer",
-        "metadata": {"name": ISSUER_NAME}, "spec": {},
+        "metadata": {"name": ISSUER_NAME},
+        "spec": {"signerURL": "https://trstctl.dod.local/api/v1/ca/authorities/dod/issue"},
     })
 
     csr_key = root / "csr-key.pem"

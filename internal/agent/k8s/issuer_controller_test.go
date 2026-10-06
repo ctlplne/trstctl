@@ -20,6 +20,17 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+const testIssuerSignerURL = "https://trstctl.trstctl.svc/api/v1/issue"
+
+func testIssuerController(t *testing.T, client *k8s.Client, signer k8s.Signer, group string) *k8s.IssuerController {
+	t.Helper()
+	controller, err := k8s.NewIssuerController(client, signer, group, testIssuerSignerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return controller
+}
+
 type fakeIssuerAPI struct {
 	mu sync.Mutex
 
@@ -237,7 +248,7 @@ func trstctlClusterIssuer(name string) map[string]any {
 		"apiVersion": "trstctl.com/v1alpha1",
 		"kind":       "ClusterIssuer",
 		"metadata":   map[string]any{"name": name, "resourceVersion": "10"},
-		"spec":       map[string]any{"signerURL": "https://trstctl.trstctl.svc/api/v1/issue"},
+		"spec":       map[string]any{"signerURL": testIssuerSignerURL},
 	}
 }
 
@@ -246,7 +257,7 @@ func trstctlIssuer(name, namespace string) map[string]any {
 		"apiVersion": "trstctl.com/v1alpha1",
 		"kind":       "Issuer",
 		"metadata":   map[string]any{"name": name, "namespace": namespace, "resourceVersion": "11"},
-		"spec":       map[string]any{"signerURL": "https://trstctl.trstctl.svc/api/v1/issue"},
+		"spec":       map[string]any{"signerURL": testIssuerSignerURL},
 	}
 }
 
@@ -325,7 +336,7 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -365,7 +376,7 @@ func TestClusterIssuerSignsApprovedRequestOutsideAgentNamespace(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -393,7 +404,7 @@ func TestNamespacedIssuerSignsOnlyRequestsInItsOwnNamespace(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -424,10 +435,153 @@ func TestIssuerControllerRefusesUnapprovedCertificateRequest(t *testing.T) {
 	})
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil || result.SignedRequests != 0 || calls != 0 || len(api.requestStatus) != 0 {
 		t.Fatalf("unapproved request reached signer/status: result=%+v calls=%d status=%v err=%v", result, calls, api.requestStatus, err)
+	}
+}
+
+func TestIssuerControllerRefusesMismatchedCAEndpoint(t *testing.T) {
+	api := newFakeIssuerAPI()
+	issuer := trstctlClusterIssuer("trstctl")
+	issuer["spec"].(map[string]any)["signerURL"] = "https://other-ca.example.test/api/v1/ca/authorities/other/issue"
+	api.clusterIssuers = []map[string]any{issuer}
+	request := certRequest("wrong-ca", "trstctl", "trstctl.com", false)
+	request["spec"].(map[string]any)["request"] = csrRequestField(t)
+	api.certificateRequests = []map[string]any{approveCertRequest(request)}
+	var signerCalls int
+	signer := k8s.SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
+		signerCalls++
+		return []byte("unexpected certificate"), nil
+	})
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.ClusterIssuersReady != 0 || result.SignedRequests != 0 || signerCalls != 0 {
+		t.Fatalf("mismatched CA was usable: ready=%d signed=%d signerCalls=%d", result.ClusterIssuersReady, result.SignedRequests, signerCalls)
+	}
+	if ready, _ := readyCondition(t, api.clusterIssuerStatus["trstctl"]); ready != "False" {
+		t.Fatalf("mismatched ClusterIssuer Ready=%q, want False", ready)
+	}
+}
+
+func TestIssuerTTLSecondsCapsRequestedDuration(t *testing.T) {
+	api := newFakeIssuerAPI()
+	issuer := trstctlClusterIssuer("trstctl")
+	issuer["spec"].(map[string]any)["ttlSeconds"] = float64(1800)
+	api.clusterIssuers = []map[string]any{issuer}
+	request := certRequest("capped", "trstctl", "trstctl.com", false)
+	request["spec"].(map[string]any)["request"] = csrRequestField(t)
+	request["spec"].(map[string]any)["duration"] = "2h"
+	api.certificateRequests = []map[string]any{approveCertRequest(request)}
+	var gotTTL time.Duration
+	baseSigner, _ := caSigner(t)
+	signer := k8s.SignerFunc(func(ctx context.Context, csr []byte, ttl time.Duration) ([]byte, error) {
+		gotTTL = ttl
+		return baseSigner.Sign(ctx, csr, ttl)
+	})
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.SignedRequests != 1 || gotTTL != 30*time.Minute {
+		t.Fatalf("issuer ttlSeconds cap ignored: signed=%d ttl=%s, want 30m", result.SignedRequests, gotTTL)
+	}
+}
+
+func TestIssuerRejectsUnsupportedOrInconsistentConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(map[string]any)
+		reason string
+	}{
+		{name: "missing-url", change: func(spec map[string]any) { delete(spec, "signerURL") }, reason: "SignerURLMismatch"},
+		{name: "profile-not-served", change: func(spec map[string]any) { spec["profileName"] = "unwired-profile" }, reason: "UnsupportedProfile"},
+		{name: "authority-id-mismatch", change: func(spec map[string]any) { spec["caAuthorityID"] = "other" }, reason: "CAAuthorityMismatch"},
+		{name: "invalid-ttl", change: func(spec map[string]any) { spec["ttlSeconds"] = float64(0) }, reason: "InvalidTTLSeconds"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := newFakeIssuerAPI()
+			issuer := trstctlClusterIssuer("trstctl")
+			tc.change(issuer["spec"].(map[string]any))
+			api.clusterIssuers = []map[string]any{issuer}
+			request := certRequest("configured-request", "trstctl", "trstctl.com", false)
+			request["spec"].(map[string]any)["request"] = csrRequestField(t)
+			api.certificateRequests = []map[string]any{approveCertRequest(request)}
+			var calls int
+			signer := k8s.SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
+				calls++
+				return nil, nil
+			})
+			srv := httptest.NewServer(api.handler())
+			defer srv.Close()
+			controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+			result, err := controller.Reconcile(context.Background(), "apps")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.ClusterIssuersReady != 0 || result.SignedRequests != 0 || calls != 0 {
+				t.Fatalf("invalid issuer became usable: ready=%d signed=%d calls=%d", result.ClusterIssuersReady, result.SignedRequests, calls)
+			}
+			condition, _ := api.clusterIssuerStatus["trstctl"]["status"].(map[string]any)
+			conditions, _ := condition["conditions"].([]any)
+			if len(conditions) == 0 {
+				t.Fatal("invalid issuer has no Ready=False condition")
+			}
+			got := conditions[0].(map[string]any)
+			if got["status"] != "False" || got["reason"] != tc.reason {
+				t.Fatalf("issuer condition=%v, want False/%s", got, tc.reason)
+			}
+		})
+	}
+}
+
+func TestIssuerTTLSecondsCapsNativeCSRAndCertificate(t *testing.T) {
+	api := newFakeIssuerAPI()
+	issuer := trstctlClusterIssuer("trstctl")
+	issuer["spec"].(map[string]any)["ttlSeconds"] = float64(1800)
+	api.clusterIssuers = []map[string]any{issuer}
+	api.certificates = []map[string]any{trstctlCertificate("native-leaf", "apps", "native-leaf-tls")}
+	csr := kubernetesCSR("native-csr-cap", "trstctl.com/trstctl", true)
+	csr["spec"].(map[string]any)["request"] = csrDERRequestField(t)
+	csr["spec"].(map[string]any)["expirationSeconds"] = float64(7200)
+	api.kubernetesCSRs = []map[string]any{csr}
+	baseSigner, _ := caSigner(t)
+	var lifetimes []time.Duration
+	signer := k8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+		lifetimes = append(lifetimes, ttl)
+		return baseSigner.Sign(ctx, csrDER, ttl)
+	})
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NativeCertificatesIssued != 1 || result.KubernetesCSRsSigned != 1 || len(lifetimes) != 2 {
+		t.Fatalf("native issuance incomplete: result=%+v lifetimes=%v", result, lifetimes)
+	}
+	for _, ttl := range lifetimes {
+		if ttl != 30*time.Minute {
+			t.Fatalf("native signer lifetime %s, want issuer 30m cap", ttl)
+		}
+	}
+}
+
+func TestIssuerControllerRequiresHTTPSOperatorEndpoint(t *testing.T) {
+	for _, endpoint := range []string{"", "http://trstctl.local/issue", "https://user:pass@trstctl.local/issue", "https://trstctl.local/issue?token=secret", "https://trstctl.local/issue#fragment"} {
+		if _, err := k8s.NewIssuerController(nil, nil, "trstctl.com", endpoint); err == nil {
+			t.Fatalf("accepted unsafe signer endpoint %q", endpoint)
+		}
 	}
 }
 
@@ -441,6 +595,7 @@ func TestIssuerControllerRetriesTransientSafeRead(t *testing.T) {
 		"apiVersion": "trstctl.com/v1alpha1",
 		"kind":       "ClusterIssuer",
 		"metadata":   map[string]any{"name": "prod"},
+		"spec":       map[string]any{"signerURL": testIssuerSignerURL},
 	}}
 	baseHandler := api.handler()
 	var listAttempts atomic.Int32
@@ -455,7 +610,7 @@ func TestIssuerControllerRetriesTransientSafeRead(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	controller := k8s.NewIssuerController(
+	controller := testIssuerController(t,
 		k8s.New(srv.URL, "tok", "apps", srv.Client()),
 		k8s.SignerFunc(func(_ context.Context, _ []byte, _ time.Duration) ([]byte, error) { return nil, nil }),
 		"trstctl.com",
@@ -484,7 +639,7 @@ func TestIssuerControllerSkipsRequestsWithoutBackingIssuerResource(t *testing.T)
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -510,7 +665,7 @@ func TestIssuerControllerSupportsNamespacedIssuer(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -540,7 +695,7 @@ func TestIssuerControllerServesNativeCertificateCRDCAPK8S02(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -582,7 +737,7 @@ func TestClusterIssuerFulfillsNativeCertificateOutsideAgentNamespace(t *testing.
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -616,7 +771,7 @@ func TestNativeKubernetesCSRRequiresExplicitNamespacedIssuerBinding(t *testing.T
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -645,7 +800,7 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -711,7 +866,7 @@ func TestIssuerControllerDistributesTrustBundlesCAPK8S07(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -776,7 +931,7 @@ func TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07(t *testing.T) {
 	srv := httptest.NewServer(api.handler())
 	defer srv.Close()
 
-	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
 	result, err := controller.Reconcile(context.Background(), "apps")
 	if err == nil || !strings.Contains(err.Error(), "only CERTIFICATE blocks") {
 		t.Fatalf("Reconcile error = %v, want private-key rejection", err)

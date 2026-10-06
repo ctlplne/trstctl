@@ -488,9 +488,12 @@ func dodReconcileAndReportKubernetesPosture(t *testing.T, srv *Server, agentAddr
 	kind := dodKindClientFromSubstrate(t, external)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	controller := agentk8s.NewIssuerController(kind.client, agentk8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	controller, err := agentk8s.NewIssuerController(kind.client, agentk8s.SignerFunc(func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
 		return srv.IssueLeaf(ctx, csrDER, ttl)
-	}), agentk8s.DefaultIssuerGroup)
+	}), agentk8s.DefaultIssuerGroup, "https://trstctl.dod.local/api/v1/ca/authorities/dod/issue")
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := controller.Reconcile(ctx, kind.namespace)
 	if err != nil {
 		t.Fatalf("reconcile real kind cluster: %v", err)

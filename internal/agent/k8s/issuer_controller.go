@@ -6,7 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
+	"strings"
+	"time"
 )
 
 const (
@@ -44,18 +48,35 @@ type IssuerReconcileResult struct {
 // direct JSON/HTTPS API calls with the service-account token instead of
 // client-go/controller-runtime.
 type IssuerController struct {
-	client *Client
-	signer Signer
-	group  string
+	client    *Client
+	signer    Signer
+	group     string
+	signerURL string
+}
+
+type issuerConfig struct {
+	ttlCap time.Duration
+}
+
+func (config issuerConfig) limitTTL(requested time.Duration) time.Duration {
+	if config.ttlCap > 0 && requested > config.ttlCap {
+		return config.ttlCap
+	}
+	return requested
 }
 
 // NewIssuerController returns a controller for trstctl Issuer and ClusterIssuer
-// resources in group. Empty group defaults to trstctl.com.
-func NewIssuerController(client *Client, signer Signer, group string) *IssuerController {
+// resources in group. signerURL is the operator-configured, TLS-authenticated
+// CA endpoint. A resource that names any other endpoint is never usable.
+func NewIssuerController(client *Client, signer Signer, group, signerURL string) (*IssuerController, error) {
 	if group == "" {
 		group = DefaultIssuerGroup
 	}
-	return &IssuerController{client: client, signer: signer, group: group}
+	parsed, err := url.Parse(signerURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("k8s: issuer controller requires a configured HTTPS signer URL without credentials, query, or fragment")
+	}
+	return &IssuerController{client: client, signer: signer, group: group, signerURL: signerURL}, nil
 }
 
 func issuerCollectionPath(namespace string) string {
@@ -80,10 +101,9 @@ func trustBundleCollectionPath() string {
 	return fmt.Sprintf("/apis/%s/%s", trstctlAPIVersion, trustBundlesPlural)
 }
 
-// Reconcile makes trstctl Issuer/ClusterIssuer resources Ready, signs every
-// pending cert-manager CertificateRequest in namespace whose issuerRef points at
-// one of those resources, issues every pending trstctl-native Certificate in
-// namespace into its requested TLS Secret, signs approved native Kubernetes
+// Reconcile checks trstctl Issuer/ClusterIssuer configuration, signs approved
+// cert-manager CertificateRequests in their own namespaces, issues trstctl-native
+// Certificates into Secrets in their own namespaces, signs approved Kubernetes
 // CertificateSigningRequests whose signerName maps to a trstctl issuer, and
 // distributes cluster-scoped public trust bundles into namespace ConfigMaps.
 func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (IssuerReconcileResult, error) {
@@ -135,7 +155,7 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 	return result, nil
 }
 
-func (c *IssuerController) reconcileIssuerResources(ctx context.Context, collectionPath, kind string) (map[string]bool, error) {
+func (c *IssuerController) reconcileIssuerResources(ctx context.Context, collectionPath, kind string) (map[string]issuerConfig, error) {
 	st, body, err := c.client.request(ctx, http.MethodGet, collectionPath, nil)
 	if err != nil {
 		return nil, err
@@ -149,7 +169,7 @@ func (c *IssuerController) reconcileIssuerResources(ctx context.Context, collect
 	if err := json.Unmarshal(body, &list); err != nil {
 		return nil, fmt.Errorf("k8s: decode trstctl %s list: %w", kind, err)
 	}
-	out := make(map[string]bool, len(list.Items))
+	out := make(map[string]issuerConfig, len(list.Items))
 	for _, obj := range list.Items {
 		name := objectName(obj)
 		if name == "" {
@@ -165,24 +185,27 @@ func (c *IssuerController) reconcileIssuerResources(ctx context.Context, collect
 			key = namespace + "/" + name
 			statusCollectionPath = issuerCollectionPath(namespace)
 		}
-		out[key] = true
-		if isReady(obj) {
+		config, reason := c.issuerConfig(obj)
+		if reason == "" {
+			out[key] = config
+		}
+		if (reason == "" && isReady(obj)) || (reason != "" && isIssuerNotReadyFor(obj, reason)) {
 			continue
 		}
-		if err := c.markIssuerReady(ctx, statusCollectionPath, kind, obj); err != nil {
+		if err := c.markIssuerStatus(ctx, statusCollectionPath, kind, obj, reason); err != nil {
 			return out, err
 		}
 	}
 	return out, nil
 }
 
-func (c *IssuerController) markIssuerReady(ctx context.Context, collectionPath, kind string, obj map[string]any) error {
+func (c *IssuerController) markIssuerStatus(ctx context.Context, collectionPath, kind string, obj map[string]any, reason string) error {
 	name := objectName(obj)
 	status, _ := obj["status"].(map[string]any)
 	if status == nil {
 		status = map[string]any{}
 	}
-	status["conditions"] = upsertIssuerReady(status["conditions"], kind)
+	status["conditions"] = upsertIssuerCondition(status["conditions"], kind, reason)
 	obj["status"] = status
 
 	st, body, err := c.client.request(ctx, http.MethodPut, collectionPath+"/"+name+"/status", obj)
@@ -195,7 +218,42 @@ func (c *IssuerController) markIssuerReady(ctx context.Context, collectionPath, 
 	return nil
 }
 
-func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, error) {
+func (c *IssuerController) issuerConfig(obj map[string]any) (issuerConfig, string) {
+	spec, _ := obj["spec"].(map[string]any)
+	endpoint, _ := spec["signerURL"].(string)
+	if endpoint != c.signerURL {
+		return issuerConfig{}, "SignerURLMismatch"
+	}
+	if profile, _ := spec["profileName"].(string); strings.TrimSpace(profile) != "" {
+		return issuerConfig{}, "UnsupportedProfile"
+	}
+	if caID, _ := spec["caAuthorityID"].(string); caID != "" && caID != caAuthorityIDFromSignerURL(c.signerURL) {
+		return issuerConfig{}, "CAAuthorityMismatch"
+	}
+	var config issuerConfig
+	if raw, exists := spec["ttlSeconds"]; exists {
+		seconds, ok := raw.(float64)
+		if !ok || seconds < 1 || seconds != math.Trunc(seconds) || seconds > float64(math.MaxInt64/int64(time.Second)) {
+			return issuerConfig{}, "InvalidTTLSeconds"
+		}
+		config.ttlCap = time.Duration(int64(seconds)) * time.Second
+	}
+	return config, ""
+}
+
+func caAuthorityIDFromSignerURL(endpoint string) string {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) == 6 && parts[0] == "api" && parts[1] == "v1" && parts[2] == "ca" && parts[3] == "authorities" && parts[5] == "issue" {
+		return parts[4]
+	}
+	return ""
+}
+
+func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, issuers, clusterIssuers map[string]issuerConfig) (int, error) {
 	// ClusterIssuer is cluster-scoped: a CertificateRequest may live in any
 	// namespace, including one other than the agent pod's namespace.
 	st, body, err := c.client.request(ctx, http.MethodGet, "/apis/cert-manager.io/v1/certificaterequests", nil)
@@ -219,10 +277,11 @@ func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, iss
 		if requestNamespace == "" {
 			continue // refuse an object with no namespace instead of misrouting its status
 		}
-		if isFinished(cr) || !isApproved(cr) || !c.requestBackedByIssuer(cr, issuers, clusterIssuers) {
+		config, backed := c.requestIssuerConfig(cr, issuers, clusterIssuers)
+		if isFinished(cr) || !isApproved(cr) || !backed {
 			continue
 		}
-		if err := bridge.fulfil(ctx, requestNamespace, cr); err != nil {
+		if err := bridge.fulfilWithCap(ctx, requestNamespace, cr, config.ttlCap); err != nil {
 			return signed, err
 		}
 		signed++
@@ -230,25 +289,27 @@ func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, iss
 	return signed, nil
 }
 
-func (c *IssuerController) requestBackedByIssuer(cr map[string]any, issuers, clusterIssuers map[string]bool) bool {
+func (c *IssuerController) requestIssuerConfig(cr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool) {
 	spec, _ := cr["spec"].(map[string]any)
 	ref, _ := spec["issuerRef"].(map[string]any)
 	if ref == nil {
-		return false
+		return issuerConfig{}, false
 	}
 	name, _ := ref["name"].(string)
 	group, _ := ref["group"].(string)
 	kind, _ := ref["kind"].(string)
 	if name == "" || group != c.group {
-		return false
+		return issuerConfig{}, false
 	}
 	switch kind {
 	case "", "Issuer":
-		return issuers[objectNamespace(cr)+"/"+name]
+		config, ok := issuers[objectNamespace(cr)+"/"+name]
+		return config, ok
 	case "ClusterIssuer":
-		return clusterIssuers[name]
+		config, ok := clusterIssuers[name]
+		return config, ok
 	default:
-		return false
+		return issuerConfig{}, false
 	}
 }
 
@@ -276,12 +337,35 @@ func isReady(obj map[string]any) bool {
 	return false
 }
 
-func upsertIssuerReady(existing any, kind string) []any {
+func isIssuerNotReadyFor(obj map[string]any, reason string) bool {
+	status, _ := obj["status"].(map[string]any)
+	conds, _ := status["conditions"].([]any)
+	for _, condition := range conds {
+		item, _ := condition.(map[string]any)
+		if item["type"] == "Ready" && item["status"] == "False" && item["reason"] == reason {
+			return true
+		}
+	}
+	return false
+}
+
+func upsertIssuerCondition(existing any, kind, reason string) []any {
 	ready := map[string]any{
 		"type":    "Ready",
 		"status":  "True",
 		"reason":  "Ready",
 		"message": "trstctl " + kind + " is ready to sign cert-manager CertificateRequests",
+	}
+	if reason != "" {
+		ready["status"] = "False"
+		ready["reason"] = reason
+		messages := map[string]string{
+			"SignerURLMismatch":   "signerURL differs from the operator-configured issuance endpoint",
+			"UnsupportedProfile":  "profileName is unsupported by this CA issuance endpoint",
+			"CAAuthorityMismatch": "caAuthorityID differs from the authority in signerURL",
+			"InvalidTTLSeconds":   "ttlSeconds must be a positive whole number within the supported lifetime range",
+		}
+		ready["message"] = "trstctl " + kind + " cannot sign: " + messages[reason]
 	}
 	conds, _ := existing.([]any)
 	for i, c := range conds {

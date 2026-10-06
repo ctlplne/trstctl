@@ -206,7 +206,11 @@ func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
 	signer := k8s.SignerFunc(func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
 		return ca.SignClientCSR(csrDER, ttl)
 	})
-	controller := k8s.NewIssuerController(client, signer, "trstctl.com")
+	signerURL := "https://trstctl.trstctl.svc/api/v1/ca/authorities/e2e/issue"
+	controller, err := k8s.NewIssuerController(client, signer, "trstctl.com", signerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	issuerName := "trstctl-dist-01-" + suffix
@@ -218,7 +222,7 @@ func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
 		"apiVersion": "trstctl.com/v1alpha1",
 		"kind":       "ClusterIssuer",
 		"metadata":   map[string]any{"name": issuerName},
-		"spec":       map[string]any{"signerURL": "https://trstctl.trstctl.svc/api/v1/ca/authorities/e2e/issue"},
+		"spec":       map[string]any{"signerURL": signerURL},
 	}
 	if st, body := raw(http.MethodPost, "/apis/trstctl.com/v1alpha1/clusterissuers", clusterIssuer); st/100 != 2 {
 		t.Fatalf("create trstctl ClusterIssuer: status %d: %s", st, body)

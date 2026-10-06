@@ -120,6 +120,19 @@ func TestManifestsDeclareTrstctlIssuerAndCertificateCRDs(t *testing.T) {
 		if _, ok := subresources["status"]; !ok {
 			t.Errorf("%s does not enable the status subresource", tc.name)
 		}
+		if tc.kind == "Issuer" || tc.kind == "ClusterIssuer" {
+			schema := versions[0]["schema"].(map[string]any)
+			openapi := schema["openAPIV3Schema"].(map[string]any)
+			properties := openapi["properties"].(map[string]any)
+			spec := properties["spec"].(map[string]any)
+			if !contains(asStringSlice(spec["required"]), "signerURL") {
+				t.Errorf("%s does not require an explicit signerURL", tc.name)
+			}
+			fields := spec["properties"].(map[string]any)
+			if _, exists := fields["profileName"]; exists {
+				t.Errorf("%s still exposes profileName without a served configuration path", tc.name)
+			}
+		}
 		if tc.kind == "Certificate" {
 			schema := versions[0]["schema"].(map[string]any)
 			openapi := schema["openAPIV3Schema"].(map[string]any)

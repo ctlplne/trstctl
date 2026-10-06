@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -29,11 +30,34 @@ type k8sOptions struct {
 	reconcileEvery  time.Duration
 }
 
+func (k k8sOptions) validateIssuerConfig() error {
+	if k.issuer == "" && !k.controller {
+		if k.signerURL != "" || k.signerTokenFile != "" {
+			return fmt.Errorf("cert-manager signer flags require --cert-manager-controller or --cert-manager-issuer")
+		}
+		return nil
+	}
+	if k.signerURL == "" || k.signerTokenFile == "" {
+		return fmt.Errorf("cert-manager integration requires --bridge-signer-url and --bridge-signer-token-file")
+	}
+	endpoint, err := url.Parse(k.signerURL)
+	if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		return fmt.Errorf("cert-manager issuance URL must be HTTPS without credentials, query, or fragment")
+	}
+	if k.reconcileEvery <= 0 {
+		return fmt.Errorf("cert-manager reconcile interval must be positive")
+	}
+	return nil
+}
+
 // runKubernetes runs the agent as a DaemonSet pod: it bootstraps its identity,
 // publishes it into a Kubernetes Secret, and (when configured) reconciles
 // trstctl Issuer/ClusterIssuer/Certificate resources, cert-manager
 // CertificateRequests, and native Kubernetes CertificateSigningRequests.
 func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
+	if err := k.validateIssuerConfig(); err != nil {
+		return err
+	}
 	client, err := k8s.InCluster()
 	if err != nil {
 		return err
@@ -91,10 +115,6 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	switch {
 	case k.issuer == "" && !k.controller:
 		// No cert-manager integration configured.
-	case k.signerURL == "":
-		fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager integration configured but --bridge-signer-url is empty; cert-manager signing disabled")
-	case k.signerTokenFile == "":
-		fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager integration configured but --bridge-signer-token-file is empty; cert-manager signing disabled")
 	default:
 		signerToken, err := os.ReadFile(k.signerTokenFile)
 		if err != nil {
@@ -107,7 +127,10 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 			fmt.Printf("trstctl-agent: cert-manager bridge active for issuer %q\n", k.issuer)
 		}
 		if k.controller {
-			issuerController = k8s.NewIssuerController(client, signer, k.group)
+			issuerController, err = k8s.NewIssuerController(client, signer, k.group, k.signerURL)
+			if err != nil {
+				return err
+			}
 			fmt.Printf("trstctl-agent: trstctl Issuer/ClusterIssuer/Certificate controller active for group %q\n", k.group)
 		}
 	}

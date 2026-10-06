@@ -105,12 +105,14 @@ Delete that host directory only when you intend to force re-enrollment for the n
 Create `Secret/trstctl-cert-manager-issuer` with:
 
 - `signer-url`: the served trstctl issuance endpoint that accepts a PEM CSR, for
-  example `/api/v1/ca/authorities/{id}/issue`;
+  example `https://trstctl:8443/api/v1/ca/authorities/{id}/issue`. It must match
+  each Issuer or ClusterIssuer `spec.signerURL` exactly; a mismatch is NotReady
+  and cannot sign;
 - `token`: an API token with permission to issue through that endpoint.
 
 The token is mounted as a file at `/var/run/trstctl/cert-manager/token`; it is not
 put on the command line or in an environment variable. The agent sends a stable
-`Idempotency-Key` per CSR, so cert-manager retries do not mint duplicate
+`Idempotency-Key` per CA endpoint, CSR, and lifetime, so retries do not mint duplicate
 certificates.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and

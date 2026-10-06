@@ -775,8 +775,8 @@ not this file.
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:113` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_test.go:1118` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/kubernetes/manifests_test.go:416` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/kubernetes/manifests_test.go:429` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/kubernetes/manifests_test.go:447` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:109` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:211` | arguments are fixed checked-in scripts (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:414` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
@@ -1092,8 +1092,8 @@ not this file.
 | `deploy/helm/helm_test.go:1080` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_test.go:1141` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/kubernetes/manifests_test.go:477` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/kubernetes/manifests_test.go:494` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/kubernetes/manifests_test.go:490` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/kubernetes/manifests_test.go:507` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/local-oidc/oidc_test.go:220` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/aud56_test.go:62` | name comes from the fixed documentation manifest in this test (CWE-22). |

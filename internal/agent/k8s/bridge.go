@@ -124,6 +124,10 @@ func isApproved(cr map[string]any) bool {
 }
 
 func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any) error {
+	return b.fulfilWithCap(ctx, namespace, cr, 0)
+}
+
+func (b *Bridge) fulfilWithCap(ctx context.Context, namespace string, cr map[string]any, ttlCap time.Duration) error {
 	if !isApproved(cr) || isFinished(cr) {
 		return fmt.Errorf("k8s: CertificateRequest is not approved and pending")
 	}
@@ -140,6 +144,9 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 	ttl, err := certificateRequestTTL(spec)
 	if err != nil {
 		return err
+	}
+	if ttlCap > 0 && ttl > ttlCap {
+		ttl = ttlCap
 	}
 	chainPEM, err := b.signer.Sign(ctx, block.Bytes, ttl)
 	if err != nil {

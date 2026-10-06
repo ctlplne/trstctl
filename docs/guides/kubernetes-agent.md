@@ -19,6 +19,8 @@ metadata:
   name: trstctl
 spec:
   signerURL: https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue
+  caAuthorityID: <ca-authority-id>
+  ttlSeconds: 7200
 ```
 
 Then point a cert-manager `Certificate` at it:
@@ -41,7 +43,18 @@ spec:
 
 cert-manager creates the `CertificateRequest`. A separate Kubernetes approver
 must set `Approved=True` first; the trstctl agent does not approve its own
-requests and ignores unapproved or denied requests. The agent confirms the named
+requests and ignores unapproved or denied requests. Put the same exact HTTPS
+issuance endpoint in the operator-owned `Secret/trstctl-cert-manager-issuer`'s
+`signer-url` value and in the Issuer's `spec.signerURL`. A mismatch, an invalid
+`ttlSeconds`, or a `caAuthorityID` that differs from the URL leaves the Issuer
+`Ready=False`; it never silently selects the configured CA. `ttlSeconds` caps
+the requested lifetime for cert-manager, native Kubernetes CSRs, and trstctl
+Certificates. The CA's own profile can restrict it further. The earlier
+`profileName` field is unsupported by this endpoint and is no longer offered by
+the CRD; an old stored object that still sets it is NotReady. This deployment
+configures one CA endpoint for its issuer controller.
+
+The agent confirms the named
 trstctl issuer resource exists in the correct scope: a `ClusterIssuer` can serve
 requests in any namespace, while an `Issuer` serves only requests in its own
 namespace. It forwards the CSR and requested
@@ -49,9 +62,38 @@ namespace. It forwards the CSR and requested
 the request `Ready=True` with the issued certificate. When duration is absent,
 the agent requests 24 hours; the CA profile may cap the issued lifetime. cert-manager
 then writes `Secret/web-tls`. Only a CSR crosses the wire to the control plane —
-never a private key. Give the separate approver permission for the exact
-`clusterissuers.trstctl.com/<name>` or `issuers.trstctl.com/<name>` signer it
-reviews; the agent service account needs no `approve` verb.
+never a private key. A `Ready=True` Issuer proves that its configuration matches
+the operator endpoint; the issued CertificateRequest and Secret prove that the
+network, token, and CA can actually complete issuance.
+
+Grant a distinct approver only the signer name it reviews. For example, bind
+the following `ClusterRole` to a separate approver identity, and give that
+identity `get` on `certificaterequests` plus `update` on
+`certificaterequests/approval` in the workload namespace. The agent service
+account needs neither grant:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: trstctl-web-approver
+rules:
+  - apiGroups: [cert-manager.io]
+    resources: [signers]
+    resourceNames: [clusterissuers.trstctl.com/trstctl]
+    verbs: [approve]
+```
+
+After inspecting the generated request, the authorized approver can approve it:
+
+```sh
+kubectl -n apps get certificaterequest
+cmctl approve -n apps <request-name> --reason pki-review
+```
+
+cert-manager documents the [exact signer
+RBAC syntax](https://cert-manager.io/docs/usage/certificaterequest/) and
+[`cmctl approve`](https://cert-manager.io/docs/reference/cmctl/).
 
 ## Native Kubernetes CertificateSigningRequest
 

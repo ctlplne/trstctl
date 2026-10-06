@@ -17,7 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
-func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, error) {
+func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, issuers, clusterIssuers map[string]issuerConfig) (int, error) {
 	st, body, err := c.client.request(ctx, http.MethodGet, nativeCertificateCollectionPath(""), nil)
 	if err != nil {
 		return 0, err
@@ -41,10 +41,11 @@ func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, issu
 		if namespace == "" {
 			continue
 		}
-		if isFinished(cert) || !c.requestBackedByIssuer(cert, issuers, clusterIssuers) {
+		config, backed := c.requestIssuerConfig(cert, issuers, clusterIssuers)
+		if isFinished(cert) || !backed {
 			continue
 		}
-		if err := c.issueNativeCertificate(ctx, namespace, cert); err != nil {
+		if err := c.issueNativeCertificate(ctx, namespace, cert, config); err != nil {
 			return issued, err
 		}
 		issued++
@@ -52,7 +53,7 @@ func (c *IssuerController) reconcileNativeCertificates(ctx context.Context, issu
 	return issued, nil
 }
 
-func (c *IssuerController) issueNativeCertificate(ctx context.Context, namespace string, obj map[string]any) error {
+func (c *IssuerController) issueNativeCertificate(ctx context.Context, namespace string, obj map[string]any, config issuerConfig) error {
 	name := objectName(obj)
 	if name == "" {
 		return fmt.Errorf("k8s: trstctl Certificate missing metadata.name")
@@ -91,7 +92,7 @@ func (c *IssuerController) issueNativeCertificate(ctx context.Context, namespace
 	if err != nil {
 		return fmt.Errorf("k8s: build CSR for trstctl Certificate %s: %w", name, err)
 	}
-	chainPEM, err := c.signer.Sign(ctx, csrDER, defaultCertificateTTL)
+	chainPEM, err := c.signer.Sign(ctx, csrDER, config.limitTTL(defaultCertificateTTL))
 	if err != nil {
 		return fmt.Errorf("k8s: sign trstctl Certificate %s: %w", name, err)
 	}

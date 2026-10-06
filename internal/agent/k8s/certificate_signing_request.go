@@ -25,7 +25,7 @@ func certificateSigningRequestsPath() string {
 	return "/apis/" + kubernetesCSRAPIVersion + "/certificatesigningrequests"
 }
 
-func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers, clusterIssuers map[string]bool) (int, []PostureResource, error) {
+func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers, clusterIssuers map[string]issuerConfig) (int, []PostureResource, error) {
 	st, body, err := c.client.request(ctx, http.MethodGet, certificateSigningRequestsPath(), nil)
 	if err != nil {
 		return 0, nil, err
@@ -43,13 +43,13 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 	signed := 0
 	posture := make([]PostureResource, 0, len(list.Items))
 	for _, csr := range list.Items {
-		backed := c.csrBackedByIssuer(csr, issuers, clusterIssuers)
+		config, backed := c.csrIssuerConfig(csr, issuers, clusterIssuers)
 		current := kubernetesCSRPosture(csr, backed)
 		if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !backed {
 			posture = append(posture, current)
 			continue
 		}
-		updated, err := c.signKubernetesCSR(ctx, csr)
+		updated, err := c.signKubernetesCSR(ctx, csr, config)
 		if err != nil {
 			posture = append(posture, failedPosture(current))
 			return signed, posture, err
@@ -65,12 +65,12 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 	return signed, posture, nil
 }
 
-func (c *IssuerController) csrBackedByIssuer(csr map[string]any, issuers, clusterIssuers map[string]bool) bool {
+func (c *IssuerController) csrIssuerConfig(csr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool) {
 	spec, _ := csr["spec"].(map[string]any)
 	signerName, _ := spec["signerName"].(string)
 	issuerName := signerNameIssuer(signerName, c.group)
 	if issuerName == "" {
-		return false
+		return issuerConfig{}, false
 	}
 
 	meta, _ := csr["metadata"].(map[string]any)
@@ -78,7 +78,7 @@ func (c *IssuerController) csrBackedByIssuer(csr map[string]any, issuers, cluste
 	if annotations != nil {
 		annotatedGroup, _ := annotations[kubernetesCSRAnnotationIssuerGroup].(string)
 		if annotatedGroup != "" && annotatedGroup != c.group {
-			return false
+			return issuerConfig{}, false
 		}
 		annotatedName, _ := annotations[kubernetesCSRAnnotationIssuerName].(string)
 		if annotatedName != "" {
@@ -87,18 +87,21 @@ func (c *IssuerController) csrBackedByIssuer(csr map[string]any, issuers, cluste
 		kind, _ := annotations[kubernetesCSRAnnotationIssuerKind].(string)
 		switch kind {
 		case "", "ClusterIssuer":
-			return clusterIssuers[issuerName]
+			config, ok := clusterIssuers[issuerName]
+			return config, ok
 		case "Issuer":
 			issuerNamespace, _ := annotations[kubernetesCSRAnnotationIssuerNamespace].(string)
-			return issuerNamespace != "" && issuers[issuerNamespace+"/"+issuerName]
+			config, ok := issuers[issuerNamespace+"/"+issuerName]
+			return config, issuerNamespace != "" && ok
 		default:
-			return false
+			return issuerConfig{}, false
 		}
 	}
 
 	// A Kubernetes CSR has no namespace of its own. Without an explicit
 	// annotation, only a cluster-scoped issuer is unambiguous.
-	return clusterIssuers[issuerName]
+	config, ok := clusterIssuers[issuerName]
+	return config, ok
 }
 
 func signerNameIssuer(signerName, group string) string {
@@ -120,7 +123,7 @@ func signerNameIssuer(signerName, group string) string {
 	return name
 }
 
-func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string]any) (map[string]any, error) {
+func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string]any, config issuerConfig) (map[string]any, error) {
 	spec, _ := csr["spec"].(map[string]any)
 	reqB64, _ := spec["request"].(string)
 	csrDER, err := decodeKubernetesCSRRequest(reqB64)
@@ -131,7 +134,7 @@ func (c *IssuerController) signKubernetesCSR(ctx context.Context, csr map[string
 	if err != nil {
 		return nil, err
 	}
-	chainPEM, err := c.signer.Sign(ctx, csrDER, ttl)
+	chainPEM, err := c.signer.Sign(ctx, csrDER, config.limitTTL(ttl))
 	if err != nil {
 		return nil, fmt.Errorf("k8s: sign CertificateSigningRequest: %w", err)
 	}
