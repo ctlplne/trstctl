@@ -3016,6 +3016,26 @@ func componentSchemas() map[string]*Schema {
 	connectorTargetActionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(),
 	}, "identity_id")
+	endpointContainmentReq := object(map[string]*Schema{
+		"target_revision": str(), "identity_id": uuid(),
+		"expected_fingerprint": str(), "required_agent_id": uuid(),
+		"preview_fingerprint": str(), "reason": str(),
+	}, "target_revision", "identity_id", "expected_fingerprint", "required_agent_id", "preview_fingerprint", "reason")
+	endpointContainmentPreview := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"target_id": uuid(), "target_name": str(), "target_revision": str(),
+		"connector": str(), "target_enabled": {Type: "boolean"},
+		"identity_id": uuid(), "identity_name": str(), "identity_status": str(),
+		"certificate_status": str(), "expected_fingerprint": str(),
+		"required_agent_id": uuid(), "preview_fingerprint": str(),
+		"required_permission": str(),
+		"execution_effects":   {Type: "array", Items: str()},
+		"verification_steps":  {Type: "array", Items: str()},
+		"warnings":            {Type: "array", Items: str()},
+	}, "capability", "ready", "effect_free", "target_id", "target_name", "target_revision", "connector",
+		"target_enabled", "identity_id", "identity_name", "identity_status", "certificate_status",
+		"expected_fingerprint", "required_agent_id", "preview_fingerprint", "required_permission",
+		"execution_effects", "verification_steps", "warnings")
 	connectorDelivery := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "outbox_id": {Type: "integer"}, "identity_id": uuid(),
 		"destination": str(), "connector": str(), "target": str(), "fingerprint": str(),
@@ -6468,6 +6488,8 @@ func componentSchemas() map[string]*Schema {
 		"EndpointBindingPreview":                   endpointBindingPreview,
 		"EndpointBinding":                          endpointBinding,
 		"ConnectorTargetActionRequest":             connectorTargetActionReq,
+		"EndpointContainmentRequest":               endpointContainmentReq,
+		"EndpointContainmentPreview":               endpointContainmentPreview,
 		"ConnectorDelivery":                        connectorDelivery,
 		"ConnectorDeliveryList":                    list("ConnectorDelivery"),
 		"AlertRecipient":                           alertRecipient,

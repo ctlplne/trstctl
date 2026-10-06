@@ -268,15 +268,16 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			                    AND i.id::text = CASE WHEN c.destination = 'endpoint.renew'
 			                        THEN convert_from(c.payload, 'UTF8')::jsonb ->> 'identity_id' END
 			           )
-			           -- A destination an operator has disabled hands out no work: rows stamped
-			           -- with that target's lane stay pending, never dropped, and are claimable
-			           -- again the moment it is enabled (DP2-028).
-			           AND NOT EXISTS (
-			                 SELECT 1
-			                   FROM deployment_targets AS dt
-			                  WHERE dt.tenant_id = c.tenant_id
-			                    AND NOT dt.enabled
-			                    AND (c.effect_lane = '`+ConnectorTargetLanePrefix+`' || dt.id::text
+		           -- A disabled target pauses ordinary deployment work, but an exact
+		           -- host containment command must remain claimable: disabling a
+		           -- configuration does not stop a compromised live listener.
+		           AND NOT EXISTS (
+		                 SELECT 1
+		                   FROM deployment_targets AS dt
+		                  WHERE dt.tenant_id = c.tenant_id
+		                    AND NOT dt.enabled
+		                    AND c.destination <> 'endpoint.contain'
+		                    AND (c.effect_lane = '`+ConnectorTargetLanePrefix+`' || dt.id::text
 			                         OR (c.destination = 'endpoint.renew' AND dt.id::text =
 			                             CASE WHEN c.destination = 'endpoint.renew'
 			                                  THEN convert_from(c.payload, 'UTF8')::jsonb->>'target_id' END))

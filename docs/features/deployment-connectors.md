@@ -244,7 +244,8 @@ Enable `endpoint.renew` in `agent_channel.claimable_job_kinds` for host-generate
 keys (`executor: agent`): this kind performs both the first issuance and later
 renewals. `connector.deploy` handles delivery of centrally prepared material and
 does not replace `endpoint.renew`. Enable `connector.test` for target tests and
-`connector.rollback` for supported restores. Start the agent with `--relay-claim`, and place
+`connector.rollback` for supported restores and `endpoint.contain` for emergency
+removal of a compromised leaf from a host listener. Start the agent with `--relay-claim`, and place
 the exact roots and executables in the file named by `--host-exec-profile`. The profile
 lives on the target host because an allowlist for `/usr/sbin/nginx` on the control
 plane says nothing about the binary the target host will actually run. Tenant target
@@ -268,6 +269,82 @@ example `"tls_probe_openssl": "/opt/openssl-3.5/bin/openssl"`. Install a build t
 supports the selected ML-DSA signature and verify its provenance on the host.
 The file must be a regular executable, not a symlink; a missing or invalid path
 refuses the profile at startup. Tenant targets and jobs cannot supply this path.
+
+### Stop a host that still serves a compromised leaf
+
+CA revocation changes relying-party status; it does not stop Apache, NGINX, or
+another workload from serving the old certificate. For a host target, the host
+operator can bind one exact target UUID to one local TLS listener and one pinned
+stop action in `--host-exec-profile`. The action's `logical_args: []` is
+intentional: a missing list permits connector-supplied arguments and is refused
+for containment. The executable must be a regular non-symlink file; `pass_args`
+must be false. A listener and action cannot be shared by two target bindings.
+Stopping a service may still affect other listeners that service owns, so the
+host operator must review that service boundary before installing the profile.
+
+```json
+{
+  "allowed_roots": ["/etc/apache2/tls"],
+  "actions": [{
+    "logical_name": "stop-incident-apache",
+    "logical_args": [],
+    "command": "/usr/sbin/apachectl",
+    "args": ["-k", "stop"],
+    "pass_args": false,
+    "timeout_seconds": 15
+  }],
+  "containments": [{
+    "target_id": "11111111-1111-4111-8111-111111111111",
+    "address": "127.0.0.1:10443",
+    "server_name": "payments.internal.example",
+    "action": "stop-incident-apache"
+  }]
+}
+```
+
+In **Where credentials are installed**, select the exact host target, choose
+**Review host containment**, inspect the last delivered leaf, identity, target
+revision, enrolled agent and outage warning, enter an incident reason, then
+choose **Queue exact host stop**. This review is still available when the
+target is disabled: disabling its trstctl configuration does not stop a live
+listener. The server rechecks the reviewed binding at submission. The agent
+checks the live fingerprint immediately before the pinned action. A different
+leaf or an unobservable listener causes no stop. A successful stop requires two
+local TLS probes that cannot observe a serving leaf. The same signed receipt
+reports queued, stopped, different-leaf, unverified, or failed; only stopped
+describes an executed action with repeated local TLS refusal. Check from the
+client segment with a stock TLS client and verify CA revocation separately.
+If the host is unreachable, inspect Jobs and queues and restore the exact
+agent/profile path. After a terminal non-success, review a new attempt; the
+old idempotency key must not be reused for a changed target or reason.
+When the host refuses the action, the exact receipt moves to
+`containment_failed` and the job dead-letters instead of repeating an
+ambiguous stop. A signed execution can also report `containment_failed`,
+`containment_unverified`, or `containment_different_leaf`; those results are
+recorded without claiming a successful stop. Every non-stopped result creates
+a critical `endpoint.containment_failed` alert in the normal tenant routing
+and inbox. The alert identifies the identity, target, certificate fingerprint
+and receipt. Inspect the signed host result and live listener, correct the
+profile or service, fetch a fresh preview, and submit a new request with a
+new `Idempotency-Key`; the previous receipt remains as incident evidence.
+A host that has not claimed the job has not reported failure, so its receipt
+remains `containment_queued`; inspect the exact agent and queue age before
+deciding whether to attempt recovery.
+
+The CLI keeps review separate from execution:
+
+```sh
+trstctl connector target contain-preview --target "$TARGET_ID" > reviewed-containment.json
+# Inspect the exact identifiers and warnings before the next command.
+trstctl connector target contain --target "$TARGET_ID" \
+  --preview-file reviewed-containment.json --reason 'confirmed key compromise'
+```
+
+The API uses `GET /api/v1/connectors/targets/{id}/contain/preview` and
+`POST /api/v1/connectors/targets/{id}/contain`; the POST needs the preview's
+revision, identity, leaf, agent and fingerprint plus an `Idempotency-Key` and
+reason. Read the returned connector receipt by its exact ID. A queued receipt
+never means the listener stopped.
 
 The ordinary probe runs first. If a direct TLS handshake fails, the configured
 native probe attempts TLS 1.3 within the same deadline and reports the exact
@@ -436,7 +513,8 @@ moment it is enabled again. The Jobs page keeps showing them as pending meanwhil
 
 The REST surface is `/api/v1/connectors/targets` for CRUD,
 `/api/v1/identities/{id}/connector-target` for identity binding, and
-`/api/v1/connectors/targets/{id}/{test,deploy,rollback}` for actions; CRUD and binding
+`/api/v1/connectors/targets/{id}/{test,deploy,rollback}` for normal actions,
+plus the reviewed host containment routes described above; CRUD and binding
 are immutable events (`deployment_target.upserted`, `deployment_target.deleted`,
 `identity.connector_target_bound`) projected into the read model, so disaster recovery
 rebuilds routing from the event log. The effect-free

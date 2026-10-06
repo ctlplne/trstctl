@@ -243,8 +243,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Four F39 decoy-credential lifecycle operations extend exposure detection.
 	// F26 adds durable managed-key inventory and exact provider/handle recovery.
 	// F62 adds four signed scheduled-report run, artifact and recovery operations.
-	if len(out) != 461 {
-		t.Fatalf("OpenAPI operationIds = %d, want 461", len(out))
+	// Exact host containment adds a read-only review and a separately
+	// authorized stop command to the deployment-connector journey.
+	if len(out) != 463 {
+		t.Fatalf("OpenAPI operationIds = %d, want 463", len(out))
 	}
 	return out
 }

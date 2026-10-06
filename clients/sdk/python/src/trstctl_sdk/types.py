@@ -4611,6 +4611,45 @@ EndpointBindingTarget = TypedDict(
     total=False,
 )
 
+EndpointContainmentPreview = TypedDict(
+    'EndpointContainmentPreview',
+    {
+        'capability': str,
+        'certificate_status': str,
+        'connector': str,
+        'effect_free': bool,
+        'execution_effects': list[str],
+        'expected_fingerprint': str,
+        'identity_id': str,
+        'identity_name': str,
+        'identity_status': str,
+        'preview_fingerprint': str,
+        'ready': bool,
+        'required_agent_id': str,
+        'required_permission': str,
+        'target_enabled': bool,
+        'target_id': str,
+        'target_name': str,
+        'target_revision': str,
+        'verification_steps': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
+EndpointContainmentRequest = TypedDict(
+    'EndpointContainmentRequest',
+    {
+        'expected_fingerprint': str,
+        'identity_id': str,
+        'preview_fingerprint': str,
+        'reason': str,
+        'required_agent_id': str,
+        'target_revision': str,
+    },
+    total=False,
+)
+
 EndpointCustodySummary = TypedDict(
     'EndpointCustodySummary',
     {

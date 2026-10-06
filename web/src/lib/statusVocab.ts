@@ -400,6 +400,41 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "success",
     order: 8,
   },
+  containment_queued: {
+    get label() {
+      return translateNow("connectors.containment.queued");
+    },
+    tone: "info",
+    order: 7,
+  },
+  containment_stopped: {
+    get label() {
+      return translateNow("connectors.containment.stopped");
+    },
+    tone: "success",
+    order: 8,
+  },
+  containment_different_leaf: {
+    get label() {
+      return translateNow("connectors.containment.differentLeaf");
+    },
+    tone: "warning",
+    order: 8,
+  },
+  containment_unverified: {
+    get label() {
+      return translateNow("connectors.containment.unverified");
+    },
+    tone: "warning",
+    order: 8,
+  },
+  containment_failed: {
+    get label() {
+      return translateNow("connectors.containment.failed");
+    },
+    tone: "critical",
+    order: 8,
+  },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

@@ -48,6 +48,49 @@ func TestLocalOpsExecutesOnlyExactOperatorProfile(t *testing.T) {
 	}
 }
 
+func TestLocalOpsContainmentNeedsExplicitEmptyLogicalArgs(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := LocalOpsConfig{
+		AllowedRoots: []string{t.TempDir()},
+		Actions: []LocalAction{{
+			LogicalName: "stop-target", LogicalArgs: []string{}, Command: executable,
+			Args: []string{"-test.run=^TestLocalOpsCommandHelper$", "-test.count=1"},
+		}},
+		Containments: []LocalContainment{{
+			TargetID: "11111111-1111-4111-8111-111111111111",
+			Address:  "127.0.0.1:18443", Action: "stop-target",
+		}},
+	}
+	if _, err := NewLocalOps(config); err != nil {
+		t.Fatalf("explicitly argument-free stop action rejected: %v", err)
+	}
+	config.Actions[0].LogicalArgs = nil
+	if _, err := NewLocalOps(config); err == nil || !strings.Contains(err.Error(), "argument-free") {
+		t.Fatalf("unrestricted action accepted for containment: %v", err)
+	}
+	config.Actions[0].LogicalArgs = []string{}
+	config.Containments[0].Address = "127.0.0.1:not-a-port"
+	if _, err := NewLocalOps(config); err == nil {
+		t.Fatalf("non-numeric containment port accepted: %v", err)
+	}
+	config.Containments[0].Address = "127.0.0.1:18443"
+	config.Containments[0].TargetID = "not-a-target-id"
+	if _, err := NewLocalOps(config); err == nil {
+		t.Fatalf("non-UUID target binding accepted: %v", err)
+	}
+	config.Containments[0].TargetID = "11111111-1111-4111-8111-111111111111"
+	config.Containments = append(config.Containments, LocalContainment{
+		TargetID: "22222222-2222-4222-8222-222222222222",
+		Address:  "127.0.0.1:18443", Action: "stop-target",
+	})
+	if _, err := NewLocalOps(config); err == nil {
+		t.Fatalf("shared listener and stop action accepted across targets: %v", err)
+	}
+}
+
 func TestLocalOpsRejectsShellAndSymlinkExecutables(t *testing.T) {
 	root := t.TempDir()
 	shell := "/bin/sh"

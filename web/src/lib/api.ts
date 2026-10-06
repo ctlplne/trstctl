@@ -180,6 +180,8 @@ import type {
   ConnectorDelivery,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
+  EndpointContainmentPreview,
+  EndpointContainmentRequest,
   RelayPluginRuntime,
   ContextualRiskPriorities as GenContextualRiskPriorities,
   UrgentRiskSummary as GenUrgentRiskSummary,
@@ -888,6 +890,8 @@ export type {
   ConnectorDelivery,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
+  EndpointContainmentPreview,
+  EndpointContainmentRequest,
   RelayPluginRuntime,
   CRLDistribution,
   CRLDistributionList,
@@ -1669,6 +1673,8 @@ export interface Api {
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
   deployConnectorTarget(id: string, input: ConnectorTargetActionRequest, idempotencyKey?: string): Promise<Identity>;
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
+  previewEndpointContainment(id: string): Promise<EndpointContainmentPreview>;
+  containEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
@@ -2262,6 +2268,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
   deployConnectorTarget: (id, input, key) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input, key),
   rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),
+  previewEndpointContainment: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/contain/preview`),
+  containEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/contain`, input, key),
   connectorDeliveries: (options) => {
     const query = new URLSearchParams(pageQueryString(options, options?.identityId));
     if (options?.idempotencyKey) query.set("idempotency_key", options.idempotencyKey);

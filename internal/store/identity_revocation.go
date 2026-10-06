@@ -67,3 +67,27 @@ func (s *Store) IdentityHasRevocationEvidence(ctx context.Context, tenantID, ide
 	})
 	return found, err
 }
+
+// IdentityOwnsCertificateFingerprintTx binds an incident-time containment
+// command to an exact certificate issued or delivered for this identity. It
+// includes already revoked leaves because those are the most urgent to remove
+// from a live listener. Similar owner or SAN text grants no authority.
+func (s *Store) IdentityOwnsCertificateFingerprintTx(ctx context.Context, tx pgx.Tx,
+	tenantID, identityID, fingerprint string) (bool, error) {
+	var found bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM certificates
+	  WHERE tenant_id=$1 AND fingerprint=$3 AND `+identityRevocationBinding+`)`,
+		tenantID, identityID, fingerprint).Scan(&found)
+	return found, err
+}
+
+func (s *Store) IdentityOwnsCertificateFingerprint(ctx context.Context,
+	tenantID, identityID, fingerprint string) (bool, error) {
+	var found bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var readErr error
+		found, readErr = s.IdentityOwnsCertificateFingerprintTx(ctx, tx, tenantID, identityID, fingerprint)
+		return readErr
+	})
+	return found, err
+}

@@ -207,6 +207,81 @@ func TestConnectorTargetCLIUsesServedAPI(t *testing.T) {
 	}
 }
 
+func TestConnectorContainmentCLIRequiresReviewedExactPreview(t *testing.T) {
+	const targetID = "11111111-1111-4111-8111-111111111111"
+	const identityID = "22222222-2222-4222-8222-222222222222"
+	const agentID = "33333333-3333-4333-8333-333333333333"
+	preview := map[string]any{
+		"ready": true, "target_id": targetID, "target_revision": "revision-1",
+		"identity_id": identityID, "expected_fingerprint": strings.Repeat("a", 64),
+		"required_agent_id": agentID, "preview_fingerprint": strings.Repeat("b", 64),
+	}
+	var posted map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/connectors/targets/"+targetID+"/contain/preview" {
+			if r.Method != http.MethodGet {
+				t.Errorf("preview method = %s", r.Method)
+			}
+			_ = json.NewEncoder(w).Encode(preview)
+			return
+		}
+		if r.URL.Path != "/api/v1/connectors/targets/"+targetID+"/contain" || r.Method != http.MethodPost {
+			t.Errorf("unexpected containment request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Idempotency-Key") != "contain-incident-1" {
+			t.Errorf("missing exact idempotency key")
+		}
+		if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
+			t.Errorf("decode containment: %v", err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"status":"containment_queued"}`)
+	}))
+	defer ts.Close()
+	env := envFunc(map[string]string{
+		"TRSTCTL_URL": ts.URL, "TRSTCTL_TOKEN": "local-test-token",
+		"TRSTCTL_TENANT":          "44444444-4444-4444-8444-444444444444",
+		"TRSTCTL_IDEMPOTENCY_KEY": "contain-incident-1",
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"connector", "target", "contain-preview", "--target", targetID}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	previewFile := filepath.Join(t.TempDir(), "reviewed-containment.json")
+	if err := os.WriteFile(previewFile, stdout.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	if err := run(context.Background(), []string{"connector", "target", "contain",
+		"--target", targetID, "--preview-file", previewFile, "--reason", "key compromise"},
+		env, &stdout, &stderr); err != nil {
+		t.Fatalf("contain: %v", err)
+	}
+	for key, want := range map[string]any{
+		"target_revision": "revision-1", "identity_id": identityID,
+		"expected_fingerprint": strings.Repeat("a", 64), "required_agent_id": agentID,
+		"preview_fingerprint": strings.Repeat("b", 64), "reason": "key compromise",
+	} {
+		if posted[key] != want {
+			t.Fatalf("contain %s=%v, want %v", key, posted[key], want)
+		}
+	}
+	posted = nil
+	preview["ready"] = false
+	if raw, err := json.Marshal(preview); err != nil {
+		t.Fatal(err)
+	} else if err := os.WriteFile(previewFile, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"connector", "target", "contain",
+		"--target", targetID, "--preview-file", previewFile, "--reason", "key compromise"},
+		env, &stdout, &stderr); err == nil || posted != nil {
+		t.Fatalf("unready preview queued containment: %v %+v", err, posted)
+	}
+}
+
 func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	type requestSeen struct {
 		Method  string

@@ -203,12 +203,29 @@ const (
 	// ConnectorTestBlocked means a relay ran the dry-run and a real deploy would
 	// NOT proceed. The reason names the step that stopped it.
 	ConnectorTestBlocked = "dry_run_blocked"
+	// Containment is a separate host action against an exact compromised leaf.
+	// These states are deliberately distinct from CA revocation and deploy.
+	ConnectorContainmentQueued        = "containment_queued"
+	ConnectorContainmentStopped       = "containment_stopped"
+	ConnectorContainmentDifferentLeaf = "containment_different_leaf"
+	ConnectorContainmentUnverified    = "containment_unverified"
+	ConnectorContainmentFailed        = "containment_failed"
 )
 
 // ConnectorDelivery is the served vocabulary for connector delivery receipts.
 var ConnectorDelivery = Registry{
 	Surface: "connector delivery receipt",
 	Claims: []Claim{
+		{Value: ConnectorContainmentQueued,
+			Meaning: "An exact host containment command is queued. No host action or listener observation has been reported."},
+		{Value: ConnectorContainmentStopped, ContactedTarget: true, MutatedTarget: true, Verified: true,
+			Meaning: "The exact enrolled host agent observed the compromised fingerprint, ran the operator-pinned stop action, and twice observed the listener refuse TLS. Independent client readback is still required for the journey."},
+		{Value: ConnectorContainmentDifferentLeaf, ContactedTarget: true, Verified: true,
+			Meaning: "The host agent saw a different leaf before any stop action. It did not stop the listener; the different leaf still needs independent authorization and trust checks."},
+		{Value: ConnectorContainmentUnverified,
+			Meaning: "The host agent could not observe a parseable TLS leaf before acting, so it did not run the stop action. Containment remains unverified."},
+		{Value: ConnectorContainmentFailed, ContactedTarget: true,
+			Meaning: "The host agent observed the compromised leaf, but the stop action failed or subsequent probes still saw a TLS listener. Containment is not proven."},
 		{
 			Value:   ConnectorQueued,
 			Meaning: "Intent committed to the outbox in the same transaction as the state change. No connector has run.",

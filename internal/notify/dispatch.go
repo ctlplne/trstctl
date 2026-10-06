@@ -687,6 +687,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Credential drift")
 	case KindHoneyTokenTriggered:
 		b.WriteString("Decoy credential was used")
+	case KindEndpointContainmentFailed:
+		b.WriteString("Emergency endpoint containment failed")
 	case KindApprovalRequest:
 		b.WriteString("Approval requested")
 	case KindEndpointVerificationFailed:

@@ -330,6 +330,8 @@ public final class OpenApiSchemas {
       "EndpointBindingPreview",
       "EndpointBindingRequest",
       "EndpointBindingTarget",
+      "EndpointContainmentPreview",
+      "EndpointContainmentRequest",
       "EndpointCustodySummary",
       "EndpointIssuer",
       "EndpointKeyCustody",

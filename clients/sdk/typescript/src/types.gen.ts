@@ -1957,6 +1957,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connectors/targets/{id}/contain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue exact-fingerprint containment on the enrolled host */
+        post: operations["containEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connectors/targets/{id}/contain/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review an exact host target and compromised leaf before emergency containment */
+        get: operations["previewEndpointContainment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/targets/{id}/deploy": {
         parameters: {
             query?: never;
@@ -9402,7 +9436,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+            status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;
@@ -10421,6 +10455,40 @@ export interface components {
             id?: string;
             name: string;
             revision?: string;
+        };
+        EndpointContainmentPreview: {
+            capability: string;
+            certificate_status: string;
+            connector: string;
+            effect_free: boolean;
+            execution_effects: string[];
+            expected_fingerprint: string;
+            /** Format: uuid */
+            identity_id: string;
+            identity_name: string;
+            identity_status: string;
+            preview_fingerprint: string;
+            ready: boolean;
+            /** Format: uuid */
+            required_agent_id: string;
+            required_permission: string;
+            target_enabled: boolean;
+            /** Format: uuid */
+            target_id: string;
+            target_name: string;
+            target_revision: string;
+            verification_steps: string[];
+            warnings: string[];
+        };
+        EndpointContainmentRequest: {
+            expected_fingerprint: string;
+            /** Format: uuid */
+            identity_id: string;
+            preview_fingerprint: string;
+            reason: string;
+            /** Format: uuid */
+            required_agent_id: string;
+            target_revision: string;
         };
         EndpointCustodySummary: {
             control_plane_generated: number;
@@ -21159,6 +21227,93 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    containEndpoint: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndpointContainmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorDelivery"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEndpointContainment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointContainmentPreview"];
+                };
             };
             /** @description client error */
             "4XX": {

@@ -1929,6 +1929,7 @@ interrupts agent claims and application-certificate delivery.
 comma-separated `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` environment form,
 lists the estate-touching job kinds enrolled agents may lease and execute:
 `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
+`endpoint.contain`,
 `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade`.
 

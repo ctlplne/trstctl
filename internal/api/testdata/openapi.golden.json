@@ -9885,6 +9885,11 @@
           },
           "status": {
             "enum": [
+              "containment_queued",
+              "containment_stopped",
+              "containment_different_leaf",
+              "containment_unverified",
+              "containment_failed",
               "queued",
               "delivered",
               "failed",
@@ -13774,6 +13779,134 @@
           "connector",
           "config",
           "enabled"
+        ],
+        "type": "object"
+      },
+      "EndpointContainmentPreview": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "certificate_status": {
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execution_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_name": {
+            "type": "string"
+          },
+          "identity_status": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "target_enabled": {
+            "type": "boolean"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_name": {
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "target_id",
+          "target_name",
+          "target_revision",
+          "connector",
+          "target_enabled",
+          "identity_id",
+          "identity_name",
+          "identity_status",
+          "certificate_status",
+          "expected_fingerprint",
+          "required_agent_id",
+          "preview_fingerprint",
+          "required_permission",
+          "execution_effects",
+          "verification_steps",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "EndpointContainmentRequest": {
+        "properties": {
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_revision",
+          "identity_id",
+          "expected_fingerprint",
+          "required_agent_id",
+          "preview_fingerprint",
+          "reason"
         ],
         "type": "object"
       },
@@ -42029,6 +42162,141 @@
           }
         ],
         "summary": "Update a deployment connector target",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/connectors/targets/{id}/contain": {
+      "post": {
+        "operationId": "containEndpoint",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointContainmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorDelivery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue exact-fingerprint containment on the enrolled host",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/connectors/targets/{id}/contain/preview": {
+      "get": {
+        "operationId": "previewEndpointContainment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointContainmentPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact host target and compromised leaf before emergency containment",
         "x-trstctl-permission": "connectors:write"
       }
     },

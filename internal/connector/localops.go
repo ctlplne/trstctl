@@ -8,13 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
@@ -53,6 +57,19 @@ type LocalOpsConfig struct {
 	TLSProbeOpenSSL string
 	AllowedRoots    []string
 	Actions         []LocalAction
+	// Containments are operator-owned bindings between one enrolled target,
+	// its local TLS listener and an exact stop action. Job payloads cannot add
+	// or override these bindings.
+	Containments []LocalContainment
+}
+
+// LocalContainment is the host operator's authority to stop one target after
+// the agent has observed the exact compromised certificate on its listener.
+type LocalContainment struct {
+	TargetID   string
+	Address    string
+	ServerName string
+	Action     string
 }
 
 // LocalActionInvocation is one command a host connector would ask its sandbox
@@ -167,7 +184,12 @@ func NewLocalOps(cfg LocalOpsConfig) (Ops, error) {
 		copyAction := configured
 		copyAction.LogicalName = strings.TrimSpace(copyAction.LogicalName)
 		copyAction.Command = filepath.Clean(strings.TrimSpace(copyAction.Command))
-		copyAction.LogicalArgs = append([]string(nil), copyAction.LogicalArgs...)
+		// An explicit [] means this action accepts zero logical arguments.
+		// Preserve that distinction from nil, which allows connector-supplied
+		// arguments and must never authorize a containment stop command.
+		if copyAction.LogicalArgs != nil {
+			copyAction.LogicalArgs = append(make([]string, 0, len(copyAction.LogicalArgs)), copyAction.LogicalArgs...)
+		}
 		copyAction.Args = append([]string(nil), copyAction.Args...)
 		if copyAction.LogicalName == "" || copyAction.Command == "" || !filepath.IsAbs(copyAction.Command) {
 			return nil, errors.New("connector: local action requires a logical name and absolute command")
@@ -197,6 +219,35 @@ func NewLocalOps(cfg LocalOpsConfig) (Ops, error) {
 			return nil, fmt.Errorf("connector: duplicate local action %q", copyAction.LogicalName)
 		}
 		actions[copyAction.LogicalName] = copyAction
+	}
+	seenContainments := make(map[string]bool, len(cfg.Containments))
+	seenListeners := make(map[string]bool, len(cfg.Containments))
+	seenStopActions := make(map[string]bool, len(cfg.Containments))
+	for _, binding := range cfg.Containments {
+		id := strings.TrimSpace(binding.TargetID)
+		address := strings.TrimSpace(binding.Address)
+		actionName := strings.TrimSpace(binding.Action)
+		parsedID, idErr := uuid.Parse(id)
+		if idErr != nil || parsedID == uuid.Nil || address == "" || actionName == "" ||
+			strings.ContainsAny(address+binding.ServerName+actionName, "\r\n") || seenContainments[parsedID.String()] {
+			return nil, errors.New("connector: containment needs a unique target id, listener and action")
+		}
+		host, port, err := net.SplitHostPort(address)
+		portNumber, portErr := strconv.Atoi(port)
+		if err != nil || host == "" || portErr != nil || portNumber < 1 || portNumber > 65535 {
+			return nil, fmt.Errorf("connector: containment listener %q is not host:port", address)
+		}
+		listener := net.JoinHostPort(strings.ToLower(host), strconv.Itoa(portNumber))
+		if seenListeners[listener] || seenStopActions[actionName] {
+			return nil, errors.New("connector: containment listener and stop action must each belong to one exact target")
+		}
+		action, ok := actions[actionName]
+		if !ok || action.PassArgs || action.LogicalArgs == nil || len(action.LogicalArgs) != 0 {
+			return nil, fmt.Errorf("connector: containment action %q must be a pinned, argument-free operator action", actionName)
+		}
+		seenContainments[parsedID.String()] = true
+		seenListeners[listener] = true
+		seenStopActions[actionName] = true
 	}
 	return &localOps{roots: roots, actions: actions}, nil
 }

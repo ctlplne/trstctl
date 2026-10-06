@@ -1260,6 +1260,14 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed += inserted
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventConnectorDeliveryRecorded {
+			inserted, err := o.reconcileEndpointContainmentFailureAlert(ctx, ev)
+			if err != nil {
+				return err
+			}
+			healed += inserted
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventRevocationHealthObserved {
 			inserted, err := o.reconcileRevocationAlerts(ctx, ev)
 			if err != nil {

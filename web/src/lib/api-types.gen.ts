@@ -2408,7 +2408,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -3339,6 +3339,37 @@ export interface EndpointBindingTarget {
   id?: string;
   name: string;
   revision?: string;
+}
+
+export interface EndpointContainmentPreview {
+  capability: string;
+  certificate_status: string;
+  connector: string;
+  effect_free: boolean;
+  execution_effects: string[];
+  expected_fingerprint: string;
+  identity_id: string;
+  identity_name: string;
+  identity_status: string;
+  preview_fingerprint: string;
+  ready: boolean;
+  required_agent_id: string;
+  required_permission: string;
+  target_enabled: boolean;
+  target_id: string;
+  target_name: string;
+  target_revision: string;
+  verification_steps: string[];
+  warnings: string[];
+}
+
+export interface EndpointContainmentRequest {
+  expected_fingerprint: string;
+  identity_id: string;
+  preview_fingerprint: string;
+  reason: string;
+  required_agent_id: string;
+  target_revision: string;
 }
 
 export interface EndpointCustodySummary {

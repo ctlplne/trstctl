@@ -62,8 +62,9 @@ import (
 // ship. Handing out work nothing can perform is how a queue silently fills while
 // the control plane's own worker stops doing it.
 var agentJobKindAllowlist = map[string]bool{
-	"connector.deploy":   true,
-	"connector.rollback": true,
+	"connector.deploy":        true,
+	"connector.rollback":      true,
+	relay.KindEndpointContain: true,
 	// D5: the dry-run. It is a first-class job kind rather than a flag on
 	// connector.deploy so an operator can enable testing without enabling
 	// deploying — the whole point of a test is that you run it before you trust
@@ -139,10 +140,11 @@ var agentJobKindVantage = map[string][]string{
 	// R1: reads public distribution points from a vantage inside the segment,
 	// because the CDPs that matter most are internal ones a SaaS control plane
 	// cannot reach by design.
-	"revocation.probe":   {mtls.AgentRoleNetwork},
-	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	"connector.test":     {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	"revocation.probe":        {mtls.AgentRoleNetwork},
+	"connector.deploy":        {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	"connector.rollback":      {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	relay.KindEndpointContain: {mtls.AgentRoleHost},
+	"connector.test":          {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	// B2: HOST ONLY, and this one is not a judgment call. The kind exists so a
 	// private key is generated on the machine that will serve it; a network
 	// relay generating a key for an appliance it merely reaches would recreate
@@ -767,6 +769,22 @@ func (a *agentService) ingestExecutedReport(
 		return ingestErr
 	}
 	switch claim.Destination {
+	case relay.KindEndpointContain:
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("containment result needs a terminal executed report")
+		}
+		var intent relay.ContainmentIntent
+		var result relay.ContainmentReport
+		if err := decodeStrictJSON(claim.Payload, &intent); err != nil {
+			return err
+		}
+		if err := decodeStrictJSON([]byte(req.Detail), &result); err != nil {
+			return err
+		}
+		if err := relay.ValidateContainmentReport(intent, result, req.EvidenceDigest); err != nil {
+			return err
+		}
+		return a.recordEndpointContainmentResult(ctx, info, claim, req, result)
 	case "connector.deploy", "connector.rollback", agentJobKindEndpointRenew:
 		if req.Outcome != transport.JobOutcomeVerified && req.Outcome != transport.JobOutcomeVerifyFailed {
 			return nil
@@ -885,6 +903,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	}
 
 	detail := strings.TrimSpace(req.Detail)
+	if claim.Destination == relay.KindEndpointContain {
+		if err := a.recordEndpointContainmentFailure(ctx, info, claim, req); err != nil {
+			return nil, status.Errorf(codes.Internal, "record failed endpoint containment: %v", err)
+		}
+	}
 	// Keep the exact failed attempt in the identity timeline before releasing
 	// its lease. A projection failure leaves the signed result retryable;
 	// response loss reuses the same event ID instead of duplicating history.
@@ -929,7 +952,14 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	// impossible operation would hold material outside the seal
 	// indefinitely, which is exactly what single-use redemption exists to
 	// prevent.
-	permanent := migrationHandled
+	// A failed containment report may follow an attempted stop whose after
+	// probes could not complete. Re-executing it without an operator review
+	// would repeat an ambiguous emergency action indefinitely.
+	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain
+	terminalReason := detail
+	if claim.Destination == relay.KindEndpointContain {
+		terminalReason = "containment_failed"
+	}
 	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
 		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
 		permanent = true
@@ -940,7 +970,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	var ok bool
 	var releaseErr error
 	if permanent {
-		ok, releaseErr = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, detail, now)
+		ok, releaseErr = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, terminalReason, now)
 	} else {
 		ok, releaseErr = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Attempt, req.Detail, now)
 	}

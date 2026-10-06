@@ -35,14 +35,14 @@ type connectorCLIConfig struct {
 
 func runConnector(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 || args[0] != "target" {
-		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback>")
+		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback|contain-preview|contain>")
 	}
 	return runConnectorTarget(ctx, args[1:], getenv, stdout, stderr)
 }
 
 func runConnectorTarget(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 {
-		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback>")
+		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback|contain-preview|contain>")
 	}
 	cfg, err := connectorCLIConfigFromEnv(getenv)
 	if err != nil {
@@ -103,9 +103,77 @@ func runConnectorTarget(ctx context.Context, args []string, getenv func(string) 
 		return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost, "/api/v1/identities/"+url.PathEscape(*identityID)+"/connector-target", map[string]string{"target_id": *targetID}, true)
 	case "test", "deploy", "rollback":
 		return runConnectorTargetAction(ctx, stdout, stderr, cfg, args[0], args[1:])
+	case "contain-preview":
+		return runConnectorContainmentPreview(ctx, stdout, stderr, cfg, args[1:])
+	case "contain":
+		return runConnectorContainment(ctx, stdout, stderr, cfg, args[1:])
 	default:
 		return fmt.Errorf("unknown connector target command %q", args[0])
 	}
+}
+
+func runConnectorContainmentPreview(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {
+	fs := flag.NewFlagSet("trstctl connector target contain-preview", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	targetID := fs.String("target", "", "exact host deployment target id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*targetID) == "" {
+		return errors.New("connector target contain-preview: --target is required")
+	}
+	return connectorCLIRequest(ctx, stdout, cfg, http.MethodGet,
+		"/api/v1/connectors/targets/"+url.PathEscape(*targetID)+"/contain/preview", nil, false)
+}
+
+// The reviewed preview is a separate file so an incident operator can inspect
+// the target, identity, leaf and agent before authorizing a host stop. The API
+// rechecks the same binding at execution time and rejects a stale preview.
+func runConnectorContainment(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {
+	fs := flag.NewFlagSet("trstctl connector target contain", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	targetID := fs.String("target", "", "exact host deployment target id")
+	previewFile := fs.String("preview-file", "", "path to reviewed contain-preview JSON")
+	reason := fs.String("reason", "", "incident reason recorded in the audit event")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*targetID) == "" || strings.TrimSpace(*previewFile) == "" || strings.TrimSpace(*reason) == "" {
+		return errors.New("connector target contain: --target, --preview-file and --reason are required")
+	}
+	file, err := os.Open(*previewFile) // #nosec G304 -- the operator names their reviewed public preview file (CWE-22)
+	if err != nil {
+		return fmt.Errorf("read containment preview: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err != nil || len(raw) > 1<<20 {
+		return errors.New("connector target contain: preview file is unreadable or larger than 1 MiB")
+	}
+	var preview struct {
+		Ready               bool   `json:"ready"`
+		TargetID            string `json:"target_id"`
+		TargetRevision      string `json:"target_revision"`
+		IdentityID          string `json:"identity_id"`
+		ExpectedFingerprint string `json:"expected_fingerprint"`
+		RequiredAgentID     string `json:"required_agent_id"`
+		PreviewFingerprint  string `json:"preview_fingerprint"`
+	}
+	if err := json.Unmarshal(raw, &preview); err != nil {
+		return fmt.Errorf("connector target contain: invalid preview JSON: %w", err)
+	}
+	if !preview.Ready || preview.TargetID != strings.TrimSpace(*targetID) ||
+		preview.TargetRevision == "" || preview.IdentityID == "" ||
+		preview.ExpectedFingerprint == "" || preview.RequiredAgentID == "" || preview.PreviewFingerprint == "" {
+		return errors.New("connector target contain: preview is unready, incomplete or names another target")
+	}
+	body := map[string]string{
+		"target_revision": preview.TargetRevision, "identity_id": preview.IdentityID,
+		"expected_fingerprint": preview.ExpectedFingerprint, "required_agent_id": preview.RequiredAgentID,
+		"preview_fingerprint": preview.PreviewFingerprint, "reason": strings.TrimSpace(*reason),
+	}
+	return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost,
+		"/api/v1/connectors/targets/"+url.PathEscape(preview.TargetID)+"/contain", body, true)
 }
 
 func runConnectorTargetUpsert(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string, targetID string) error {

@@ -64,6 +64,10 @@ const (
 	DestinationRisk = "notification.risk"
 	// DestinationHoneyToken carries the first observed use of an inert decoy.
 	DestinationHoneyToken = "notification.honeytoken"
+	// DestinationContainment pages tenant operators when an exact emergency
+	// host stop could not be verified. It is separate from ordinary endpoint
+	// verification because a compromised leaf may still be serving.
+	DestinationContainment = "notification.containment"
 )
 
 // Alert kinds.
@@ -111,13 +115,14 @@ const (
 	KindCAValidityCompression = "ca.validity_compression"
 	// KindRevocationHealth marks a CRL or OCSP endpoint whose signed evidence is
 	// stale, nearing expiry, unreachable, or invalid.
-	KindRevocationHealth       = "revocation.health"
-	KindOwnershipReattestation = "ownership.reattestation_requested"
-	KindRestoreDrillFailed     = "backup.restore_drill_failed"
-	KindRestoreDrillSkipped    = "backup.restore_drill_skipped"
-	KindRestoreDrillObjective  = "backup.restore_drill_objective_breached"
-	KindUrgentRisk             = "risk.urgent"
-	KindHoneyTokenTriggered    = "honeytoken.triggered"
+	KindRevocationHealth          = "revocation.health"
+	KindOwnershipReattestation    = "ownership.reattestation_requested"
+	KindRestoreDrillFailed        = "backup.restore_drill_failed"
+	KindRestoreDrillSkipped       = "backup.restore_drill_skipped"
+	KindRestoreDrillObjective     = "backup.restore_drill_objective_breached"
+	KindUrgentRisk                = "risk.urgent"
+	KindHoneyTokenTriggered       = "honeytoken.triggered"
+	KindEndpointContainmentFailed = "endpoint.containment_failed"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

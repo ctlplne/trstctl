@@ -261,6 +261,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 				},
 				DynamicObject: []string{"/target_config"},
 			}), true
+	case "endpoint.containment.requested":
+		return shape(`{"target_id":"","target_revision":"","identity_id":"","expected_fingerprint":"","required_agent_id":"","reason":"","requested_by":"","outbox_id":1}`), true
 	case "ct.submission.delivered":
 		return shape(`{"capability":"","submission_id":"","log_url":"","entry_type":"","leaf_sha256_fingerprint":"","subject":"","serial_number":"","delivered_at":""}`), true
 	case "ct.submission.queued":

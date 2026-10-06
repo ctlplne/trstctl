@@ -665,19 +665,29 @@ export function Notifications() {
                 <NotificationDetailRow term={detail.deployment_recorded_at ? t("notifications.context.historicalDeadline") : "Not after"}>
                   {detail.not_after ? formatDateTime(detail.not_after) : t("notifications.center.noDeadline")}
                 </NotificationDetailRow>
-                {detail.deployment_recorded_at ? (
+                {detail.deployment_recorded_at || detail.deployment_receipt_id || detail.certificate_fingerprint ? (
                   <>
-                    <NotificationDetailRow term={t("notifications.context.recordedAt")}>{formatDateTime(detail.deployment_recorded_at)}</NotificationDetailRow>
-                    <NotificationDetailRow term={t("notifications.context.receipt")} mono>
-                      {detail.deployment_receipt_id || "-"}
-                    </NotificationDetailRow>
-                    <NotificationDetailRow term={t("notifications.context.fingerprint")} mono>
-                      {detail.certificate_fingerprint || "-"}
-                    </NotificationDetailRow>
-                    <div className="min-w-0 text-sm text-muted-foreground">
-                      <dt className="sr-only">{t("notifications.context.recordedAt")}</dt>
-                      <dd>{t("notifications.context.historicalHelp")}</dd>
-                    </div>
+                    {detail.deployment_recorded_at ? (
+                      <NotificationDetailRow term={t("notifications.context.recordedAt")}>
+                        {formatDateTime(detail.deployment_recorded_at)}
+                      </NotificationDetailRow>
+                    ) : null}
+                    {detail.deployment_receipt_id ? (
+                      <NotificationDetailRow term={t("notifications.context.receipt")} mono>
+                        {detail.deployment_receipt_id}
+                      </NotificationDetailRow>
+                    ) : null}
+                    {detail.certificate_fingerprint ? (
+                      <NotificationDetailRow term={t("notifications.context.fingerprint")} mono>
+                        {detail.certificate_fingerprint}
+                      </NotificationDetailRow>
+                    ) : null}
+                    {detail.deployment_recorded_at ? (
+                      <div className="min-w-0 text-sm text-muted-foreground">
+                        <dt className="sr-only">{t("notifications.context.recordedAt")}</dt>
+                        <dd>{t("notifications.context.historicalHelp")}</dd>
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
                 {detail.kind === "identity.renewal_failed" ? (

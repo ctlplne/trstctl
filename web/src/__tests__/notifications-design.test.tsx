@@ -150,6 +150,32 @@ describe("Global Alert Center", () => {
     expect(await screen.findByText("Oct 1, 2026, 12:42 AM")).toBeInTheDocument();
   });
 
+  it("shows the exact containment receipt and leaf without inventing a historical deployment timestamp", async () => {
+    const alert = {
+      id: "731",
+      tenant_id: "t1",
+      destination: "notification.containment",
+      kind: "endpoint.containment_failed",
+      identity_id: "compromised-identity",
+      subject: "payments Apache",
+      certificate_fingerprint: "exact-compromised-leaf",
+      deployment_receipt_id: "failed-containment-receipt",
+      status: "pending",
+      severity: "critical",
+      attempts: 0,
+      created_at: "2026-10-06T04:00:00Z",
+    };
+    apiMock.notifications.mockResolvedValue({ items: [alert] });
+    apiMock.notification.mockResolvedValue({ ...alert, deliveries: [] });
+    const user = userEvent.setup();
+    renderNotifications();
+    await user.click(await screen.findByRole("button", { name: "Review details" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notification 731" });
+    expect(within(dialog).getByText("failed-containment-receipt")).toBeInTheDocument();
+    expect(within(dialog).getByText("exact-compromised-leaf")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Captured when the renewal failed. This does not verify what the listener serves now.")).not.toBeInTheDocument();
+  });
+
   it("makes the five operator jobs first-class and keeps a blank tenant honest", async () => {
     const user = userEvent.setup();
     renderNotifications();

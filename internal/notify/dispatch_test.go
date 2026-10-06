@@ -500,4 +500,8 @@ func TestFormatMessage(t *testing.T) {
 	if !strings.Contains(msg, "expiring") || !strings.Contains(msg, "example.com") {
 		t.Errorf("unexpected message: %q", msg)
 	}
+	failed := notify.FormatMessage(notify.Alert{Kind: notify.KindEndpointContainmentFailed, Subject: "payments Apache"})
+	if !strings.Contains(failed, "Emergency endpoint containment failed") || !strings.Contains(failed, "payments Apache") {
+		t.Errorf("critical containment page lacks actionable identity: %q", failed)
+	}
 }

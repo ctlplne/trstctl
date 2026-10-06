@@ -14894,6 +14894,77 @@ export const messages = {
     defaultMessage: "Queue restore",
     description: "Confirmation action that queues connector recovery.",
   },
+  "connectors.containment.heading": {
+    defaultMessage: "Remove a compromised certificate from this host",
+    description: "Emergency host endpoint action heading.",
+  },
+  "connectors.containment.help": {
+    defaultMessage:
+      "Review the exact certificate and enrolled host before asking its agent to stop the TLS listener. This can interrupt service. A disabled destination may still be serving a certificate.",
+    description: "Containment scope and impact.",
+  },
+  "connectors.containment.review": { defaultMessage: "Review host containment", description: "Effect-free containment review action." },
+  "connectors.containment.reviewing": { defaultMessage: "Checking exact host evidence…", description: "Containment review loading state." },
+  "connectors.containment.previewTitle": { defaultMessage: "Exact host action review — no change made", description: "Containment preview result heading." },
+  "connectors.containment.target": { defaultMessage: "Destination", description: "Exact containment target label." },
+  "connectors.containment.identity": { defaultMessage: "Credential identity", description: "Exact containment identity label." },
+  "connectors.containment.leaf": {
+    defaultMessage: "Last delivered certificate SHA-256",
+    description: "Candidate leaf; the host performs a fresh live probe before any stop.",
+  },
+  "connectors.containment.agent": { defaultMessage: "Enrolled host agent", description: "Pinned host recipient label." },
+  "connectors.containment.revision": { defaultMessage: "Destination revision", description: "Target change binding label." },
+  "connectors.containment.certificateStatus": {
+    defaultMessage: "Inventory certificate state",
+    description: "Inventory state is separate from listener observation.",
+  },
+  "connectors.containment.effectBoundary": {
+    defaultMessage:
+      "The agent checks this exact certificate on its operator-pinned listener before running the pinned stop action. A changed or unreachable listener does not authorize a stop. Queueing alone does not prove containment.",
+    description: "Host stop guard and proof boundary.",
+  },
+  "connectors.containment.reason": { defaultMessage: "Incident reason", description: "Audited containment reason input." },
+  "connectors.containment.reasonRequired": {
+    defaultMessage: "Enter an incident reason before queueing a stop.",
+    description: "Containment reason form validation.",
+  },
+  "connectors.containment.submit": { defaultMessage: "Queue exact host stop", description: "Submit the reviewed host action." },
+  "connectors.containment.queued": { defaultMessage: "Host stop queued — listener may still be serving", description: "Pending containment status." },
+  "connectors.containment.queuedHelp": {
+    defaultMessage: "Wait for the exact enrolled host agent. Check this receipt again; no stop or listener check has been proved yet.",
+    description: "Pending containment guidance.",
+  },
+  "connectors.containment.stopped": { defaultMessage: "Host agent stopped TLS on the pinned listener", description: "Signed repeated local refusal status." },
+  "connectors.containment.differentLeaf": {
+    defaultMessage: "Different certificate served — no stop attempted",
+    description: "Safe changed-leaf refusal status.",
+  },
+  "connectors.containment.unverified": {
+    defaultMessage: "Listener unverified — no stop attempted",
+    description: "Unreachable or unobservable listener status.",
+  },
+  "connectors.containment.failed": { defaultMessage: "Host stop failed or the listener still served TLS", description: "Failed containment status." },
+  "connectors.containment.noProof": {
+    defaultMessage:
+      "Check the signed host report and the live listener before declaring this credential contained. Retry with a new reviewed request after fixing the cause.",
+    description: "Containment recovery guidance.",
+  },
+  "connectors.containment.stockVerify": {
+    defaultMessage:
+      "The signed local report observed two TLS refusals. Verify from the client segment with a stock TLS client, and check CA revocation separately.",
+    description: "Independent verification guidance.",
+  },
+  "connectors.containment.readFailed": {
+    defaultMessage: "The exact host result could not be read or did not match this request. Read the receipt again; no new stop was submitted.",
+    description: "Fail-closed containment readback guidance.",
+  },
+  "connectors.containment.receipt": { defaultMessage: "Receipt", description: "Exact containment receipt identifier." },
+  "connectors.containment.refresh": { defaultMessage: "Check host result", description: "Read the same containment receipt." },
+  "connectors.containment.retry": {
+    defaultMessage: "Review a new attempt",
+    description: "Starts a fresh containment review after a signed non-success result.",
+  },
+  "connectors.containment.signedEvidence": { defaultMessage: "Signed host probe and action evidence", description: "Disclosure for raw signed result data." },
   "connectors.recovery.queued": {
     defaultMessage: "Restore queued — waiting for agent proof",
     description: "Heading for accepted but not yet proven connector recovery.",

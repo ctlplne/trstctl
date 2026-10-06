@@ -105,6 +105,16 @@ type HostProfile struct {
 	// executable and argv on this host. A connector cannot add to this, and
 	// neither can a tenant's target configuration.
 	Actions []HostAction `json:"actions"`
+	// Containments grant an exact target one local listener and one stop action.
+	// This mapping is loaded only from the host operator's profile file.
+	Containments []HostContainment `json:"containments,omitempty"`
+}
+
+type HostContainment struct {
+	TargetID   string `json:"target_id"`
+	Address    string `json:"address"`
+	ServerName string `json:"server_name,omitempty"`
+	Action     string `json:"action"`
 }
 
 // HostAction is one permitted command.
@@ -155,7 +165,19 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			Timeout:     timeout,
 		})
 	}
-	return connector.LocalOpsConfig{AllowedRoots: profile.AllowedRoots, Actions: actions, TLSProbeOpenSSL: profile.TLSProbeOpenSSL}, nil
+	containments := make([]connector.LocalContainment, 0, len(profile.Containments))
+	for _, binding := range profile.Containments {
+		containments = append(containments, connector.LocalContainment{
+			TargetID: binding.TargetID, Address: binding.Address,
+			ServerName: binding.ServerName, Action: binding.Action,
+		})
+	}
+	configured := connector.LocalOpsConfig{AllowedRoots: profile.AllowedRoots, Actions: actions,
+		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL}
+	if _, err := connector.NewLocalOps(configured); err != nil {
+		return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid host profile: %w", err)
+	}
+	return configured, nil
 }
 
 // HostTargetConfig is the host-side view of a deployment target: the paths and

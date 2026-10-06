@@ -692,6 +692,19 @@ func (s *Store) GetConnectorDeliveryReceiptForOutboxTx(ctx context.Context, tx p
 	return r, err
 }
 
+// GetConnectorDeliveryReceiptForOutbox reads the canonical queued/result row
+// for an exact tenant job. It is used when the signed agent result updates the
+// same operator-visible receipt after the claim is admitted.
+func (s *Store) GetConnectorDeliveryReceiptForOutbox(ctx context.Context, tenantID string, outboxID int64) (ConnectorDeliveryReceipt, error) {
+	var receipt ConnectorDeliveryReceipt
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var readErr error
+		receipt, readErr = s.GetConnectorDeliveryReceiptForOutboxTx(ctx, tx, tenantID, outboxID)
+		return readErr
+	})
+	return receipt, err
+}
+
 // GetConnectorDeliveryReceipt loads one receipt in its tenant context.
 func (s *Store) GetConnectorDeliveryReceipt(ctx context.Context, tenantID, id string) (ConnectorDeliveryReceipt, error) {
 	var r ConnectorDeliveryReceipt

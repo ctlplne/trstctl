@@ -81,6 +81,7 @@ func ClaimableKinds() []string {
 		// for it is refused and the reach recorded, exactly as it already is for
 		// the three network-only kinds above when a host agent asks.
 		KindEndpointRenew,
+		KindEndpointContain,
 	}
 }
 
@@ -278,6 +279,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// hold.
 	if job.Kind == KindEndpointRenew {
 		return runHostRenew(ctx, ch, client, hostProfile, hostRollback, job)
+	}
+	if job.Kind == KindEndpointContain {
+		return runContainment(ctx, ch, hostProfile, job)
 	}
 	// H2: trust distribution is public anchor material and host-local I/O. It
 	// redeems no credential, and routing it before deploy is what enforces that.
