@@ -2690,7 +2690,7 @@ describe("CLI-parity client methods (S3.3)", () => {
     },
     {
       name: "issueLeafFromCA",
-      call: () => api.issueLeafFromCA("int1", { csr_pem: "-----BEGIN CERTIFICATE REQUEST-----" }),
+      call: () => api.issueLeafFromCA("int1", { csr_pem: "-----BEGIN CERTIFICATE REQUEST-----", ttl_seconds: 3600 }),
       method: "POST",
       path: "/api/v1/ca/authorities/int1/issue",
       status: 201,

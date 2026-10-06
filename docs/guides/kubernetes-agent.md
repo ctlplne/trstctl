@@ -165,6 +165,10 @@ will not infer a namespaced issuer from a same-named resource. If present,
 `trstctl.com/issuer-name` must exactly match the issuer name in
 `spec.signerName`; annotations cannot redirect a CSR to another CA. The agent
 requests 24 hours if `spec.expirationSeconds` is absent, subject to the CA profile.
+An approved CSR with a conflicting annotation is reported as
+`failed/issuer_binding_mismatch`; an extra path segment in `spec.signerName` is
+`failed/invalid_signer_name`. Correct the request and submit a new CSR instead
+of looking for a missing Issuer.
 
 ```yaml
 apiVersion: certificates.k8s.io/v1

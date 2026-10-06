@@ -819,6 +819,19 @@ func TestNativeKubernetesCSRSignerNameCannotSelectAnotherIssuer(t *testing.T) {
 			api.kubernetesCSRStatus["extra-signer-path"] != nil,
 			api.kubernetesCSRStatus["matching-issuer"] != nil)
 	}
+	postureByName := make(map[string]k8s.PostureResource, len(result.KubernetesCSRPosture))
+	for _, resource := range result.KubernetesCSRPosture {
+		postureByName[resource.Name] = resource
+	}
+	for name, reason := range map[string]string{
+		"annotation-cross-ca": "issuer_binding_mismatch",
+		"extra-signer-path":   "invalid_signer_name",
+	} {
+		resource := postureByName[name]
+		if resource.State != "failed" || resource.Reason != reason {
+			t.Errorf("%s posture = %s/%s, want failed/%s", name, resource.State, resource.Reason, reason)
+		}
+	}
 }
 
 func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *testing.T) {

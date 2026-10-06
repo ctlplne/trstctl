@@ -92,7 +92,7 @@ func publicRequestHash(obj map[string]any) string {
 	return crypto.SHA256Hex(csrDER)
 }
 
-func kubernetesCSRPosture(obj map[string]any, backed bool) PostureResource {
+func kubernetesCSRPosture(obj map[string]any, backed bool, bindingReason string) PostureResource {
 	resource := postureResource(obj)
 	resource.PublicHash = publicRequestHash(obj)
 	switch {
@@ -104,6 +104,8 @@ func kubernetesCSRPosture(obj map[string]any, backed bool) PostureResource {
 		resource.State, resource.Reason = "ready", "already_ready"
 	case !isKubernetesCSRApproved(obj):
 		resource.State, resource.Reason = "pending", "approval_pending"
+	case !backed && bindingReason != "":
+		resource.State, resource.Reason = "failed", bindingReason
 	case !backed:
 		resource.State, resource.Reason = "pending", "issuer_not_found"
 	default:

@@ -177,6 +177,26 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getAllByText("Stale controllers:")).toHaveLength(2);
   });
 
+  it("explains native CSR issuer binding failures with an operator action", async () => {
+    const fixture = kubernetesCSRSupportFixture();
+    apiMock.kubernetesCSRSupport.mockResolvedValueOnce({
+      ...fixture,
+      summary: { ...fixture.summary, observed: 2, ready: 0, failed: 2 },
+      objects: [
+        { ...fixture.objects[0], uid: "binding-mismatch", name: "binding-mismatch", state: "failed", reason: "issuer_binding_mismatch" },
+        { ...fixture.objects[0], uid: "extra-path", name: "extra-path", state: "failed", reason: "invalid_signer_name" },
+      ],
+    });
+
+    renderWorkloads();
+    await userEvent.setup().click(await screen.findByText("Kubernetes controller evidence"));
+    expect(await screen.findByText("Issuer annotation conflicts with signer name. Correct and resubmit the CSR.")).toHaveAttribute(
+      "title",
+      "issuer_binding_mismatch",
+    );
+    expect(screen.getByText("Signer name has an extra path segment. Correct and resubmit the CSR.")).toHaveAttribute("title", "invalid_signer_name");
+  });
+
   it("does not call a stale or failed controller active", () => {
     const healthy = kubernetesTrustBundleFixture();
     expect(kubernetesControllerBadgeValue(healthy)).toBe("active");

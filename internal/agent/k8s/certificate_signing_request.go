@@ -43,8 +43,8 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 	signed := 0
 	posture := make([]PostureResource, 0, len(list.Items))
 	for _, csr := range list.Items {
-		config, backed := c.csrIssuerConfig(csr, issuers, clusterIssuers)
-		current := kubernetesCSRPosture(csr, backed)
+		config, backed, bindingReason := c.csrIssuerConfig(csr, issuers, clusterIssuers)
+		current := kubernetesCSRPosture(csr, backed, bindingReason)
 		if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !backed {
 			posture = append(posture, current)
 			continue
@@ -58,19 +58,26 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 		// Use the API server's update response, not the pre-reconcile list
 		// object. In particular, resourceVersion must describe the exact object
 		// whose status.certificate was persisted.
-		current = kubernetesCSRPosture(updated, true)
+		current = kubernetesCSRPosture(updated, true, "")
 		current.State, current.Reason = "ready", "signed"
 		posture = append(posture, current)
 	}
 	return signed, posture, nil
 }
 
-func (c *IssuerController) csrIssuerConfig(csr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool) {
+func (c *IssuerController) csrIssuerConfig(csr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool, string) {
 	spec, _ := csr["spec"].(map[string]any)
 	signerName, _ := spec["signerName"].(string)
 	issuerName := signerNameIssuer(signerName, c.group)
 	if issuerName == "" {
-		return issuerConfig{}, false
+		group := c.group
+		if group == "" {
+			group = DefaultIssuerGroup
+		}
+		if strings.HasPrefix(signerName, group+"/") {
+			return issuerConfig{}, false, "invalid_signer_name"
+		}
+		return issuerConfig{}, false, ""
 	}
 
 	meta, _ := csr["metadata"].(map[string]any)
@@ -78,30 +85,33 @@ func (c *IssuerController) csrIssuerConfig(csr map[string]any, issuers, clusterI
 	if annotations != nil {
 		annotatedGroup, _ := annotations[kubernetesCSRAnnotationIssuerGroup].(string)
 		if annotatedGroup != "" && annotatedGroup != c.group {
-			return issuerConfig{}, false
+			return issuerConfig{}, false, "issuer_binding_mismatch"
 		}
 		annotatedName, _ := annotations[kubernetesCSRAnnotationIssuerName].(string)
 		if annotatedName != "" && annotatedName != issuerName {
-			return issuerConfig{}, false
+			return issuerConfig{}, false, "issuer_binding_mismatch"
 		}
 		kind, _ := annotations[kubernetesCSRAnnotationIssuerKind].(string)
 		switch kind {
 		case "", "ClusterIssuer":
 			config, ok := clusterIssuers[issuerName]
-			return config, ok
+			return config, ok, ""
 		case "Issuer":
 			issuerNamespace, _ := annotations[kubernetesCSRAnnotationIssuerNamespace].(string)
+			if issuerNamespace == "" {
+				return issuerConfig{}, false, "issuer_binding_mismatch"
+			}
 			config, ok := issuers[issuerNamespace+"/"+issuerName]
-			return config, issuerNamespace != "" && ok
+			return config, ok, ""
 		default:
-			return issuerConfig{}, false
+			return issuerConfig{}, false, "issuer_binding_mismatch"
 		}
 	}
 
 	// A Kubernetes CSR has no namespace of its own. Without an explicit
 	// annotation, only a cluster-scoped issuer is unambiguous.
 	config, ok := clusterIssuers[issuerName]
-	return config, ok
+	return config, ok, ""
 }
 
 func signerNameIssuer(signerName, group string) string {

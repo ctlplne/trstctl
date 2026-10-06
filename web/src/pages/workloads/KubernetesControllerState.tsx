@@ -40,6 +40,11 @@ export function KubernetesControllerState({
       ?.map((item) => item.last_sync)
       .sort()
       .at(-1);
+  const reasonLabel = (reason: string) => {
+    if (reason === "issuer_binding_mismatch") return t("workloads.kubernetesLive.issuerBindingMismatch");
+    if (reason === "invalid_signer_name") return t("workloads.kubernetesLive.invalidSignerName");
+    return reason;
+  };
   const label = kind === "csr" ? t("workloads.kubernetesCSR.heading") : t("workloads.trustBundles.heading");
   const columns: Array<DataGridColumn<KubernetesPostureObject>> = [
     {
@@ -52,7 +57,7 @@ export function KubernetesControllerState({
       ),
     },
     { id: "state", header: t("workloads.kubernetesLive.state"), cell: (row) => <StatusBadge value={row.state} /> },
-    { id: "reason", header: t("workloads.kubernetesLive.reason"), cell: (row) => row.reason },
+    { id: "reason", header: t("workloads.kubernetesLive.reason"), cell: (row) => <span title={row.reason}>{reasonLabel(row.reason)}</span> },
     {
       id: "hash",
       header: t("workloads.kubernetesLive.publicHash"),

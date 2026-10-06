@@ -18618,6 +18618,14 @@ export const messages = {
     defaultMessage: "Reason",
     description: "Kubernetes controller's per-object reason column.",
   },
+  "workloads.kubernetesLive.issuerBindingMismatch": {
+    defaultMessage: "Issuer annotation conflicts with signer name. Correct and resubmit the CSR.",
+    description: "Remedy for an approved Kubernetes CSR whose issuer annotation selects a different CA.",
+  },
+  "workloads.kubernetesLive.invalidSignerName": {
+    defaultMessage: "Signer name has an extra path segment. Correct and resubmit the CSR.",
+    description: "Remedy for an approved Kubernetes CSR whose signer name is not one exact issuer name.",
+  },
   "workloads.kubernetesLive.publicHash": {
     defaultMessage: "Public content hash",
     description: "Hash of a public Kubernetes CSR or CA bundle, never secret material.",
