@@ -486,7 +486,7 @@ not this file.
 | `internal/orchestrator/tenant_registration_test.go:241` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:322` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/perf/live.go:873` | page size is positive and small (CWE-190) |
+| `internal/perf/live.go:875` | page size is positive and small (CWE-190) |
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
@@ -818,8 +818,8 @@ not this file.
 | `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:94` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
-| `internal/perf/live.go:753` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
-| `internal/perf/live.go:917` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:755` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:919` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/pqc/native_probe_test.go:74` | pinned local stock executable and owned loopback fixture. |
 | `internal/pqc/prepared_leaf_openssl_test.go:63` | LookPath-resolved OpenSSL, fixed verbs, loopback and TempDir artifacts. |
 | `internal/pqc/prepared_leaf_openssl_test.go:83` | Fixed stock TLS validation command against the owned loopback server. |
@@ -1496,7 +1496,7 @@ not this file.
 | `internal/testutil/openssltest/openssltest_test.go:14` | fake openssl shim must be executable; 0700 is the minimum that runs (CWE-276) |
 | `scripts/gen-terraform-provider-routes/main.go:92` | generated Go source committed to the repo; world-readable by design (CWE-276) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:140` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
-| `scripts/perf/cmd/capacitycalibrate/main_test.go:180` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `scripts/perf/cmd/capacitycalibrate/main_test.go:183` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `scripts/perf/cmd/perfgate/main.go:55` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakcapture/main.go:85` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakgate/main.go:123` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
