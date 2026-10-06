@@ -8280,6 +8280,22 @@ export const messages = {
     defaultMessage: "Could not start the reviewed CA ceremony",
     description: "Fallback error when exact reviewed ceremony creation fails.",
   },
+  "caHierarchy.ceremonyLookup.label": {
+    defaultMessage: "Find ceremony by ID",
+    description: "Exact lookup label for a separately signed-in CA custodian.",
+  },
+  "caHierarchy.ceremonyLookup.load": {
+    defaultMessage: "Load ceremony",
+    description: "Read a tenant-scoped CA ceremony by its exact ID without changing it.",
+  },
+  "caHierarchy.ceremonyLookup.help": {
+    defaultMessage: "Use the ID from the change request. Your tenant and permissions still control access.",
+    description: "Explains the cross-session approval lookup and its authorization boundary.",
+  },
+  "caHierarchy.ceremonyLookup.empty": {
+    defaultMessage: "Start or load a ceremony to inspect its approval state.",
+    description: "Empty state for an opener or a separately signed-in custodian on the CA lifecycle tab.",
+  },
   "caHierarchy.rotationPreview.title": {
     defaultMessage: "Review CA rotation",
     description: "Heading for the server-owned effect-free review shown before activating a CA successor.",
@@ -25833,10 +25849,6 @@ export const messages = {
   "source.ssh.workflow.failed.e76cbdb07c": {
     defaultMessage: "SSH workflow failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
-  },
-  "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd": {
-    defaultMessage: "Start a ceremony to see its purpose, approval threshold, and status.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848": {
     defaultMessage: "Start a root CA ceremony, then record a second custodian approval before using the ceremony for a signer-backed authority action.",

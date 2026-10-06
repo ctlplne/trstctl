@@ -50,6 +50,14 @@ collects approvals the same way**: each custodian calls
 cannot approve their own ceremony); every approval is auditable and emits
 `ca.ceremony.approved`.
 
+In the console, the opener copies the exact ceremony ID into the change request.
+Each custodian signs in with their own identity, opens **Certificate authorities →
+Lifecycle**, enters that ID under **Find ceremony by ID**, and selects **Load
+ceremony**. They check the purpose, opener, and remaining quorum before selecting
+**Approve**. Loading is a tenant-scoped read; knowing an ID never grants approval
+permission. A fresh browser session does not inherit another operator's local
+ceremony panel.
+
 Before `StartCeremony`, send the exact proposed request to
 `POST /api/v1/ca/ceremonies/preview`. This is an effect-free validation step: it
 creates no ceremony, key, certificate, event, idempotency record, or external

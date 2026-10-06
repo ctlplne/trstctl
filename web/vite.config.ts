@@ -33,10 +33,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(webRoot, "../internal/webui/dist"),
     emptyOutDir: true,
-    // A second safe compression pass removes repeated route scaffolding while
+    // Repeated safe compression passes remove route scaffolding while
     // preserving the existing shipped-byte budgets.
     minify: "terser",
-    terserOptions: { module: true, toplevel: true, compress: { passes: 3 } },
+    terserOptions: { module: true, toplevel: true, compress: { passes: 4 } },
     rollupOptions: {
       output: {
         // Route splitting otherwise emits one sub-kilobyte file per shared
@@ -63,6 +63,12 @@ export default defineConfig({
               test: (id) =>
                 [
                   "/src/components/IdentityPicker.tsx",
+                  "/src/components/CredentialChip.tsx",
+                  "/src/components/DetailDrawer.tsx",
+                  "/src/components/EmptyState.tsx",
+                  "/src/components/PageHeader.tsx",
+                  "/src/components/PageTabs.tsx",
+                  "/src/components/ProgressiveTaskList.tsx",
                   "/src/components/ScrollableTableRegion.tsx",
                   "/src/components/dashboard/index.tsx",
                   "/src/components/ui/checkbox.tsx",

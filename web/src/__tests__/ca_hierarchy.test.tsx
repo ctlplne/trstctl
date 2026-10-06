@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     issuerCapabilities: vi.fn(),
     previewCACeremony: vi.fn(),
     createCACeremony: vi.fn(),
+    caCeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
     importExistingCA: vi.fn(),
@@ -761,6 +762,32 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("2 / 2 approvals")).toBeInTheDocument();
     expect(screen.getByText("approved")).toBeInTheDocument();
     expect(screen.queryByText("root:<sha256-of-ca-spec>")).not.toBeInTheDocument();
+  });
+
+  it("lets another custodian load a pending ceremony by its exact ID after signing in", async () => {
+    const user = userEvent.setup();
+    const id = "a6e2d916-0d8a-4e3d-8a06-222fe0f60b80";
+    apiMock.caCeremony.mockResolvedValue({
+      id,
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      purpose: "root:reviewed-spec",
+      threshold: 2,
+      approvals: 0,
+      status: "pending",
+      opener: "eval-admin",
+      created_at: "2026-10-06T16:42:00Z",
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+
+    expect(screen.getByText("No ceremony loaded")).toBeInTheDocument();
+    const lifecycle = screen.getByRole("heading", { name: "CA key ceremony" }).closest("section");
+    expect(lifecycle).not.toBeNull();
+    await user.type(within(lifecycle!).getByLabelText("Find ceremony by ID"), id);
+    await user.click(screen.getByRole("button", { name: "Load ceremony" }));
+
+    await waitFor(() => expect(apiMock.caCeremony).toHaveBeenCalledWith(id));
+    expect(await screen.findByRole("button", { name: `Approve ceremony ${id}` })).toBeEnabled();
+    expect(screen.getByText("eval-admin")).toBeInTheDocument();
   });
 
   it("configures, previews, then generates managed-key custody without private key bytes", async () => {

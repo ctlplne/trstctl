@@ -226,7 +226,7 @@ export function CeremonyPanel({
   onView: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const complete = ceremony.approvals >= ceremony.threshold || ceremony.status === "approved";
+  const complete = ceremony.approvals >= ceremony.threshold || ceremony.status !== "pending";
   return (
     <section aria-labelledby="active-ceremony-heading" className="ui-panel p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -264,6 +264,38 @@ export function CeremonyPanel({
         <CeremonyValue label="Opened by" value={ceremony.opener || "-"} />
       </dl>
     </section>
+  );
+}
+
+export function CeremonyLookupForm({ busy, id, onChange, onLoad }: { busy: boolean; id: string; onChange: (id: string) => void; onLoad: () => void }) {
+  const { t } = useTranslation();
+  const valid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim());
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid) onLoad();
+      }}
+    >
+      <label className="grid flex-1 gap-1 text-sm font-medium">
+        {t("caHierarchy.ceremonyLookup.label")}
+        <input
+          className="ui-input"
+          autoComplete="off"
+          maxLength={36}
+          value={id}
+          onChange={(event) => onChange(event.target.value)}
+          aria-describedby="ca-ceremony-lookup-help"
+        />
+      </label>
+      <Button type="submit" variant="outline" disabled={busy || !valid}>
+        {t("caHierarchy.ceremonyLookup.load")}
+      </Button>
+      <p id="ca-ceremony-lookup-help" className="w-full text-caption text-muted-foreground">
+        {t("caHierarchy.ceremonyLookup.help")}
+      </p>
+    </form>
   );
 }
 

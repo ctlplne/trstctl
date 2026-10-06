@@ -31,7 +31,13 @@ import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
-import { CACeremonyReviewDialog, CARotationReviewDialog, CeremonyDetailDialog, CeremonyPanel } from "./cahierarchy/CAHierarchyCeremonyParts";
+import {
+  CACeremonyReviewDialog,
+  CARotationReviewDialog,
+  CeremonyDetailDialog,
+  CeremonyLookupForm,
+  CeremonyPanel,
+} from "./cahierarchy/CAHierarchyCeremonyParts";
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
 import {
   api,
@@ -359,6 +365,7 @@ export function CAHierarchy() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
+  const [ceremonyLookupID, setCeremonyLookupID] = useState("");
   const [ceremonyBusy, setCeremonyBusy] = useState(false);
   const [ceremonyError, setCeremonyError] = useState<string | null>(null);
   const [issuerDialogType, setIssuerDialogType] = useState<IssuerTypeConfig | null>(null);
@@ -503,13 +510,16 @@ export function CAHierarchy() {
     void refreshAuthorities();
   }
 
-  async function viewCeremony(id: string) {
+  async function readCeremony(id: string, detail = false) {
     setCeremonyBusy(true);
     setCeremonyError(null);
     try {
-      setCeremonyDetail(await api.caCeremony(id));
+      const record = await api.caCeremony(id);
+      if (detail) setCeremonyDetail(record);
+      else setCeremony(record);
     } catch (err) {
-      setCeremonyError(errorText(err, "Could not load ceremony detail"));
+      if (!detail) setCeremony(null);
+      setCeremonyError(errorText(err, t("source.ceremony.action.failed.974d5f2180")));
     } finally {
       setCeremonyBusy(false);
     }
@@ -1053,13 +1063,17 @@ export function CAHierarchy() {
           </Button>
           <span className="text-sm text-muted-foreground">{translateNow("source.default.request.trust.root.ca.2.approvals.246b100b12")}</span>
         </div>
+        <CeremonyLookupForm
+          busy={ceremonyBusy}
+          id={ceremonyLookupID}
+          onChange={setCeremonyLookupID}
+          onLoad={() => void readCeremony(ceremonyLookupID.trim())}
+        />
         {ceremonyError && <ErrorState title={translateNow("source.ceremony.action.failed.974d5f2180")}>{ceremonyError}</ErrorState>}
         {ceremony ? (
-          <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} onView={(id) => void viewCeremony(id)} />
+          <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} onView={(id) => void readCeremony(id, true)} />
         ) : (
-          <EmptyState title={translateNow("source.no.ceremony.loaded.3e9d28986c")}>
-            {translateNow("source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd")}
-          </EmptyState>
+          <EmptyState title={translateNow("source.no.ceremony.loaded.3e9d28986c")}>{t("caHierarchy.ceremonyLookup.empty")}</EmptyState>
         )}
       </section>
 
