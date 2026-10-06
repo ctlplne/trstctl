@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
@@ -71,6 +72,7 @@ func (d *issuanceDispatcher) issueEndpointCSR(
 	dnsNames []string,
 	ttl time.Duration,
 	leafProfile crypto.LeafProfile,
+	keyOrigin custody.KeyOrigin,
 ) (leafPEM, chainPEM []byte, caID, source string, anchor *time.Time, err error) {
 	var issued crypto.IssuedLeaf
 	switch selection.Source {
@@ -84,7 +86,7 @@ func (d *issuanceDispatcher) issueEndpointCSR(
 		if d.authorityIssue == nil {
 			return nil, nil, "", "", nil, errors.New("server: selected private CA issuance is unavailable; no CA was substituted")
 		}
-		issued, chainPEM, caID, err = d.authorityIssue(ctx, tenantID, selection.ID, csrDER, ttl, leafProfile)
+		issued, chainPEM, caID, err = d.authorityIssue(ctx, tenantID, selection.ID, csrDER, ttl, leafProfile, keyOrigin)
 		if err == nil && caID != selection.ID {
 			return nil, nil, "", "", nil, errors.New("server: selected private CA returned a different authority; no certificate was accepted")
 		}

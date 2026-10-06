@@ -1772,13 +1772,17 @@ actionable error naming the field to set:
 - a **default certificate profile** is bound (`ca.default_profile`);
 - **revocation publication** is configured — at least one of
   `ca.crl_distribution_points` or `ca.ocsp_servers` — so issued leaves carry a
-  status pointer (composing with the served-leaf profile);
+  status pointer for the built-in CA (composing with the served-leaf profile);
 - and, when `ca.require_fips=true` is declared, the **FIPS 140-3 module is active**
   (the binary was built with `GOFIPS140=v1.0.0` / `make fips-build`, or run with
   `GODEBUG=fips140=on`).
 
 In `regulated` mode, CA key ceremonies also need at least two custodian approvals
 besides the opener, whatever the request asks for (see `ca.ceremony_min_approvals`).
+Managed CA leaves require the separate `ca.hierarchy_revocation_base_url` before
+issuance in this mode. It must be the externally reachable HTTP(S) origin of this
+control plane. The issuer-specific CRL and OCSP paths are added to each leaf;
+the built-in CA's global status pointers are never copied onto managed CA leaves.
 
 A **complete** regulated config boots normally. The default posture
 (`ca.governance_mode` unset, or `standard`) imposes no coupling, so existing
@@ -1789,6 +1793,7 @@ single-node deployments are unaffected.
 | `TRSTCTL_CA_GOVERNANCE_MODE` | `standard` | `standard` (or unset): the controls are independent. `regulated`: fail startup unless the policy gate, four-eyes dual control, a bound default profile, revocation publication, and any declared FIPS requirement are **all** present together. |
 | `TRSTCTL_CA_REQUIRE_FIPS` | `false` | In `regulated` mode, additionally require the FIPS 140-3 module to be active (build with `GOFIPS140=v1.0.0` or run with `GODEBUG=fips140=on`); otherwise startup fails closed. Ignored outside regulated mode. |
 | `TRSTCTL_CA_CEREMONY_MIN_APPROVALS` | `0` (floor of 1) | Fewest custodian approvals, besides the opener, that a CA key ceremony (root, intermediate, rekey, cross-sign, import) may require. A ceremony request may ask for more but never fewer; preview and start both refuse a lower `threshold` with 422. `regulated` mode raises the floor to at least 2. |
+| `TRSTCTL_CA_HIERARCHY_REVOCATION_BASE_URL` | unset | HTTP(S) origin published in managed CA leaves for the exact issuer's CRL and OCSP URLs. Use a relying-party-reachable control-plane address. Required before managed CA leaf issuance in `regulated` mode; without it, `standard` mode issues leaves with no managed CA status pointer. |
 
 ## Served AI surface and model adapter
 

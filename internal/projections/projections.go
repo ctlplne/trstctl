@@ -4374,7 +4374,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				pl.Fingerprint != info.SHA256Fingerprint || pl.KeyAlgorithm != info.KeyAlgorithm ||
 				pl.NotBefore == nil || !pl.NotBefore.Equal(info.NotBefore) ||
 				pl.NotAfter == nil || !pl.NotAfter.Equal(info.NotAfter) ||
-				!bytes.Equal(publicDER, pl.CertificateDER) || info.IsCA || pl.KeyOrigin != string(custody.OriginRequester) ||
+				!bytes.Equal(publicDER, pl.CertificateDER) || info.IsCA ||
+				(!pl.MigrationExactAuthority && pl.KeyOrigin != string(custody.OriginRequester)) ||
+				(pl.MigrationExactAuthority && pl.KeyOrigin != string(custody.OriginRequester) &&
+					pl.KeyOrigin != string(custody.OriginHostAgent) && pl.KeyOrigin != string(custody.OriginControlPlane)) ||
 				(pl.RotationRouted != (pl.RequestedCAID != "" && pl.RequestedCAID != pl.CAID)) ||
 				(pl.MigrationExactAuthority && pl.RotationRouted) {
 				return fmt.Errorf("projections: managed CA leaf inventory differs from signed public evidence")
@@ -4400,7 +4403,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			}); err != nil {
 				return err
 			}
-			return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time)
+			if err := p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time); err != nil {
+				return err
+			}
+			// The same event transaction makes first CRL publication durable.
+			// A relying party can then read status before any revocation occurs;
+			// retries and rebuilds retain one intent for this immutable event.
+			return p.store.EnsureCertificateCRLPublicationTx(ctx, tx, e.TenantID, e.ID, pl.CAID)
 		}
 		var pl CAIssuedCertificate
 		if err := decode(e, &pl); err != nil {

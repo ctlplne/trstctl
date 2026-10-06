@@ -2113,6 +2113,10 @@ type CA struct {
 	CRLDistributionPoints []string `json:"crl_distribution_points,omitempty"`
 	OCSPServers           []string `json:"ocsp_servers,omitempty"`
 	IssuerURLs            []string `json:"issuer_urls,omitempty"`
+	// HierarchyRevocationBaseURL is the operator-owned origin that serves the
+	// exact managed-CA CRL and OCSP routes. Ordinary ca.* leaf pointers are for
+	// the built-in issuer and must not be stamped on another authority's leaf.
+	HierarchyRevocationBaseURL string `json:"hierarchy_revocation_base_url,omitempty"`
 	// CertificatePolicyOIDs are placed in the certificatePolicies extension. The
 	// default is a single private-enterprise policy OID identifying trstctl
 	// issuance; override it with your CP/CPS policy OID(s).
@@ -2572,6 +2576,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 func applyCAEnv(getenv func(string) string, ca *CA) {
 	setString(getenv, "TRSTCTL_CA_CERT_FILE", &ca.CertFile)
 	setString(getenv, "TRSTCTL_CA_PUBLIC_CERT_FILE", &ca.PublicCertFile)
+	setString(getenv, "TRSTCTL_CA_HIERARCHY_REVOCATION_BASE_URL", &ca.HierarchyRevocationBaseURL)
 	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &ca.GovernanceMode)
 	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &ca.RequireFIPS)
 	setInt(getenv, "TRSTCTL_CA_CEREMONY_MIN_APPROVALS", &ca.CeremonyMinApprovals)
@@ -3242,6 +3247,7 @@ func (c *Config) Validate() error {
 		validateSignerConfig,
 		validateServedSurfaces,
 		validateGovernanceConfig,
+		validateHierarchyRevocationBaseURL,
 		validateHAConfig,
 		validateFederationConfig,
 		validatePCASConfig,
@@ -3251,6 +3257,28 @@ func (c *Config) Validate() error {
 		errs = append(errs, validate(c)...)
 	}
 	return errors.Join(errs...)
+}
+
+func validateHierarchyRevocationBaseURL(c *Config) []error {
+	base := c.CA.HierarchyRevocationBaseURL
+	if base == "" {
+		return nil
+	}
+	parsed, err := url.Parse(base)
+	if err != nil || parsed == nil || base != strings.TrimSpace(base) ||
+		(parsed.Scheme != "https" && parsed.Scheme != "http") ||
+		parsed.Hostname() == "" || strings.HasSuffix(parsed.Host, ":") || parsed.User != nil || parsed.Opaque != "" ||
+		(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.ForceQuery ||
+		strings.Contains(base, "#") || parsed.Fragment != "" {
+		return []error{errors.New("ca.hierarchy_revocation_base_url must be an http(s) origin without credentials, path, query, or fragment")}
+	}
+	if port := parsed.Port(); port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return []error{errors.New("ca.hierarchy_revocation_base_url has an invalid TCP port")}
+		}
+	}
+	return nil
 }
 
 func validateCBOMConfig(c *Config) []error {

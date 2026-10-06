@@ -220,26 +220,28 @@ type Deps struct {
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
-	TelemetryReporter         *telemetry.Reporter
-	OutboxHandler             orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions                []api.Option         // auth/audit/etc.
-	License                   *license.Manager     // offline edition state exposed by GET /v1/editions
-	EnablePCAS                bool                 // PCAS: proof-carrying algorithm succession (internal/succession); the succession API/orchestrator wiring keys off this
-	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
-	LicensedOutboxFactory     LicensedOutboxFactory
-	LicensedBackgroundWorkers []BackgroundWorker
-	LicensedProjectionOptions []projections.Option
-	LicensedLeafSigner        LicensedLeafSigner
-	PreparedSubjectLeafSigner PreparedSubjectLeafSigner
-	LicensedCSRInspector      LicensedCSRInspector
-	LicensedCSRParser         LicensedCSRParser
-	LicensedSPIFFESVIDFactory LicensedSPIFFESVIDFactory
-	SignTimeout               time.Duration // per-issuance signer deadline (slow → fail closed)
-	CACommonName              string
-	CACertFile                string             // authoritative persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
-	CAPublicCertFile          string             // optional certificate-only mirror for clients outside the private data volume
-	LeafProfile               crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
-	DefaultProfile            string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	TelemetryReporter                    *telemetry.Reporter
+	OutboxHandler                        orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions                           []api.Option         // auth/audit/etc.
+	License                              *license.Manager     // offline edition state exposed by GET /v1/editions
+	EnablePCAS                           bool                 // PCAS: proof-carrying algorithm succession (internal/succession); the succession API/orchestrator wiring keys off this
+	LicensedAPIOptionsFactory            LicensedAPIOptionsFactory
+	LicensedOutboxFactory                LicensedOutboxFactory
+	LicensedBackgroundWorkers            []BackgroundWorker
+	LicensedProjectionOptions            []projections.Option
+	LicensedLeafSigner                   LicensedLeafSigner
+	PreparedSubjectLeafSigner            PreparedSubjectLeafSigner
+	LicensedCSRInspector                 LicensedCSRInspector
+	LicensedCSRParser                    LicensedCSRParser
+	LicensedSPIFFESVIDFactory            LicensedSPIFFESVIDFactory
+	SignTimeout                          time.Duration // per-issuance signer deadline (slow → fail closed)
+	CACommonName                         string
+	CACertFile                           string             // authoritative persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	CAPublicCertFile                     string             // optional certificate-only mirror for clients outside the private data volume
+	LeafProfile                          crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
+	HierarchyRevocationBaseURL           string
+	CAHierarchyRequireRevocationPointers bool
+	DefaultProfile                       string // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
 	// CACeremonyMinApprovals is the CA key-ceremony approval floor (config
 	// ca.ceremony_min_approvals, raised to 2 by regulated governance; F264).
 	CACeremonyMinApprovals int
@@ -698,6 +700,10 @@ type Server struct {
 	// signer (AN-4). It is nil when no issuing CA is provisioned (revocation, like
 	// issuance, is then unavailable rather than served by an in-process key).
 	revoc *revocationService
+	// managedRevocs holds per-tenant, per-authority signing responders. A CA
+	// rotation creates a new authority ID, so predecessor status stays available.
+	managedRevocMu sync.RWMutex
+	managedRevocs  map[string]*revocationService
 
 	// orch and idem are retained so the served issuance protocols (EXC-WIRE-02) can
 	// record minted certs as events (AN-2) and dedupe retried enrollments (AN-5)
@@ -1869,9 +1875,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
 	return nil
 }
@@ -2279,9 +2285,12 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("/auth/", apiHandler)
 	mux.Handle("/enroll/", apiHandler)
 	mux.Handle("/scim/", apiHandler)
-	if s.revoc != nil {
+	if s.revoc != nil || s.caHierarchy != nil {
 		revMux := http.NewServeMux()
-		s.revoc.routes(revMux)
+		if s.revoc != nil {
+			s.revoc.routes(revMux)
+		}
+		s.managedCARoutes(revMux)
 		revHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, revMux)
 		mux.Handle("/ocsp/", revHandler)
 		mux.Handle("/crl/", revHandler)
@@ -3292,10 +3301,10 @@ func (s *Server) snapshotOnce(ctx context.Context) {
 // start in its own goroutine. A sweep error is logged and the next tick retries
 // (the same pattern as the outbox dispatcher and the other background workers).
 func (s *Server) RunCRLScheduler(ctx context.Context) {
-	if s.revoc == nil {
+	if s.revoc == nil && s.caHierarchy == nil {
 		return
 	}
-	s.revoc.runScheduler(ctx, func(_ string, n int, err error) {
+	report := func(_ string, n int, err error) {
 		if err != nil {
 			if s.mCRLFailures != nil {
 				s.mCRLFailures.Inc()
@@ -3312,7 +3321,37 @@ func (s *Server) RunCRLScheduler(ctx context.Context) {
 			}
 			s.logger.Info("crl scheduler regenerated CRLs", slog.Int("regenerated", n))
 		}
-	})
+	}
+	var managedDone chan struct{}
+	if s.caHierarchy != nil {
+		managedDone = make(chan struct{})
+		go func() {
+			defer close(managedDone)
+			sweep := func() {
+				n, err := s.regenerateDueManagedCRLs(ctx)
+				report("managed CA CRL scheduler sweep", n, err)
+			}
+			sweep()
+			ticker := time.NewTicker(crlSchedulerInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					sweep()
+				}
+			}
+		}()
+	}
+	if s.revoc != nil {
+		s.revoc.runScheduler(ctx, report)
+	} else {
+		<-ctx.Done()
+	}
+	if managedDone != nil {
+		<-managedDone
+	}
 }
 
 const (

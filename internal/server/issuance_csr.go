@@ -47,13 +47,13 @@ func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenan
 	// A CSR on the transition wins: it is the most specific statement of intent
 	// for this particular issuance.
 	if csr := strings.TrimSpace(p.SubjectCSRPEM); csr != "" {
-		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), binding)
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), custody.OriginRequester, binding)
 	}
 	// Otherwise the request's own CSR, recorded when the identity was created.
 	// The CSR belongs to the requester, not to whoever approves them: an approver
 	// pressing "approve" should not have to re-supply key material they never had.
 	if csr := subjectCSRFromIdentity(ident); csr != "" {
-		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), binding)
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), custody.OriginRequester, binding)
 	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
 	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name}, selection, issueKey, binding)
@@ -83,7 +83,7 @@ func (d *issuanceDispatcher) mintServedLeafForRenewal(
 		}
 		// The current renewal admission/profile/authority checks still apply.
 		// Retaining public CSR custody does not reuse an old approval vote.
-		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), issuance...)
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), custody.OriginRequester, issuance...)
 	}
 	if predecessor.KeyOrigin != string(custody.OriginControlPlane) || subjectCSRFromIdentity(ident) != "" {
 		return issuedLeafMaterial{}, errors.New("server: renewal key custody is unknown or requires its original requester/agent protocol")
@@ -166,8 +166,12 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	selection endpointAuthoritySelection,
 	issueKey string,
 	csrPEM []byte,
+	keyOrigin custody.KeyOrigin,
 	issuance ...*store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
+	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent {
+		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a known requester or host-agent key origin")
+	}
 	csrDER, dnsNames, err := decodeSubjectCSRWithInspector(csrPEM, d.inspectSubjectCSR)
 	if err != nil {
 		return issuedLeafMaterial{}, err
@@ -186,7 +190,7 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, chainPEM, caID, source, anchor, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
+	leafPEM, chainPEM, caID, source, anchor, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile, keyOrigin)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -230,11 +234,10 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 			ValidityAnchor: anchor,
 			Source:         source, CertificateDER: append([]byte(nil), blk.Bytes...),
-			// B5: the requester generated this key and the control plane never
-			// held it. That is a fact about THIS certificate, recorded from what
-			// the code did rather than from what the documentation says the
-			// system does — which is the difference an auditor is asking about.
-			KeyOrigin: string(custody.OriginRequester),
+			// The caller proves possession of this key through its CSR. The
+			// caller path tells us whether that was an ordinary requester or a
+			// trstctl host agent; the control plane never held the private half.
+			KeyOrigin: string(keyOrigin),
 		},
 		CertPEM:  append([]byte(nil), leafPEM...),
 		ChainPEM: append([]byte(nil), chainPEM...),

@@ -53,6 +53,8 @@ type caHierarchyService struct {
 	signer                    SignerProvider
 	signAuthz                 signing.SignTokenProvider
 	leafProfile               crypto.LeafProfile
+	revocationBaseURL         string
+	requireRevocationPointers bool
 	// minApprovals is the configured ceremony threshold floor (F264).
 	minApprovals int
 
@@ -68,8 +70,10 @@ func (s *Server) buildCAHierarchyService(d Deps) api.CAHierarchyService {
 		parseSubjectCSR: d.LicensedCSRParser, inspectHybridSubjectCSR: d.LicensedCSRInspector,
 		preparedSubjectLeafSigner: d.PreparedSubjectLeafSigner,
 		store:                     d.Store, log: d.Log, signer: d.Signer, signAuthz: s.signAuthz,
-		leafProfile: d.LeafProfile, signers: map[string]*signing.RemoteSigner{},
-		minApprovals: d.CACeremonyMinApprovals,
+		leafProfile: d.LeafProfile, revocationBaseURL: d.HierarchyRevocationBaseURL,
+		requireRevocationPointers: d.CAHierarchyRequireRevocationPointers,
+		signers:                   map[string]*signing.RemoteSigner{},
+		minApprovals:              d.CACeremonyMinApprovals,
 	}
 }
 
@@ -217,9 +221,13 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	csrDER []byte,
 	ttl time.Duration,
 	profile crypto.LeafProfile,
+	keyOrigin custody.KeyOrigin,
 ) (crypto.IssuedLeaf, []byte, string, error) {
 	if len(csrDER) == 0 || ttl <= 0 {
 		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: CSR and positive TTL are required", api.ErrCAHierarchyInvalid)
+	}
+	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent && keyOrigin != custody.OriginControlPlane {
+		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: exact-authority issuance requires a known subject-key origin", api.ErrCAHierarchyInvalid)
 	}
 	authority, err := h.store.GetCAAuthority(ctx, tenantID, authorityID)
 	if err != nil {
@@ -236,7 +244,10 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
-	profile = applyAuthorityLane(profile, authority)
+	profile, err = h.leafProfileForAuthority(tenantID, authority, profile)
+	if err != nil {
+		return crypto.IssuedLeaf{}, nil, "", err
+	}
 	// A migration member is pinned to this exact authority, so it cannot follow a
 	// later rotation. It still must stop when that pinned authority expires.
 	profile.ClampTTLToIssuer = true
@@ -253,6 +264,7 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	}
 	evidence := managedCALeafEvent(authority.ID, issued.DER, info)
 	evidence.MigrationExactAuthority = true
+	evidence.KeyOrigin = string(keyOrigin)
 	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAEndEntityInventorySchemaVersion, evidence)
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
@@ -845,8 +857,10 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
-	profile := h.leafProfile
-	profile = applyAuthorityLane(profile, ca)
+	profile, err := h.leafProfileForAuthority(tenantID, ca, h.leafProfile)
+	if err != nil {
+		return api.CAIssuedLeaf{}, err
+	}
 	// The TTL clamp happens inside the signer, which already parses the issuer
 	// certificate — one parse per issuance (E2/V34). An expired issuer surfaces
 	// as a profile violation and keeps the invalid-hierarchy error surface.
@@ -1812,6 +1826,26 @@ func applyAuthorityLane(profile crypto.LeafProfile, ca store.CAAuthority) crypto
 		profile.AllowedExtKeyUsage = append([]string(nil), ca.EKUs...)
 	}
 	return profile
+}
+
+// leafProfileForAuthority keeps revocation pointers bound to the CA that signs
+// this exact leaf. The global ca.* pointers describe the built-in issuer and
+// would send managed-CA relying parties to a different authority's responder.
+func (h *caHierarchyService) leafProfileForAuthority(tenantID string, ca store.CAAuthority, profile crypto.LeafProfile) (crypto.LeafProfile, error) {
+	profile = applyAuthorityLane(profile, ca)
+	profile.CRLDistributionPoints = nil
+	profile.OCSPServers = nil
+	profile.IssuingCertificateURL = nil
+	if h.revocationBaseURL == "" {
+		if h.requireRevocationPointers {
+			return crypto.LeafProfile{}, fmt.Errorf("%w: regulated managed CA issuance requires ca.hierarchy_revocation_base_url", api.ErrCAHierarchyInvalid)
+		}
+		return profile, nil
+	}
+	base := strings.TrimRight(h.revocationBaseURL, "/")
+	profile.CRLDistributionPoints = []string{base + "/crl/" + tenantID + "/authorities/" + ca.ID}
+	profile.OCSPServers = []string{base + "/ocsp/" + tenantID + "/authorities/" + ca.ID}
+	return profile, nil
 }
 
 func intersectDNSSuffixes(a, b []string) []string {

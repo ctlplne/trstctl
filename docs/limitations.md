@@ -4173,6 +4173,20 @@ certificates keep the URLs they were issued with until reissued. trstctl
 revocation is both authoritative in the product's own inventory/records
 and publishable to external relying parties over served OCSP/CRL.
 
+Signer-backed CA hierarchy leaves use their own tenant-and-authority status
+routes (`/crl/{tenant}/authorities/{ca-id}` and
+`/ocsp/{tenant}/authorities/{ca-id}`), including after that authority is
+superseded. New leaves are inventoried with their signed public bytes; their
+first CRL publication is queued in the same tenant transaction as the
+issuance projection. Exact-certificate revocation checks the immutable
+issuance event, exact leaf signature and serial ledger before it records the
+revocation and queues that authority's CRL. The authenticated
+`/api/v1/revocation/crls` list returns the issuer-specific URL. Managed-CA
+CDP/AIA pointers require the operator's `ca.hierarchy_revocation_base_url`;
+without it, standard-mode leaves have no automatic status pointer, while
+regulated mode refuses the managed-CA issue request. Existing leaves retain
+their original extensions, so reissue them to add discoverable pointers.
+
 CT log submission is served as an outbound side effect, not as an inline
 API call: the API validates public certificate PEM and CT log URLs,
 records `ct.submit` outbox rows in the tenant transaction, and the worker

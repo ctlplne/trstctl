@@ -3,12 +3,15 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"io"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -42,6 +46,25 @@ func TestCASpecRejectsUnrepresentableTTL(t *testing.T) {
 	err := validateCASpec(api.CASpec{CommonName: "CA", TTLSeconds: math.MaxInt64})
 	if !errors.Is(err, api.ErrCAHierarchyInvalid) {
 		t.Fatalf("unrepresentable CA lifetime error = %v, want invalid spec", err)
+	}
+}
+
+func TestManagedCARegulatedIssuanceRequiresIssuerStatusOrigin(t *testing.T) {
+	service := &caHierarchyService{requireRevocationPointers: true}
+	profile := crypto.LeafProfile{
+		CRLDistributionPoints: []string{"https://built-in.example.test/crl"},
+		OCSPServers:           []string{"https://built-in.example.test/ocsp"},
+	}
+	_, err := service.leafProfileForAuthority("11111111-1111-4111-8111-111111111111",
+		store.CAAuthority{ID: "22222222-2222-4222-8222-222222222222"}, profile)
+	if !errors.Is(err, api.ErrCAHierarchyInvalid) || !strings.Contains(err.Error(), "hierarchy_revocation_base_url") {
+		t.Fatalf("regulated managed CA issuance without issuer status origin = %v, want actionable refusal", err)
+	}
+	service.requireRevocationPointers = false
+	got, err := service.leafProfileForAuthority("11111111-1111-4111-8111-111111111111",
+		store.CAAuthority{ID: "22222222-2222-4222-8222-222222222222"}, profile)
+	if err != nil || len(got.CRLDistributionPoints) != 0 || len(got.OCSPServers) != 0 {
+		t.Fatalf("standard managed CA inherited wrong issuer status pointers: %+v, %v", got, err)
 	}
 }
 
@@ -357,10 +380,14 @@ func TestExternalIntermediateCSRAppendFailureDoesNotConsumeCeremony(t *testing.T
 }
 
 func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
-	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()})
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) {
+		d.HierarchyRevocationBaseURL = "https://status.example.test"
+		d.LeafProfile.CRLDistributionPoints = []string{"https://built-in.example.test/crl"}
+		d.LeafProfile.OCSPServers = []string{"https://built-in.example.test/ocsp"}
+	})
 	registerServedTenant(t, h, "Operating tenant fixture")
 	openerToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
-		"issuers:write", "issuers:read", "certs:issue",
+		"issuers:write", "issuers:read", "certs:issue", "certs:read", "identities:write",
 	})
 	approverOne := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "custodian-one", []string{
 		"issuers:write", "issuers:read", "certs:issue",
@@ -457,6 +484,12 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if info.Subject != "CN=leaf.svc.example.test" || len(info.DNSNames) != 1 || info.DNSNames[0] != "leaf.svc.example.test" {
 		t.Fatalf("leaf identity = subject %q DNS %v; want hierarchy-issued leaf.svc.example.test", info.Subject, info.DNSNames)
 	}
+	if want := "https://status.example.test/crl/" + h.tenant + "/authorities/" + inter.ID; len(info.CRLDistributionPoints) != 1 || info.CRLDistributionPoints[0] != want {
+		t.Fatalf("managed CA leaf CRL pointer = %v, want exact issuer %s", info.CRLDistributionPoints, want)
+	}
+	if want := "https://status.example.test/ocsp/" + h.tenant + "/authorities/" + inter.ID; len(info.OCSPServers) != 1 || info.OCSPServers[0] != want {
+		t.Fatalf("managed CA leaf OCSP pointer = %v, want exact issuer %s", info.OCSPServers, want)
+	}
 	inventoried, err := h.store.GetCertificateByFingerprint(t.Context(), h.tenant, info.SHA256Fingerprint)
 	if err != nil {
 		t.Fatalf("managed CA leaf missing from exact-revocation inventory: %v", err)
@@ -475,6 +508,10 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	} else if !found || rec.Revoked() {
 		t.Fatalf("hierarchy issued serial row = found %v %+v, want active ca_issued_certs row", found, rec)
 	}
+	managedIDs, err := h.store.ManagedCAAuthoritiesWithIssuedCerts(t.Context(), h.tenant)
+	if err != nil || len(managedIDs) != 1 || managedIDs[0] != inter.ID {
+		t.Fatalf("managed CA CRL scheduler authorities = %v, %v; want exact issuing intermediate", managedIDs, err)
+	}
 
 	// The served endpoint returned a verified leaf. Its immutable issuance fact
 	// must be available to usage reconciliation as well as the CA serial index.
@@ -488,6 +525,12 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	}
 	if mintFacts != 1 {
 		t.Errorf("served hierarchy leaf has %d immutable mint facts, want 1 for the independently verified certificate", mintFacts)
+	}
+	if intents := exactRevocationOutboxCount(t, h); intents != 1 {
+		t.Fatalf("managed CA issuance has %d initial signed-CRL intents, want one", intents)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("publish initial managed CA CRL from the durable outbox: %v", err)
 	}
 
 	storedInter, err := h.store.GetCAAuthority(context.Background(), h.tenant, inter.ID)
@@ -511,6 +554,35 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build hierarchy OCSP request: %v", err)
 	}
+	{
+		response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + inter.ID)
+		if err != nil {
+			t.Fatalf("read initial public managed CA CRL: %v", err)
+		}
+		der, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK {
+			t.Fatalf("initial public managed CA CRL = HTTP %d read %v", response.StatusCode, readErr)
+		}
+		parsed, err := crypto.ParseCRL(der, interDER)
+		if err != nil || protoContains(parsed.RevokedSerials, issued.Serial) {
+			t.Fatalf("initial signed managed CA CRL revoked an active leaf: %+v, %v", parsed, err)
+		}
+		response, err = http.Post(h.ts.URL+"/ocsp/"+h.tenant+"/authorities/"+inter.ID,
+			"application/ocsp-request", bytes.NewReader(reqDER))
+		if err != nil {
+			t.Fatalf("read initial public managed CA OCSP: %v", err)
+		}
+		der, readErr = io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK {
+			t.Fatalf("initial public managed CA OCSP = HTTP %d read %v", response.StatusCode, readErr)
+		}
+		status, err := crypto.ParseOCSPResponse(der, interDER)
+		if err != nil || status.Status != crypto.OCSPGood || status.Serial != issued.Serial {
+			t.Fatalf("initial signed managed CA OCSP did not report exact active leaf: %+v, %v", status, err)
+		}
+	}
 	goodDER, err := revoc.respondOCSP(context.Background(), h.tenant, reqDER)
 	if err != nil {
 		t.Fatalf("hierarchy OCSP before revoke: %v", err)
@@ -522,9 +594,85 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if good.Status != crypto.OCSPGood {
 		t.Fatalf("hierarchy OCSP status before revoke = %q, want good", good.Status)
 	}
-	reasonCode := crypto.CRLReasonCode(crypto.RevocationReasonKeyCompromise)
-	if err := h.srv.orch.RevokeCertificateForCA(context.Background(), h.tenant, "", issued.Serial, inter.ID, string(crypto.RevocationReasonKeyCompromise), reasonCode, time.Now().UTC()); err != nil {
-		t.Fatalf("revoke hierarchy issued serial: %v", err)
+	for name, altered := range map[string]store.Certificate{
+		"different serial":      func() store.Certificate { c := inventoried; c.Serial = "01"; return c }(),
+		"different fingerprint": func() store.Certificate { c := inventoried; c.Fingerprint = strings.Repeat("0", 64); return c }(),
+		"different tenant": func() store.Certificate {
+			c := inventoried
+			c.TenantID = "11111111-1111-4111-8111-111111111112"
+			return c
+		}(),
+	} {
+		if _, err := h.srv.certificateRevocationAuthority(t.Context(), altered); !errors.Is(err, orchestrator.ErrCertificateRevocationUnsupported) {
+			t.Fatalf("%s was accepted as the managed leaf's revocation authority: %v", name, err)
+		}
+	}
+	statusCode, revokeBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/certificates/bulk-revoke", openerToken,
+		"hierarchy-exact-leaf-revoke", map[string]any{"certificate_ids": []string{inventoried.ID}, "reason": "keyCompromise"})
+	if statusCode != http.StatusOK || !strings.Contains(string(revokeBody), `"total_revoked":1`) {
+		t.Fatalf("public managed CA leaf revocation = HTTP %d %s, want one exact revoked leaf", statusCode, revokeBody)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("publish managed CA revocation from the durable outbox: %v", err)
+	}
+	if count := exactRevocationOutboxCount(t, h); count != 2 {
+		t.Fatalf("managed CA initial and revoked publication intents = %d, want exactly two", count)
+	}
+	response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + inter.ID)
+	if err != nil {
+		t.Fatalf("read public managed CA CRL: %v", err)
+	}
+	publicCRL, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	_ = response.Body.Close()
+	if readErr != nil || response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/pkix-crl" {
+		t.Fatalf("public managed CA CRL = HTTP %d type %q read %v", response.StatusCode, response.Header.Get("Content-Type"), readErr)
+	}
+	publicCRLInfo, err := crypto.ParseCRL(publicCRL, interDER)
+	if err != nil || !protoContains(publicCRLInfo.RevokedSerials, issued.Serial) {
+		t.Fatalf("public managed CA CRL omitted exact revoked serial: %+v, %v", publicCRLInfo, err)
+	}
+	statusCode, distributionBody := doBearer(t, h.ts, http.MethodGet, "/api/v1/revocation/crls", openerToken, "", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("managed CA CRL distribution API = HTTP %d %s", statusCode, distributionBody)
+	}
+	var distributions struct {
+		Items []struct {
+			CAID    string `json:"ca_id"`
+			FullURL string `json:"full_url"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(distributionBody, &distributions); err != nil {
+		t.Fatalf("decode managed CA distribution: %v", err)
+	}
+	var managedURL string
+	for _, item := range distributions.Items {
+		if item.CAID == inter.ID {
+			managedURL = item.FullURL
+		}
+	}
+	if managedURL != "/crl/"+h.tenant+"/authorities/"+inter.ID {
+		t.Fatalf("managed CA distribution points at wrong issuer: %q", managedURL)
+	}
+	response, err = http.Post(h.ts.URL+"/ocsp/"+h.tenant+"/authorities/"+inter.ID, "application/ocsp-request", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatalf("read public managed CA OCSP: %v", err)
+	}
+	publicOCSP, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	_ = response.Body.Close()
+	if readErr != nil || response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/ocsp-response" {
+		t.Fatalf("public managed CA OCSP = HTTP %d type %q read %v", response.StatusCode, response.Header.Get("Content-Type"), readErr)
+	}
+	publicStatus, err := crypto.ParseOCSPResponse(publicOCSP, interDER)
+	if err != nil || publicStatus.Status != crypto.OCSPRevoked || publicStatus.Serial != issued.Serial {
+		t.Fatalf("public managed CA OCSP omitted exact revoked serial: %+v, %v", publicStatus, err)
+	}
+	response, err = http.Get(h.ts.URL + "/crl/11111111-1111-4111-8111-111111111112/authorities/" + inter.ID)
+	if err != nil {
+		t.Fatalf("cross-tenant managed CA CRL request: %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("cross-tenant managed CA CRL = HTTP %d, want 404", response.StatusCode)
 	}
 	if rec, found, err := h.store.LookupIssuedCert(context.Background(), h.tenant, inter.ID, issued.Serial); err != nil {
 		t.Fatalf("lookup revoked hierarchy serial: %v", err)
@@ -711,6 +859,27 @@ func TestServedCARotationWithoutDowntimeCAPCA03(t *testing.T) {
 	throughSuccessorURL := issueHierarchyLeaf(t, h, operator, successorCA.ID, "direct.rotation.example.test", "rotation-successor-direct")
 	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(throughSuccessorURL.CertificatePEM)), caCertDER(t, []byte(successorCA.CertificatePEM))); err != nil {
 		t.Fatalf("post-rotation leaf from successor URL did not chain to successor: %v", err)
+	}
+	managedIDs, err := h.store.ManagedCAAuthoritiesWithIssuedCerts(t.Context(), h.tenant)
+	if err != nil || !slices.Contains(managedIDs, oldCA.ID) || !slices.Contains(managedIDs, successorCA.ID) {
+		t.Fatalf("CRL scheduler dropped a superseded or successor authority: ids=%v err=%v", managedIDs, err)
+	}
+	if _, err := h.srv.regenerateDueManagedCRLs(t.Context()); err != nil {
+		t.Fatalf("refresh managed CA CRLs across rotation: %v", err)
+	}
+	for _, issuer := range []servedCAAuthority{oldCA, successorCA} {
+		response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + issuer.ID)
+		if err != nil {
+			t.Fatalf("read rotated authority CRL %s: %v", issuer.ID, err)
+		}
+		crlDER, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK {
+			t.Fatalf("rotated authority CRL %s = HTTP %d read %v", issuer.ID, response.StatusCode, readErr)
+		}
+		if _, err := crypto.ParseCRL(crlDER, caCertDER(t, []byte(issuer.CertificatePEM))); err != nil {
+			t.Fatalf("rotated authority CRL %s has no valid issuer signature: %v", issuer.ID, err)
+		}
 	}
 	if !h.hasEvent(t, "ca.authority.rotated") || !h.hasEvent(t, "ca.endentity.issued") {
 		t.Fatal("CA rotation did not record rotation and issuance audit events")

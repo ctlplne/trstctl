@@ -46,6 +46,7 @@ type servedHostRelayChannel struct {
 	lastOutcome, lastDetail   string
 	lastAccepted              bool
 	lastReportErr             error
+	lastSignErr               error
 	lastCredentialFingerprint string
 	lastCustody               *custody.Record
 }

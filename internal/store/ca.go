@@ -142,6 +142,36 @@ func (s *Store) ListCAAuthorities(ctx context.Context, tenantID string) ([]CAAut
 	return out, err
 }
 
+// ManagedCAAuthoritiesWithIssuedCerts returns only signer-backed authorities
+// with a serial ledger in this tenant. A superseded authority remains included:
+// its predecessor CRL must stay fresh until its issued leaves are no longer
+// relied upon. Both joined tables carry the tenant predicate under RLS.
+func (s *Store) ManagedCAAuthoritiesWithIssuedCerts(ctx context.Context, tenantID string) ([]string, error) {
+	var ids []string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT authority.id::text
+			FROM ca_authorities AS authority
+			JOIN ca_issued_certs AS issued
+			  ON issued.tenant_id = authority.tenant_id AND issued.ca_id = authority.id
+			WHERE authority.tenant_id = $1 AND issued.tenant_id = $1
+			  AND NULLIF(authority.signer_handle, '') IS NOT NULL
+			ORDER BY 1`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return rows.Err()
+	})
+	return ids, err
+}
+
 // FindActiveCAAuthoritySuccessor returns the active signer-backed replacement for
 // a superseded authority. This is what lets the old issuance URL keep working
 // during a zero-downtime rotation window while the actual signer moves forward.

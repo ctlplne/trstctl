@@ -72,6 +72,7 @@ type authorityIssueFunc func(
 	csrDER []byte,
 	ttl time.Duration,
 	leafProfile crypto.LeafProfile,
+	keyOrigin custody.KeyOrigin,
 ) (issued crypto.IssuedLeaf, chainPEM []byte, effectiveAuthorityID string, err error)
 
 // connectorPluginDeployer is the narrow signed-plugin surface needed by the
@@ -141,8 +142,9 @@ type issuanceDispatcher struct {
 	// paths record issued serial state; publishCRL forces a fresh CRL after trusted
 	// revocation state changes. Neither is used by public GET /crl/{tenant}; reads
 	// must never create tenant state.
-	ensureCRL  func(context.Context, string) error
-	publishCRL func(context.Context, string) error
+	ensureCRL           func(context.Context, string) error
+	publishCRL          func(context.Context, string) error
+	publishAuthorityCRL func(context.Context, string, string) error
 	// plugins is the served WASM-plugin surface (ARCH-007). When non-nil, a
 	// connector.deploy whose connector names a loaded, provenance-verified plugin
 	// (SUPPLY-004) is pushed through the capability sandbox. Missing or declining
@@ -753,7 +755,7 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, chainPEM, caID, source, anchor, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
+	leafPEM, chainPEM, caID, source, anchor, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile, custody.OriginControlPlane)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}

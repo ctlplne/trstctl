@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -55,6 +57,42 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 			}
 		}
 	}
+	if s.caHierarchy != nil && certificate.IssuanceEventID != "" {
+		event, found, err := s.log.EventByID(ctx, certificate.IssuanceEventID)
+		if err != nil {
+			return "", err
+		}
+		if found && event.Type == projections.EventCAEndEntityIssued && event.SchemaVersion == projections.CAEndEntityInventorySchemaVersion {
+			if event.TenantID != certificate.TenantID {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			var origin projections.CAEndEntityInventoried
+			if json.Unmarshal(event.Data, &origin) != nil || origin.ID != certificate.ID ||
+				origin.Fingerprint != certificate.Fingerprint || origin.Serial != certificate.Serial ||
+				!bytes.Equal(origin.CertificateDER, certificate.CertificateDER) {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			authority, err := s.store.GetCAAuthority(ctx, certificate.TenantID, origin.CAID)
+			if store.IsNotFound(err) || authority.SignerHandle == "" {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			if err != nil {
+				return "", err
+			}
+			issuerDER, err := firstCertDER(authority.CertificatePEM)
+			if err != nil || crypto.VerifyLeafSignedByCA(origin.CertificateDER, issuerDER) != nil {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			_, found, err := s.store.LookupIssuedCert(ctx, certificate.TenantID, origin.CAID, certificate.Serial)
+			if err != nil {
+				return "", err
+			}
+			if !found {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			return origin.CAID, nil
+		}
+	}
 	if s.revoc == nil {
 		return "", errors.New("server: certificate revocation publication is unavailable")
 	}
@@ -87,8 +125,17 @@ func (d *issuanceDispatcher) handleCertificateCRLPublication(ctx context.Context
 	if err := json.Unmarshal(message.Payload, &command); err != nil {
 		return fmt.Errorf("server: decode certificate CRL publication: %w", err)
 	}
-	if command.EventID == "" || command.CAID != IssuingCAID() || d.publishCRL == nil {
+	if command.EventID == "" || command.CAID == "" {
 		return errors.New("server: requested certificate CRL authority is not served")
 	}
-	return d.publishCRL(ctx, message.TenantID)
+	if command.CAID == IssuingCAID() {
+		if d.publishCRL == nil {
+			return errors.New("server: requested certificate CRL authority is not served")
+		}
+		return d.publishCRL(ctx, message.TenantID)
+	}
+	if d.publishAuthorityCRL == nil {
+		return errors.New("server: requested managed CA CRL authority is not served")
+	}
+	return d.publishAuthorityCRL(ctx, message.TenantID, command.CAID)
 }

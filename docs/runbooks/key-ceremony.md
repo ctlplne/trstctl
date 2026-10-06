@@ -142,6 +142,38 @@ Leaf issuance (once an intermediate exists) is served at
 `POST /api/v1/ca/authorities/{id}/issue` (CSR PEM, validity, a `certs:issue`
 token); the CA key still signs inside the isolated signer process.
 
+Before issuing a managed-CA leaf, set `ca.hierarchy_revocation_base_url` to the
+operator-owned HTTP(S) **origin** that clients can reach, for example
+`https://pki.example.internal`. The matching environment override is
+`TRSTCTL_CA_HIERARCHY_REVOCATION_BASE_URL`. trstctl stamps the exact authority
+and tenant into each signed leaf's CRL and OCSP URLs:
+
+```text
+/crl/{tenant}/authorities/{ca-id}
+/ocsp/{tenant}/authorities/{ca-id}
+```
+
+Publish those paths at the configured origin without client authentication;
+relying parties use them to check status. The built-in issuer's
+`ca.crl_distribution_points` and `ca.ocsp_servers` are separate and are never
+copied onto a managed-CA leaf. In regulated governance mode, managed-CA leaf
+issuance refuses to sign until the hierarchy origin is configured. In standard
+mode without this setting, issued leaves omit automatic status pointers;
+configure each relying party with the exact issuer endpoints or reissue after
+setting the origin.
+
+The signed leaf is inventoried under its exact fingerprint. To revoke it, use
+the Certificates console's **Review revocation** action, or select that
+certificate ID through `POST /api/v1/certificates/bulk-revoke` with an RFC 5280
+reason and an `Idempotency-Key`; the principal needs `identities:write` and
+`certs:issue` plus any policy approvals. Read the exact certificate and audit
+event again, then get its issuer's URL from `GET /api/v1/revocation/crls`.
+Verify the returned DER with `openssl crl -inform DER -in <downloaded.crl>
+-noout -text` and verify its signature against the **same managed CA**; use a
+stock client configured to enforce that CRL or OCSP response to prove a relying
+party rejects the revoked serial. A CA rotation keeps predecessor and successor
+status paths separate; never substitute the current CA's CRL for a predecessor.
+
 ## Procedure: offline root with served intermediate
 
 Use this when the root key lives outside the control plane and only comes online

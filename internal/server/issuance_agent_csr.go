@@ -161,7 +161,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 			}
 		}
 		material, err := d.mintServedLeafFromCSRForSelection(
-			ctx, tenantID, ident, selection, idemKey, csrPEM, intent.Issuance,
+			ctx, tenantID, ident, selection, idemKey, csrPEM, custody.OriginHostAgent, intent.Issuance,
 		)
 		if err != nil {
 			return nil, err
@@ -171,13 +171,8 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		// secret.Wipe(material.KeyPEM)` because it has key bytes to be rid of.
 		cert := material.Certificate
 		cert.IssuanceIdempotencyKey = idemKey
-		// The narrower custody claim, and a true one (B5's vocabulary). The
-		// shared CSR path records "requester", which is correct but weaker: it
-		// says the control plane did not generate the key. Here we know more —
-		// a trstctl agent generated it on the host that will serve it — and
-		// recording the weaker fact when the stronger one is known is exactly
-		// the kind of understatement that makes a custody column useless for
-		// deciding which credentials still need migrating.
+		// Keep the host origin recorded by the shared CSR path, and add the
+		// agent identity that actually generated the subject key.
 		cert.KeyOrigin = string(custody.OriginHostAgent)
 		cert.KeyGeneratedBy = agentName
 		if predecessor := strings.TrimSpace(intent.PredecessorCertificateID); predecessor != "" {

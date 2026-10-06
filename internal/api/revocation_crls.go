@@ -46,10 +46,19 @@ func (a *API) listCRLDistributions(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusInternalServerError, "CRL distribution artifacts are unavailable"))
 		return
 	}
-	a.writeJSON(w, http.StatusOK, crlDistributionListResponse{Items: crlDistributionsFromArtifacts(tenantID, artifacts)})
+	authorities, err := a.store.ListCAAuthorities(r.Context(), tenantID)
+	if err != nil {
+		a.writeProblem(w, problem.New(http.StatusInternalServerError, "CA authority distribution metadata is unavailable"))
+		return
+	}
+	managed := make(map[string]bool, len(authorities))
+	for _, authority := range authorities {
+		managed[authority.ID] = true
+	}
+	a.writeJSON(w, http.StatusOK, crlDistributionListResponse{Items: crlDistributionsFromArtifacts(tenantID, artifacts, managed)})
 }
 
-func crlDistributionsFromArtifacts(tenantID string, artifacts []store.CRL) []crlDistributionResponse {
+func crlDistributionsFromArtifacts(tenantID string, artifacts []store.CRL, managed map[string]bool) []crlDistributionResponse {
 	var out []crlDistributionResponse
 	byCA := map[string]*crlDistributionResponse{}
 	for _, artifact := range artifacts {
@@ -63,9 +72,13 @@ func crlDistributionsFromArtifacts(tenantID string, artifacts []store.CRL) []crl
 			item = &out[len(out)-1]
 			byCA[artifact.CAID] = item
 		}
+		baseURL := "/crl/" + tenantID
+		if managed[artifact.CAID] {
+			baseURL += "/authorities/" + artifact.CAID
+		}
 		switch artifact.Kind {
 		case store.CRLKindFull:
-			item.FullURL = "/crl/" + tenantID
+			item.FullURL = baseURL
 			item.FullNumber = artifact.Number
 			item.ShardCount = artifact.ShardCount
 			item.ThisUpdate = artifact.ThisUpdate
@@ -73,13 +86,13 @@ func crlDistributionsFromArtifacts(tenantID string, artifacts []store.CRL) []crl
 			item.RevokedCount = artifact.RevokedCount
 		case store.CRLKindShard:
 			item.Shards = append(item.Shards, crlDistributionShardResponse{
-				Index: artifact.ShardIndex, URL: "/crl/" + tenantID + "/shards/" + strconv.Itoa(artifact.ShardIndex),
+				Index: artifact.ShardIndex, URL: baseURL + "/shards/" + strconv.Itoa(artifact.ShardIndex),
 				RevokedCount: artifact.RevokedCount,
 			})
 		case store.CRLKindDelta:
 			if artifact.DeltaBaseNumber != nil {
 				item.DeltaBaseNumber = *artifact.DeltaBaseNumber
-				item.DeltaURL = "/crl/" + tenantID + "/delta/" + strconv.FormatInt(*artifact.DeltaBaseNumber, 10)
+				item.DeltaURL = baseURL + "/delta/" + strconv.FormatInt(*artifact.DeltaBaseNumber, 10)
 			}
 		}
 	}

@@ -36,6 +36,7 @@ func (c *servedHostRelayChannel) SignJobCSR(ctx context.Context, jobID int64, at
 	resp, err := c.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
 		JobID: jobID, Attempt: attempt, CSRDER: csrDER,
 	})
+	c.lastSignErr = err
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -393,9 +394,9 @@ func runAgentPassAUD40(t *testing.T, channel *servedHostRelayChannel, profile co
 	executed, err := agentrelay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), channel,
 		http.DefaultClient, profile, nil, nil, state, 1, 120)
 	if err != nil || executed != 1 || channel.lastOutcome != wantOutcome || !channel.lastAccepted || channel.lastReportErr != nil {
-		t.Fatalf("agent pass = executed %d outcome %q accepted %v reportErr %v detail %q err %v; want 1/%q",
+		t.Fatalf("agent pass = executed %d outcome %q accepted %v reportErr %v signErr %v detail %q err %v; want 1/%q",
 			executed, channel.lastOutcome, channel.lastAccepted, channel.lastReportErr,
-			channel.lastDetail, err, wantOutcome)
+			channel.lastSignErr, channel.lastDetail, err, wantOutcome)
 	}
 }
 
