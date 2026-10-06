@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -25,6 +27,23 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestCAIssueLeafRejectsUnrepresentableTTLBeforeAuthorityLookup(t *testing.T) {
+	service := &caHierarchyService{}
+	_, err := service.IssueLeaf(context.Background(), "tenant", "ca", api.CAIssueLeafRequest{
+		CSRDER: []byte("request"), TTLSeconds: math.MaxInt64,
+	})
+	if !errors.Is(err, api.ErrCAHierarchyInvalid) {
+		t.Fatalf("unrepresentable ttl error = %v, want invalid request before CA lookup", err)
+	}
+}
+
+func TestCASpecRejectsUnrepresentableTTL(t *testing.T) {
+	err := validateCASpec(api.CASpec{CommonName: "CA", TTLSeconds: math.MaxInt64})
+	if !errors.Is(err, api.ErrCAHierarchyInvalid) {
+		t.Fatalf("unrepresentable CA lifetime error = %v, want invalid spec", err)
+	}
+}
 
 func TestCAAuthorityAppendSurvivesRolledBackInlineProjection(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})

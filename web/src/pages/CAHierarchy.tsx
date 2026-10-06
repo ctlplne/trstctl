@@ -2292,7 +2292,7 @@ function CreateAuthorityDialog({
 function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClose: () => void }) {
   const { t } = useTranslation();
   const [csrPEM, setCSRPEM] = useState("");
-  const [ttlSeconds, setTTLSeconds] = useState("");
+  const [ttlSeconds, setTTLSeconds] = useState("2592000");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CAIssuedLeaf | null>(null);
@@ -2306,14 +2306,18 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
       setError("CSR PEM must contain a BEGIN CERTIFICATE REQUEST block.");
       return;
     }
-    const ttl = Number.parseInt(ttlSeconds.trim(), 10);
+    const ttl = Number(ttlSeconds.trim());
+    if (!Number.isSafeInteger(ttl) || ttl <= 0 || ttl > 9_223_372_036) {
+      setError(t("caHierarchy.issueLeaf.invalidTTL"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       setResult(
         await api.issueLeafFromCA(authority.id, {
           csr_pem: csr,
-          ttl_seconds: Number.isFinite(ttl) && ttl > 0 ? ttl : undefined,
+          ttl_seconds: ttl,
         }),
       );
     } catch (err) {
@@ -2369,13 +2373,15 @@ function IssueLeafDialog({ authority, onClose }: { authority: CAAuthority; onClo
             />
           </label>
           <label className="grid gap-1 text-body font-medium">
-            {t("parity.ttlSecondsOptional_68f1c5")}
+            {t("caHierarchy.issueLeaf.ttlSeconds")}
             <input
               type="number"
+              required
               min={1}
+              max={9_223_372_036}
+              step={1}
               value={ttlSeconds}
               onChange={(event) => setTTLSeconds(event.target.value)}
-              placeholder="2592000"
               className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
             />
           </label>

@@ -1685,7 +1685,7 @@ export interface CAIssueIntermediateRequest {
 
 export interface CAIssueLeafRequest {
   csr_pem: string;
-  ttl_seconds?: number;
+  ttl_seconds: number;
 }
 
 export interface CAIssuedIntermediate {

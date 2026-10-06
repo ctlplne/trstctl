@@ -31,6 +31,9 @@ type k8sOptions struct {
 }
 
 func (k k8sOptions) validateIssuerConfig() error {
+	if k.controller && k.issuer != "" {
+		return fmt.Errorf("cert-manager signing modes cannot combine --cert-manager-controller with --cert-manager-issuer")
+	}
 	if k.issuer == "" && !k.controller {
 		if k.signerURL != "" || k.signerTokenFile != "" {
 			return fmt.Errorf("cert-manager signer flags require --cert-manager-controller or --cert-manager-issuer")

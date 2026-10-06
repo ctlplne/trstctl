@@ -38,6 +38,7 @@ const { apiMock } = vi.hoisted(() => ({
     issueExternalCA: vi.fn(),
     caAuthorities: vi.fn(),
     createRootCA: vi.fn(),
+    issueLeafFromCA: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
     caRetirementChecklist: vi.fn(),
@@ -638,6 +639,48 @@ describe("CA hierarchy and custody surface", () => {
     expect(within(dialog).getByRole("button", { name: "Create intermediate CA" })).toBeDisabled();
     await user.selectOptions(select, parent.id);
     expect(select).toHaveValue(parent.id);
+  });
+
+  it("sends the required lifetime when issuing directly from a served CA", async () => {
+    const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "ca-issuer-1",
+          tenant_id: "tenant-1",
+          common_name: "QA Issuing CA",
+          kind: "intermediate",
+          status: "active",
+          certificate_pem: "public certificate",
+          signer_handle: "ca/issuer-1",
+          serial: "42",
+          max_path_len: 0,
+          created_at: "2026-10-06T17:00:00Z",
+        },
+      ],
+    });
+    apiMock.issueLeafFromCA.mockResolvedValue({
+      certificate_pem: "-----BEGIN CERTIFICATE-----\nISSUED\n-----END CERTIFICATE-----",
+      serial: "leaf-1",
+      not_after: "2026-11-05T17:00:00Z",
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=authorities");
+
+    await within(await screen.findByRole("table", { name: "Served CA authorities" })).findByText("QA Issuing CA");
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "QA Issuing CA" })).getByRole("button", { name: /Issue leaf/ }));
+    const dialog = await screen.findByRole("dialog", { name: /Issue leaf from QA Issuing CA/ });
+    expect(within(dialog).getByLabelText("TTL seconds")).toHaveValue(2592000);
+    await user.type(within(dialog).getByLabelText("CSR PEM"), "-----BEGIN CERTIFICATE REQUEST-----\nMIIBtest\n-----END CERTIFICATE REQUEST-----");
+    await user.click(within(dialog).getByRole("button", { name: "Issue leaf certificate" }));
+
+    await waitFor(() =>
+      expect(apiMock.issueLeafFromCA).toHaveBeenCalledWith("ca-issuer-1", {
+        csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nMIIBtest\n-----END CERTIFICATE REQUEST-----",
+        ttl_seconds: 2592000,
+      }),
+    );
+    expect(await within(dialog).findByText("leaf-1")).toBeInTheDocument();
   });
 
   it("renders issuers with kind, chain, public key, and certificate links", async () => {

@@ -54,6 +54,11 @@ Certificates. The CA's own profile can restrict it further. The earlier
 the CRD; an old stored object that still sets it is NotReady. This deployment
 configures one CA endpoint for its issuer controller.
 
+The older `--cert-manager-issuer` fixed-name bridge signs only requests in the
+agent namespace and does not read Issuer resources. It cannot run alongside
+`--cert-manager-controller`; the shipped DaemonSet uses only the resource-aware
+controller so Issuer configuration governs every signing decision.
+
 The agent confirms the named
 trstctl issuer resource exists in the correct scope: a `ClusterIssuer` can serve
 requests in any namespace, while an `Issuer` serves only requests in its own

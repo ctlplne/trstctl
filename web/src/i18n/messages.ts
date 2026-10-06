@@ -8359,6 +8359,14 @@ export const messages = {
   "caHierarchy.ceremonyCancel.failed": { defaultMessage: "Could not cancel ceremony", description: "Fallback error for a failed CA ceremony cancellation." },
   "caHierarchy.ceremonyCancel.closedBy": { defaultMessage: "Closed by", description: "Authenticated actor who cancelled the ceremony." },
   "caHierarchy.ceremonyCancel.closedAt": { defaultMessage: "Closed at", description: "Time of the ceremony cancellation event." },
+  "caHierarchy.issueLeaf.ttlSeconds": {
+    defaultMessage: "TTL seconds",
+    description: "Required requested lifetime for direct issuance from a served CA authority.",
+  },
+  "caHierarchy.issueLeaf.invalidTTL": {
+    defaultMessage: "Enter a whole-number lifetime from 1 to 9,223,372,036 seconds.",
+    description: "Direct CA issuance lifetime validation error.",
+  },
   "caHierarchy.rotationPreview.title": {
     defaultMessage: "Review CA rotation",
     description: "Heading for the server-owned effect-free review shown before activating a CA successor.",

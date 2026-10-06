@@ -137,6 +137,12 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
    into their requested TLS Secrets, and writes status back to the owning
    resource.
 
+Do not combine `--cert-manager-controller` with the older
+`--cert-manager-issuer` fixed-name bridge. The bridge does not read Issuer
+resources and cannot enforce their CA endpoint or lifetime settings; the agent
+rejects both flags together before it enrolls. The shipped DaemonSet uses the
+resource-aware controller.
+
 For node-level certificate inventory, add read-only hostPath mounts for the public
 certificate directories you want to enumerate and pass
 `--inventory-cert-roots=/host/etc/ssl,/host/etc/pki/tls/certs`. The agent reports

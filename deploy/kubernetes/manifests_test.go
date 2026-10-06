@@ -283,6 +283,11 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 			t.Errorf("DaemonSet args missing %q; got %v", want, args)
 		}
 	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--cert-manager-issuer=") {
+			t.Errorf("DaemonSet enables the legacy bridge alongside the resource-aware controller: %q", arg)
+		}
+	}
 
 	env := envValues(c["env"])
 	if got := env["TRSTCTL_ENROLL_URL"]; got != "https://trstctl:8443" {

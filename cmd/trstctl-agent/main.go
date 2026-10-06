@@ -105,7 +105,7 @@ func main() {
 	inventorySSHSSHDConfigs := flag.String("inventory-ssh-sshd-configs", "", "comma-separated sshd_config paths or globs whose TrustedUserCAKeys references are inventoried; empty disables this SSH source")
 	k8sMode := flag.Bool("k8s", false, "run as a Kubernetes DaemonSet: publish the identity into a Secret and reconcile Kubernetes certificate CRDs")
 	k8sSecret := flag.String("k8s-secret", "", "Kubernetes Secret to publish the identity into (namespace/name)")
-	cmIssuer := flag.String("cert-manager-issuer", "", "cert-manager issuerRef name to bridge (enables the external issuer)")
+	cmIssuer := flag.String("cert-manager-issuer", "", "standalone legacy cert-manager bridge for one issuerRef name; cannot combine with --cert-manager-controller")
 	cmGroup := flag.String("cert-manager-group", "trstctl.com", "cert-manager issuerRef group")
 	cmController := flag.Bool("cert-manager-controller", false, "run the trstctl Issuer/ClusterIssuer/Certificate Kubernetes controller")
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")

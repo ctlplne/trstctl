@@ -24,6 +24,7 @@ func TestKubernetesIssuerConfigFailsBeforeAgentBootstrap(t *testing.T) {
 		edit func(*k8sOptions)
 		want string
 	}{
+		{name: "conflicting-signing-modes", edit: func(k *k8sOptions) { k.issuer = "trstctl" }, want: "cannot combine"},
 		{name: "missing-url", edit: func(k *k8sOptions) { k.signerURL = "" }, want: "--bridge-signer-url"},
 		{name: "missing-token", edit: func(k *k8sOptions) { k.signerTokenFile = "" }, want: "--bridge-signer-token-file"},
 		{name: "insecure-url", edit: func(k *k8sOptions) { k.signerURL = "http://trstctl.example.test/issue" }, want: "must be HTTPS"},

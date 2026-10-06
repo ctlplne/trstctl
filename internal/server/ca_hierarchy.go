@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"slices"
 	"strings"
@@ -830,6 +831,9 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	if req.TTLSeconds <= 0 {
 		return api.CAIssuedLeaf{}, fmt.Errorf("%w: ttl_seconds must be positive", api.ErrCAHierarchyInvalid)
 	}
+	if req.TTLSeconds > math.MaxInt64/int64(time.Second) {
+		return api.CAIssuedLeaf{}, fmt.Errorf("%w: ttl_seconds exceeds the supported duration range", api.ErrCAHierarchyInvalid)
+	}
 	requestedCA, ca, err := h.issuingAuthority(ctx, tenantID, caID)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
@@ -988,6 +992,9 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 	}
 	if req.TTLSeconds < 0 {
 		return api.CAAuthorityRotation{}, fmt.Errorf("%w: ttl_seconds cannot be negative", api.ErrCAHierarchyInvalid)
+	}
+	if req.TTLSeconds > math.MaxInt64/int64(time.Second) {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: ttl_seconds exceeds the supported duration range", api.ErrCAHierarchyInvalid)
 	}
 	purpose, err := rekeyCAPurpose(caID)
 	if err != nil {
@@ -1691,6 +1698,9 @@ func validateCASpec(spec api.CASpec) error {
 	}
 	if spec.TTLSeconds < 0 {
 		return fmt.Errorf("%w: ttl_seconds cannot be negative", api.ErrCAHierarchyInvalid)
+	}
+	if spec.TTLSeconds > math.MaxInt64/int64(time.Second) {
+		return fmt.Errorf("%w: ttl_seconds exceeds the supported duration range", api.ErrCAHierarchyInvalid)
 	}
 	switch strings.ToLower(spec.SignatureAlgorithm) {
 	case "", "ecdsa-p256":
