@@ -85,7 +85,8 @@ release artifacts use their release pipeline's source identity.
 Compose starts PostgreSQL and NATS JetStream, generates a stable local OIDC
 keypair, starts the signing service in its own container, and then starts the
 control plane through the external-datastore path. A loopback-only local identity provider (IdP)
-gives this disposable blank evaluation one first operator. The evaluation profile
+creates a first operator and two separately authenticated custodians in a private
+Compose volume. The evaluation profile
 registers its configured tenant in the event history at startup, so the first
 certificate has the tenant lifecycle needed for later revocation. Restart preserves
 that registration; erasing a tenant does not cause startup to recreate it. The signer remains a
@@ -144,8 +145,20 @@ evaluation browser. Follow [Trust the local evaluation certificate](local-evalua
 for macOS, Windows, Linux, and cleanup instructions. Do not bypass the browser
 warning.
 
-Visit <https://localhost:8443>, choose **Continue with SSO**, and the local IdP
-signs in `eval-admin@trstctl.local` for the evaluation tenant. Both the UI/API
+Visit <https://localhost:8443> and choose **Continue with SSO**. The local IdP
+asks for an operator ID and password. The initial IDs are `eval-admin`,
+`eval-custodian-1`, and `eval-custodian-2`; read their generated passwords from
+the private Compose volume on the installation host:
+
+```sh
+docker compose -f deploy/docker/docker-compose.yml run --rm --no-deps \
+  --entrypoint cat oidc-keys /local-oidc-private/operator-credentials.json
+```
+
+Keep that output private. Each password belongs to one operator; use separate
+browser profiles for custodian approvals. The file and its salted verifier roster
+are mode `0600`, persist across restarts, and are never mounted into the control
+plane. The first sign-in uses `eval-admin` for the evaluation tenant. Both the UI/API
 and the automatic IdP bind to host loopback; another machine cannot use this
 evaluation administrator. A fresh install lands on a **Get started** prompt
 that launches the setup wizard. The wizard has six screens: prove signer

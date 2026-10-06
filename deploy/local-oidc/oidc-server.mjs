@@ -1,6 +1,6 @@
 import http from "node:http";
-import { readFileSync } from "node:fs";
-import { createHash, createPrivateKey, randomBytes, sign, timingSafeEqual } from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
+import { createHash, createPrivateKey, randomBytes, scryptSync, sign, timingSafeEqual } from "node:crypto";
 
 const host = process.env.OIDC_HOST || "127.0.0.1";
 const port = Number(process.env.OIDC_PORT || "18081");
@@ -8,9 +8,7 @@ const issuer = process.env.OIDC_ISSUER || `http://${host}:${port}`;
 const clientID = process.env.OIDC_CLIENT_ID || "trstctl-local-eval-ui";
 const configuredRedirectURI = process.env.OIDC_REDIRECT_URI;
 const tenant = process.env.OIDC_TENANT || "11111111-1111-4111-8111-111111111111";
-const subject = process.env.OIDC_SUBJECT || "eval-admin";
-const email = process.env.OIDC_EMAIL || "eval-admin@trstctl.local";
-const displayName = process.env.OIDC_NAME || "Evaluation Admin";
+const usersPath = process.env.OIDC_USERS_FILE || "";
 const keyID = process.env.OIDC_KEY_ID || "trstctl-local-eval-idp";
 const keyPath = process.env.OIDC_PRIVATE_KEY || "/local-oidc/idp-private.pem";
 const jwksPath = process.env.OIDC_JWKS || "/local-oidc/jwks.json";
@@ -25,6 +23,30 @@ if (!configuredRedirectURI) {
 const privateKey = createPrivateKey(readFileSync(keyPath, "utf8"));
 const jwks = readFileSync(jwksPath, "utf8");
 const authorizationCodes = new Map();
+const loginChallenges = new Map();
+const loginChallengeTTL = 2 * 60 * 1000;
+const maxLoginChallenges = 256;
+let tenantUsers = [];
+if (usersPath) {
+  const info = statSync(usersPath);
+  if (!info.isFile() || (info.mode & 0o077) !== 0) throw new Error("OIDC_USERS_FILE must be a private regular file (0600)");
+  const document = JSON.parse(readFileSync(usersPath, "utf8"));
+  if (document.version !== 1 || document.tenant !== tenant || !Array.isArray(document.users) || document.users.length < 1) {
+    throw new Error("OIDC_USERS_FILE has an invalid tenant or identity roster");
+  }
+  const seen = new Set();
+  tenantUsers = document.users.map((user) => {
+    const salt = Buffer.from(user.salt || "", "base64url");
+    const verifier = Buffer.from(user.password_hash || "", "base64url");
+    if (!/^[A-Za-z0-9._-]{1,128}$/.test(user.subject || "") ||
+        typeof user.email !== "string" || typeof user.name !== "string" ||
+        salt.length !== 16 || verifier.length !== 32 || seen.has(user.subject)) {
+      throw new Error("OIDC_USERS_FILE has an invalid or duplicate identity");
+    }
+    seen.add(user.subject);
+    return { subject: user.subject, email: user.email, name: user.name, salt, verifier };
+  });
+}
 
 // Provider-operator sign-in (opt-in). A licensed deployment's provider plane
 // accepts bearer tokens from an offline-pinned IdP that carries role and MFA
@@ -64,7 +86,7 @@ function responseHeaders(contentType) {
     pragma: "no-cache",
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
-    "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+    "content-security-policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'",
   };
 }
 
@@ -96,6 +118,12 @@ function constantTimeEqual(left, right) {
 function cleanupExpiredCodes(now = Date.now()) {
   for (const [code, record] of authorizationCodes) {
     if (now - record.createdAt > authorizationCodeTTL) authorizationCodes.delete(code);
+  }
+}
+
+function cleanupExpiredLoginChallenges(now = Date.now()) {
+  for (const [challenge, record] of loginChallenges) {
+    if (now - record.createdAt > loginChallengeTTL) loginChallenges.delete(challenge);
   }
 }
 
@@ -135,21 +163,57 @@ function authorize(url, res) {
     return json(res, 400, { error: "invalid_request", error_description: "PKCE S256 is required" });
   }
 
-  cleanupExpiredCodes();
-  if (authorizationCodes.size >= maxAuthorizationCodes) {
+  cleanupExpiredLoginChallenges();
+  if (!tenantUsers.length) return json(res, 503, { error: "temporarily_unavailable", error_description: "local evaluator users are not provisioned" });
+  if (loginChallenges.size >= maxLoginChallenges) {
     return json(res, 503, { error: "temporarily_unavailable" });
   }
-  const code = randomBytes(32).toString("base64url");
-  authorizationCodes.set(code, {
+  const challenge = randomBytes(32).toString("base64url");
+  loginChallenges.set(challenge, {
     clientID,
     redirectURI,
+    state,
     nonce,
     codeChallenge,
     createdAt: Date.now(),
   });
-  const target = new URL(configuredRedirectURI);
+  return html(res, 200, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Evaluation operator sign-in</title></head><body>
+<main><h1>Evaluation operator sign-in</h1><p>Enter your own operator ID and password. Each custodian must sign in separately.</p>
+<form method="post" action="/authorize"><input type="hidden" name="login_challenge" value="${challenge}">
+<label>Operator ID <input name="subject" autocomplete="username" required></label>
+<label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in</button></form></main></body></html>`);
+}
+
+async function finishAuthorize(req, res) {
+  let form;
+  try { form = await readForm(req); }
+  catch { return json(res, 413, { error: "invalid_request", error_description: "sign-in request is too large" }); }
+  cleanupExpiredLoginChallenges();
+  const challenge = form.get("login_challenge") || "";
+  const record = loginChallenges.get(challenge);
+  loginChallenges.delete(challenge);
+  if (!record || Date.now() - record.createdAt > loginChallengeTTL) {
+    return json(res, 400, { error: "invalid_request", error_description: "sign-in challenge is missing, used, or expired" });
+  }
+  const user = tenantUsers.find((candidate) => candidate.subject === form.get("subject"));
+  const salt = user?.salt || Buffer.alloc(16);
+  const expected = user?.verifier || Buffer.alloc(32);
+  const password = Buffer.from(form.get("password") || "", "utf8");
+  const calculated = scryptSync(password, salt, 32);
+  password.fill(0);
+  const valid = user && timingSafeEqual(calculated, expected);
+  calculated.fill(0);
+  if (!valid) {
+    return html(res, 401, '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sign-in refused</title></head><body><h1>Sign-in refused</h1><p>Check your operator ID and password, then return to trstctl to start a new sign-in.</p></body></html>');
+  }
+  cleanupExpiredCodes();
+  if (authorizationCodes.size >= maxAuthorizationCodes) return json(res, 503, { error: "temporarily_unavailable" });
+  const code = randomBytes(32).toString("base64url");
+  authorizationCodes.set(code, { ...record, user });
+  const target = new URL(record.redirectURI);
   target.searchParams.set("code", code);
-  target.searchParams.set("state", state);
+  target.searchParams.set("state", record.state);
   return redirect(res, target.toString());
 }
 
@@ -190,9 +254,9 @@ async function exchange(req, res) {
   const idToken = signIDToken({
     iss: issuer,
     aud: clientID,
-    sub: subject,
-    email,
-    name: displayName,
+    sub: record.user.subject,
+    email: record.user.email,
+    name: record.user.name,
     tenant,
     nonce: record.nonce,
     iat: now,
@@ -296,6 +360,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(jwks);
     }
     if (req.method === "GET" && url.pathname === "/authorize") return authorize(url, res);
+    if (req.method === "POST" && url.pathname === "/authorize") return finishAuthorize(req, res);
     if (req.method === "POST" && url.pathname === "/token") return exchange(req, res);
     if (providerClientID && req.method === "GET" && url.pathname === "/provider/sign-in") return providerSignInPage(res);
     if (providerClientID && req.method === "POST" && url.pathname === "/provider/token") return providerToken(req, res);

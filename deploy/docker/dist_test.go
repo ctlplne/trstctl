@@ -458,6 +458,12 @@ func TestComposeBlankEvaluationHasASafeFirstOperatorLogin(t *testing.T) {
 	if got := asEnvString(idp.Environment["OIDC_REDIRECT_URI"]); got != "https://localhost:8443/auth/callback" {
 		t.Errorf("eval OIDC redirect allowlist = %q, want the exact blank callback", got)
 	}
+	if got := asEnvString(idp.Environment["OIDC_USERS_FILE"]); got != "/local-oidc-private/users.json" {
+		t.Errorf("eval OIDC user verifier file = %q, want private-volume roster", got)
+	}
+	if got := asEnvString(cf.Services["oidc-keys"].Environment["OIDC_CREDENTIALS_FILE"]); got != "/local-oidc-private/operator-credentials.json" {
+		t.Errorf("eval OIDC credential bootstrap file = %q, want private-volume credentials", got)
+	}
 	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
 		t.Errorf("eval OIDC loopback proxy network_mode = %q, want service:trstctl", got)
 	}
@@ -472,6 +478,7 @@ func TestComposeBlankEvaluationHasASafeFirstOperatorLogin(t *testing.T) {
 
 	mustContainAll(t, "blank evaluation shared local IdP", raw,
 		"../local-oidc/oidc-keygen.mjs",
+		"../local-oidc/oidc-usergen.mjs",
 		"../local-oidc/oidc-server.mjs")
 	idpSource := readArtifact(t, filepath.Join("..", "local-oidc", "oidc-server.mjs"))
 	mustContainAll(t, "shared local IdP security contract", idpSource,

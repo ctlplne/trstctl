@@ -40,6 +40,35 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 		"OIDC_KEY_ID=trstctl-local-oidc-test-key",
 	)
 	runNode(t, node, keyEnv, "oidc-keygen.mjs")
+	usersPath := filepath.Join(privateDir, "users.json")
+	credentialsPath := filepath.Join(privateDir, "operator-credentials.json")
+	usersEnv := append(keyEnv, "OIDC_USERS_FILE="+usersPath, "OIDC_CREDENTIALS_FILE="+credentialsPath)
+	runNode(t, node, usersEnv, "oidc-usergen.mjs")
+	usersBefore := readFile(t, usersPath)
+	credentialsBefore := readFile(t, credentialsPath)
+	runNode(t, node, usersEnv, "oidc-usergen.mjs")
+	if !bytes.Equal(usersBefore, readFile(t, usersPath)) || !bytes.Equal(credentialsBefore, readFile(t, credentialsPath)) {
+		t.Fatal("local OIDC user generator rotated persisted credentials on restart")
+	}
+	if fileMode(t, usersPath) != 0o600 || fileMode(t, credentialsPath) != 0o600 {
+		t.Fatal("local OIDC identity and initial credential files must be mode 0600")
+	}
+	var credentials struct {
+		Users []struct {
+			Subject  string `json:"subject"`
+			Password string `json:"password"`
+		} `json:"users"`
+	}
+	if err := json.Unmarshal(credentialsBefore, &credentials); err != nil {
+		t.Fatal(err)
+	}
+	passwordBySubject := map[string]string{}
+	for _, user := range credentials.Users {
+		passwordBySubject[user.Subject] = user.Password
+	}
+	if passwordBySubject["eval-admin"] == "" || passwordBySubject["eval-custodian-1"] == "" || passwordBySubject["eval-custodian-2"] == "" {
+		t.Fatal("evaluation fixture must provision three separately authenticated identities")
+	}
 	privateBefore := readFile(t, filepath.Join(privateDir, "idp-private.pem"))
 	publicBefore := readFile(t, filepath.Join(publicDir, "jwks.json"))
 	runNode(t, node, keyEnv, "oidc-keygen.mjs")
@@ -74,6 +103,7 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 		"OIDC_KEY_ID=trstctl-local-oidc-test-key",
 		"OIDC_PRIVATE_KEY="+filepath.Join(privateDir, "idp-private.pem"),
 		"OIDC_JWKS="+filepath.Join(publicDir, "jwks.json"),
+		"OIDC_USERS_FILE="+usersPath,
 	)
 	var serverOutput bytes.Buffer
 	cmd := exec.Command(node, "oidc-server.mjs") // #nosec G204 -- node path comes from LookPath and the script is a checked-in test target (CWE-78)
@@ -103,7 +133,7 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 	}
 	_ = bad.Body.Close()
 
-	code := authorizationCode(t, client, issuer)
+	code := authorizationCode(t, client, issuer, "eval-admin", passwordBySubject["eval-admin"])
 	if len(code) != 43 || strings.Contains(code, "eval-admin") || strings.Contains(code, testTenant) {
 		t.Fatalf("authorization code is not an opaque 256-bit value: %q", code)
 	}
@@ -137,7 +167,7 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 	}
 	_ = replay.Body.Close()
 
-	wrongVerifierCode := authorizationCode(t, client, issuer)
+	wrongVerifierCode := authorizationCode(t, client, issuer, "eval-custodian-1", passwordBySubject["eval-custodian-1"])
 	wrong := exchangeCode(t, client, issuer, wrongVerifierCode, strings.Repeat("x", 43))
 	if wrong.StatusCode != http.StatusBadRequest {
 		t.Fatalf("wrong PKCE verifier = %d, want 400", wrong.StatusCode)
@@ -148,6 +178,32 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 		t.Fatalf("code reused after wrong verifier = %d, want 400", afterWrong.StatusCode)
 	}
 	_ = afterWrong.Body.Close()
+
+	otherCode := authorizationCode(t, client, issuer, "eval-custodian-2", passwordBySubject["eval-custodian-2"])
+	otherToken := exchangeCode(t, client, issuer, otherCode, testPKCEVerifier)
+	if otherToken.StatusCode != http.StatusOK {
+		t.Fatalf("second custodian exchange = %d", otherToken.StatusCode)
+	}
+	var otherBody struct {
+		IDToken string `json:"id_token"`
+	}
+	decodeJSON(t, otherToken.Body, &otherBody)
+	_ = otherToken.Body.Close()
+	if got := jwtClaims(t, otherBody.IDToken)["sub"]; got != "eval-custodian-2" {
+		t.Fatalf("second custodian subject = %v", got)
+	}
+	badPage := authorize(t, client, issuer, testRedirectURI)
+	badChallenge := loginChallenge(t, badPage)
+	badLogin := postLogin(t, client, issuer, badChallenge, "eval-custodian-1", "wrong-password")
+	if badLogin.StatusCode != http.StatusUnauthorized || badLogin.Header.Get("Location") != "" {
+		t.Fatalf("bad custodian credential status = %d location = %q", badLogin.StatusCode, badLogin.Header.Get("Location"))
+	}
+	_ = badLogin.Body.Close()
+	loginReplay := postLogin(t, client, issuer, badChallenge, "eval-custodian-1", passwordBySubject["eval-custodian-1"])
+	if loginReplay.StatusCode != http.StatusBadRequest {
+		t.Fatalf("replayed login challenge = %d", loginReplay.StatusCode)
+	}
+	_ = loginReplay.Body.Close()
 }
 
 func runNode(t *testing.T, node string, env []string, script string) {
@@ -212,9 +268,11 @@ func authorize(t *testing.T, client *http.Client, issuer, redirectURI string) *h
 	return resp
 }
 
-func authorizationCode(t *testing.T, client *http.Client, issuer string) string {
+func authorizationCode(t *testing.T, client *http.Client, issuer, subject, password string) string {
 	t.Helper()
-	resp := authorize(t, client, issuer, testRedirectURI)
+	page := authorize(t, client, issuer, testRedirectURI)
+	challenge := loginChallenge(t, page)
+	resp := postLogin(t, client, issuer, challenge, subject, password)
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("authorize = %d body=%s", resp.StatusCode, readBody(resp))
@@ -231,6 +289,33 @@ func authorizationCode(t *testing.T, client *http.Client, issuer string) string 
 		t.Fatal("authorize redirect has no code")
 	}
 	return code
+}
+
+func loginChallenge(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	body := readBody(resp)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || strings.Contains(body, "name=\"code\"") {
+		t.Fatalf("authorization without credentials = %d", resp.StatusCode)
+	}
+	marker := `name="login_challenge" value="`
+	i := strings.Index(body, marker)
+	if i < 0 {
+		t.Fatal("authorization page has no login challenge")
+	}
+	value := body[i+len(marker):]
+	return value[:strings.Index(value, `"`)]
+}
+
+func postLogin(t *testing.T, client *http.Client, issuer, challenge, subject, password string) *http.Response {
+	t.Helper()
+	resp, err := client.PostForm(issuer+"/authorize", url.Values{
+		"login_challenge": {challenge}, "subject": {subject}, "password": {password},
+	})
+	if err != nil {
+		t.Fatalf("post login: %v", err)
+	}
+	return resp
 }
 
 func exchangeCode(t *testing.T, client *http.Client, issuer, code, verifier string) *http.Response {
