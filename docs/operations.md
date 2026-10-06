@@ -112,10 +112,11 @@ Two more answers are part of the idempotency contract under concurrency:
   two replicas). The control plane waits briefly for it; if it has not finished,
   the retry is told to come back. The next retry replays the recorded response.
 - **409, "effect is indeterminate"**: the original request's command ran but its
-  result could not be recorded (for example the datastore became unavailable
-  right after the effect committed). The key is walled rather than re-executed,
-  because re-running would duplicate the effect. Inspect the resource, then
-  retry with a **new** key if the effect is missing.
+  result could not be confirmed or recorded (for example an immutable CA event
+  was acknowledged but the SQL projection could not be read back). The key is
+  walled rather than re-executed, because re-running could duplicate the effect.
+  Inspect the resource and audit first; use a **new** key only after confirming
+  the effect is missing and following the affected subsystem's recovery steps.
 
 ### Connection budget
 
@@ -164,14 +165,13 @@ has been too slow for that long is a stall, not a burst. A check that fails for
 a real reason (a stalled projection, a missing recovery authority) fails
 readiness immediately, as before.
 
-One more retryable answer: **503 with `Retry-After`, "rolled back because of a
-concurrent transaction"** (extensions `retryable: true` and `sqlstate` 40001 or
-40P01). PostgreSQL detected a serialization failure or a deadlock (for example
-the request's inline projection racing the durable tail on the same rows) and
-rolled the current transaction back. The idempotency claim is released, so the
-same request retries as-is; commands that span several transactions recover
-their own committed steps through their durable fences and receipts, so the
-retry never duplicates them. Anything that still answers **500** is logged by
+For **503 with `sqlstate` 40001 or 40P01** and `retryable: false`, PostgreSQL
+rolled back one transaction after a concurrent write. That does not prove the
+whole command had no effect: it may already have appended an event. Inspect
+the resource and audit before retrying with the same `Idempotency-Key`.
+Event-aware CA creation reconciles its acknowledged event and exact projected
+authority before returning success; if it cannot confirm them, it answers the
+walled 409 above. Anything that still answers **500** is logged by
 the control plane (`api: internal error answered as 500`) with the response's
 `traceparent`, the error's type chain, the SQLSTATE and constraint when it is a
 PostgreSQL error, and a message with every quoted literal masked; row values

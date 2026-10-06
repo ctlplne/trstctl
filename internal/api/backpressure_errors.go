@@ -31,15 +31,13 @@ func (a *API) writeBackpressureError(w http.ResponseWriter, err error) bool {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "certificate history requires an ordered read-model rebuild; ask the operator to stop mutating control-plane replicas and run trstctl --rebuild with the existing deployment configuration, then retry with the same Idempotency-Key").
 			WithExtension("recovery_required", "read_model_rebuild").WithExtension("retryable", false))
 	case store.IsTransactionRollback(err):
-		// PostgreSQL rolled the current transaction back because of a concurrent
-		// transaction (serialization failure 40001 or deadlock 40P01, e.g. the
-		// inline apply racing the durable tail on the same rows). The idempotency
-		// claim is released, so the same request retries as-is; commands that
-		// span several transactions recover their own committed steps through
-		// their durable fences and receipts, so the retry never duplicates them.
-		w.Header().Set("Retry-After", "1")
-		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "PostgreSQL rolled the request's transaction back because of a concurrent transaction; retry with the same Idempotency-Key").
-			WithExtension("retryable", true).WithExtension("sqlstate", store.SQLState(err)))
+		// This proves only one PostgreSQL transaction was rolled back. A command
+		// may already have committed an event or another durable step outside
+		// that transaction. Never advertise an automatic retry of the whole
+		// command from this generic handler; event-aware owners reconcile and
+		// return their exact result or ErrEffectIndeterminate instead.
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "A PostgreSQL transaction was rolled back after a concurrent write. Inspect the resource and audit before retrying this command with the same Idempotency-Key.").
+			WithExtension("retryable", false).WithExtension("sqlstate", store.SQLState(err)))
 	case errors.Is(err, context.DeadlineExceeded):
 		// The request ran into its deadline while the datastore was saturated:
 		// the same retryable 503 as the pool-acquire timeout, not a 500.

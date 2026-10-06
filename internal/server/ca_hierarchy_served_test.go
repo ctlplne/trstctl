@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -20,8 +21,58 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestCAAuthorityAppendSurvivesRolledBackInlineProjection(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ctx := context.Background()
+	ceremonyID, err := h.store.CreateKeyCeremony(ctx, h.tenant, "recovery-root", "opener", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notAfter := time.Now().UTC().Add(365 * 24 * time.Hour)
+	expected := store.CAAuthority{
+		ID: "1576505c-c130-474d-a80c-91fc9870a922", TenantID: h.tenant,
+		CommonName: "Recovered root", Kind: "root", Status: "active",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nMIIBAA==\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "ca-recovered-root", Serial: "01", NotAfter: &notAfter, MaxPathLen: 1,
+	}
+	payload, err := json.Marshal(caAuthorityCreatedPayload(expected, ceremonyID, false, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := h.log.Append(ctx, events.Event{Type: projections.EventCARootCreated, TenantID: h.tenant,
+		SchemaVersion: projections.CAAuthorityCreatedEventSchemaVersion, Data: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalErr := errors.New("injected SQL transaction rollback after event append")
+	err = h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		if err := projections.New(h.store).ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		return originalErr
+	})
+	if !errors.Is(err, originalErr) {
+		t.Fatalf("injected rollback = %v", err)
+	}
+	before := servedEventCount(t, h, projections.EventCARootCreated)
+	svc := &caHierarchyService{store: h.store}
+	actual, err := svc.reconcileAppendedAuthority(ctx, h.tenant, ceremonyID, expected, ev, originalErr)
+	if err != nil || actual.ID != expected.ID || actual.SignerHandle != expected.SignerHandle {
+		t.Fatalf("reconcile appended authority = %+v, %v", actual, err)
+	}
+	ceremony, err := h.store.GetKeyCeremony(ctx, h.tenant, ceremonyID)
+	if err != nil || ceremony.Status != "completed" {
+		t.Fatalf("ceremony after recovery = %+v, %v", ceremony, err)
+	}
+	if after := servedEventCount(t, h, projections.EventCARootCreated); after != before {
+		t.Fatalf("recovery appended a second CA event: %d -> %d", before, after)
+	}
+}
 
 func TestServedCACeremonyPreviewIsExactEffectFreeAndSecretFree(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})

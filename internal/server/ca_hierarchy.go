@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -362,7 +363,7 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 	var created store.CAAuthority
 	var signer *signing.RemoteSigner
 	var signerCreated bool
-	eventAppended := false
+	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
@@ -384,9 +385,7 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
 		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, false, "")
-		if ev.ID != "" {
-			eventAppended = true
-		}
+		appended = ev
 		if err != nil {
 			return err
 		}
@@ -394,10 +393,16 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 		return nil
 	})
 	if err != nil {
-		if signerCreated && !eventAppended && signer != nil {
+		if signerCreated && appended.ID == "" && signer != nil {
 			_ = signer.Destroy(ctx)
 		}
-		return api.CAAuthority{}, caHierarchyConflict(err)
+		if appended.ID == "" {
+			return api.CAAuthority{}, caHierarchyConflict(err)
+		}
+		created, err = h.reconcileAppendedAuthority(ctx, tenantID, req.CeremonyID, created, appended, err)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
 	}
 	h.rememberSigner(created.ID, signer)
 	return authorityResponse(created), nil
@@ -421,6 +426,7 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 	}
 	authorityID := uuid.NewString()
 	var created store.CAAuthority
+	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
@@ -432,6 +438,7 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 			MaxPathLen: issued.MaxPathLen, PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
 		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, true, "")
+		appended = ev
 		if err != nil {
 			return err
 		}
@@ -439,7 +446,13 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 		return nil
 	})
 	if err != nil {
-		return api.CAAuthority{}, caHierarchyConflict(err)
+		if appended.ID == "" {
+			return api.CAAuthority{}, caHierarchyConflict(err)
+		}
+		created, err = h.reconcileAppendedAuthority(ctx, tenantID, req.CeremonyID, created, appended, err)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
 	}
 	return authorityResponse(created), nil
 }
@@ -470,6 +483,7 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	}
 	authorityID := uuid.NewString()
 	var created store.CAAuthority
+	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
@@ -482,6 +496,7 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
 		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAAuthorityImported, created, req.CeremonyID, false, crypto.SHA256Hex([]byte(chainPEM)))
+		appended = ev
 		if err != nil {
 			return err
 		}
@@ -489,7 +504,13 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 		return nil
 	})
 	if err != nil {
-		return api.CAAuthority{}, caHierarchyConflict(err)
+		if appended.ID == "" {
+			return api.CAAuthority{}, caHierarchyConflict(err)
+		}
+		created, err = h.reconcileAppendedAuthority(ctx, tenantID, req.CeremonyID, created, appended, err)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
 	}
 	h.rememberSigner(created.ID, signer)
 	return authorityResponse(created), nil
@@ -520,7 +541,7 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 	var created store.CAAuthority
 	var childSigner *signing.RemoteSigner
 	var signerCreated bool
-	eventAppended := false
+	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
@@ -545,9 +566,7 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
 		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, false, "")
-		if ev.ID != "" {
-			eventAppended = true
-		}
+		appended = ev
 		if err != nil {
 			return err
 		}
@@ -555,10 +574,16 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		return nil
 	})
 	if err != nil {
-		if signerCreated && !eventAppended && childSigner != nil {
+		if signerCreated && appended.ID == "" && childSigner != nil {
 			_ = childSigner.Destroy(ctx)
 		}
-		return api.CAAuthority{}, caHierarchyConflict(err)
+		if appended.ID == "" {
+			return api.CAAuthority{}, caHierarchyConflict(err)
+		}
+		created, err = h.reconcileAppendedAuthority(ctx, tenantID, req.CeremonyID, created, appended, err)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
 	}
 	h.rememberSigner(created.ID, childSigner)
 	return authorityResponse(created), nil
@@ -647,6 +672,7 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 	}
 	authorityID := uuid.NewString()
 	var created store.CAAuthority
+	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
@@ -662,6 +688,7 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
 		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, true, "")
+		appended = ev
 		if err != nil {
 			return err
 		}
@@ -669,7 +696,13 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 		return nil
 	})
 	if err != nil {
-		return api.CAAuthority{}, caHierarchyConflict(err)
+		if appended.ID == "" {
+			return api.CAAuthority{}, caHierarchyConflict(err)
+		}
+		created, err = h.reconcileAppendedAuthority(ctx, tenantID, req.CeremonyID, created, appended, err)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
 	}
 	h.rememberSigner(created.ID, childSigner)
 	return authorityResponse(created), nil
@@ -1783,6 +1816,89 @@ func caHierarchyConflict(err error) error {
 	default:
 		return err
 	}
+}
+
+// reconcileAppendedAuthority handles the event/SQL split after a creation
+// event has been acknowledged by JetStream but the inline projection or SQL
+// COMMIT failed. The event is already source truth: reporting "rolled back,
+// retry" would be false and could cause a second CA creation. Confirm the
+// exact projected authority and ceremony, applying the same event if the tail
+// has not caught up. A failed confirmation returns an indeterminate effect so
+// the HTTP idempotency claim remains fenced for operator recovery.
+func (h *caHierarchyService) reconcileAppendedAuthority(
+	ctx context.Context, tenantID, ceremonyID string, expected store.CAAuthority,
+	appended events.Event, originalErr error,
+) (store.CAAuthority, error) {
+	indeterminate := func(reason error) (store.CAAuthority, error) {
+		return store.CAAuthority{}, fmt.Errorf("%w: CA authority event %s was appended but exact projection could not be confirmed (transaction: %v; recovery: %v)",
+			orchestrator.ErrEffectIndeterminate, appended.ID, originalErr, reason)
+	}
+	if appended.ID == "" || appended.TenantID != tenantID || expected.ID == "" || ceremonyID == "" {
+		return indeterminate(errors.New("incomplete authority event identity"))
+	}
+	var payload projections.CAAuthorityCreated
+	if err := json.Unmarshal(appended.Data, &payload); err != nil {
+		return indeterminate(err)
+	}
+	if payload.CAID != expected.ID || payload.CeremonyID != ceremonyID ||
+		payload.SignerHandle != expected.SignerHandle || payload.Serial != expected.Serial ||
+		payload.CertificatePEM != expected.CertificatePEM || payload.Kind != expected.Kind ||
+		!sameCAParent(payload.ParentID, expected.ParentID) {
+		return indeterminate(errors.New("acknowledged authority event differs from reviewed mutation"))
+	}
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		actual, authorityErr := h.store.GetCAAuthority(work, tenantID, expected.ID)
+		ceremony, ceremonyErr := h.store.GetKeyCeremony(work, tenantID, ceremonyID)
+		if authorityErr == nil && ceremonyErr == nil {
+			if !sameCreatedAuthority(actual, expected) || ceremony.Status != "completed" {
+				return indeterminate(errors.New("projected authority or ceremony does not match acknowledged event"))
+			}
+			return actual, nil
+		}
+		if authorityErr != nil && !errors.Is(authorityErr, pgx.ErrNoRows) {
+			lastErr = authorityErr
+		} else if ceremonyErr != nil && !errors.Is(ceremonyErr, pgx.ErrNoRows) {
+			lastErr = ceremonyErr
+		} else {
+			lastErr = projections.New(h.store).Apply(work, appended)
+		}
+		if work.Err() != nil {
+			break
+		}
+		if lastErr != nil && !store.IsTransactionRollback(lastErr) {
+			// A concurrent tail may have committed while this apply failed; one
+			// final read is still required before declaring an unknown outcome.
+			continue
+		}
+	}
+	if actual, err := h.store.GetCAAuthority(work, tenantID, expected.ID); err == nil {
+		if ceremony, ceremonyErr := h.store.GetKeyCeremony(work, tenantID, ceremonyID); ceremonyErr == nil &&
+			ceremony.Status == "completed" && sameCreatedAuthority(actual, expected) {
+			return actual, nil
+		}
+	}
+	return indeterminate(lastErr)
+}
+
+func sameCAParent(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func sameCreatedAuthority(actual, expected store.CAAuthority) bool {
+	return actual.ID == expected.ID && actual.TenantID == expected.TenantID &&
+		actual.Status == "active" && actual.Kind == expected.Kind &&
+		sameCAParent(actual.ParentID, expected.ParentID) &&
+		actual.Serial == expected.Serial && actual.CertificatePEM == expected.CertificatePEM &&
+		actual.SignerHandle == expected.SignerHandle && actual.CommonName == expected.CommonName &&
+		actual.MaxPathLen == expected.MaxPathLen &&
+		slices.Equal(actual.PermittedDNSNames, expected.PermittedDNSNames) &&
+		slices.Equal(actual.EKUs, expected.EKUs)
 }
 
 func (h *caHierarchyService) emit(ctx context.Context, tenantID, eventType string, data map[string]any) error {

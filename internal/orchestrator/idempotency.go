@@ -618,6 +618,15 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 	out, fnErr := fn(ctx)
 	if fnErr != nil {
 		secret.Wipe(out)
+		if errors.Is(fnErr, ErrEffectIndeterminate) {
+			// The callback has explicitly reported that an effect may already
+			// have crossed its durable boundary. Releasing the claim would let
+			// the same HTTP command execute again and duplicate that effect.
+			if markErr := i.markProtectedIndeterminate(ctx, tenantID, key, binding); markErr != nil {
+				return nil, errors.Join(fnErr, markErr)
+			}
+			return nil, fnErr
+		}
 		if releaseErr := i.releaseClaim(ctx, tenantID, key, binding); releaseErr != nil {
 			return nil, fmt.Errorf("%w (release idempotency claim: %v)", fnErr, releaseErr)
 		}
@@ -1189,7 +1198,7 @@ func (i *Idempotency) doBoundMemory(
 			record.completed = true
 			record.codec = codec
 			record.result = append([]byte(nil), protected...)
-		} else if callbackSucceeded && wallProtectFailure {
+		} else if (callbackSucceeded && wallProtectFailure) || errors.Is(err, ErrEffectIndeterminate) {
 			record.indeterminate = true
 		} else if !callbackSucceeded && created && record.persist && errors.Is(err, ErrIdempotencyConflict) {
 			// A durable receiver may reveal that a fresh cache claim belongs to

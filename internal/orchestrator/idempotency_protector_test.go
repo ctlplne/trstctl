@@ -819,6 +819,38 @@ func TestConfiguredProtectorKeepsCallbackErrorsRetryable(t *testing.T) {
 	}
 }
 
+func TestBoundIndeterminateCallbackKeepsItsClaim(t *testing.T) {
+	backends := []struct {
+		name string
+		new  func(*testing.T) *orchestrator.Idempotency
+	}{
+		{"memory", func(*testing.T) *orchestrator.Idempotency { return orchestrator.NewMemoryIdempotency() }},
+		{"postgres", func(t *testing.T) *orchestrator.Idempotency { return orchestrator.NewIdempotency(newStore(t)) }},
+	}
+	for _, backend := range backends {
+		t.Run(backend.name, func(t *testing.T) {
+			idem := backend.new(t)
+			calls := 0
+			const key = "ca-event-appended-projection-uncertain"
+			const binding = "sha256:exact-ca-command"
+			first, err := idem.DoBound(context.Background(), tenantA, key, binding, func(context.Context) ([]byte, error) {
+				calls++
+				return nil, orchestrator.ErrEffectIndeterminate
+			})
+			if len(first) != 0 || !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
+				t.Fatalf("first result=%q err=%v, want indeterminate", first, err)
+			}
+			replay, err := idem.DoBound(context.Background(), tenantA, key, binding, func(context.Context) ([]byte, error) {
+				calls++
+				return []byte("unsafe second effect"), nil
+			})
+			if len(replay) != 0 || !errors.Is(err, orchestrator.ErrEffectIndeterminate) || calls != 1 {
+				t.Fatalf("replay=%q err=%v calls=%d, want no second effect", replay, err, calls)
+			}
+		})
+	}
+}
+
 func TestMemoryDurableBoundReceiverConflictReleasesFreshClaim(t *testing.T) {
 	idem := orchestrator.NewMemoryIdempotency()
 	ctx := context.Background()

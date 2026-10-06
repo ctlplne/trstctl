@@ -208,27 +208,27 @@ func (s *Store) ApplyCAAuthorityCreatedTx(ctx context.Context, tx pgx.Tx, author
 	if authority.CreatedAt.IsZero() {
 		authority.CreatedAt = time.Now().UTC()
 	}
-	if err := applyCAAuthorityUpsertTx(ctx, tx, authority); err != nil {
-		return err
+	if ceremonyID != "" {
+		if completedAt.IsZero() {
+			completedAt = authority.CreatedAt
+		}
+		// The command holds this ceremony row before it appends the event.
+		// The durable tail can project that event while the command is still
+		// projecting it inline. Taking the authority upsert lock first here
+		// forms an ABBA cycle with the command's ceremony-then-authority order.
+		tag, err := tx.Exec(ctx,
+			`UPDATE ca_key_ceremonies
+			    SET status = 'completed', completed_at = $3
+			  WHERE tenant_id = $1 AND id = $2 AND status IN ('pending', 'completed')`,
+			authority.TenantID, ceremonyID, completedAt)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrKeyCeremonyNotPending
+		}
 	}
-	if ceremonyID == "" {
-		return nil
-	}
-	if completedAt.IsZero() {
-		completedAt = authority.CreatedAt
-	}
-	tag, err := tx.Exec(ctx,
-		`UPDATE ca_key_ceremonies
-		    SET status = 'completed', completed_at = $3
-		  WHERE tenant_id = $1 AND id = $2 AND status IN ('pending', 'completed')`,
-		authority.TenantID, ceremonyID, completedAt)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() != 1 {
-		return ErrKeyCeremonyNotPending
-	}
-	return nil
+	return applyCAAuthorityUpsertTx(ctx, tx, authority)
 }
 
 // ApplyCAAuthorityRekeyedTx projects a ca.authority.rekeyed event into the CA
