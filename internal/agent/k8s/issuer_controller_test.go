@@ -781,6 +781,46 @@ func TestNativeKubernetesCSRRequiresExplicitNamespacedIssuerBinding(t *testing.T
 	}
 }
 
+func TestNativeKubernetesCSRSignerNameCannotSelectAnotherIssuer(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{
+		trstctlClusterIssuer("named-a"),
+		trstctlClusterIssuer("named-b"),
+		trstctlClusterIssuer("extra"),
+	}
+	makeCSR := func(name, signerName, annotatedName string) map[string]any {
+		csr := kubernetesCSR(name, signerName, true)
+		csr["spec"].(map[string]any)["request"] = csrDERRequestField(t)
+		if annotatedName != "" {
+			csr["metadata"].(map[string]any)["annotations"] = map[string]any{
+				"trstctl.com/issuer-name": annotatedName,
+			}
+		}
+		return csr
+	}
+	api.kubernetesCSRs = []map[string]any{
+		makeCSR("annotation-cross-ca", "trstctl.com/named-a", "named-b"),
+		makeCSR("extra-signer-path", "trstctl.com/named-a/extra", ""),
+		makeCSR("matching-issuer", "trstctl.com/named-a", "named-a"),
+	}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.KubernetesCSRsSigned != 1 || len(api.kubernetesCSRStatus) != 1 || api.kubernetesCSRStatus["matching-issuer"] == nil {
+		t.Fatalf("signer-name binding: signed=%d status_count=%d cross_ca=%t extra_path=%t matching=%t",
+			result.KubernetesCSRsSigned, len(api.kubernetesCSRStatus),
+			api.kubernetesCSRStatus["annotation-cross-ca"] != nil,
+			api.kubernetesCSRStatus["extra-signer-path"] != nil,
+			api.kubernetesCSRStatus["matching-issuer"] != nil)
+	}
+}
+
 func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *testing.T) {
 	baseSigner, _ := caSigner(t)
 	var gotTTL time.Duration

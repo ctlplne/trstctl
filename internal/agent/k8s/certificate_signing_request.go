@@ -81,8 +81,8 @@ func (c *IssuerController) csrIssuerConfig(csr map[string]any, issuers, clusterI
 			return issuerConfig{}, false
 		}
 		annotatedName, _ := annotations[kubernetesCSRAnnotationIssuerName].(string)
-		if annotatedName != "" {
-			issuerName = annotatedName
+		if annotatedName != "" && annotatedName != issuerName {
+			return issuerConfig{}, false
 		}
 		kind, _ := annotations[kubernetesCSRAnnotationIssuerKind].(string)
 		switch kind {
@@ -112,13 +112,9 @@ func signerNameIssuer(signerName, group string) string {
 	if !strings.HasPrefix(signerName, prefix) {
 		return ""
 	}
-	name := strings.Trim(strings.TrimPrefix(signerName, prefix), "/")
-	if name == "" {
+	name := strings.TrimPrefix(signerName, prefix)
+	if name == "" || strings.Contains(name, "/") {
 		return ""
-	}
-	if strings.Contains(name, "/") {
-		parts := strings.Split(name, "/")
-		name = parts[len(parts)-1]
 	}
 	return name
 }

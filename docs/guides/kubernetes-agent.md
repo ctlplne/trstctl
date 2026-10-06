@@ -161,8 +161,10 @@ a stable idempotency key, then writes `status.certificate` on the CSR status
 subresource. Kubernetes CSRs have no namespace. To choose a namespaced trstctl
 `Issuer`, set `trstctl.com/issuer-kind: Issuer` and
 `trstctl.com/issuer-namespace: <namespace>` annotations; otherwise the agent
-will not infer a namespaced issuer from a same-named resource. The agent requests
-24 hours if `spec.expirationSeconds` is absent, subject to the CA profile.
+will not infer a namespaced issuer from a same-named resource. If present,
+`trstctl.com/issuer-name` must exactly match the issuer name in
+`spec.signerName`; annotations cannot redirect a CSR to another CA. The agent
+requests 24 hours if `spec.expirationSeconds` is absent, subject to the CA profile.
 
 ```yaml
 apiVersion: certificates.k8s.io/v1
@@ -173,12 +175,24 @@ metadata:
     trstctl.com/issuer-kind: ClusterIssuer
 spec:
   signerName: trstctl.com/trstctl
-  request: <base64-der-csr>
+  request: <base64-pem-csr>
+  expirationSeconds: 3600
   usages:
     - digital signature
     - key encipherment
     - server auth
 ```
+
+Kubernetes checks `signers` authorization again when the agent writes the
+certificate. The shipped agent ClusterRole grants `sign` only on
+`trstctl.com/trstctl`. For another issuer name, grant the agent ServiceAccount
+`sign` on that **exact** `trstctl.com/<issuer-name>` resource name, then bind
+the role to `trstctl-agent` in namespace `trstctl`. A Ready ClusterIssuer does
+not replace this permission; the API server returns 403 without it. Keep the
+approver separate: it needs `get` on CSRs, `update` on
+`certificatesigningrequests/approval`, and `approve` on the same exact signer
+name. The agent must not receive that approval grant. Kubernetes documents the
+[approval and signing RBAC](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#certificate-signing-authorization).
 
 Use `trstctl-cli kubernetes csr` or
 `GET /api/v1/kubernetes/certificate-signing-requests` to inspect the served
