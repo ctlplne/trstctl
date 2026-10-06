@@ -8242,6 +8242,18 @@ export const messages = {
     defaultMessage: "Parent authority for managed intermediate",
     description: "Parent CA selector for a managed intermediate ceremony.",
   },
+  "caHierarchy.managedIntermediate.selectParent": {
+    defaultMessage: "Select an active parent authority",
+    description: "Empty parent choice before a managed intermediate ceremony is reviewed.",
+  },
+  "caHierarchy.managedIntermediate.loadingParents": {
+    defaultMessage: "Loading active parent authorities…",
+    description: "Waiting for the active parent list in the intermediate CA create form.",
+  },
+  "caHierarchy.managedIntermediate.noParents": {
+    defaultMessage: "No active parent is available. Create or restore a root CA before creating an intermediate.",
+    description: "Explains why intermediate creation is unavailable when no active parent exists.",
+  },
   "caHierarchy.managedIntermediate.parentRequired": {
     defaultMessage: "Choose an active parent authority.",
     description: "Validation error for a missing managed intermediate parent.",

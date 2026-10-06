@@ -62,7 +62,7 @@ export function ManagedIntermediateCeremonyForm({
   } = useForm<ManagedIntermediateValues>({
     resolver: zodResolver(managedIntermediateForm),
     defaultValues: {
-      parent_id: parents[0]?.id ?? "",
+      parent_id: "",
       spec_json: JSON.stringify(managedIntermediateDefaultSpec, null, 2),
     },
   });
@@ -83,6 +83,7 @@ export function ManagedIntermediateCeremonyForm({
       <label className="grid gap-1 text-sm font-medium">
         {t("caHierarchy.managedIntermediate.parent")}
         <select className="ui-input" {...register("parent_id")}>
+          <option value="">{t("caHierarchy.managedIntermediate.selectParent")}</option>
           {parents.map((parent) => (
             <option key={parent.id} value={parent.id}>
               {parent.common_name} ({parent.kind}, {parent.status})

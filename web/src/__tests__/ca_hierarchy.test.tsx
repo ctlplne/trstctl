@@ -610,6 +610,35 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByRole("table", { name: "Served CA authorities" })).toHaveTextContent("Trust Root CA");
   });
 
+  it("requires an explicit active parent choice for intermediate creation", async () => {
+    const user = userEvent.setup();
+    const parent = {
+      id: "2fd8a523-62a4-4bc3-9a82-c5633827493e",
+      tenant_id: "tenant-1",
+      common_name: "Trust Root CA",
+      kind: "root",
+      status: "active",
+      certificate_pem: "public certificate",
+      signer_handle: "ca/root/parent",
+      serial: "42",
+      max_path_len: 1,
+      created_at: "2026-10-06T17:00:00Z",
+    };
+    apiMock.caAuthorities.mockResolvedValue({ items: [parent] });
+    renderCAHierarchy("/ca-hierarchy?tab=authorities");
+    const table = document.querySelector('[aria-label="Served CA authorities"]');
+    expect(table).not.toBeNull();
+    await within(table as HTMLElement).findByText("Trust Root CA");
+
+    await user.click(screen.getByRole("button", { name: "Create intermediate CA" }));
+    const dialog = await screen.findByRole("dialog", { name: "Create intermediate CA" });
+    const select = within(dialog).getByLabelText("Parent authority");
+    expect(select).toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: "Create intermediate CA" })).toBeDisabled();
+    await user.selectOptions(select, parent.id);
+    expect(select).toHaveValue(parent.id);
+  });
+
   it("renders issuers with kind, chain, public key, and certificate links", async () => {
     const user = userEvent.setup();
     renderCAHierarchy();
@@ -843,7 +872,9 @@ describe("CA hierarchy and custody surface", () => {
     });
     renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
 
-    await screen.findByRole("combobox", { name: "Parent authority for managed intermediate" });
+    const parentSelect = await screen.findByRole("combobox", { name: "Parent authority for managed intermediate" });
+    expect(parentSelect).toHaveValue("");
+    await user.selectOptions(parentSelect, parent.id);
     await user.click(screen.getByRole("button", { name: "Review managed intermediate ceremony" }));
     const expectedSpec = { common_name: "Issuing Intermediate CA", max_path_len: 0, signature_algorithm: "ECDSA-P256", ttl_seconds: 71_280_000 };
     const request = { operation: "create_intermediate", parent_id: parent.id, threshold: 2, spec: expectedSpec };

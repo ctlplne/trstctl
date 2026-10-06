@@ -1145,7 +1145,8 @@ export function CAHierarchy() {
       {createAuthorityKind && (
         <CreateAuthorityDialog
           kind={createAuthorityKind}
-          parents={authorityParents}
+          parents={activeAuthorityParents}
+          parentsLoading={loading}
           onClose={() => setCreateAuthorityKind(null)}
           onCreated={handleAuthorityCreated}
         />
@@ -2119,16 +2120,18 @@ function CreateAuthorityDialog({
   onClose,
   onCreated,
   parents,
+  parentsLoading,
 }: {
   kind: "root" | "intermediate";
   parents: CAAuthority[];
+  parentsLoading: boolean;
   onClose: () => void;
   onCreated: (authority: CAAuthority) => void;
 }) {
   const { t } = useTranslation();
   const isRoot = kind === "root";
   const [ceremonyID, setCeremonyID] = useState("");
-  const [parentID, setParentID] = useState(parents[0]?.id ?? "");
+  const [parentID, setParentID] = useState("");
   const [specJSON, setSpecJSON] = useState(() => JSON.stringify(isRoot ? rootCeremonyRequest.spec : managedIntermediateDefaultSpec, null, 2));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2201,22 +2204,29 @@ function CreateAuthorityDialog({
           <span className="text-caption font-normal text-muted-foreground">{t("parity.quorumApprovedCeremonyId_df8e12")}</span>
         </label>
         {!isRoot && (
-          <label className="grid gap-1 text-body font-medium">
-            {t("parity.parentAuthority_d9bb89")}
-            <select
-              required
-              value={parentID}
-              onChange={(event) => setParentID(event.target.value)}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            >
-              <option value="">{t("parity.selectParentAuthority_76a0a6")}</option>
-              {parents.map((parent) => (
-                <option key={parent.id} value={parent.id}>
-                  {parent.common_name} ({parent.kind}, {parent.status})
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="grid gap-1 text-body font-medium">
+              {t("parity.parentAuthority_d9bb89")}
+              <select
+                required
+                value={parentID}
+                onChange={(event) => setParentID(event.target.value)}
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+              >
+                <option value="">{t("parity.selectParentAuthority_76a0a6")}</option>
+                {parents.map((parent) => (
+                  <option key={parent.id} value={parent.id}>
+                    {parent.common_name} ({parent.kind}, {parent.status})
+                  </option>
+                ))}
+              </select>
+            </label>
+            {parents.length === 0 ? (
+              <p className="text-caption text-muted-foreground">
+                {t(parentsLoading ? "caHierarchy.managedIntermediate.loadingParents" : "caHierarchy.managedIntermediate.noParents")}
+              </p>
+            ) : null}
+          </>
         )}
         <label className="grid gap-1 text-body font-medium">
           {t("parity.specJson_e57c5c")}
