@@ -1,10 +1,117 @@
 import { X } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
-import type { CAAuthorityRotationPlanPreview, CACeremonyPlanPreview, CAKeyCeremony } from "@/lib/api";
+import type { CAAuthority, CAAuthorityRotationPlanPreview, CACeremonyPlanPreview, CACeremonyStartRequest, CAKeyCeremony } from "@/lib/api";
+
+const managedIntermediateSpec = z
+  .object({
+    common_name: z.string().trim().min(1),
+    max_path_len: z.number().int().min(0).optional(),
+    signature_algorithm: z.string().trim().min(1).optional(),
+    ttl_seconds: z.number().int().positive().optional(),
+    permitted_dns_domains: z.array(z.string().trim().min(1)).optional(),
+    extended_key_usages: z.array(z.string().trim().min(1)).optional(),
+  })
+  .strict();
+
+const managedIntermediateForm = z.object({
+  parent_id: z.uuid(),
+  spec_json: z
+    .string()
+    .trim()
+    .min(1)
+    .superRefine((value, context) => {
+      try {
+        if (managedIntermediateSpec.safeParse(JSON.parse(value)).success) return;
+      } catch {
+        // The same field error covers invalid JSON and an invalid CA spec.
+      }
+      context.addIssue({ code: "custom", message: translateNow("caHierarchy.managedIntermediate.invalidSpec") });
+    }),
+});
+
+type ManagedIntermediateValues = z.infer<typeof managedIntermediateForm>;
+
+export const managedIntermediateDefaultSpec: CACeremonyStartRequest["spec"] = {
+  common_name: "Issuing Intermediate CA",
+  max_path_len: 0,
+  signature_algorithm: "ECDSA-P256",
+  ttl_seconds: 71_280_000,
+};
+
+export function ManagedIntermediateCeremonyForm({
+  busy,
+  parents,
+  onReview,
+}: {
+  busy: boolean;
+  parents: CAAuthority[];
+  onReview: (request: CACeremonyStartRequest) => void;
+}) {
+  const { t } = useTranslation();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ManagedIntermediateValues>({
+    resolver: zodResolver(managedIntermediateForm),
+    defaultValues: {
+      parent_id: parents[0]?.id ?? "",
+      spec_json: JSON.stringify(managedIntermediateDefaultSpec, null, 2),
+    },
+  });
+  return (
+    <form
+      className="grid gap-3 rounded-control border border-border p-4"
+      onSubmit={handleSubmit((values) =>
+        onReview({
+          operation: "create_intermediate",
+          threshold: 2,
+          parent_id: values.parent_id,
+          spec: managedIntermediateSpec.parse(JSON.parse(values.spec_json)),
+        }),
+      )}
+    >
+      <h3 className="font-semibold">{t("caHierarchy.managedIntermediate.title")}</h3>
+      <p className="text-sm text-muted-foreground">{t("caHierarchy.managedIntermediate.help")}</p>
+      <label className="grid gap-1 text-sm font-medium">
+        {t("caHierarchy.managedIntermediate.parent")}
+        <select className="ui-input" {...register("parent_id")}>
+          {parents.map((parent) => (
+            <option key={parent.id} value={parent.id}>
+              {parent.common_name} ({parent.kind}, {parent.status})
+            </option>
+          ))}
+        </select>
+      </label>
+      {errors.parent_id ? (
+        <p role="alert" className="text-sm text-destructive">
+          {t("caHierarchy.managedIntermediate.parentRequired")}
+        </p>
+      ) : null}
+      <label className="grid gap-1 text-sm font-medium">
+        {t("caHierarchy.managedIntermediate.spec")}
+        <textarea className="ui-input min-h-32 font-mono text-xs" rows={7} {...register("spec_json")} />
+      </label>
+      {errors.spec_json ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errors.spec_json.message}
+        </p>
+      ) : null}
+      <div>
+        <Button type="submit" disabled={busy}>
+          {t("caHierarchy.managedIntermediate.review")}
+        </Button>
+      </div>
+    </form>
+  );
+}
 
 export function CARotationReviewDialog({
   busy,
@@ -155,6 +262,11 @@ export function CACeremonyReviewDialog({
             </dd>
           </div>
         </dl>
+
+        <section className="border-t border-border pt-4">
+          <h3 className="font-semibold">{t("caHierarchy.preview.exactSpec")}</h3>
+          <pre className="mt-2 max-h-48 overflow-auto rounded-control bg-muted p-3 text-xs">{JSON.stringify(preview.normalized_spec, null, 2)}</pre>
+        </section>
 
         <ReviewList title={t("caHierarchy.preview.changes")} items={preview.changes} />
         <ReviewList title={t("caHierarchy.preview.risks")} items={preview.risks} />

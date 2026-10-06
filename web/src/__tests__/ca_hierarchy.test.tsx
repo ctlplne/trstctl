@@ -800,6 +800,62 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.queryByText("root:<sha256-of-ca-spec>")).not.toBeInTheDocument();
   });
 
+  it("reviews a managed-intermediate ceremony bound to its selected parent and exact spec", async () => {
+    const user = userEvent.setup();
+    const parent = {
+      id: "2fd8a523-62a4-4bc3-9a82-c5633827493e",
+      tenant_id: "tenant-1",
+      common_name: "Trust Root CA",
+      kind: "root",
+      status: "active",
+      certificate_pem: "public certificate",
+      signer_handle: "ca/root/parent",
+      serial: "42",
+      max_path_len: 1,
+      created_at: "2026-10-06T17:00:00Z",
+    };
+    apiMock.caAuthorities.mockResolvedValue({ items: [parent] });
+    apiMock.previewCACeremony.mockImplementationOnce(async (input: { operation: string; threshold: number; spec: Record<string, unknown> }) => ({
+      capability: "F48",
+      operation: input.operation,
+      ready: true,
+      request_fingerprint: "review-managed-intermediate",
+      approval_threshold: input.threshold,
+      required_permission: "issuers:write",
+      normalized_spec: input.spec,
+      parent,
+      changes: ["Prepare a parent-bound intermediate CA ceremony."],
+      risks: ["This parent will sign the new intermediate."],
+      verification_steps: ["Verify the new intermediate chain against this parent."],
+      sensitive_inputs: [],
+      preview_writes: [],
+      preview_external_effects: [],
+    }));
+    apiMock.createCACeremony.mockResolvedValueOnce({
+      id: "ceremony-intermediate-1",
+      tenant_id: "tenant-1",
+      purpose: "intermediate:2fd8a523-62a4-4bc3-9a82-c5633827493e:reviewed-spec",
+      threshold: 2,
+      status: "pending",
+      approvals: 0,
+      opener: "operator@example.test",
+      created_at: "2026-10-06T17:00:00Z",
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+
+    await screen.findByRole("combobox", { name: "Parent authority for managed intermediate" });
+    await user.click(screen.getByRole("button", { name: "Review managed intermediate ceremony" }));
+    const expectedSpec = { common_name: "Issuing Intermediate CA", max_path_len: 0, signature_algorithm: "ECDSA-P256", ttl_seconds: 71_280_000 };
+    const request = { operation: "create_intermediate", parent_id: parent.id, threshold: 2, spec: expectedSpec };
+    await waitFor(() => expect(apiMock.previewCACeremony).toHaveBeenCalledWith(request));
+    const review = await screen.findByRole("dialog", { name: "Review CA ceremony" });
+    expect(within(review).getByText("Trust Root CA · root · active")).toBeInTheDocument();
+    expect(within(review).getByText(/"max_path_len": 0/)).toBeInTheDocument();
+    await user.click(within(review).getByRole("button", { name: "Start reviewed ceremony" }));
+    await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledWith(request));
+    expect(await screen.findByText("ceremony-intermediate-1")).toBeInTheDocument();
+  });
+
   it("lets another custodian load a pending ceremony by its exact ID after signing in", async () => {
     const user = userEvent.setup();
     const id = "a6e2d916-0d8a-4e3d-8a06-222fe0f60b80";

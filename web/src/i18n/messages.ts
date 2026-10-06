@@ -8225,6 +8225,39 @@ export const messages = {
     defaultMessage: "Add authority",
     description: "Primary action that opens the certificate authority workspace.",
   },
+  "caHierarchy.managedIntermediate.sectionHelp": {
+    defaultMessage: "Open an exact root or intermediate ceremony, then have distinct custodians approve before the signer creates a CA.",
+    description: "Explains the managed CA ceremony workflow on the lifecycle tab.",
+  },
+  "caHierarchy.managedIntermediate.title": {
+    defaultMessage: "Managed intermediate ceremony",
+    description: "Heading for the parent-bound managed intermediate ceremony form.",
+  },
+  "caHierarchy.managedIntermediate.help": {
+    defaultMessage:
+      "Choose the active parent and the exact CA spec. The review makes no changes; two other custodians must approve before you create the intermediate.",
+    description: "Explains parent and spec binding before a managed intermediate ceremony.",
+  },
+  "caHierarchy.managedIntermediate.parent": {
+    defaultMessage: "Parent authority for managed intermediate",
+    description: "Parent CA selector for a managed intermediate ceremony.",
+  },
+  "caHierarchy.managedIntermediate.parentRequired": {
+    defaultMessage: "Choose an active parent authority.",
+    description: "Validation error for a missing managed intermediate parent.",
+  },
+  "caHierarchy.managedIntermediate.spec": {
+    defaultMessage: "Managed intermediate spec JSON",
+    description: "Exact CA specification bound to managed intermediate ceremony approvals.",
+  },
+  "caHierarchy.managedIntermediate.invalidSpec": {
+    defaultMessage: "Enter valid CA spec JSON with a common name and supported fields.",
+    description: "Validation error for an invalid managed intermediate CA specification.",
+  },
+  "caHierarchy.managedIntermediate.review": {
+    defaultMessage: "Review managed intermediate ceremony",
+    description: "Open the effect-free review for an exact managed intermediate ceremony.",
+  },
   "caHierarchy.preview.title": {
     defaultMessage: "Review CA ceremony",
     description: "Heading for the server-owned effect-free review shown before a CA key ceremony is created.",
@@ -8251,6 +8284,7 @@ export const messages = {
     description: "Label for the server permission required to start the reviewed ceremony.",
   },
   "caHierarchy.preview.commonName": { defaultMessage: "CA common name", description: "Label for the reviewed CA profile common name." },
+  "caHierarchy.preview.exactSpec": { defaultMessage: "Exact CA spec", description: "Normalized public CA parameters bound to the ceremony fingerprint." },
   "caHierarchy.preview.authority": { defaultMessage: "Existing authority", description: "Label for the tenant-scoped authority referenced by the ceremony." },
   "caHierarchy.preview.fingerprint": { defaultMessage: "Request fingerprint", description: "Label for the exact non-secret CA ceremony request digest." },
   "caHierarchy.preview.changes": { defaultMessage: "What this prepares", description: "Heading for the later CA change authorized by the ceremony." },
@@ -25850,10 +25884,6 @@ export const messages = {
   "source.ssh.workflow.failed.e76cbdb07c": {
     defaultMessage: "SSH workflow failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
-  },
-  "source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848": {
-    defaultMessage: "Start a root CA ceremony, then record a second custodian approval before using the ceremony for a signer-backed authority action.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.start.re.key.ceremony.c2e02a1a0c": {
     defaultMessage: "Start re-key ceremony",

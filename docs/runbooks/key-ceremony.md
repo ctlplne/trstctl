@@ -106,6 +106,13 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
    `"parent_id": "<root-ca-id>"`; the server derives
    `intermediate:<parent-ca-id>:<sha256-of-ca-spec>` from the same request the CA
    operation will execute.
+   In the console, open **Certificate authorities → Lifecycle → Managed
+   intermediate ceremony**. Select the active parent, edit the exact CA spec,
+   review the server's normalized spec and effect-free plan, then start the
+   ceremony. Give its ID to the two independently signed-in custodians. After
+   quorum, open **Authorities → Create intermediate CA** and submit that ID,
+   the same parent, and the same reviewed spec. A different parent or spec is
+   refused instead of reusing the approval.
 3. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals` (see
    above).
 4. **Create the CA.** Once *m* custodians have approved, call

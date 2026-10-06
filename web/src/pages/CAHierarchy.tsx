@@ -37,6 +37,8 @@ import {
   CeremonyDetailDialog,
   CeremonyLookupForm,
   CeremonyPanel,
+  ManagedIntermediateCeremonyForm,
+  managedIntermediateDefaultSpec,
 } from "./cahierarchy/CAHierarchyCeremonyParts";
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
 import {
@@ -485,6 +487,7 @@ export function CAHierarchy() {
 
   const sortedIssuers = useMemo(() => [...issuers].sort((a, b) => a.name.localeCompare(b.name)), [issuers]);
   const authorityParents = useMemo(() => authorities.filter((authority) => authority.kind === "root" || authority.kind === "intermediate"), [authorities]);
+  const activeAuthorityParents = useMemo(() => authorityParents.filter((authority) => authority.status === "active"), [authorityParents]);
   const retirementCandidates = useMemo(
     () => authorities.filter((authority) => authority.signer_handle && (authority.status === "superseded" || authority.status === "revoked")),
     [authorities],
@@ -1056,7 +1059,7 @@ export function CAHierarchy() {
             <h2 id="ceremony-heading" className="text-title font-semibold">
               {translateNow("source.ca.key.ceremony.244faa4ab3")}
             </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848")}</p>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.managedIntermediate.sectionHelp")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1065,6 +1068,14 @@ export function CAHierarchy() {
           </Button>
           <span className="text-sm text-muted-foreground">{translateNow("source.default.request.trust.root.ca.2.approvals.246b100b12")}</span>
         </div>
+        {activeAuthorityParents.length > 0 ? (
+          <ManagedIntermediateCeremonyForm
+            key={activeAuthorityParents.map((authority) => authority.id).join(",")}
+            busy={ceremonyBusy}
+            parents={activeAuthorityParents}
+            onReview={(request) => void openCeremonyReview(request, setCeremony, (message) => setCeremonyError(message || null), setCeremonyBusy)}
+          />
+        ) : null}
         <CeremonyLookupForm
           busy={ceremonyBusy}
           id={ceremonyLookupID}
@@ -2118,15 +2129,7 @@ function CreateAuthorityDialog({
   const isRoot = kind === "root";
   const [ceremonyID, setCeremonyID] = useState("");
   const [parentID, setParentID] = useState(parents[0]?.id ?? "");
-  const [specJSON, setSpecJSON] = useState(() =>
-    JSON.stringify(
-      isRoot
-        ? { common_name: "Trust Root CA", max_path_len: 1, signature_algorithm: "ECDSA-P256", ttl_seconds: 315_360_000 }
-        : { common_name: "Issuing Intermediate CA", max_path_len: 0, signature_algorithm: "ECDSA-P256", ttl_seconds: 71_280_000 },
-      null,
-      2,
-    ),
-  );
+  const [specJSON, setSpecJSON] = useState(() => JSON.stringify(isRoot ? rootCeremonyRequest.spec : managedIntermediateDefaultSpec, null, 2));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ceremonyInputRef = useRef<HTMLInputElement>(null);
