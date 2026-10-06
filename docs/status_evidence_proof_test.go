@@ -293,15 +293,16 @@ func validateConsoleReference(reference string, requiredTokens []string) string 
 // console vocabulary. Adding a green status to statusVocab.ts is a truth claim,
 // so it must arrive with a short statement of the fact that licenses green.
 var consoleSuccessEvidenceValues = map[string]string{
-	"agentStatus.online":             "a current agent heartbeat was observed",
-	"certificateStatus.active":       "the certificate read model says active rather than revoked or superseded",
-	"deliveryStatus.delivered":       "the connector receipt records target mutation; verification remains a distinct value",
-	"deliveryStatus.dry_run_planned": "the relay contacted the target and returned a zero-write mutation plan",
-	"deliveryStatus.rolled_back":     "an enrolled agent reported a family-specific predecessor restore; receipt detail states whether the listener was reverified",
-	"discoveryStatus.managed":        "the event-sourced triage projection records an operator claim linked to a managed identity",
-	"expiryBands.healthy":            "a parsed expiry is more than ninety days away",
-	"lifecycleStatus.deployed":       "the event-sourced lifecycle records deployment",
-	"lifecycleStatus.issued":         "the event-sourced lifecycle records issuance",
+	"agentStatus.online":                 "a current agent heartbeat was observed",
+	"certificateStatus.active":           "the certificate read model says active rather than revoked or superseded",
+	"deliveryStatus.delivered":           "the connector receipt records target mutation; verification remains a distinct value",
+	"deliveryStatus.containment_stopped": "the signed host receipt records an exact-fingerprint stop and two fresh local TLS probes that no longer observe a served leaf; independent client readback is separate",
+	"deliveryStatus.dry_run_planned":     "the relay contacted the target and returned a zero-write mutation plan",
+	"deliveryStatus.rolled_back":         "an enrolled agent reported a family-specific predecessor restore; receipt detail states whether the listener was reverified",
+	"discoveryStatus.managed":            "the event-sourced triage projection records an operator claim linked to a managed identity",
+	"expiryBands.healthy":                "a parsed expiry is more than ninety days away",
+	"lifecycleStatus.deployed":           "the event-sourced lifecycle records deployment",
+	"lifecycleStatus.issued":             "the event-sourced lifecycle records issuance",
 }
 
 func TestConsoleSuccessLabelsAreEvidenceReviewed(t *testing.T) {

@@ -286,8 +286,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// The requester-visible issuer roster adds one read-only command to F33.
 	// The durable secret-sync job read adds one read-only command to F68.
 	// F26 adds paginated managed-key inventory and exact key recovery commands.
-	if len(out) != 473 {
-		t.Fatalf("CLI commands = %d, want 473", len(out))
+	// F7's reviewed host-containment preview and submit commands raise it to
+	// 475, closing the gap between the served API and the documented CLI path.
+	if len(out) != 475 {
+		t.Fatalf("CLI commands = %d, want 475", len(out))
 	}
 	return out
 }

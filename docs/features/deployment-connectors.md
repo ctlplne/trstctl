@@ -334,11 +334,22 @@ deciding whether to attempt recovery.
 The CLI keeps review separate from execution:
 
 ```sh
-trstctl connector target contain-preview --target "$TARGET_ID" > reviewed-containment.json
-# Inspect the exact identifiers and warnings before the next command.
-trstctl connector target contain --target "$TARGET_ID" \
-  --preview-file reviewed-containment.json --reason 'confirmed key compromise'
+trstctl connector target contain-preview "$TARGET_ID" > reviewed-containment.json
+# Inspect the target, identity, agent, fingerprint, revision, and outage warnings.
+jq -e --arg reason 'confirmed key compromise' \
+  'if .ready and .effect_free then
+     {target_revision, identity_id, expected_fingerprint, required_agent_id,
+      preview_fingerprint, reason: $reason}
+   else error("containment preview is not ready") end' \
+  reviewed-containment.json > containment-request.json
+trstctl --idempotency-key "$INCIDENT_KEY" --force \
+  connector target contain "$TARGET_ID" -f containment-request.json
 ```
+
+Use a new incident key for a changed preview or reason. Keep the reviewed
+preview and exact request in the incident record without adding credential
+material. `--force` acknowledges that the command can stop a host listener;
+the server and agent still enforce the reviewed binding and exact live leaf.
 
 The API uses `GET /api/v1/connectors/targets/{id}/contain/preview` and
 `POST /api/v1/connectors/targets/{id}/contain`; the POST needs the preview's

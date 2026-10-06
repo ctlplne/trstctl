@@ -50,6 +50,9 @@ func (c Command) Destructive() bool {
 	if strings.HasPrefix(name, "identities approve ") {
 		return false
 	}
+	if name == "connector target contain" {
+		return true
+	}
 	for _, marker := range []string{
 		"bulk-revoke",
 		"decommission",
@@ -271,6 +274,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"connector", "target", "test"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/test", Body: bodyNone, Summary: "Preview connector target changes without writing"},
 	{Name: []string{"connector", "target", "deploy"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/deploy", Body: bodyFile, Summary: "Deploy an identity through a connector target"},
 	{Name: []string{"connector", "target", "rollback"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/rollback", Body: bodyFile, Summary: "Queue restoration of a proven connector predecessor"},
+	{Name: []string{"connector", "target", "contain-preview"}, Method: "GET", Path: "/api/v1/connectors/targets/{id}/contain/preview", Summary: "Review exact host, agent and compromised leaf before containment"},
+	{Name: []string{"connector", "target", "contain"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/contain", Body: bodyFile, Summary: "Queue the reviewed exact-fingerprint host stop"},
 	{Name: []string{"notifications", "channels"}, Method: "GET", Path: "/api/v1/notification-channels", Summary: "List supported and configured notification channel families"},
 	{Name: []string{"notifications", "channels", "create"}, Method: "POST", Path: "/api/v1/notification-channels", Body: bodyFile, Summary: "Create a tenant-authored notification channel using secret references"},
 	{Name: []string{"notifications", "channels", "get"}, Method: "GET", Path: "/api/v1/notification-channels/{id}", Summary: "Get a tenant-authored notification channel"},
