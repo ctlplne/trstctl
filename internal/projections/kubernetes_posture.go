@@ -114,16 +114,16 @@ func validateKubernetesPostureReport(report KubernetesControllerPostureReported)
 	if report.ReconcileIntervalSeconds < 1 || report.ReconcileIntervalSeconds > 86400 {
 		return fmt.Errorf("reconcile_interval_seconds must be between 1 and 86400")
 	}
-	if err := validateKubernetesPostureSection(report.CertificateSigning); err != nil {
+	if err := validateKubernetesPostureSection(report.CertificateSigning, store.KubernetesPostureCertificateSigningRequests); err != nil {
 		return fmt.Errorf("certificate_signing_requests: %w", err)
 	}
-	if err := validateKubernetesPostureSection(report.TrustBundles); err != nil {
+	if err := validateKubernetesPostureSection(report.TrustBundles, store.KubernetesPostureTrustBundles); err != nil {
 		return fmt.Errorf("trust_bundles: %w", err)
 	}
 	return nil
 }
 
-func validateKubernetesPostureSection(section KubernetesPostureSection) error {
+func validateKubernetesPostureSection(section KubernetesPostureSection, capability string) error {
 	if section.Complete && section.FailureCode != "" {
 		return fmt.Errorf("a complete reconcile cannot carry failure_code")
 	}
@@ -147,7 +147,7 @@ func validateKubernetesPostureSection(section KubernetesPostureSection) error {
 		if resource.State != "ready" && resource.State != "pending" && resource.State != "failed" {
 			return fmt.Errorf("resource state %q is not allowed", resource.State)
 		}
-		if !validKubernetesPostureReason(resource.Reason) {
+		if !validKubernetesPostureReason(resource.Reason, capability) {
 			return fmt.Errorf("resource reason %q is not allowed", resource.Reason)
 		}
 		if resource.PublicHash != "" && !validLowerHex(resource.PublicHash, 64) {
@@ -198,8 +198,10 @@ func validKubernetesOpaqueMetadata(value string) bool {
 	return value != ""
 }
 
-func validKubernetesPostureReason(reason string) bool {
+func validKubernetesPostureReason(reason, capability string) bool {
 	switch reason {
+	case "issuer_binding_mismatch", "invalid_signer_name":
+		return capability == store.KubernetesPostureCertificateSigningRequests
 	case "signed", "already_ready", "approval_pending", "issuer_not_found", "denied", "failed", "awaiting_sign", "distributed", "controller_error":
 		return true
 	default:

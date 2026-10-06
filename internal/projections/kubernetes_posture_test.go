@@ -99,6 +99,14 @@ func TestKubernetesControllerPostureContractRejectsUnboundedOrNonMetadataValues(
 			report.TrustBundles.Complete = false
 			report.TrustBundles.FailureCode = "token=secret"
 		},
+		"CSR reason on trust bundle": func(report *projections.KubernetesControllerPostureReported) {
+			report.TrustBundles.Resources = []projections.KubernetesPostureResource{{
+				Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "failed", Reason: "issuer_binding_mismatch",
+			}}
+		},
+		"unrecognized CSR reason": func(report *projections.KubernetesControllerPostureReported) {
+			report.CertificateSigning.Resources[0].Reason = "unrecognized_reason"
+		},
 		"unbounded resources": func(report *projections.KubernetesControllerPostureReported) {
 			resource := report.CertificateSigning.Resources[0]
 			report.CertificateSigning.Resources = make([]projections.KubernetesPostureResource, 2001)
@@ -114,6 +122,25 @@ func TestKubernetesControllerPostureContractRejectsUnboundedOrNonMetadataValues(
 			mutate(&report)
 			if _, err := projections.MarshalKubernetesPostureReport(report); err == nil {
 				t.Fatal("invalid Kubernetes posture report was accepted")
+			}
+		})
+	}
+}
+
+func TestKubernetesControllerPostureContractAcceptsIssuerBindingFailures(t *testing.T) {
+	for _, reason := range []string{"issuer_binding_mismatch", "invalid_signer_name"} {
+		t.Run(reason, func(t *testing.T) {
+			report := projections.KubernetesControllerPostureReported{
+				ReportID:  "33333333-3333-3333-3333-333333333333",
+				AgentID:   "44444444-4444-4444-4444-444444444444",
+				ClusterID: "sha256:" + strings.Repeat("a", 64), ReconcileIntervalSeconds: 30,
+				CertificateSigning: projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
+					Name: "rejected-csr", UID: "csr-uid", ResourceVersion: "17", State: "failed", Reason: reason,
+				}}},
+				TrustBundles: projections.KubernetesPostureSection{Complete: true},
+			}
+			if _, err := projections.MarshalKubernetesPostureReport(report); err != nil {
+				t.Fatalf("agent's closed-set rejection reason was refused: %v", err)
 			}
 		})
 	}

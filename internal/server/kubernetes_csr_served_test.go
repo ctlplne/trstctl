@@ -47,6 +47,10 @@ func TestServedKubernetesPostureReportUsesAuthenticatedAgentEventProjection(t *t
 		ClusterID: "sha256:" + strings.Repeat("a", 64), ReconcileIntervalSeconds: 30,
 		CertificateSigning: transport.KubernetesPostureSection{Complete: true, Resources: []transport.KubernetesPostureResource{{
 			Name: "web-csr", UID: "csr-uid", ResourceVersion: "17", State: "ready", Reason: "signed", PublicHash: strings.Repeat("b", 64),
+		}, {
+			Name: "rejected-csr", UID: "rejected-uid", ResourceVersion: "18", State: "failed", Reason: "issuer_binding_mismatch",
+		}, {
+			Name: "malformed-signer-csr", UID: "malformed-uid", ResourceVersion: "19", State: "failed", Reason: "invalid_signer_name",
 		}}},
 		TrustBundles: transport.KubernetesPostureSection{Complete: true, Resources: []transport.KubernetesPostureResource{{
 			Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "ready", Reason: "distributed", PublicHash: strings.Repeat("c", 64),
@@ -82,8 +86,15 @@ func TestServedKubernetesPostureReportUsesAuthenticatedAgentEventProjection(t *t
 		t.Fatal(err)
 	}
 	rows, err := h.store.ListKubernetesControllerPosture(ctx, h.tenant, "certificate-signing-requests")
-	if err != nil || len(rows) != 1 || len(rows[0].Resources) != 1 || rows[0].Resources[0].Name != "web-csr" {
+	if err != nil || len(rows) != 1 || len(rows[0].Resources) != 3 {
 		t.Fatalf("projected Kubernetes posture = %+v err=%v", rows, err)
+	}
+	reasons := make(map[string]string, len(rows[0].Resources))
+	for _, resource := range rows[0].Resources {
+		reasons[resource.Name] = resource.Reason
+	}
+	if reasons["web-csr"] != "signed" || reasons["rejected-csr"] != "issuer_binding_mismatch" || reasons["malformed-signer-csr"] != "invalid_signer_name" {
+		t.Fatalf("projected Kubernetes posture reasons = %+v", reasons)
 	}
 
 	before := servedEventCount(t, h, projections.EventKubernetesControllerPostureReported)
