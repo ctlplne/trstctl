@@ -334,7 +334,7 @@ deciding whether to attempt recovery.
 The CLI keeps review separate from execution:
 
 ```sh
-trstctl connector target contain-preview "$TARGET_ID" > reviewed-containment.json
+trstctl-cli connector target contain-preview "$TARGET_ID" > reviewed-containment.json
 # Inspect the target, identity, agent, fingerprint, revision, and outage warnings.
 jq -e --arg reason 'confirmed key compromise' \
   'if .ready and .effect_free then
@@ -342,7 +342,7 @@ jq -e --arg reason 'confirmed key compromise' \
       preview_fingerprint, reason: $reason}
    else error("containment preview is not ready") end' \
   reviewed-containment.json > containment-request.json
-trstctl --idempotency-key "$INCIDENT_KEY" --force \
+trstctl-cli --idempotency-key "$INCIDENT_KEY" --force \
   connector target contain "$TARGET_ID" -f containment-request.json
 ```
 
