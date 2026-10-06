@@ -71,13 +71,21 @@ never a private key. A `Ready=True` Issuer proves that its configuration matches
 the operator endpoint; the issued CertificateRequest and Secret prove that the
 network, token, and CA can actually complete issuance.
 
-Grant a distinct approver only the signer name it reviews. For example, bind
-the following `ClusterRole` to a separate approver identity, and give that
-identity `get` on `certificaterequests` plus `update` on
-`certificaterequests/approval` in the workload namespace. The agent service
-account needs neither grant:
+Grant a distinct approver only the signer name it reviews. This example creates
+its own identity, gives it request read and status update access only in `apps`,
+and limits its signer approval grant to the `trstctl` ClusterIssuer. cert-manager
+stores the approval condition on `certificaterequests/status`; it does not expose
+an `approval` subresource. The status grant can also change other request
+conditions, so keep this identity separate from the issuer agent. The agent
+service account needs neither grant:
 
 ```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trstctl-web-approver
+  namespace: apps
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -87,13 +95,55 @@ rules:
     resources: [signers]
     resourceNames: [clusterissuers.trstctl.com/trstctl]
     verbs: [approve]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trstctl-web-approver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: trstctl-web-approver
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-web-approver
+    namespace: apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trstctl-web-request-approver
+  namespace: apps
+rules:
+  - apiGroups: [cert-manager.io]
+    resources: [certificaterequests]
+    verbs: [get, list]
+  - apiGroups: [cert-manager.io]
+    resources: [certificaterequests/status]
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trstctl-web-request-approver
+  namespace: apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trstctl-web-request-approver
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-web-approver
+    namespace: apps
 ```
 
-After inspecting the generated request, the authorized approver can approve it:
+After inspecting the generated request, the approver can approve it with a
+short-lived token minted for this identity and a kubeconfig containing that
+token:
 
 ```sh
 kubectl -n apps get certificaterequest
-cmctl approve -n apps <request-name> --reason pki-review
+KUBECONFIG=<approver-kubeconfig> cmctl approve -n apps <request-name> --reason pki-review
 ```
 
 cert-manager documents the [exact signer
