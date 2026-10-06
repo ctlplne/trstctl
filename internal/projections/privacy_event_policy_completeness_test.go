@@ -194,6 +194,15 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 						privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}},
 						SideEffect:                  &identityTransitionEffect{Destination: "connector.deploy", IdempotencyKey: "event", Completed: true},
 					}))
+				case LifecycleKeyCompromiseEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV8{
+						privacyIdentityTransitionV3: privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{
+							privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "revoked"}}},
+						CompromiseContainment: &identityCompromiseContainment{
+							TargetID: "target", IdentityID: "identity", RequiredAgentID: "agent", Connector: "apache",
+							Target: "server", RequestedBy: "operator", ReceiptID: "receipt",
+						},
+					}))
 				}
 			}
 			if isApplicationSecretMutationEvent(eventType) {
@@ -493,6 +502,10 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 			case LifecycleCompletedSideEffectEventSchemaVersion:
 				data = completePrivacyFixture[privacyIdentityTransitionV7](t,
 					`{"identity_id":"identity-a","from":"issued","to":"deployed","reason":"requested by privacy-policy-subject","idempotency_key":"stable-key","side_effect":{"destination":"connector.deploy","idempotency_key":"transition:stable-key","completed":true},"ownership_readiness":{"mode":"owner","identity_id":"identity-a","owner_id":"owner-a","owner_model_digest":"sha256:model","attested_by":"privacy-policy-subject","verified_at":"2026-08-12T10:00:00Z","attestation_due_at":"2026-11-10T10:00:00Z","evaluated_at":"2026-08-12T10:01:00Z"}}`)
+				wantPlaceholder = true
+			case LifecycleKeyCompromiseEventSchemaVersion:
+				data = completePrivacyFixture[privacyIdentityTransitionV8](t,
+					`{"identity_id":"identity-a","from":"issued","to":"revoked","reason":"requested by privacy-policy-subject","idempotency_key":"stable-key","side_effect":{"destination":"revocation.publish","idempotency_key":"transition:stable-key"},"compromise_containment":{"target_id":"target-a","target_revision":"revision-a","identity_id":"identity-a","expected_fingerprint":"sha256:a","required_agent_id":"agent-a","connector":"apache","target":"server privacy-policy-subject","reason":"for privacy-policy-subject","requested_by":"privacy-policy-subject","idempotency_key":"stable-key","outbox_id":1,"receipt_id":"receipt-a"}}`)
 				wantPlaceholder = true
 			default:
 				t.Fatalf("identity transition %s has no privacy fixture for schema v%d", eventType, version)

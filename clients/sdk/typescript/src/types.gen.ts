@@ -2881,6 +2881,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/compromise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read separate CA and host effects for one retained key-compromise command */
+        get: operations["readKeyCompromise"];
+        put?: never;
+        /** Queue CA revocation and exact host containment in one reviewed command */
+        post: operations["executeKeyCompromise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identities/{id}/compromise/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review exact CA revocation and host containment for one compromised X.509 identity */
+        post: operations["previewKeyCompromise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/connector-target": {
         parameters: {
             query?: never;
@@ -11417,6 +11452,59 @@ export interface components {
             state: string;
             tenant_bound: boolean;
             transport: string;
+        };
+        KeyCompromiseCertificate: {
+            authority: string;
+            fingerprint: string;
+            /** Format: uuid */
+            id: string;
+            serial: string;
+        };
+        KeyCompromiseExecutionRequest: {
+            connector: string;
+            expected_fingerprint: string;
+            expected_version: number;
+            /** Format: uuid */
+            identity_id: string;
+            preview_fingerprint: string;
+            /** Format: uuid */
+            required_agent_id: string;
+            /** Format: uuid */
+            target_id: string;
+            target_name: string;
+            target_revision: string;
+        };
+        KeyCompromisePlan: {
+            capability: string;
+            certificates: components["schemas"]["KeyCompromiseCertificate"][];
+            effect_free: boolean;
+            execution_effects: string[];
+            expected_version: number;
+            /** Format: uuid */
+            identity_id: string;
+            preview_fingerprint: string;
+            ready: boolean;
+            required_permissions: string[];
+            target: components["schemas"]["EndpointContainmentPreview"];
+            verification_steps: string[];
+        };
+        KeyCompromisePlanRequest: {
+            /** Format: uuid */
+            target_id: string;
+        };
+        KeyCompromiseResult: {
+            containment: components["schemas"]["ConnectorDelivery"];
+            identity: components["schemas"]["Identity"];
+            revocation: components["schemas"]["KeyCompromiseRevocationAttempt"];
+        };
+        KeyCompromiseRevocationAttempt: {
+            attempts: number;
+            /** Format: date-time */
+            delivered_at?: string;
+            destination: string;
+            id: number;
+            last_error?: string;
+            status: string;
         };
         KubernetesCSRSupport: {
             api_group: string;
@@ -23784,6 +23872,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Approval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    readKeyCompromise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyCompromiseResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    executeKeyCompromise: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyCompromiseExecutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyCompromiseResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewKeyCompromise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyCompromisePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyCompromisePlan"];
                 };
             };
             /** @description client error */

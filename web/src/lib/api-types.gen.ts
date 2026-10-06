@@ -4259,6 +4259,58 @@ export interface KMIPPosture {
   transport: string;
 }
 
+export interface KeyCompromiseCertificate {
+  authority: string;
+  fingerprint: string;
+  id: string;
+  serial: string;
+}
+
+export interface KeyCompromiseExecutionRequest {
+  connector: string;
+  expected_fingerprint: string;
+  expected_version: number;
+  identity_id: string;
+  preview_fingerprint: string;
+  required_agent_id: string;
+  target_id: string;
+  target_name: string;
+  target_revision: string;
+}
+
+export interface KeyCompromisePlan {
+  capability: string;
+  certificates: KeyCompromiseCertificate[];
+  effect_free: boolean;
+  execution_effects: string[];
+  expected_version: number;
+  identity_id: string;
+  preview_fingerprint: string;
+  ready: boolean;
+  required_permissions: string[];
+  target: EndpointContainmentPreview;
+  verification_steps: string[];
+}
+
+export interface KeyCompromisePlanRequest {
+  target_id: string;
+}
+
+export interface KeyCompromiseResult {
+  containment: ConnectorDelivery;
+  identity: Identity;
+  revocation: KeyCompromiseRevocationAttempt;
+}
+
+export interface KeyCompromiseRevocationAttempt {
+  attempts: number;
+  delivered_at?: string;
+  destination: string;
+  id: number;
+  last_error?: string;
+  status: string;
+}
+
 export interface KubernetesCSRSupport {
   api_group: string;
   api_version: string;

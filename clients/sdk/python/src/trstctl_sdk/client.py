@@ -186,6 +186,29 @@ class TrstctlClient:
     def create_profile(self, name: str, spec: Mapping[str, Any], *, idempotency_key: Optional[str] = None) -> Any:
         return self.request("POST", "/api/v1/profiles", body={"name": name, "spec": dict(spec)}, idempotency_key=idempotency_key)
 
+    def preview_key_compromise(self, identity_id: str, target_id: str) -> Any:
+        """Effect-free review of the exact CA records and host leaf."""
+        return self.request(
+            "POST", f"/api/v1/identities/{parse.quote(identity_id, safe='')}/compromise/preview",
+            body={"target_id": target_id},
+        )
+
+    def execute_key_compromise(self, identity_id: str, reviewed: Mapping[str, Any], *, idempotency_key: str) -> Any:
+        """Queue two independently observed effects from one reviewed command."""
+        if not idempotency_key:
+            raise ValueError("key compromise requires the reviewed Idempotency-Key")
+        return self.request(
+            "POST", f"/api/v1/identities/{parse.quote(identity_id, safe='')}/compromise",
+            body=dict(reviewed), idempotency_key=idempotency_key,
+        )
+
+    def key_compromise_status(self, identity_id: str, request_key: str) -> Any:
+        """Read CA and host outcomes separately by the original request key."""
+        return self.request(
+            "GET", f"/api/v1/identities/{parse.quote(identity_id, safe='')}/compromise",
+            query={"request_key": request_key},
+        )
+
     def issue_pki_secret(self, common_name: str, *, ttl_seconds: int = 3600, idempotency_key: Optional[str] = None) -> Any:
         return self.request(
             "POST",

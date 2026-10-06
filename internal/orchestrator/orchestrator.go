@@ -311,6 +311,7 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 type transitionOptions struct {
 	reviewed       []*store.Identity
 	renewalAttempt *store.RenewalAttempt
+	compromise     *EndpointContainmentRequest
 }
 
 // FailRenewalAttempt records the exact authenticated job attempt in the durable
@@ -339,10 +340,20 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		option = options[0]
 	}
 	reviewed := option.reviewed
+	compromise := option.compromise
 	if len(reviewed) > 1 {
 		return errors.New("orchestrator: multiple reviewed identity snapshots")
 	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if compromise != nil {
+		if to != StateRevoked || reason != "keyCompromise" ||
+			completedDestination != "" || len(sideEffectPayload) != 0 || transform != nil {
+			return errors.New("orchestrator: compound key compromise needs an ordinary revocation side effect")
+		}
+		if err := validateKeyCompromiseContainment(identityID, idempotencyKey, *compromise); err != nil {
+			return err
+		}
+	}
 	subjectCSRPEM = strings.TrimSpace(subjectCSRPEM)
 	if approval != nil && issuance != nil {
 		return errors.New("orchestrator: lifecycle issuance binding must have one authority source")
@@ -388,7 +399,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				return err
 			}
 			if err := validateRetainedLifecycleApprovalEvent(retained, tenantID, identityID, to,
-				reason, idempotencyKey, subjectCSRPEM, *approval); err != nil {
+				reason, idempotencyKey, subjectCSRPEM, *approval, compromise); err != nil {
 				return err
 			}
 			return o.store.ConsumeOperationApprovalTx(ctx, tx, tenantID, *approval, eventID, retained.Time)
@@ -455,6 +466,16 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if sideEffectCompleted {
 		schemaVersion = projections.LifecycleCompletedSideEffectEventSchemaVersion
 	}
+	if compromise != nil {
+		if !hasSideEffect || sideEffectDest != "revocation.publish" {
+			return errors.New("orchestrator: compound key compromise has no CA publication intent")
+		}
+		schemaVersion = projections.LifecycleKeyCompromiseEventSchemaVersion
+		if approval == nil {
+			eventID = keyCompromiseEventID(tenantID, identityID, idempotencyKey)
+		}
+		sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
+	}
 	// Classify the claim demand from the RAW side-effect payload, before any
 	// sealing transform makes it opaque (epic A3). The classifier is injected by
 	// the composition root because vantage is the connector registry's census,
@@ -507,7 +528,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	if hasSideEffect {
 		replayPayload := append([]byte(nil), outboxPayload...)
-		if sideEffectCompleted || approval != nil || issuance != nil || (ownershipReadiness != nil && len(sideEffectPayload) == 0) {
+		if sideEffectCompleted || approval != nil || issuance != nil || compromise != nil || (ownershipReadiness != nil && len(sideEffectPayload) == 0) {
 			// V4 approval, v5 issuance, and v6 ownership-readiness events have one command body, not an
 			// opaque base64 copy inside themselves. An ownership-ready transition
 			// with an EXPLICIT side-effect body is different: its transformed body
@@ -684,6 +705,85 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					return err
 				}
 			}
+			if compromise != nil {
+				var revision, connectorType, name string
+				var targetConfig []byte
+				if err := tx.QueryRow(ctx,
+					`SELECT revision_id, type, name, config FROM deployment_targets
+					  WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, tenantID, compromise.TargetID).
+					Scan(&revision, &connectorType, &name, &targetConfig); err != nil {
+					return err
+				}
+				if revision != compromise.TargetRevision || connectorType != compromise.Connector ||
+					name != compromise.Target {
+					return ErrStaleLifecyclePreview
+				}
+				agentID, err := connector.TargetHostAgentID(targetConfig)
+				if err != nil || agentID != compromise.RequiredAgentID {
+					return ErrStaleLifecyclePreview
+				}
+				owned, err := o.store.IdentityOwnsCertificateFingerprintTx(ctx, tx, tenantID,
+					identityID, compromise.ExpectedFingerprint)
+				if err != nil {
+					return err
+				}
+				if !owned {
+					return ErrStaleLifecyclePreview
+				}
+				retained, found, err := o.log.EventByID(ctx, eventID)
+				if err != nil {
+					return err
+				}
+				var reservedID int64
+				if found {
+					if retained.TenantID != tenantID || retained.Type != evType ||
+						retained.SchemaVersion != schemaVersion {
+						return store.ErrIdempotencyConflict
+					}
+					var prior transitionPayload
+					if err := json.Unmarshal(retained.Data, &prior); err != nil {
+						return err
+					}
+					if prior.CompromiseContainment == nil || prior.CompromiseContainment.OutboxID <= 0 {
+						return store.ErrIdempotencyConflict
+					}
+					reservedID = prior.CompromiseContainment.OutboxID
+				}
+				command, err := json.Marshal(compromise)
+				if err != nil {
+					return err
+				}
+				hostKey := keyCompromiseContainmentKey(identityID, idempotencyKey)
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+					ReservedID: reservedID, TenantID: tenantID,
+					Destination:    DestinationEndpointContainment,
+					IdempotencyKey: hostKey, Payload: command,
+					EffectLane:        ConnectorTargetEffectLane(compromise.TargetID),
+					RequiredAgentRole: "host", RequiredAgentID: compromise.RequiredAgentID,
+				})
+				if err != nil {
+					return err
+				}
+				if !inserted && !found {
+					return store.ErrIdempotencyConflict
+				}
+				var outboxID int64
+				if err := tx.QueryRow(ctx,
+					`SELECT id FROM outbox WHERE tenant_id=$1 AND idempotency_key=$2 FOR UPDATE`,
+					tenantID, hostKey).Scan(&outboxID); err != nil {
+					return err
+				}
+				if reservedID != 0 && outboxID != reservedID {
+					return store.ErrIdempotencyConflict
+				}
+				requested := newEndpointContainmentRequestedV2(*compromise, outboxID,
+					endpointContainmentReceiptID(tenantID, compromise.TargetID, idempotencyKey))
+				basePayload.CompromiseContainment = &requested
+				payload, err = json.Marshal(basePayload)
+				if err != nil {
+					return err
+				}
+			}
 			ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, Time: eventTime, SchemaVersion: schemaVersion, Data: payload})
 			if err != nil {
 				return err
@@ -795,11 +895,13 @@ func validateRetainedLifecycleApprovalEvent(
 	to State,
 	reason, idempotencyKey, subjectCSRPEM string,
 	approval store.OperationApprovalUse,
+	compromise ...*EndpointContainmentRequest,
 ) error {
 	expectedType, ok := EventTypeFor(State(approval.FromState), State(approval.ToState))
 	if !ok || State(approval.ToState) != to || event.ID != approvalExecutionEventID(tenantID, approval) ||
 		event.Type != expectedType || event.TenantID != tenantID ||
-		event.SchemaVersion != projections.LifecycleApprovalEventSchemaVersion || event.Sequence == 0 {
+		(event.SchemaVersion != projections.LifecycleApprovalEventSchemaVersion &&
+			event.SchemaVersion != projections.LifecycleKeyCompromiseEventSchemaVersion) || event.Sequence == 0 {
 		return store.ErrApprovalDrifted
 	}
 	if err := projections.ValidateLifecycleApprovalEvent(event); err != nil {
@@ -823,6 +925,14 @@ func validateRetainedLifecycleApprovalEvent(
 		return err
 	}
 	if !bytes.Equal(gotApproval, wantApproval) {
+		return store.ErrApprovalDrifted
+	}
+	if len(compromise) == 1 && compromise[0] != nil {
+		if event.SchemaVersion != projections.LifecycleKeyCompromiseEventSchemaVersion ||
+			payload.CompromiseContainment == nil || payload.CompromiseContainment.request() != *compromise[0] {
+			return store.ErrApprovalDrifted
+		}
+	} else if payload.CompromiseContainment != nil {
 		return store.ErrApprovalDrifted
 	}
 	return nil
@@ -912,7 +1022,24 @@ func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Co
 			RequiredAgentRole: requiredAgentRole,
 			RequiredAgentID:   requiredAgentID,
 		}
-		return addEntry(key, candidate)
+		if err := addEntry(key, candidate); err != nil {
+			return err
+		}
+		if payload.CompromiseContainment != nil {
+			c := payload.CompromiseContainment
+			command, err := json.Marshal(c.request())
+			if err != nil {
+				return err
+			}
+			hostKey := keyCompromiseContainmentKey(payload.IdentityID, payload.IdempotencyKey)
+			return addEntry(hostKey, Entry{
+				ReservedID: c.OutboxID, TenantID: tenantID,
+				Destination: DestinationEndpointContainment, IdempotencyKey: hostKey,
+				Payload: command, EffectLane: ConnectorTargetEffectLane(c.TargetID),
+				RequiredAgentRole: "host", RequiredAgentID: c.RequiredAgentID,
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("orchestrator: collect canonical lifecycle outbox: %w", err)
@@ -1592,6 +1719,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		if err != nil {
 			return err
 		}
+		restored := 0
 		if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 			// The claim demand is COPIED from the durable side-effect record,
 			// never re-derived: a census change between enqueue and replay must
@@ -1614,12 +1742,33 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				return err
 			}
 			if inserted {
-				healed++
+				restored++
+			}
+			if pl.CompromiseContainment != nil {
+				c := pl.CompromiseContainment
+				command, err := json.Marshal(c.request())
+				if err != nil {
+					return err
+				}
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+					ReservedID: c.OutboxID, TenantID: ev.TenantID,
+					Destination:    DestinationEndpointContainment,
+					IdempotencyKey: keyCompromiseContainmentKey(pl.IdentityID, pl.IdempotencyKey),
+					Payload:        command, EffectLane: ConnectorTargetEffectLane(c.TargetID),
+					RequiredAgentRole: "host", RequiredAgentID: c.RequiredAgentID,
+				})
+				if err != nil {
+					return err
+				}
+				if inserted {
+					restored++
+				}
 			}
 			return nil
 		}); err != nil {
 			return err
 		}
+		healed += restored
 		return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 	})
 	if err != nil {
@@ -1736,6 +1885,19 @@ func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest 
 		payload, err := json.Marshal(canonical)
 		if err != nil {
 			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): derive canonical outbox payload: %w", ev.Type, ev.Sequence, err)
+		}
+		return pl.SideEffect.IdempotencyKey, payload, nil
+	}
+	if ev.SchemaVersion == projections.LifecycleKeyCompromiseEventSchemaVersion {
+		if len(pl.SideEffect.Payload) != 0 || pl.CompromiseContainment == nil {
+			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): key compromise has no exact second intent", ev.Type, ev.Sequence)
+		}
+		canonical := pl
+		canonical.SideEffect = nil
+		canonical.CompromiseContainment = nil
+		payload, err := json.Marshal(canonical)
+		if err != nil {
+			return "", nil, err
 		}
 		return pl.SideEffect.IdempotencyKey, payload, nil
 	}

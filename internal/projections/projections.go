@@ -333,6 +333,11 @@ const LifecycleOwnershipReadinessEventSchemaVersion = 6
 // execute that effect a second time.
 const LifecycleCompletedSideEffectEventSchemaVersion = 7
 
+// LifecycleKeyCompromiseEventSchemaVersion binds CA publication and an exact
+// host containment job to one reviewed revocation event. Each receiver keeps
+// its own result; the queued host receipt is projected from this same event.
+const LifecycleKeyCompromiseEventSchemaVersion = 8
+
 // OwnerDepthEventSchemaVersion is the first owner.created/owner.updated shape
 // that carries the complete I1 application model. V1 remains readable and is
 // deliberately applied as a basic-field update so absent legacy fields cannot
@@ -2822,16 +2827,32 @@ func RestoreDrillAttestationID(tenantID, drillID string) string {
 // read an indexed, tenant-scoped projection instead of replaying the whole log.
 // (The contract is the JSON, so the projector does not import the orchestrator.)
 type identityTransition struct {
-	IdentityID         string                                  `json:"identity_id"`
-	From               string                                  `json:"from"`
-	To                 string                                  `json:"to"`
-	Reason             string                                  `json:"reason,omitempty"`
-	IdempotencyKey     string                                  `json:"idempotency_key,omitempty"`
-	SubjectCSRPEM      string                                  `json:"subject_csr_pem,omitempty"`
-	SideEffect         *identityTransitionEffect               `json:"side_effect,omitempty"`
-	Approval           *store.OperationApprovalUse             `json:"approval,omitempty"`
-	Issuance           *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
-	OwnershipReadiness *store.OwnershipReadinessEvidence       `json:"ownership_readiness,omitempty"`
+	IdentityID            string                                  `json:"identity_id"`
+	From                  string                                  `json:"from"`
+	To                    string                                  `json:"to"`
+	Reason                string                                  `json:"reason,omitempty"`
+	IdempotencyKey        string                                  `json:"idempotency_key,omitempty"`
+	SubjectCSRPEM         string                                  `json:"subject_csr_pem,omitempty"`
+	SideEffect            *identityTransitionEffect               `json:"side_effect,omitempty"`
+	CompromiseContainment *identityCompromiseContainment          `json:"compromise_containment,omitempty"`
+	Approval              *store.OperationApprovalUse             `json:"approval,omitempty"`
+	Issuance              *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+	OwnershipReadiness    *store.OwnershipReadinessEvidence       `json:"ownership_readiness,omitempty"`
+}
+
+type identityCompromiseContainment struct {
+	TargetID            string `json:"target_id"`
+	TargetRevision      string `json:"target_revision"`
+	IdentityID          string `json:"identity_id"`
+	ExpectedFingerprint string `json:"expected_fingerprint"`
+	RequiredAgentID     string `json:"required_agent_id"`
+	Connector           string `json:"connector"`
+	Target              string `json:"target"`
+	Reason              string `json:"reason"`
+	RequestedBy         string `json:"requested_by"`
+	IdempotencyKey      string `json:"idempotency_key"`
+	OutboxID            int64  `json:"outbox_id"`
+	ReceiptID           string `json:"receipt_id"`
 }
 
 // identityTransitionEffect mirrors the lifecycle event's durable AN-6 intent
@@ -3458,7 +3479,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityCreated:                          {1: true},
 	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true},
 	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
-	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleKeyCompromiseEventSchemaVersion: true},
 	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
 	EventIdentityRenewalFailed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
@@ -6346,6 +6367,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			}); err != nil {
 				return err
 			}
+			if pl.CompromiseContainment != nil {
+				c := pl.CompromiseContainment
+				outboxID, identityID := c.OutboxID, c.IdentityID
+				if err := p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+					ID: c.ReceiptID, TenantID: e.TenantID, OutboxID: &outboxID,
+					IdentityID: &identityID, EventSequence: e.Sequence,
+					Destination: "endpoint.contain", Connector: c.Connector,
+					Target: c.Target, Fingerprint: c.ExpectedFingerprint,
+					Status: "containment_queued", Reason: "host containment queued",
+					Detail:         "Awaiting the exact enrolled host agent; no stop or listener verification has happened.",
+					IdempotencyKey: c.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
+				}); err != nil {
+					return err
+				}
+			}
 			if pl.To == "revoked" || pl.To == "retired" {
 				_, err := p.stopIdentityWorkTx(ctx, tx, e.TenantID, pl.IdentityID, time.Now().UTC())
 				return err
@@ -6563,10 +6599,38 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 	hasApproval := pl.Approval != nil
 	hasIssuance := pl.Issuance != nil
 	schemaVersion := schemaVersionOf(e)
+	if schemaVersion != LifecycleKeyCompromiseEventSchemaVersion && pl.CompromiseContainment != nil {
+		return fmt.Errorf("projections: %s compromise containment payload/schema mismatch", e.Type)
+	}
 	if pl.SideEffect != nil && pl.SideEffect.Completed && schemaVersion != LifecycleCompletedSideEffectEventSchemaVersion {
 		return fmt.Errorf("projections: %s completed side-effect payload/schema mismatch", e.Type)
 	}
 	switch schemaVersion {
+	case LifecycleKeyCompromiseEventSchemaVersion:
+		c := pl.CompromiseContainment
+		if hasIssuance || c == nil || e.Type != EventIdentityRevoked ||
+			pl.To != "revoked" || pl.Reason != "keyCompromise" || pl.IdempotencyKey == "" ||
+			pl.SideEffect == nil || pl.SideEffect.Completed ||
+			pl.SideEffect.Destination != "revocation.publish" ||
+			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
+			len(pl.SideEffect.Payload) != 0 ||
+			c.IdentityID != pl.IdentityID || c.IdempotencyKey != pl.IdempotencyKey ||
+			c.Reason != pl.Reason || c.TargetID == "" || c.TargetRevision == "" ||
+			c.RequiredAgentID == "" || !connector.CanRollbackOnHost(c.Connector) ||
+			c.Target == "" || c.RequestedBy == "" || c.OutboxID <= 0 ||
+			c.ReceiptID != uuid.NewSHA1(uuid.NameSpaceOID,
+				[]byte("endpoint-containment-receipt\x00"+e.TenantID+"\x00"+c.TargetID+"\x00"+c.IdempotencyKey)).String() ||
+			(!hasApproval && e.ID != uuid.NewSHA1(uuid.NameSpaceOID,
+				[]byte("identity-key-compromise\x00"+e.TenantID+"\x00"+pl.IdentityID+"\x00"+pl.IdempotencyKey)).String()) {
+			return fmt.Errorf("projections: %s key-compromise authority is incomplete", e.Type)
+		}
+		if raw, err := hex.DecodeString(c.ExpectedFingerprint); err != nil || len(raw) != 32 ||
+			strings.ToLower(c.ExpectedFingerprint) != c.ExpectedFingerprint {
+			return fmt.Errorf("projections: %s exact compromised fingerprint is invalid", e.Type)
+		}
+		if !hasApproval {
+			return nil
+		}
 	case LifecycleApprovalEventSchemaVersion:
 		if !hasApproval || hasIssuance {
 			return fmt.Errorf("projections: %s approval payload/schema mismatch", e.Type)
@@ -6663,7 +6727,8 @@ func ValidateLifecycleApprovalEvent(e events.Event) error {
 	if schemaVersionOf(e) != LifecycleApprovalEventSchemaVersion &&
 		schemaVersionOf(e) != LifecycleIssuanceEventSchemaVersion &&
 		schemaVersionOf(e) != LifecycleOwnershipReadinessEventSchemaVersion &&
-		schemaVersionOf(e) != LifecycleCompletedSideEffectEventSchemaVersion {
+		schemaVersionOf(e) != LifecycleCompletedSideEffectEventSchemaVersion &&
+		schemaVersionOf(e) != LifecycleKeyCompromiseEventSchemaVersion {
 		return nil
 	}
 	var payload identityTransition

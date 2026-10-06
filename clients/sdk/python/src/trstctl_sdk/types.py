@@ -5877,6 +5877,82 @@ KMIPPosture = TypedDict(
     total=False,
 )
 
+KeyCompromiseCertificate = TypedDict(
+    'KeyCompromiseCertificate',
+    {
+        'authority': str,
+        'fingerprint': str,
+        'id': str,
+        'serial': str,
+    },
+    total=False,
+)
+
+KeyCompromiseExecutionRequest = TypedDict(
+    'KeyCompromiseExecutionRequest',
+    {
+        'connector': str,
+        'expected_fingerprint': str,
+        'expected_version': int,
+        'identity_id': str,
+        'preview_fingerprint': str,
+        'required_agent_id': str,
+        'target_id': str,
+        'target_name': str,
+        'target_revision': str,
+    },
+    total=False,
+)
+
+KeyCompromisePlan = TypedDict(
+    'KeyCompromisePlan',
+    {
+        'capability': str,
+        'certificates': list[dict[str, Any]],
+        'effect_free': bool,
+        'execution_effects': list[str],
+        'expected_version': int,
+        'identity_id': str,
+        'preview_fingerprint': str,
+        'ready': bool,
+        'required_permissions': list[str],
+        'target': dict[str, Any],
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
+KeyCompromisePlanRequest = TypedDict(
+    'KeyCompromisePlanRequest',
+    {
+        'target_id': str,
+    },
+    total=False,
+)
+
+KeyCompromiseResult = TypedDict(
+    'KeyCompromiseResult',
+    {
+        'containment': dict[str, Any],
+        'identity': dict[str, Any],
+        'revocation': dict[str, Any],
+    },
+    total=False,
+)
+
+KeyCompromiseRevocationAttempt = TypedDict(
+    'KeyCompromiseRevocationAttempt',
+    {
+        'attempts': int,
+        'delivered_at': str,
+        'destination': str,
+        'id': int,
+        'last_error': str,
+        'status': str,
+    },
+    total=False,
+)
+
 KubernetesCSRSupport = TypedDict(
     'KubernetesCSRSupport',
     {

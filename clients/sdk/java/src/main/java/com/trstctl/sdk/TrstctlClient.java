@@ -145,6 +145,30 @@ public final class TrstctlClient {
     return List.of();
   }
 
+  /** Read-only review of exact CA records and one currently served host leaf. */
+  public Map<String, Object> previewKeyCompromise(String identityId, String targetId)
+      throws IOException, InterruptedException, ProblemException {
+    return Json.asObject(request("POST", "/api/v1/identities/" + encode(identityId) + "/compromise/preview",
+        Map.of("target_id", targetId), Map.of(), null));
+  }
+
+  /** Queue two independently observed effects from the complete reviewed plan. */
+  public Map<String, Object> executeKeyCompromise(String identityId, Map<String, ?> reviewed, String idempotencyKey)
+      throws IOException, InterruptedException, ProblemException {
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+      throw new IllegalArgumentException("key compromise requires a caller-stable Idempotency-Key");
+    }
+    return Json.asObject(request("POST", "/api/v1/identities/" + encode(identityId) + "/compromise",
+        reviewed, Map.of(), idempotencyKey));
+  }
+
+  /** Read the CA job and host receipt by the original request key. */
+  public Map<String, Object> keyCompromiseStatus(String identityId, String requestKey)
+      throws IOException, InterruptedException, ProblemException {
+    return Json.asObject(request("GET", "/api/v1/identities/" + encode(identityId) + "/compromise",
+        null, Map.of("request_key", requestKey), null));
+  }
+
   public PkiSecret issuePkiSecret(String commonName, int ttlSeconds, String idempotencyKey)
       throws IOException, InterruptedException, ProblemException {
     Map<String, Object> body = new LinkedHashMap<>();

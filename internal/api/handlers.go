@@ -149,6 +149,7 @@ func toIdentityResponse(it store.Identity) identityResponse {
 
 type transitionRequest struct {
 	reviewedIdentity *store.Identity
+	compromise       *orchestrator.EndpointContainmentRequest
 	To               string  `json:"to"`
 	Reason           string  `json:"reason"`
 	ExpectedVersion  *uint64 `json:"expected_version,omitempty"`

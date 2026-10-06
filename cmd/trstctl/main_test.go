@@ -282,6 +282,105 @@ func TestConnectorContainmentCLIRequiresReviewedExactPreview(t *testing.T) {
 	}
 }
 
+func TestConnectorCompromiseCLIUsesOneReviewedCommand(t *testing.T) {
+	const identityID = "22222222-2222-4222-8222-222222222222"
+	const targetID = "11111111-1111-4111-8111-111111111111"
+	const agentID = "33333333-3333-4333-8333-333333333333"
+	preview := map[string]any{
+		"ready": true, "effect_free": true, "identity_id": identityID,
+		"expected_version": 9, "preview_fingerprint": strings.Repeat("b", 64),
+		"target": map[string]any{
+			"target_id": targetID, "target_name": "qa-apache", "target_revision": "revision-2",
+			"connector": "apache", "identity_id": identityID,
+			"expected_fingerprint": strings.Repeat("a", 64), "required_agent_id": agentID,
+		},
+	}
+	var posted map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/identities/"+identityID+"/compromise/preview" &&
+			r.URL.Path != "/api/v1/identities/"+identityID+"/compromise" {
+			t.Errorf("wrong compromise route: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/identities/"+identityID+"/compromise" {
+			if r.URL.Query().Get("request_key") != "compromise-incident-1" {
+				t.Errorf("status did not use original request key: %q", r.URL.RawQuery)
+			}
+			_, _ = io.WriteString(w, `{"identity":{"status":"revoked"},"revocation":{"id":41,"destination":"revocation.publish","status":"pending","attempts":0},"containment":{"status":"containment_queued"}}`)
+			return
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("wrong method: %s", r.Method)
+		}
+		if strings.HasSuffix(r.URL.Path, "/preview") {
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["target_id"] != targetID {
+				t.Errorf("preview did not name exact target: %+v %v", body, err)
+			}
+			_ = json.NewEncoder(w).Encode(preview)
+			return
+		}
+		if r.Header.Get("Idempotency-Key") != "compromise-incident-1" {
+			t.Error("execution lost incident idempotency key")
+		}
+		if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
+			t.Errorf("decode execution: %v", err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"identity":{"status":"revoked"},"containment":{"status":"containment_queued"}}`)
+	}))
+	defer ts.Close()
+	env := envFunc(map[string]string{
+		"TRSTCTL_URL": ts.URL, "TRSTCTL_TOKEN": "local-test-token",
+		"TRSTCTL_TENANT":          "44444444-4444-4444-8444-444444444444",
+		"TRSTCTL_IDEMPOTENCY_KEY": "compromise-incident-1",
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"connector", "target", "compromise-preview",
+		"--identity", identityID, "--target", targetID}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	previewFile := filepath.Join(t.TempDir(), "reviewed-compromise.json")
+	if err := os.WriteFile(previewFile, stdout.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	if err := run(context.Background(), []string{"connector", "target", "compromise",
+		"--preview-file", previewFile}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	stdout.Reset()
+	if err := run(context.Background(), []string{"connector", "target", "compromise-status",
+		"--identity", identityID, "--request-key", "compromise-incident-1"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("read independent effects: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"destination":"revocation.publish"`) {
+		t.Fatalf("status omitted CA job: %s", stdout.String())
+	}
+	for key, want := range map[string]any{
+		"target_id": targetID, "target_name": "qa-apache", "target_revision": "revision-2",
+		"connector": "apache", "identity_id": identityID,
+		"expected_fingerprint": strings.Repeat("a", 64), "required_agent_id": agentID,
+		"expected_version": float64(9), "preview_fingerprint": strings.Repeat("b", 64),
+	} {
+		if posted[key] != want {
+			t.Fatalf("execution %s=%v, want %v", key, posted[key], want)
+		}
+	}
+	posted = nil
+	preview["ready"] = false
+	if raw, err := json.Marshal(preview); err != nil {
+		t.Fatal(err)
+	} else if err := os.WriteFile(previewFile, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"connector", "target", "compromise",
+		"--preview-file", previewFile}, env, &stdout, &stderr); err == nil || posted != nil {
+		t.Fatalf("unready review dispatched command: %v %+v", err, posted)
+	}
+}
+
 func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	type requestSeen struct {
 		Method  string

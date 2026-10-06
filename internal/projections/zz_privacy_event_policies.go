@@ -438,6 +438,21 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	identityTransitionV7Rules = append(identityTransitionV7Rules,
 		privacyRule("/side_effect/completed", opaque))
 	identityTransitionV7 := privacyRules(identityTransitionV7Rules...)
+	identityTransitionV8Rules := append([]events.PrivacyFieldRule(nil), identityTransitionV4.Rules...)
+	identityTransitionV8Rules = append(identityTransitionV8Rules,
+		privacyRule("/compromise_containment/target_id", opaque),
+		privacyRule("/compromise_containment/target_revision", opaque),
+		privacyRule("/compromise_containment/identity_id", opaque),
+		privacyRule("/compromise_containment/expected_fingerprint", opaque),
+		privacyRule("/compromise_containment/required_agent_id", opaque),
+		privacyRule("/compromise_containment/connector", opaque),
+		privacyRule("/compromise_containment/target", token),
+		privacyRule("/compromise_containment/reason", clear),
+		privacyRule("/compromise_containment/requested_by", exact),
+		privacyRule("/compromise_containment/idempotency_key", opaque),
+		privacyRule("/compromise_containment/outbox_id", opaque),
+		privacyRule("/compromise_containment/receipt_id", opaque))
+	identityTransitionV8 := privacyRules(identityTransitionV8Rules...)
 	agentHeartbeat := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/version", opaque), privacyRule("/status", opaque),
@@ -937,6 +952,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleApprovalEventSchemaVersion}] = identityTransitionV4
 	}
 	policies[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = identityTransitionV5
+	policies[privacyEventPolicyKey{EventType: EventIdentityRevoked, Version: LifecycleKeyCompromiseEventSchemaVersion}] = identityTransitionV8
 	return policies
 }
 
@@ -1339,6 +1355,12 @@ type privacyIdentityTransitionV7 struct {
 	OwnershipReadiness *store.OwnershipReadinessEvidence `json:"ownership_readiness,omitempty"`
 }
 
+type privacyIdentityTransitionV8 struct {
+	privacyIdentityTransitionV3
+	Approval              *store.OperationApprovalUse    `json:"approval,omitempty"`
+	CompromiseContainment *identityCompromiseContainment `json:"compromise_containment"`
+}
+
 // Legacy CA hierarchy events were audit breadcrumbs with event-specific wire
 // labels. They deliberately do not reuse CAAuthorityCreated: that v2 snapshot is
 // a different schema even where a few coordinate names overlap.
@@ -1594,6 +1616,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleApprovalEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV4]()
 	}
 	shapes[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV5]()
+	shapes[privacyEventPolicyKey{EventType: EventIdentityRevoked, Version: LifecycleKeyCompromiseEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV8]()
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV6]()
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
@@ -565,27 +566,25 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 		"outbox-enqueue-if-absent\x1f"+e.TenantID+"\x1f"+e.IdempotencyKey); err != nil {
 		return false, fmt.Errorf("orchestrator: lock enqueue-if-absent outbox: %w", err)
 	}
-	insertSQL := `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
-		 SELECT $1, $2, $3, $4, $5, $6, nullif($7, '')::uuid
-		 WHERE NOT EXISTS (
-		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
-		 )`
 	if e.ReservedID < 0 {
 		return false, fmt.Errorf("orchestrator: negative reserved outbox id")
 	}
+	args := []any{e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole, e.RequiredAgentID}
+	var tag pgconn.CommandTag
 	if e.ReservedID != 0 {
-		insertSQL = `INSERT INTO outbox (id, tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+		tag, err = tx.Exec(ctx, `INSERT INTO outbox (id, tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
 		 OVERRIDING SYSTEM VALUE
 		 SELECT $8, $1, $2, $3, $4, $5, $6, nullif($7, '')::uuid
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
-		 )`
+		 )`, append(args, e.ReservedID)...)
+	} else {
+		tag, err = tx.Exec(ctx, `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+		 SELECT $1, $2, $3, $4, $5, $6, nullif($7, '')::uuid
+		 WHERE NOT EXISTS (
+		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
+		 )`, args...)
 	}
-	args := []any{e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole, e.RequiredAgentID}
-	if e.ReservedID != 0 {
-		args = append(args, e.ReservedID)
-	}
-	tag, err := tx.Exec(ctx, insertSQL, args...)
 	if err != nil {
 		return false, fmt.Errorf("orchestrator: enqueue-if-absent outbox: %w", err)
 	}

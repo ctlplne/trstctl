@@ -288,7 +288,7 @@ func TestOutboxEnqueuesExecuteOnATransactionHandle(t *testing.T) {
 // not need a row. A row that stops matching means an enqueue path moved: confirm the
 // move was intended, then update the row.
 var outboxEnqueueExpectedSites = map[string]int{
-	"internal/orchestrator/outbox.go":                     2, // canonical Enqueue + EnqueueIfAbsent
+	"internal/orchestrator/outbox.go":                     3, // Enqueue plus both literal transaction-bound EnqueueIfAbsent variants
 	"internal/store/code_signing.go":                      1,
 	"internal/store/managed_key.go":                       1,
 	"internal/store/notification_delivery.go":             1,

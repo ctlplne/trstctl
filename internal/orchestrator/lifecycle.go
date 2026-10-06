@@ -174,9 +174,13 @@ type transitionPayload struct {
 	// Absent means the legacy path — the control plane generates the subject key
 	// itself — which is retained for one release train behind a recorded
 	// deprecation event.
-	SubjectCSRPEM string                      `json:"subject_csr_pem,omitempty"`
-	SideEffect    *transitionSideEffect       `json:"side_effect,omitempty"`
-	Approval      *store.OperationApprovalUse `json:"approval,omitempty"`
+	SubjectCSRPEM string                `json:"subject_csr_pem,omitempty"`
+	SideEffect    *transitionSideEffect `json:"side_effect,omitempty"`
+	// CompromiseContainment is a second, independently delivered effect of one
+	// reviewed key-compromise command. Its exact host/outbox binding survives an
+	// event append followed by a PostgreSQL rollback.
+	CompromiseContainment *endpointContainmentRequestedV2 `json:"compromise_containment,omitempty"`
+	Approval              *store.OperationApprovalUse     `json:"approval,omitempty"`
 	// Issuance is the exact profile revision and TTL used by an issuance that
 	// does not require dual control. Approval-gated issuance carries the same
 	// binding inside Approval instead, so each command has one canonical copy.

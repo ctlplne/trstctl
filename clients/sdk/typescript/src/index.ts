@@ -32,6 +32,9 @@ export type Identity = Schemas["Identity"];
 export type IdentityRequest = Schemas["IdentityRequest"];
 export type IdentityList = Schemas["IdentityList"];
 export type TransitionRequest = Schemas["TransitionRequest"];
+export type KeyCompromisePlan = Schemas["KeyCompromisePlan"];
+export type KeyCompromiseExecutionRequest = Schemas["KeyCompromiseExecutionRequest"];
+export type KeyCompromiseResult = Schemas["KeyCompromiseResult"];
 export type Certificate = Schemas["Certificate"];
 export type CertificateHealthDashboard = Schemas["CertificateHealthDashboard"];
 export type CertificateList = Schemas["CertificateList"];
@@ -295,6 +298,27 @@ export class TrstctlClient {
       method: "POST",
       body,
       idempotencyKey,
+    });
+  }
+
+  /** Effect-free review of exact CA records and the currently served host leaf. */
+  previewKeyCompromise(identityId: string, targetId: string): Promise<KeyCompromisePlan> {
+    return this.request<KeyCompromisePlan>(`/api/v1/identities/${encodeURIComponent(identityId)}/compromise/preview`, {
+      method: "POST", body: { target_id: targetId },
+    });
+  }
+
+  /** Queue separate CA and host effects from the complete reviewed bindings. */
+  executeKeyCompromise(identityId: string, reviewed: KeyCompromiseExecutionRequest, idempotencyKey: string): Promise<KeyCompromiseResult> {
+    return this.request<KeyCompromiseResult>(`/api/v1/identities/${encodeURIComponent(identityId)}/compromise`, {
+      method: "POST", body: reviewed, idempotencyKey,
+    });
+  }
+
+  /** Read both effects by the original request key; acceptance is not proof. */
+  keyCompromiseStatus(identityId: string, requestKey: string): Promise<KeyCompromiseResult> {
+    return this.request<KeyCompromiseResult>(`/api/v1/identities/${encodeURIComponent(identityId)}/compromise`, {
+      query: { request_key: requestKey },
     });
   }
 

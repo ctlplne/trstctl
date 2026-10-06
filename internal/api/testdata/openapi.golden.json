@@ -17509,6 +17509,201 @@
         ],
         "type": "object"
       },
+      "KeyCompromiseCertificate": {
+        "properties": {
+          "authority": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fingerprint",
+          "serial",
+          "authority"
+        ],
+        "type": "object"
+      },
+      "KeyCompromiseExecutionRequest": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_name": {
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "target_revision",
+          "target_name",
+          "connector",
+          "identity_id",
+          "expected_fingerprint",
+          "required_agent_id",
+          "expected_version",
+          "preview_fingerprint"
+        ],
+        "type": "object"
+      },
+      "KeyCompromisePlan": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "certificates": {
+            "items": {
+              "$ref": "#/components/schemas/KeyCompromiseCertificate"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execution_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/EndpointContainmentPreview"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "identity_id",
+          "expected_version",
+          "target",
+          "certificates",
+          "preview_fingerprint",
+          "required_permissions",
+          "execution_effects",
+          "verification_steps"
+        ],
+        "type": "object"
+      },
+      "KeyCompromisePlanRequest": {
+        "properties": {
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "KeyCompromiseResult": {
+        "properties": {
+          "containment": {
+            "$ref": "#/components/schemas/ConnectorDelivery"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "revocation": {
+            "$ref": "#/components/schemas/KeyCompromiseRevocationAttempt"
+          }
+        },
+        "required": [
+          "identity",
+          "revocation",
+          "containment"
+        ],
+        "type": "object"
+      },
+      "KeyCompromiseRevocationAttempt": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "delivered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "destination",
+          "status",
+          "attempts"
+        ],
+        "type": "object"
+      },
       "KubernetesCSRSupport": {
         "properties": {
           "api_group": {
@@ -45871,6 +46066,207 @@
         ],
         "summary": "Approve a pending privileged action (dual control)",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/identities/{id}/compromise": {
+      "get": {
+        "operationId": "readKeyCompromise",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCompromiseResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read separate CA and host effects for one retained key-compromise command",
+        "x-trstctl-permission": "identities:read"
+      },
+      "post": {
+        "operationId": "executeKeyCompromise",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCompromiseExecutionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCompromiseResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue CA revocation and exact host containment in one reviewed command",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/identities/{id}/compromise/preview": {
+      "post": {
+        "operationId": "previewKeyCompromise",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCompromisePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCompromisePlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review exact CA revocation and host containment for one compromised X.509 identity",
+        "x-trstctl-permission": "identities:write"
       }
     },
     "/api/v1/identities/{id}/connector-target": {

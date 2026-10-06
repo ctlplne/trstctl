@@ -35,14 +35,14 @@ type connectorCLIConfig struct {
 
 func runConnector(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 || args[0] != "target" {
-		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback|contain-preview|contain>")
+		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback|contain-preview|contain|compromise-preview|compromise|compromise-status>")
 	}
 	return runConnectorTarget(ctx, args[1:], getenv, stdout, stderr)
 }
 
 func runConnectorTarget(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 {
-		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback|contain-preview|contain>")
+		return errors.New("usage: trstctl connector target <list|get|create|update|delete|bind|test|deploy|rollback|contain-preview|contain|compromise-preview|compromise|compromise-status>")
 	}
 	cfg, err := connectorCLIConfigFromEnv(getenv)
 	if err != nil {
@@ -107,9 +107,113 @@ func runConnectorTarget(ctx context.Context, args []string, getenv func(string) 
 		return runConnectorContainmentPreview(ctx, stdout, stderr, cfg, args[1:])
 	case "contain":
 		return runConnectorContainment(ctx, stdout, stderr, cfg, args[1:])
+	case "compromise-preview":
+		return runConnectorCompromisePreview(ctx, stdout, stderr, cfg, args[1:])
+	case "compromise":
+		return runConnectorCompromise(ctx, stdout, stderr, cfg, args[1:])
+	case "compromise-status":
+		return runConnectorCompromiseStatus(ctx, stdout, stderr, cfg, args[1:])
 	default:
 		return fmt.Errorf("unknown connector target command %q", args[0])
 	}
+}
+
+func runConnectorCompromisePreview(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {
+	fs := flag.NewFlagSet("trstctl connector target compromise-preview", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	identityID := fs.String("identity", "", "exact compromised lifecycle identity id")
+	targetID := fs.String("target", "", "exact enrolled host target id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*identityID) == "" || strings.TrimSpace(*targetID) == "" {
+		return errors.New("connector target compromise-preview: --identity and --target are required")
+	}
+	return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost,
+		"/api/v1/identities/"+url.PathEscape(*identityID)+"/compromise/preview",
+		map[string]string{"target_id": *targetID}, false)
+}
+
+// The CLI reads the complete effect-free preview that the operator saved and
+// reviewed. It copies only public exact bindings; the server repeats all CA,
+// identity, target, agent, and leaf checks under the mutation boundary.
+func runConnectorCompromise(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {
+	if cfg.idempotencyKey == "" {
+		return errors.New("connector target compromise: set --idempotency-key or TRSTCTL_IDEMPOTENCY_KEY so both effects can be followed")
+	}
+	fs := flag.NewFlagSet("trstctl connector target compromise", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	previewFile := fs.String("preview-file", "", "path to reviewed compromise-preview JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*previewFile) == "" {
+		return errors.New("connector target compromise: --preview-file is required")
+	}
+	file, err := os.Open(*previewFile) // #nosec G304 -- the operator names their reviewed public preview file (CWE-22)
+	if err != nil {
+		return fmt.Errorf("read key-compromise preview: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err != nil || len(raw) > 1<<20 {
+		return errors.New("connector target compromise: preview file is unreadable or larger than 1 MiB")
+	}
+	var preview struct {
+		Ready              bool   `json:"ready"`
+		EffectFree         bool   `json:"effect_free"`
+		IdentityID         string `json:"identity_id"`
+		ExpectedVersion    uint64 `json:"expected_version"`
+		PreviewFingerprint string `json:"preview_fingerprint"`
+		Target             struct {
+			TargetID            string `json:"target_id"`
+			TargetName          string `json:"target_name"`
+			TargetRevision      string `json:"target_revision"`
+			Connector           string `json:"connector"`
+			IdentityID          string `json:"identity_id"`
+			ExpectedFingerprint string `json:"expected_fingerprint"`
+			RequiredAgentID     string `json:"required_agent_id"`
+		} `json:"target"`
+	}
+	if err := json.Unmarshal(raw, &preview); err != nil {
+		return fmt.Errorf("connector target compromise: invalid preview JSON: %w", err)
+	}
+	if !preview.Ready || !preview.EffectFree || preview.IdentityID == "" ||
+		preview.Target.IdentityID != preview.IdentityID || preview.Target.TargetID == "" ||
+		preview.Target.TargetRevision == "" || preview.Target.TargetName == "" ||
+		preview.Target.Connector == "" || preview.Target.ExpectedFingerprint == "" ||
+		preview.Target.RequiredAgentID == "" || preview.PreviewFingerprint == "" {
+		return errors.New("connector target compromise: preview is unready or lacks an exact host/identity binding")
+	}
+	body := map[string]any{
+		"target_id":            preview.Target.TargetID,
+		"target_revision":      preview.Target.TargetRevision,
+		"target_name":          preview.Target.TargetName,
+		"connector":            preview.Target.Connector,
+		"identity_id":          preview.IdentityID,
+		"expected_fingerprint": preview.Target.ExpectedFingerprint,
+		"required_agent_id":    preview.Target.RequiredAgentID,
+		"expected_version":     preview.ExpectedVersion,
+		"preview_fingerprint":  preview.PreviewFingerprint,
+	}
+	return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost,
+		"/api/v1/identities/"+url.PathEscape(preview.IdentityID)+"/compromise", body, true)
+}
+
+func runConnectorCompromiseStatus(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {
+	fs := flag.NewFlagSet("trstctl connector target compromise-status", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	identityID := fs.String("identity", "", "exact compromised lifecycle identity id")
+	requestKey := fs.String("request-key", "", "original key used for the compound command")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *identityID == "" || *requestKey == "" {
+		return errors.New("connector target compromise-status: --identity and --request-key are required")
+	}
+	query := url.Values{"request_key": {*requestKey}}
+	return connectorCLIRequest(ctx, stdout, cfg, http.MethodGet,
+		"/api/v1/identities/"+url.PathEscape(*identityID)+"/compromise?"+query.Encode(), nil, false)
 }
 
 func runConnectorContainmentPreview(ctx context.Context, stdout, stderr io.Writer, cfg connectorCLIConfig, args []string) error {

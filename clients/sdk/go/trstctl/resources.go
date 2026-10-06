@@ -4,6 +4,7 @@ package trstctl
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,6 +64,71 @@ type IdentityRequest struct {
 type TransitionRequest struct {
 	To     string `json:"to"` // issued | deployed | renewing | revoked | retired (required)
 	Reason string `json:"reason,omitempty"`
+}
+
+// KeyCompromisePlan is an effect-free review of exact CA records and one
+// currently served host leaf. The caller must copy its bindings into the
+// execution request; the server checks them again before queuing work.
+type KeyCompromisePlan struct {
+	Capability      string `json:"capability"`
+	Ready           bool   `json:"ready"`
+	EffectFree      bool   `json:"effect_free"`
+	IdentityID      string `json:"identity_id"`
+	ExpectedVersion uint64 `json:"expected_version"`
+	Target          struct {
+		TargetID            string `json:"target_id"`
+		TargetName          string `json:"target_name"`
+		TargetRevision      string `json:"target_revision"`
+		Connector           string `json:"connector"`
+		ExpectedFingerprint string `json:"expected_fingerprint"`
+		RequiredAgentID     string `json:"required_agent_id"`
+	} `json:"target"`
+	Certificates []struct {
+		ID          string `json:"id"`
+		Fingerprint string `json:"fingerprint"`
+		Serial      string `json:"serial"`
+		Authority   string `json:"authority"`
+	} `json:"certificates"`
+	PreviewFingerprint  string   `json:"preview_fingerprint"`
+	RequiredPermissions []string `json:"required_permissions"`
+	ExecutionEffects    []string `json:"execution_effects"`
+	VerificationSteps   []string `json:"verification_steps"`
+}
+
+// KeyCompromiseExecutionRequest carries every exact binding from a ready plan.
+type KeyCompromiseExecutionRequest struct {
+	TargetID            string `json:"target_id"`
+	TargetRevision      string `json:"target_revision"`
+	TargetName          string `json:"target_name"`
+	Connector           string `json:"connector"`
+	IdentityID          string `json:"identity_id"`
+	ExpectedFingerprint string `json:"expected_fingerprint"`
+	RequiredAgentID     string `json:"required_agent_id"`
+	ExpectedVersion     uint64 `json:"expected_version"`
+	PreviewFingerprint  string `json:"preview_fingerprint"`
+}
+
+// KeyCompromiseResult reports the CA job and host receipt independently.
+// A delivered CA command still needs signed revocation and client proof.
+type KeyCompromiseResult struct {
+	Identity   Identity `json:"identity"`
+	Revocation struct {
+		ID          int64  `json:"id"`
+		Destination string `json:"destination"`
+		Status      string `json:"status"`
+		Attempts    int    `json:"attempts"`
+		LastError   string `json:"last_error,omitempty"`
+		DeliveredAt string `json:"delivered_at,omitempty"`
+	} `json:"revocation"`
+	Containment struct {
+		ID          string `json:"id"`
+		OutboxID    int64  `json:"outbox_id"`
+		IdentityID  string `json:"identity_id"`
+		Destination string `json:"destination"`
+		Fingerprint string `json:"fingerprint"`
+		Status      string `json:"status"`
+		Detail      string `json:"detail,omitempty"`
+	} `json:"containment"`
 }
 
 // Certificate is an issued/discovered X.509 certificate in inventory.
@@ -222,6 +288,45 @@ func (c *Client) transitionIdentity(ctx context.Context, id, to, reason, key str
 	body := TransitionRequest{To: to, Reason: reason}
 	err := c.do(ctx, http.MethodPost, "/api/v1/identities/"+url.PathEscape(id)+"/transitions",
 		requestOptions{body: body, idempotencyKey: key}, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PreviewKeyCompromise reviews both receiver effects without creating work.
+func (c *Client) PreviewKeyCompromise(ctx context.Context, identityID, targetID string) (*KeyCompromisePlan, error) {
+	var out KeyCompromisePlan
+	err := c.do(ctx, http.MethodPost, "/api/v1/identities/"+url.PathEscape(identityID)+"/compromise/preview",
+		requestOptions{body: map[string]string{"target_id": targetID}}, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ExecuteKeyCompromise queues one reviewed compound command under a caller-
+// stable key. Its result is acceptance, not a claim that either receiver ran.
+func (c *Client) ExecuteKeyCompromise(ctx context.Context, identityID string,
+	reviewed KeyCompromiseExecutionRequest, key string) (*KeyCompromiseResult, error) {
+	if key == "" {
+		return nil, errors.New("trstctl: key compromise requires a caller-stable Idempotency-Key")
+	}
+	var out KeyCompromiseResult
+	err := c.do(ctx, http.MethodPost, "/api/v1/identities/"+url.PathEscape(identityID)+"/compromise",
+		requestOptions{body: reviewed, idempotencyKey: key}, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// KeyCompromiseStatus reads both receiver outcomes by the original key.
+func (c *Client) KeyCompromiseStatus(ctx context.Context, identityID, key string) (*KeyCompromiseResult, error) {
+	var out KeyCompromiseResult
+	q := url.Values{"request_key": {key}}
+	err := c.do(ctx, http.MethodGet, "/api/v1/identities/"+url.PathEscape(identityID)+"/compromise?"+q.Encode(),
+		requestOptions{}, &out)
 	if err != nil {
 		return nil, err
 	}

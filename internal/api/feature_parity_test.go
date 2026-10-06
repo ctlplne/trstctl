@@ -245,8 +245,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F62 adds four signed scheduled-report run, artifact and recovery operations.
 	// Exact host containment adds a read-only review and a separately
 	// authorized stop command to the deployment-connector journey.
-	if len(out) != 463 {
-		t.Fatalf("OpenAPI operationIds = %d, want 463", len(out))
+	// One reviewed key-compromise command adds preview, execution, and separate
+	// CA/host status readback to the same revocation and connector journey.
+	if len(out) != 466 {
+		t.Fatalf("OpenAPI operationIds = %d, want 466", len(out))
 	}
 	return out
 }

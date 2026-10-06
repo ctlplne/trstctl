@@ -10,6 +10,8 @@ import {
   type GraphImpact,
   type Identity,
   type IdentityTransitionPreview,
+  type KeyCompromisePlan,
+  type KeyCompromiseResult,
   type RevocationHealth,
 } from "@/lib/api";
 import { apiProblemContext } from "@/lib/apiProblem";
@@ -24,6 +26,9 @@ import type { MessageKey } from "@/i18n/messages";
 import { graphNodeIdForIdentity, revocationReasons } from "@/lib/revocation";
 import { LifecycleApprovalRecovery } from "@/components/LifecycleApprovalRecovery";
 import { lifecycleApproval, lifecycleCommandKey, type LifecycleApproval } from "@/lib/lifecycleCommand";
+import { useApiQuery } from "@/lib/query";
+import { KeyCompromiseEffects } from "./KeyCompromiseEffects";
+import { KeyCompromiseRecovery } from "./KeyCompromiseRecovery";
 
 type ReviewBase = {
   impact: GraphImpact | null;
@@ -41,8 +46,16 @@ type CertificateReview = ReviewBase & {
   kind: "certificate";
 };
 
-type ReviewState = CertificateReview | IdentityReview;
-type CompletedState = { certificate: Certificate; kind: "certificate"; queued?: boolean } | { identity: Identity; kind: "identity" };
+type CompromiseReview = ReviewBase & {
+  kind: "compromise";
+  plan: KeyCompromisePlan;
+};
+
+type ReviewState = CertificateReview | IdentityReview | CompromiseReview;
+type CompletedState =
+  | { certificate: Certificate; kind: "certificate"; queued?: boolean }
+  | { identity: Identity; kind: "identity" }
+  | { identity: Identity; result: KeyCompromiseResult; requestKey: string; kind: "compromise" };
 type RevocationTarget =
   | { identity: Identity; key: string; kind: "identity"; name: string }
   | { certificate: Certificate; key: string; kind: "certificate"; name: string };
@@ -68,8 +81,8 @@ function certificateTargetName(certificate: Certificate): string {
   return certificate.subject.trim() || certificate.id;
 }
 
-function reviewKey(targetKey: string, reason: string): string {
-  return `${targetKey}\u0000${reason}`;
+function reviewKey(targetKey: string, reason: string, hostTargetID: string): string {
+  return `${targetKey}\u0000${reason}\u0000${hostTargetID}`;
 }
 
 function affectedCopy(impact: GraphImpact | null, error: string | null, t: (key: MessageKey, values?: Record<string, number | string>) => string): string {
@@ -105,6 +118,7 @@ export function RevocationCenter({
   const [step, setStep] = useState(0);
   const [targetKey, setTargetKey] = useState(() => (targetCertificateID ? certificateTargetKey(targetCertificateID) : ""));
   const [reason, setReason] = useState<BulkRevokeRequest["reason"]>("unspecified");
+  const [hostTargetID, setHostTargetID] = useState("");
   const [review, setReview] = useState<ReviewState | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -178,8 +192,17 @@ export function RevocationCenter({
     [certificateRecords, eligibleIdentities],
   );
   const selected = targets.find((target) => target.key === targetKey) ?? null;
+  const boundHostTargetID =
+    selected?.kind === "identity" && typeof selected.identity.attributes?.deployment_target_id === "string"
+      ? selected.identity.attributes.deployment_target_id
+      : "";
+  const effectiveHostTargetID = hostTargetID || boundHostTargetID;
+  const hostTargets = useApiQuery(["key-compromise-targets"], () => api.connectorTargets(), {
+    enabled: selected?.kind === "identity" && reason === "keyCompromise",
+    retry: false,
+  });
   const selectedCanReview = selected?.kind === "identity" || (selected?.kind === "certificate" && revocableCertificateStates.has(selected.certificate.status));
-  const currentKey = reviewKey(targetKey, reason);
+  const currentKey = reviewKey(targetKey, reason, reason === "keyCompromise" ? effectiveHostTargetID : "");
   const reviewCurrent = review?.key === currentKey;
   const reviewReady = reviewCurrent && (review.kind === "certificate" || review.plan.ready);
   const freshEndpoints = health?.summary.fresh ?? 0;
@@ -221,7 +244,7 @@ export function RevocationCenter({
         id: "confirm",
         label: t("certificates.revocation.confirmTitle"),
         description: t("certificates.revocation.confirmDescription"),
-        progressState: completed && !(completed.kind === "certificate" && completed.queued) ? "done" : "pending",
+        progressState: completed && completed.kind !== "compromise" && !(completed.kind === "certificate" && completed.queued) ? "done" : "pending",
       },
     ],
     [completed, reviewCurrent, t],
@@ -243,6 +266,15 @@ export function RevocationCenter({
     setApprovalNotice(null);
     try {
       if (selected.kind === "identity") {
+        if (reason === "keyCompromise") {
+          if (!effectiveHostTargetID) throw new Error(t("certificates.revocation.compromiseTargetRequired"));
+          const plan = await api.previewKeyCompromise(selected.identity.id, effectiveHostTargetID);
+          const nodeID = graphNodeIdForIdentity(selected.identity);
+          const graph = nodeID ? await readImpact(nodeID, t) : { impact: null, impactError: t("certificates.revocation.graphBindingMissing") };
+          setReview({ kind: "compromise", key: currentKey, plan, ...graph });
+          setStep(1);
+          return;
+        }
         const plan = await api.previewIdentityTransition(selected.identity.id, "revoked", reason);
         const nodeID = graphNodeIdForIdentity(selected.identity);
         const graph = nodeID ? await readImpact(nodeID, t) : { impact: null, impactError: t("certificates.revocation.graphBindingMissing") };
@@ -270,7 +302,39 @@ export function RevocationCenter({
     setExecuteError(null);
     setApprovalNotice(null);
     try {
-      if (selected.kind === "identity" && review.kind === "identity") {
+      if (selected.kind === "identity" && review.kind === "compromise") {
+        const plan = review.plan;
+        const closedRequestId = approvalRestart?.fingerprint === plan.preview_fingerprint ? approvalRestart.requestId : undefined;
+        const key = `identity-compromise:${plan.preview_fingerprint}${closedRequestId ? `:${closedRequestId}` : ""}`;
+        const result = await api.executeKeyCompromise(
+          selected.identity.id,
+          {
+            target_id: plan.target.target_id,
+            target_revision: plan.target.target_revision,
+            target_name: plan.target.target_name,
+            connector: plan.target.connector,
+            identity_id: plan.identity_id,
+            expected_fingerprint: plan.target.expected_fingerprint,
+            required_agent_id: plan.target.required_agent_id,
+            expected_version: plan.expected_version,
+            preview_fingerprint: plan.preview_fingerprint,
+          },
+          key,
+        );
+        if (
+          result.identity.status !== "revoked" ||
+          result.revocation.destination !== "revocation.publish" ||
+          !result.revocation.id ||
+          result.containment.destination !== "endpoint.contain" ||
+          result.containment.identity_id !== plan.identity_id ||
+          result.containment.fingerprint !== plan.target.expected_fingerprint ||
+          !result.containment.outbox_id
+        ) {
+          throw new Error(t("certificates.revocation.verifyFailed"));
+        }
+        setCompleted({ kind: "compromise", identity: result.identity, result, requestKey: key });
+        onRevoked?.(result.identity);
+      } else if (selected.kind === "identity" && review.kind === "identity") {
         const closedRequestId = approvalRestart?.fingerprint === review.plan.request_fingerprint ? approvalRestart.requestId : undefined;
         const updated = await api.transitionIdentity(
           selected.identity.id,
@@ -334,6 +398,8 @@ export function RevocationCenter({
         </div>
       </header>
 
+      <KeyCompromiseRecovery />
+
       <StepShell
         currentIndex={step}
         steps={steps}
@@ -367,6 +433,7 @@ export function RevocationCenter({
                   value={targetKey}
                   onChange={(event) => {
                     setTargetKey(event.target.value);
+                    setHostTargetID("");
                     invalidateReview();
                   }}
                 >
@@ -395,6 +462,35 @@ export function RevocationCenter({
                 </Select>
               )}
             </Field>
+            {selected?.kind === "identity" && reason === "keyCompromise" ? (
+              <Field
+                label={t("certificates.revocation.compromiseTarget")}
+                description={t("certificates.revocation.compromiseTargetHelp")}
+                controlId="revocation-center-host-target"
+              >
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={effectiveHostTargetID}
+                    onChange={(event) => {
+                      setHostTargetID(event.target.value);
+                      invalidateReview();
+                    }}
+                  >
+                    <option value="">{t("certificates.revocation.compromiseTargetRequired")}</option>
+                    {boundHostTargetID && !hostTargets.data?.items.some((target) => target.id === boundHostTargetID) ? (
+                      <option value={boundHostTargetID}>{boundHostTargetID}</option>
+                    ) : null}
+                    {hostTargets.data?.items.map((target) => (
+                      <option key={target.id} value={target.id}>
+                        {target.name} · {target.connector}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            ) : null}
+            {hostTargets.error && selected?.kind === "identity" && reason === "keyCompromise" ? <p role="alert">{hostTargets.error}</p> : null}
             <Field label={t("certificates.revocation.reasonLabel")} description={t("certificates.revocation.reasonHelp")} controlId="revocation-center-reason">
               {(control) => (
                 <Select
@@ -439,10 +535,27 @@ export function RevocationCenter({
             <div className="rounded-control border border-status-success/30 bg-status-success/5 p-3">
               <p className="font-semibold text-status-success">{t("certificates.revocation.noChanges")}</p>
               <p className="mt-1 text-muted-foreground">
-                {review.kind === "identity" ? review.plan.guidance : t("certificates.revocation.certificateReviewGuidance")}
+                {review.kind === "identity"
+                  ? review.plan.guidance
+                  : review.kind === "compromise"
+                    ? t("certificates.revocation.compromiseReviewGuidance")
+                    : t("certificates.revocation.certificateReviewGuidance")}
               </p>
             </div>
-            {review.kind === "identity" ? (
+            {review.kind === "compromise" ? (
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Fact label={t("certificates.revocation.compromiseTarget")}>{review.plan.target.target_name}</Fact>
+                <Fact label={t("certificates.revocation.version")} mono>
+                  {String(review.plan.expected_version)}
+                </Fact>
+                <Fact label={t("connectors.containment.agent")} mono>
+                  {review.plan.target.required_agent_id}
+                </Fact>
+                <Fact label={t("connectors.containment.leaf")} mono>
+                  {review.plan.target.expected_fingerprint}
+                </Fact>
+              </dl>
+            ) : review.kind === "identity" ? (
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Fact label={t("certificates.revocation.owner")}>{review.plan.owner_name || review.plan.owner_id}</Fact>
                 <Fact label={t("certificates.revocation.reasonLabel")} mono>
@@ -489,7 +602,19 @@ export function RevocationCenter({
               ) : null}
             </div>
             <div className="grid gap-4 lg:grid-cols-3">
-              {review.kind === "identity" ? (
+              {review.kind === "compromise" ? (
+                <>
+                  <PlanList
+                    title={t("certificates.revocation.prerequisites")}
+                    items={[
+                      t("certificates.revocation.compromiseCertificates", { count: review.plan.certificates.length }),
+                      ...review.plan.required_permissions,
+                    ]}
+                  />
+                  <PlanList title={t("certificates.revocation.writes")} items={review.plan.execution_effects} />
+                  <PlanList title={t("certificates.revocation.proof")} items={review.plan.verification_steps} />
+                </>
+              ) : review.kind === "identity" ? (
                 <>
                   <PlanList title={t("certificates.revocation.prerequisites")} items={review.plan.prerequisites} />
                   <PlanList title={t("certificates.revocation.writes")} items={[...review.plan.execution_writes, ...review.plan.execution_external_effects]} />
@@ -514,10 +639,14 @@ export function RevocationCenter({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">
-                {review.kind === "identity" ? t("certificates.revocation.fingerprint") : t("certificates.revocation.certificateFingerprint")}
+                {review.kind === "certificate" ? t("certificates.revocation.certificateFingerprint") : t("certificates.revocation.fingerprint")}
               </p>
               <code className="mt-1 block break-all rounded-control bg-muted px-2 py-1 text-xs">
-                {review.kind === "identity" ? review.plan.request_fingerprint : review.certificate.fingerprint}
+                {review.kind === "identity"
+                  ? review.plan.request_fingerprint
+                  : review.kind === "compromise"
+                    ? review.plan.preview_fingerprint
+                    : review.certificate.fingerprint}
               </code>
             </div>
           </div>
@@ -525,9 +654,20 @@ export function RevocationCenter({
 
         {step === 2 && completed ? (
           <div role="region" aria-label={t("certificates.revocation.confirmRegion")} className="grid max-w-2xl gap-4">
-            <p className="font-medium break-all">{completed.kind === "identity" ? completed.identity.name : certificateTargetName(completed.certificate)}</p>
+            <p className="font-medium break-all">{completed.kind === "certificate" ? certificateTargetName(completed.certificate) : completed.identity.name}</p>
             <div className="rounded-control border border-border bg-muted/30 p-3 text-sm">
-              {completed.kind === "certificate" && completed.queued ? (
+              {completed.kind === "compromise" ? (
+                <>
+                  <p role="status" className="font-semibold text-status-warning">
+                    {t("certificates.revocation.compromiseQueued")}
+                  </p>
+                  <p className="mt-2 text-sm">{t("certificates.revocation.compromiseVerify")}</p>
+                  <p className="mt-2 break-all text-xs">
+                    {t("certificates.revocation.compromiseRequestKey")}: {completed.requestKey}
+                  </p>
+                  <KeyCompromiseEffects identityID={completed.identity.id} requestKey={completed.requestKey} initial={completed.result} />
+                </>
+              ) : completed.kind === "certificate" && completed.queued ? (
                 <QueuedCertificateRevocation
                   certificate={completed.certificate}
                   onConfirmed={(certificate) => {
@@ -545,14 +685,14 @@ export function RevocationCenter({
                 <Link
                   className="text-primary underline"
                   to={
-                    completed.kind === "identity"
+                    completed.kind !== "certificate"
                       ? `/audit?type=${encodeURIComponent("identity.revoked")}&q=${encodeURIComponent(completed.identity.id)}`
                       : `/audit?type=certificate.revocation.batch.applied&q=${encodeURIComponent(completed.certificate.id)}`
                   }
                 >
                   {t("certificates.revocation.auditLink")}
                 </Link>
-                {completed.kind === "identity" && graphNodeIdForIdentity(completed.identity) ? (
+                {completed.kind !== "certificate" && graphNodeIdForIdentity(completed.identity) ? (
                   <Link className="text-primary underline" to={`/graph?node=${encodeURIComponent(graphNodeIdForIdentity(completed.identity) ?? "")}`}>
                     {t("certificates.revocation.graphLink")}
                   </Link>
@@ -598,8 +738,11 @@ export function RevocationCenter({
             <LifecycleApprovalRecovery
               approval={approvalNotice}
               onReviewNew={(requestId) => {
-                if (review.kind !== "identity") return;
-                setApprovalRestart({ fingerprint: review.plan.request_fingerprint, requestId });
+                if (review.kind === "certificate") return;
+                setApprovalRestart({
+                  fingerprint: review.kind === "compromise" ? review.plan.preview_fingerprint : review.plan.request_fingerprint,
+                  requestId,
+                });
                 setApprovalNotice(null);
                 setExecuteError(null);
                 void loadReview();

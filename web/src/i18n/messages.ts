@@ -7094,6 +7094,96 @@ export const messages = {
     defaultMessage: "Choose the factual reason. It becomes durable revocation and audit evidence.",
     description: "Explanation under the RFC 5280 revocation reason selector.",
   },
+  "certificates.revocation.compromiseTarget": {
+    defaultMessage: "Host serving the compromised certificate",
+    description: "Exact deployment target selector for combined CA revocation and host containment.",
+  },
+  "certificates.revocation.compromiseTargetHelp": {
+    defaultMessage: "Choose the registered host target. The preview verifies its last served certificate, agent, and target revision before anything changes.",
+    description: "Explains the evidence required before a combined key-compromise command.",
+  },
+  "certificates.revocation.compromiseTargetRequired": {
+    defaultMessage: "Choose an exact host target",
+    description: "Missing target prompt for key-compromise containment.",
+  },
+  "certificates.revocation.compromiseReviewGuidance": {
+    defaultMessage:
+      "This read-only plan binds the issuing CA certificates and the exact leaf on one host. Submitting queues two independent jobs: CA revocation and host removal.",
+    description: "Effect-free review guidance for a combined key-compromise response.",
+  },
+  "certificates.revocation.compromiseCertificates": {
+    defaultMessage: "{count} exact certificate records will be sent to their issuing CA for revocation.",
+    description: "Bounded certificate count in the key-compromise preview.",
+  },
+  "certificates.revocation.compromiseQueued": {
+    defaultMessage: "CA revocation and host containment were queued separately.",
+    description: "Accepted compound command is not a claim of external completion.",
+  },
+  "certificates.revocation.compromiseVerify": {
+    defaultMessage:
+      "Follow both jobs. Confirm signed CRL or OCSP status for each certificate and use a fresh client to prove this host no longer serves the compromised leaf.",
+    description: "Independent readback steps after key-compromise acceptance.",
+  },
+  "certificates.revocation.compromiseCAJob": {
+    defaultMessage: "Issuing CA revocation job",
+    description: "Separate CA effect in the compound key-compromise result.",
+  },
+  "certificates.revocation.compromiseHostJob": {
+    defaultMessage: "Exact host containment job",
+    description: "Separate host effect in the compound key-compromise result.",
+  },
+  "certificates.revocation.compromiseCAPending": {
+    defaultMessage: "The issuing CA has not completed this command. Certificate trust may remain unchanged.",
+    description: "Pending CA revocation disclaimer in the compound result.",
+  },
+  "certificates.revocation.compromiseCADelivered": {
+    defaultMessage: "The CA command was delivered. Verify each exact serial through signed CRL or OCSP and a client that enforces revocation.",
+    description: "Distinguishes a completed dispatcher call from relying-party revocation proof.",
+  },
+  "certificates.revocation.compromiseCAFailed": {
+    defaultMessage: "The CA command failed. Inspect the error and recover the issuer job; the host stop may still proceed independently.",
+    description: "Recovery guidance for one failed effect of a compound command.",
+  },
+  "certificates.revocation.compromiseAttempts": {
+    defaultMessage: "Delivery attempts: {count}",
+    description: "Attempt count for the CA revocation outbox job.",
+  },
+  "certificates.revocation.compromiseReadMismatch": {
+    defaultMessage: "The result no longer matches the reviewed identity, CA job, or exact host receipt.",
+    description: "Fail-closed error for a compound status readback mismatch.",
+  },
+  "certificates.revocation.compromiseReadFailed": {
+    defaultMessage: "Current CA and host results could not be verified. Check Jobs and queues before claiming containment.",
+    description: "Honest unavailable state for compound status readback.",
+  },
+  "certificates.revocation.compromiseRefresh": {
+    defaultMessage: "Refresh both results",
+    description: "Manual refresh of independent CA and host status.",
+  },
+  "certificates.revocation.compromiseJobsLink": {
+    defaultMessage: "Open Jobs and queues",
+    description: "Link to recover the CA or host command.",
+  },
+  "certificates.revocation.compromiseResume": {
+    defaultMessage: "Resume a key-compromise response",
+    description: "Read-only recovery control for a compound incident after browser or server restart.",
+  },
+  "certificates.revocation.compromiseResumeHelp": {
+    defaultMessage: "Enter the managed identity ID and the original incident request key. This reads both jobs and does not queue another action.",
+    description: "Guidance for reopening a key-compromise result without mutation.",
+  },
+  "certificates.revocation.compromiseIdentityID": {
+    defaultMessage: "Compromised identity ID",
+    description: "Exact identity UUID input for incident recovery.",
+  },
+  "certificates.revocation.compromiseRequestKey": {
+    defaultMessage: "Original incident request key",
+    description: "Stable command key for incident readback and retry.",
+  },
+  "certificates.revocation.compromiseResumeAction": {
+    defaultMessage: "Read both incident results",
+    description: "Read-only action for the two key-compromise effects.",
+  },
   "certificates.revocation.reviewAction": { defaultMessage: "Review exact plan", description: "Action that requests an effect-free revocation preview." },
   "certificates.revocation.reviewLoading": { defaultMessage: "Reviewing exact plan…", description: "Busy label while loading the revocation preview." },
   "certificates.revocation.continueAction": {

@@ -50,6 +50,10 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	}
 	if _, ok := orchestrator.EventTypeFor(orchestrator.State(identity.Status), state); !ok {
 		if orchestrator.State(identity.Status) == state {
+			if req.compromise != nil {
+				return a.replayIdentityKeyCompromise(ctx, tenantID, principal, id,
+					req, idempotencyKey, idempotencyKeyDigest, subjectCSRDigest)
+			}
 			recovered, recoverErr := a.replayConsumedIdentityTransition(ctx, tenantID, id,
 				principal.Subject, state, req.Reason, idempotencyKey, csrPEM,
 				idempotencyKeyDigest, subjectCSRDigest)
@@ -112,6 +116,13 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 		}
 		evidenceRefs = append(evidenceRefs, "identity_snapshot_sha256:"+crypto.SHA256Hex(raw))
 	}
+	if req.compromise != nil {
+		raw, err := json.Marshal(req.compromise)
+		if err != nil {
+			return 0, nil, err
+		}
+		evidenceRefs = append(evidenceRefs, "key_compromise_host_intent_sha256:"+crypto.SHA256Hex(raw))
+	}
 
 	// Validate every part of the operation before creating an approval request.
 	// An invalid transition/CSR/quota denial is not genuine work for a reviewer.
@@ -151,7 +162,25 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	}
 	start := time.Now()
 	var terr error
-	if authority != nil {
+	var containmentReceipt store.ConnectorDeliveryReceipt
+	if req.compromise != nil {
+		if authority != nil {
+			containmentReceipt, terr = a.orch.TransitionKeyCompromiseWithApproval(ctx,
+				tenantID, id, idempotencyKey, req.ExpectedVersion, *req.compromise,
+				store.OperationApprovalUse{
+					RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
+					Requester: authority.Requester, ResourceKind: authority.ResourceKind,
+					ResourceID: authority.ResourceID, Action: authority.Action,
+					FromState: authority.FromState, ToState: authority.ToState,
+					TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+					Reason: authority.Reason, EvidenceRefs: append([]string(nil), authority.EvidenceRefs...),
+					Issuance: authority.Issuance,
+				})
+		} else {
+			containmentReceipt, terr = a.orch.TransitionKeyCompromise(ctx, tenantID, id,
+				idempotencyKey, req.ExpectedVersion, *req.compromise)
+		}
+	} else if authority != nil {
 		terr = a.orch.TransitionWithSubjectCSRAndApprovalAtVersion(ctx, tenantID, id, state,
 			req.Reason, idempotencyKey, csrPEM, store.OperationApprovalUse{
 				RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
@@ -174,6 +203,17 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	updated, err := a.store.GetIdentity(ctx, tenantID, id)
 	if err != nil {
 		return 0, nil, err
+	}
+	if req.compromise != nil {
+		revocation, _, err := a.orch.KeyCompromiseStatus(ctx, tenantID, id, idempotencyKey)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, keyCompromiseResult{
+			Identity:    toIdentityResponse(updated),
+			Revocation:  revocation,
+			Containment: toConnectorDeliveryResponse(containmentReceipt),
+		}, nil
 	}
 	return http.StatusOK, toIdentityResponse(updated), nil
 }

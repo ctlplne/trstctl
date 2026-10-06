@@ -5,13 +5,18 @@ import { MemoryRouter } from "react-router-dom";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 import { AppQueryProvider } from "@/lib/query";
 import { ApiError, type Identity } from "@/lib/api";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     bulkRevokeCertificates: vi.fn(),
     getCertificate: vi.fn(),
     graphBlastRadius: vi.fn(),
+    connectorTargets: vi.fn(),
+    connectorDelivery: vi.fn(),
+    previewKeyCompromise: vi.fn(),
+    executeKeyCompromise: vi.fn(),
+    readKeyCompromise: vi.fn(),
     previewIdentityTransition: vi.fn(),
     transitionIdentity: vi.fn(),
   },
@@ -73,8 +78,12 @@ const brokerCertificate = {
   source: "agent-broker",
 };
 
+function renderWithApp(ui: ReactNode) {
+  return render(ui, { wrapper: AppQueryProvider });
+}
+
 function renderCenter() {
-  return render(
+  return renderWithApp(
     <MemoryRouter>
       <RevocationCenter
         identities={identities}
@@ -103,6 +112,145 @@ function renderCenter() {
 }
 
 describe("RevocationCenter", () => {
+  it("reopens a cold incident without submitting another revocation", async () => {
+    const result = {
+      identity: { ...identities[0], status: "revoked" },
+      revocation: { id: 91, destination: "revocation.publish", status: "delivered", attempts: 1 },
+      containment: {
+        id: "receipt-cold",
+        tenant_id: "tenant-a",
+        identity_id: identities[0].id,
+        outbox_id: 92,
+        destination: "endpoint.contain",
+        connector: "apache",
+        target: "payments-apache",
+        fingerprint: "b".repeat(64),
+        status: "containment_stopped",
+        attempts: 1,
+        detail: "signed exact-leaf stop",
+        created_at: "2026-10-06T00:00:00Z",
+        updated_at: "2026-10-06T00:01:00Z",
+      },
+    };
+    apiMock.readKeyCompromise.mockReset().mockResolvedValue(result);
+    apiMock.executeKeyCompromise.mockReset();
+    apiMock.transitionIdentity.mockReset();
+    const user = userEvent.setup();
+    renderWithApp(
+      <MemoryRouter>
+        <RevocationCenter identities={[]} distributions={[]} health={null} />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByText("Resume a key-compromise response"));
+    await user.type(screen.getByLabelText("Compromised identity ID"), identities[0].id);
+    await user.type(screen.getByLabelText("Original incident request key"), "original-incident-91");
+    await user.click(screen.getByRole("button", { name: "Read both incident results" }));
+    expect(
+      await screen.findByText("The CA command was delivered. Verify each exact serial through signed CRL or OCSP and a client that enforces revocation."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Exact host containment job" })).toHaveTextContent("signed exact-leaf stop");
+    expect(apiMock.readKeyCompromise).toHaveBeenCalledWith(identities[0].id, "original-incident-91");
+    expect(apiMock.executeKeyCompromise).not.toHaveBeenCalled();
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+  });
+
+  it("reviews one exact host and keeps both compromise effects pending after acceptance", async () => {
+    const fingerprint = "a".repeat(64);
+    const target = {
+      id: "target-payments",
+      name: "payments-apache",
+      connector: "apache",
+    };
+    const compromisePlan = {
+      capability: "key_compromise",
+      ready: true,
+      effect_free: true,
+      identity_id: identities[0].id,
+      expected_version: 7,
+      target: {
+        target_id: target.id,
+        target_name: target.name,
+        connector: target.connector,
+        target_revision: "revision-7",
+        required_agent_id: "agent-payments",
+        expected_fingerprint: fingerprint,
+      },
+      certificates: [{ id: "certificate-payments", fingerprint, serial: "0a", authority: "qa-ca" }],
+      preview_fingerprint: "reviewed-compromise-7",
+      required_permissions: ["identities:write", "connectors:write"],
+      execution_effects: ["Queue CA revocation", "Queue exact host containment"],
+      verification_steps: ["Check signed CRL", "Check fresh TLS client"],
+    };
+    const receipt = {
+      id: "receipt-payments",
+      tenant_id: "tenant-a",
+      identity_id: identities[0].id,
+      outbox_id: 42,
+      destination: "endpoint.contain",
+      connector: target.connector,
+      target: target.name,
+      fingerprint,
+      status: "containment_queued",
+      attempts: 0,
+      created_at: "2026-10-06T00:00:00Z",
+      updated_at: "2026-10-06T00:00:00Z",
+    };
+    apiMock.connectorTargets.mockReset().mockResolvedValue({ items: [target] });
+    apiMock.previewKeyCompromise.mockReset().mockResolvedValue(compromisePlan);
+    const compoundResult = {
+      identity: { ...identities[0], status: "revoked" },
+      revocation: { id: 41, destination: "revocation.publish", status: "pending", attempts: 0 },
+      containment: receipt,
+    };
+    apiMock.executeKeyCompromise.mockReset().mockResolvedValue(compoundResult);
+    apiMock.readKeyCompromise.mockReset().mockResolvedValue(compoundResult);
+    apiMock.connectorDelivery.mockReset().mockResolvedValue(receipt);
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({ node: null, affected: [] });
+    apiMock.previewIdentityTransition.mockReset();
+    apiMock.transitionIdentity.mockReset();
+    const user = userEvent.setup();
+    renderCenter();
+
+    await user.selectOptions(screen.getByLabelText("Managed certificate"), identities[0].id);
+    await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "keyCompromise");
+    await screen.findByRole("option", { name: "payments-apache · apache" });
+    await user.selectOptions(screen.getByLabelText("Host serving the compromised certificate"), target.id);
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await waitFor(() => expect(apiMock.previewKeyCompromise).toHaveBeenCalledWith(identities[0].id, target.id));
+    expect(screen.getByText("No changes were made")).toBeInTheDocument();
+    expect(screen.getByText("1 exact certificate records will be sent to their issuing CA for revocation.")).toBeInTheDocument();
+    expect(apiMock.previewIdentityTransition).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));
+    await user.type(screen.getByLabelText("Type the exact credential label"), identities[0].name);
+    await user.click(screen.getByRole("button", { name: "Revoke reviewed credential" }));
+    await waitFor(() =>
+      expect(apiMock.executeKeyCompromise).toHaveBeenCalledWith(
+        identities[0].id,
+        expect.objectContaining({
+          target_id: target.id,
+          target_revision: "revision-7",
+          identity_id: identities[0].id,
+          expected_fingerprint: fingerprint,
+          expected_version: 7,
+          preview_fingerprint: "reviewed-compromise-7",
+        }),
+        "identity-compromise:reviewed-compromise-7",
+      ),
+    );
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    expect(await screen.findByText("CA revocation and host containment were queued separately.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Follow both jobs. Confirm signed CRL or OCSP status for each certificate and use a fresh client to prove this host no longer serves the compromised leaf.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Issuing CA revocation job" })).toHaveTextContent("The issuing CA has not completed this command");
+    await waitFor(() => expect(apiMock.readKeyCompromise).toHaveBeenCalledWith(identities[0].id, "identity-compromise:reviewed-compromise-7"));
+    expect(screen.getAllByText("Host stop queued — listener may still be serving").length).toBeGreaterThan(0);
+  });
+
   it("requires an effect-free, version-bound review before one exact revoke", async () => {
     apiMock.previewIdentityTransition.mockReset().mockResolvedValue(plan);
     apiMock.graphBlastRadius.mockReset().mockResolvedValue({
@@ -131,10 +279,10 @@ describe("RevocationCenter", () => {
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
 
     await user.selectOptions(screen.getByLabelText("Managed certificate"), "identity-payments");
-    await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "keyCompromise");
+    await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "cessationOfOperation");
     await user.click(screen.getByRole("button", { name: "Review exact plan" }));
 
-    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenCalledWith("identity-payments", "revoked", "keyCompromise"));
+    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenCalledWith("identity-payments", "revoked", "cessationOfOperation"));
     expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:certificate-payments");
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(await screen.findByText("No changes were made")).toBeInTheDocument();
@@ -151,7 +299,7 @@ describe("RevocationCenter", () => {
     await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
 
     await waitFor(() =>
-      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("identity-payments", "revoked", "keyCompromise", undefined, expect.any(String), 7),
+      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("identity-payments", "revoked", "cessationOfOperation", undefined, expect.any(String), 7),
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted and the identity now reads revoked.");
     expect(screen.getByRole("link", { name: "Open immutable audit evidence" })).toHaveAttribute("href", "/audit?type=identity.revoked&q=identity-payments");
@@ -165,7 +313,7 @@ describe("RevocationCenter", () => {
       const [current, setCurrent] = useState<Identity[]>(identities);
       return <RevocationCenter identities={current} distributions={[]} health={null} onRevoked={(updated) => setCurrent([updated])} />;
     }
-    render(
+    renderWithApp(
       <MemoryRouter>
         <LiveInventory />
       </MemoryRouter>,
@@ -202,7 +350,7 @@ describe("RevocationCenter", () => {
     const user = userEvent.setup();
     async function reviewAndConfirm() {
       await user.selectOptions(screen.getByLabelText("Managed certificate"), "identity-payments");
-      await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "keyCompromise");
+      await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "cessationOfOperation");
       await user.click(screen.getByRole("button", { name: "Review exact plan" }));
       await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
       const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
@@ -228,7 +376,7 @@ describe("RevocationCenter", () => {
     apiMock.transitionIdentity.mockReset();
     const user = userEvent.setup();
 
-    render(
+    renderWithApp(
       <MemoryRouter>
         <RevocationCenter identities={identities} health={null} distributions={[]} />
       </MemoryRouter>,
@@ -275,7 +423,7 @@ describe("RevocationCenter", () => {
     const onCertificateRevoked = vi.fn();
     const user = userEvent.setup();
 
-    render(
+    renderWithApp(
       <MemoryRouter>
         <RevocationCenter
           certificates={[]}
@@ -344,7 +492,7 @@ describe("RevocationCenter", () => {
     });
     const user = userEvent.setup();
 
-    render(
+    renderWithApp(
       <MemoryRouter>
         <RevocationCenter certificates={[]} targetCertificateID={subjectless.id} identities={[]} health={null} distributions={[]} />
       </MemoryRouter>,
@@ -382,7 +530,7 @@ describe("RevocationCenter", () => {
     apiMock.bulkRevokeCertificates.mockReset();
     const user = userEvent.setup();
 
-    render(
+    renderWithApp(
       <MemoryRouter>
         <RevocationCenter certificates={[]} targetCertificateID={brokerCertificate.id} identities={[]} health={null} distributions={[]} />
       </MemoryRouter>,
@@ -400,7 +548,7 @@ describe("RevocationCenter", () => {
     apiMock.getCertificate.mockReset().mockRejectedValue(new Error("certificate not found"));
     apiMock.bulkRevokeCertificates.mockReset();
 
-    render(
+    renderWithApp(
       <MemoryRouter>
         <RevocationCenter certificates={[]} targetCertificateID={brokerCertificate.id} identities={[]} health={null} distributions={[]} />
       </MemoryRouter>,
@@ -421,7 +569,7 @@ describe("RevocationCenter", () => {
     apiMock.bulkRevokeCertificates.mockReset();
     const user = userEvent.setup();
 
-    render(
+    renderWithApp(
       <MemoryRouter>
         <RevocationCenter certificates={[]} targetCertificateID={brokerCertificate.id} identities={[]} health={null} distributions={[]} />
       </MemoryRouter>,
@@ -450,7 +598,7 @@ describe("RevocationCenter", () => {
     });
     const onCertificateRevoked = vi.fn();
     const user = userEvent.setup();
-    render(
+    renderWithApp(
       <MemoryRouter>
         <AppQueryProvider>
           <RevocationCenter

@@ -507,6 +507,16 @@ be reviewed again. After success, the center links directly to the immutable
 and outbox remain the only mutation authority; the console does not invent a second
 browser-only revocation path.
 
+For reason `keyCompromise`, a managed identity with an exact registered host
+target takes the compound response in [deployment connectors](deployment-connectors.md#one-reviewed-key-compromise-response).
+The preview binds the issuing CA and served leaf before one confirmation queues
+separate CA revocation and host containment. The console reads both statuses by
+the original request key; `revoked` is only the lifecycle projection and a
+queued host receipt does not mean the listener stopped. Check each certificate
+serial through signed CRL/OCSP and verify the live host with a fresh stock TLS
+client. The ordinary single-effect transition remains available for other
+factual revocation reasons.
+
 For an X.509 identity, the preview checks the exact unrevoked certificates tied to
 its issuance or verified deployment, including superseded leaves that could be
 restored. If their recorded issuing CA cannot revoke through this integration,

@@ -361,6 +361,45 @@ revision, identity, leaf, agent and fingerprint plus an `Idempotency-Key` and
 reason. Read the returned connector receipt by its exact ID. A queued receipt
 never means the listener stopped.
 
+### One reviewed key-compromise response
+
+When a managed X.509 identity's key is compromised and one registered host is
+still serving its leaf, open **Certificates → Revocation & CT → Revocation center**,
+select that identity, reason `keyCompromise`, and the exact host target. The
+effect-free preview reads the issuing CA authority for every bounded certificate
+record, the current identity version, target revision, enrolled agent, and last
+served leaf. A missing authority or exact host binding refuses the command.
+The route requires `identities:write` and `connectors:write`; dual-control
+policy still requires a distinct approver. The command emits one retained
+`identity.revoked` event and queues two independent jobs in the same tenant
+transaction: `revocation.publish` and `endpoint.contain`. Acceptance changes
+the lifecycle state but proves neither CA publication nor host stop. A host
+agent outage does not delay the CA dispatcher, and a CA outage does not delay
+the host agent. Never restore a revoked predecessor during recovery.
+
+The CLI uses the same reviewed API command. Keep one incident key through
+retry and status readback:
+
+```sh
+trstctl-cli connector target compromise-preview \
+  --identity "$IDENTITY_ID" --target "$TARGET_ID" > reviewed-compromise.json
+# Inspect every certificate/authority and the exact target, leaf, agent and version.
+trstctl-cli --idempotency-key "$INCIDENT_KEY" --force \
+  connector target compromise --preview-file reviewed-compromise.json
+trstctl-cli connector target compromise-status \
+  --identity "$IDENTITY_ID" --request-key "$INCIDENT_KEY"
+```
+
+API clients use `POST /api/v1/identities/{id}/compromise/preview`, then echo the
+reviewed bindings to `POST /api/v1/identities/{id}/compromise` with the stable
+`Idempotency-Key`. `GET /api/v1/identities/{id}/compromise?request_key=…` reads
+the CA outbox attempt and exact host receipt separately; it requires
+`identities:read` and `connectors:read`. A delivered CA command still needs
+signed CRL/OCSP and a stock client that enforces revocation. A stopped host
+receipt still needs an independent fresh-client TLS check. If one job fails,
+inspect Jobs and queues, its exact receipt, and the live endpoint before a
+new reviewed attempt. Reusing the original key with changed bindings is refused.
+
 The ordinary probe runs first. If a direct TLS handshake fails, the configured
 native probe attempts TLS 1.3 within the same deadline and reports the exact
 presented leaf and chain. This applies to target tests, deployments, host

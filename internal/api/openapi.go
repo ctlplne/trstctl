@@ -3045,6 +3045,35 @@ func componentSchemas() map[string]*Schema {
 		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")
+	keyCompromisePlanRequest := object(map[string]*Schema{
+		"target_id": uuid(),
+	}, "target_id")
+	keyCompromiseCertificate := object(map[string]*Schema{
+		"id": uuid(), "fingerprint": str(), "serial": str(), "authority": str(),
+	}, "id", "fingerprint", "serial", "authority")
+	keyCompromisePlan := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"identity_id": uuid(), "expected_version": {Type: "integer"},
+		"target":               ref("EndpointContainmentPreview"),
+		"certificates":         {Type: "array", Items: ref("KeyCompromiseCertificate")},
+		"preview_fingerprint":  str(),
+		"required_permissions": {Type: "array", Items: str()},
+		"execution_effects":    {Type: "array", Items: str()},
+		"verification_steps":   {Type: "array", Items: str()},
+	}, "capability", "ready", "effect_free", "identity_id", "expected_version", "target", "certificates", "preview_fingerprint", "required_permissions", "execution_effects", "verification_steps")
+	keyCompromiseExecutionRequest := object(map[string]*Schema{
+		"target_id": uuid(), "target_revision": str(), "target_name": str(),
+		"connector": str(), "identity_id": uuid(), "expected_fingerprint": str(),
+		"required_agent_id": uuid(), "expected_version": {Type: "integer"},
+		"preview_fingerprint": str(),
+	}, "target_id", "target_revision", "target_name", "connector", "identity_id", "expected_fingerprint", "required_agent_id", "expected_version", "preview_fingerprint")
+	keyCompromiseResult := object(map[string]*Schema{
+		"identity": ref("Identity"), "revocation": ref("KeyCompromiseRevocationAttempt"), "containment": ref("ConnectorDelivery"),
+	}, "identity", "revocation", "containment")
+	keyCompromiseRevocationAttempt := object(map[string]*Schema{
+		"id": {Type: "integer"}, "destination": str(), "status": str(),
+		"attempts": {Type: "integer"}, "last_error": str(), "delivered_at": timestamp(),
+	}, "id", "destination", "status", "attempts")
 	alertRecipient := object(map[string]*Schema{
 		"kind": str(), "subject": str(), "display_name": str(), "email": str(),
 		"roles": {Type: "array", Items: str()},
@@ -6492,6 +6521,12 @@ func componentSchemas() map[string]*Schema {
 		"EndpointContainmentPreview":               endpointContainmentPreview,
 		"ConnectorDelivery":                        connectorDelivery,
 		"ConnectorDeliveryList":                    list("ConnectorDelivery"),
+		"KeyCompromisePlanRequest":                 keyCompromisePlanRequest,
+		"KeyCompromiseCertificate":                 keyCompromiseCertificate,
+		"KeyCompromisePlan":                        keyCompromisePlan,
+		"KeyCompromiseExecutionRequest":            keyCompromiseExecutionRequest,
+		"KeyCompromiseResult":                      keyCompromiseResult,
+		"KeyCompromiseRevocationAttempt":           keyCompromiseRevocationAttempt,
 		"AlertRecipient":                           alertRecipient,
 		"NotificationChannel":                      notificationChannel,
 		"NotificationChannelList":                  list("NotificationChannel"),
