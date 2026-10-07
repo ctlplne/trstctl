@@ -18,7 +18,13 @@ export function CertificateActivityEvidence({ certificate }: { certificate: Cert
   const fingerprint = certificate.fingerprint;
   const label = certificateDisplayName(certificate);
   if (!identityId || !fingerprint) {
-    const notice = t(!fingerprint ? "certificates.evidence.missingFingerprint" : "certificates.evidence.missingIdentity");
+    const notice = t(
+      !fingerprint
+        ? "certificates.evidence.missingFingerprint"
+        : certificate.kubernetes_provenance?.length
+          ? "certificates.evidence.kubernetesObserved"
+          : "certificates.evidence.missingIdentity",
+    );
     return <CredentialActivityTimeline credentialLabel={label} deliveryNotice={notice} rotationNotice={notice} rollbackNotice={notice} />;
   }
   return (

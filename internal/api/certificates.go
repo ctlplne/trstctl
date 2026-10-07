@@ -26,7 +26,12 @@ type certificateIngestRequest struct {
 type certificateResponse struct {
 	ID string `json:"id"`
 	// IdentityIDs are exact retained issuance/delivery bindings, never name matches.
-	IdentityIDs        []string   `json:"identity_ids,omitempty"`
+	IdentityIDs []string `json:"identity_ids,omitempty"`
+
+	// KubernetesProvenance is an authenticated agent observation of the exact
+	// leaf in cert-manager status, not a claim that a Secret or listener serves it.
+	KubernetesProvenance []store.KubernetesCertificateProvenance `json:"kubernetes_provenance,omitempty"`
+
 	TenantID           string     `json:"tenant_id"`
 	OwnerID            *string    `json:"owner_id"`
 	Subject            string     `json:"subject"`
@@ -278,6 +283,14 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 	response := toCertificateResponse(c)
 	response.IdentityIDs = bindings[c.ID]
+	if c.IssuanceEventID != "" {
+		provenance, err := a.store.ListKubernetesCertificateProvenance(r.Context(), tenantID, []string{c.Fingerprint})
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		response.KubernetesProvenance = provenance[c.Fingerprint]
+	}
 	a.writeJSON(w, http.StatusOK, response)
 }
 
@@ -338,9 +351,23 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	fingerprints := make([]string, 0, len(certs))
+	for _, c := range certs {
+		if c.IssuanceEventID != "" {
+			fingerprints = append(fingerprints, c.Fingerprint)
+		}
+	}
+	provenance, err := a.store.ListKubernetesCertificateProvenance(r.Context(), tenantID, fingerprints)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	for _, c := range certs {
 		response := toCertificateResponse(c)
 		response.IdentityIDs = bindings[c.ID]
+		if c.IssuanceEventID != "" {
+			response.KubernetesProvenance = provenance[c.Fingerprint]
+		}
 		items = append(items, response)
 	}
 	next := ""

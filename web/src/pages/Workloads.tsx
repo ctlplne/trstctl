@@ -150,13 +150,19 @@ export function Workloads() {
   const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(() => searchParams.get("workflow") === "attester-trust");
   const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
   const [showAttestedIssue, setShowAttestedIssue] = useState(() => searchParams.get("workflow") === "attested");
-  const [kubernetesOpened, setKubernetesOpened] = useState(false);
+  const requestUID = searchParams.get("kubernetes_request") ?? "";
+  const [kubernetesOpened, setKubernetesOpened] = useState(Boolean(requestUID));
   const csrQuery = useApiQuery(["kubernetes", "csr-posture"], () => api.kubernetesCSRSupport(), {
     enabled: kubernetesOpened,
     retry: false,
     live: { intervalMs: 30_000 },
   });
   const trustBundleQuery = useApiQuery(["kubernetes", "trust-bundle-posture"], () => api.kubernetesTrustBundles(), {
+    enabled: kubernetesOpened,
+    retry: false,
+    live: { intervalMs: 30_000 },
+  });
+  const certManagerQuery = useApiQuery(["kubernetes", "cert-manager-posture"], () => api.kubernetesCertManagerRequests(), {
     enabled: kubernetesOpened,
     retry: false,
     live: { intervalMs: 30_000 },
@@ -673,9 +679,28 @@ export function Workloads() {
         </section>
       ) : null}
 
-      <details className="group border-y border-border py-3" onToggle={(event) => setKubernetesOpened(event.currentTarget.open)}>
+      <details className="group border-y border-border py-3" open={kubernetesOpened} onToggle={(event) => setKubernetesOpened(event.currentTarget.open)}>
         <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("workloads.advanced.kubernetesSummary")}</summary>
         <div className="mt-3 grid gap-4">
+          <section id="cert-manager" aria-labelledby="cert-manager-heading" className="grid gap-3 border-y border-border py-4">
+            <h2 id="cert-manager-heading" className="text-title font-semibold">
+              {t("workloads.certManager.heading")}
+            </h2>
+            <p className="text-sm text-muted-foreground">{t("workloads.certManager.description")}</p>
+            {certManagerQuery.errorValue ? (
+              <ErrorState title={t("workloads.certManager.errorTitle")}>
+                {apiProblemMessage(certManagerQuery.errorValue, t("workloads.certManager.errorFallback"))}
+              </ErrorState>
+            ) : null}
+            <KubernetesControllerState
+              kind="cert-manager"
+              report={certManagerQuery.data}
+              loading={certManagerQuery.loading}
+              onRefresh={certManagerQuery.refetch}
+              requestUID={requestUID || undefined}
+            />
+            {requestUID && <p className="text-xs text-muted-foreground">{t("workloads.certManager.filtered", { uid: requestUID })}</p>}
+          </section>
           <section aria-labelledby="kubernetes-csr-heading" className="grid gap-3 border-y border-border py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

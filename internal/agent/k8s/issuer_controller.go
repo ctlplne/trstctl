@@ -27,18 +27,21 @@ const (
 
 // IssuerReconcileResult summarizes one external-issuer controller reconcile.
 type IssuerReconcileResult struct {
-	ClusterIssuersReady      int
-	IssuersReady             int
-	SignedRequests           int
-	NativeCertificatesIssued int
-	KubernetesCSRsSigned     int
-	TrustBundlesDistributed  int
-	KubernetesCSRComplete    bool
-	KubernetesCSRFailureCode string
-	KubernetesCSRPosture     []PostureResource
-	TrustBundleComplete      bool
-	TrustBundleFailureCode   string
-	TrustBundlePosture       []PostureResource
+	ClusterIssuersReady           int
+	IssuersReady                  int
+	SignedRequests                int
+	CertificateRequestComplete    bool
+	CertificateRequestFailureCode string
+	CertificateRequestPosture     []PostureResource
+	NativeCertificatesIssued      int
+	KubernetesCSRsSigned          int
+	TrustBundlesDistributed       int
+	KubernetesCSRComplete         bool
+	KubernetesCSRFailureCode      string
+	KubernetesCSRPosture          []PostureResource
+	TrustBundleComplete           bool
+	TrustBundleFailureCode        string
+	TrustBundlePosture            []PostureResource
 }
 
 // IssuerController is the trstctl Kubernetes CRD controller. It marks trstctl
@@ -121,11 +124,15 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 	}
 	result.IssuersReady = len(issuers)
 
-	signed, err := c.reconcileCertificateRequests(ctx, issuers, clusterIssuers)
+	result.CertificateRequestFailureCode = "reconcile_failed"
+	signed, requestPosture, err := c.reconcileCertificateRequests(ctx, issuers, clusterIssuers)
+	result.CertificateRequestPosture = requestPosture
 	if err != nil {
 		return result, err
 	}
 	result.SignedRequests = signed
+	result.CertificateRequestComplete = true
+	result.CertificateRequestFailureCode = ""
 
 	nativeIssued, err := c.reconcileNativeCertificates(ctx, issuers, clusterIssuers)
 	if err != nil {
@@ -253,40 +260,48 @@ func caAuthorityIDFromSignerURL(endpoint string) string {
 	return ""
 }
 
-func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, issuers, clusterIssuers map[string]issuerConfig) (int, error) {
+func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, issuers, clusterIssuers map[string]issuerConfig) (int, []PostureResource, error) {
 	// ClusterIssuer is cluster-scoped: a CertificateRequest may live in any
 	// namespace, including one other than the agent pod's namespace.
 	st, body, err := c.client.request(ctx, http.MethodGet, "/apis/cert-manager.io/v1/certificaterequests", nil)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if st/100 != 2 {
-		return 0, fmt.Errorf("k8s: list certificaterequests: status %d: %s", st, string(body))
+		return 0, nil, fmt.Errorf("k8s: list certificaterequests: status %d: %s", st, string(body))
 	}
 	var list struct {
 		Items []map[string]any `json:"items"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return 0, fmt.Errorf("k8s: decode certificaterequest list: %w", err)
+		return 0, nil, fmt.Errorf("k8s: decode certificaterequest list: %w", err)
 	}
 
 	bridge := &Bridge{client: c.client, signer: c.signer, issuerGroup: c.group}
 	signed := 0
+	posture := make([]PostureResource, 0, len(list.Items))
 	for _, cr := range list.Items {
 		requestNamespace := objectNamespace(cr)
 		if requestNamespace == "" {
 			continue // refuse an object with no namespace instead of misrouting its status
 		}
 		config, backed := c.requestIssuerConfig(cr, issuers, clusterIssuers)
+		current := certManagerRequestPosture(cr, backed, c.group)
 		if isFinished(cr) || !isApproved(cr) || !backed {
+			if current.Name != "" {
+				posture = append(posture, current)
+			}
 			continue
 		}
-		if err := bridge.fulfilWithCap(ctx, requestNamespace, cr, config.ttlCap); err != nil {
-			return signed, err
+		updated, err := bridge.fulfilWithCapResult(ctx, requestNamespace, cr, config.ttlCap)
+		if err != nil {
+			posture = append(posture, failedPosture(current))
+			return signed, posture, err
 		}
+		posture = append(posture, certManagerRequestPosture(updated, true, c.group))
 		signed++
 	}
-	return signed, nil
+	return signed, posture, nil
 }
 
 func (c *IssuerController) requestIssuerConfig(cr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool) {

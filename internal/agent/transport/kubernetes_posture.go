@@ -21,6 +21,8 @@ type KubernetesPostureResource struct {
 	State           string `json:"state"`
 	Reason          string `json:"reason"`
 	PublicHash      string `json:"public_hash,omitempty"`
+	ParentUID       string `json:"parent_uid,omitempty"`
+	ParentName      string `json:"parent_name,omitempty"`
 }
 
 type KubernetesPostureSection struct {
@@ -32,11 +34,12 @@ type KubernetesPostureSection struct {
 // KubernetesPostureRequest is one idempotent post-reconcile report. Tenant and
 // controller identity are absent: the server derives both from verified mTLS.
 type KubernetesPostureRequest struct {
-	ReportID                 string                   `json:"report_id"`
-	ClusterID                string                   `json:"cluster_id"`
-	ReconcileIntervalSeconds int                      `json:"reconcile_interval_seconds"`
-	CertificateSigning       KubernetesPostureSection `json:"certificate_signing_requests"`
-	TrustBundles             KubernetesPostureSection `json:"trust_bundles"`
+	ReportID                 string                    `json:"report_id"`
+	ClusterID                string                    `json:"cluster_id"`
+	ReconcileIntervalSeconds int                       `json:"reconcile_interval_seconds"`
+	CertificateSigning       KubernetesPostureSection  `json:"certificate_signing_requests"`
+	CertificateRequests      *KubernetesPostureSection `json:"cert_manager_certificate_requests,omitempty"`
+	TrustBundles             KubernetesPostureSection  `json:"trust_bundles"`
 }
 
 type KubernetesPostureResponse struct {

@@ -4,10 +4,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Num } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import type { KubernetesCSRSupport, KubernetesTrustBundleDistribution } from "@/lib/api";
+import type { KubernetesCSRSupport, KubernetesCertManagerRequests, KubernetesTrustBundleDistribution } from "@/lib/api";
 import type { KubernetesPostureObject } from "@/lib/api-types.gen";
 
-type Report = KubernetesCSRSupport | KubernetesTrustBundleDistribution;
+type Report = KubernetesCSRSupport | KubernetesCertManagerRequests | KubernetesTrustBundleDistribution;
 
 // A 200 response alone does not mean the controller finished its last pass.
 // Older servers can omit summary, so absence stays pending rather than green.
@@ -25,15 +25,17 @@ export function KubernetesControllerState({
   report,
   loading,
   onRefresh,
+  requestUID,
 }: {
-  kind: "csr" | "trust-bundle";
+  kind: "csr" | "cert-manager" | "trust-bundle";
   report: Report | null;
   loading: boolean;
   onRefresh: () => void;
+  requestUID?: string;
 }) {
   const { t, formatDateTime } = useTranslation();
   const summary = report?.summary;
-  const objects = report?.objects ?? [];
+  const objects = (report?.objects ?? []).filter((row) => !requestUID || row.uid === requestUID);
   const lastSync =
     report?.last_sync ??
     report?.controllers
@@ -45,7 +47,8 @@ export function KubernetesControllerState({
     if (reason === "invalid_signer_name") return t("workloads.kubernetesLive.invalidSignerName");
     return reason;
   };
-  const label = kind === "csr" ? t("workloads.kubernetesCSR.heading") : t("workloads.trustBundles.heading");
+  const label =
+    kind === "csr" ? t("workloads.kubernetesCSR.heading") : kind === "cert-manager" ? t("workloads.certManager.heading") : t("workloads.trustBundles.heading");
   const columns: Array<DataGridColumn<KubernetesPostureObject>> = [
     {
       id: "object",
@@ -57,6 +60,15 @@ export function KubernetesControllerState({
       ),
     },
     { id: "state", header: t("workloads.kubernetesLive.state"), cell: (row) => <StatusBadge value={row.state} /> },
+    ...(kind === "cert-manager"
+      ? [
+          {
+            id: "parent",
+            header: t("workloads.certManager.parent"),
+            cell: (row: KubernetesPostureObject) => (row.parent_name ? `${row.namespace}/${row.parent_name} · ${row.parent_uid}` : "—"),
+          },
+        ]
+      : []),
     { id: "reason", header: t("workloads.kubernetesLive.reason"), cell: (row) => <span title={row.reason}>{reasonLabel(row.reason)}</span> },
     {
       id: "hash",

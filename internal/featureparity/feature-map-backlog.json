@@ -3465,8 +3465,10 @@
                 "/api/v1/external-cas",
                 "/api/v1/external-cas/{id}/issue",
                 "/api/v1/kubernetes/certificate-signing-requests",
+                "/api/v1/kubernetes/cert-manager-certificate-requests",
                 "/api/v1/kubernetes/trust-bundles",
                 "internal/agent/k8s/certificate_signing_request.go",
+                "internal/agent/k8s/cert_manager_posture.go",
                 "internal/agent/k8s/trust_bundle.go",
                 "deploy/kubernetes/certmanager-issuer-crds.yaml",
                 "deploy/kubernetes/rbac.yaml"
@@ -3476,6 +3478,7 @@
                 "web/src/pages/Identities.tsx",
                 "web/src/pages/Wizard.tsx",
                 "web/src/pages/Workloads.tsx",
+                "web/src/pages/Certificates.tsx",
                 "web/src/lib/api.ts"
             ],
             "status": "closed",
@@ -3494,6 +3497,7 @@
                 "listExternalCAs",
                 "issueExternalCA",
                 "getKubernetesCSRSupport",
+                "getKubernetesCertManagerRequests",
                 "getKubernetesTrustBundleDistribution"
             ],
             "api_na": "",
@@ -3511,6 +3515,7 @@
                 "external-cas list",
                 "external-cas issue",
                 "kubernetes csr",
+                "kubernetes cert-manager-requests",
                 "kubernetes trust-bundles"
             ],
             "cli_na": "",

@@ -71,6 +71,27 @@ never a private key. A `Ready=True` Issuer proves that its configuration matches
 the operator endpoint; the issued CertificateRequest and Secret prove that the
 network, token, and CA can actually complete issuance.
 
+After each reconcile, the enrolled agent sends a metadata-only report over its
+authenticated agent connection. `GET /api/v1/kubernetes/cert-manager-certificate-requests`
+shows the current `CertificateRequest` UID, parent `Certificate` UID, state, and
+SHA-256 fingerprint of the issued leaf. The agent verifies the request signature
+and that the leaf contains the request's exact public key before reporting a
+ready binding. `GET /api/v1/certificates/{id}` and the
+certificate inventory return `kubernetes_provenance` only when that fingerprint
+matches a certificate issued by trstctl. The event projection retains this
+exact binding after cert-manager removes the request. The Certificates console
+labels the leaf **cert-manager renewal observed**, links to the exact request
+under Workloads & Machines, and shows both UIDs. A name, SAN, or idempotency-key
+prefix never creates the link. Earlier leaves for which no authenticated report
+exists remain unlinked.
+
+This observation proves that the agent saw the issued leaf in the approved
+request's status. Check `Secret/web-tls` with `kubectl`, then read the actual
+listener with a stock TLS client to prove delivery and serving. The provenance
+field and console never claim those later effects on their own. A stale report
+also does not prove the controller is currently healthy; the Workloads view
+shows report freshness and reconcile completion separately.
+
 Grant a distinct approver only the signer name it reviews. This example creates
 its own identity, gives it request read and status update access only in `apps`,
 and limits its signer approval grant to the `trstctl` ClusterIssuer. cert-manager

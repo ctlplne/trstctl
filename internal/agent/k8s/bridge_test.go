@@ -99,7 +99,7 @@ func (f *fakeCertManager) handler() http.Handler {
 func certRequest(name, issuer, group string, ready bool) map[string]any {
 	cr := map[string]any{
 		"apiVersion": "cert-manager.io/v1", "kind": "CertificateRequest",
-		"metadata": map[string]any{"name": name, "namespace": "apps"},
+		"metadata": map[string]any{"name": name, "namespace": "apps", "uid": "request-uid-" + name, "resourceVersion": "7"},
 		"spec": map[string]any{
 			"issuerRef": map[string]any{"name": issuer, "kind": "ClusterIssuer", "group": group},
 		},

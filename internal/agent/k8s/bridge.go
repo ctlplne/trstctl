@@ -128,32 +128,37 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 }
 
 func (b *Bridge) fulfilWithCap(ctx context.Context, namespace string, cr map[string]any, ttlCap time.Duration) error {
+	_, err := b.fulfilWithCapResult(ctx, namespace, cr, ttlCap)
+	return err
+}
+
+func (b *Bridge) fulfilWithCapResult(ctx context.Context, namespace string, cr map[string]any, ttlCap time.Duration) (map[string]any, error) {
 	if !isApproved(cr) || isFinished(cr) {
-		return fmt.Errorf("k8s: CertificateRequest is not approved and pending")
+		return nil, fmt.Errorf("k8s: CertificateRequest is not approved and pending")
 	}
 	spec, _ := cr["spec"].(map[string]any)
 	reqB64, _ := spec["request"].(string)
 	pemCSR, err := base64.StdEncoding.DecodeString(reqB64)
 	if err != nil {
-		return fmt.Errorf("k8s: decode CertificateRequest.spec.request: %w", err)
+		return nil, fmt.Errorf("k8s: decode CertificateRequest.spec.request: %w", err)
 	}
 	block, _ := pem.Decode(pemCSR)
 	if block == nil {
-		return fmt.Errorf("k8s: CertificateRequest.spec.request is not a PEM CSR")
+		return nil, fmt.Errorf("k8s: CertificateRequest.spec.request is not a PEM CSR")
 	}
 	ttl, err := certificateRequestTTL(spec)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if ttlCap > 0 && ttl > ttlCap {
 		ttl = ttlCap
 	}
 	chainPEM, err := b.signer.Sign(ctx, block.Bytes, ttl)
 	if err != nil {
-		return fmt.Errorf("k8s: sign CertificateRequest: %w", err)
+		return nil, fmt.Errorf("k8s: sign CertificateRequest: %w", err)
 	}
 	if len(bytes.TrimSpace(chainPEM)) == 0 {
-		return fmt.Errorf("k8s: sign CertificateRequest: empty certificate chain")
+		return nil, fmt.Errorf("k8s: sign CertificateRequest: empty certificate chain")
 	}
 
 	meta, _ := cr["metadata"].(map[string]any)
@@ -175,12 +180,16 @@ func (b *Bridge) fulfilWithCap(ctx context.Context, namespace string, cr map[str
 
 	st, rb, err := b.client.request(ctx, http.MethodPut, certificateRequestsPath(namespace)+"/"+name+"/status", cr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if st/100 != 2 {
-		return fmt.Errorf("k8s: update CertificateRequest %s/%s status: %d: %s", namespace, name, st, string(rb))
+		return nil, fmt.Errorf("k8s: update CertificateRequest %s/%s status: %d: %s", namespace, name, st, string(rb))
 	}
-	return nil
+	var updated map[string]any
+	if err := json.Unmarshal(rb, &updated); err != nil || updated == nil {
+		return nil, fmt.Errorf("k8s: decode updated CertificateRequest %s/%s: %v", namespace, name, err)
+	}
+	return updated, nil
 }
 
 // upsertReady returns the condition list with a true Ready condition, replacing

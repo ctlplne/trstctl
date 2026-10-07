@@ -47,7 +47,7 @@ export interface LifecycleCockpitProps {
   routingPolicies: Evidence<NotificationRoutingPolicy>;
 }
 
-type AutomationState = "failed" | "delayed" | "running" | "verified" | "managed-unverified" | "manual" | "unknown";
+type AutomationState = "failed" | "delayed" | "running" | "verified" | "managed-unverified" | "external-controller" | "manual" | "unknown";
 
 type ActionRow = {
   certificate: Certificate;
@@ -162,6 +162,7 @@ function automationState(
   if (run?.status === "succeeded" && run.successor_fingerprint === certificate.fingerprint) return "verified";
   if (identity) return "managed-unverified";
   if (certificate.identity_ids?.length) return "unknown";
+  if (certificate.kubernetes_provenance?.length) return "external-controller";
   return "manual";
 }
 
@@ -335,6 +336,9 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
       } else if (certificate.identity_ids?.length) {
         actionLabel = t("certificates.lifecycle.reviewIdentity");
         actionTo = certificateIdentityPath(certificate);
+      } else if (certificate.kubernetes_provenance?.length) {
+        actionLabel = t("certificates.lifecycle.reviewKubernetes");
+        actionTo = `/workloads?kubernetes_request=${encodeURIComponent(certificate.kubernetes_provenance[0]!.request_uid)}`;
       } else {
         actionLabel = t(certificate.source?.startsWith("attested:") ? "certificates.lifecycle.replaceAttested" : "certificateCockpit.action.replace");
         actionTo = certificateReplacementPath(certificate);

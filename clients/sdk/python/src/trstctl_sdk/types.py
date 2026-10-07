@@ -2855,6 +2855,7 @@ Certificate = TypedDict(
         'key_generated_by': str,
         'key_origin': str,
         'key_storage': str,
+        'kubernetes_provenance': list[dict[str, Any]],
         'not_after': str,
         'not_before': str,
         'owner_id': str,
@@ -5999,6 +6000,37 @@ KubernetesCSRSupportRule = TypedDict(
     total=False,
 )
 
+KubernetesCertManagerRequests = TypedDict(
+    'KubernetesCertManagerRequests',
+    {
+        'capability': str,
+        'controllers': list[dict[str, Any]],
+        'generated_at': str,
+        'last_sync': str,
+        'objects': list[dict[str, Any]],
+        'served': bool,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+KubernetesCertificateProvenance = TypedDict(
+    'KubernetesCertificateProvenance',
+    {
+        'certificate_name': str,
+        'certificate_uid': str,
+        'cluster_id': str,
+        'controller_id': str,
+        'fingerprint': str,
+        'namespace': str,
+        'observed_at': str,
+        'report_id': str,
+        'request_name': str,
+        'request_uid': str,
+    },
+    total=False,
+)
+
 KubernetesPostureController = TypedDict(
     'KubernetesPostureController',
     {
@@ -6024,6 +6056,8 @@ KubernetesPostureObject = TypedDict(
         'controller_id': str,
         'name': str,
         'namespace': str,
+        'parent_name': str,
+        'parent_uid': str,
         'public_hash': str,
         'reason': str,
         'resource_version': str,

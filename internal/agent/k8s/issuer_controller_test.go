@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/k8s"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 const testIssuerSignerURL = "https://trstctl.trstctl.svc/api/v1/issue"
@@ -331,6 +332,10 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 		cr := certRequest("cm-generated", "trstctl", "trstctl.com", false)
 		cr["spec"].(map[string]any)["request"] = csrRequestField(t)
 		cr["spec"].(map[string]any)["issuerRef"].(map[string]any)["kind"] = "ClusterIssuer"
+		cr["metadata"].(map[string]any)["ownerReferences"] = []any{map[string]any{
+			"apiVersion": "cert-manager.io/v1", "kind": "Certificate", "controller": true,
+			"name": "workload", "uid": "certificate-uid-workload",
+		}}
 		return approveCertRequest(cr)
 	}()}
 	srv := httptest.NewServer(api.handler())
@@ -362,6 +367,79 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 	}
 	if block, _ := pem.Decode(decoded); block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("status.certificate does not contain a PEM certificate")
+	}
+	info, err := certinfo.Inspect(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.CertificateRequestComplete || len(result.CertificateRequestPosture) != 1 {
+		t.Fatalf("cert-manager posture = %+v complete=%v", result.CertificateRequestPosture, result.CertificateRequestComplete)
+	}
+	posture := result.CertificateRequestPosture[0]
+	if posture.UID != "request-uid-cm-generated" || posture.ParentUID != "certificate-uid-workload" || posture.ParentName != "workload" || posture.PublicHash != info.SHA256Fingerprint || posture.State != "ready" {
+		t.Fatalf("cert-manager provenance = %+v; expected exact request and leaf", posture)
+	}
+	reportJSON, err := json.Marshal(result.PostureReport(controllerClusterID(), 30*time.Second))
+	if err != nil || strings.Contains(string(reportJSON), "BEGIN CERTIFICATE") || strings.Contains(string(reportJSON), string(decoded)) {
+		t.Fatalf("cert-manager report leaked certificate bytes: err=%v report=%s", err, reportJSON)
+	}
+}
+
+func TestCertManagerPostureDoesNotInventParentFromName(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	request := certRequest("same-name-as-certificate", "trstctl", "trstctl.com", false)
+	request["spec"].(map[string]any)["request"] = csrRequestField(t)
+	api.certificateRequests = []map[string]any{approveCertRequest(request)}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil || len(result.CertificateRequestPosture) != 1 {
+		t.Fatalf("reconcile unowned request: result=%+v err=%v", result, err)
+	}
+	posture := result.CertificateRequestPosture[0]
+	if posture.State != "failed" || posture.Reason != "missing_owner" || posture.ParentUID != "" || posture.PublicHash == "" {
+		t.Fatalf("same-name unowned request was incorrectly bound: %+v", posture)
+	}
+}
+
+func TestCertManagerPostureRejectsCertificateFromDifferentCSR(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	request := approveCertRequest(certRequest("original", "trstctl", "trstctl.com", false))
+	request["spec"].(map[string]any)["request"] = csrRequestField(t)
+	api.certificateRequests = []map[string]any{request}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller := testIssuerController(t, k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	if _, err := controller.Reconcile(context.Background(), "apps"); err != nil {
+		t.Fatal(err)
+	}
+	_, originalCertificate := readyCondition(t, api.requestStatus["original"])
+	if originalCertificate == "" {
+		t.Fatal("original request has no issued certificate")
+	}
+	swapped := certRequest("swapped", "trstctl", "trstctl.com", true)
+	swapped["spec"].(map[string]any)["request"] = csrRequestField(t) // distinct key, same requested names
+	swapped["metadata"].(map[string]any)["ownerReferences"] = []any{map[string]any{
+		"apiVersion": "cert-manager.io/v1", "kind": "Certificate", "controller": true,
+		"name": "workload", "uid": "certificate-uid-workload",
+	}}
+	swapped["status"].(map[string]any)["certificate"] = originalCertificate
+	swapped["status"].(map[string]any)["conditions"] = []any{
+		map[string]any{"type": "Approved", "status": "True"}, map[string]any{"type": "Ready", "status": "True"},
+	}
+	api.certificateRequests = []map[string]any{swapped}
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil || len(result.CertificateRequestPosture) != 1 {
+		t.Fatalf("observe swapped request: result=%+v err=%v", result, err)
+	}
+	posture := result.CertificateRequestPosture[0]
+	if posture.State != "failed" || posture.Reason != "certificate_key_mismatch" || posture.PublicHash != "" {
+		t.Fatalf("swapped request was bound to another issued leaf: %+v", posture)
 	}
 }
 

@@ -1596,10 +1596,19 @@ func componentSchemas() map[string]*Schema {
 		"decisions":          {Type: "array", Items: ref("AccessChangeDecision")},
 	}, "id", "tenant_id", "requested_action", "requester_subject", "nhi_id", "nhi_kind", "display_name", "resource", "entitlement", "change_ref", "change_system", "risk", "reason", "evidence_refs", "status", "required_approvals", "approval_count", "created_at", "updated_at")
 
+	kubernetesCertificateProvenance := object(map[string]*Schema{
+		"cluster_id": str(), "namespace": str(),
+		"request_name": str(), "request_uid": str(),
+		"certificate_name": str(), "certificate_uid": str(),
+		"fingerprint": str(), "controller_id": uuid(), "report_id": uuid(),
+		"observed_at": timestamp(),
+	}, "cluster_id", "namespace", "request_name", "request_uid", "certificate_name", "certificate_uid", "fingerprint", "controller_id", "report_id", "observed_at")
+	kubernetesCertificateProvenance.Description = "Authenticated enrolled-agent observation linking an exact issued leaf fingerprint to a cert-manager CertificateRequest and its controller-owned Certificate UID. Retained across request garbage collection. Does not prove Secret delivery or a served workload endpoint."
 	certificate := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
-		"identity_ids": {Type: "array", Items: uuid(), Description: "Managing identities proved by retained issuance or successful delivery evidence. Returned by certificate inventory list/detail reads. Absent means no resolved binding; multiple values require explicit selection. Never inferred from a name or owner."},
-		"sans":         {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
+		"identity_ids":          {Type: "array", Items: uuid(), Description: "Managing identities proved by retained issuance or successful delivery evidence. Returned by certificate inventory list/detail reads. Absent means no resolved binding; multiple values require explicit selection. Never inferred from a name or owner."},
+		"kubernetes_provenance": {Type: "array", Items: ref("KubernetesCertificateProvenance"), Description: "Exact authenticated cert-manager request/Certificate UID observations for this issued fingerprint; absent when unobserved. Not deployment verification."},
+		"sans":                  {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
 		"fingerprint": str(), "key_algorithm": str(), "not_before": timestamp(), "not_after": timestamp(),
 		"deployment_location": str(), "source": str(), "created_at": timestamp(),
 		"status":            {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
@@ -5799,10 +5808,19 @@ func componentSchemas() map[string]*Schema {
 		"state":            {Type: "string", Enum: []string{"ready", "pending", "failed"}},
 		"reason":           str(),
 		"public_hash":      str(),
+		"parent_uid":       str(),
+		"parent_name":      str(),
 	}, "controller_id", "cluster_id", "name", "uid", "resource_version", "state", "reason")
 	kubernetesCSRSupportRule := object(map[string]*Schema{
 		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()},
 	}, "api_group", "resource", "verbs")
+	kubernetesCertManagerRequests := object(map[string]*Schema{
+		"capability": str(), "served": {Type: "boolean"}, "generated_at": timestamp(), "last_sync": timestamp(),
+		"summary":     ref("KubernetesPostureSummary"),
+		"controllers": {Type: "array", Items: ref("KubernetesPostureController")},
+		"objects":     {Type: "array", Items: ref("KubernetesPostureObject")},
+	}, "capability", "served", "generated_at", "summary", "controllers", "objects")
+	kubernetesCertManagerRequests.Description = "Latest enrolled-controller cert-manager CertificateRequest observations. A ready object includes its issued leaf hash and exact parent Certificate UID; this does not prove Secret delivery or listener state."
 	// Preserve the original descriptor fields and required set so older clients
 	// remain source-compatible. The four posture fields are additive and optional
 	// in the contract; a current server always emits them from controller-reported
@@ -6363,6 +6381,7 @@ func componentSchemas() map[string]*Schema {
 		"FirstIssuanceRetry":                       firstIssuanceRetry,
 		"IdentityDeploymentEvidence":               identityDeploymentEvidence,
 		"Certificate":                              certificate,
+		"KubernetesCertificateProvenance":          kubernetesCertificateProvenance,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),
 		"CertificateHealthSummary":                 certificateHealthSummary,
@@ -7000,6 +7019,7 @@ func componentSchemas() map[string]*Schema {
 		"KubernetesPostureObject":            kubernetesPostureObject,
 		"KubernetesCSRSupportRule":           kubernetesCSRSupportRule,
 		"KubernetesCSRSupport":               kubernetesCSRSupport,
+		"KubernetesCertManagerRequests":      kubernetesCertManagerRequests,
 		"KubernetesTrustBundleDistribution":  kubernetesTrustBundleDistribution,
 		"SecretScanRequest":                  secretScanReq,
 		"SecretScanPreview":                  secretScanPreview,

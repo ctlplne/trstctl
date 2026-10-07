@@ -167,6 +167,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"external-cas", "list"}, Method: "GET", Path: "/api/v1/external-cas", Summary: "List configured upstream CA integrations"},
 	{Name: []string{"external-cas", "issue"}, Method: "POST", Path: "/api/v1/external-cas/{id}/issue", Body: bodyFile, Summary: "Issue a certificate through an upstream CA integration"},
 	{Name: []string{"kubernetes", "csr"}, Method: "GET", Path: "/api/v1/kubernetes/certificate-signing-requests", Summary: "Show native Kubernetes CertificateSigningRequest support"},
+	{Name: []string{"kubernetes", "cert-manager-requests"}, Method: "GET", Path: "/api/v1/kubernetes/cert-manager-certificate-requests", Summary: "Show authenticated cert-manager CertificateRequest observations"},
 	{Name: []string{"kubernetes", "trust-bundles"}, Method: "GET", Path: "/api/v1/kubernetes/trust-bundles", Summary: "Show Kubernetes trust-bundle distribution support"},
 	{Name: []string{"setup", "protocols", "status"}, Method: "GET", Path: "/api/v1/setup/protocols", Summary: "Show the tenant-bound eval protocol profile status"},
 	{Name: []string{"setup", "protocols", "activate"}, Method: "POST", Path: "/api/v1/setup/protocols/activate", Body: bodyNone, Summary: "Activate the tenant-bound eval protocol profile"},

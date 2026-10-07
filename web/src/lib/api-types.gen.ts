@@ -2047,6 +2047,7 @@ export interface Certificate {
   key_generated_by?: string;
   key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
   key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
+  kubernetes_provenance?: KubernetesCertificateProvenance[];
   not_after?: string;
   not_before?: string;
   owner_id?: string;
@@ -4345,6 +4346,29 @@ export interface KubernetesCSRSupportRule {
   verbs: string[];
 }
 
+export interface KubernetesCertManagerRequests {
+  capability: string;
+  controllers: KubernetesPostureController[];
+  generated_at: string;
+  last_sync?: string;
+  objects: KubernetesPostureObject[];
+  served: boolean;
+  summary: KubernetesPostureSummary;
+}
+
+export interface KubernetesCertificateProvenance {
+  certificate_name: string;
+  certificate_uid: string;
+  cluster_id: string;
+  controller_id: string;
+  fingerprint: string;
+  namespace: string;
+  observed_at: string;
+  report_id: string;
+  request_name: string;
+  request_uid: string;
+}
+
 export interface KubernetesPostureController {
   cluster_id: string;
   controller_id: string;
@@ -4364,6 +4388,8 @@ export interface KubernetesPostureObject {
   controller_id: string;
   name: string;
   namespace?: string;
+  parent_name?: string;
+  parent_uid?: string;
   public_hash?: string;
   reason: string;
   resource_version: string;

@@ -3466,6 +3466,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kubernetes/cert-manager-certificate-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get authenticated cert-manager CertificateRequest observations */
+        get: operations["getKubernetesCertManagerRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kubernetes/certificate-signing-requests": {
         parameters: {
             query?: never;
@@ -9103,6 +9120,8 @@ export interface components {
             key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
             /** @enum {string} */
             key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
+            /** @description Exact authenticated cert-manager request/Certificate UID observations for this issued fingerprint; absent when unobserved. Not deployment verification. */
+            kubernetes_provenance?: components["schemas"]["KubernetesCertificateProvenance"][];
             /** Format: date-time */
             not_after?: string;
             /** Format: date-time */
@@ -11557,6 +11576,34 @@ export interface components {
             resource: string;
             verbs: string[];
         };
+        /** @description Latest enrolled-controller cert-manager CertificateRequest observations. A ready object includes its issued leaf hash and exact parent Certificate UID; this does not prove Secret delivery or listener state. */
+        KubernetesCertManagerRequests: {
+            capability: string;
+            controllers: components["schemas"]["KubernetesPostureController"][];
+            /** Format: date-time */
+            generated_at: string;
+            /** Format: date-time */
+            last_sync?: string;
+            objects: components["schemas"]["KubernetesPostureObject"][];
+            served: boolean;
+            summary: components["schemas"]["KubernetesPostureSummary"];
+        };
+        /** @description Authenticated enrolled-agent observation linking an exact issued leaf fingerprint to a cert-manager CertificateRequest and its controller-owned Certificate UID. Retained across request garbage collection. Does not prove Secret delivery or a served workload endpoint. */
+        KubernetesCertificateProvenance: {
+            certificate_name: string;
+            certificate_uid: string;
+            cluster_id: string;
+            /** Format: uuid */
+            controller_id: string;
+            fingerprint: string;
+            namespace: string;
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: uuid */
+            report_id: string;
+            request_name: string;
+            request_uid: string;
+        };
         KubernetesPostureController: {
             cluster_id: string;
             controller_id: string;
@@ -11576,6 +11623,8 @@ export interface components {
             controller_id: string;
             name: string;
             namespace?: string;
+            parent_name?: string;
+            parent_uid?: string;
             public_hash?: string;
             reason: string;
             resource_version: string;
@@ -25680,6 +25729,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ITSMTicket"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getKubernetesCertManagerRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesCertManagerRequests"];
                 };
             };
             /** @description client error */

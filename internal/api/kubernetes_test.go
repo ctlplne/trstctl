@@ -62,6 +62,7 @@ func TestKubernetesPostureRoutesFailHonestlyWithoutControllerReport(t *testing.T
 	handler := New(nil, nil, nil, WithInsecureHeaderResolver())
 	for _, path := range []string{
 		"/api/v1/kubernetes/certificate-signing-requests",
+		"/api/v1/kubernetes/cert-manager-certificate-requests",
 		"/api/v1/kubernetes/trust-bundles",
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -97,15 +98,26 @@ func TestKubernetesPostureRoutesRequireAndUseExplicitProductionReaders(t *testin
 			Resources: []store.KubernetesPostureResource{{Name: "real-bundle", UID: "bundle-uid", ResourceVersion: "8", State: "ready", Reason: "distributed"}},
 		}},
 	}}
+	certManager := &fakeKubernetesPostureReader{rows: map[string][]store.KubernetesControllerPosture{
+		store.KubernetesPostureCertManagerRequests: {{
+			ControllerID: "11111111-1111-1111-1111-111111111111", ClusterID: "sha256:" + strings.Repeat("a", 64),
+			ReportID: "55555555-5555-5555-5555-555555555555", ReconcileComplete: true,
+			ReconcileIntervalSeconds: 30, ReportedAt: now,
+			Resources: []store.KubernetesPostureResource{{Namespace: "apps", Name: "real-request", UID: "request-uid", ResourceVersion: "9", State: "ready", Reason: "signed",
+				PublicHash: strings.Repeat("d", 64), ParentName: "workload", ParentUID: "certificate-uid"}},
+		}},
+	}}
 	handler := New(nil, nil, nil,
 		WithInsecureHeaderResolver(),
 		WithKubernetesCSRPosture(csr),
+		WithKubernetesCertManagerPosture(certManager),
 		WithKubernetesTrustBundlePosture(trust),
 	)
 	for _, tc := range []struct {
 		path, object string
 	}{
 		{path: "/api/v1/kubernetes/certificate-signing-requests", object: "real-csr"},
+		{path: "/api/v1/kubernetes/cert-manager-certificate-requests", object: "real-request"},
 		{path: "/api/v1/kubernetes/trust-bundles", object: "real-bundle"},
 	} {
 		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
@@ -116,12 +128,18 @@ func TestKubernetesPostureRoutesRequireAndUseExplicitProductionReaders(t *testin
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"`+tc.object+`"`) {
 			t.Fatalf("%s status=%d body=%s, want explicit projected object %s", tc.path, rec.Code, rec.Body.String(), tc.object)
 		}
+		if tc.object == "real-request" && (!strings.Contains(rec.Body.String(), `"parent_uid":"certificate-uid"`) || !strings.Contains(rec.Body.String(), `"public_hash":"`+strings.Repeat("d", 64)+`"`)) {
+			t.Fatalf("cert-manager route lost exact parent or issued leaf: %s", rec.Body.String())
+		}
 	}
 	if len(csr.calls) != 1 || !strings.HasSuffix(csr.calls[0], "/"+store.KubernetesPostureCertificateSigningRequests) {
 		t.Fatalf("CSR reader calls=%v", csr.calls)
 	}
 	if len(trust.calls) != 1 || !strings.HasSuffix(trust.calls[0], "/"+store.KubernetesPostureTrustBundles) {
 		t.Fatalf("TrustBundle reader calls=%v", trust.calls)
+	}
+	if len(certManager.calls) != 1 || !strings.HasSuffix(certManager.calls[0], "/"+store.KubernetesPostureCertManagerRequests) {
+		t.Fatalf("cert-manager reader calls=%v", certManager.calls)
 	}
 }
 

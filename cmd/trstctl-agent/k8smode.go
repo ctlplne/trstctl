@@ -244,6 +244,7 @@ func transportKubernetesPostureReport(report k8s.ControllerPostureReport) *trans
 				Namespace: resource.Namespace, Name: resource.Name, UID: resource.UID,
 				ResourceVersion: resource.ResourceVersion, State: resource.State,
 				Reason: resource.Reason, PublicHash: resource.PublicHash,
+				ParentUID: resource.ParentUID, ParentName: resource.ParentName,
 			})
 		}
 		return transport.KubernetesPostureSection{Complete: section.Complete, FailureCode: section.FailureCode, Resources: resources}
@@ -252,5 +253,10 @@ func transportKubernetesPostureReport(report k8s.ControllerPostureReport) *trans
 		ReportID: report.ReportID, ClusterID: report.ClusterID,
 		ReconcileIntervalSeconds: report.ReconcileIntervalSeconds,
 		CertificateSigning:       convert(report.CertificateSigning), TrustBundles: convert(report.TrustBundles),
+		CertificateRequests: ptrKubernetesPostureSection(convert(report.CertificateRequests)),
 	}
+}
+
+func ptrKubernetesPostureSection(section transport.KubernetesPostureSection) *transport.KubernetesPostureSection {
+	return &section
 }

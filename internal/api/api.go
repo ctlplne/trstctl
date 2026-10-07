@@ -180,6 +180,7 @@ type API struct {
 	privacyRetentionPolicy             privacy.RetentionPolicy
 	privacyRetentionSource             privacy.RetentionPolicySource
 	kubernetesCSRPosture               KubernetesPostureReader
+	kubernetesCMPosture                KubernetesPostureReader
 	kubernetesTrustPosture             KubernetesPostureReader
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
@@ -301,6 +302,7 @@ type config struct {
 	privacyRetentionPolicy      privacy.RetentionPolicy
 	privacyRetentionSource      privacy.RetentionPolicySource
 	kubernetesCSRPosture        KubernetesPostureReader
+	kubernetesCMPosture         KubernetesPostureReader
 	kubernetesTrustPosture      KubernetesPostureReader
 	featureObserver             func(feature, action, outcome string, seconds float64)
 	ownershipAttestationCadence time.Duration
@@ -614,6 +616,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		privacyRetentionPolicy:      policy.WithDefaults(),
 		privacyRetentionSource:      cfg.privacyRetentionSource,
 		kubernetesCSRPosture:        cfg.kubernetesCSRPosture,
+		kubernetesCMPosture:         cfg.kubernetesCMPosture,
 		kubernetesTrustPosture:      cfg.kubernetesTrustPosture,
 	}
 	a.bindLifecyclePolicy()
@@ -1151,6 +1154,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/external-cas", opID: "listExternalCAs", summary: "List configured upstream CA integrations", handler: a.listExternalCAs, resSchema: "ExternalCAList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: combineRouteScopes(scopeIssuerPath("id"), scopeProfileJSON("profile_name"))},
 		{method: "GET", path: "/api/v1/kubernetes/certificate-signing-requests", opID: "getKubernetesCSRSupport", summary: "Get native Kubernetes CertificateSigningRequest support", handler: a.getKubernetesCSRSupport, resSchema: "KubernetesCSRSupport", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/kubernetes/cert-manager-certificate-requests", opID: "getKubernetesCertManagerRequests", summary: "Get authenticated cert-manager CertificateRequest observations", handler: a.getKubernetesCertManagerRequests, resSchema: "KubernetesCertManagerRequests", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/kubernetes/trust-bundles", opID: "getKubernetesTrustBundleDistribution", summary: "Get Kubernetes trust-bundle distribution support", handler: a.getKubernetesTrustBundleDistribution, resSchema: "KubernetesTrustBundleDistribution", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/workloads/attester-trust-sources", opID: "createWorkloadAttesterTrustSource", summary: "Create a tenant workload attester trust source", handler: a.createWorkloadAttesterTrustSource, reqSchema: "WorkloadAttesterTrustSourceRequest", resSchema: "WorkloadAttesterTrustSource", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/workloads/attester-trust-sources", opID: "listWorkloadAttesterTrustSources", summary: "List tenant workload attester trust sources", handler: a.listWorkloadAttesterTrustSources, resSchema: "WorkloadAttesterTrustSourceList", successCode: "200", perm: authz.CertsRead},

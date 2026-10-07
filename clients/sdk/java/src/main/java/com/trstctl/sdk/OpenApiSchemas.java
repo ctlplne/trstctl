@@ -426,6 +426,8 @@ public final class OpenApiSchemas {
       "KeyCompromiseRevocationAttempt",
       "KubernetesCSRSupport",
       "KubernetesCSRSupportRule",
+      "KubernetesCertManagerRequests",
+      "KubernetesCertificateProvenance",
       "KubernetesPostureController",
       "KubernetesPostureObject",
       "KubernetesPostureSummary",

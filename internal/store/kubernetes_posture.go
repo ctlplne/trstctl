@@ -12,6 +12,7 @@ import (
 
 const (
 	KubernetesPostureCertificateSigningRequests = "certificate-signing-requests"
+	KubernetesPostureCertManagerRequests        = "cert-manager-certificate-requests"
 	KubernetesPostureTrustBundles               = "trust-bundles"
 )
 
@@ -26,6 +27,8 @@ type KubernetesPostureResource struct {
 	State           string `json:"state"`
 	Reason          string `json:"reason"`
 	PublicHash      string `json:"public_hash,omitempty"`
+	ParentUID       string `json:"parent_uid,omitempty"`
+	ParentName      string `json:"parent_name,omitempty"`
 }
 
 // KubernetesControllerPosture is the latest event-projected observation for one

@@ -32,6 +32,8 @@ type KubernetesPostureResource struct {
 	State           string `json:"state"`
 	Reason          string `json:"reason"`
 	PublicHash      string `json:"public_hash,omitempty"`
+	ParentUID       string `json:"parent_uid,omitempty"`
+	ParentName      string `json:"parent_name,omitempty"`
 }
 
 // KubernetesPostureSection is one independently honest controller surface. A
@@ -46,12 +48,13 @@ type KubernetesPostureSection struct {
 // agent channel after a real controller reconcile. AgentID is derived from the
 // verified client certificate by the server, never trusted from the request.
 type KubernetesControllerPostureReported struct {
-	ReportID                 string                   `json:"report_id"`
-	AgentID                  string                   `json:"agent_id"`
-	ClusterID                string                   `json:"cluster_id"`
-	ReconcileIntervalSeconds int                      `json:"reconcile_interval_seconds"`
-	CertificateSigning       KubernetesPostureSection `json:"certificate_signing_requests"`
-	TrustBundles             KubernetesPostureSection `json:"trust_bundles"`
+	ReportID                 string                    `json:"report_id"`
+	AgentID                  string                    `json:"agent_id"`
+	ClusterID                string                    `json:"cluster_id"`
+	ReconcileIntervalSeconds int                       `json:"reconcile_interval_seconds"`
+	CertificateSigning       KubernetesPostureSection  `json:"certificate_signing_requests"`
+	CertificateRequests      *KubernetesPostureSection `json:"cert_manager_certificate_requests,omitempty"`
+	TrustBundles             KubernetesPostureSection  `json:"trust_bundles"`
 }
 
 func (p *Projector) applyKubernetesPostureTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
@@ -73,19 +76,27 @@ func (p *Projector) applyKubernetesPostureTx(ctx context.Context, tx pgx.Tx, e e
 	if err := validateKubernetesPostureReport(payload); err != nil {
 		return true, fmt.Errorf("projections: %s: %w", e.Type, err)
 	}
-	for _, section := range []struct {
+	sections := []struct {
 		capability string
 		posture    KubernetesPostureSection
 	}{
 		{store.KubernetesPostureCertificateSigningRequests, payload.CertificateSigning},
 		{store.KubernetesPostureTrustBundles, payload.TrustBundles},
-	} {
+	}
+	if payload.CertificateRequests != nil {
+		sections = append(sections, struct {
+			capability string
+			posture    KubernetesPostureSection
+		}{store.KubernetesPostureCertManagerRequests, *payload.CertificateRequests})
+	}
+	for _, section := range sections {
 		resources := make([]store.KubernetesPostureResource, 0, len(section.posture.Resources))
 		for _, resource := range section.posture.Resources {
 			resources = append(resources, store.KubernetesPostureResource{
 				Namespace: resource.Namespace, Name: resource.Name, UID: resource.UID,
 				ResourceVersion: resource.ResourceVersion, State: resource.State,
 				Reason: resource.Reason, PublicHash: resource.PublicHash,
+				ParentUID: resource.ParentUID, ParentName: resource.ParentName,
 			})
 		}
 		if err := p.store.ApplyKubernetesControllerPostureTx(ctx, tx, store.KubernetesControllerPosture{
@@ -96,6 +107,22 @@ func (p *Projector) applyKubernetesPostureTx(ctx context.Context, tx pgx.Tx, e e
 			ReportedAt: e.Time, EventSequence: e.Sequence,
 		}); err != nil {
 			return true, err
+		}
+		if section.capability == store.KubernetesPostureCertManagerRequests {
+			for _, resource := range section.posture.Resources {
+				if resource.State != "ready" {
+					continue
+				}
+				if err := p.store.ApplyKubernetesCertificateProvenanceTx(ctx, tx, store.KubernetesCertificateProvenance{
+					TenantID: e.TenantID, ClusterID: payload.ClusterID, Namespace: resource.Namespace,
+					RequestName: resource.Name, RequestUID: resource.UID,
+					CertificateName: resource.ParentName, CertificateUID: resource.ParentUID,
+					Fingerprint: resource.PublicHash, ControllerID: payload.AgentID,
+					ReportID: payload.ReportID, ObservedAt: e.Time, EventSequence: e.Sequence,
+				}); err != nil {
+					return true, err
+				}
+			}
 		}
 	}
 	return true, nil
@@ -119,6 +146,11 @@ func validateKubernetesPostureReport(report KubernetesControllerPostureReported)
 	}
 	if err := validateKubernetesPostureSection(report.TrustBundles, store.KubernetesPostureTrustBundles); err != nil {
 		return fmt.Errorf("trust_bundles: %w", err)
+	}
+	if report.CertificateRequests != nil {
+		if err := validateKubernetesPostureSection(*report.CertificateRequests, store.KubernetesPostureCertManagerRequests); err != nil {
+			return fmt.Errorf("cert_manager_certificate_requests: %w", err)
+		}
 	}
 	return nil
 }
@@ -152,6 +184,20 @@ func validateKubernetesPostureSection(section KubernetesPostureSection, capabili
 		}
 		if resource.PublicHash != "" && !validLowerHex(resource.PublicHash, 64) {
 			return fmt.Errorf("public_hash must be lowercase SHA-256 hex")
+		}
+		if capability == store.KubernetesPostureCertManagerRequests {
+			if resource.Namespace == "" {
+				return fmt.Errorf("cert-manager request namespace is required")
+			}
+			if (resource.ParentUID == "") != (resource.ParentName == "") ||
+				(resource.ParentUID != "" && (!validKubernetesOpaqueMetadata(resource.ParentUID) || len(resource.ParentUID) > 128 || !validKubernetesDNSSubdomain(resource.ParentName, 253))) {
+				return fmt.Errorf("cert-manager parent identity is invalid")
+			}
+			if resource.State == "ready" && (resource.ParentUID == "" || resource.PublicHash == "") {
+				return fmt.Errorf("ready cert-manager request requires parent UID and certificate fingerprint")
+			}
+		} else if resource.ParentUID != "" || resource.ParentName != "" {
+			return fmt.Errorf("parent identity is only valid for cert-manager requests")
 		}
 		identity := resource.Namespace + "\x00" + resource.Name + "\x00" + resource.UID
 		if _, duplicate := seen[identity]; duplicate {
@@ -200,6 +246,8 @@ func validKubernetesOpaqueMetadata(value string) bool {
 
 func validKubernetesPostureReason(reason, capability string) bool {
 	switch reason {
+	case "invalid_certificate", "invalid_request", "certificate_key_mismatch", "missing_owner", "approval_missing":
+		return capability == store.KubernetesPostureCertManagerRequests
 	case "issuer_binding_mismatch", "invalid_signer_name":
 		return capability == store.KubernetesPostureCertificateSigningRequests
 	case "signed", "already_ready", "approval_pending", "issuer_not_found", "denied", "failed", "awaiting_sign", "distributed", "controller_error":

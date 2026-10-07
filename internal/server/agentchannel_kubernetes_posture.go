@@ -48,6 +48,11 @@ func (a *agentService) ReportKubernetesPosture(ctx context.Context, req *transpo
 		CertificateSigning: transportKubernetesPostureSection(req.CertificateSigning),
 		TrustBundles:       transportKubernetesPostureSection(req.TrustBundles),
 	}
+	if req.CertificateRequests != nil {
+		section := transportKubernetesPostureSection(*req.CertificateRequests)
+		report.CertificateRequests = &section
+		sortKubernetesPostureResources(section.Resources)
+	}
 	sortKubernetesPostureResources(report.CertificateSigning.Resources)
 	sortKubernetesPostureResources(report.TrustBundles.Resources)
 	payload, err := projections.MarshalKubernetesPostureReport(report)
@@ -106,6 +111,7 @@ func transportKubernetesPostureSection(section transport.KubernetesPostureSectio
 			Namespace: resource.Namespace, Name: resource.Name, UID: resource.UID,
 			ResourceVersion: resource.ResourceVersion, State: resource.State,
 			Reason: resource.Reason, PublicHash: resource.PublicHash,
+			ParentUID: resource.ParentUID, ParentName: resource.ParentName,
 		})
 	}
 	return projections.KubernetesPostureSection{Complete: section.Complete, FailureCode: section.FailureCode, Resources: resources}

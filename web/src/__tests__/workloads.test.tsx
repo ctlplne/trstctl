@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     brokerAgentIdentities: vi.fn(),
     kubernetesCSRSupport: vi.fn(),
+    kubernetesCertManagerRequests: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
     rotationRuns: vi.fn(),
     sshFleet: vi.fn(),
@@ -32,9 +33,9 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function renderWorkloads() {
+function renderWorkloads(route = "/workloads") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <AppQueryProvider>
         <Workloads />
       </AppQueryProvider>
@@ -50,6 +51,29 @@ describe("workload identity disclosure surface", () => {
     apiMock.getDynamicLease.mockReset();
     apiMock.brokerAgentIdentities.mockReset().mockResolvedValue(brokerHistoryPage([]));
     apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
+    apiMock.kubernetesCertManagerRequests.mockReset().mockResolvedValue({
+      capability: "cert-manager-certificate-requests",
+      served: true,
+      generated_at: "2026-10-06T23:45:30Z",
+      last_sync: "2026-10-06T23:45:30Z",
+      summary: { controllers: 1, complete_controllers: 1, stale_controllers: 0, observed: 1, ready: 1, pending: 0, failed: 0 },
+      controllers: [],
+      objects: [
+        {
+          cluster_id: "sha256:cluster",
+          controller_id: "controller-1",
+          namespace: "apps",
+          name: "workload-6",
+          uid: "request-uid-6",
+          resource_version: "8",
+          state: "ready",
+          reason: "signed",
+          public_hash: "d".repeat(64),
+          parent_name: "workload",
+          parent_uid: "certificate-uid",
+        },
+      ],
+    });
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
     apiMock.agents.mockReset().mockResolvedValue([
@@ -142,10 +166,12 @@ describe("workload identity disclosure surface", () => {
 
     expect(apiMock.kubernetesCSRSupport).not.toHaveBeenCalled();
     expect(apiMock.kubernetesTrustBundles).not.toHaveBeenCalled();
+    expect(apiMock.kubernetesCertManagerRequests).not.toHaveBeenCalled();
     await user.click(screen.getByText("Kubernetes controller evidence"));
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(apiMock.kubernetesCSRSupport).toHaveBeenCalledTimes(1);
     expect(apiMock.kubernetesTrustBundles).toHaveBeenCalledTimes(1);
+    expect(apiMock.kubernetesCertManagerRequests).toHaveBeenCalledTimes(1);
   });
 
   it("bases SSH urgency on observed standing grants, not an unobserved CA posture", async () => {
@@ -173,8 +199,16 @@ describe("workload identity disclosure surface", () => {
     expect(within(trustObjects).getByText("qa-j5-agent-ca")).toBeInTheDocument();
     expect(within(trustObjects).getByText("distributed")).toBeInTheDocument();
     expect(within(trustObjects).getByText("324c0a9b75…82608f")).toBeInTheDocument();
-    expect(screen.getAllByText("1 of 1 controllers completed their last reported pass.")).toHaveLength(2);
-    expect(screen.getAllByText("Stale controllers:")).toHaveLength(2);
+    expect(screen.getAllByText("1 of 1 controllers completed their last reported pass.")).toHaveLength(3);
+    expect(screen.getAllByText("Stale controllers:")).toHaveLength(3);
+  });
+
+  it("opens the exact cert-manager request from a certificate link", async () => {
+    renderWorkloads("/workloads?kubernetes_request=request-uid-6");
+    const table = await screen.findByRole("table", { name: "Observed objects for cert-manager CertificateRequests" });
+    expect(within(table).getByText("apps/workload-6")).toBeInTheDocument();
+    expect(within(table).getByText("apps/workload · certificate-uid")).toBeInTheDocument();
+    expect(screen.getByText(/Showing request UID request-uid-6/)).toBeInTheDocument();
   });
 
   it("explains native CSR issuer binding failures with an operator action", async () => {

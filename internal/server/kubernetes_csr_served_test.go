@@ -52,6 +52,11 @@ func TestServedKubernetesPostureReportUsesAuthenticatedAgentEventProjection(t *t
 		}, {
 			Name: "malformed-signer-csr", UID: "malformed-uid", ResourceVersion: "19", State: "failed", Reason: "invalid_signer_name",
 		}}},
+		CertificateRequests: &transport.KubernetesPostureSection{Complete: true, Resources: []transport.KubernetesPostureResource{{
+			Namespace: "apps", Name: "managed-6", UID: "request-uid-6", ResourceVersion: "21",
+			State: "ready", Reason: "signed", PublicHash: strings.Repeat("d", 64),
+			ParentName: "managed", ParentUID: "certificate-uid",
+		}}},
 		TrustBundles: transport.KubernetesPostureSection{Complete: true, Resources: []transport.KubernetesPostureResource{{
 			Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "ready", Reason: "distributed", PublicHash: strings.Repeat("c", 64),
 		}}},
@@ -95,6 +100,10 @@ func TestServedKubernetesPostureReportUsesAuthenticatedAgentEventProjection(t *t
 	}
 	if reasons["web-csr"] != "signed" || reasons["rejected-csr"] != "issuer_binding_mismatch" || reasons["malformed-signer-csr"] != "invalid_signer_name" {
 		t.Fatalf("projected Kubernetes posture reasons = %+v", reasons)
+	}
+	provenance, err := h.store.ListKubernetesCertificateProvenance(ctx, h.tenant, []string{strings.Repeat("d", 64)})
+	if err != nil || len(provenance[strings.Repeat("d", 64)]) != 1 || provenance[strings.Repeat("d", 64)][0].CertificateUID != "certificate-uid" {
+		t.Fatalf("mTLS cert-manager provenance = %+v err=%v", provenance, err)
 	}
 
 	before := servedEventCount(t, h, projections.EventKubernetesControllerPostureReported)

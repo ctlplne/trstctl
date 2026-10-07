@@ -25,6 +25,12 @@ func WithKubernetesCSRPosture(reader KubernetesPostureReader) Option {
 	return func(c *config) { c.kubernetesCSRPosture = reader }
 }
 
+// WithKubernetesCertManagerPosture attaches the event-projected cert-manager
+// request observations from enrolled agents.
+func WithKubernetesCertManagerPosture(reader KubernetesPostureReader) Option {
+	return func(c *config) { c.kubernetesCMPosture = reader }
+}
+
 // WithKubernetesTrustBundlePosture wires real TrustBundle controller projections
 // into the served CAP-K8S-07 route.
 func WithKubernetesTrustBundlePosture(reader KubernetesPostureReader) Option {
@@ -74,6 +80,18 @@ type KubernetesPostureObject struct {
 	State           string `json:"state"`
 	Reason          string `json:"reason"`
 	PublicHash      string `json:"public_hash,omitempty"`
+	ParentUID       string `json:"parent_uid,omitempty"`
+	ParentName      string `json:"parent_name,omitempty"`
+}
+
+type KubernetesCertManagerRequests struct {
+	Capability  string                        `json:"capability"`
+	Served      bool                          `json:"served"`
+	GeneratedAt string                        `json:"generated_at"`
+	LastSync    string                        `json:"last_sync"`
+	Summary     KubernetesPostureSummary      `json:"summary"`
+	Controllers []KubernetesPostureController `json:"controllers"`
+	Objects     []KubernetesPostureObject     `json:"objects"`
 }
 
 type KubernetesCSRSupport struct {
@@ -225,6 +243,20 @@ func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *API) getKubernetesCertManagerRequests(w http.ResponseWriter, r *http.Request) {
+	rows, ok := a.kubernetesPostureRows(w, r, a.kubernetesCMPosture, store.KubernetesPostureCertManagerRequests)
+	if !ok {
+		return
+	}
+	generatedAt := time.Now().UTC()
+	state := buildKubernetesPosture(rows, generatedAt)
+	a.writeJSON(w, http.StatusOK, KubernetesCertManagerRequests{
+		Capability: store.KubernetesPostureCertManagerRequests,
+		Served:     state.served, GeneratedAt: generatedAt.Format(time.RFC3339), LastSync: state.lastSync,
+		Summary: state.summary, Controllers: state.controllers, Objects: state.objects,
+	})
+}
+
 func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *http.Request) {
 	rows, ok := a.kubernetesPostureRows(w, r, a.kubernetesTrustPosture, store.KubernetesPostureTrustBundles)
 	if !ok {
@@ -313,6 +345,7 @@ func buildKubernetesPosture(rows []store.KubernetesControllerPosture, now time.T
 				Namespace: resource.Namespace, Name: resource.Name, UID: resource.UID,
 				ResourceVersion: resource.ResourceVersion, State: resource.State,
 				Reason: resource.Reason, PublicHash: resource.PublicHash,
+				ParentUID: resource.ParentUID, ParentName: resource.ParentName,
 			})
 		}
 		state.summary.Controllers++

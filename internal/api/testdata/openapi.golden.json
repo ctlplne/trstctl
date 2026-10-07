@@ -8342,6 +8342,13 @@
             ],
             "type": "string"
           },
+          "kubernetes_provenance": {
+            "description": "Exact authenticated cert-manager request/Certificate UID observations for this issued fingerprint; absent when unobserved. Not deployment verification.",
+            "items": {
+              "$ref": "#/components/schemas/KubernetesCertificateProvenance"
+            },
+            "type": "array"
+          },
           "not_after": {
             "format": "date-time",
             "type": "string"
@@ -17855,6 +17862,100 @@
         ],
         "type": "object"
       },
+      "KubernetesCertManagerRequests": {
+        "description": "Latest enrolled-controller cert-manager CertificateRequest observations. A ready object includes its issued leaf hash and exact parent Certificate UID; this does not prove Secret delivery or listener state.",
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesPostureController"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_sync": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesPostureObject"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/KubernetesPostureSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "summary",
+          "controllers",
+          "objects"
+        ],
+        "type": "object"
+      },
+      "KubernetesCertificateProvenance": {
+        "description": "Authenticated enrolled-agent observation linking an exact issued leaf fingerprint to a cert-manager CertificateRequest and its controller-owned Certificate UID. Retained across request garbage collection. Does not prove Secret delivery or a served workload endpoint.",
+        "properties": {
+          "certificate_name": {
+            "type": "string"
+          },
+          "certificate_uid": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "controller_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "request_name": {
+            "type": "string"
+          },
+          "request_uid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "namespace",
+          "request_name",
+          "request_uid",
+          "certificate_name",
+          "certificate_uid",
+          "fingerprint",
+          "controller_id",
+          "report_id",
+          "observed_at"
+        ],
+        "type": "object"
+      },
       "KubernetesPostureController": {
         "properties": {
           "cluster_id": {
@@ -17918,6 +18019,12 @@
             "type": "string"
           },
           "namespace": {
+            "type": "string"
+          },
+          "parent_name": {
+            "type": "string"
+          },
+          "parent_uid": {
             "type": "string"
           },
           "public_hash": {
@@ -48799,6 +48906,53 @@
         ],
         "summary": "Queue a ServiceNow ITSM ticket through the outbox",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/kubernetes/cert-manager-certificate-requests": {
+      "get": {
+        "operationId": "getKubernetesCertManagerRequests",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesCertManagerRequests"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get authenticated cert-manager CertificateRequest observations",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/kubernetes/certificate-signing-requests": {

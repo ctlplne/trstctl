@@ -142,6 +142,18 @@ support. The shipped ClusterRole grants `sign` only for `trstctl.com/trstctl`; a
 signer such as `trstctl.com/payments` needs that resource name added rather than
 granting every Kubernetes signer.
 
+For cert-manager, the enrolled agent also reports each trstctl-issued
+`CertificateRequest`'s exact UID, controller-owned parent `Certificate` UID,
+and issued leaf fingerprint over the authenticated agent channel. The
+event-projected `GET /api/v1/kubernetes/cert-manager-certificate-requests` and
+`trstctl-cli kubernetes cert-manager-requests` expose the latest controller
+observation. Inventory list/detail responses retain `kubernetes_provenance`
+for an exact issued fingerprint even after cert-manager garbage-collects that
+request. The Certificates console links that observation to Workloads &
+Machines without calling an externally controlled renewal manual. This is
+issuance provenance; verify the Kubernetes Secret and the served listener
+independently before claiming deployment.
+
 The same agent serves CAP-K8S-07 trust-bundle distribution: operators apply a
 cluster-scoped `TrustBundle.trstctl.com` resource with a public PEM CA bundle and
 target namespaces; the controller rejects non-certificate PEM blocks, creates/updates

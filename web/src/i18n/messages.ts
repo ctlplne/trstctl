@@ -2014,6 +2014,42 @@ export const messages = {
     defaultMessage: "Not identity-managed — replace via request →",
     description: "Certificate detail affordance when no managing identity exists; links to the request flow.",
   },
+  "certificates.lifecycle.reviewKubernetes": {
+    defaultMessage: "Review cert-manager request →",
+    description: "Open the exact cert-manager CertificateRequest observed by the enrolled Kubernetes controller.",
+  },
+  "certificates.kubernetes.observed": {
+    defaultMessage: "cert-manager renewal observed",
+    description: "Exact CertificateRequest and leaf observed by an enrolled Kubernetes controller.",
+  },
+  "certificates.kubernetes.certificate": {
+    defaultMessage: "Certificate: {namespace}/{name}",
+    description: "Namespaced parent cert-manager Certificate object.",
+  },
+  "certificates.kubernetes.certificateUID": {
+    defaultMessage: "Certificate UID: {uid}",
+    description: "Exact parent Kubernetes Certificate UID.",
+  },
+  "certificates.kubernetes.request": {
+    defaultMessage: "CertificateRequest: {name} · UID {uid}",
+    description: "Exact cert-manager request name and UID.",
+  },
+  "certificates.kubernetes.cluster": {
+    defaultMessage: "Cluster identity: {cluster}",
+    description: "Hash identity of the Kubernetes cluster reporting this certificate.",
+  },
+  "certificates.kubernetes.report": {
+    defaultMessage: "Agent {agent} · report {report}",
+    description: "Authenticated agent and immutable report identifiers for cert-manager provenance.",
+  },
+  "certificates.kubernetes.observedAt": {
+    defaultMessage: "Observed {time}",
+    description: "Time when the agent reported the cert-manager CertificateRequest leaf.",
+  },
+  "certificates.kubernetes.limit": {
+    defaultMessage: "The agent observed issuance to the request. Secret delivery and the served endpoint require separate verification.",
+    description: "Limit of cert-manager provenance evidence.",
+  },
   "certificates.lifecycle.renewStarted": {
     defaultMessage: "Renewal started",
     description: "Toast title shown when an identity renewal has been kicked off from the certificate inventory.",
@@ -7988,6 +8024,10 @@ export const messages = {
     description: "Managed certificate without successful automation evidence.",
   },
   "certificateCockpit.automation.manual": { defaultMessage: "Manual renewal", description: "Certificate without managed identity automation." },
+  "certificateCockpit.automation.external-controller": {
+    defaultMessage: "cert-manager renewal observed",
+    description: "An enrolled Kubernetes controller observed the exact issued leaf in a cert-manager request.",
+  },
   "certificateCockpit.automation.unknown": { defaultMessage: "Automation not checked", description: "Unavailable certificate automation evidence." },
   "certificateCockpit.owner.missing": { defaultMessage: "No accountable owner", description: "Certificate has no owner reference." },
   "certificateCockpit.owner.unreachable": { defaultMessage: "{name}; no alert contact", description: "Certificate owner has no reachable contact." },
@@ -18546,6 +18586,32 @@ export const messages = {
     defaultMessage: "Live controller result",
     description: "Heading for a Kubernetes controller's authenticated report and observed objects.",
   },
+  "workloads.certManager.heading": {
+    defaultMessage: "cert-manager CertificateRequests",
+    description: "Authenticated cert-manager request observations from the enrolled Kubernetes controller.",
+  },
+  "workloads.certManager.description": {
+    defaultMessage:
+      "The enrolled agent reports exact request and parent Certificate UIDs with the issued leaf fingerprint. This does not verify Secret delivery or a serving endpoint.",
+    description: "Evidence boundary for cert-manager request posture.",
+  },
+  "workloads.certManager.parent": {
+    defaultMessage: "Parent Certificate and UID",
+    description: "Column heading for the exact cert-manager Certificate owner reference.",
+  },
+  "workloads.certManager.errorTitle": {
+    defaultMessage: "CertificateRequest observations unavailable",
+    description: "Title when the cert-manager controller report cannot be read.",
+  },
+  "workloads.certManager.errorFallback": {
+    defaultMessage: "Check the enrolled Kubernetes agent and its report connection.",
+    description: "Fallback guidance when the cert-manager report read fails.",
+  },
+  "workloads.certManager.filtered": {
+    defaultMessage:
+      "Showing request UID {uid} from the latest report. Historical bindings remain in the certificate detail after Kubernetes removes a request.",
+    description: "Exact request filter and historical evidence limit.",
+  },
   "workloads.kubernetesLive.evidenceFor": {
     defaultMessage: "Live evidence for {name}",
     description: "Accessible label for one Kubernetes controller evidence group.",
@@ -24602,6 +24668,11 @@ export const messages = {
   "certificates.evidence.missingIdentity": {
     defaultMessage: "No managed identity is linked to this certificate, so its lifecycle evidence cannot be correlated.",
     description: "Avoid guessing a lifecycle identity from a duplicate common name.",
+  },
+  "certificates.evidence.kubernetesObserved": {
+    defaultMessage:
+      "cert-manager issued this exact leaf. trstctl identity rotation, connector delivery, and rollback history do not apply; verify the Kubernetes Secret and served workload separately.",
+    description: "Activity timeline limit for a cert-manager-managed certificate without trstctl identity binding.",
   },
   "certificates.evidence.historical": {
     defaultMessage: "Historical evidence for this certificate only. A later renewal may serve a different certificate.",

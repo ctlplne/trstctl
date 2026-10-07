@@ -22,6 +22,10 @@ type PostureResource struct {
 	State           string
 	Reason          string
 	PublicHash      string
+	// Parent is the cert-manager Certificate controller owner, when Kubernetes
+	// records that exact UID. It is never inferred from a shared DNS name.
+	ParentUID  string
+	ParentName string
 }
 
 type PostureSection struct {
@@ -35,6 +39,7 @@ type ControllerPostureReport struct {
 	ClusterID                string
 	ReconcileIntervalSeconds int
 	CertificateSigning       PostureSection
+	CertificateRequests      PostureSection
 	TrustBundles             PostureSection
 }
 
@@ -57,10 +62,15 @@ func (r IssuerReconcileResult) PostureReport(clusterID string, reconcileEvery ti
 	if !r.TrustBundleComplete && bundleFailure == "" {
 		bundleFailure = "not_reconciled"
 	}
+	requestFailure := r.CertificateRequestFailureCode
+	if !r.CertificateRequestComplete && requestFailure == "" {
+		requestFailure = "not_reconciled"
+	}
 	return ControllerPostureReport{
 		ReportID: uuid.NewString(), ClusterID: clusterID, ReconcileIntervalSeconds: seconds,
-		CertificateSigning: PostureSection{Complete: r.KubernetesCSRComplete, FailureCode: csrFailure, Resources: r.KubernetesCSRPosture},
-		TrustBundles:       PostureSection{Complete: r.TrustBundleComplete, FailureCode: bundleFailure, Resources: r.TrustBundlePosture},
+		CertificateSigning:  PostureSection{Complete: r.KubernetesCSRComplete, FailureCode: csrFailure, Resources: r.KubernetesCSRPosture},
+		CertificateRequests: PostureSection{Complete: r.CertificateRequestComplete, FailureCode: requestFailure, Resources: r.CertificateRequestPosture},
+		TrustBundles:        PostureSection{Complete: r.TrustBundleComplete, FailureCode: bundleFailure, Resources: r.TrustBundlePosture},
 	}
 }
 

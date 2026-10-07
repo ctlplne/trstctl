@@ -606,6 +606,47 @@ describe("Certificate Lifecycle cockpit", () => {
     vi.useRealTimers();
   });
 
+  it("uses exact enrolled-controller provenance for cert-manager renewal without claiming deployment", async () => {
+    const certificate = {
+      id: "cert-manager-leaf",
+      tenant_id: "tenant-1",
+      subject: "CN=workload.example.test",
+      issuer: "CN=Managed CA",
+      status: "active",
+      fingerprint: "d".repeat(64),
+      not_after: "2026-08-25T12:00:00Z",
+      owner_id: "team-platform",
+      kubernetes_provenance: [
+        {
+          cluster_id: "sha256:" + "a".repeat(64),
+          namespace: "apps",
+          request_name: "workload-6",
+          request_uid: "request-uid-6",
+          certificate_name: "workload",
+          certificate_uid: "certificate-uid",
+          fingerprint: "d".repeat(64),
+          controller_id: "agent-1",
+          report_id: "report-1",
+          observed_at: "2026-08-24T11:00:00Z",
+        },
+      ],
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const queue = await screen.findByRole("table", { name: "Certificate action queue" });
+    const row = within(queue).getByRole("row", { name: /workload.example.test/ });
+    expect(within(row).getByText("cert-manager renewal observed")).toBeInTheDocument();
+    expect(within(row).queryByText("Manual renewal")).not.toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "Review cert-manager request →" })).toHaveAttribute("href", "/workloads?kubernetes_request=request-uid-6");
+    const inventory = screen.getByRole("table", { name: "Inventoried certificates" });
+    fireEvent.click(within(inventory).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText("Certificate UID: certificate-uid")).toBeInTheDocument();
+    expect(within(detail).getByText(/Secret delivery and the served endpoint require separate verification/)).toBeInTheDocument();
+    expect(within(detail).queryByText(/Not identity-managed/)).not.toBeInTheDocument();
+  });
+
   it("keeps inventory and certificate details on the selected local calendar day", async () => {
     const certificate = {
       id: "midnight-cert",

@@ -26,6 +26,11 @@ func TestKubernetesControllerPostureEventProjectsTenantReadModels(t *testing.T) 
 		CertificateSigning: projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
 			Name: "web-csr", UID: "csr-uid", ResourceVersion: "17", State: "ready", Reason: "signed", PublicHash: strings.Repeat("b", 64),
 		}}},
+		CertificateRequests: &projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
+			Namespace: "payments", Name: "web-6", UID: "request-uid-6", ResourceVersion: "18",
+			State: "ready", Reason: "signed", PublicHash: strings.Repeat("d", 64),
+			ParentName: "web", ParentUID: "certificate-uid",
+		}}},
 		TrustBundles: projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
 			Name: "corp-roots", UID: "bundle-uid", ResourceVersion: "9", State: "ready", Reason: "distributed", PublicHash: strings.Repeat("c", 64),
 		}}},
@@ -43,6 +48,7 @@ func TestKubernetesControllerPostureEventProjectsTenantReadModels(t *testing.T) 
 	}
 	for capability, wantName := range map[string]string{
 		store.KubernetesPostureCertificateSigningRequests: "web-csr",
+		store.KubernetesPostureCertManagerRequests:        "web-6",
 		store.KubernetesPostureTrustBundles:               "corp-roots",
 	} {
 		rows, err := st.ListKubernetesControllerPosture(ctx, tenantA, capability)
@@ -53,6 +59,31 @@ func TestKubernetesControllerPostureEventProjectsTenantReadModels(t *testing.T) 
 		if err != nil || len(other) != 0 {
 			t.Fatalf("tenant B saw tenant A %s posture: %+v err=%v", capability, other, err)
 		}
+	}
+	provenance, err := st.ListKubernetesCertificateProvenance(ctx, tenantA, []string{strings.Repeat("d", 64)})
+	if err != nil || len(provenance[strings.Repeat("d", 64)]) != 1 || provenance[strings.Repeat("d", 64)][0].CertificateUID != "certificate-uid" {
+		t.Fatalf("exact cert-manager provenance = %+v err=%v", provenance, err)
+	}
+	other, err := st.ListKubernetesCertificateProvenance(ctx, tenantB, []string{strings.Repeat("d", 64)})
+	if err != nil || len(other) != 0 {
+		t.Fatalf("cross-tenant cert-manager provenance = %+v err=%v", other, err)
+	}
+	report.ReportID = "77777777-7777-7777-7777-777777777777"
+	report.CertificateRequests.Resources = nil // cert-manager garbage-collected its request
+	payload, err = projections.MarshalKubernetesPostureReport(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err = log.Append(ctx, events.Event{Type: projections.EventKubernetesControllerPostureReported, TenantID: tenantA, Data: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, ev); err != nil {
+		t.Fatal(err)
+	}
+	provenance, err = st.ListKubernetesCertificateProvenance(ctx, tenantA, []string{strings.Repeat("d", 64)})
+	if err != nil || len(provenance[strings.Repeat("d", 64)]) != 1 {
+		t.Fatalf("garbage collection lost retained provenance: %+v err=%v", provenance, err)
 	}
 }
 
@@ -106,6 +137,21 @@ func TestKubernetesControllerPostureContractRejectsUnboundedOrNonMetadataValues(
 		},
 		"unrecognized CSR reason": func(report *projections.KubernetesControllerPostureReported) {
 			report.CertificateSigning.Resources[0].Reason = "unrecognized_reason"
+		},
+		"cert-manager ready without exact owner": func(report *projections.KubernetesControllerPostureReported) {
+			report.CertificateRequests = &projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
+				Namespace: "apps", Name: "leaf-1", UID: "request-uid", ResourceVersion: "2", State: "ready", Reason: "signed", PublicHash: strings.Repeat("d", 64),
+			}}}
+		},
+		"cert-manager raw certificate rather than fingerprint": func(report *projections.KubernetesControllerPostureReported) {
+			report.CertificateRequests = &projections.KubernetesPostureSection{Complete: true, Resources: []projections.KubernetesPostureResource{{
+				Namespace: "apps", Name: "leaf-1", UID: "request-uid", ResourceVersion: "2", State: "ready", Reason: "signed", PublicHash: "-----BEGIN CERTIFICATE-----",
+				ParentName: "leaf", ParentUID: "certificate-uid",
+			}}}
+		},
+		"cert-manager parent on unrelated CSR": func(report *projections.KubernetesControllerPostureReported) {
+			report.CertificateSigning.Resources[0].ParentUID = "certificate-uid"
+			report.CertificateSigning.Resources[0].ParentName = "leaf"
 		},
 		"unbounded resources": func(report *projections.KubernetesControllerPostureReported) {
 			resource := report.CertificateSigning.Resources[0]

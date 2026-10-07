@@ -291,8 +291,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// The compound key-compromise preview, execute, and original-key status
 	// commands bring the downloadable client to parity with the served routes.
 	// F48 adds the matching reasoned terminal CA ceremony cancellation command.
-	if len(out) != 479 {
-		t.Fatalf("CLI commands = %d, want 479", len(out))
+	// Exact enrolled-controller cert-manager posture adds one read command.
+	if len(out) != 480 {
+		t.Fatalf("CLI commands = %d, want 480", len(out))
 	}
 	return out
 }

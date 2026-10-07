@@ -248,8 +248,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// One reviewed key-compromise command adds preview, execution, and separate
 	// CA/host status readback to the same revocation and connector journey.
 	// F48 adds one reasoned terminal CA ceremony cancellation operation.
-	if len(out) != 467 {
-		t.Fatalf("OpenAPI operationIds = %d, want 467", len(out))
+	// Exact enrolled-controller cert-manager request provenance adds one read.
+	if len(out) != 468 {
+		t.Fatalf("OpenAPI operationIds = %d, want 468", len(out))
 	}
 	return out
 }

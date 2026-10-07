@@ -295,6 +295,7 @@ import type {
   IssuerRequest,
   ITSMTicket,
   KubernetesCSRSupport,
+  KubernetesCertManagerRequests,
   KubernetesSecretOperator,
   KubernetesTrustBundleDistribution,
   MachineAuthMethod,
@@ -984,6 +985,7 @@ export type {
   IssuerRequest,
   ITSMTicket,
   KubernetesCSRSupport,
+  KubernetesCertManagerRequests,
   KubernetesSecretOperator,
   KubernetesTrustBundleDistribution,
   MachineAuthMethod,
@@ -1952,6 +1954,7 @@ export interface Api {
   updateSecretSyncWorkloadIdentitySource(id: string, input: SecretSyncWorkloadIdentitySourceRequest): Promise<SecretSyncWorkloadIdentitySource>;
   deleteSecretSyncWorkloadIdentitySource(id: string): Promise<void>;
   kubernetesCSRSupport(): Promise<KubernetesCSRSupport>;
+  kubernetesCertManagerRequests(): Promise<KubernetesCertManagerRequests>;
   kubernetesTrustBundles(): Promise<KubernetesTrustBundleDistribution>;
   kubernetesSecretOperator(): Promise<KubernetesSecretOperator>;
   secretWorkloadInjection(): Promise<SecretWorkloadInjection>;
@@ -2600,6 +2603,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<SecretSyncWorkloadIdentitySource>("PUT", `/api/v1/secrets/syncs/workload-identity-sources/${encodeURIComponent(id)}`, input),
   deleteSecretSyncWorkloadIdentitySource: (id) => mutate<void>("DELETE", `/api/v1/secrets/syncs/workload-identity-sources/${encodeURIComponent(id)}`),
   kubernetesCSRSupport: () => req<KubernetesCSRSupport>("/api/v1/kubernetes/certificate-signing-requests"),
+  kubernetesCertManagerRequests: () => req<KubernetesCertManagerRequests>("/api/v1/kubernetes/cert-manager-certificate-requests"),
   kubernetesTrustBundles: () => req<KubernetesTrustBundleDistribution>("/api/v1/kubernetes/trust-bundles"),
   kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),
   secretWorkloadInjection: () => req<SecretWorkloadInjection>("/api/v1/secrets/workload-injection"),

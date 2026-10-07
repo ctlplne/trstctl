@@ -1683,6 +1683,16 @@ function CertificateWorkspace() {
                         </Link>
                       );
                     }
+                    if (detail.kubernetes_provenance?.length) {
+                      return (
+                        <Link
+                          to={`/workloads?kubernetes_request=${encodeURIComponent(detail.kubernetes_provenance[0]!.request_uid)}`}
+                          className="text-caption font-medium text-brand-accent hover:underline"
+                        >
+                          {t("certificates.lifecycle.reviewKubernetes")}
+                        </Link>
+                      );
+                    }
                     if (detail.status === "active") {
                       return (
                         <Link to={certificateReplacementPath(detail)} className="text-caption font-medium text-brand-accent hover:underline">
@@ -1697,6 +1707,22 @@ function CertificateWorkspace() {
                   <RenewalHistory
                     runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)}
                   />
+                  {detail.kubernetes_provenance?.map((item) => (
+                    <div key={`${item.cluster_id}:${item.request_uid}`} className="mt-2 rounded-md border border-border p-3 text-sm">
+                      <p className="font-semibold">{t("certificates.kubernetes.observed")}</p>
+                      <p>{t("certificates.kubernetes.certificate", { namespace: item.namespace, name: item.certificate_name })}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{t("certificates.kubernetes.certificateUID", { uid: item.certificate_uid })}</p>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {t("certificates.kubernetes.request", { name: item.request_name, uid: item.request_uid })}
+                      </p>
+                      <p className="font-mono text-xs text-muted-foreground">{t("certificates.kubernetes.cluster", { cluster: item.cluster_id })}</p>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {t("certificates.kubernetes.report", { agent: item.controller_id, report: item.report_id })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t("certificates.kubernetes.observedAt", { time: formatDateTime(item.observed_at) })}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{t("certificates.kubernetes.limit")}</p>
+                    </div>
+                  ))}
                 </dd>
               </div>
               <div className="md:col-span-2">
@@ -1756,6 +1782,16 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
         return (
           <Link to={certificateIdentityPath(c)} className="text-caption font-medium text-brand-accent hover:underline">
             {translateNow("certificates.lifecycle.reviewIdentity")}
+          </Link>
+        );
+      }
+      if (c.kubernetes_provenance?.length) {
+        return (
+          <Link
+            to={`/workloads?kubernetes_request=${encodeURIComponent(c.kubernetes_provenance[0]!.request_uid)}`}
+            className="text-caption font-medium text-brand-accent hover:underline"
+          >
+            {translateNow("certificates.lifecycle.reviewKubernetes")}
           </Link>
         );
       }
