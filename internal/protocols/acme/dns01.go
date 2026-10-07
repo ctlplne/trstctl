@@ -24,24 +24,33 @@ var ErrNoDNS01ProviderConfig = errors.New("acme: no served dns-01 provider confi
 // the endpoint-lifecycle preview, and preflight checks, so a prerequisite that
 // the preview accepts cannot be rejected later at issuance time.
 func DNS01ZoneCovers(zone, challengeDomain, domain string) bool {
+	return DNS01ZoneMatchSpecificity(zone, challengeDomain, domain) > 0
+}
+
+// DNS01ZoneMatchSpecificity returns the label count of the narrowest matching
+// zone or challenge name. Zero means no match. Order-time provider selection
+// uses this same rule as coverage checks so an explicit child-zone delegation
+// cannot be shadowed by a broad parent config whose name sorts first.
+func DNS01ZoneMatchSpecificity(zone, challengeDomain, domain string) int {
 	base := strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(domain)), "*."), ".")
 	if base == "" {
-		return false
+		return 0
 	}
 	recordName := strings.TrimSuffix(strings.ToLower(DNS01RecordName(domain)), ".")
+	best := 0
 	for _, candidate := range []string{zone, challengeDomain} {
 		candidate = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(candidate)), ".")
 		if candidate == "" {
 			continue
 		}
-		if base == candidate || strings.HasSuffix(base, "."+candidate) {
-			return true
-		}
-		if recordName == candidate || strings.HasSuffix(recordName, "."+candidate) {
-			return true
+		if base == candidate || strings.HasSuffix(base, "."+candidate) ||
+			recordName == candidate || strings.HasSuffix(recordName, "."+candidate) {
+			if specificity := strings.Count(candidate, ".") + 1; specificity > best {
+				best = specificity
+			}
 		}
 	}
-	return false
+	return best
 }
 
 // Resolver looks up TXT records; *net.Resolver satisfies it. It is an injectable

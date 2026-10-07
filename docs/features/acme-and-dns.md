@@ -199,6 +199,11 @@ The served control plane has a tenant-scoped DNS-01 provider-config API:
 `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
 zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
 `credential_refs` only. Inline provider tokens are rejected.
+When configs overlap, served ACME chooses the most specific matching zone or
+challenge name before checking DNS-01 methods, wildcard permission, or upstream
+domain-validation consent. A broad parent config cannot override a narrower
+config's refusal. Two eligible DNS-01 providers at the same specificity are
+ambiguous and stop issuance; narrow their zones or remove the duplicate.
 `POST /api/v1/acme/dns-01/preflight` evaluates CNAME delegation, TXT propagation,
 live CAA, method policy, and wildcard policy against one of those configs and records an
 `acme.dns01.preflighted` event. The matching CLI commands are
@@ -209,7 +214,8 @@ The Protocols page also provides a review-before-run provider test:
 1. **Review test** calls
    `POST /api/v1/acme/dns-01/provider-configs/{id}/qualification/preview`. It performs
    no write, generates no probe, calls no signer, and contacts no provider. It names
-   the exact record, readiness checks, external effects, least-privilege checklist,
+   the exact record, verifies this config is the one a served order would select,
+   and shows readiness checks, external effects, least-privilege access scope,
    and recovery plan.
 2. **Publish, verify, and clean up** calls
    `POST /api/v1/acme/dns-01/provider-configs/{id}/qualification-runs`. The server
@@ -310,6 +316,9 @@ where it should before you rely on it. The served ACME order-time path applies t
 fail-closed check from the DNS-01 outbox worker, so a missing or mismatched CNAME stops
 issuance before any production-zone TXT write can happen. This is the well-known
 acme-dns pattern, and trstctl's acme-dns provider is the typical validation-zone backend.
+The provider test review names the delegated validation target as the TXT write
+and least-privilege access scope; the production challenge name remains the DNS
+name the ACME server checks. Keep these two names distinct when granting access.
 
 In the Protocols console, **Test provider** turns that rule into an exact per-domain
 journey. Its no-change review draws the production challenge name, the required CNAME,

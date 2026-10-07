@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/lifecycle"
@@ -296,6 +297,115 @@ func TestUpstreamSelectionPicksTheConfigThatCanActuallyDoTheJob(t *testing.T) {
 	if cfg.Name != "zzz-upstream-capable" {
 		t.Errorf("selected %q; selection must filter on consent and wildcard support rather than "+
 			"checking them on whichever config matched first", cfg.Name)
+	}
+}
+
+// A child-zone delegation must win over a broad parent-zone provider even when
+// the broad config sorts first by name. Otherwise the worker writes a TXT at
+// the CNAME source rather than the isolated target and the real ACME order
+// fails after the console's explicit child provider test passed.
+func TestDNS01SelectionPrefersMostSpecificZoneBeforeProviderName(t *testing.T) {
+	ctx := context.Background()
+	h := newServedHarness(t, config.Protocols{})
+	broadID := uuid.NewString()
+	childID := uuid.NewString()
+	seedDNS01Config(t, ctx, h, store.ACMEDNS01ProviderConfig{
+		ID:   broadID,
+		Name: "A broad parent", Provider: "webhook", Zone: "partner-lab.example.com",
+		AllowedMethods: []string{"dns-01", "http-01"}, AllowWildcards: true, AllowUpstreamDV: true,
+	})
+	seedDNS01Config(t, ctx, h, store.ACMEDNS01ProviderConfig{
+		ID:   childID,
+		Name: "Z delegated child", Provider: "webhook", Zone: "delegated.partner-lab.example.com",
+		ChallengeDomain:  "validation.partner-lab.example.com",
+		DelegationTarget: "_acme-challenge.delegated.validation.partner-lab.example.com",
+		AllowedMethods:   []string{"dns-01"},
+	})
+	constDomain := "delegated.partner-lab.example.com"
+	cfg, err := h.srv.acmeDNS01.selectProviderConfig(ctx, h.tenant, constDomain)
+	if err != nil || cfg.Name != "Z delegated child" {
+		t.Fatalf("selected %+v, err %v; want the delegated child provider", cfg, err)
+	}
+	methods, constrained, err := h.srv.acmeDNS01.AllowedMethods(ctx, h.tenant, constDomain)
+	if err != nil || !constrained || len(methods) != 1 || methods[0] != "dns-01" {
+		t.Fatalf("child-zone method policy = %v constrained=%v err=%v; want dns-01 only", methods, constrained, err)
+	}
+	for _, tc := range []struct {
+		id, name string
+		want     bool
+	}{{broadID, "broad parent", false}, {childID, "delegated child", true}} {
+		preview, err := h.srv.PreviewACMEDNS01Qualification(ctx, h.tenant, tc.id,
+			api.ACMEDNS01QualificationRequest{Domain: constDomain})
+		if err != nil {
+			t.Fatalf("preview %s: %v", tc.name, err)
+		}
+		found := false
+		for _, check := range preview.Checks {
+			if check.ID == "order-time-selection" {
+				found = true
+				if check.Passed != tc.want {
+					t.Errorf("%s order-time selection check passed=%t, want %t", tc.name, check.Passed, tc.want)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s review omitted order-time provider selection check", tc.name)
+		}
+	}
+	if _, err := h.srv.acmeDNS01.selectProviderConfigForUpstream(ctx, h.tenant, constDomain); err == nil || !strings.Contains(err.Error(), "allow_upstream_dv") {
+		t.Fatalf("child zone withheld upstream consent but broad provider was used: %v", err)
+	}
+
+	wildcard := "*.delegated.partner-lab.example.com"
+	methods, constrained, err = h.srv.acmeDNS01.AllowedMethods(ctx, h.tenant, wildcard)
+	if err != nil || !constrained || len(methods) != 0 {
+		t.Fatalf("child-zone wildcard denial was bypassed: methods=%v constrained=%v err=%v", methods, constrained, err)
+	}
+	if _, err := h.srv.acmeDNS01.selectProviderConfig(ctx, h.tenant, wildcard); err == nil {
+		t.Fatal("broad parent provider bypassed the exact child wildcard denial")
+	}
+}
+
+func TestDNS01SelectionRejectsAmbiguousSameScopeProviders(t *testing.T) {
+	ctx := context.Background()
+	h := newServedHarness(t, config.Protocols{})
+	for _, name := range []string{"A first", "Z second"} {
+		seedDNS01Config(t, ctx, h, store.ACMEDNS01ProviderConfig{
+			Name: name, Provider: "webhook", Zone: "same-scope.test",
+			AllowedMethods: []string{"dns-01"},
+		})
+	}
+	if _, err := h.srv.acmeDNS01.selectProviderConfig(ctx, h.tenant, "same-scope.test"); err == nil || !strings.Contains(err.Error(), "multiple") {
+		t.Fatalf("same-scope DNS-01 providers must fail as ambiguous, got %v", err)
+	}
+	if _, _, err := h.srv.acmeDNS01.AllowedMethods(ctx, h.tenant, "same-scope.test"); err == nil || !strings.Contains(err.Error(), "multiple") {
+		t.Fatalf("same-scope ambiguity must be visible before ordering, got %v", err)
+	}
+}
+
+func TestDelegatedDNS01QualificationReviewNamesValidationZoneWrite(t *testing.T) {
+	ctx := context.Background()
+	h := newServedHarness(t, config.Protocols{})
+	const source = "_acme-challenge.delegated.partner-lab.example.com"
+	const target = "_acme-challenge.delegated.validation.partner-lab.example.com"
+	cfg := store.ACMEDNS01ProviderConfig{
+		ID: uuid.NewString(), Name: "delegated", Provider: "webhook", Zone: "delegated.partner-lab.example.com",
+		ChallengeDomain: "validation.partner-lab.example.com", DelegationTarget: target,
+		AllowedMethods: []string{"dns-01"},
+	}
+	seedDNS01Config(t, ctx, h, cfg)
+	preview, err := h.srv.PreviewACMEDNS01Qualification(ctx, h.tenant, cfg.ID,
+		api.ACMEDNS01QualificationRequest{Domain: "delegated.partner-lab.example.com"})
+	if err != nil {
+		t.Fatalf("preview delegated provider: %v", err)
+	}
+	if preview.RecordName != source || len(preview.ExecuteExternalEffects) == 0 || len(preview.LeastPrivilegeChecklist) == 0 {
+		t.Fatalf("delegated preview omitted challenge/effect/access facts: %+v", preview)
+	}
+	if !strings.Contains(preview.ExecuteExternalEffects[0], target) ||
+		!strings.Contains(preview.LeastPrivilegeChecklist[0], target) {
+		t.Fatalf("review names the source instead of the isolated write target: effects=%v access=%v",
+			preview.ExecuteExternalEffects, preview.LeastPrivilegeChecklist)
 	}
 }
 

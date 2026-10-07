@@ -237,11 +237,10 @@ func (a *servedACMEDNS01Automation) selectProviderConfigForUpstream(ctx context.
 // upstreamDVConsented filters selection to configs an operator has enabled for
 // upstream domain validation.
 //
-// A FILTER, not a post-hoc check on whichever config matched first. Consent is
-// per config, so a zone covered by two of them — one consented, one not — must
-// select the consented one rather than reporting that the zone is not enabled.
-// The error when nothing matches still names the flag, because "no config
-// matches" would leave an operator with nothing to act on.
+// Consent is evaluated among configs at the most specific matching scope. Two
+// configs at that same scope can differ in consent, but a broad parent config
+// must not override a child's explicit refusal. The error when nothing is
+// consented still names the flag, so the operator can repair the right scope.
 func upstreamDVConsented(cfg store.ACMEDNS01ProviderConfig) bool { return cfg.AllowUpstreamDV }
 
 func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, tenantID, domain string, extra ...func(store.ACMEDNS01ProviderConfig) bool) (store.ACMEDNS01ProviderConfig, error) {
@@ -249,15 +248,21 @@ func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, te
 	if err != nil {
 		return store.ACMEDNS01ProviderConfig{}, err
 	}
+	matches := mostSpecificDNS01ProviderConfigs(configs, domain)
+	if len(matches) == 0 {
+		return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("%w: %s", acme.ErrNoDNS01ProviderConfig, domain)
+	}
 	rejectedByExtra := false
-	for _, cfg := range configs {
+	methodBlocked := false
+	wildcardBlocked := false
+	eligible := make([]store.ACMEDNS01ProviderConfig, 0, len(matches))
+	for _, cfg := range matches {
 		if !stringIn(acme.ChallengeDNS01, cfg.AllowedMethods) {
+			methodBlocked = true
 			continue
 		}
 		if acme.IsWildcard(domain) && !cfg.AllowWildcards {
-			continue
-		}
-		if !dns01ConfigMatchesDomain(cfg, domain) {
+			wildcardBlocked = true
 			continue
 		}
 		if !allExtraPredicatesPass(cfg, extra) {
@@ -267,15 +272,45 @@ func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, te
 			rejectedByExtra = true
 			continue
 		}
-		return cfg, nil
+		eligible = append(eligible, cfg)
+	}
+	if len(eligible) == 1 {
+		return eligible[0], nil
+	}
+	if len(eligible) > 1 {
+		return store.ACMEDNS01ProviderConfig{}, fmt.Errorf(
+			"server: multiple DNS-01 provider configs cover %s at the same specificity; narrow their zones or remove the duplicate", domain)
 	}
 	if rejectedByExtra {
 		return store.ACMEDNS01ProviderConfig{}, fmt.Errorf(
-			"server: a DNS-01 provider config covers %s but none of them is enabled for upstream "+
+			"server: a DNS-01 provider config covers %s at the most specific scope but none is enabled for upstream "+
 				"domain validation; enable allow_upstream_dv on the one that should publish "+
 				"challenge records into that zone on an external CA's behalf", domain)
 	}
+	if wildcardBlocked {
+		return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("%w: most-specific provider config for %s denies wildcard issuance", acme.ErrNoDNS01ProviderConfig, domain)
+	}
+	if methodBlocked {
+		return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("%w: most-specific provider config for %s does not allow dns-01", acme.ErrNoDNS01ProviderConfig, domain)
+	}
 	return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("%w: %s", acme.ErrNoDNS01ProviderConfig, domain)
+}
+
+func mostSpecificDNS01ProviderConfigs(configs []store.ACMEDNS01ProviderConfig, domain string) []store.ACMEDNS01ProviderConfig {
+	best := 0
+	var matches []store.ACMEDNS01ProviderConfig
+	for _, cfg := range configs {
+		specificity := acme.DNS01ZoneMatchSpecificity(cfg.Zone, cfg.ChallengeDomain, domain)
+		if specificity == 0 || specificity < best {
+			continue
+		}
+		if specificity > best {
+			best = specificity
+			matches = matches[:0]
+		}
+		matches = append(matches, cfg)
+	}
+	return matches
 }
 
 func allExtraPredicatesPass(cfg store.ACMEDNS01ProviderConfig, extra []func(store.ACMEDNS01ProviderConfig) bool) bool {
@@ -300,14 +335,14 @@ func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID
 	if err != nil {
 		return nil, false, err
 	}
-	matched := false
+	matches := mostSpecificDNS01ProviderConfigs(configs, domain)
+	if len(matches) == 0 {
+		return nil, false, nil
+	}
 	allowed := map[string]bool{}
 	wildcard := acme.IsWildcard(domain)
-	for _, cfg := range configs {
-		if !dns01ConfigMatchesDomain(cfg, domain) {
-			continue
-		}
-		matched = true
+	dns01Providers := 0
+	for _, cfg := range matches {
 		if wildcard && !cfg.AllowWildcards {
 			continue
 		}
@@ -318,11 +353,14 @@ func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID
 			}
 			if method != "" {
 				allowed[method] = true
+				if method == acme.ChallengeDNS01 {
+					dns01Providers++
+				}
 			}
 		}
 	}
-	if !matched {
-		return nil, false, nil
+	if dns01Providers > 1 {
+		return nil, true, fmt.Errorf("server: multiple DNS-01 provider configs cover %s at the same specificity; narrow their zones or remove the duplicate", domain)
 	}
 	methods := make([]string, 0, len(allowed))
 	for _, method := range []string{acme.ChallengeHTTP01, acme.ChallengeDNS01, acme.ChallengeTLSALPN01} {

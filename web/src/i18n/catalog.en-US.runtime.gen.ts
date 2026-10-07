@@ -14349,7 +14349,7 @@ export const defaultMessageValues = [
   "Loading DNS-01 provider configs.",
   "No DNS-01 provider configured",
   "Add a provider connection before using automated DNS-01 challenges.",
-  "Connect a DNS provider by secret reference, then test the real publish, DNS visibility, and cleanup path before relying on it for renewals.",
+  "Connect a DNS provider by secret reference, then test publish, DNS visibility, and cleanup. When zones overlap, the narrowest matching zone controls issuance; duplicate DNS-01 providers at that scope block it.",
   "Add DNS-01 provider",
   "Add DNS-01 provider config",
   "Edit DNS-01 provider config: {name}",

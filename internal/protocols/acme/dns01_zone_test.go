@@ -28,3 +28,19 @@ func TestDNS01ZoneCovers(t *testing.T) {
 		}
 	}
 }
+
+func TestDNS01ZoneMatchSpecificity(t *testing.T) {
+	const domain = "delegated.partner-lab.example.com"
+	parent := DNS01ZoneMatchSpecificity("partner-lab.example.com", "", domain)
+	child := DNS01ZoneMatchSpecificity("delegated.partner-lab.example.com", "validation.partner-lab.example.com", domain)
+	record := DNS01ZoneMatchSpecificity("", "_acme-challenge.delegated.partner-lab.example.com", domain)
+	if parent <= 0 || child <= parent || record <= child {
+		t.Fatalf("specificity parent=%d child=%d exact challenge=%d; want increasing scope", parent, child, record)
+	}
+	if got := DNS01ZoneMatchSpecificity("other.example.com", "", domain); got != 0 {
+		t.Fatalf("unrelated zone specificity = %d, want zero", got)
+	}
+	if got := DNS01ZoneMatchSpecificity("delegated.partner-lab.example.com.", "", "*.DELEGATED.partner-lab.example.com."); got != child {
+		t.Fatalf("wildcard/case/trailing-dot specificity = %d, want %d", got, child)
+	}
+}

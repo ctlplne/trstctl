@@ -16951,7 +16951,7 @@ export const messages = {
   },
   "protocols.dns01.configHelp": {
     defaultMessage:
-      "Connect a DNS provider by secret reference, then test the real publish, DNS visibility, and cleanup path before relying on it for renewals.",
+      "Connect a DNS provider by secret reference, then test publish, DNS visibility, and cleanup. When zones overlap, the narrowest matching zone controls issuance; duplicate DNS-01 providers at that scope block it.",
     description: "ELI5 explanation above DNS-01 provider configs.",
   },
   "protocols.dns01.addProvider": {

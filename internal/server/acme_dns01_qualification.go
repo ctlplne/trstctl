@@ -40,12 +40,21 @@ func (s *Server) PreviewACMEDNS01Qualification(ctx context.Context, tenantID, co
 	if domainOK {
 		recordName = acme.DNS01RecordName(domain)
 	}
+	writeName := recordName
+	if cfg.DelegationTarget != "" {
+		writeName = cfg.DelegationTarget
+	}
 	referenceFields, refsOK := dns01CredentialReferenceFields(cfg.CredentialRefs)
 	automationReady := s.acmeDNS01 != nil && s.acmeDNS01.store != nil && s.acmeDNS01.outbox != nil && s.acmeDNS01.log != nil
 	resolverReady := automationReady && len(s.acmeDNS01.txtResolvers) > 0
 	methodReady := stringIn(acme.ChallengeDNS01, cfg.AllowedMethods)
 	coverageReady := domainOK && dns01ConfigMatchesDomain(cfg, domain)
 	wildcardReady := domainOK && (!acme.IsWildcard(domain) || cfg.AllowWildcards)
+	selectionReady := false
+	if automationReady && coverageReady && methodReady && wildcardReady {
+		selected, err := s.acmeDNS01.selectProviderConfig(ctx, tenantID, domain)
+		selectionReady = err == nil && selected.ID == cfg.ID
+	}
 
 	checks := []api.ACMEDNS01QualificationCheck{
 		qualificationCheck("domain", "DNS name", domainOK,
@@ -54,6 +63,9 @@ func (s *Server) PreviewACMEDNS01Qualification(ctx context.Context, tenantID, co
 		qualificationCheck("domain-policy", "Domain policy", coverageReady,
 			"This provider config covers the requested domain.",
 			"Choose a config whose zone or challenge domain covers this DNS name."),
+		qualificationCheck("order-time-selection", "Served order provider", selectionReady,
+			"A served ACME order for this name will use this exact provider config.",
+			"This config is not the unique DNS-01 provider the served ACME order would use. Narrow or remove overlapping zones, then review this test again."),
 		qualificationCheck("dns-01-policy", "DNS-01 permission", methodReady,
 			"The config permits DNS-01 for this zone.",
 			"Add dns-01 to the config's allowed methods before testing or issuing."),
@@ -72,7 +84,7 @@ func (s *Server) PreviewACMEDNS01Qualification(ctx context.Context, tenantID, co
 	}
 	blockers := qualificationBlockers(checks)
 	return api.ACMEDNS01QualificationPreview{
-		Ready:                     domainOK && coverageReady && methodReady && wildcardReady && refsOK && automationReady && resolverReady,
+		Ready:                     domainOK && coverageReady && selectionReady && methodReady && wildcardReady && refsOK && automationReady && resolverReady,
 		EffectFree:                true,
 		ConfigID:                  cfg.ID,
 		ConfigName:                cfg.Name,
@@ -91,7 +103,7 @@ func (s *Server) PreviewACMEDNS01Qualification(ctx context.Context, tenantID, co
 			"Append sanitized publish and cleanup audit events after each receiver action succeeds.",
 		},
 		ExecuteExternalEffects: []string{
-			"Publish one server-generated random TXT probe at " + displayRecordName(recordName) + ".",
+			"Publish one server-generated random TXT probe at " + displayRecordName(writeName) + ".",
 			"Remove that exact TXT probe after DNS visibility is checked, including when the visibility check fails.",
 		},
 		ExecuteSignerCalls: []string{},
@@ -101,7 +113,7 @@ func (s *Server) PreviewACMEDNS01Qualification(ctx context.Context, tenantID, co
 			"If cleanup needs attention, use Retry cleanup from qualification history; the server reuses its retained recovery payload.",
 		},
 		LeastPrivilegeChecklist: []string{
-			"Grant TXT create/update/delete only for " + displayRecordName(recordName) + " or the narrowest supported _acme-challenge subtree.",
+			"Grant TXT create/update/delete only for " + displayRecordName(writeName) + " or the narrowest supported _acme-challenge subtree.",
 			"Use a dedicated provider credential reference; do not reuse an account-wide administrator token.",
 			"Allow only the provider API host required by this config and keep wildcard issuance off unless it is needed.",
 		},
