@@ -326,6 +326,20 @@ describe("journeys hub", () => {
     expect(apiMock.issuanceRequest).not.toHaveBeenCalled();
   });
 
+  it("labels a submitted request without claiming its decision or certificate already exists", async () => {
+    const user = userEvent.setup();
+    const id = "11111111-1111-4111-8111-111111111113";
+    apiMock.issuanceRequest.mockResolvedValue({ id, status: "requested", requester: "eval-admin" });
+    renderJourneys(`/journeys?j=first-certificate&request=${id}`);
+    expect(await within(screen.getByRole("button", { name: /First certificate/ })).findByText("1 of 4 steps checked")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Request the credential" })).toBeInTheDocument();
+    expect(screen.getByText("Checked against this request's served evidence for this step.")).toBeInTheDocument();
+    expect(apiMock.identityIssuanceResult).not.toHaveBeenCalled();
+    expect(apiMock.getCertificate).not.toHaveBeenCalled();
+  });
+
   it("tracks one request through independent approval and its exact inventoried certificate", async () => {
     const user = userEvent.setup();
     const id = "11111111-1111-4111-8111-111111111111";

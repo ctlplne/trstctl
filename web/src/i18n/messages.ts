@@ -5913,8 +5913,8 @@ export const messages = {
     description: "Badge for a journey step whose runnable server evidence check failed unexpectedly.",
   },
   "journeys.evidence.exact": {
-    defaultMessage: "Checked against the selected request, its independent decision, and its exact certificate result.",
-    description: "Proof source for first-certificate lifecycle steps.",
+    defaultMessage: "Checked against this request's served evidence for this step.",
+    description: "Proof source for each exact first-certificate lifecycle step without claiming a later stage is complete.",
   },
   "journeys.evidence.tenantSignal": {
     defaultMessage: "Checked from tenant records. Inspect the linked workspace for the exact object and external outcome.",
