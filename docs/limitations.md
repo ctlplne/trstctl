@@ -3755,6 +3755,11 @@ This is a deliberate, documented trust boundary, not an accident.
   `protocols.acme.tenant_id`; it activates only when an issuing CA is
   provisioned and fails closed otherwise. The Protocols console now exposes the
   tenant-scoped, read-only ARI publication and scheduler-consumption posture.
+  For certificates issued by an external ACME CA, the lifecycle scheduler and
+  posture currently use a locally computed last-third window. They do not fetch
+  that CA's `renewalInfo`, so an earlier CA signal may require an operator to
+  initiate renewal. This is an open U5 defect observed against the local Pebble
+  lab, not a claim of upstream ARI consumption.
   Roadmap residual: a dedicated ACME admin console for account/order/challenge
   drilldown, revocation operations, and richer client setup controls remains
   outside the F5 GA-served protocol denominator.

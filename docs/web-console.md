@@ -613,7 +613,7 @@ for Intune-style SCEP, plus challenge rotation and allow/deny telemetry.
 
 The read-only **ARI posture** panel calls `GET /api/v1/acme/ari/posture` with
 `lifecycle:read`. It shows whether renewal information is really published for the
-current tenant, each affected certificate's suggested renewal window, and the
+current tenant, each affected certificate's locally computed or published renewal window, and the
 durable lifecycle scheduler state that consumed that window. Loading, no affected
 certificates, permission denied, API error, and ACME-not-served are distinct states;
 the panel never turns an unavailable publisher into a success-looking empty table.

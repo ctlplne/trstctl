@@ -86,8 +86,8 @@ three signals, tenant-isolated at the database layer:
   CA, the immutable first issuance receipt proves when trstctl received that leaf;
   it does not claim to know the CA's signing clock. When `renew_before` already covers
   the remaining signed lifetime at that issuance receipt, the scheduler waits for the
-  signed ARI window. Thus a newly received 12-minute external leaf with a 30-day lead
-  does not renew again on the next one-minute sweep. The CA may sign a shorter lifetime
+  locally computed last-third window. Thus a newly received 12-minute external leaf
+  with a 30-day lead does not renew again on the next one-minute sweep. The CA may sign a shorter lifetime
   than the reviewed profile requests; inspect the returned certificate and listener.
   A 47-day leaf with a 30-day lead still becomes due around day 17; this repair does
   not shorten the configured lead or postpone that deadline. The automation plan uses
@@ -393,6 +393,13 @@ every build through `internal/pqcmigration`.
 - **ARI-driven renewal** covers trstctl-issued deployed X.509 identities. Rows discovered
   from an outside CA stay visible for expiry/risk, but renewing them needs an issuer or
   connector path that can actually replace that external certificate.
+- **External ACME CA timing is not yet consumed.** For a certificate issued through an
+  external ACME authority, the scheduler currently computes its own last-third
+  window from the certificate validity dates. The ARI posture panel displays that
+  local estimate; it does not fetch the authority's `renewalInfo` response. An
+  upstream emergency renewal signal or a different CA window can therefore be
+  missed. Inspect the upstream CA's ARI endpoint with a trusted client and use an
+  explicit renewal when the CA asks for earlier replacement.
 - **Unknown issuance time remains unknown.** Inventory discoveries and protocol
   issuance paths without a constructor timestamp or authenticated issuance receipt
   still use the fixed fallback alongside ARI. Discovery time and the backdated X.509

@@ -470,7 +470,8 @@ The response separates three facts that operators often confuse:
 - `publication_status` says whether ACME renewal information is actually served for
   this tenant;
 - each affected certificate reports its `suggested_window` and its own publication
-  state; and
+  state; `not_published` with a window can mean a local estimate for an external
+  CA certificate, not the CA's authoritative ARI response; and
 - `scheduler_status`, `scheduler_consumed`, and `rotation_run_id` show whether the
   lifecycle scheduler used that window and how its durable rotation run ended.
 

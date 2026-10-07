@@ -417,21 +417,24 @@ stampede — and if a certificate must be replaced *early* (a mass revocation), 
 no way to tell them. **ACME Renewal Information (ARI, RFC 9773)** fixes both: the CA
 publishes a *suggested renewal window* per certificate, and clients renew within it.
 
-trstctl computes the window as the last third of the certificate's life and has each
-client pick a deterministic, spread-out point inside it. If the CA flags a
-certificate for early renewal, the window jumps to "right now" and compliant clients
-renew immediately.
+trstctl's ACME server computes the window as the last third of the certificate's
+life. An ACME client can spread its renewals across that window. If trstctl's CA
+flags a certificate for early renewal, its published window opens immediately;
+clients that poll ARI can act on that signal.
 
-Served by the ACME server at `GET /acme/renewal-info/{certid}` and consumed by the
-served lifecycle scheduler for trstctl-issued deployed X.509 identities — certificates
-can renew when their ARI window opens, even before the fixed `renew_before` fallback.
+The local window is served by trstctl's ACME server at
+`GET /acme/renewal-info/{certid}` and used by its lifecycle scheduler for deployed
+X.509 identities. Certificates can renew when that local window opens, even before
+the fixed `renew_before` fallback. For certificates issued by an external ACME CA,
+the current scheduler does not fetch that CA's ARI window; see
+[the lifecycle limit](lifecycle-and-pqc.md#pitfalls--limits).
 
 Operators inspect the same chain through the read-only
 `GET /api/v1/acme/ari/posture` route, the `trstctl-cli acme ari posture` command,
 or the **ARI posture** panel on **Protocols**. The authenticated route requires
 `lifecycle:read` and PostgreSQL RLS limits every certificate and rotation-run row to
 the caller's tenant. It reports whether ARI publication is served for that tenant,
-the exact suggested window for each affected certificate, and whether the lifecycle
+the locally computed or published suggested window for each affected certificate, and whether the lifecycle
 scheduler is pending, running, succeeded, or failed for that window. It never returns
 certificate bytes, fingerprints, tenant IDs, account/order data, or private-key
 material.
