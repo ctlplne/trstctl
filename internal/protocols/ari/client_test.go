@@ -3,8 +3,11 @@
 package ari
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,6 +67,31 @@ func TestFetchRenewalInfoValidatesUpstreamResponse(t *testing.T) {
 	}
 }
 
+type directoryRoundTrip func(*http.Request) (*http.Response, error)
+
+func (f directoryRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func FuzzDiscoverRenewalInfo(f *testing.F) {
+	f.Add([]byte(`{"renewalInfo":"https://acme.example.test/renewal-info"}`))
+	f.Add([]byte(`{"renewalInfo":"http://127.0.0.1/private"}`))
+	f.Add([]byte(`{"renewalInfo":false}`))
+	f.Fuzz(func(t *testing.T, body []byte) {
+		if len(body) > 2048 {
+			t.Skip()
+		}
+		client := NewClient(&http.Client{Transport: directoryRoundTrip(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}}, nil
+		})})
+		endpoint, err := client.DiscoverRenewalInfo(t.Context(), "https://acme.example.test/dir")
+		if err == nil {
+			parsed, parseErr := renewalInfoEndpoint(endpoint)
+			if parseErr != nil || parsed.Scheme != "https" {
+				t.Fatalf("accepted unsafe endpoint %q: %v", endpoint, parseErr)
+			}
+		}
+	})
+}
+
 func TestFetchRenewalInfoRejectsMalformedCertificateIdentifierBeforeNetwork(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("malformed identifier reached the network")
@@ -78,5 +106,54 @@ func TestFetchRenewalInfoRejectsMalformedCertificateIdentifierBeforeNetwork(t *t
 		if _, _, err := NewClient(server.Client()).FetchRenewalInfo(context.Background(), base, "AQID.BAUG"); err == nil {
 			t.Errorf("accepted malformed endpoint %q", base)
 		}
+	}
+}
+
+func TestDiscoverRenewalInfoFromDirectory(t *testing.T) {
+	const ariPath = "/draft-ietf-acme-ari-03/renewalInfo"
+	tests := []struct {
+		name, body string
+		status     int
+		wantErr    string
+		absent     bool
+	}{
+		{name: "advertised", body: `{"renewalInfo":"%s"}`},
+		{name: "not advertised", body: `{}`, absent: true},
+		{name: "relative URL", body: `{"renewalInfo":"/renewalInfo"}`, wantErr: "invalid renewal info endpoint"},
+		{name: "userinfo URL", body: `{"renewalInfo":"https://user@example.test/renewalInfo"}`, wantErr: "invalid renewal info endpoint"},
+		{name: "directory failure", body: `{"detail":"arbitrary upstream text"}`, status: http.StatusServiceUnavailable, wantErr: "status 503"},
+		{name: "oversized directory", body: `{}` + strings.Repeat(" ", maxBody), wantErr: "response exceeds"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var expected string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/dir" || r.Method != http.MethodGet || r.Header.Get("User-Agent") == "" {
+					t.Errorf("invalid directory request: %s %s, agent=%q", r.Method, r.URL.Path, r.Header.Get("User-Agent"))
+				}
+				if tt.status != 0 {
+					w.WriteHeader(tt.status)
+				}
+				_, _ = fmt.Fprint(w, strings.ReplaceAll(tt.body, "%s", expected))
+			}))
+			defer server.Close()
+			expected = server.URL + ariPath
+			got, err := NewClient(server.Client()).DiscoverRenewalInfo(context.Background(), server.URL+"/dir")
+			if tt.absent {
+				if !errors.Is(err, ErrNotAdvertised) {
+					t.Fatalf("error = %v, want ErrNotAdvertised", err)
+				}
+				return
+			}
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || got != expected {
+				t.Fatalf("endpoint = %q, error = %v, want %q", got, err, expected)
+			}
+		})
 	}
 }
