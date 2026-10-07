@@ -919,7 +919,9 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 			len(afterRenew.Items), len(afterRefusal.Items), afterRefusal.Raw)
 	}
 
-	transition("revoked", "keyCompromise")
+	// This ordinary offboarding journey uses the direct transition. A serving
+	// key compromise has its own reviewed CA-and-host containment journey.
+	transition("revoked", "cessationOfOperation")
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain revoke: %v", err)
 	}

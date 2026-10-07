@@ -234,7 +234,9 @@ func TestPlatformIdentityRevocationRetriesPublicationAfterObservation(t *testing
 	if _, err := h.orch.RecordCertificate(ctx, h.tenant, observation); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateRevoked, "keyCompromise"); err != nil {
+	// This tests ordinary CRL publication retry; key compromise must take the
+	// separate containment command for a serving identity.
+	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateRevoked, "cessationOfOperation"); err != nil {
 		t.Fatal(err)
 	}
 	row := pendingOutboxByDestination(t, h, "revocation.publish")
