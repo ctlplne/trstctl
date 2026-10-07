@@ -249,9 +249,11 @@ export function ACMEOperatorPanel() {
                     <li key={`${activity.order_id}:${activity.domain}`} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <div className="min-w-0">
                         <p className="break-all text-sm font-semibold">{activity.domain}</p>
-                        <p className="mt-1 text-caption text-muted-foreground">
-                          {t("protocols.acmePlan.activityOffered", { methods: displayMethodList(activity.challenge_methods, locale) })}
-                        </p>
+                        {!activity.validation_skipped ? (
+                          <p className="mt-1 text-caption text-muted-foreground">
+                            {t("protocols.acmePlan.activityOffered", { methods: displayMethodList(activity.challenge_methods, locale) })}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-caption text-muted-foreground">
                           {t("protocols.acmePlan.activityStarted", { at: formatDateTime(activity.created_at) })}
                         </p>

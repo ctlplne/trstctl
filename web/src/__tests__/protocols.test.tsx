@@ -801,11 +801,23 @@ describe("protocol surface", () => {
       issuing_profile: "internal-acme",
       issuing_profile_auth_mode: "trust_authenticated",
       challenge_methods: [],
+      validation_activity: [
+        {
+          order_id: "internal-order",
+          domain: "svc.internal.example.test",
+          order_status: "valid",
+          authorization_status: "valid",
+          challenge_methods: ["http-01"],
+          validation_skipped: true,
+          created_at: "2026-08-27T23:44:00Z",
+        },
+      ],
     });
     await renderProtocols();
     const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
     expect(within(panel).getByText("1 active of 2 configured")).toBeInTheDocument();
-    expect(within(panel).getByText("Domain check skipped by trusted profile")).toBeInTheDocument();
+    expect(within(panel).getAllByText("Domain check skipped by trusted profile")).toHaveLength(2);
+    expect(within(panel).queryByText("Offered HTTP-01")).not.toBeInTheDocument();
     await userEvent.click(within(panel).getByRole("button", { name: "Copy ACME client command" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--standalone"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--eab-kid"));

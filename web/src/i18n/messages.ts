@@ -9697,7 +9697,7 @@ export const messages = {
   "protocols.acmePlan.warnings": { defaultMessage: "Limits to know", description: "ACME non-blocking warning disclosure." },
   "protocols.acmePlan.activityHeading": { defaultMessage: "Recent ACME orders", description: "Heading for real served ACME order activity." },
   "protocols.acmePlan.activityDescription": {
-    defaultMessage: "Orders from the event log show checks offered, completed, or skipped. Tokens and account keys stay hidden.",
+    defaultMessage: "Recent orders show checks offered, completed, or skipped. Tokens and account keys stay hidden.",
     description: "ELI5 explanation of the durable, sanitized ACME domain-validation activity view.",
   },
   "protocols.acmePlan.activityCount": { defaultMessage: "{count} recent", description: "Count of recent ACME domain-validation activity rows." },
@@ -17337,8 +17337,7 @@ export const messages = {
     description: "B4: how many ACME accounts this credential has admitted.",
   },
   "protocols.eab.description": {
-    defaultMessage:
-      "An EAB credential scopes admitted accounts and orders. Disabling it stops new work and pending internal-trust finalization; issued certificates stay valid.",
+    defaultMessage: "An EAB credential limits accounts and orders. Disabling it stops new work and pending trusted orders; issued certificates stay valid.",
     description: "B4: explains what an external account binding credential controls and what disabling one does and does not do.",
   },
   "protocols.eab.disable": {
