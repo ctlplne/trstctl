@@ -146,6 +146,16 @@ func (c *eabCredential) active(now time.Time) (bool, string) {
 	}
 }
 
+// pendingFinalizationAllowed checks revocation of an internal-trust grant
+// without reapplying the new-order quota. The last permitted order must still
+// be finalizable, but disabling or expiring its grant stops an unissued leaf.
+func (c *eabCredential) pendingFinalizationAllowed(now time.Time) bool {
+	c.mu.Lock()
+	operatorDisabled := c.disabledByOperator
+	c.mu.Unlock()
+	return !c.policy.Disabled && !operatorDisabled && !c.policy.expired(now)
+}
+
 func (c *eabCredential) recordAccountBound(now time.Time) {
 	c.mu.Lock()
 	c.accountsBound++

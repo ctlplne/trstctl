@@ -21,6 +21,33 @@ type acmeDeviceAttestationProfiles struct {
 	profileName string
 }
 
+// acmeActiveCertificateProfile gives the public ACME listener the same active
+// profile version that protocol issuance enforces. The tenant-scoped store read
+// is repeated per order so changing the active version takes effect at once.
+type acmeActiveCertificateProfile struct {
+	store       *store.Store
+	tenantID    string
+	profileName string
+}
+
+func (p acmeActiveCertificateProfile) Resolve(ctx context.Context) (profile.CertificateProfile, error) {
+	if p.store == nil || p.tenantID == "" || p.profileName == "" {
+		return profile.CertificateProfile{}, fmt.Errorf("ACME active profile binding is unavailable")
+	}
+	record, err := p.store.GetActiveProfile(ctx, p.tenantID, p.profileName)
+	if err != nil {
+		return profile.CertificateProfile{}, fmt.Errorf("load ACME active profile %q: %w", p.profileName, err)
+	}
+	var certificateProfile profile.CertificateProfile
+	if err := json.Unmarshal(record.Spec, &certificateProfile); err != nil {
+		return profile.CertificateProfile{}, fmt.Errorf("decode ACME active profile %q: %w", p.profileName, err)
+	}
+	if err := certificateProfile.ValidateDefinition(); err != nil {
+		return profile.CertificateProfile{}, fmt.Errorf("validate ACME active profile %q: %w", p.profileName, err)
+	}
+	return certificateProfile, nil
+}
+
 func (p acmeDeviceAttestationProfiles) DeviceAttestationPolicy(
 	ctx context.Context,
 	tenantID, identifier string,

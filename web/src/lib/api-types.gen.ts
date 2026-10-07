@@ -276,6 +276,7 @@ export interface ACMEOperatorPlan {
   eab_required: boolean;
   generated_at: string;
   issuing_profile: string;
+  issuing_profile_auth_mode: "public_trust" | "trust_authenticated";
   issuing_profile_ready: boolean;
   next_action: ACMEOperatorAction;
   preview_external_effects: string[];

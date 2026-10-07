@@ -22,6 +22,7 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 		DirectoryPath:          "/directory",
 		ChallengeMethods:       []string{"http-01", "dns-01", "tls-alpn-01"},
 		IssuingProfile:         s.defaultProfile,
+		IssuingProfileAuthMode: string(profile.ACMEAuthModePublicTrust),
 		IssuingProfileReady:    s.defaultProfile == "",
 		ActivationMode:         "startup_configuration",
 		Blockers:               []string{},
@@ -112,6 +113,20 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 			if err := json.Unmarshal(rec.Spec, &spec); err != nil {
 				return api.ACMEOperatorPlan{}, fmt.Errorf("decode issuing profile %q: %w", s.defaultProfile, err)
 			}
+			mode, err := profile.NormalizeACMEAuthMode(spec.ACMEAuthMode)
+			if err != nil {
+				plan.Blockers = append(plan.Blockers, "The active ACME issuing profile has an unsupported authentication mode.")
+				plan.RecoverySteps = append(plan.RecoverySteps, "Correct the profile's acme_auth_mode and select a reviewed active version before retrying.")
+			} else {
+				plan.IssuingProfileAuthMode = string(mode)
+				if mode == profile.ACMEAuthModeTrustAuthenticated {
+					plan.ChallengeMethods = []string{}
+					if !plan.EABRequired {
+						plan.Blockers = append(plan.Blockers, "Internal-trust ACME issuance requires mandatory External Account Binding; a self-created ACME account key is insufficient authorization.")
+						plan.RecoverySteps = append(plan.RecoverySteps, "Configure protocols.acme_eab.required with scoped, file-backed credentials, then restart and retry with an EAB-bound account.")
+					}
+				}
+			}
 			maximum := time.Duration(spec.MaxValidity)
 			if maximum > 0 && maximum <= crypto.IssuanceBackdateSkew() {
 				plan.Blockers = append(plan.Blockers, fmt.Sprintf("The issuing profile's maximum validity %s leaves no usable lifetime after the %s NotBefore backdate.", maximum, crypto.IssuanceBackdateSkew()))
@@ -122,7 +137,8 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 		}
 	}
 
-	plan.Ready = plan.Served && plan.TenantBound && plan.IssuingProfileReady && (!plan.EABRequired || plan.EABActive > 0)
+	plan.Ready = plan.Served && plan.TenantBound && plan.IssuingProfileReady &&
+		(!plan.EABRequired || plan.EABActive > 0) && len(plan.Blockers) == 0
 	switch {
 	case plan.ActivationRequired:
 		plan.NextAction = api.ACMEOperatorAction{
@@ -131,9 +147,13 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 			Method: "POST", Path: "/api/v1/setup/protocols/activate",
 		}
 	case plan.Ready:
+		detail := "Point a stock ACME client at this directory. Account, order, challenge, issuance, renewal, and revocation remain protocol operations."
+		if plan.IssuingProfileAuthMode == string(profile.ACMEAuthModeTrustAuthenticated) {
+			detail = "Register the client with scoped EAB and request an internal certificate. Domain challenges are skipped; issuance, renewal, and revocation remain protocol operations."
+		}
 		plan.NextAction = api.ACMEOperatorAction{
 			Kind: "connect_acme_client", Label: "Connect an ACME client",
-			Detail: "Point a stock ACME client at this directory. Account, order, challenge, issuance, renewal, and revocation remain protocol operations.",
+			Detail: detail,
 			Method: "GET", Path: plan.DirectoryPath,
 		}
 	default:

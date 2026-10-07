@@ -49,6 +49,7 @@ type ACMEOperatorPlan struct {
 	EABActive              int                            `json:"eab_active"`
 	DNS01ProviderConfigs   int                            `json:"dns01_provider_configs"`
 	IssuingProfile         string                         `json:"issuing_profile"`
+	IssuingProfileAuthMode string                         `json:"issuing_profile_auth_mode"`
 	IssuingProfileReady    bool                           `json:"issuing_profile_ready"`
 	ActivationMode         string                         `json:"activation_mode"`
 	ActivationRequired     bool                           `json:"activation_required"`

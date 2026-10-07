@@ -55,6 +55,32 @@ func TestServedACMEPlanRejectsProfileWithoutUsableValidity(t *testing.T) {
 	}
 }
 
+func TestServedACMEPlanNamesInternalTrustModeAndRequiresEAB(t *testing.T) {
+	h := newOperatingServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		func(d *Deps) { d.DefaultProfile = "internal-acme" },
+	)
+	storeServerTestProfile(t, h.store, h.tenant, "internal-acme", profile.CertificateProfile{
+		Name: "internal-acme", ACMEAuthMode: profile.ACMEAuthModeTrustAuthenticated,
+		MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"acme"},
+	})
+	token := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead))
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/operator-plan", token, nil)
+	var plan struct {
+		Ready            bool     `json:"ready"`
+		AuthMode         string   `json:"issuing_profile_auth_mode"`
+		ChallengeMethods []string `json:"challenge_methods"`
+		Blockers         []string `json:"blockers"`
+	}
+	if err := json.Unmarshal(body, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusOK || plan.Ready || plan.AuthMode != "trust_authenticated" ||
+		len(plan.ChallengeMethods) != 0 || !strings.Contains(strings.Join(plan.Blockers, " "), "External Account Binding") {
+		t.Fatalf("internal trust plan without EAB = %d %s", status, body)
+	}
+}
+
 // F5 needs one server-owned answer to the operator's simple question: "Can an
 // ACME client get a certificate from this tenant right now?" Browser probes can
 // only prove that one browser reached one URL. They cannot prove the tenant

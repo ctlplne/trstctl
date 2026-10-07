@@ -1175,7 +1175,7 @@ never live in the API process. What you can do end to end against the running bi
   (`/metrics`, `/readyz`, W3C trace headers), bulkheads plus per-tenant rate
   limiting, backup/restore plus disaster recovery, and safe schema migrations.
 - Protocol parity hardening: served ACME supports the explicit
-  ACME trust_authenticated profile mode for authenticated internal issuance, plus
+  ACME trust_authenticated profile mode for scoped EAB-bound internal issuance, plus
   account-keyed order/hour and concurrent-order limits. Served EST includes
   `/serverkeygen`, RFC 9266 `tls-server-end-point` binding, profile PathID dispatch,
   and an mTLS sibling route when configured. Served SCEP includes the
@@ -3784,11 +3784,11 @@ This is a deliberate, documented trust boundary, not an accident.
   external account credentials over the API, because that would mean returning a
   shared MAC secret in a response body; the HMAC key stays byte-backed in locked
   memory where configuration put it and appears in no served response, in any
-  encoding. Binding a credential to a certificate profile is also **not**
-  served: the ACME server does not select profiles — that decision is made at
-  the issuance seam — so a per-credential profile setting would be policy that
-  nothing reads. The served disable verb cannot re-enable a credential that
-  configuration disables; config is the floor.
+  encoding. Per-credential profile selection is **not** served: the tenant's
+  `ca.default_profile` supplies one active profile to every ACME account, and
+  the server reads its authentication mode for each order. The served disable
+  verb cannot re-enable a credential that configuration disables; config is
+  the floor.
 - EST (RFC 7030), SCEP (RFC 8894), CMP (RFC 4210/6712), the SPIFFE Workload
   API, and the SSH CA issuance servers are served end-to-end by the running
   binary, each behind the same issuance seam as the API mint: signed in the

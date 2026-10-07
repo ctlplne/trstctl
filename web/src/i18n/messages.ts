@@ -6181,12 +6181,11 @@ export const messages = {
   "protocols.acmePlan.clientGuide": { defaultMessage: "Install and automate this client", description: "ACME fleet lifecycle operator guidance." },
   "protocols.acmePlan.clientDNSHelp": {
     defaultMessage:
-      "This DNS example requires the official RFC2136 plugin and its protected credentials file. certonly saves certificate files; installation, renewal scheduling and retirement are separate steps in the guide.",
+      "DNS-01 needs the RFC2136 plugin and a protected credentials file. certonly saves files; use the guide for deployment, renewal, and retirement.",
     description: "ACME fleet lifecycle operator guidance.",
   },
   "protocols.acmePlan.clientHTTPHelp": {
-    defaultMessage:
-      "The standalone example needs HTTP-01 to be offered and port 80 reachable by the CA. For other challenge methods, choose a compatible client. Follow the guide for installation, scheduled renewal and retirement.",
+    defaultMessage: "Standalone needs HTTP-01 allowed and port 80 reachable by the CA. Use the guide for deployment, renewal, and retirement.",
     description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.fleet.title": { defaultMessage: "Automate fleet TLS", description: "Journey title: ACME fleet automation." },
@@ -9647,28 +9646,28 @@ export const messages = {
     defaultMessage: "Every shipped method is enabled, tenant-bound, and answering its public probe.",
     description: "Confirmation shown when all machine certificate request methods are ready.",
   },
-  "protocols.acmePlan.region": {
-    defaultMessage: "ACME readiness and next step",
-    description: "Accessible label for the server-owned ACME operator workflow.",
-  },
   "protocols.acmePlan.heading": {
     defaultMessage: "ACME readiness and next step",
     description: "Heading for the server-owned ACME operator workflow.",
   },
   "protocols.acmePlan.description": {
-    defaultMessage: "One server check joins the tenant, issuing policy, account gate, challenge methods, and exact next action. The browser does not guess.",
+    defaultMessage: "The server checks tenant binding, issuing policy, account admission, and the next action.",
     description: "ELI5 explanation of ACME readiness authority.",
   },
   "protocols.acmePlan.loading": { defaultMessage: "Checking ACME readiness…", description: "ACME plan loading state." },
   "protocols.acmePlan.unavailableTitle": { defaultMessage: "ACME readiness is unavailable", description: "ACME plan read failure heading." },
   "protocols.acmePlan.unavailableBody": {
-    defaultMessage: "trstctl could not verify the full ACME path, so this page will not call it ready or unlock a setup action.",
+    defaultMessage: "trstctl could not verify ACME readiness. Setup actions remain unavailable.",
     description: "Fail-closed ACME plan read guidance.",
   },
   "protocols.acmePlan.ready": { defaultMessage: "Ready for ACME clients", description: "ACME plan ready badge." },
   "protocols.acmePlan.blocked": { defaultMessage: "ACME needs attention", description: "ACME plan blocked badge." },
   "protocols.acmePlan.directory": { defaultMessage: "Directory", description: "ACME directory path label." },
   "protocols.acmePlan.challenges": { defaultMessage: "Challenge methods", description: "ACME validation methods label." },
+  "profiles.acmeAuthMode.internal": {
+    defaultMessage: "Skip domain checks for EAB-bound internal accounts",
+    description: "Explicit internal ACME profile admission mode; unchecked keeps domain validation.",
+  },
   "protocols.acmePlan.profile": { defaultMessage: "Issuing policy", description: "ACME issuing profile label." },
   "protocols.acmePlan.profileDefault": { defaultMessage: "Built-in signer policy", description: "Fallback when ACME has no named profile." },
   "protocols.acmePlan.eab": { defaultMessage: "Account admission", description: "ACME EAB readiness label." },
@@ -9686,7 +9685,7 @@ export const messages = {
   "protocols.acmePlan.nextStep": { defaultMessage: "Do next", description: "ACME plan next-action eyebrow." },
   "protocols.acmePlan.copy": { defaultMessage: "Copy ACME client command", description: "Copy a stock-client command with placeholders." },
   "protocols.acmePlan.copied": {
-    defaultMessage: "Copied a command with placeholders only; no secret material was included.",
+    defaultMessage: "Copied a command with placeholders; no secrets included.",
     description: "Confirmation after copying safe ACME setup command.",
   },
   "protocols.acmePlan.permissionDenied": {
@@ -9696,15 +9695,14 @@ export const messages = {
   "protocols.acmePlan.actionFailed": { defaultMessage: "ACME action failed", description: "ACME plan action error heading." },
   "protocols.acmePlan.blockers": { defaultMessage: "Fix before connecting a client", description: "ACME blocker list heading." },
   "protocols.acmePlan.warnings": { defaultMessage: "Limits to know", description: "ACME non-blocking warning disclosure." },
-  "protocols.acmePlan.activityHeading": { defaultMessage: "Recent domain validation", description: "Heading for real served ACME domain-validation activity." },
+  "protocols.acmePlan.activityHeading": { defaultMessage: "Recent ACME orders", description: "Heading for real served ACME order activity." },
   "protocols.acmePlan.activityDescription": {
-    defaultMessage:
-      "These are real ACME orders rebuilt from the event log. They show the methods policy offered and the method that actually proved control; challenge tokens and account keys stay hidden.",
+    defaultMessage: "Orders from the event log show checks offered, completed, or skipped. Tokens and account keys stay hidden.",
     description: "ELI5 explanation of the durable, sanitized ACME domain-validation activity view.",
   },
   "protocols.acmePlan.activityCount": { defaultMessage: "{count} recent", description: "Count of recent ACME domain-validation activity rows." },
   "protocols.acmePlan.activityEmpty": {
-    defaultMessage: "No ACME client has started domain validation yet. Copy the client command above to create the first real order.",
+    defaultMessage: "No ACME orders yet. Copy the command above to start one.",
     description: "Empty state for ACME domain-validation activity.",
   },
   "protocols.acmePlan.activityValidated": {
@@ -17340,7 +17338,7 @@ export const messages = {
   },
   "protocols.eab.description": {
     defaultMessage:
-      "Each credential is an authorization, not just a door key: an account remembers which credential admitted it, and every order under that account is checked against the credential's scope. Disabling one stops new accounts and orders under it and leaves certificates already issued under it valid.",
+      "An EAB credential scopes admitted accounts and orders. Disabling it stops new work and pending internal-trust finalization; issued certificates stay valid.",
     description: "B4: explains what an external account binding credential controls and what disabling one does and does not do.",
   },
   "protocols.eab.disable": {

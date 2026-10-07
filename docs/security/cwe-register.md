@@ -518,8 +518,8 @@ not this file.
 | `internal/server/bundled_pg.go:78` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:907` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/protocol_mounts.go:909` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:912` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:914` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
@@ -1295,10 +1295,10 @@ not this file.
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:119` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:687` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:794` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:859` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1146` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:692` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:799` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:864` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1151` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:590` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:228` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:232` | test reads its own tempdir fixture (CWE-22) |

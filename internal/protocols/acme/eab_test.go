@@ -105,6 +105,21 @@ func TestEABCredentialActiveNamesTheCause(t *testing.T) {
 	})
 }
 
+func TestEABPendingFinalizationKeepsLastAllowedOrderButHonorsRevocation(t *testing.T) {
+	credential := &eabCredential{policy: EABPolicy{MaxOrders: 1, NotAfter: eabNow.Add(time.Hour)}, ordersCreated: 1}
+	if !credential.pendingFinalizationAllowed(eabNow) {
+		t.Fatal("the last permitted order must remain finalizable after reaching its order quota")
+	}
+	credential.disabledByOperator = true
+	if credential.pendingFinalizationAllowed(eabNow) {
+		t.Fatal("an operator-disabled grant must stop pending internal issuance")
+	}
+	credential.disabledByOperator = false
+	if credential.pendingFinalizationAllowed(eabNow.Add(time.Hour)) {
+		t.Fatal("an expired grant must stop pending internal issuance")
+	}
+}
+
 // TestSetEABDisabledCannotLiftTheConfigurationFloor is the safety property of the
 // runtime verb: an API call may switch a credential off, never on past config.
 func TestSetEABDisabledCannotLiftTheConfigurationFloor(t *testing.T) {

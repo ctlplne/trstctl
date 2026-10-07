@@ -7232,6 +7232,8 @@ export interface components {
             /** Format: date-time */
             generated_at: string;
             issuing_profile: string;
+            /** @enum {string} */
+            issuing_profile_auth_mode: "public_trust" | "trust_authenticated";
             issuing_profile_ready: boolean;
             next_action: components["schemas"]["ACMEOperatorAction"];
             preview_external_effects: string[];

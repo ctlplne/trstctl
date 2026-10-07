@@ -271,6 +271,11 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 			store:       s.store,
 			profileName: s.defaultProfile,
 		})
+	if s.defaultProfile != "" {
+		acmeSrv = acmeSrv.WithCertificateProfileResolver(acmeActiveCertificateProfile{
+			store: s.store, tenantID: acmeTenant, profileName: s.defaultProfile,
+		}.Resolve)
+	}
 	if s.acmeDNS01 != nil {
 		var txtResolver acme.Resolver
 		switch validator := validators.DNS01.(type) {

@@ -269,6 +269,10 @@ type Server struct {
 
 	meta     DirectoryMeta
 	authMode profile.ACMEAuthMode
+	// A served tenant can change the active profile without restarting ACME.
+	// Resolve before each order, outside the state lock, so the profile store's
+	// tenant-scoped read is authoritative and cannot block unrelated ACME work.
+	profileResolver func(context.Context) (profile.CertificateProfile, error)
 
 	// onFailure receives a diagnosis for every refusal this server issues
 	// (epic I4). Nil disables it.
@@ -473,6 +477,25 @@ func (s *Server) WithCertificateProfile(p profile.CertificateProfile) (*Server, 
 	}
 	s.authMode = mode
 	return s, nil
+}
+
+// WithCertificateProfileResolver reads the active, tenant-bound certificate
+// profile for each new order. A read failure refuses issuance; it never falls
+// back to public_trust or to a stale in-memory profile.
+func (s *Server) WithCertificateProfileResolver(resolve func(context.Context) (profile.CertificateProfile, error)) *Server {
+	s.profileResolver = resolve
+	return s
+}
+
+func (s *Server) currentAuthMode(ctx context.Context) (profile.ACMEAuthMode, error) {
+	if s.profileResolver == nil {
+		return profile.NormalizeACMEAuthMode(s.authMode)
+	}
+	p, err := s.profileResolver(ctx)
+	if err != nil {
+		return "", err
+	}
+	return profile.NormalizeACMEAuthMode(p.ACMEAuthMode)
 }
 
 // WithRevocationHook installs the served-platform revocation effect. The hook is
@@ -952,6 +975,21 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
 		return
 	}
+	authMode, err := s.currentAuthMode(r.Context())
+	if err != nil {
+		s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "active ACME certificate profile is unavailable")
+		return
+	}
+	// An ACME account key alone proves only possession of a self-created key.
+	// Skipping DNS validation requires operator-issued EAB authorization, both
+	// in the served directory policy and on this exact account.
+	s.mu.Lock()
+	eabRequired := s.meta.ExternalAccountRequired
+	s.mu.Unlock()
+	if authMode == profile.ACMEAuthModeTrustAuthenticated && (!eabRequired || acct.eabKeyID == "") {
+		s.problem(w, r, http.StatusForbidden, "unauthorized", "internal-trust ACME orders require a required, EAB-bound account")
+		return
+	}
 	// The credential that admitted this account decides what it may ask for
 	// (B4). This runs before any work is done and before any rate limiter, so a
 	// denial costs nothing and is recorded against the credential rather than
@@ -975,10 +1013,6 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 			s.rateLimitedAfter(w, r, retryAfter, "too many ACME newOrder requests for this account")
 			return
 		}
-	}
-	authMode := s.authMode
-	if authMode == "" {
-		authMode = profile.ACMEAuthModePublicTrust
 	}
 	challengeTypesByDomain := make(map[string][]string, len(req.Identifiers))
 	pendingChallengeDelta := 0
@@ -1321,6 +1355,22 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		}
 		s.problem(w, r, http.StatusForbidden, "orderNotReady", "order is not ready to finalize")
 		return
+	}
+	if o.authMode == profile.ACMEAuthModeTrustAuthenticated {
+		mode, err := s.currentAuthMode(r.Context())
+		if err != nil {
+			s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "active ACME certificate profile is unavailable")
+			return
+		}
+		s.mu.Lock()
+		credential := s.eabCredentials[acct.eabKeyID]
+		eabRequired := s.meta.ExternalAccountRequired
+		s.mu.Unlock()
+		if mode != profile.ACMEAuthModeTrustAuthenticated || !eabRequired ||
+			credential == nil || !credential.pendingFinalizationAllowed(time.Now()) {
+			s.problem(w, r, http.StatusForbidden, "unauthorized", "internal-trust ACME authorization is no longer active")
+			return
+		}
 	}
 	csr, err := ParseFinalizeRequest(msg.Payload)
 	if err != nil {

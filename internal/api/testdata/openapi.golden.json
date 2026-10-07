@@ -1150,6 +1150,13 @@
           "issuing_profile": {
             "type": "string"
           },
+          "issuing_profile_auth_mode": {
+            "enum": [
+              "public_trust",
+              "trust_authenticated"
+            ],
+            "type": "string"
+          },
           "issuing_profile_ready": {
             "type": "boolean"
           },
@@ -1207,6 +1214,7 @@
           "eab_active",
           "dns01_provider_configs",
           "issuing_profile",
+          "issuing_profile_auth_mode",
           "issuing_profile_ready",
           "activation_mode",
           "activation_required",

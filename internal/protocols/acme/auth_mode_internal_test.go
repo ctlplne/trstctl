@@ -5,6 +5,7 @@ package acme
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,7 +42,9 @@ func TestACMETrustAuthenticatedProfileMakesOrderReadyWithoutDVChallenge(t *testi
 		t.Fatalf("bind ACME state log: %v", err)
 	}
 
-	acct := &account{url: "http://ca.test/acme/acct/1", status: statusValid}
+	srv.meta.ExternalAccountRequired = true
+	srv.eabCredentials = map[string]*eabCredential{"internal": {keyID: "internal"}}
+	acct := &account{url: "http://ca.test/acme/acct/1", status: statusValid, eabKeyID: "internal"}
 	msg := &jose.ACMEMessage{Payload: []byte(`{"identifiers":[{"type":"dns","value":"svc.internal.test"}]}`)}
 	rec := httptest.NewRecorder()
 	srv.newOrder(rec, httptest.NewRequest(http.MethodPost, "http://ca.test/acme/new-order", nil), msg, acct)
@@ -133,6 +136,101 @@ func TestACMETrustAuthenticatedProfileStillRejectsUnauthenticatedOrder(t *testin
 	}
 	if len(srv.orders) != 0 {
 		t.Fatalf("unauthenticated order created %d orders, want 0", len(srv.orders))
+	}
+}
+
+func TestACMETrustAuthenticatedProfileRequiresEABBoundAccount(t *testing.T) {
+	srv, err := New(nil, AcceptAll{}).WithCertificateProfile(profile.CertificateProfile{
+		ACMEAuthMode: profile.ACMEAuthModeTrustAuthenticated,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := &jose.ACMEMessage{Payload: []byte(`{"identifiers":[{"type":"dns","value":"svc.internal.test"}]}`)}
+	acct := &account{url: "http://ca.test/acme/acct/1", status: statusValid}
+	for _, required := range []bool{false, true} {
+		srv.meta.ExternalAccountRequired = required
+		rec := httptest.NewRecorder()
+		srv.newOrder(rec, httptest.NewRequest(http.MethodPost, "http://ca.test/acme/new-order", nil), msg, acct)
+		if rec.Code != http.StatusForbidden || len(srv.orders) != 0 {
+			t.Fatalf("required=%v: unbound account got %d, orders=%d: %s", required, rec.Code, len(srv.orders), rec.Body.String())
+		}
+	}
+	acct.eabKeyID = "internal"
+	srv.eabCredentials = map[string]*eabCredential{"internal": {keyID: "internal"}}
+	srv.meta.ExternalAccountRequired = false
+	rec := httptest.NewRecorder()
+	srv.newOrder(rec, httptest.NewRequest(http.MethodPost, "http://ca.test/acme/new-order", nil), msg, acct)
+	if rec.Code != http.StatusForbidden || len(srv.orders) != 0 {
+		t.Fatalf("trust mode without required EAB got %d, orders=%d: %s", rec.Code, len(srv.orders), rec.Body.String())
+	}
+}
+
+func TestACMEActiveProfileModeIsResolvedForEachOrder(t *testing.T) {
+	srv := New(nil, AcceptAll{})
+	srv.meta.ExternalAccountRequired = true
+	srv.eabCredentials = map[string]*eabCredential{"internal": {keyID: "internal"}}
+	mode := profile.ACMEAuthModePublicTrust
+	srv.WithCertificateProfileResolver(func(context.Context) (profile.CertificateProfile, error) {
+		return profile.CertificateProfile{ACMEAuthMode: mode}, nil
+	})
+	acct := &account{url: "http://ca.test/acme/acct/1", status: statusValid, eabKeyID: "internal"}
+	msg := &jose.ACMEMessage{Payload: []byte(`{"identifiers":[{"type":"dns","value":"svc.internal.test"}]}`)}
+	for _, tc := range []struct {
+		mode profile.ACMEAuthMode
+		want string
+	}{{profile.ACMEAuthModePublicTrust, statusPending}, {profile.ACMEAuthModeTrustAuthenticated, statusReady}} {
+		mode = tc.mode
+		rec := httptest.NewRecorder()
+		srv.newOrder(rec, httptest.NewRequest(http.MethodPost, "http://ca.test/acme/new-order", nil), msg, acct)
+		if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"status":"`+tc.want+`"`) {
+			t.Fatalf("mode %q got %d %s, want %s", tc.mode, rec.Code, rec.Body.String(), tc.want)
+		}
+	}
+}
+
+func TestACMEActiveProfileReadFailureRefusesOrderWithoutFallback(t *testing.T) {
+	srv := New(nil, AcceptAll{})
+	srv.WithCertificateProfileResolver(func(context.Context) (profile.CertificateProfile, error) {
+		return profile.CertificateProfile{}, errors.New("profile store unavailable")
+	})
+	acct := &account{url: "http://ca.test/acme/acct/1", status: statusValid}
+	msg := &jose.ACMEMessage{Payload: []byte(`{"identifiers":[{"type":"dns","value":"svc.internal.test"}]}`)}
+	rec := httptest.NewRecorder()
+	srv.newOrder(rec, httptest.NewRequest(http.MethodPost, "http://ca.test/acme/new-order", nil), msg, acct)
+	if rec.Code != http.StatusServiceUnavailable || len(srv.orders) != 0 {
+		t.Fatalf("failed profile read got %d, orders=%d: %s", rec.Code, len(srv.orders), rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "profile store unavailable") {
+		t.Fatal("profile store error leaked into public ACME response")
+	}
+}
+
+func TestACMEInternalTrustReadyOrderCannotFinalizeAfterProfileOrEABRevocation(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mode    profile.ACMEAuthMode
+		disable bool
+	}{{"profile switches to public trust", profile.ACMEAuthModePublicTrust, false},
+		{"EAB credential is disabled", profile.ACMEAuthModeTrustAuthenticated, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := New(nil, AcceptAll{})
+			srv.meta.ExternalAccountRequired = true
+			srv.eabCredentials = map[string]*eabCredential{"internal": {keyID: "internal", disabledByOperator: tc.disable}}
+			srv.WithCertificateProfileResolver(func(context.Context) (profile.CertificateProfile, error) {
+				return profile.CertificateProfile{ACMEAuthMode: tc.mode}, nil
+			})
+			acct := &account{url: "http://ca.test/acme/acct/1", status: statusValid, eabKeyID: "internal"}
+			srv.orders["order"] = &order{id: "order", accountURL: acct.url, status: statusReady,
+				authMode: profile.ACMEAuthModeTrustAuthenticated}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "http://ca.test/acme/order/order/finalize", nil)
+			req.SetPathValue("id", "order")
+			srv.finalize(rec, req, &jose.ACMEMessage{}, acct)
+			if rec.Code != http.StatusForbidden || srv.orders["order"].status != statusReady {
+				t.Fatalf("finalize after grant change got %d, status=%q: %s", rec.Code, srv.orders["order"].status, rec.Body.String())
+			}
+		})
 	}
 }
 

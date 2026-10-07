@@ -79,7 +79,7 @@ function buildDemoHistory() {
     { key: "service-mtls-30d", name: "service-mtls-30d", spec: { max_validity: "720h", eku: ["serverAuth", "clientAuth"], san_policy: "internal-dns" }, daysAgo: 179 },
     { key: "humanless-api-key-1h", name: "humanless-api-key-1h", spec: { max_validity: "1h", rotation: "forced", audience: "automation" }, daysAgo: 172 },
     { key: "pqc-hybrid-lab", name: "pqc-hybrid-lab", spec: { algorithm: "Hybrid-ML-DSA-44-ECDSA-P256", status: "lab-only" }, daysAgo: 130 },
-    { key: "acme-trust-authenticated-90d", name: "acme-trust-authenticated-90d", spec: { max_validity: "2160h", acme: { external_account_binding: true, trust_authenticated: true } }, daysAgo: 104 },
+    { key: "acme-trust-authenticated-90d", name: "acme-trust-authenticated-90d", spec: { max_validity: "2160h", allowed_protocols: ["acme"], acme_auth_mode: "trust_authenticated" }, daysAgo: 104 },
     { key: "est-serverkeygen-iot-24h", name: "est-serverkeygen-iot-24h", spec: { max_validity: "24h", est: { serverkeygen: true, tls_unique_binding: "tls-server-end-point" } }, daysAgo: 79 },
     { key: "scep-intune-mobile-7d", name: "scep-intune-mobile-7d", spec: { max_validity: "168h", scep: { challenge: "intune-jws", replay_cache: "required" } }, daysAgo: 52 },
     { key: "ssh-host-12h", name: "ssh-host-12h", spec: { max_validity: "12h", ssh: { principals: "hostnames", renewal: "agent" } }, daysAgo: 23 },

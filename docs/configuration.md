@@ -1869,6 +1869,13 @@ quota, or after its window is refused fail-closed and recorded. Scope has no env
 shortcut: it is per-key structured config. See
 [ACME external account bindings](features/acme-and-dns.md).
 
+For an internal ACME profile with `acme_auth_mode: trust_authenticated`, select it
+with `ca.default_profile` and require EAB. Put each HMAC key in a 0600 file and
+reference it as `protocols.acme_eab.keys[].hmac_key_file`; the credential's
+`allowed_identifiers` must cover only the intended internal names. The server
+checks the active tenant profile at each order and refuses a trusted order from
+an account without EAB, even if the account predates the configuration change.
+
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NONCES` | `4096` | Maximum outstanding ACME replay nonces retained by the tenant-bound ACME mount. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS` | `2048` | Maximum ACME accounts retained by the tenant-bound ACME mount. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS` | `4096` | Maximum pending ACME orders retained before the server returns ACME `rateLimited` (429). |

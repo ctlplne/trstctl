@@ -135,21 +135,29 @@ exactly as it did before.
 The mechanism: `GET /api/v1/acme/eab-credentials` serves each credential's scope,
 quota, window, and live accounts-bound / orders-created / orders-denied counters, and
 `POST /api/v1/acme/eab-credentials/{kid}/disable` (or `/enable`) stops or resumes new
-accounts and orders under one credential at runtime — the verb you want when a
-credential leaks, because it takes effect immediately and leaves certificates already
-issued under it valid. The Protocols console shows the same list with the same action.
+accounts and orders under one credential at runtime. For internal-trust profiles it
+also stops pending finalization. Use it when a credential leaks; certificates already
+issued under it remain valid until revoked or expired. The Protocols console shows
+the same list with the same action.
 
 The exact contract: the served response carries no HMAC key in any encoding, and there
 is no API that mints one — **rotation is a configuration operation**: add the new key
 id to `protocols.acme_eab.keys`, then disable the old one while clients migrate. The
 served disable verb cannot re-enable a credential that configuration disables; config
-is the floor. Binding a credential to a certificate profile is not available, because
-the ACME server does not select profiles.
+is the floor. EAB credentials cannot select different certificate profiles: the
+deployment's `ca.default_profile` applies to every ACME account in that tenant.
 
 The default ACME profile mode is full public-trust domain validation. For internal PKI,
-a profile can explicitly set `trust_authenticated`: an already-authenticated internal
-ACME account can move an order straight to ready without a DV challenge, while
-unauthenticated orders still fail closed. trstctl also applies an account-keyed
+an active certificate profile can explicitly set `"acme_auth_mode":"trust_authenticated"`.
+Set `ca.default_profile` to that profile and configure `protocols.acme_eab.required=true`
+with a scoped EAB credential injected through a 0600 `hmac_key_file`. The server reads
+the tenant's active profile version for each order. Only an account that registered
+with that EAB credential can move an order straight to ready without a DV challenge;
+possession of a self-created ACME account key is insufficient. The readiness panel
+names this mode and blocks a trust-authenticated profile when EAB is not mandatory.
+Changing the active profile or disabling/expiring its EAB credential stops a pending
+internal-trust order from finalizing; already issued certificates remain valid until
+their ordinary renewal or revocation. trstctl also applies an account-keyed
 order/hour limiter plus a concurrent-order cap, so many clients behind one NAT do not
 share a single coarse source-IP budget and one noisy account cannot starve the ACME lane.
 
@@ -480,8 +488,8 @@ tenant cannot read another tenant's certificate identifiers or rotation evidence
   — this is deliberate, not a bug.
 - **CAA fails closed** on lookup errors: if your DNS is unreachable, issuance is
   refused rather than risked.
-- **`trust_authenticated` is not public issuance.** Use it only for internal profiles
-  where the ACME account is already authenticated through trstctl's platform controls.
+- **`trust_authenticated` is not public issuance.** Use it only for an internal profile
+  with mandatory, scoped EAB. The ACME account key alone is not enrollment authority.
 
 ## Reference
 

@@ -271,6 +271,23 @@ describe("operational console surface", () => {
     );
   });
 
+  it("lets an operator explicitly author an EAB-bound internal ACME rule", async () => {
+    apiMock.profiles.mockResolvedValue([]);
+    apiMock.createProfile.mockResolvedValue({ id: "internal", name: "internal-acme", version: 1, active: true });
+    const user = userEvent.setup();
+    renderAt("/profiles");
+    await user.click(await screen.findByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "internal-acme");
+    await user.click(screen.getByRole("checkbox", { name: "Skip domain checks for EAB-bound internal accounts" }));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    await waitFor(() =>
+      expect(apiMock.createProfile).toHaveBeenCalledWith({
+        name: "internal-acme",
+        spec: expect.objectContaining({ acme_auth_mode: "trust_authenticated" }),
+      }),
+    );
+  });
+
   it("surfaces served profile validation problems from the JSON fallback", async () => {
     apiMock.profiles.mockResolvedValue([]);
     apiMock.createProfile.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "max_validity exceeds the tenant profile ceiling" })));

@@ -368,6 +368,7 @@ ACMEOperatorPlan = TypedDict(
         'eab_required': bool,
         'generated_at': str,
         'issuing_profile': str,
+        'issuing_profile_auth_mode': str,
         'issuing_profile_ready': bool,
         'next_action': dict[str, Any],
         'preview_external_effects': list[str],

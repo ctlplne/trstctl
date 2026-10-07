@@ -750,7 +750,7 @@ describe("protocol surface", () => {
     expect(within(panel).getByText("1 active of 2 configured")).toBeInTheDocument();
     expect(within(panel).getByText("This check made no changes and contacted no external system.")).toBeInTheDocument();
     expect(within(panel).getByRole("heading", { name: "If a client fails" })).toBeInTheDocument();
-    expect(within(panel).getByRole("heading", { name: "Recent domain validation" })).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { name: "Recent ACME orders" })).toBeInTheDocument();
     expect(within(panel).getByText("api.example.test")).toBeInTheDocument();
     expect(within(panel).getByText("Validated with HTTP-01")).toBeInTheDocument();
     expect(within(panel).getByText("Offered HTTP-01 and DNS-01")).toBeInTheDocument();
@@ -792,6 +792,23 @@ describe("protocol surface", () => {
     await renderProtocols();
     const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
     expect(within(panel).queryByRole("button", { name: "Copy ACME client command" })).not.toBeInTheDocument();
+  });
+
+  it("shows internal EAB admission and gives a usable client command without DV", async () => {
+    const writeText = installClipboardSpy();
+    apiMock.acmeOperatorPlan.mockResolvedValue({
+      ...readyACMEOperatorPlan(),
+      issuing_profile: "internal-acme",
+      issuing_profile_auth_mode: "trust_authenticated",
+      challenge_methods: [],
+    });
+    await renderProtocols();
+    const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
+    expect(within(panel).getByText("1 active of 2 configured")).toBeInTheDocument();
+    expect(within(panel).getByText("Domain check skipped by trusted profile")).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole("button", { name: "Copy ACME client command" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--standalone"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--eab-kid"));
   });
 
   it("activates only when the server offers the tenant-bound eval action, then reloads the plan", async () => {

@@ -27,6 +27,7 @@ interface BuilderFields {
   allowedEkus: string[];
   maxValidity: string;
   allowedProtocols: string[];
+  trustEABAccounts: boolean;
   allowedDnsSuffixes: string;
   deviceAttestationEnabled: boolean;
   deviceAttestationRootsPEM: string;
@@ -46,6 +47,7 @@ const defaultBuilder: BuilderFields = {
   allowedEkus: ["serverAuth"],
   maxValidity: "2160h",
   allowedProtocols: ["api", "acme"],
+  trustEABAccounts: false,
   allowedDnsSuffixes: "example.com",
   deviceAttestationEnabled: false,
   deviceAttestationRootsPEM: "",
@@ -367,6 +369,12 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
           onToggle={(value) => onChange({ ...fields, allowedProtocols: toggleValue(fields.allowedProtocols, value) })}
         />
       </div>
+      {fields.allowedProtocols.includes("acme") && (
+        <label className="inline-flex items-center gap-2 text-sm md:col-span-2">
+          <Checkbox checked={fields.trustEABAccounts} onChange={(event) => onChange({ ...fields, trustEABAccounts: event.target.checked })} />
+          {translateNow("profiles.acmeAuthMode.internal")}
+        </label>
+      )}
       <fieldset className="space-y-3 border-y border-border py-3 md:col-span-2">
         <legend className="text-sm font-medium">{translateNow("profiles.deviceAttestation.legend")}</legend>
         <label htmlFor="profile-device-attestation-enabled" className="inline-flex items-center gap-2 text-sm">
@@ -809,6 +817,9 @@ function buildProfileSpec(fields: BuilderFields): ProfileSpec {
   if (fields.allowedEkus.length > 0) spec.allowed_ekus = fields.allowedEkus;
   if (fields.maxValidity.trim()) spec.max_validity = fields.maxValidity.trim();
   if (fields.allowedProtocols.length > 0) spec.allowed_protocols = fields.allowedProtocols;
+  if (fields.allowedProtocols.includes("acme") && fields.trustEABAccounts) {
+    spec.acme_auth_mode = "trust_authenticated";
+  }
   const suffixes = splitList(fields.allowedDnsSuffixes);
   if (suffixes.length > 0) spec.allowed_dns_suffixes = suffixes;
   if (fields.deviceAttestationEnabled) {

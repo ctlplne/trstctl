@@ -727,9 +727,11 @@ func componentSchemas() map[string]*Schema {
 		"directory_path":    {Type: "string", Enum: []string{"/directory"}},
 		"challenge_methods": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01"}}},
 		"eab_required":      {Type: "boolean"}, "eab_configured": {Type: "integer"}, "eab_active": {Type: "integer"},
-		"dns01_provider_configs": {Type: "integer"}, "issuing_profile": str(), "issuing_profile_ready": {Type: "boolean"},
-		"activation_mode":     {Type: "string", Enum: []string{"startup_configuration", "eval_profile_event"}},
-		"activation_required": {Type: "boolean"}, "activation_available": {Type: "boolean"},
+		"dns01_provider_configs": {Type: "integer"}, "issuing_profile": str(),
+		"issuing_profile_auth_mode": {Type: "string", Enum: []string{"public_trust", "trust_authenticated"}},
+		"issuing_profile_ready":     {Type: "boolean"},
+		"activation_mode":           {Type: "string", Enum: []string{"startup_configuration", "eval_profile_event"}},
+		"activation_required":       {Type: "boolean"}, "activation_available": {Type: "boolean"},
 		"next_action": ref("ACMEOperatorAction"),
 		"blockers":    {Type: "array", Items: str()}, "warnings": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()},
@@ -737,7 +739,7 @@ func componentSchemas() map[string]*Schema {
 		"validation_activity": {Type: "array", Items: ref("ACMEDomainValidationActivity")},
 		"generated_at":        timestamp(),
 	}, "ready", "served", "tenant_bound", "directory_path", "challenge_methods", "eab_required", "eab_configured", "eab_active",
-		"dns01_provider_configs", "issuing_profile", "issuing_profile_ready", "activation_mode", "activation_required", "activation_available",
+		"dns01_provider_configs", "issuing_profile", "issuing_profile_auth_mode", "issuing_profile_ready", "activation_mode", "activation_required", "activation_available",
 		"next_action", "blockers", "warnings", "recovery_steps", "preview_writes", "preview_external_effects", "validation_activity", "generated_at")
 	caAuthorityHorizon := object(map[string]*Schema{
 		"band_months": {Type: "integer"}, "months_remaining": {Type: "integer"},

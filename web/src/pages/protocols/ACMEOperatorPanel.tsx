@@ -16,11 +16,14 @@ function directoryURL(path: string): string {
 }
 
 function clientCommand(plan: ACMEOperatorPlan): string | null {
-  const authenticator = plan.challenge_methods.includes("dns-01")
-    ? "--dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini --preferred-challenges dns"
-    : plan.challenge_methods.includes("http-01")
-      ? "--standalone --preferred-challenges http"
-      : null;
+  const authenticator =
+    plan.issuing_profile_auth_mode === "trust_authenticated"
+      ? "--standalone"
+      : plan.challenge_methods.includes("dns-01")
+        ? "--dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini --preferred-challenges dns"
+        : plan.challenge_methods.includes("http-01")
+          ? "--standalone --preferred-challenges http"
+          : null;
   if (!authenticator) return null;
   const eab = plan.eab_required ? " --eab-kid '<configured-key-id>' --eab-hmac-key '<retrieve-from-secret-manager>'" : "";
   const directory = directoryURL(plan.directory_path).replace(/'/g, "'\\''");
@@ -67,6 +70,8 @@ export function ACMEOperatorPanel() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const plan = isACMEOperatorPlan(query.data) ? query.data : null;
+  const command = plan ? clientCommand(plan) : null;
+  const internalTrust = plan?.issuing_profile_auth_mode === "trust_authenticated";
 
   if (!canRead) return null;
 
@@ -84,8 +89,6 @@ export function ACMEOperatorPanel() {
   }
 
   async function copyCommand() {
-    if (!plan) return;
-    const command = clientCommand(plan);
     if (!command) return;
     await navigator.clipboard?.writeText(command);
     setCopied(true);
@@ -96,7 +99,7 @@ export function ACMEOperatorPanel() {
       role="region"
       id="acme-operator-panel"
       aria-labelledby="acme-operator-plan-heading"
-      aria-label={t("protocols.acmePlan.region")}
+      aria-label={t("protocols.acmePlan.heading")}
       className="grid scroll-mt-24 gap-4 p-comfortable"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -130,7 +133,7 @@ export function ACMEOperatorPanel() {
             </div>
             <div className="bg-surface px-3 py-3">
               <dt className="text-caption text-muted-foreground">{t("protocols.acmePlan.challenges")}</dt>
-              <dd className="mt-1 text-sm font-medium">{plan.challenge_methods.join(", ")}</dd>
+              <dd className="mt-1 text-sm font-medium">{internalTrust ? t("protocols.acmePlan.activitySkipped") : plan.challenge_methods.join(", ")}</dd>
             </div>
             <div className="bg-surface px-3 py-3">
               <dt className="text-caption text-muted-foreground">{t("protocols.acmePlan.profile")}</dt>
@@ -171,7 +174,7 @@ export function ACMEOperatorPanel() {
                   {plan.next_action.label}
                 </Button>
               ) : null}
-              {plan.ready && clientCommand(plan) ? (
+              {plan.ready && command ? (
                 <Button type="button" variant="outline" onClick={() => void copyCommand()}>
                   {t("protocols.acmePlan.copy")}
                 </Button>
@@ -180,7 +183,15 @@ export function ACMEOperatorPanel() {
           </div>
           {plan.ready ? (
             <div className="grid gap-2 text-sm text-muted-foreground">
-              <p>{t(plan.challenge_methods.includes("dns-01") ? "protocols.acmePlan.clientDNSHelp" : "protocols.acmePlan.clientHTTPHelp")}</p>
+              <p>
+                {t(
+                  internalTrust
+                    ? "protocols.eab.description"
+                    : plan.challenge_methods.includes("dns-01")
+                      ? "protocols.acmePlan.clientDNSHelp"
+                      : "protocols.acmePlan.clientHTTPHelp",
+                )}
+              </p>
               <a className="text-primary underline" href="https://docs.trstctl.com/journeys/automate-fleet-tls/" target="_blank" rel="noreferrer">
                 {t("protocols.acmePlan.clientGuide")}
               </a>
