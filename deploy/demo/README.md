@@ -10,8 +10,8 @@ through served HTTPS APIs.
 docker compose -f deploy/demo/docker-compose.yml up --build
 ```
 
-The UI and automatic demo IdP bind to host loopback, so the disposable demo
-administrator is not exposed to the LAN. The IdP uses an exact callback allowlist,
+The UI and demo IdP bind to host loopback, so the disposable demo
+operators are not exposed to the LAN. The IdP uses an exact callback allowlist,
 PKCE, and short-lived single-use authorization codes. The stack creates one stable self-signed browser certificate and publishes only
 its public half. Copy it out and verify the API before opening the browser:
 
@@ -23,10 +23,21 @@ curl --fail --cacert ./trstctl-demo-control-plane.crt https://127.0.0.1:9443/rea
 ```
 
 Import `trstctl-demo-control-plane.crt` into the trust store used by your local
-evaluation browser, then open <https://127.0.0.1:9443> and click **Sign in with
+evaluation browser, then open <https://127.0.0.1:9443> and click **Continue with
 SSO**. Do not bypass a certificate warning: if the browser still warns, it is not
-using the copied trust file. The demo IdP signs you in as
-`demo-admin@trstctl.local` for tenant
+using the copied trust file. The local IdP asks for an operator ID and password.
+Read the generated passwords privately on the installation host:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml run --rm --no-deps \
+  --entrypoint cat oidc-keys /demo-oidc-credentials/operator-credentials.json
+```
+
+Sign in as `eval-admin`; `eval-custodian-1` and `eval-custodian-2` are separate
+operators for approval journeys. The two private Compose volumes keep salted user
+verifiers and the initial passwords apart. Only the IdP reads the verifier volume;
+the control plane and signer mount neither volume. Each file is mode `0600` and
+survives container restarts. The seeded tenant remains
 `11111111-1111-4111-8111-111111111111`. Remove the local trust entry when the
 evaluation ends.
 

@@ -341,6 +341,44 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	}
 }
 
+func TestDemoOIDCProvidesPrivateOperatorRoster(t *testing.T) {
+	cf := parseCompose(t)
+	if _, ok := cf.Volumes["demoidpusers"]; !ok {
+		t.Fatal("seeded demo needs a persistent private OIDC user volume")
+	}
+	if _, ok := cf.Volumes["demoidpcredentials"]; !ok {
+		t.Fatal("seeded demo needs a separate persistent bootstrap credential volume")
+	}
+	keys := cf.Services["oidc-keys"]
+	if !slices.Contains(keys.Volumes, "demoidpusers:/demo-oidc-users") ||
+		!slices.Contains(keys.Volumes, "demoidpcredentials:/demo-oidc-credentials") ||
+		!slices.Contains(keys.Volumes, "../local-oidc/oidc-usergen.mjs:/local/oidc-usergen.mjs:ro") ||
+		!slices.Contains(keys.Command, "node /local/oidc-keygen.mjs && node /local/oidc-usergen.mjs") {
+		t.Fatalf("demo OIDC initializer must persist the signer key and private operator roster: %+v", keys)
+	}
+	for name, want := range map[string]string{ // #nosec G101 -- fixture paths name files; no credential value is embedded.
+		"OIDC_USERS_FILE":       "/demo-oidc-users/users.json",
+		"OIDC_CREDENTIALS_FILE": "/demo-oidc-credentials/operator-credentials.json",
+	} {
+		if got := stringValue(keys.Environment[name]); got != want {
+			t.Fatalf("demo OIDC initializer %s = %q, want %q", name, got, want)
+		}
+	}
+	idp := cf.Services["demo-oidc"]
+	if got := stringValue(idp.Environment["OIDC_USERS_FILE"]); got != "/demo-oidc-users/users.json" ||
+		!slices.Contains(idp.Volumes, "demoidpusers:/demo-oidc-users:ro") ||
+		slices.Contains(idp.Volumes, "demoidpcredentials:/demo-oidc-credentials:ro") {
+		t.Fatalf("demo IdP must read only the private user roster, never the bootstrap passwords: %+v", idp)
+	}
+	for _, service := range []string{"trstctl", "signer", "demo-seed"} {
+		if slices.ContainsFunc(cf.Services[service].Volumes, func(volume string) bool {
+			return strings.HasPrefix(volume, "demoidpusers:") || strings.HasPrefix(volume, "demoidpcredentials:")
+		}) {
+			t.Fatalf("%s must not mount the private OIDC user and credential volume", service)
+		}
+	}
+}
+
 func TestDemoSeedSourceNeverLogsOneTimeCredentials(t *testing.T) {
 	body := read(t, "seed.mjs")
 	for _, forbidden := range []string{
@@ -1182,7 +1220,7 @@ func validateAUD68ProofSource(body string) error {
 		{label: "project-unique control image", needle: `export TRSTCTL_DEMO_CONTROL_IMAGE="${proof_control_image}"`},
 		{label: "project-unique seed image", needle: `export TRSTCTL_DEMO_SEED_IMAGE="${proof_seed_image}"`},
 		{label: "complete service-name collision census", needle: "readonly -a proof_services=(\n  postgres nats localstack oidc-keys managedkeys-config signer trstctl demo-oidc\n  oidc-loopback localstack-loopback localstack-signer-loopback demo-seed\n)"},
-		{label: "complete volume-name collision census", needle: "readonly -a proof_volumes=(\n  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata publictrust demoidp managedkeys\n)"},
+		{label: "complete volume-name collision census", needle: "readonly -a proof_volumes=(\n  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata publictrust demoidp demoidpusers demoidpcredentials managedkeys\n)"},
 		{label: "exact container collision", needle: `assert_named_object_absent container "${proof_project}-${service_name}-1"`},
 		{label: "exact volume collision", needle: `assert_named_object_absent volume "${proof_project}_${volume_name}"`},
 		{label: "exact network collision", needle: `assert_named_object_absent network "${proof_project}_default"`},
