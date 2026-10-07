@@ -4864,6 +4864,17 @@ revoke by its DER, not by serial, so trstctl cannot revoke an ACME certificate
 it does not hold a copy of. A request carrying only a serial is refused with the
 reason rather than sent as something the protocol cannot express.
 
+The local Pebble 2.10 partner-lab issuer is also a limited revocation witness.
+Its issued leaf in the U5 QA run had no CRL Distribution Point and no OCSP URI.
+The issuer accepted trstctl's authenticated ACME `revokeCert` requests for the
+exact retained certificates, but a stock relying party cannot discover a
+signed CRL or OCSP responder from that leaf and independently reject it on
+revocation grounds. The lab can prove upstream acceptance and can use the
+host agent plus a fresh TLS probe to prove the compromised leaf is no longer
+served. It cannot claim stock client revocation enforcement for that Pebble
+certificate. Use an issuer that publishes reachable revocation status and a
+relying client configured to check it for that separate proof.
+
 A CI guard parses every issuer package and fails the build if the matrix and the
 code disagree in either direction — a claimed capability with no implementation,
 or an implementation the matrix does not advertise.
