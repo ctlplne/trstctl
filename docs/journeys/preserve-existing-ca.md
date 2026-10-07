@@ -59,8 +59,11 @@ below. The control-plane operator must:
    `allow_upstream_dv` enabled. Without it, issuance cannot publish the challenge
    record. The endpoint lifecycle preview now refuses with that exact reason instead
    of queueing work that would fail asynchronously. Create the config through
+   **Certificates → How machines request credentials → Automatic certificate renewal
+   (ACME) → View setup → Add DNS-01 provider**, or through
    `POST /api/v1/acme/dns-01/provider-configs` or
-   `trstctl-cli acme dns-01 provider-configs`; the console has no page for it yet.
+   `trstctl-cli acme dns-01 provider-configs`. Review the saved row: it must show
+   **Upstream domain validation allowed** for the intended zone.
    See [ACME and DNS validation](../features/acme-and-dns.md).
 6. For a host-executed destination (Apache, NGINX, HAProxy, Caddy, Traefik, IIS,
    PostgreSQL, and the other file-and-reload connectors), set
