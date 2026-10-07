@@ -131,7 +131,11 @@ cert-manager gets the normal `kubernetes.io/tls` Secret; a trstctl-native `Certi
 gets a locally generated workload key written to `Secret/<secretName>` (transient
 buffers wiped) and marked Ready; a native `CertificateSigningRequest` needs Kubernetes
 or a separate approver to set `Approved` — the agent never approves its own requests.
-It accepts `spec.signerName` values such as
+cert-manager `CertificateRequest`s for this external issuer also need a separate
+approver on **every** renewal. Without one, a short-lived Secret can expire while
+the next request waits. The [cert-manager approval runbook](../runbooks/kubernetes-cert-manager-approval.md)
+shows a scoped approver policy, RBAC binding, denial checks, and served-TLS readback.
+For native Kubernetes CSRs, the agent accepts `spec.signerName` values such as
 `trstctl.com/trstctl` or `trstctl.com/<issuer-name>`, optionally disambiguated with
 the `trstctl.com/issuer-{name,kind,group}` annotations, and writes the PEM chain to
 `status.certificate` while preserving the

@@ -111,6 +111,7 @@ nav:
           - Microsoft Entra ID: operator/oidc-runbooks/entra-id.md
           - Google Workspace: operator/oidc-runbooks/google-workspace.md
       - CA key ceremony: runbooks/key-ceremony.md
+      - cert-manager approval and renewal: runbooks/kubernetes-cert-manager-approval.md
   - Build and automate:
       - API and CLI integrator: journeys/build-on-the-api.md
       - CLI reference: cli.md
