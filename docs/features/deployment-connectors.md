@@ -370,6 +370,41 @@ revision, identity, leaf, agent and fingerprint plus an `Idempotency-Key` and
 reason. Read the returned connector receipt by its exact ID. A queued receipt
 never means the listener stopped.
 
+### Replace a certificate after host containment
+
+Keep the stopped listener closed while creating a **replacement** identity in
+**Where credentials are installed**. Select the exact revoked original, the
+same destination, an explicit issuing CA and a profile that permits the name.
+Do not use connector rollback: that would restore a revoked predecessor.
+The replacement preview is effect-free and binds the original identity,
+destination revision, issuer, profile and request fingerprint. Its `ready`
+result does not inspect the host's private stop/recovery script.
+
+For a service whose containment action removed one listener from its local
+configuration, the host operator must prepare a separate, pinned recovery
+action in `--host-exec-profile` before authorizing the replacement. For NGINX,
+the connector calls the logical `nginx` action with only `-t` and `-s reload`.
+An operator-owned executable can whitelist exactly those arguments and, during
+`-t`, re-enable only the contained server block **after** the connector writes
+the new certificate and key. Before re-enabling it, check the new certificate's
+hostname and validity, that its public key matches the private key, and that
+its fingerprint is not any revoked predecessor. If configuration validation
+fails, put the include back into its disabled state. The subsequent reload
+must refuse an invalid or revoked leaf. Keep the executable as a regular,
+non-symlink file under host ownership; the tenant request cannot replace it.
+Other listeners should continue to use their normal NGINX test and reload
+path while this one is contained.
+
+The host agent's deployment receipt must then say `verified` for the new
+fingerprint, and a fresh stock TLS client must see that same leaf and validate
+its hostname and chain. Read the revoked original and replacement by their
+distinct identity IDs, then retire the original only after checking its CA
+revocation result. A failed deploy or missing host recovery action leaves the
+listener stopped; an HTTP 201 binding response alone is not recovery proof.
+The control plane does not currently attest this private recovery action in
+the binding preview, so the operator must test and record its exact host
+profile before submitting a stopped-listener replacement.
+
 ### One reviewed key-compromise response
 
 When a managed X.509 identity's key is compromised and one registered host is

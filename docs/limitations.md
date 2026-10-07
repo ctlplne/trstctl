@@ -4875,6 +4875,17 @@ served. It cannot claim stock client revocation enforcement for that Pebble
 certificate. Use an issuer that publishes reachable revocation status and a
 relying client configured to check it for that separate proof.
 
+After exact host containment, the endpoint replacement preview can prove the
+tenant-side original, target, CA, profile and queued effects, but it cannot
+inspect an operator-owned recovery action in the host agent's private exec
+profile. It may report `ready` while the listener is deliberately stopped.
+For services that require an explicit start or config-include restore, the
+host operator must prepare and test a pinned action that refuses every revoked
+predecessor before authorizing replacement. The agent's verified deployment
+receipt and a fresh stock TLS readback are the completion evidence; the
+preview and accepted binding alone are insufficient. The NGINX procedure is
+documented in `docs/features/deployment-connectors.md`.
+
 A CI guard parses every issuer package and fails the build if the matrix and the
 code disagree in either direction — a claimed capability with no implementation,
 or an implementation the matrix does not advertise.
