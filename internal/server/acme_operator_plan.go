@@ -99,42 +99,8 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 		plan.RecoverySteps = append(plan.RecoverySteps, "For wildcard or private DNS names, add a least-privilege DNS-01 provider reference and run its preflight before retrying the ACME client.")
 	}
 
-	if s.defaultProfile != "" {
-		if s.store == nil {
-			plan.Blockers = append(plan.Blockers, "The named issuing profile cannot be checked because the profile store is unavailable.")
-		} else if rec, err := s.store.GetActiveProfile(ctx, tenantID, s.defaultProfile); err != nil {
-			if !store.IsNotFound(err) {
-				return api.ACMEOperatorPlan{}, err
-			}
-			plan.Blockers = append(plan.Blockers, "The configured default issuing profile is not active for this tenant.")
-			plan.RecoverySteps = append(plan.RecoverySteps, "Create or reactivate the named issuing profile, then retry the same ACME order. The responder fails closed while the profile is missing.")
-		} else {
-			var spec profile.CertificateProfile
-			if err := json.Unmarshal(rec.Spec, &spec); err != nil {
-				return api.ACMEOperatorPlan{}, fmt.Errorf("decode issuing profile %q: %w", s.defaultProfile, err)
-			}
-			mode, err := profile.NormalizeACMEAuthMode(spec.ACMEAuthMode)
-			if err != nil {
-				plan.Blockers = append(plan.Blockers, "The active ACME issuing profile has an unsupported authentication mode.")
-				plan.RecoverySteps = append(plan.RecoverySteps, "Correct the profile's acme_auth_mode and select a reviewed active version before retrying.")
-			} else {
-				plan.IssuingProfileAuthMode = string(mode)
-				if mode == profile.ACMEAuthModeTrustAuthenticated {
-					plan.ChallengeMethods = []string{}
-					if !plan.EABRequired {
-						plan.Blockers = append(plan.Blockers, "Internal-trust ACME issuance requires mandatory External Account Binding; a self-created ACME account key is insufficient authorization.")
-						plan.RecoverySteps = append(plan.RecoverySteps, "Configure protocols.acme_eab.required with scoped, file-backed credentials, then restart and retry with an EAB-bound account.")
-					}
-				}
-			}
-			maximum := time.Duration(spec.MaxValidity)
-			if maximum > 0 && maximum <= crypto.IssuanceBackdateSkew() {
-				plan.Blockers = append(plan.Blockers, fmt.Sprintf("The issuing profile's maximum validity %s leaves no usable lifetime after the %s NotBefore backdate.", maximum, crypto.IssuanceBackdateSkew()))
-				plan.RecoverySteps = append(plan.RecoverySteps, "Choose an issuing profile whose maximum validity includes the clock-skew backdate and leaves enough time for deployment and automatic renewal. Then retry enrollment.")
-			} else {
-				plan.IssuingProfileReady = true
-			}
-		}
+	if err := s.acmeOperatorProfile(ctx, tenantID, &plan); err != nil {
+		return api.ACMEOperatorPlan{}, err
 	}
 
 	plan.Ready = plan.Served && plan.TenantBound && plan.IssuingProfileReady &&
@@ -165,4 +131,51 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	plan.RecoverySteps = append(plan.RecoverySteps,
 		"After a client failure, use Enrollment diagnostics to see the refused step and its safe retry guidance; do not weaken validation to make the order pass.")
 	return plan, nil
+}
+
+// acmeOperatorProfile resolves the active issuing profile and puts its
+// authentication and lifetime prerequisites into the read-only operator plan.
+func (s *Server) acmeOperatorProfile(ctx context.Context, tenantID string, plan *api.ACMEOperatorPlan) error {
+	if s.defaultProfile == "" {
+		return nil
+	}
+	if s.store == nil {
+		plan.Blockers = append(plan.Blockers, "The named issuing profile cannot be checked because the profile store is unavailable.")
+		return nil
+	}
+	rec, err := s.store.GetActiveProfile(ctx, tenantID, s.defaultProfile)
+	if err != nil {
+		if !store.IsNotFound(err) {
+			return err
+		}
+		plan.Blockers = append(plan.Blockers, "The configured default issuing profile is not active for this tenant.")
+		plan.RecoverySteps = append(plan.RecoverySteps, "Create or reactivate the named issuing profile, then retry the same ACME order. The responder fails closed while the profile is missing.")
+		return nil
+	}
+	var spec profile.CertificateProfile
+	if err := json.Unmarshal(rec.Spec, &spec); err != nil {
+		return fmt.Errorf("decode issuing profile %q: %w", s.defaultProfile, err)
+	}
+	mode, err := profile.NormalizeACMEAuthMode(spec.ACMEAuthMode)
+	if err != nil {
+		plan.Blockers = append(plan.Blockers, "The active ACME issuing profile has an unsupported authentication mode.")
+		plan.RecoverySteps = append(plan.RecoverySteps, "Correct the profile's acme_auth_mode and select a reviewed active version before retrying.")
+	} else {
+		plan.IssuingProfileAuthMode = string(mode)
+		if mode == profile.ACMEAuthModeTrustAuthenticated {
+			plan.ChallengeMethods = []string{}
+			if !plan.EABRequired {
+				plan.Blockers = append(plan.Blockers, "Internal-trust ACME issuance requires mandatory External Account Binding; a self-created ACME account key is insufficient authorization.")
+				plan.RecoverySteps = append(plan.RecoverySteps, "Configure protocols.acme_eab.required with scoped, file-backed credentials, then restart and retry with an EAB-bound account.")
+			}
+		}
+	}
+	maximum := time.Duration(spec.MaxValidity)
+	if maximum > 0 && maximum <= crypto.IssuanceBackdateSkew() {
+		plan.Blockers = append(plan.Blockers, fmt.Sprintf("The issuing profile's maximum validity %s leaves no usable lifetime after the %s NotBefore backdate.", maximum, crypto.IssuanceBackdateSkew()))
+		plan.RecoverySteps = append(plan.RecoverySteps, "Choose an issuing profile whose maximum validity includes the clock-skew backdate and leaves enough time for deployment and automatic renewal. Then retry enrollment.")
+	} else {
+		plan.IssuingProfileReady = true
+	}
+	return nil
 }
