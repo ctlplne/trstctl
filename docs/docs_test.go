@@ -3707,9 +3707,15 @@ func TestABACOverlayIsServedAndDisclosed(t *testing.T) {
 		}
 	}
 	apiCode := read(t, "../internal/api/api.go")
-	for _, want := range []string{"WithABACDenyOverlay", "func (a *API) checkABAC", `"request.path"`} {
+	for _, want := range []string{"WithABACDenyOverlay"} {
 		if !strings.Contains(apiCode, want) {
-			t.Errorf("internal/api/api.go should keep API ABAC guard anchor %q", want)
+			t.Errorf("internal/api/api.go should keep ABAC configuration anchor %q", want)
+		}
+	}
+	abacGuard := read(t, "../internal/api/abac_guard.go")
+	for _, want := range []string{"func (a *API) checkABAC", `"request.path"`} {
+		if !strings.Contains(abacGuard, want) {
+			t.Errorf("internal/api/abac_guard.go should keep API ABAC guard anchor %q", want)
 		}
 	}
 	handlers := read(t, "../internal/api/handlers.go")
