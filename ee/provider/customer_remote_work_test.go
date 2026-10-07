@@ -138,8 +138,9 @@ func TestProviderStatusRefusesUncertainControlPlaneDelivery(t *testing.T) {
 				Offboarding: NewTenantOffboarder(st, log, orch, runtime.Mutations)})
 
 			outbox := orchestrator.NewOutbox(st)
+			destination := "provider-unknown." + action
 			if err := st.WithTenant(ctx, id, func(tx pgx.Tx) error {
-				_, err := outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: id, Destination: "provider-unknown.probe", IdempotencyKey: "native-uncertain", Payload: []byte(`{}`)})
+				_, err := outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: id, Destination: destination, IdempotencyKey: "native-uncertain", Payload: []byte(`{}`)})
 				return err
 			}); err != nil {
 				t.Fatal(err)
@@ -149,7 +150,7 @@ func TestProviderStatusRefusesUncertainControlPlaneDelivery(t *testing.T) {
 			// HTTP/process-kill tests prove that the remote effect can continue.
 			claimed, err := outbox.DispatchOneScoped(ctx, orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
 				return errors.New("receiver response lost")
-			}), orchestrator.DestinationScope{IncludePrefixes: []string{"provider-unknown.probe"}})
+			}), orchestrator.DestinationScope{IncludePrefixes: []string{destination}})
 			if err != nil || !claimed {
 				t.Fatalf("dispatch=%v, %v", claimed, err)
 			}
@@ -158,7 +159,7 @@ func TestProviderStatusRefusesUncertainControlPlaneDelivery(t *testing.T) {
 			r.Header.Set("Idempotency-Key", "native-transition")
 			w := httptest.NewRecorder()
 			provider.ServeHTTP(w, r)
-			if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") != "1" || !strings.Contains(w.Body.String(), "provider-unknown.probe") {
+			if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") != "1" || !strings.Contains(w.Body.String(), destination) {
 				t.Fatalf("%s failed to explain unresolved receiver: status=%d body=%s", action, w.Code, w.Body.String())
 			}
 			if current, err := NewPGStore(st).Tenant(ctx, id); err != nil || current.Status != TenantActive {
