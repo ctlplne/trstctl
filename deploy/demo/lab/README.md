@@ -2,6 +2,15 @@
 
 This opt-in overlay turns the normal seeded demo into a real local lifecycle lab. It keeps one independent ACME CA (Pebble), its DNS challenge server, a bounded incident receiver for OpsGenie and PagerDuty contracts, a local Mailpit SMTP receiver, and one nonroot edge host running real Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL processes. The same trstctl host collector updates all six services, so host-role jobs cannot race between unrelated collectors.
 
+The tenant DNS-01 provider uses `trstctl.partner-lab.example.com` as the CAA
+identifier for trstctl's **served** ACME CA. The separate upstream Pebble CA in
+`trstctl-lab.json` uses `pebble.local`. Keep these identities distinct: a CAA record
+allowing Pebble must not be presented as authorization for trstctl to issue.
+Existing retained labs keep their stored provider configuration. Edit the
+**Local Pebble DNS validation** row on **How machines request credentials** and set
+its CAA issuer domain to `trstctl.partner-lab.example.com` before using the
+served `/directory`; this is a tenant configuration change, not a restart flag.
+
 ## Run every safe local journey
 
 From the repository root:

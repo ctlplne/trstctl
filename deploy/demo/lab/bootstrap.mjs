@@ -80,7 +80,7 @@ async function ensureDNSProvider() {
     zone: "partner-lab.example.com",
     config: { endpoint: "http://127.0.0.1:8056" },
     credential_refs: {},
-    caa_issuer_domain: "pebble.local",
+    caa_issuer_domain: "trstctl.partner-lab.example.com",
     allowed_methods: ["dns-01"],
     allow_wildcards: false,
     allow_upstream_dv: true,
