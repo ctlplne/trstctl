@@ -1814,6 +1814,7 @@ func rotationTrigger(origin, idempotencyKey, reason string) string {
 		return "manual"
 	}
 	if strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix) ||
+		strings.HasPrefix(reason, lifecycleUpstreamARIRenewalReasonPrefix) ||
 		strings.HasPrefix(reason, lifecycleFixedRenewalReasonPrefix) {
 		return "scheduler"
 	}

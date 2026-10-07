@@ -43,6 +43,83 @@ type acmeUpstreamARIFetchPayload struct {
 	Fingerprint      string `json:"fingerprint"`
 }
 
+// ACMEUpstreamARICandidate is an active external leaf without an initial ARI
+// request. CertificateDER is public evidence; the caller verifies it before
+// appending a fetch intent. Selection is keyset-bounded under tenant RLS.
+type ACMEUpstreamARICandidate struct {
+	CertificateID  string
+	AuthorityID    string
+	Fingerprint    string
+	Serial         string
+	CertificateDER []byte
+	NotAfter       time.Time
+}
+
+// TenantsWithMissingACMEUpstreamARI is only an enumerator. The actual leaves
+// are loaded through tenant-scoped RLS in ListMissingACMEUpstreamARI.
+func (s *Store) TenantsWithMissingACMEUpstreamARI(ctx context.Context, authorityID, authorityTenant string, now time.Time, limit int) ([]string, error) {
+	if authorityID == "" {
+		return nil, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.SystemPool().Query(ctx,
+		//trstctl:system-query — leader-only tenant enumeration; the selected certificate data is read later through tenant RLS (AN-1).
+		`SELECT DISTINCT c.tenant_id::text FROM certificates c
+		 LEFT JOIN acme_upstream_ari a ON a.tenant_id=c.tenant_id AND a.certificate_id=c.id
+		 WHERE c.issuing_external_ca_id=$1 AND c.status='active'
+		   AND c.not_after>$2 AND a.certificate_id IS NULL
+		   AND ($3::text='' OR c.tenant_id::text=$3)
+		 ORDER BY 1 LIMIT $4`, authorityID, now, authorityTenant, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tenants []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		tenants = append(tenants, tenantID)
+	}
+	return tenants, rows.Err()
+}
+
+func (s *Store) ListMissingACMEUpstreamARI(ctx context.Context, tenantID, afterID, authorityID string, now time.Time, limit int) ([]ACMEUpstreamARICandidate, error) {
+	if authorityID == "" {
+		return nil, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var candidates []ACMEUpstreamARICandidate
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT c.id::text,c.issuing_external_ca_id,c.fingerprint,c.serial,c.certificate_der,c.not_after
+			FROM certificates c
+			LEFT JOIN acme_upstream_ari a ON a.tenant_id=$1 AND a.certificate_id=c.id
+			WHERE c.tenant_id=$1 AND c.id>$2 AND c.issuing_external_ca_id=$3
+			  AND c.status='active' AND c.not_after>$4 AND a.certificate_id IS NULL
+			ORDER BY c.id LIMIT $5`, tenantID, afterID, authorityID, now, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var candidate ACMEUpstreamARICandidate
+			if err := rows.Scan(&candidate.CertificateID, &candidate.AuthorityID,
+				&candidate.Fingerprint, &candidate.Serial, &candidate.CertificateDER,
+				&candidate.NotAfter); err != nil {
+				return err
+			}
+			candidates = append(candidates, candidate)
+		}
+		return rows.Err()
+	})
+	return candidates, err
+}
+
 func validateACMEUpstreamARI(a ACMEUpstreamARI) error {
 	if a.TenantID == "" || a.CertificateID == "" || a.AuthorityID == "" ||
 		a.ARICertificateID == "" || a.Fingerprint == "" || a.EventID == "" ||
@@ -203,6 +280,7 @@ func (s *Store) GetACMEUpstreamARI(ctx context.Context, tenantID, certificateID 
 }
 
 func (a ACMEUpstreamARI) CanSchedule() bool {
-	return a.WindowStart != nil && a.WindowEnd != nil && a.WindowEnd.After(*a.WindowStart) &&
+	return (a.Status == "ready" || a.Status == "error") &&
+		a.WindowStart != nil && a.WindowEnd != nil && a.WindowEnd.After(*a.WindowStart) &&
 		strings.TrimSpace(a.AuthorityID) != ""
 }

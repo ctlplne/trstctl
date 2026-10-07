@@ -3355,10 +3355,11 @@ func (s *Server) RunCRLScheduler(ctx context.Context) {
 }
 
 const (
-	defaultLifecycleSchedulerInterval  = time.Minute
-	lifecycleARIRenewalReasonPrefix    = "scheduled renewal from ARI window "
-	lifecycleFixedRenewalReasonPrefix  = "scheduled renewal before "
-	lifecycleTransitionOriginScheduler = "lifecycle_scheduler"
+	defaultLifecycleSchedulerInterval       = time.Minute
+	lifecycleARIRenewalReasonPrefix         = "scheduled renewal from ARI window "
+	lifecycleUpstreamARIRenewalReasonPrefix = "scheduled renewal from upstream ARI window "
+	lifecycleFixedRenewalReasonPrefix       = "scheduled renewal before "
+	lifecycleTransitionOriginScheduler      = "lifecycle_scheduler"
 )
 
 // RunLifecycleScheduler runs the leader-only certificate renewal scheduler until
@@ -3409,6 +3410,10 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 		return 0, nil
 	}
 	now := renewalAt.UTC()
+	_, ariDiscoveryErr := s.discoverExternalARICandidates(ctx, now)
+	if ariDiscoveryErr != nil && s.logger != nil {
+		s.logger.Warn("external ACME ARI discovery failed", slog.String("error", ariDiscoveryErr.Error()))
+	}
 	// Stopping issuance remains active during maintenance windows and when
 	// automatic renewal is disabled. Only idle work is canceled; live leases
 	// retain their original completion/report path until they finish or expire.
@@ -3466,7 +3471,11 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 						continue
 					}
 					candidate.Certificate = servedCertificate
-					reason, due := lifecycleRenewalReason(candidate.Certificate, now, cutoff)
+					reason, due, decisionErr := s.lifecycleRenewalReasonForCertificate(ctx, tenant, candidate.Certificate, now, cutoff)
+					if decisionErr != nil {
+						s.observeLifecycleSweep(queued, 0, decisionErr)
+						return queued, decisionErr
+					}
 					if !due {
 						continue
 					}
@@ -3516,8 +3525,8 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 		s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, err)
 		return queued, err
 	}
-	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, nil)
-	return queued, nil
+	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, ariDiscoveryErr)
+	return queued, ariDiscoveryErr
 }
 
 // lifecycleServedRenewalCertificate uses the signed connector timeline when

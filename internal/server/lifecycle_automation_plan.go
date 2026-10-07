@@ -87,13 +87,21 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 	plan.Summary.OutboxFailed = outbox.Failed
 	cutoff := at.Add(s.lifecycleRenewBefore)
 	for _, row := range rows {
-		reason, due := lifecycleRenewalReason(store.Certificate{
-			NotBefore: row.CertificateStart, NotAfter: row.CertificateEnd, ValidityAnchor: row.CertificateValidityAnchor,
+		reason, due, err := s.lifecycleRenewalReasonForCertificate(ctx, tenantID, store.Certificate{
+			ID: row.CertificateID, Fingerprint: row.CertificateFingerprint,
+			IssuingExternalCAID: row.CertificateExternalCAID,
+			NotBefore:           row.CertificateStart, NotAfter: row.CertificateEnd, ValidityAnchor: row.CertificateValidityAnchor,
 			CreatedAt: row.CertificateCreatedAt, Source: "issued", IssuanceIdempotencyKey: row.CertificateIssuanceKey,
 		}, at, cutoff)
+		if err != nil {
+			return api.LifecycleAutomationPlan{}, err
+		}
 		source := "not_due"
 		explanation := "No renewal is due yet."
 		switch {
+		case strings.HasPrefix(reason, lifecycleUpstreamARIRenewalReasonPrefix):
+			source = "ari"
+			explanation = "The upstream CA renewal window is open."
 		case strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix):
 			source = "ari"
 			explanation = "The CA renewal window is open."

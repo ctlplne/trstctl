@@ -136,3 +136,75 @@ func TestUpstreamARIProjectionQueuesOneBoundedFetchAndKeepsLastGoodWindow(t *tes
 		t.Fatalf("revoked certificate queued %d fetches, want three retained", got)
 	}
 }
+
+func TestUpstreamARIWindowOpensSchedulerDatabasePrefilterBeforeLocalEstimate(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	const tenant = "a7200000-0000-4000-8000-000000000001"
+	seedTenant(t, s, tenant)
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenant, Kind: store.OwnerTeam, Name: "upstream ARI owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := s.CreateIdentity(ctx, store.Identity{
+		TenantID: tenant, Kind: store.KindX509Certificate,
+		Name: "upstream-ari.example.test", OwnerID: owner.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Status = "deployed"
+	if err := s.UpsertIdentity(ctx, identity); err != nil {
+		t.Fatal(err)
+	}
+	issued := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	expires := issued.Add(90 * 24 * time.Hour)
+	cert, err := s.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenant, OwnerID: &owner.ID, Subject: identity.Name,
+		SANs: []string{identity.Name}, Fingerprint: "upstream-early-window",
+		Source: "issued", IssuanceIdempotencyKey: "issue:transition:early-window",
+		NotBefore: &issued, NotAfter: &expires,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE certificates SET issuing_external_ca_id='pebble'
+			WHERE tenant_id=$1 AND id=$2`, tenant, cert.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	start, end := issued.Add(40*24*time.Hour), issued.Add(42*24*time.Hour)
+	base := store.ACMEUpstreamARI{
+		TenantID: tenant, CertificateID: cert.ID, AuthorityID: "pebble",
+		ARICertificateID: "AQID.BAUG", Fingerprint: cert.Fingerprint,
+		UpdatedAt: issued, NextPollAt: issued, EventID: "a7200000-0000-4000-8000-000000000010", EventSequence: 10,
+	}
+	if err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+		return s.ApplyACMEUpstreamARIRequestedTx(ctx, tx, base)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	base.Status, base.WindowStart, base.WindowEnd = "ready", &start, &end
+	base.UpdatedAt, base.NextPollAt = issued.Add(time.Minute), issued.Add(6*time.Hour)
+	base.EventID, base.EventSequence = "a7200000-0000-4000-8000-000000000011", 11
+	if err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+		return s.ApplyACMEUpstreamARIObservedTx(ctx, tx, base)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	now := issued.Add(45 * 24 * time.Hour)
+	if expires.Add(-expires.Sub(issued) / 3).Before(now) {
+		t.Fatal("fixture local estimate is already open")
+	}
+	candidates, err := s.ListRenewalIdentityCandidates(ctx, tenant, now.Add(time.Hour), now)
+	if err != nil || len(candidates) != 1 || candidates[0].Certificate.ID != cert.ID ||
+		candidates[0].Certificate.IssuingExternalCAID != "pebble" {
+		t.Fatalf("early CA window missed tenant scheduler prefilter: %+v err=%v", candidates, err)
+	}
+	tenants, err := s.TenantsWithRenewalIdentityCandidates(ctx, now.Add(time.Hour), now)
+	if err != nil || len(tenants) != 1 || tenants[0] != tenant {
+		t.Fatalf("early CA window missed leader tenant enumeration: %v err=%v", tenants, err)
+	}
+}

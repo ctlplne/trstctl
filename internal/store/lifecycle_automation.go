@@ -25,6 +25,8 @@ type LifecycleAutomationInventory struct {
 	CertificateValidityAnchor *time.Time
 	CertificateCreatedAt      time.Time
 	CertificateIssuanceKey    string
+	CertificateFingerprint    string
+	CertificateExternalCAID   string
 	LatestRunID               string
 	LatestRunStatus           string
 	RollbackRef               string
@@ -61,6 +63,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			SELECT i.id::text, i.name, i.status, i.owner_id::text, o.name,
 			       cert.id::text, cert.not_before, cert.not_after, cert.validity_anchor,
 			       cert.created_at, cert.issuance_idempotency_key,
+			       cert.fingerprint, cert.issuing_external_ca_id,
 			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, ''),
 			       coalesce(i.attributes->>'deployment_target_id', ''),
 			       coalesce(i.attributes->>'endpoint_replaces_identity_id', ''),
@@ -114,7 +117,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 		  ) AS unverified ON true
 		  JOIN LATERAL (
 			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor,
-			              c.created_at, c.issuance_idempotency_key
+			              c.created_at, c.issuance_idempotency_key, c.fingerprint, c.issuing_external_ca_id
 			         FROM certificates AS c
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
@@ -160,6 +163,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 				&item.OwnerID, &item.OwnerName, &item.CertificateID,
 				&item.CertificateStart, &item.CertificateEnd, &item.CertificateValidityAnchor,
 				&item.CertificateCreatedAt, &item.CertificateIssuanceKey,
+				&item.CertificateFingerprint, &item.CertificateExternalCAID,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
 				&item.TargetID, &item.PredecessorID, &item.DeliveryUnverified,
 				&item.PendingRenewal,

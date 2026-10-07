@@ -847,7 +847,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			        i.issuer_id::text, i.status, i.not_before, i.not_after, i.attributes, i.created_at,
 			        c.id::text, c.tenant_id::text, c.owner_id::text, c.subject, c.sans, c.issuer, c.serial,
 			        c.fingerprint, c.key_algorithm, c.not_before, c.not_after, c.deployment_location, c.source,
-			        c.certificate_der, c.issuance_idempotency_key, c.created_at, c.validity_anchor,
+			        c.certificate_der, c.issuance_idempotency_key, c.created_at, c.validity_anchor, c.issuing_external_ca_id,
 			        c.status, c.replaces_id::text, c.revoked_at, c.revocation_reason, c.renewed_at, c.alerted_at
 			   FROM identities i
 			   JOIN certificates c
@@ -858,6 +858,9 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			          AND served.fingerprint = c.fingerprint
 			          AND ((served.destination = 'connector.rollback' AND served.status = 'rolled_back')
 			            OR (served.destination = 'connector.deploy' AND served.status = 'verified'))))
+			   LEFT JOIN acme_upstream_ari upstream
+			     ON upstream.tenant_id=i.tenant_id AND upstream.certificate_id=c.id
+			    AND upstream.authority_id=c.issuing_external_ca_id AND upstream.fingerprint=c.fingerprint
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
 			    AND i.status IN ('deployed', 'renewal_failed')
@@ -879,6 +882,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			              c.not_before IS NOT NULL
 			              AND c.not_after - ((c.not_after - c.not_before) / 3.0) <= $3
 			            )
+			         OR (upstream.window_start IS NOT NULL AND upstream.window_start <= $3)
 			        )
 			  ORDER BY i.id, c.not_after, c.created_at`,
 			tenantID, fixedCutoff, ariNow)
@@ -897,7 +901,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt,
 				&cert.ID, &cert.TenantID, &cert.OwnerID, &cert.Subject, &cert.SANs, &cert.Issuer, &cert.Serial,
 				&cert.Fingerprint, &cert.KeyAlgorithm, &cert.NotBefore, &cert.NotAfter, &cert.DeploymentLocation, &cert.Source,
-				&cert.CertificateDER, &cert.IssuanceIdempotencyKey, &cert.CreatedAt, &cert.ValidityAnchor,
+				&cert.CertificateDER, &cert.IssuanceIdempotencyKey, &cert.CreatedAt, &cert.ValidityAnchor, &cert.IssuingExternalCAID,
 				&cert.Status, &cert.ReplacesID, &cert.RevokedAt, &cert.RevocationReason, &cert.RenewedAt, &cert.AlertedAt); err != nil {
 				return err
 			}
@@ -935,6 +939,9 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 		          AND served.fingerprint = c.fingerprint
 		          AND ((served.destination = 'connector.rollback' AND served.status = 'rolled_back')
 		            OR (served.destination = 'connector.deploy' AND served.status = 'verified'))))
+		   LEFT JOIN acme_upstream_ari upstream
+		     ON upstream.tenant_id=i.tenant_id AND upstream.certificate_id=c.id
+		    AND upstream.authority_id=c.issuing_external_ca_id AND upstream.fingerprint=c.fingerprint
 		  WHERE i.kind = 'x509_certificate'
 		    AND i.status IN ('deployed', 'renewal_failed')
 		    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
@@ -951,6 +958,7 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 		              c.not_before IS NOT NULL
 		              AND c.not_after - ((c.not_after - c.not_before) / 3.0) <= $2
 		            )
+		         OR (upstream.window_start IS NOT NULL AND upstream.window_start <= $2)
 		        )
 		  ORDER BY 1`, fixedCutoff, ariNow)
 	if err != nil {

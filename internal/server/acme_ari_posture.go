@@ -136,7 +136,8 @@ func normalizeACMEARIRunStatus(status string) string {
 
 func classifyACMEARISchedulerSource(trigger, reason string) string {
 	switch {
-	case trigger == "scheduler" && strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix):
+	case trigger == "scheduler" && (strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix) ||
+		strings.HasPrefix(reason, lifecycleUpstreamARIRenewalReasonPrefix)):
 		return api.ACMEARISourceARI
 	case trigger == "scheduler" && strings.HasPrefix(reason, lifecycleFixedRenewalReasonPrefix):
 		return api.ACMEARISourceFixedThreshold

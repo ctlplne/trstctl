@@ -92,22 +92,26 @@ func TestExternalARIWorkerBindsExactLeafAndReplaysCanonicalOutcome(t *testing.T)
 	if err != nil || cert.Source != "issued" || cert.IssuingExternalCAID != "pebble" {
 		t.Fatalf("external issuer did not survive endpoint recording: %+v err=%v", cert, err)
 	}
-	request := projections.ACMEUpstreamARIRequested{
-		CertificateID: cert.ID, AuthorityID: "pebble",
-		ARICertificateID: ariID, Fingerprint: cert.Fingerprint,
-	}
-	data, err = json.Marshal(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	event, err := h.log.Append(ctx, events.Event{
-		Type: projections.EventACMEUpstreamARIRequested, TenantID: h.tenant, Data: data,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := projections.New(h.store).Apply(ctx, event); err != nil {
-		t.Fatal(err)
+	start, end := time.Now().UTC().Add(time.Hour), time.Now().UTC().Add(2*time.Hour)
+	calls, fail := 0, false
+	h.handler.externalCAs = &externalCARegistry{byID: map[string]externalCAEntry{
+		"pebble": {
+			meta: api.ExternalCA{ID: "pebble", Type: "letsencrypt"}, tenantID: h.tenant,
+			ariFetch: func(context.Context, string) (ari.RenewalInfo, time.Duration, error) {
+				calls++
+				if fail {
+					return ari.RenewalInfo{}, 0, errors.New("private upstream diagnostic must not be retained")
+				}
+				return ari.RenewalInfo{SuggestedWindow: ari.Window{Start: start, End: end}}, 5 * time.Second, nil
+			},
+		},
+	}}
+	server := &Server{store: h.store, log: h.log, proj: projector, externalCAs: h.handler.externalCAs}
+	for _, want := range []int{1, 0} {
+		queued, err := server.discoverExternalARICandidates(ctx, time.Now().UTC())
+		if err != nil || queued != want {
+			t.Fatalf("external ARI discovery queued %d, want %d: %v", queued, want, err)
+		}
 	}
 	readMessage := func(after int64) orchestrator.Message {
 		t.Helper()
@@ -127,20 +131,6 @@ func TestExternalARIWorkerBindsExactLeafAndReplaysCanonicalOutcome(t *testing.T)
 	if first.RequiredAgentRole != "control_plane" {
 		t.Fatalf("ARI command role = %q", first.RequiredAgentRole)
 	}
-	start, end := time.Now().UTC().Add(time.Hour), time.Now().UTC().Add(2*time.Hour)
-	calls, fail := 0, false
-	h.handler.externalCAs = &externalCARegistry{byID: map[string]externalCAEntry{
-		"pebble": {
-			meta: api.ExternalCA{ID: "pebble", Type: "letsencrypt"}, tenantID: h.tenant,
-			ariFetch: func(context.Context, string) (ari.RenewalInfo, time.Duration, error) {
-				calls++
-				if fail {
-					return ari.RenewalInfo{}, 0, errors.New("private upstream diagnostic must not be retained")
-				}
-				return ari.RenewalInfo{SuggestedWindow: ari.Window{Start: start, End: end}}, 5 * time.Second, nil
-			},
-		},
-	}}
 	wrong := first
 	wrong.Payload = []byte(`{"certificate_id":"` + cert.ID + `","authority_id":"pebble","ari_certificate_id":"` + ariID + `","fingerprint":"wrong"}`)
 	if err := h.handler.deliver(ctx, wrong); err == nil || calls != 0 {
