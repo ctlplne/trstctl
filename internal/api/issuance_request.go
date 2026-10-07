@@ -388,6 +388,21 @@ func (a *API) listIssuanceRequests(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, out)
 }
 
+func (a *API) getIssuanceRequest(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	row, err := a.store.GetIssuanceRequest(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	a.writeJSON(w, http.StatusOK, toIssuanceRequestResponse(row))
+}
+
 func validIssuanceState(s string) bool {
 	for _, v := range issuancerequest.States {
 		if v == s {

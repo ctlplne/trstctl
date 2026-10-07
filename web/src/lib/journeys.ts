@@ -39,8 +39,6 @@ export interface Journey {
   id: JourneyCensusId;
   titleKey: MessageKey;
   descriptionKey: MessageKey;
-  /** The long-form reference walkthrough this journey mirrors. */
-  doc: string;
   steps: JourneyStep[];
 }
 
@@ -49,22 +47,20 @@ export const journeys: Journey[] = [
     id: "first-certificate",
     titleKey: "journeys.fc.title",
     descriptionKey: "journeys.fc.description",
-    doc: "docs/journeys/first-certificate.md",
     steps: [
-      // The wizard's proof is a real certificate, not merely an issuer catalog
-      // row. Fresh eval installs use the built-in signer-backed setup issuer,
-      // so checking the catalog left a completed wizard stuck at 3/4.
-      { id: "wizard", titleKey: "journeys.fc.wizard.title", bodyKey: "journeys.fc.wizard.body", to: "/wizard", detect: "certificates" },
-      { id: "request", titleKey: "journeys.fc.request.title", bodyKey: "journeys.fc.request.body", to: "/request", detect: "requests" },
-      { id: "approve", titleKey: "journeys.fc.approve.title", bodyKey: "journeys.fc.approve.body", to: "/approvals?status=pending", detect: "certificates" },
-      { id: "inventory", titleKey: "journeys.fc.inventory.title", bodyKey: "journeys.fc.inventory.body", to: "/certificates", detect: "certificates" },
+      // The guide is an operator review. Every lifecycle step below is tied to
+      // one selected request, its independent decision and its exact public
+      // issuance result. A certificate from another workflow proves none of it.
+      { id: "wizard", titleKey: "journeys.fc.wizard.title", bodyKey: "journeys.fc.wizard.body", to: "/wizard" },
+      { id: "request", titleKey: "journeys.fc.request.title", bodyKey: "journeys.fc.request.body", to: "/request" },
+      { id: "approve", titleKey: "journeys.fc.approve.title", bodyKey: "journeys.fc.approve.body", to: "/approvals?status=pending" },
+      { id: "inventory", titleKey: "journeys.fc.inventory.title", bodyKey: "journeys.fc.inventory.body", to: "/certificates" },
     ],
   },
   {
     id: "migrate-from-existing-ca",
     titleKey: "journeys.mig.title",
     descriptionKey: "journeys.mig.description",
-    doc: "docs/journeys/migrate-from-existing-ca.md",
     steps: [
       { id: "source", titleKey: "journeys.mig.source.title", bodyKey: "journeys.mig.source.body", to: "/discovery?tab=sources", detect: "sources" },
       { id: "scan", titleKey: "journeys.mig.scan.title", bodyKey: "journeys.mig.scan.body", to: "/discovery?tab=sources", detect: "runs" },
@@ -78,7 +74,6 @@ export const journeys: Journey[] = [
     id: "preserve-existing-ca",
     titleKey: "journeys.pec.title",
     descriptionKey: "journeys.pec.description",
-    doc: "docs/journeys/preserve-existing-ca.md",
     steps: [
       {
         id: "baseline",
@@ -99,7 +94,6 @@ export const journeys: Journey[] = [
     id: "respond-to-compromise",
     titleKey: "journeys.ir.title",
     descriptionKey: "journeys.ir.description",
-    doc: "docs/journeys/respond-to-compromise.md",
     steps: [
       { id: "blast", titleKey: "journeys.ir.blast.title", bodyKey: "journeys.ir.blast.body", to: "/graph" },
       { id: "contain", titleKey: "journeys.ir.contain.title", bodyKey: "journeys.ir.contain.body", to: "/incidents", detect: "incidents" },
@@ -111,7 +105,6 @@ export const journeys: Journey[] = [
     id: "automate-fleet-tls",
     titleKey: "journeys.fleet.title",
     descriptionKey: "journeys.fleet.description",
-    doc: "docs/journeys/automate-fleet-tls.md",
     steps: [
       {
         id: "protocols",
@@ -167,7 +160,6 @@ export const journeys: Journey[] = [
     id: "kubernetes-workload-identity",
     titleKey: "journeys.k8s.title",
     descriptionKey: "journeys.k8s.description",
-    doc: "docs/journeys/kubernetes-workload-identity.md",
     steps: [
       { id: "trust", titleKey: "journeys.k8s.trust.title", bodyKey: "journeys.k8s.trust.body", to: "/workloads" },
       { id: "spiffe", titleKey: "journeys.k8s.spiffe.title", bodyKey: "journeys.k8s.spiffe.body", to: "/protocols" },
@@ -200,7 +192,6 @@ export const journeys: Journey[] = [
     id: "enroll-devices",
     titleKey: "journeys.devices.title",
     descriptionKey: "journeys.devices.description",
-    doc: "docs/journeys/enroll-devices.md",
     steps: [
       { id: "protocols", titleKey: "journeys.devices.protocols.title", bodyKey: "journeys.devices.protocols.body", to: "/protocols" },
       {
@@ -231,7 +222,6 @@ export const journeys: Journey[] = [
     id: "manage-secrets",
     titleKey: "journeys.sec.title",
     descriptionKey: "journeys.sec.description",
-    doc: "docs/journeys/manage-secrets.md",
     steps: [
       {
         id: "enable",
@@ -250,7 +240,6 @@ export const journeys: Journey[] = [
     id: "ssh-at-scale",
     titleKey: "journeys.ssh.title",
     descriptionKey: "journeys.ssh.description",
-    doc: "docs/journeys/ssh-at-scale.md",
     steps: [
       {
         id: "source",
@@ -290,7 +279,6 @@ export const journeys: Journey[] = [
     id: "operate-as-a-provider",
     titleKey: "journeys.provider.title",
     descriptionKey: "journeys.provider.description",
-    doc: "docs/journeys/operate-as-a-provider.md",
     steps: [
       {
         id: "entitlement",
@@ -320,7 +308,6 @@ export const journeys: Journey[] = [
     id: "onboard-a-team",
     titleKey: "journeys.team.title",
     descriptionKey: "journeys.team.description",
-    doc: "docs/journeys/onboard-a-team.md",
     steps: [
       {
         id: "token",
@@ -351,7 +338,6 @@ export const journeys: Journey[] = [
     id: "crypto-agility-pqc",
     titleKey: "journeys.pqc.title",
     descriptionKey: "journeys.pqc.description",
-    doc: "docs/journeys/crypto-agility-pqc.md",
     steps: [
       {
         id: "scan",
@@ -384,7 +370,6 @@ export const journeys: Journey[] = [
     id: "run-in-production",
     titleKey: "journeys.prod.title",
     descriptionKey: "journeys.prod.description",
-    doc: "docs/journeys/run-in-production.md",
     steps: [
       {
         id: "tls",
@@ -420,7 +405,6 @@ export const journeys: Journey[] = [
     id: "build-on-the-api",
     titleKey: "journeys.api.title",
     descriptionKey: "journeys.api.description",
-    doc: "docs/journeys/build-on-the-api.md",
     steps: [
       {
         id: "contract",

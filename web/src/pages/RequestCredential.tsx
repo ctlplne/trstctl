@@ -322,7 +322,15 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
       {
         id: "name",
         header: "Credential",
-        cell: (request) => <span className="font-medium">{request.subject}</span>,
+        cell: (request) => (
+          <Link
+            className="font-medium text-brand-accent underline underline-offset-2"
+            to={`/journeys?j=first-certificate&request=${encodeURIComponent(request.id)}`}
+          >
+            {request.subject}
+            <span className="sr-only"> — {t("journeys.fc.exactRequest.track")}</span>
+          </Link>
+        ),
       },
       {
         id: "profile",

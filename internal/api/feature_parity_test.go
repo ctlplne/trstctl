@@ -249,8 +249,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// CA/host status readback to the same revocation and connector journey.
 	// F48 adds one reasoned terminal CA ceremony cancellation operation.
 	// Exact enrolled-controller cert-manager request provenance adds one read.
-	if len(out) != 468 {
-		t.Fatalf("OpenAPI operationIds = %d, want 468", len(out))
+	// An exact, tenant-scoped issuance-request read makes older decisions usable
+	// after they leave the recent list; F33 owns the added operation.
+	if len(out) != 469 {
+		t.Fatalf("OpenAPI operationIds = %d, want 469", len(out))
 	}
 	return out
 }

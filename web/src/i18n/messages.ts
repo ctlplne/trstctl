@@ -5860,12 +5860,12 @@ export const messages = {
     description: "Collapsed disclosure label for guided paths beyond the three recommended choices.",
   },
   "journeys.progress": {
-    defaultMessage: "{done} of {total} steps done",
-    description: "Progress line on a journey card.",
+    defaultMessage: "{done} of {total} steps checked",
+    description: "Checklist progress line; local marks are not server verification.",
   },
   "journeys.progressLabel": {
-    defaultMessage: "Verified journey progress",
-    description: "Accessible label for journey progress computed from served evidence and explicit operator confirmation.",
+    defaultMessage: "Journey checklist progress",
+    description: "Accessible label for checklist progress combining server checks and explicit local review marks.",
   },
   "journeys.census.verified": {
     defaultMessage: "Verified path · shipped wiring {passed}/{total}",
@@ -5897,8 +5897,8 @@ export const messages = {
     description: "Label before the path of the long-form journey doc.",
   },
   "journeys.status.done": {
-    defaultMessage: "Done",
-    description: "Badge for a completed journey step.",
+    defaultMessage: "Checked",
+    description: "Badge for a checked journey step; check source is shown alongside it.",
   },
   "journeys.status.pending": {
     defaultMessage: "Pending",
@@ -5911,6 +5911,18 @@ export const messages = {
   "journeys.status.checkFailed": {
     defaultMessage: "Could not verify",
     description: "Badge for a journey step whose runnable server evidence check failed unexpectedly.",
+  },
+  "journeys.evidence.exact": {
+    defaultMessage: "Checked against the selected request, its independent decision, and its exact certificate result.",
+    description: "Proof source for first-certificate lifecycle steps.",
+  },
+  "journeys.evidence.tenantSignal": {
+    defaultMessage: "Checked from tenant records. Inspect the linked workspace for the exact object and external outcome.",
+    description: "Proof limit for broad tenant-record journey detectors.",
+  },
+  "journeys.evidence.local": {
+    defaultMessage: "Reviewed in this browser only; trstctl has not verified the external action.",
+    description: "Proof limit for browser-local journey marks.",
   },
   "journeys.detector.unavailableTitle": {
     defaultMessage: "This step cannot be checked yet",
@@ -5963,6 +5975,26 @@ export const messages = {
   "journeys.fc.inventory.body": {
     defaultMessage: "The issued certificate lands in the inventory and starts counting toward estate health.",
     description: "First-certificate journey step 4 body.",
+  },
+  "journeys.fc.exactRequest.label": {
+    defaultMessage: "Track one issuance request",
+    description: "Label for the exact request selector in the first-certificate journey.",
+  },
+  "journeys.fc.exactRequest.help": {
+    defaultMessage: "Open a request on Request credential and follow its link here. Approval and inventory checks use that ID.",
+    description: "Explains how to select an exact request and what it proves.",
+  },
+  "journeys.fc.exactRequest.check": {
+    defaultMessage: "Track request",
+    description: "Submit button for a selected issuance request ID.",
+  },
+  "journeys.fc.exactRequest.unavailable": {
+    defaultMessage: "This request could not be read. Check its ID and your certificate read access, then refresh.",
+    description: "Recovery message when an exact issuance request cannot be read.",
+  },
+  "journeys.fc.exactRequest.track": {
+    defaultMessage: "Track this request in Journeys",
+    description: "Accessible suffix for the request table's journey deep link.",
   },
   "journeys.pec.title": {
     defaultMessage: "Preserve your existing CA",
@@ -6117,12 +6149,12 @@ export const messages = {
     description: "Copy-command button state after copying.",
   },
   "journeys.markDone": {
-    defaultMessage: "Mark step done",
-    description: "Toggle that manually completes a journey step the console cannot detect.",
+    defaultMessage: "Mark reviewed locally",
+    description: "Toggle that stores a local checklist mark, not a server verification.",
   },
   "journeys.undoDone": {
-    defaultMessage: "Mark as not done",
-    description: "Toggle that clears a manual journey-step completion mark.",
+    defaultMessage: "Clear local mark",
+    description: "Toggle that clears a browser-local journey review mark.",
   },
   "journeys.fleet.install.title": { defaultMessage: "Install the client certificate", description: "ACME fleet lifecycle operator guidance." },
   "journeys.fleet.install.body": {

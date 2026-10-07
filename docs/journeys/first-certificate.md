@@ -17,6 +17,19 @@ key and does not create one. The separate signer's health is a prerequisite;
 a catalog label is not an issuing-authority selection. The completed certificate
 reports its actual issuer.
 
+The console's **First certificate** checklist has a separate, approval-gated
+request path. Complete the first-use guide as an operator review, open a request
+on **Request credential**, then follow its credential link to track that exact
+request in **Journeys**. You can also paste its UUID into **Track one issuance
+request**. The request check reads `GET /api/v1/issuance-requests/{id}` with
+`certs:read`; `trstctl-cli issuance-requests show {id}` provides the same read.
+The approval check requires a recorded decision by someone other than the
+requester. The inventory check reads that request's identity, exact issuance
+result and certificate ID, then reads the same certificate from inventory. A
+certificate from another request cannot complete these steps. The guide review
+and other manual journey marks live only in this browser. Checklist counts are
+not proof of endpoint installation, renewal or relying-party acceptance.
+
 Submitting the identity transition accepts work. It does not mean that a
 certificate exists yet. Keep the page open while it reads the result for that
 identity and its exact issuance request key. A pending result offers no download.

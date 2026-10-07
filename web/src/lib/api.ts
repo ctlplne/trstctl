@@ -33,6 +33,7 @@ import type {
   CryptoReadinessExport,
   CMDBReconcileSchedule,
   IssuanceRequest,
+  IdentityIssuanceResult,
   IssuanceRequestInput,
   IssuanceRequestList,
   IssuanceRequestPreparation,
@@ -1550,6 +1551,8 @@ export interface Api {
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
+  issuanceRequest(id: string): Promise<IssuanceRequest>;
+  identityIssuanceResult(id: string, requestKey: string): Promise<IdentityIssuanceResult>;
   issuanceRequestIssuers(): Promise<IssuanceRequestIssuerList>;
   /** I3/AUD-78: open a request without pretending it is already an identity. */
   createIssuanceRequest(input: IssuanceRequestInput): Promise<IssuanceRequest>;
@@ -2076,6 +2079,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
+  issuanceRequest: (id) => req<IssuanceRequest>(`/api/v1/issuance-requests/${encodeURIComponent(id)}`),
+  identityIssuanceResult: (id, requestKey) =>
+    req<IdentityIssuanceResult>(`/api/v1/identities/${encodeURIComponent(id)}/issuance-result?request_key=${encodeURIComponent(requestKey)}`),
   issuanceRequestIssuers: () => req<IssuanceRequestIssuerList>("/api/v1/issuance-requests/issuers"),
   previewIssuanceRequest: (input) => postRead<IssuanceRequestPreview>("/api/v1/issuance-requests/preview", input),
   createIssuanceRequest: (input) => mutate<IssuanceRequest>("POST", "/api/v1/issuance-requests", input),

@@ -292,8 +292,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// commands bring the downloadable client to parity with the served routes.
 	// F48 adds the matching reasoned terminal CA ceremony cancellation command.
 	// Exact enrolled-controller cert-manager posture adds one read command.
-	if len(out) != 480 {
-		t.Fatalf("CLI commands = %d, want 480", len(out))
+	// F33's exact issuance-request show gives headless operators the same
+	// decision and issuance evidence after the recent list rolls over.
+	if len(out) != 481 {
+		t.Fatalf("CLI commands = %d, want 481", len(out))
 	}
 	return out
 }

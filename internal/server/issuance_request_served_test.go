@@ -79,6 +79,46 @@ func TestServedRequesterCannotApproveTheirOwnRequest(t *testing.T) {
 	}
 }
 
+func TestServedIssuanceRequestExactReadRequiresTenantAndCertsRead(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "requester@example.test", string(authz.CertsRequest))
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "reader@example.test", string(authz.CertsRead))
+	opened := openRequest(t, h, requester, "i3-exact-read", "exact-read.example.test")
+	path := "/api/v1/issuance-requests/" + opened.ID
+
+	status, body := secretsReq(t, h, http.MethodGet, path, reader, nil)
+	if status != http.StatusOK {
+		t.Fatalf("exact request read: status %d body %s", status, body)
+	}
+	var got servedRequest
+	if err := json.Unmarshal(body, &got); err != nil || got.ID != opened.ID || got.Status != issuancerequest.StateRequested {
+		t.Fatalf("exact request read returned %+v: %v", got, err)
+	}
+	for _, test := range []struct {
+		name  string
+		token string
+		path  string
+		want  int
+	}{
+		{name: "missing permission", token: requester, path: path, want: http.StatusForbidden},
+		{name: "unknown request", token: reader, path: "/api/v1/issuance-requests/22222222-2222-4222-8222-222222222223", want: http.StatusNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			status, body := secretsReq(t, h, http.MethodGet, test.path, test.token, nil)
+			if status != test.want {
+				t.Fatalf("status %d body %s, want %d", status, body, test.want)
+			}
+		})
+	}
+	const neighbor = "22222222-2222-4222-8222-222222222224"
+	registerServedTenantID(t, h, neighbor, "Other exact-read tenant")
+	neighborReader := seedScopedToken(t, h.store, neighbor, string(authz.CertsRead))
+	status, body = secretsReq(t, h, http.MethodGet, path, neighborReader, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("neighbor read status %d body %s, want 404", status, body)
+	}
+}
+
 // A denial must carry a reason, and must be final.
 func TestServedDenialCarriesAReasonAndIsFinal(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})

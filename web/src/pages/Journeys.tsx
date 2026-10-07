@@ -6,8 +6,11 @@ import { capabilityExecutionReason } from "@/components/CapabilityTruth";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api } from "@/lib/api";
+import type { Certificate, IdentityIssuanceResult, IssuanceRequest } from "@/lib/api-types.gen";
+import { useApiQuery } from "@/lib/query";
 import { hasJourneyMark, readJourneyMarks, toggleJourneyMark } from "@/lib/journeyProgress";
 import { journeyCensus } from "@/lib/journeyCensus.gen";
 import { journeyById, journeyDocUrl, journeys, type Journey, type JourneyDetector, type JourneyStep } from "@/lib/journeys";
@@ -67,17 +70,50 @@ const detectorDefinitions: Record<JourneyDetector, DetectorDefinition> = {
 
 type DetectorResult = { state: "done" | "pending" | "blocked" | "error"; reason?: string };
 type DetectorState = Partial<Record<JourneyDetector, DetectorResult>>;
+type ExactProof = { request: IssuanceRequest | null; result: IdentityIssuanceResult | null; certificate: Certificate | null; inventoryError: boolean };
+const emptyExactProof: ExactProof = { request: null, result: null, certificate: null, inventoryError: false };
+const requestIDPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** A step counts as done when served data confirms it (detector) or, for the
- * command/config steps the console cannot observe, when the operator has
- * marked it done by hand. Progress is always out of every step. */
-function stepDone(journey: Journey, step: JourneyStep, detected: DetectorState, marks: Set<string>): boolean {
+function independentDecision(request: IssuanceRequest | null): boolean {
+  return Boolean(
+    request &&
+    (request.status === "approved" || request.status === "issued") &&
+    request.decided_at &&
+    request.decided_by &&
+    request.decided_by !== request.requester,
+  );
+}
+
+function exactStepDone(step: JourneyStep, proof: ExactProof): boolean {
+  if (step.id === "request") return Boolean(proof.request);
+  if (step.id === "approve") return independentDecision(proof.request);
+  if (step.id === "inventory") {
+    return Boolean(
+      independentDecision(proof.request) &&
+      proof.request?.status === "issued" &&
+      proof.request.identity_id &&
+      proof.result?.state === "issued" &&
+      proof.result.identity_id === proof.request.identity_id &&
+      proof.result.request_key === `issuance-request-issue:${proof.request.id}` &&
+      proof.result.certificate?.id &&
+      proof.certificate?.id === proof.result.certificate.id &&
+      proof.certificate.identity_ids?.includes(proof.request.identity_id),
+    );
+  }
+  return false;
+}
+
+/** The checklist separates exact first-certificate evidence, broad tenant
+ * signals, and browser-local review marks. None of those is a substitute for
+ * external endpoint verification. */
+function stepDone(journey: Journey, step: JourneyStep, detected: DetectorState, marks: Set<string>, proof: ExactProof): boolean {
+  if (journey.id === "first-certificate" && step.id !== "wizard") return exactStepDone(step, proof);
   if (step.detect) return detected[step.detect]?.state === "done";
   return hasJourneyMark(marks, journey.id, step.id);
 }
 
-function journeyProgress(journey: Journey, detected: DetectorState, marks: Set<string>): { done: number; total: number } {
-  const done = journey.steps.filter((step) => stepDone(journey, step, detected, marks)).length;
+function journeyProgress(journey: Journey, detected: DetectorState, marks: Set<string>, proof: ExactProof): { done: number; total: number } {
+  const done = journey.steps.filter((step) => stepDone(journey, step, detected, marks, proof)).length;
   return { done, total: journey.steps.length };
 }
 
@@ -86,6 +122,24 @@ export function Journeys() {
   const capabilities = useCapabilities();
   const [searchParams, setSearchParams] = useSearchParams();
   const active = journeyById(searchParams.get("j"));
+  const requestID = searchParams.get("request") ?? "";
+  const [requestDraft, setRequestDraft] = useState(requestID);
+  const exactQuery = useApiQuery(
+    ["journeys", "issuance-request", requestID],
+    async (): Promise<ExactProof> => {
+      const request = await api.issuanceRequest(requestID);
+      if (request.status !== "issued" || !request.identity_id) return { ...emptyExactProof, request };
+      try {
+        const result = await api.identityIssuanceResult(request.identity_id, `issuance-request-issue:${requestID}`);
+        const certificate = result.state === "issued" && result.certificate?.id ? await api.getCertificate(result.certificate.id) : null;
+        return { request, result, certificate, inventoryError: false };
+      } catch {
+        return { ...emptyExactProof, request, inventoryError: true };
+      }
+    },
+    { enabled: requestIDPattern.test(requestID) },
+  );
+  const exactProof = exactQuery.data ?? emptyExactProof;
   const [detected, setDetected] = useState<DetectorState>({});
   const [marks, setMarks] = useState<Set<string>>(() => readJourneyMarks());
   const [checking, setChecking] = useState(false);
@@ -130,6 +184,8 @@ export function Journeys() {
     void refreshStatus();
   }, [refreshStatus]);
 
+  useEffect(() => setRequestDraft(requestID), [requestID]);
+
   // Initial detection can choose the first incomplete step. Once the operator
   // interacts, refreshed evidence updates progress without moving their place.
   useEffect(() => {
@@ -137,12 +193,12 @@ export function Journeys() {
       navigation.current = { journeyId: active.id, manual: false };
     }
     if (navigation.current.manual) return;
-    const firstOpen = active.steps.findIndex((s) => !stepDone(active, s, detected, marks));
+    const firstOpen = active.steps.findIndex((s) => !stepDone(active, s, detected, marks, exactProof));
     setStep(firstOpen === -1 ? 0 : firstOpen);
     // Manual marks intentionally omitted: toggling a step should not yank the
     // operator to a different step mid-read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, detected]);
+  }, [active, detected, exactProof]);
 
   function selectStep(index: number) {
     navigation.current = { journeyId: active.id, manual: true };
@@ -168,21 +224,30 @@ export function Journeys() {
           id: s.id,
           label: t(s.titleKey),
           description: t(s.bodyKey),
-          progressState: stepDone(active, s, detected, marks) ? "done" : detector?.state === "blocked" || detector?.state === "error" ? "blocked" : "pending",
+          progressState: stepDone(active, s, detected, marks, exactProof)
+            ? "done"
+            : detector?.state === "blocked" || detector?.state === "error"
+              ? "blocked"
+              : "pending",
         };
       }),
-    [active, detected, marks, t],
+    [active, detected, marks, exactProof, t],
   );
   const current = active.steps[step];
-  const currentDone = current ? stepDone(active, current, detected, marks) : false;
-  const currentDetector = current?.detect ? detected[current.detect] : undefined;
+  const currentDone = current ? stepDone(active, current, detected, marks, exactProof) : false;
+  const exactError = active.id === "first-certificate" && Boolean(exactQuery.error || (current?.id === "inventory" && exactProof.inventoryError));
+  const currentDetector = current?.detect
+    ? detected[current.detect]
+    : exactError && current?.id !== "wizard"
+      ? { state: "error" as const, reason: t("journeys.detector.checkFailed") }
+      : undefined;
   // Keep the active path visible for deep links, then add only two nearby
   // recommendations. The remaining valid paths stay one disclosure away.
   const recommendedJourneys = [active, ...journeys.filter((journey) => journey.id !== active.id).slice(0, 2)];
   const otherJourneys = journeys.filter((journey) => !recommendedJourneys.some((recommended) => recommended.id === journey.id));
 
   function renderJourneyChoice(journey: Journey) {
-    const progress = journeyProgress(journey, detected, marks);
+    const progress = journeyProgress(journey, detected, marks, exactProof);
     const selected = journey.id === active.id;
     return (
       <button
@@ -224,6 +289,7 @@ export function Journeys() {
               onClick={() => {
                 selectStep(step);
                 void refreshStatus();
+                if (requestIDPattern.test(requestID)) exactQuery.refetch();
               }}
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -250,6 +316,43 @@ export function Journeys() {
           tabIndex={-1}
           className="grid min-w-0 content-start gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
+          {active.id === "first-certificate" && (
+            <form
+              className="grid max-w-2xl gap-2 rounded-panel border border-border p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!requestIDPattern.test(requestDraft.trim())) return;
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current);
+                  next.set("request", requestDraft.trim());
+                  return next;
+                });
+              }}
+            >
+              <label htmlFor="journey-request-id" className="text-body font-medium">
+                {t("journeys.fc.exactRequest.label")}
+              </label>
+              <p className="text-caption text-muted-foreground">{t("journeys.fc.exactRequest.help")}</p>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  id="journey-request-id"
+                  className="min-w-0 flex-1 font-mono"
+                  value={requestDraft}
+                  onChange={(event) => setRequestDraft(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <Button type="submit" disabled={!requestIDPattern.test(requestDraft.trim())}>
+                  {t("journeys.fc.exactRequest.check")}
+                </Button>
+              </div>
+              {requestID && exactQuery.error && (
+                <p role="alert" className="text-caption text-status-danger">
+                  {t("journeys.fc.exactRequest.unavailable")}
+                </p>
+              )}
+            </form>
+          )}
           <StepShell
             steps={shellSteps}
             currentIndex={step}
@@ -272,6 +375,15 @@ export function Journeys() {
                   )}
                   <p className="text-body text-muted-foreground">{t(current.bodyKey)}</p>
                 </div>
+                {currentDone && (
+                  <p className="text-caption text-muted-foreground">
+                    {active.id === "first-certificate" && current.id !== "wizard"
+                      ? t("journeys.evidence.exact")
+                      : current.detect
+                        ? t("journeys.evidence.tenantSignal")
+                        : t("journeys.evidence.local")}
+                  </p>
+                )}
                 {currentDetector?.state === "blocked" ? (
                   <UnavailableState title={t("journeys.detector.unavailableTitle")}>{currentDetector.reason}</UnavailableState>
                 ) : currentDetector?.state === "error" ? (
@@ -295,7 +407,7 @@ export function Journeys() {
                       <span className="font-mono text-caption text-muted-foreground">{current.to}</span>
                     </>
                   )}
-                  {!current.detect && (
+                  {!current.detect && (active.id !== "first-certificate" || current.id === "wizard") && (
                     <Button
                       type="button"
                       variant={currentDone ? "outline" : "secondary"}

@@ -7,7 +7,8 @@ import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { appRoutePaths } from "@/lib/navigation";
 import { journeyDocUrl, journeys } from "@/lib/journeys";
-import { journeyCensus } from "@/lib/journeyCensus.gen";
+import { journeyCensus, journeyCensusProof } from "@/lib/journeyCensus.gen";
+import { AppQueryProvider } from "@/lib/query";
 import { messages } from "@/i18n/messages";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -24,6 +25,9 @@ const { apiMock } = vi.hoisted(() => ({
     secretPage: vi.fn(),
     members: vi.fn(),
     auditEvents: vi.fn(),
+    issuanceRequest: vi.fn(),
+    identityIssuanceResult: vi.fn(),
+    getCertificate: vi.fn(),
   },
 }));
 
@@ -108,7 +112,7 @@ describe("journey definitions stay wired end to end", () => {
       expect(journeyDocUrl(journey)).toBe(`https://docs.trstctl.com/journeys/${journey.id}/`);
       expect(messages[journey.titleKey], `missing ${journey.titleKey}`).toBeDefined();
       expect(messages[journey.descriptionKey], `missing ${journey.descriptionKey}`).toBeDefined();
-      const census = journeyCensus.journeys[journey.id];
+      const census = journeyCensusProof.journeys[journey.id];
       expect(census.status).toBe("served");
       for (const row of census.census_rows) {
         expect(row.status, `${journey.id}/${row.id} is not served`).toBe("served");
@@ -156,23 +160,30 @@ describe("journeys hub", () => {
     apiMock.secretPage.mockResolvedValue({ items: [] });
     apiMock.members.mockResolvedValue({ items: [] });
     apiMock.auditEvents.mockResolvedValue([]);
+    apiMock.issuanceRequest.mockRejectedValue(new Error("Request not found"));
+    apiMock.identityIssuanceResult.mockRejectedValue(new Error("No issuance result"));
+    apiMock.getCertificate.mockRejectedValue(new Error("Certificate not found"));
   });
 
-  function renderJourneys() {
+  function renderJourneys(initialEntry = "/journeys") {
     return render(
-      <MemoryRouter initialEntries={["/journeys"]}>
-        <Journeys />
-      </MemoryRouter>,
+      <AppQueryProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Journeys />
+        </MemoryRouter>
+      </AppQueryProvider>,
     );
   }
 
   function renderJourneysWithRuntime(initialEntry = "/journeys") {
     return render(
-      <CapabilityFixtureProvider view={journeyRuntime}>
-        <MemoryRouter initialEntries={[initialEntry]}>
-          <Journeys />
-        </MemoryRouter>
-      </CapabilityFixtureProvider>,
+      <AppQueryProvider>
+        <CapabilityFixtureProvider view={journeyRuntime}>
+          <MemoryRouter initialEntries={[initialEntry]}>
+            <Journeys />
+          </MemoryRouter>
+        </CapabilityFixtureProvider>
+      </AppQueryProvider>,
     );
   }
 
@@ -186,12 +197,12 @@ describe("journeys hub", () => {
     await user.click(screen.getByRole("button", { name: "Refresh status" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Revoke and retire" })).toBeInTheDocument();
-    expect(within(screen.getByRole("button", { name: /First certificate/ })).getByText("3 of 4 steps done")).toBeInTheDocument();
-    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("0 of 7 steps done")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /First certificate/ })).getByText("0 of 4 steps checked")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("0 of 7 steps checked")).toBeInTheDocument();
     // Switching journeys still starts at the first incomplete step, including
     // when returning to a journey that was navigated earlier.
     await user.click(screen.getByRole("button", { name: /First certificate/ }));
-    expect(screen.getByRole("link", { name: /Take me there/ })).toHaveAttribute("href", "/request");
+    expect(screen.getByRole("link", { name: /Take me there/ })).toHaveAttribute("href", "/wizard");
     await user.click(screen.getByRole("button", { name: /Automate fleet TLS/ }));
     expect(screen.getByRole("heading", { name: "Inspect the ACME surface" })).toBeInTheDocument();
   });
@@ -219,11 +230,11 @@ describe("journeys hub", () => {
     const user = userEvent.setup();
     renderJourneysWithRuntime("/journeys?j=automate-fleet-tls");
     await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "Mark step done" }));
+    await user.click(screen.getByRole("button", { name: "Mark reviewed locally" }));
     await user.click(screen.getByRole("button", { name: "Refresh status" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Inspect the ACME surface" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mark as not done" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear local mark" })).toBeInTheDocument();
   });
 
   it("counts every step, detects served progress, and lets manual steps be marked done", async () => {
@@ -247,7 +258,7 @@ describe("journeys hub", () => {
     // An issuer row alone is not proof that the wizard issued anything. The
     // first-use path stays open until a real certificate appears.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
-    expect(await within(firstCert).findByText("0 of 4 steps done")).toBeInTheDocument();
+    expect(await within(firstCert).findByText("0 of 4 steps checked")).toBeInTheDocument();
     expect(screen.getByText("Start here")).toBeInTheDocument();
     const morePaths = screen.getByText(`More guided paths (${journeys.length - 3})`).closest("details");
     expect(morePaths).not.toHaveAttribute("open");
@@ -262,7 +273,7 @@ describe("journeys hub", () => {
     await user.click(screen.getByText(`More guided paths (${journeys.length - 3})`));
     expect(morePaths).toHaveAttribute("open");
     const fleet = screen.getByRole("button", { name: /Automate fleet TLS/ });
-    expect(within(fleet).getByText("0 of 7 steps done")).toBeInTheDocument();
+    expect(within(fleet).getByText("0 of 7 steps checked")).toBeInTheDocument();
 
     await user.click(fleet);
     expect(screen.getByRole("heading", { name: "Inspect the ACME surface" })).toBeInTheDocument();
@@ -277,8 +288,8 @@ describe("journeys hub", () => {
     expect(screen.queryByRole("link", { name: /Take me there/ })).not.toBeInTheDocument();
 
     // Manual completion updates the card's progress and persists locally.
-    await user.click(screen.getByRole("button", { name: "Mark step done" }));
-    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 7 steps done")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Mark reviewed locally" }));
+    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 7 steps checked")).toBeInTheDocument();
     expect(localStorage.getItem("trstctl-journey-progress")).toContain("automate-fleet-tls:certbot");
 
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -293,7 +304,7 @@ describe("journeys hub", () => {
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("heading", { name: "Revoke and retire" })).toBeInTheDocument();
     expect(screen.getByText(/--reason cessationofoperation/)).toBeInTheDocument();
-    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 7 steps done")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 7 steps checked")).toBeInTheDocument();
 
     // Every journey links to its published walkthrough on the docs site.
     const docLink = screen.getByRole("link", { name: "https://docs.trstctl.com/journeys/automate-fleet-tls/" });
@@ -303,7 +314,7 @@ describe("journeys hub", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("counts the built-in setup issuer journey complete after the wizard creates its identity and certificate", async () => {
+  it("does not count an unrelated identity and certificate as an approved first-certificate request", async () => {
     apiMock.issuers.mockResolvedValue([]);
     apiMock.identities.mockResolvedValue([{ id: "identity-1", name: "first-service" }]);
     apiMock.certificatePage.mockResolvedValue({ items: [{ id: "certificate-1", subject: "first-service" }] });
@@ -311,7 +322,59 @@ describe("journeys hub", () => {
     renderJourneys();
 
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
-    expect(await within(firstCert).findByText("4 of 4 steps done")).toBeInTheDocument();
+    expect(await within(firstCert).findByText("0 of 4 steps checked")).toBeInTheDocument();
+    expect(apiMock.issuanceRequest).not.toHaveBeenCalled();
+  });
+
+  it("tracks one request through independent approval and its exact inventoried certificate", async () => {
+    const user = userEvent.setup();
+    const id = "11111111-1111-4111-8111-111111111111";
+    apiMock.issuanceRequest.mockResolvedValue({
+      id,
+      status: "issued",
+      requester: "requester@example.test",
+      decided_by: "approver@example.test",
+      decided_at: "2026-10-07T00:00:00Z",
+      identity_id: "identity-1",
+    });
+    apiMock.identityIssuanceResult.mockResolvedValue({
+      state: "issued",
+      identity_id: "identity-1",
+      request_key: `issuance-request-issue:${id}`,
+      certificate: { id: "certificate-1" },
+    });
+    apiMock.getCertificate.mockResolvedValue({ id: "certificate-1", identity_ids: ["identity-1"], status: "active" });
+    renderJourneys(`/journeys?j=first-certificate&request=${id}`);
+    const card = screen.getByRole("button", { name: /First certificate/ });
+    expect(await within(card).findByText("3 of 4 steps checked")).toBeInTheDocument();
+    expect(apiMock.issuanceRequest).toHaveBeenCalledWith(id);
+    expect(apiMock.identityIssuanceResult).toHaveBeenCalledWith("identity-1", `issuance-request-issue:${id}`);
+    expect(apiMock.getCertificate).toHaveBeenCalledWith("certificate-1");
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("heading", { name: "Complete the first-use guide" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Mark reviewed locally" }));
+    expect(within(card).getByText("4 of 4 steps checked")).toBeInTheDocument();
+  });
+
+  it("refuses to count self approval or an unrelated inventory certificate", async () => {
+    const id = "11111111-1111-4111-8111-111111111112";
+    apiMock.issuanceRequest.mockResolvedValue({
+      id,
+      status: "issued",
+      requester: "same@example.test",
+      decided_by: "same@example.test",
+      decided_at: "2026-10-07T00:00:00Z",
+      identity_id: "identity-1",
+    });
+    apiMock.identityIssuanceResult.mockResolvedValue({
+      state: "issued",
+      identity_id: "identity-1",
+      request_key: `issuance-request-issue:${id}`,
+      certificate: { id: "certificate-1" },
+    });
+    apiMock.getCertificate.mockResolvedValue({ id: "different-certificate", identity_ids: ["identity-1"], status: "active" });
+    renderJourneys(`/journeys?j=first-certificate&request=${id}`);
+    expect(await within(screen.getByRole("button", { name: /First certificate/ })).findByText("1 of 4 steps checked")).toBeInTheDocument();
   });
 
   it("shows an unavailable detector as blocked without calling it or fabricating carousel progress", async () => {
@@ -325,7 +388,7 @@ describe("journeys hub", () => {
     expect(screen.getByText("This step cannot be checked yet")).toBeInTheDocument();
     expect(screen.getByText(unavailableIncidentDetail)).toBeInTheDocument();
     expect(apiMock.incidentExecutions).not.toHaveBeenCalled();
-    expect(screen.getByRole("progressbar", { name: "Verified journey progress" })).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.getByRole("progressbar", { name: "Journey checklist progress" })).toHaveAttribute("aria-valuenow", "0");
     expect(screen.getByTestId("compact-step-progress")).not.toHaveTextContent("✓");
   });
 });

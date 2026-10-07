@@ -48305,6 +48305,64 @@
         "x-trstctl-permission": "certs:request"
       }
     },
+    "/api/v1/issuance-requests/{id}": {
+      "get": {
+        "operationId": "getIssuanceRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one exact issuance request and its independent decision after it leaves the recent list",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
     "/api/v1/issuance-requests/{id}/approve": {
       "post": {
         "operationId": "approveIssuanceRequest",
