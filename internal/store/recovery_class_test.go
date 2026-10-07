@@ -352,6 +352,22 @@ func TestKubernetesCertificateProvenanceRebuildAndSnapshotRecovery(t *testing.T)
 	}
 }
 
+func TestACMEUpstreamARIUsesEventRecoveryAndSnapshots(t *testing.T) {
+	const table = "acme_upstream_ari"
+	if !containsRecoveryTable(TenantScopedTables, table) {
+		t.Fatalf("%s must be erased with its tenant", table)
+	}
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s must be rebuilt from observed events", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must survive snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 49 {
+		t.Fatalf("snapshot v48 cannot restore the upstream CA's renewal window")
+	}
+}
+
 func TestCMDBCIInventoryIsRebuiltAndSnapshotSafeAUD46(t *testing.T) {
 	const table = "cmdb_ci_inventory"
 	if !containsRecoveryTable(ReadModelTables, table) {

@@ -3619,6 +3619,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01RecordPresented:                 {1: true},
 	EventACMEDNS01RecordCleaned:                   {1: true},
 	EventACMEUpstreamAuthorizationObserved:        {1: true},
+	EventACMEUpstreamARIRequested:                 {1: true},
+	EventACMEUpstreamARIObserved:                  {1: true},
 	EventEndpointVerified:                         {1: true, endpointVerificationAlertEventSchemaVersionV2: true, EndpointVerificationAlertEventSchemaVersion: true},
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
@@ -5327,6 +5329,35 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, Identifier: pl.Identifier, Issuer: pl.Issuer,
 			ChallengeType: pl.ChallengeType, Reused: pl.Reused,
 			ExpiresAt: pl.ExpiresAt, EventSequence: e.Sequence, ObservedAt: e.Time,
+		})
+	case EventACMEUpstreamARIRequested:
+		var pl ACMEUpstreamARIRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyACMEUpstreamARIRequestedTx(ctx, tx, store.ACMEUpstreamARI{
+			TenantID: e.TenantID, CertificateID: pl.CertificateID,
+			AuthorityID: pl.AuthorityID, ARICertificateID: pl.ARICertificateID,
+			Fingerprint: pl.Fingerprint, UpdatedAt: e.Time, NextPollAt: e.Time,
+			EventID: e.ID, EventSequence: e.Sequence,
+		})
+	case EventACMEUpstreamARIObserved:
+		var pl ACMEUpstreamARIObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		var fetchedAt *time.Time
+		if pl.Status == "ready" {
+			fetchedAt = &e.Time
+		}
+		return p.store.ApplyACMEUpstreamARIObservedTx(ctx, tx, store.ACMEUpstreamARI{
+			TenantID: e.TenantID, CertificateID: pl.CertificateID,
+			AuthorityID: pl.AuthorityID, ARICertificateID: pl.ARICertificateID,
+			Fingerprint: pl.Fingerprint, Status: pl.Status,
+			WindowStart: pl.WindowStart, WindowEnd: pl.WindowEnd,
+			UpdatedAt: e.Time, FetchedAt: fetchedAt, NextPollAt: pl.NextPollAt,
+			FailureCount: pl.FailureCount, ErrorClass: pl.ErrorClass,
+			EventID: e.ID, EventSequence: e.Sequence,
 		})
 	case EventACMEDNS01Preflighted:
 		var pl ACMEDNS01Preflighted
