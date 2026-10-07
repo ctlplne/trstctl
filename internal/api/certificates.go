@@ -7,10 +7,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/store"
@@ -132,7 +134,7 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		Issuer: c.Issuer, Serial: c.Serial, Fingerprint: c.Fingerprint, KeyAlgorithm: c.KeyAlgorithm,
 		NotBefore: c.NotBefore, NotAfter: c.NotAfter, DeploymentLocation: c.DeploymentLocation,
 		Source: c.Source, CreatedAt: c.CreatedAt,
-		Status: c.Status, RevokedAt: c.RevokedAt, RevocationReason: c.RevocationReason,
+		Status: c.Status, RevokedAt: c.RevokedAt, RevocationReason: certificateRevocationReason(c.RevocationReason),
 		KeyOrigin: c.KeyOrigin, KeyStorage: c.KeyStorage,
 		KeyExportable: c.KeyExportable, KeyGeneratedBy: c.KeyGeneratedBy,
 		// The summary is computed rather than stored, so a surface cannot render
@@ -145,6 +147,26 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 			GeneratedBy: c.KeyGeneratedBy,
 		}.Summary(),
 	}
+}
+
+// Historical ACME revocations stored a diagnostic sentence instead of the
+// RFC 5280 reason name. Preserve their immutable events, but return the same
+// canonical reason vocabulary as new revocations to operators and SDK clients.
+func certificateRevocationReason(stored string) string {
+	const legacyPrefix = "acme revokeCert reason code "
+	codeText, legacy := strings.CutPrefix(stored, legacyPrefix)
+	if !legacy {
+		return stored
+	}
+	code, err := strconv.Atoi(codeText)
+	if err != nil {
+		return stored
+	}
+	reason, ok := crypto.RevocationReasonFromCRLCode(code)
+	if !ok {
+		return stored
+	}
+	return string(reason)
 }
 
 func toCertificateHealthDashboard(s store.CertificateHealthSnapshot) certificateHealthDashboard {

@@ -97,6 +97,8 @@ func TestParseRevokeRequest(t *testing.T) {
 		{"empty certificate", `{"certificate":""}`},
 		{"std base64 not url", `{"certificate":"++//=="}`},
 		{"negative reason", `{"certificate":"MIIBAg","reason":-1}`},
+		{"unassigned reason", `{"certificate":"MIIBAg","reason":7}`},
+		{"out of range reason", `{"certificate":"MIIBAg","reason":999}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := acmesrv.ParseRevokeRequest([]byte(tc.json)); err == nil {

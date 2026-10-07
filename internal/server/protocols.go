@@ -295,6 +295,11 @@ func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, proto
 }
 
 func (p *protocolIssuer) revokeProtocolLeaf(ctx context.Context, tenantID, protocolName string, fingerprint, serial string, reasonCode int, certDER []byte) error {
+	namedReason, validReason := crypto.RevocationReasonFromCRLCode(reasonCode)
+	if !validReason {
+		return fmt.Errorf("server: protocol revoke reason %d is not an assigned RFC 5280 CRL reason", reasonCode)
+	}
+	reason := string(namedReason)
 	if err := requireACMERequestRegistration(ctx, p.store, p.log, tenantID); err != nil {
 		return err
 	}
@@ -322,7 +327,6 @@ func (p *protocolIssuer) revokeProtocolLeaf(ctx context.Context, tenantID, proto
 	key := "protocol-revoke:" + protocolName + ":" + fingerprint
 	_, err := p.idem.Do(ctx, tenantID, key, func(ctx context.Context) ([]byte, error) {
 		now := time.Now()
-		reason := fmt.Sprintf("%s revokeCert reason code %d", protocolName, reasonCode)
 		if err := p.orch.RevokeCertificateForCA(ctx, tenantID, fingerprint, serial, p.caID, reason, reasonCode, now); err != nil {
 			return nil, err
 		}

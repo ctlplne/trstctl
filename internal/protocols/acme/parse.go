@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/protocols/ari"
 )
 
@@ -146,7 +147,8 @@ type RevokeRequest struct {
 // ParseRevokeRequest decodes a revokeCert payload (RFC 8555 §7.6): a base64url
 // (DER) certificate and an optional integer reason code. Exported so it can be
 // fuzzed against the exact production path; it fails closed on a malformed body, a
-// non-base64url certificate, an empty certificate, or a negative reason code.
+// non-base64url certificate, an empty certificate, or an unassigned RFC 5280
+// reason code. Validate before any revocation state or CRL outbox is written.
 func ParseRevokeRequest(payload []byte) (RevokeRequest, error) {
 	var raw struct {
 		Certificate string `json:"certificate"`
@@ -164,8 +166,8 @@ func ParseRevokeRequest(payload []byte) (RevokeRequest, error) {
 	}
 	out := RevokeRequest{CertDER: der}
 	if raw.Reason != nil {
-		if *raw.Reason < 0 {
-			return RevokeRequest{}, fmt.Errorf("acme: revokeCert reason %d is negative", *raw.Reason)
+		if !crypto.ValidCRLReasonCode(*raw.Reason) {
+			return RevokeRequest{}, fmt.Errorf("acme: revokeCert reason %d is not an assigned RFC 5280 CRL reason", *raw.Reason)
 		}
 		out.Reason = *raw.Reason
 	}

@@ -1822,6 +1822,16 @@ func TestServedACMEEndToEnd(t *testing.T) {
 	if st := servedOCSPStatus(t, h.srv, h.tenant, leafDER, h.caPEM); st != "good" {
 		t.Fatalf("pre-revoke OCSP status = %q, want good", st)
 	}
+	// An unassigned CRL reason must fail at the ACME boundary before either the
+	// immutable revocation event or its signed CRL can be changed.
+	invalidErr := client.RevokeCert(ctx, nil, leafDER, xacme.CRLReasonCode(7))
+	var acmeErr *xacme.Error
+	if !errors.As(invalidErr, &acmeErr) || acmeErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unassigned ACME revoke reason = %v, want HTTP 400", invalidErr)
+	}
+	if st := servedOCSPStatus(t, h.srv, h.tenant, leafDER, h.caPEM); st != "good" {
+		t.Fatalf("rejected revoke changed OCSP status to %q", st)
+	}
 
 	// Revoke via ACME (RFC 8555 §7.6) using the ACCOUNT key (nil signer → the client
 	// kid-authenticates with the account that ordered the cert — the account-key
@@ -1833,6 +1843,10 @@ func TestServedACMEEndToEnd(t *testing.T) {
 
 	if st := servedOCSPStatus(t, h.srv, h.tenant, leafDER, h.caPEM); st != "revoked" {
 		t.Fatalf("post-revoke OCSP status = %q, want revoked", st)
+	}
+	revokedLeaf, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, info.SHA256Fingerprint)
+	if err != nil || revokedLeaf.Status != "revoked" || revokedLeaf.RevocationReason != "keyCompromise" {
+		t.Fatalf("ACME revoke inventory status=%q reason=%q err=%v; want named RFC 5280 reason", revokedLeaf.Status, revokedLeaf.RevocationReason, err)
 	}
 	posture = ariPostureForTenant(t, h, postureToken)
 	published = ariPostureItem{}

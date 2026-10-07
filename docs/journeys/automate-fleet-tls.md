@@ -284,7 +284,9 @@ certbot revoke --server https://trstctl.example.com/directory \
 
 For compromise, follow [Respond to compromise](respond-to-compromise.md), use the
 appropriate reason, and replace the compromised key. Confirm the exact serial is
-revoked in inventory and audit. Fetch the issuer's signed CRL or OCSP status and
+revoked in inventory and audit. Inventory names the RFC 5280 reason (for example,
+`superseded`) rather than leaving an ACME integer for the operator to decode; the
+signed CRL carries the matching reason code. Fetch the issuer's signed CRL or OCSP status and
 verify it independently. For the platform issuer, the tenant CRL is served at
 `/crl/<tenant-id>.crl`; trust its signature against the intended issuer, not merely
 its download URL. A default browser handshake does not prove revocation enforcement.
