@@ -315,8 +315,11 @@ choose **Queue exact host stop**. This review is still available when the
 target is disabled: disabling its trstctl configuration does not stop a live
 listener. The server rechecks the reviewed binding at submission. The agent
 checks the live fingerprint immediately before the pinned action. A different
-leaf or an unobservable listener causes no stop. A successful stop requires two
-local TLS probes that cannot observe a serving leaf. The same signed receipt
+leaf or an unobservable listener causes no stop. After the pinned stop action,
+the agent records up to 40 local TLS probes 250 milliseconds apart so a graceful
+reload can finish. A successful stop requires the last two consecutive probes
+to observe no serving leaf; the signed receipt retains earlier observations that
+still saw the compromised leaf. The same receipt
 reports queued, stopped, different-leaf, unverified, or failed; only stopped
 describes an executed action with repeated local TLS refusal. Check from the
 client segment with a stock TLS client and verify CA revocation separately.

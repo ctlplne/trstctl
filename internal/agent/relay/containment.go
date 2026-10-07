@@ -30,10 +30,12 @@ type ContainmentIntent struct {
 }
 
 const (
-	ContainmentStopped       = "stopped"
-	ContainmentDifferentLeaf = "different_leaf"
-	ContainmentUnverified    = "unverified"
-	ContainmentFailed        = "failed"
+	ContainmentStopped           = "stopped"
+	ContainmentDifferentLeaf     = "different_leaf"
+	ContainmentUnverified        = "unverified"
+	ContainmentFailed            = "failed"
+	containmentMaxPostStopProbes = 40
+	containmentPostStopInterval  = 250 * time.Millisecond
 )
 
 // ContainmentReport is the public, signed before/after account of one host
@@ -82,6 +84,7 @@ func ValidateContainmentReport(intent ContainmentIntent, report ContainmentRepor
 		!strings.EqualFold(report.Before.ExpectedFingerprint, intent.ExpectedFingerprint) {
 		return errors.New("containment before probe is not local or exact")
 	}
+	lastObservedAt := report.Before.ObservedAtUnix
 	for _, after := range report.After {
 		if err := after.Validate(); err != nil {
 			return err
@@ -89,9 +92,10 @@ func ValidateContainmentReport(intent ContainmentIntent, report ContainmentRepor
 		if after.Vantage != transport.VantageLocal || after.Address != report.Before.Address ||
 			after.ServerName != report.Before.ServerName ||
 			!strings.EqualFold(after.ExpectedFingerprint, intent.ExpectedFingerprint) ||
-			after.ObservedAtUnix < report.Before.ObservedAtUnix {
+			after.ObservedAtUnix < lastObservedAt {
 			return errors.New("containment after probe does not follow the same local listener")
 		}
+		lastObservedAt = after.ObservedAtUnix
 	}
 	beforeExact := report.Before.Reached && strings.EqualFold(report.Before.ObservedFingerprint, intent.ExpectedFingerprint)
 	switch report.State {
@@ -104,14 +108,18 @@ func ValidateContainmentReport(intent ContainmentIntent, report ContainmentRepor
 			return errors.New("different-leaf containment did not observe a different leaf before any action")
 		}
 	case ContainmentStopped, ContainmentFailed:
-		if !beforeExact || len(report.After) != 2 {
-			return errors.New("containment stop lacks exact before and two after probes")
+		if !beforeExact || len(report.After) < 2 || len(report.After) > containmentMaxPostStopProbes {
+			return errors.New("containment stop lacks exact before and bounded after probes")
 		}
 		if report.State == ContainmentStopped {
 			for _, after := range report.After {
-				if after.Reached {
-					return errors.New("stopped target still presents a TLS leaf")
+				if after.Reached && !strings.EqualFold(after.ObservedFingerprint, intent.ExpectedFingerprint) {
+					return errors.New("stopped target presented a different TLS leaf")
 				}
+			}
+			last := len(report.After) - 1
+			if report.After[last-1].Reached || report.After[last].Reached {
+				return errors.New("stopped target lacks two final TLS refusals")
 			}
 		}
 	default:
@@ -195,9 +203,18 @@ func containmentForTarget(profile connector.LocalOpsConfig, targetID string) (co
 // executeContainment checks the live fingerprint immediately before the
 // operator-pinned stop command. If another certificate is already serving, it
 // never stops that healthy successor. Two post-action observations prevent a
-// transient refusal from being mistaken for a durable stop.
+// transient refusal from being mistaken for a durable stop. A graceful reload
+// may leave an old worker serving briefly; preserve every bounded observation
+// in the signed report while waiting for two consecutive refusals.
 func executeContainment(ctx context.Context, intent ContainmentIntent, binding connector.LocalContainment,
 	probe func() (transport.ProbeTranscript, error), stop func() error) (ContainmentReport, error) {
+	return executeContainmentWithPolicy(ctx, intent, binding, probe, stop,
+		containmentMaxPostStopProbes, containmentPostStopInterval)
+}
+
+func executeContainmentWithPolicy(ctx context.Context, intent ContainmentIntent, binding connector.LocalContainment,
+	probe func() (transport.ProbeTranscript, error), stop func() error,
+	maxProbes int, interval time.Duration) (ContainmentReport, error) {
 	report := ContainmentReport{TargetID: intent.TargetID, TargetRevision: intent.TargetRevision,
 		IdentityID: intent.IdentityID, ExpectedFingerprint: strings.ToLower(intent.ExpectedFingerprint),
 		Action: binding.Action, After: []transport.ProbeTranscript{}}
@@ -215,9 +232,11 @@ func executeContainment(ctx context.Context, intent ContainmentIntent, binding c
 		return report, nil
 	}
 	stopErr := stop()
-	for i := 0; i < 2; i++ {
+	consecutiveAbsence := 0
+	differentLeaf := false
+	for i := 0; i < maxProbes; i++ {
 		if i != 0 {
-			timer := time.NewTimer(250 * time.Millisecond)
+			timer := time.NewTimer(interval)
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
@@ -230,15 +249,21 @@ func executeContainment(ctx context.Context, intent ContainmentIntent, binding c
 			return ContainmentReport{}, err
 		}
 		report.After = append(report.After, after)
-	}
-	report.State = ContainmentStopped
-	if stopErr != nil {
-		report.State = ContainmentFailed
-	}
-	for _, after := range report.After {
 		if after.Reached {
-			report.State = ContainmentFailed
+			consecutiveAbsence = 0
+			if !strings.EqualFold(after.ObservedFingerprint, intent.ExpectedFingerprint) {
+				differentLeaf = true
+			}
+		} else {
+			consecutiveAbsence++
 		}
+		if consecutiveAbsence == 2 {
+			break
+		}
+	}
+	report.State = ContainmentFailed
+	if stopErr == nil && consecutiveAbsence == 2 && !differentLeaf {
+		report.State = ContainmentStopped
 	}
 	return report, nil
 }
