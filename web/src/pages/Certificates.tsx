@@ -1706,6 +1706,7 @@ function CertificateWorkspace() {
                 <dd>
                   <RenewalHistory
                     runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)}
+                    externalController={Boolean(detail.kubernetes_provenance?.length)}
                   />
                   {detail.kubernetes_provenance?.map((item) => (
                     <div key={`${item.cluster_id}:${item.request_uid}`} className="mt-2 rounded-md border border-border p-3 text-sm">

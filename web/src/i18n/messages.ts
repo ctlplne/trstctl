@@ -2022,6 +2022,10 @@ export const messages = {
     defaultMessage: "cert-manager renewal observed",
     description: "Exact CertificateRequest and leaf observed by an enrolled Kubernetes controller.",
   },
+  "certificates.kubernetes.noTrstctlRotation": {
+    defaultMessage: "No trstctl-managed rotation run is recorded for this leaf. The cert-manager request is shown below.",
+    description: "Certificate detail empty state when exact cert-manager provenance exists but no trstctl rotation run does.",
+  },
   "certificates.kubernetes.certificate": {
     defaultMessage: "Certificate: {namespace}/{name}",
     description: "Namespaced parent cert-manager Certificate object.",

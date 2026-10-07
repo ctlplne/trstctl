@@ -252,9 +252,13 @@ export function DeploymentReceipts({ deliveries }: { deliveries: ConnectorDelive
   );
 }
 
-export function RenewalHistory({ runs }: { runs: RotationRun[] }) {
+export function RenewalHistory({ runs, externalController = false }: { runs: RotationRun[]; externalController?: boolean }) {
   if (runs.length === 0) {
-    return <p className="text-caption text-muted-foreground">{translateNow("source.no.renewal.history.for.this.certificate.ye.d731b9489d")}</p>;
+    return (
+      <p className="text-caption text-muted-foreground">
+        {translateNow(externalController ? "certificates.kubernetes.noTrstctlRotation" : "source.no.renewal.history.for.this.certificate.ye.d731b9489d")}
+      </p>
+    );
   }
   return (
     <AttentionList ariaLabel="Renewal history">
