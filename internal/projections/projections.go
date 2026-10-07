@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"reflect"
@@ -4348,6 +4349,59 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt)
 	case EventCAEndEntityIssued:
+		legacyManagedLeaf, err := LegacyManagedCALeafEvidence(e)
+		if err != nil {
+			return err
+		}
+		if legacyManagedLeaf {
+			// Historical v2 managed-CA events already retained the public leaf.
+			// Recover its inventory row from that same mint event rather than
+			// appending a second issuance or guessing custody from a serial.
+			var pl struct {
+				CAIssuedCertificate
+				Subject string `json:"subject"`
+			}
+			if err := decode(e, &pl); err != nil {
+				return err
+			}
+			info, err := certinfo.Inspect(pl.CertificateDER)
+			if err != nil {
+				return fmt.Errorf("projections: historical managed CA leaf proof: %w", err)
+			}
+			if e.ID == "" || pl.CAID == "" || pl.Serial != info.SerialNumber ||
+				pl.Fingerprint != info.SHA256Fingerprint || info.IsCA ||
+				(pl.Subject != "" && pl.Subject != info.Subject) {
+				return errors.New("projections: historical managed CA leaf differs from retained public evidence")
+			}
+			caPEM, err := p.store.CAAuthorityCertificateTx(ctx, tx, e.TenantID, pl.CAID)
+			if err != nil {
+				return fmt.Errorf("projections: historical managed CA issuer: %w", err)
+			}
+			caDER, err := certinfo.LeafDER(caPEM)
+			if err != nil || cryptoboundary.VerifyLeafSignedByCA(pl.CertificateDER, caDER) != nil {
+				return errors.New("projections: historical managed CA leaf has no exact issuer signature")
+			}
+			notBefore, notAfter := info.NotBefore, info.NotAfter
+			if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
+				ID: LegacyManagedCAInventoryID(e), TenantID: e.TenantID, CAID: pl.CAID,
+				Subject: info.Subject, SANs: certificateInfoSANs(info), Issuer: info.Issuer,
+				Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
+				KeyAlgorithm: info.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
+				Source: "issued", CertificateDER: pl.CertificateDER,
+				CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pl.CertificateDER}),
+				CreatedAt:      e.Time,
+			}); err != nil {
+				return err
+			}
+			issuedAt := pl.IssuedAt
+			if issuedAt.IsZero() {
+				issuedAt = e.Time
+			}
+			if err := p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt); err != nil {
+				return err
+			}
+			return p.store.EnsureCertificateCRLPublicationTx(ctx, tx, e.TenantID, e.ID, pl.CAID)
+		}
 		if schemaVersionOf(e) == CAEndEntityInventorySchemaVersion {
 			var pl CAEndEntityInventoried
 			if err := decode(e, &pl); err != nil {
@@ -7270,6 +7324,16 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 	// extensions rebuild is therefore either in both passes or beyond the saved
 	// checkpoint for the next catch-up/tailer; it can never land in core alone.
 	if err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		legacyManagedLeaf, err := p.legacyManagedCAInventoryNeedsRebuild(ctx, log)
+		if err != nil {
+			return fmt.Errorf("projections: inspect legacy managed CA inventory: %w", err)
+		}
+		if legacyManagedLeaf {
+			if err := p.rebuildWithPrivacyBarrier(ctx, log); err != nil {
+				return fmt.Errorf("projections: rebuild legacy managed CA inventory from retained history: %w", err)
+			}
+			return nil
+		}
 		legacyRollback, err := p.store.ConnectorRollbackProjectionNeedsRebuild(ctx)
 		if err != nil {
 			return fmt.Errorf("projections: inspect legacy rollback receipt order: %w", err)
@@ -7515,7 +7579,10 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 			}); err != nil {
 				return err
 			}
-			return p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead)
+			if err := p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead); err != nil {
+				return err
+			}
+			return p.store.SetLegacyManagedCAInventoryCheckedThroughTx(readCtx, tx, replayHead)
 		})
 	})
 }

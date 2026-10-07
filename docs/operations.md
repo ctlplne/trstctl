@@ -265,3 +265,12 @@ corrected configuration emits a new immutable configuration version. Never repai
 the cursor, outbox row, or feed projection with SQL: startup reconciliation checks
 the queued event against the retained audit range and either recreates the exact
 intent or fails closed.
+
+After upgrading a deployment that issued managed-CA leaves with version-2
+`ca.endentity.issued` events, allow the first control-plane start to complete its
+retained-history check. It atomically rebuilds the read model if it finds a
+responder-only completion without a certificate inventory receipt. The recovery
+cursor checks only newly projected events on later starts, including events
+written after a binary rollback. If startup reports a public leaf or issuer
+signature mismatch, inspect the retained event and CA authority; do not insert
+an inventory row directly or reissue merely to clear the error.

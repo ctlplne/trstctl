@@ -21,6 +21,9 @@ type CertificateIssuanceReceipt struct {
 	Status      string
 	Fingerprint *string
 	Time        *time.Time
+	// True only when a retained v2 managed-CA mint also projected its signed
+	// public leaf into inventory. Old responder-only receipts default false.
+	LegacyInventoryProjected bool
 }
 
 // CertificateIssuanceReceiptsNeedBackfill identifies pre-upgrade receipts and

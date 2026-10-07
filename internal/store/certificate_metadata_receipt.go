@@ -51,6 +51,38 @@ func (s *Store) CertificateMetadataEventAppliedTx(ctx context.Context, tx pgx.Tx
 	return done, rows.Err()
 }
 
+// LegacyManagedCAInventoryEventProjected verifies the exact immutable receipt
+// and its inventory bit under tenant RLS. Missing receipts belong to an older
+// responder-only projector and require replay from retained event authority.
+func (s *Store) LegacyManagedCAInventoryEventProjected(ctx context.Context, e eventspec.Event) (bool, error) {
+	if e.ID == "" || e.Sequence == 0 {
+		return false, errors.New("store: invalid legacy managed CA event identity")
+	}
+	digest, err := certificateMetadataEventDigest(e)
+	if err != nil {
+		return false, err
+	}
+	var projected bool
+	err = s.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
+		var retainedDigest string
+		err := tx.QueryRow(ctx, `SELECT event_digest,legacy_inventory_projected
+			FROM certificate_metadata_receipts WHERE tenant_id=$1 AND event_id=$2`, e.TenantID, e.ID).
+			Scan(&retainedDigest, &projected)
+		if errors.Is(err, pgx.ErrNoRows) {
+			projected = false
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if retainedDigest != digest {
+			return fmt.Errorf("%w: legacy managed CA receipt differs from retained envelope", ErrIdempotencyConflict)
+		}
+		return nil
+	})
+	return projected, err
+}
+
 // CertificateMetadataReceiptBatchLimit bounds a recovery receipt read. The
 // caller still verifies every envelope; neither a high watermark nor a current
 // certificate row can stand in for an exact completion receipt.
@@ -235,9 +267,9 @@ func (s *Store) WithCertificateMetadataEventTx(ctx context.Context, tx pgx.Tx, e
 		return err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO certificate_metadata_receipts
-		(tenant_id,event_sequence,event_id,event_digest,issuance_status,issuance_fingerprint,issuance_time)
-		VALUES($1,$2,$3,$4,$5,$6,$7)`, e.TenantID, int64(e.Sequence), e.ID, digest,
-		summary.Status, summary.Fingerprint, summary.Time); err != nil {
+		(tenant_id,event_sequence,event_id,event_digest,issuance_status,issuance_fingerprint,issuance_time,legacy_inventory_projected)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, e.TenantID, int64(e.Sequence), e.ID, digest,
+		summary.Status, summary.Fingerprint, summary.Time, summary.LegacyInventoryProjected); err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO certificate_metadata_watermarks(tenant_id,latest_sequence,unknown_write) VALUES($1,$2,false)

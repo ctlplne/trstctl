@@ -3,11 +3,14 @@
 package projections
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
@@ -15,7 +18,34 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// CertificateRecordingMaterial enumerates both event families that currently
+// LegacyManagedCALeafEvidence distinguishes the historical hierarchy v2
+// payload from the same-version responder-only payload. Hierarchy producers
+// always included a subject field, even when the CSR subject was empty. The
+// responder form has no subject and must retain its serial-only semantics.
+func LegacyManagedCALeafEvidence(e events.Event) (bool, error) {
+	if e.Type != EventCAEndEntityIssued || schemaVersionOf(e) != CAIssuedCertificateEvidenceSchemaVersion {
+		return false, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(e.Data, &fields); err != nil {
+		return false, err
+	}
+	raw, present := fields["subject"]
+	if !present {
+		return false, nil
+	}
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '"' {
+		return false, fmt.Errorf("projections: historical managed CA subject must be a string")
+	}
+	var subject string
+	if err := json.Unmarshal(raw, &subject); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// CertificateRecordingMaterial enumerates the event families that currently
 // update certificate public material. Command recovery and projection share this
 // list so edge reconciliation cannot bypass the same fingerprint fence.
 func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, error) {
@@ -24,6 +54,19 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 	}
 	switch e.Type {
 	case EventCAEndEntityIssued:
+		if schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion {
+			managed, err := LegacyManagedCALeafEvidence(e)
+			if err != nil || !managed {
+				return store.Certificate{}, false, err
+			}
+			var p CAIssuedCertificate
+			if err := json.Unmarshal(e.Data, &p); err != nil {
+				return store.Certificate{}, true, err
+			}
+			return store.Certificate{Fingerprint: p.Fingerprint, Source: "issued",
+				CertificateDER: p.CertificateDER,
+				CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.CertificateDER})}, true, nil
+		}
 		if schemaVersionOf(e) != CAEndEntityInventorySchemaVersion {
 			return store.Certificate{}, false, nil
 		}
@@ -58,6 +101,14 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 	}
 }
 
+// Version two retained a signed public leaf but no inventory identifier. Its
+// derived row identity must be stable across replay and upgrade. The event ID
+// belongs to the original mint; rebuilding inventory never mints another leaf.
+func LegacyManagedCAInventoryID(e events.Event) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID,
+		[]byte("managed-ca-legacy-inventory\x00"+e.TenantID+"\x00"+e.ID)).String()
+}
+
 // ApplyTx takes the fingerprint fence before any approval row/fence lock. Both
 // inline and tail projectors follow this order. An older already-projected
 // recording cannot overwrite current import provenance or an immutable origin.
@@ -77,8 +128,13 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 	}
 	return p.store.WithCertificateProjectionOrderTx(ctx, tx, projectionTenant, e.Sequence, func() error {
+		managed, err := LegacyManagedCALeafEvidence(e)
+		if err != nil {
+			return err
+		}
 		if e.Type == EventCAIssuedCertificate ||
-			(e.Type == EventCAEndEntityIssued && schemaVersionOf(e) != CAEndEntityInventorySchemaVersion) {
+			(e.Type == EventCAEndEntityIssued && (schemaVersionOf(e) == 1 ||
+				(schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion && !managed))) {
 			return p.store.WithResponderIssuanceReceiptTx(ctx, tx, e, func() error {
 				return p.applyCoreEventTx(ctx, tx, e)
 			}, func() (store.CertificateIssuanceReceipt, error) {
@@ -143,7 +199,8 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 	}
 	issued := material.Source == "issued" && len(material.CertificateDER) > 0 && len(material.CertificatePEM) > 0 &&
 		((e.Type == EventCertificateRecorded && strings.HasPrefix(material.IssuanceIdempotencyKey, "issue:transition:")) ||
-			(e.Type == EventCAEndEntityIssued && schemaVersionOf(e) == CAEndEntityInventorySchemaVersion))
+			(e.Type == EventCAEndEntityIssued && (schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion ||
+				schemaVersionOf(e) == CAEndEntityInventorySchemaVersion)))
 	return p.store.ApplyCertificateRecordingHeadTx(ctx, tx, e.TenantID, material.Fingerprint, e.ID, e.Sequence, issued)
 }
 
@@ -164,6 +221,9 @@ func CertificateMetadataEvent(e events.Event) (bool, error) {
 		EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
 		EventEndpointVerified:
 		if e.Type == EventCAEndEntityIssued {
+			if schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion {
+				return LegacyManagedCALeafEvidence(e)
+			}
 			return schemaVersionOf(e) == CAEndEntityInventorySchemaVersion, nil
 		}
 		return true, nil

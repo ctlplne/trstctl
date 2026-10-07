@@ -231,6 +231,20 @@ DNS, path length, subject/public key, and both chain directions first. The full
 operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
+On upgrade, read-model catch-up checks older version-2 managed-hierarchy
+`ca.endentity.issued` events that were previously recorded only in the CA
+responder ledger. The hierarchy payload includes a `subject` field, even when
+empty; same-version responder-only payloads omit it and keep their original
+meaning. When the hierarchy event contains public DER and its exact fingerprint,
+trstctl verifies the leaf against the named issuing CA and recovers
+one stable certificate inventory row. The original event remains the mint; this
+does not sign a replacement or claim where the leaf's private key was held.
+Version-1 serial-only events cannot supply a public certificate for this replay.
+For those, use a supported certificate import to record an independently obtained
+public PEM; an import is an observation and does not by itself prove trstctl
+issued or can revoke that leaf. A failed replay leaves startup closed with an
+error rather than guessing a certificate or CA.
+
 ### Executing a CA migration in waves (H2)
 
 CA rollover is served as a durable trust-before-leaf workflow, not as a batch loop.

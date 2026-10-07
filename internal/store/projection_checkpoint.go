@@ -255,10 +255,46 @@ func (s *Store) ResetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx) erro
 	_, err := tx.Exec(ctx,
 		`UPDATE projection_checkpoint
 		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
-		        failed_at = NULL, updated_at = now()
+		        failed_at = NULL, legacy_managed_ca_inventory_checked_through = 0,
+		        updated_at = now()
 		  WHERE id = 1`)
 	if err != nil {
 		return fmt.Errorf("store: reset projection checkpoint: %w", err)
 	}
 	return nil
+}
+
+// LegacyManagedCAInventoryRecoveryCursor is a system recovery cursor. It is
+// intentionally separate from applied_seq so an older writer can advance the
+// projection without falsely attesting that inventory replay was checked.
+func (s *Store) LegacyManagedCAInventoryRecoveryCursor(ctx context.Context) (uint64, uint64, error) {
+	var applied, checked int64
+	err := s.poolFor(ctx).QueryRow(ctx, `SELECT applied_seq,legacy_managed_ca_inventory_checked_through
+		FROM projection_checkpoint WHERE id=1`).Scan(&applied, &checked)
+	if err != nil {
+		return 0, 0, fmt.Errorf("store: read legacy managed CA recovery cursor: %w", err)
+	}
+	if applied < 0 || checked < 0 {
+		return 0, 0, errors.New("store: invalid legacy managed CA recovery cursor")
+	}
+	return uint64(applied), uint64(checked), nil
+}
+
+// MarkLegacyManagedCAInventoryCheckedThrough advances only after the retained
+// projected history has been compared with exact per-event receipts. The caller
+// holds the projection lock and history-generation read fence.
+func (s *Store) MarkLegacyManagedCAInventoryCheckedThrough(ctx context.Context, seq uint64) error {
+	_, err := s.poolFor(ctx).Exec(ctx, `UPDATE projection_checkpoint
+		SET legacy_managed_ca_inventory_checked_through=$1,updated_at=now()
+		WHERE id=1 AND applied_seq >= $1`, int64(seq)) // #nosec G115 -- log sequence fits PostgreSQL bigint (CWE-190)
+	return err
+}
+
+// The full rebuild derives this cursor inside the same transaction as the read
+// model and applied checkpoint. A failed rebuild keeps the previous cursor.
+func (s *Store) SetLegacyManagedCAInventoryCheckedThroughTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
+	_, err := tx.Exec(ctx, `UPDATE projection_checkpoint
+		SET legacy_managed_ca_inventory_checked_through=$1,updated_at=now()
+		WHERE id=1 AND applied_seq=$1`, int64(seq)) // #nosec G115 -- log sequence fits PostgreSQL bigint (CWE-190)
+	return err
 }

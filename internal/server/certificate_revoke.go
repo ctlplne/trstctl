@@ -62,6 +62,46 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 		if err != nil {
 			return "", err
 		}
+		managed, err := projections.LegacyManagedCALeafEvidence(event)
+		if err != nil {
+			return "", orchestrator.ErrCertificateRevocationUnsupported
+		}
+		if found && managed {
+			if event.TenantID != certificate.TenantID ||
+				projections.LegacyManagedCAInventoryID(event) != certificate.ID {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			var origin projections.CAIssuedCertificate
+			if json.Unmarshal(event.Data, &origin) != nil || origin.CAID == "" ||
+				origin.Fingerprint != certificate.Fingerprint || origin.Serial != certificate.Serial ||
+				!bytes.Equal(origin.CertificateDER, certificate.CertificateDER) {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			info, err := certinfo.Inspect(origin.CertificateDER)
+			if err != nil || info.IsCA || info.SHA256Fingerprint != origin.Fingerprint ||
+				info.SerialNumber != origin.Serial {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			authority, err := s.store.GetCAAuthority(ctx, certificate.TenantID, origin.CAID)
+			if store.IsNotFound(err) || authority.SignerHandle == "" {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			if err != nil {
+				return "", err
+			}
+			issuerDER, err := firstCertDER(authority.CertificatePEM)
+			if err != nil || crypto.VerifyLeafSignedByCA(origin.CertificateDER, issuerDER) != nil {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			_, found, err := s.store.LookupIssuedCert(ctx, certificate.TenantID, origin.CAID, origin.Serial)
+			if err != nil {
+				return "", err
+			}
+			if !found {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			return origin.CAID, nil
+		}
 		if found && event.Type == projections.EventCAEndEntityIssued && event.SchemaVersion == projections.CAEndEntityInventorySchemaVersion {
 			if event.TenantID != certificate.TenantID {
 				return "", orchestrator.ErrCertificateRevocationUnsupported

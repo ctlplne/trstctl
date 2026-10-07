@@ -59,6 +59,11 @@ func certificateIssuanceReceipt(e events.Event) (store.CertificateIssuanceReceip
 			return store.CertificateIssuanceReceipt{Status: "not_mint"}, nil
 		}
 		summary.Status, summary.Fingerprint, summary.Time = "mint", &issued.Fingerprint, &e.Time
+		managed, err := LegacyManagedCALeafEvidence(e)
+		if err != nil {
+			return summary, err
+		}
+		summary.LegacyInventoryProjected = managed
 		return summary, nil
 	}
 	material, recording, err := CertificateRecordingMaterial(e)

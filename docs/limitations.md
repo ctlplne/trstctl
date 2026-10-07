@@ -4187,6 +4187,15 @@ without it, standard-mode leaves have no automatic status pointer, while
 regulated mode refuses the managed-CA issue request. Existing leaves retain
 their original extensions, so reissue them to add discoverable pointers.
 
+Older managed-CA hierarchy version-2 issuance events include the public leaf
+and are replayed into inventory on upgrade after exact issuer-signature
+verification. Same-version responder-only events remain serial evidence.
+The inventory identity stays stable across rebuilds and the original issuance
+event remains its revocation authority. Version-1 events retain only a serial;
+trstctl cannot reconstruct their missing public certificate or infer key custody
+from that serial. An operator-supplied PEM can be imported as an observation,
+but that import is not proof of issuance or revocation authority.
+
 CT log submission is served as an outbound side effect, not as an inline
 API call: the API validates public certificate PEM and CT log URLs,
 records `ct.submit` outbox rows in the tenant transaction, and the worker
