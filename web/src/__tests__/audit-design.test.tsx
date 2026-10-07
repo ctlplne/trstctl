@@ -125,4 +125,52 @@ describe("Route 035 change-history hierarchy", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Older changes are in signed archives" })).toBeInTheDocument();
     expect(screen.getByText(/543 older audit records.*archive custodian.*trstctl-cli audit verify/i)).toBeInTheDocument();
   });
+
+  it("shows each retained revocation outcome without claiming queued or failed items succeeded", async () => {
+    const events = [
+      {
+        id: "revocation-batch-1",
+        sequence: 8,
+        tenant_id: "tenant-1",
+        type: "certificate.revocation.batch.applied",
+        time: "2026-10-07T00:48:59Z",
+        hash: "sha256:revocation-batch-1",
+        actor: { subject: "custodian-1" },
+        data: {
+          items: [
+            { id: "cert-1", matched: true, status: "revoked" },
+            { id: "cert-2", matched: true, status: "queued" },
+            { id: "cert-3", matched: true, status: "skipped" },
+            { id: "cert-4", matched: false, status: "failed" },
+          ],
+        },
+      },
+    ];
+    apiMock.auditWindow.mockResolvedValue({ events });
+    renderAudit();
+
+    expect(await screen.findByText("1 revoked · 1 queued · 1 skipped · 1 failed")).toBeInTheDocument();
+    expect(screen.queryByText("Succeeded", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Recorded; no success result in this event", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it("does not infer a revocation result from an unknown batch item status", async () => {
+    const events = [
+      {
+        id: "revocation-batch-unknown",
+        sequence: 9,
+        tenant_id: "tenant-1",
+        type: "certificate.revocation.batch.applied",
+        time: "2026-10-07T00:49:00Z",
+        hash: "sha256:revocation-batch-unknown",
+        actor: { subject: "custodian-1" },
+        data: { items: [{ id: "cert-1", status: "future-status" }] },
+      },
+    ];
+    apiMock.auditWindow.mockResolvedValue({ events });
+    renderAudit();
+
+    expect(await screen.findByText("Recorded; no success result in this event")).toBeInTheDocument();
+    expect(screen.queryByText(/revoked · .* failed/)).not.toBeInTheDocument();
+  });
 });

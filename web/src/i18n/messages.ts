@@ -11440,6 +11440,10 @@ export const messages = {
     defaultMessage: "Recorded; no success result in this event",
     description: "Truthful audit event outcome when the envelope does not state success or failure.",
   },
+  "audit.design.result.revocationBatch": {
+    defaultMessage: "{revoked} revoked · {queued} queued · {skipped} skipped · {failed} failed",
+    description: "Exact item outcomes in a retained certificate revocation batch. Queued external revocations are not yet complete.",
+  },
   "audit.design.result.matched": {
     defaultMessage: "Certificate at endpoint matched the expected fingerprint",
     description: "Independent endpoint observation found the expected certificate.",

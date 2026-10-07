@@ -269,7 +269,7 @@ function AuditWorkspace() {
             <SummaryFact label={t("audit.design.lastChangeShown")} value={readableEventType(lastShown.type)} />
             <SummaryFact label={t("audit.design.changedBy")} value={actorLabel(lastShown.actor)} />
             <SummaryFact label={t("audit.design.when")} value={formatDateTime(lastShown.time)} />
-            <SummaryFact label={t("audit.design.result")} value={t(eventResultKey(lastShown))} />
+            <SummaryFact label={t("audit.design.result")} value={revocationBatchResult(lastShown, t) ?? t(eventResultKey(lastShown))} />
           </dl>
         ) : null}
       </Card>
@@ -626,6 +626,20 @@ function eventResultKey(event: AuditEvent): MessageKey {
   if (/\.(failed|failure|rejected|denied)$/.test(event.type)) return "audit.design.result.failed";
   if (/\.(succeeded|completed|approved|issued|created|updated|recorded|deployed)$/.test(event.type)) return "audit.design.result.succeeded";
   return "audit.design.result.recorded";
+}
+
+function revocationBatchResult(event: AuditEvent, t: ReturnType<typeof useTranslation>["t"]): string | null {
+  if (event.type !== "certificate.revocation.batch.applied" || !Array.isArray(event.data?.items) || event.data.items.length === 0) {
+    return null;
+  }
+  const counts = { revoked: 0, queued: 0, skipped: 0, failed: 0 };
+  for (const item of event.data.items) {
+    if (!item || typeof item !== "object" || Array.isArray(item) || !("status" in item)) return null;
+    const status = item.status;
+    if (typeof status !== "string" || (status !== "revoked" && status !== "queued" && status !== "skipped" && status !== "failed")) return null;
+    counts[status] += 1;
+  }
+  return t("audit.design.result.revocationBatch", counts);
 }
 
 function HashChainPanel({ events }: { events: AuditEvent[] }) {

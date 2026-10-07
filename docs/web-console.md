@@ -494,6 +494,10 @@ removing tenant-scoped evidence or operational controls.
 The tool chip is a server-side filter, not a word search. Workloads & Machines
 includes trust configuration, attestation, issuance, SPIFFE, SSH, agents, and
 related workload-certificate lifecycle events; it does not mean “contains ssh.”
+For a certificate revocation batch, the summary counts the recorded `revoked`,
+`queued`, `skipped`, and `failed` items separately. `queued` means an external
+authority still has work to do; an audit count alone is not CRL or relying-party
+proof. Open the exact event and verify the issuer's revocation evidence.
 The tool, feature ID, action, text, time window and as-of sequence intersect
 before selecting the newest or earliest matching events and applying the 1–100
 event limit. Search, signed bundles and all file-export formats use
