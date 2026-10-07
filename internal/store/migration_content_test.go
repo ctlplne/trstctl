@@ -19,6 +19,55 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// Migration 0244 must leave an old managed-CA receipt unclaimed until the
+// retained issuance event is replayed. A pre-upgrade checkpoint may already be
+// ahead of that event, so the new inspection cursor starts at zero while the
+// original applied sequence remains unchanged.
+func TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 244)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	const tenant = "11111111-1111-4111-8111-111111111111"
+	if _, err := pool.Exec(ctx, `INSERT INTO certificate_metadata_receipts
+		(tenant_id,event_sequence,event_id,event_digest,issuance_status)
+		VALUES ($1,17,'legacy-managed-ca-event',repeat('a',64),'mint')`, tenant); err == nil {
+		t.Fatal("pre-upgrade receipt unexpectedly accepted a mint without fingerprint and issuance time")
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO certificate_metadata_receipts
+		(tenant_id,event_sequence,event_id,event_digest,issuance_status)
+		VALUES ($1,17,'legacy-managed-ca-event',repeat('a',64),'unverifiable')`, tenant); err != nil {
+		t.Fatalf("seed pre-upgrade receipt: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE projection_checkpoint SET applied_seq=41 WHERE id=1`); err != nil {
+		t.Fatalf("seed pre-upgrade projection checkpoint: %v", err)
+	}
+	const stable = `SELECT tenant_id::text,event_sequence,event_id,event_digest,issuance_status
+		FROM certificate_metadata_receipts
+		WHERE tenant_id='11111111-1111-4111-8111-111111111111'::uuid ORDER BY event_sequence`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 1 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0244 changed legacy receipt content: %d/%s before, %d/%s after",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var projected bool
+	if err := pool.QueryRow(ctx, `SELECT legacy_inventory_projected FROM certificate_metadata_receipts
+		WHERE tenant_id=$1 AND event_sequence=17`, tenant).Scan(&projected); err != nil || projected {
+		t.Fatalf("0244 invented legacy inventory completion: projected=%v err=%v", projected, err)
+	}
+	var applied, inspected int64
+	if err := pool.QueryRow(ctx, `SELECT applied_seq,legacy_managed_ca_inventory_checked_through
+		FROM projection_checkpoint WHERE id=1`).Scan(&applied, &inspected); err != nil || applied != 41 || inspected != 0 {
+		t.Fatalf("0244 recovery cursor: applied=%d inspected=%d err=%v", applied, inspected, err)
+	}
+}
+
 // The outcome column classifies old committed receipts as applied without
 // changing their event identity or digest. Rejected-domain is reserved for new
 // projection writes; the constraint must reject any other classification.
@@ -368,6 +417,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor
 	237: true, // TestMigration0237PreservesProviderAuthorityReceipts
 	238: true, // TestMigration0238PreservesTenantBrands
 	235: true, // TestMigration0235PreservesNativeHoneyTokens

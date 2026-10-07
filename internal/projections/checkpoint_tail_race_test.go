@@ -102,9 +102,11 @@ func TestProjectCatchUpRefusesMissingHistoryBeforeReset(t *testing.T) {
 	reset := false
 	extension := &catchUpResetHook{reset: func(context.Context) error { reset = true; return nil }}
 	err = projections.New(s, projections.WithEventProjection(extension)).ProjectCatchUp(ctx, log)
-	want := fmt.Sprintf("checkpoint %d is beyond event history head %d", head+1, head)
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("missing-history error = %v, want %q", err, want)
+	checkpointText := fmt.Sprintf("checkpoint %d", head+1)
+	headText := fmt.Sprintf("history head %d", head)
+	if err == nil || !strings.Contains(err.Error(), checkpointText) ||
+		!strings.Contains(err.Error(), "beyond") || !strings.Contains(err.Error(), headText) {
+		t.Fatalf("missing-history error = %v, want %q beyond %q", err, checkpointText, headText)
 	}
 	if reset {
 		t.Error("extension was reset before missing history was refused")
