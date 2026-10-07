@@ -1051,10 +1051,6 @@ export const messages = {
     defaultMessage: "{roots} roots and {intermediates} intermediates; {discovered} hierarchy authorities discovered.",
     description: "CA hierarchy overview summary of served lineage and direct discovery.",
   },
-  "caHierarchy.workspace.custodyLoaded": {
-    defaultMessage: "{algorithm} version {version} is {state}.",
-    description: "CA hierarchy overview summary for the managed key currently loaded in the workspace.",
-  },
   "caHierarchy.workspace.custodyEmpty": {
     defaultMessage: "No managed key is loaded; custody actions remain available in their workspace.",
     description: "CA hierarchy overview summary when no managed key has been generated or loaded.",
@@ -2893,11 +2889,6 @@ export const messages = {
     defaultMessage: "Create a connector:<target> schedule; delivery is worker-queued and crash-resumable.",
     description: "Secret rotation schedule table empty state.",
   },
-  "secrets.rotation.connectorOnly": {
-    defaultMessage:
-      "Manual provider rotation currently requires connector:<target>. Static and dynamic-lease providers stay unavailable until one durable worker owns every effect and rollback phase.",
-    description: "Secret rotation form: connector-only fail-closed validation.",
-  },
   "secrets.rotation.previewAction": {
     defaultMessage: "Review rotation plan",
     description: "F37 effect-free connector rotation preview action.",
@@ -3014,29 +3005,9 @@ export const messages = {
     defaultMessage: "Import unavailable",
     description: "Disabled bulk-import disclosure: disabled action label.",
   },
-  "secrets.tabs.store": {
-    defaultMessage: "Store",
-    description: "Secrets page tab: browse, import, and manage the native secret store.",
-  },
-  "secrets.tabs.access": {
-    defaultMessage: "Access",
-    description: "Secrets page tab: developer access snippets and machine login.",
-  },
-  "secrets.tabs.sharing": {
-    defaultMessage: "Sharing",
-    description: "Secrets page tab: one-time shares and ephemeral API keys.",
-  },
-  "secrets.tabs.engines": {
-    defaultMessage: "Engines",
-    description: "Secrets page tab: PKI, dynamic secrets, and transit/KMIP engines.",
-  },
   "secrets.tabs.scanning": {
     defaultMessage: "Find leaked secrets in code",
     description: "Secrets route: repository and build-artifact secret checks, named for the operator outcome.",
-  },
-  "secrets.tabs.sync": {
-    defaultMessage: "Sync",
-    description: "Secrets page tab: secret sync and platform integrations.",
   },
   "secrets.route.engines": {
     defaultMessage: "Automatic secret sources",
@@ -6758,10 +6729,6 @@ export const messages = {
     defaultMessage: "Hide navigation sidebar",
     description: "Desktop navigation sidebar collapse button label.",
   },
-  "shell.navigation": {
-    defaultMessage: "Navigation",
-    description: "Mobile drawer title.",
-  },
   "shell.openCommandPalette": {
     defaultMessage: "Open task search",
     description: "Plain-language label for the global task and object search trigger.",
@@ -6822,21 +6789,9 @@ export const messages = {
     defaultMessage: "Needs action",
     description: "Primary nav section for urgent worklists.",
   },
-  "nav.section.module": {
-    defaultMessage: "Module",
-    description: "Primary nav section label above the S-B2 product module switcher.",
-  },
   "nav.module.auditLens": {
     defaultMessage: "Changes in this space",
     description: "Plain-language link to change history scoped to the active product space (S-B4).",
-  },
-  "nav.module.upsell": {
-    defaultMessage: "This module requires a commercial edition — view Plan and license",
-    description: "Tooltip on a locked module's upsell row in the switcher (S-B5).",
-  },
-  "nav.module.upsellBadge": {
-    defaultMessage: "Upgrade",
-    description: "Short badge on a locked module's upsell row.",
   },
   "nav.section.needsActionWorklists": {
     defaultMessage: "Needs action worklists",
@@ -6874,22 +6829,6 @@ export const messages = {
     defaultMessage: "Includes issued, imported, and discovery-fed certificate inventory.",
     description: "Short description for the certificate estate health panel.",
   },
-  "breakglass.issue.heading": {
-    defaultMessage: "Online break-glass issue",
-    description: "Heading for the online break-glass issue form.",
-  },
-  "breakglass.issue.description": {
-    defaultMessage: "Submit a CSR, reason, TTL, and m-of-n operator approvals; the server records breakglass.issued before returning the bundle.",
-    description: "Description for the online break-glass issue form.",
-  },
-  "breakglass.issue.label": {
-    defaultMessage: "Online issue request (JSON)",
-    description: "Textarea label for an online break-glass issue request body.",
-  },
-  "breakglass.issue.submit": {
-    defaultMessage: "Issue break-glass certificate",
-    description: "Submit button for online break-glass issue.",
-  },
   "breakglass.issue.busy": {
     defaultMessage: "Issuing...",
     description: "Busy submit button text for online break-glass issue.",
@@ -6897,10 +6836,6 @@ export const messages = {
   "breakglass.issue.errorTitle": {
     defaultMessage: "Issue failed",
     description: "Error title for online break-glass issue failures.",
-  },
-  "breakglass.issue.invalidJson": {
-    defaultMessage: "Issue request must be one JSON object.",
-    description: "Validation error when the online break-glass issue request is not valid JSON.",
   },
   "breakglass.issue.status": {
     defaultMessage: "Issued and audited {count} break-glass bundle.",
@@ -7623,16 +7558,8 @@ export const messages = {
     defaultMessage: "Issue & renew",
     description: "Primary navigation group.",
   },
-  "nav.group.protocols": {
-    defaultMessage: "Protocols",
-    description: "Primary navigation group.",
-  },
   "nav.group.secrets": {
     defaultMessage: "Secrets",
-    description: "Primary navigation group.",
-  },
-  "nav.group.connectorsPlugins": {
-    defaultMessage: "Connectors & Plugins",
     description: "Primary navigation group.",
   },
   "nav.group.riskInsight": {
@@ -7643,20 +7570,12 @@ export const messages = {
     defaultMessage: "Approve & respond",
     description: "Primary navigation group.",
   },
-  "nav.group.governance": {
-    defaultMessage: "Governance",
-    description: "Primary navigation group.",
-  },
   "nav.group.platform": {
     defaultMessage: "Administer",
     description: "Primary navigation group.",
   },
   "nav.item.dashboard": {
     defaultMessage: "Home",
-    description: "Primary navigation item.",
-  },
-  "nav.item.setUp": {
-    defaultMessage: "Set up",
     description: "Primary navigation item.",
   },
   "nav.item.requestCredential": {
@@ -7682,18 +7601,6 @@ export const messages = {
   "nav.spaceQuestion.secrets": {
     defaultMessage: "Which secrets need rotation, repair, or access review?",
     description: "Plain-language orientation question shown inside Secrets and Access.",
-  },
-  "nav.module.ssh": {
-    defaultMessage: "SSH",
-    description: "Module switcher label: SSH trust and user-certificate issuance.",
-  },
-  "nav.module.signing": {
-    defaultMessage: "Signing",
-    description: "Module switcher label: code and artifact signing.",
-  },
-  "nav.module.fleet": {
-    defaultMessage: "Fleet",
-    description: "Module switcher label: agents, devices, and workload identity.",
   },
   "nav.space.workload": {
     defaultMessage: "Workloads & Machines",
@@ -8256,10 +8163,6 @@ export const messages = {
   "profiles.restore.verify": { defaultMessage: "How to prove it worked", description: "Heading for profile recovery verification steps." },
   "profiles.restore.cancel": { defaultMessage: "Go back", description: "Action that closes recovery review without changing state." },
   "profiles.restore.confirm": { defaultMessage: "Restore as new version", description: "Action that confirms the exact reviewed profile recovery." },
-  "nav.item.issuance": {
-    defaultMessage: "Issuance",
-    description: "Primary navigation item.",
-  },
   "nav.item.caHierarchy": {
     defaultMessage: "Certificate authorities",
     description: "Primary navigation item.",
@@ -9123,10 +9026,6 @@ export const messages = {
     defaultMessage: "No shadow NHI findings.",
     description: "Empty table text when no shadow NHI posture findings exist.",
   },
-  "discovery.findings.filters": {
-    defaultMessage: "Discovery finding filters",
-    description: "Accessible label for discovery finding triage filters.",
-  },
   "discovery.findings.filterStatus": {
     defaultMessage: "Triage status",
     description: "Label for the discovery finding triage-status filter.",
@@ -9207,14 +9106,6 @@ export const messages = {
     defaultMessage: "Risk",
     description: "Column header for discovery finding risk score.",
   },
-  "discovery.findings.columnDiscovered": {
-    defaultMessage: "Discovered",
-    description: "Column header for discovery finding discovery time.",
-  },
-  "discovery.findings.columnActions": {
-    defaultMessage: "Actions",
-    description: "Column header for discovery finding action buttons.",
-  },
   "discovery.findings.columnFingerprint": {
     defaultMessage: "Fingerprint",
     description: "Detail label for a discovery finding fingerprint.",
@@ -9222,10 +9113,6 @@ export const messages = {
   "discovery.findings.noMatches": {
     defaultMessage: "No findings match these filters.",
     description: "Empty row text when discovery finding filters hide every row.",
-  },
-  "discovery.findings.details": {
-    defaultMessage: "Details",
-    description: "Button label to open discovery finding details.",
   },
   "discovery.findings.review": {
     defaultMessage: "Review finding",
@@ -10220,22 +10107,6 @@ export const messages = {
     defaultMessage: "No relay evidence yet",
     description: "Honest unknown state before any enrollment relay has reported network evidence.",
   },
-  "nav.item.acmeAndDns": {
-    defaultMessage: "ACME and DNS",
-    description: "Primary navigation item.",
-  },
-  "nav.item.enrollmentProtocols": {
-    defaultMessage: "Enrollment protocols",
-    description: "Primary navigation item.",
-  },
-  "nav.item.spiffe": {
-    defaultMessage: "SPIFFE",
-    description: "Primary navigation item.",
-  },
-  "nav.item.sshCa": {
-    defaultMessage: "SSH CA",
-    description: "Primary navigation item.",
-  },
   "nav.item.sshTrust": {
     defaultMessage: "SSH access",
     description: "Primary navigation item.",
@@ -10545,18 +10416,6 @@ export const messages = {
     defaultMessage: "Metadata reported by configured agents. Key bytes never leave the host.",
     description: "Safety description for the SSH fleet inventory.",
   },
-  "sshTrust.fleet.hostsOutsideCA": {
-    defaultMessage: "Reported key locations",
-    description: "SSH fleet metric for observed key locations; CA trust is not inferred from a raw key.",
-  },
-  "sshTrust.fleet.standingGrants": {
-    defaultMessage: "Standing grants",
-    description: "SSH fleet metric for persistent authorized_keys access.",
-  },
-  "sshTrust.fleet.orphanedGrants": {
-    defaultMessage: "Orphaned grants",
-    description: "SSH fleet metric for unattributed authorized_keys access.",
-  },
   "sshTrust.fleet.empty": {
     defaultMessage: "No agent-reported SSH key locations yet.",
     description: "Empty state for SSH fleet inventory.",
@@ -10597,37 +10456,13 @@ export const messages = {
     defaultMessage: "Software Trust",
     description: "Primary navigation item.",
   },
-  "nav.item.tsa": {
-    defaultMessage: "TSA",
-    description: "Primary navigation item.",
-  },
   "nav.item.secrets": {
     defaultMessage: "Secrets",
     description: "Primary navigation item for native secret inventory and lifecycle.",
   },
-  "nav.item.nativeSecrets": {
-    defaultMessage: "Native secrets",
-    description: "Primary navigation item.",
-  },
-  "nav.item.pkiSecrets": {
-    defaultMessage: "PKI secrets",
-    description: "Primary navigation item.",
-  },
-  "nav.item.machineLogin": {
-    defaultMessage: "Machine login",
-    description: "Primary navigation item.",
-  },
-  "nav.item.secretSharing": {
-    defaultMessage: "Secret sharing",
-    description: "Primary navigation item.",
-  },
   "nav.item.connectors": {
     defaultMessage: "Where credentials are installed",
     description: "Primary navigation item. Matches the decision-first deployment-destination page heading.",
-  },
-  "nav.item.plugins": {
-    defaultMessage: "Plugins",
-    description: "Primary navigation item.",
   },
   "nav.item.risk": {
     defaultMessage: "What to fix first",
@@ -10736,6 +10571,142 @@ export const messages = {
   "migration.design.answer": {
     defaultMessage: "What can move now, what blocks cutover, and how to roll back.",
     description: "Plain-language answer provided by the migration page.",
+  },
+  "migration.form.guided": {
+    defaultMessage: "Guided form",
+    description: "Return from advanced JSON to the guided migration form.",
+  },
+  "migration.form.advanced": {
+    defaultMessage: "Advanced JSON",
+    description: "Open the advanced migration manifest editor.",
+  },
+  "migration.form.scopeStep": {
+    defaultMessage: "Select authority",
+    description: "First migration planning step.",
+  },
+  "migration.form.mapStep": {
+    defaultMessage: "Map waves",
+    description: "Second migration planning step.",
+  },
+  "migration.form.reviewStep": {
+    defaultMessage: "Review exact plan",
+    description: "Last migration planning step.",
+  },
+  "migration.form.scopeHelp": {
+    defaultMessage: "Choose the active CA authority that will issue the successor certificates.",
+    description: "Authority selection guidance for migration.",
+  },
+  "migration.form.mapHelp": {
+    defaultMessage: "Choose each identity and host agent, then set the destination trust-anchor path.",
+    description: "Wave mapping guidance for migration.",
+  },
+  "migration.form.reviewHelp": {
+    defaultMessage: "Review every mapping. Checking readiness changes no trust; starting the run is a separate decision.",
+    description: "Exact-plan review guidance.",
+  },
+  "migration.form.planId": {
+    defaultMessage: "Plan ID",
+    description: "Operator-chosen migration plan identifier.",
+  },
+  "migration.form.authority": {
+    defaultMessage: "New CA authority",
+    description: "Active replacement CA authority selector.",
+  },
+  "migration.form.chooseAuthority": {
+    defaultMessage: "Choose an active authority",
+    description: "Empty authority selection option.",
+  },
+  "migration.form.loadingRosters": {
+    defaultMessage: "Loading migration rosters…",
+    description: "Loading state for authorities, identities, and agents.",
+  },
+  "migration.form.rosterUnavailable": {
+    defaultMessage: "Migration rosters unavailable",
+    description: "Read error for migration entity rosters.",
+  },
+  "migration.form.setupIncomplete": {
+    defaultMessage: "Complete migration setup",
+    description: "Missing entities needed for guided migration planning.",
+  },
+  "migration.form.needAuthority": {
+    defaultMessage: "Create an active CA authority.",
+    description: "Missing migration authority remedy.",
+  },
+  "migration.form.needIdentity": {
+    defaultMessage: "Issue a deployable X.509 identity.",
+    description: "Missing migration identity remedy.",
+  },
+  "migration.form.needAgent": {
+    defaultMessage: "Enroll an active host agent.",
+    description: "Missing migration agent remedy.",
+  },
+  "migration.form.progress": {
+    defaultMessage: "Migration plan progress",
+    description: "Accessible label for migration wizard progress.",
+  },
+  "migration.form.wave": {
+    defaultMessage: "Wave {number}",
+    description: "Ordered migration wave label.",
+  },
+  "migration.form.waveName": {
+    defaultMessage: "Wave name",
+    description: "Migration wave identifier field.",
+  },
+  "migration.form.identity": {
+    defaultMessage: "Identity",
+    description: "Migration member identity selector.",
+  },
+  "migration.form.agent": {
+    defaultMessage: "Host agent",
+    description: "Migration member host-agent selector.",
+  },
+  "migration.form.path": {
+    defaultMessage: "Trust-anchor path",
+    description: "Destination path for a migration member's trust anchor.",
+  },
+  "migration.form.chooseIdentity": {
+    defaultMessage: "Choose an identity",
+    description: "Empty migration identity option.",
+  },
+  "migration.form.chooseAgent": {
+    defaultMessage: "Choose a host agent",
+    description: "Empty migration agent option.",
+  },
+  "migration.form.addWave": {
+    defaultMessage: "Add wave",
+    description: "Add an ordered migration wave.",
+  },
+  "migration.form.addMember": {
+    defaultMessage: "Add member",
+    description: "Add a mapped identity to a migration wave.",
+  },
+  "migration.form.removeWave": {
+    defaultMessage: "Remove wave {number}",
+    description: "Accessible label for removing an ordered migration wave.",
+  },
+  "migration.form.removeMember": {
+    defaultMessage: "Remove member {number}",
+    description: "Accessible label for removing a migration member.",
+  },
+  "migration.form.moveUp": {
+    defaultMessage: "Move wave {number} up",
+    description: "Accessible label for reordering a migration wave up.",
+  },
+  "migration.form.moveDown": {
+    defaultMessage: "Move wave {number} down",
+    description: "Accessible label for reordering a migration wave down.",
+  },
+  "migration.form.duplicateWave": {
+    defaultMessage: "Each wave needs a distinct name.",
+    description: "Guided migration wave validation error.",
+  },
+  "migration.form.duplicateIdentity": {
+    defaultMessage: "An identity may appear in only one wave.",
+    description: "Guided migration identity validation error.",
+  },
+  "migration.form.reviewTitle": {
+    defaultMessage: "Exact migration plan",
+    description: "Reviewed authority and wave mappings before assessment.",
   },
   "migration.design.technicalDetails": {
     defaultMessage: "Source mappings, dual-run evidence, cutover and rollback controls.",
@@ -11485,10 +11456,6 @@ export const messages = {
   },
   "nav.item.ownership": {
     defaultMessage: "Ownership",
-    description: "Primary navigation item.",
-  },
-  "nav.item.rbac": {
-    defaultMessage: "RBAC",
     description: "Primary navigation item.",
   },
   "nav.item.policy": {
@@ -12470,14 +12437,6 @@ export const messages = {
     defaultMessage: "Alerts and delivery",
     description: "Primary navigation item.",
   },
-  "nav.item.sso": {
-    defaultMessage: "SSO",
-    description: "Primary navigation item.",
-  },
-  "nav.item.apiDistribution": {
-    defaultMessage: "API and distribution",
-    description: "Primary navigation item.",
-  },
   "command.title": {
     defaultMessage: "What do you need?",
     description: "Outcome-first title for the global task and object search dialog.",
@@ -12598,30 +12557,6 @@ export const messages = {
     defaultMessage: "This agent version advertises no endpoint-discovery sources. Nothing is being collected until one is configured.",
     description:
       "Truth-integrity 1: shown when the served agent response advertises no discovery capability, replacing a hardcoded console fallback that claimed sources the agent binary cannot collect.",
-  },
-  "agents.endpointDiscovery.filesystem": {
-    defaultMessage: "Filesystem certificates",
-    description: "Fallback label for filesystem endpoint discovery capability.",
-  },
-  "agents.endpointDiscovery.pkcs11": {
-    defaultMessage: "PKCS#11 token certificates",
-    description: "Fallback label for PKCS#11 endpoint discovery capability.",
-  },
-  "agents.endpointDiscovery.windowsStore": {
-    defaultMessage: "Windows certificate store",
-    description: "Fallback label for Windows certificate store endpoint discovery capability.",
-  },
-  "agents.endpointDiscovery.k8sSecret": {
-    defaultMessage: "Kubernetes TLS Secrets",
-    description: "Fallback label for Kubernetes Secret endpoint discovery capability.",
-  },
-  "agents.endpointDiscovery.trustStore": {
-    defaultMessage: "Trust stores",
-    description: "Fallback label for trust-store endpoint discovery capability.",
-  },
-  "agents.endpointDiscovery.privateKey": {
-    defaultMessage: "Private-key material",
-    description: "Fallback label for private-key endpoint discovery capability.",
   },
   "nhi.inventory.title": {
     defaultMessage: "Non-human identity inventory",
@@ -13502,22 +13437,6 @@ export const messages = {
     defaultMessage: "No identities or credentials are known yet",
     description: "Opening Ownership status when the attribution source is genuinely empty.",
   },
-  "owners.design.statusComplete": {
-    defaultMessage: "Every known identity and credential has an owner",
-    description: "Opening Ownership status when attribution has no known gap.",
-  },
-  "owners.design.statusNeedsOne": {
-    defaultMessage: "1 known identity or credential needs an owner",
-    description: "Opening Ownership status for one known attribution gap.",
-  },
-  "owners.design.statusNeedsMany": {
-    defaultMessage: "{count} known identities or credentials need an owner",
-    description: "Opening Ownership status for multiple known attribution gaps.",
-  },
-  "owners.design.statusBody": {
-    defaultMessage: "{assigned} of {known} known identities and credentials are assigned. {current} of {owners} owner records have current review evidence.",
-    description: "Truthful attribution and attestation counts below the opening Ownership status.",
-  },
   "owners.design.disclosure.directory": {
     defaultMessage: "Owner records, inheritance, and attestations",
     description: "Progressive disclosure for owner records and their attestation controls.",
@@ -13975,20 +13894,6 @@ export const messages = {
     defaultMessage: "+{count} more rules in exact details",
     description: "Count of routing rules beyond the compact opening preview.",
   },
-  "notifications.design.channelsHelp": {
-    defaultMessage: "A channel is one external destination. Webhook URLs and provider credentials stay behind server validation and secret references.",
-    description: "Technical ELI5 help for notification channels and webhooks.",
-  },
-  "notifications.design.routingHelp": {
-    defaultMessage:
-      "A routing rule maps event severity to one or more channels. trstctl uses one fixed alert envelope across channels; this build has no tenant-editable template library. A test writes durable outbox work first; it does not call the destination from the browser.",
-    description: "Technical ELI5 help for routing rules, templates, and safe tests.",
-  },
-  "notifications.design.deliveryHelp": {
-    defaultMessage:
-      "Each attempt keeps status, retry count, last error, idempotency key, owner, and recipients. Requeue is available only after a delivery reaches the dead-letter state.",
-    description: "Technical ELI5 help for delivery attempts and dead letters.",
-  },
   "notifications.design.emptyDeliveryTitle": {
     defaultMessage: "No delivery attempts match",
     description: "Empty state title within exact delivery evidence.",
@@ -14109,10 +14014,6 @@ export const messages = {
   "notifications.routing.readinessReady": {
     defaultMessage: "This rule can reach every destination entered below.",
     description: "Routing policy form guidance when every entered destination is ready.",
-  },
-  "notifications.routing.loadError": {
-    defaultMessage: "Could not load notification routing policies",
-    description: "Fallback error when notification routing policies cannot be fetched.",
   },
   "notifications.routing.createError": {
     defaultMessage: "Could not create notification routing policy",
@@ -14317,14 +14218,6 @@ export const messages = {
   "notifications.loading": {
     defaultMessage: "Loading notifications...",
     description: "Loading state for notification inbox rows.",
-  },
-  "notifications.emptyTitle": {
-    defaultMessage: "No notifications found",
-    description: "Empty state title for notification inbox rows.",
-  },
-  "notifications.emptyBody": {
-    defaultMessage: "Adjust filters or refresh the inbox.",
-    description: "Empty state body for notification inbox rows.",
   },
   "notifications.table.ariaLabel": {
     defaultMessage: "Notifications inbox",
@@ -17657,14 +17550,6 @@ export const messages = {
     defaultMessage: "/etc/trstctl/gitleaks-rules.toml",
     description: "Placeholder path for an additive custom Gitleaks rules file.",
   },
-  "secrets.scan.customRulesYes": {
-    defaultMessage: "yes",
-    description: "Short value showing custom rules were used for a secret scan.",
-  },
-  "secrets.scan.customRulesNo": {
-    defaultMessage: "no",
-    description: "Short value showing custom rules were not used for a secret scan.",
-  },
   "secrets.scan.required": { defaultMessage: "This field is required.", description: "Required-field error in the secret scan workflow." },
   "secrets.scan.pathHelp": {
     defaultMessage: "Choose a repository or build-workspace path that the control plane is allowed to read.",
@@ -19294,10 +19179,6 @@ export const messages = {
   "workloads.attestation.issueHeading": {
     defaultMessage: "Issue attested SVID",
     description: "Form heading for issuing an attested SVID.",
-  },
-  "workloads.attestation.issueDescription": {
-    defaultMessage: "Proof payloads and returned certificates are cleared instead of being stored in UI state.",
-    description: "Security note for attested SVID issuance.",
   },
   "workloads.attestation.proofPayload": {
     defaultMessage: "Attestation proof payload (base64)",

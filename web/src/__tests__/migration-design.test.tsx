@@ -12,6 +12,9 @@ const { apiMock } = vi.hoisted(() => ({
     pauseMigrationRun: vi.fn(),
     resumeMigrationRun: vi.fn(),
     rollbackMigrationRun: vi.fn(),
+    caAuthorities: vi.fn(),
+    identities: vi.fn(),
+    agents: vi.fn(),
   },
 }));
 
@@ -32,6 +35,9 @@ describe("route 028 decision-first migration design", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.migrationRuns.mockResolvedValue({ items: [] });
+    apiMock.caAuthorities.mockResolvedValue({ items: [{ id: "40400000-0000-4000-8000-000000000042", common_name: "QA new CA", status: "active" }] });
+    apiMock.identities.mockResolvedValue([{ id: "identity-1", name: "QA leaf", kind: "x509_certificate", status: "deployed" }]);
+    apiMock.agents.mockResolvedValue([{ id: "agent-1", name: "QA host", status: "active", presence: { state: "online" } }]);
   });
 
   it("answers cutover readiness before revealing source mappings and controls", async () => {
@@ -55,7 +61,7 @@ describe("route 028 decision-first migration design", () => {
     expect(screen.queryByLabelText("Migration plan JSON")).not.toBeInTheDocument();
 
     await user.click(startPlan);
-    const manifest = await screen.findByLabelText("Migration plan JSON");
+    const manifest = await screen.findByLabelText("Plan ID");
     expect(plan).toHaveAttribute("open");
     expect(manifest).toHaveFocus();
   });
@@ -73,6 +79,7 @@ describe("route 028 decision-first migration design", () => {
     renderMigration();
 
     await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.click(screen.getByRole("button", { name: "Advanced JSON" }));
     await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
     expect(await screen.findByText(/This plan is incomplete or is not valid JSON/)).toBeInTheDocument();
     expect(apiMock.assessMigration).not.toHaveBeenCalled();
@@ -110,6 +117,7 @@ describe("route 028 decision-first migration design", () => {
     renderMigration();
 
     await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.click(screen.getByRole("button", { name: "Advanced JSON" }));
     fireEvent.change(screen.getByLabelText("Migration plan JSON"), {
       target: {
         value: JSON.stringify({

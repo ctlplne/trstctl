@@ -13,6 +13,9 @@ const { apiMock } = vi.hoisted(() => ({
     pauseMigrationRun: vi.fn(),
     resumeMigrationRun: vi.fn(),
     rollbackMigrationRun: vi.fn(),
+    caAuthorities: vi.fn(),
+    identities: vi.fn(),
+    agents: vi.fn(),
   },
 }));
 
@@ -81,6 +84,9 @@ describe("executable CA migration console (AUD-40)", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.migrationRuns.mockResolvedValue({ items: [existingRun] });
+    apiMock.caAuthorities.mockResolvedValue({ items: [] });
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.agents.mockResolvedValue([]);
     apiMock.assessMigration.mockResolvedValue({
       plan_id: manifest.plan_id,
       members: 1,
@@ -101,6 +107,7 @@ describe("executable CA migration console (AUD-40)", () => {
     expect(await screen.findByRole("heading", { name: "1 migration run" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Start migration plan" }));
+    await user.click(screen.getByRole("button", { name: "Advanced JSON" }));
     fireEvent.change(screen.getByLabelText("Migration plan JSON"), { target: { value: JSON.stringify(manifest) } });
     await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
 

@@ -1,16 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { api, type MigrationAssessment, type MigrationRun, type MigrationRunStartRequest } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
-
-const defaultManifest =
-  '{"plan_id":"ca-rollover-2026","new_authority_id":"00000000-0000-4000-8000-000000000000","waves":[{"id":"canary","ordinal":1,"members":[{"identity_id":"","agent_id":"","trust_anchor_path":"/etc/trstctl/next-root.pem"}]}]}';
+import { MigrationPlanEditor } from "@/pages/MigrationPlanEditor";
 
 type Disclosure = "plan" | "gates" | "history";
 
@@ -19,14 +16,13 @@ type Disclosure = "plan" | "gates" | "history";
 export function Migration() {
   const { t } = useTranslation();
   const runs = useApiQuery(["migration-runs"], api.migrationRuns);
-  const [manifest, setManifest] = useState(defaultManifest);
   const [assessment, setAssessment] = useState<MigrationAssessment | null>(null);
   const [reviewed, setReviewed] = useState<MigrationRunStartRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Record<Disclosure, boolean>>({ plan: false, gates: false, history: false });
   const [rollbackRun, setRollbackRun] = useState<MigrationRun | null>(null);
-  const planRef = useRef<HTMLTextAreaElement>(null);
+  const planRevision = useRef(0);
   const confirmRollbackRef = useRef<HTMLButtonElement>(null);
 
   const runItems = runs.data?.items ?? [];
@@ -36,31 +32,40 @@ export function Migration() {
   const ready = Boolean(assessment && assessmentMatches && assessment.unknowns.length === 0 && assessment.migratable === assessment.members);
   const problem = error ?? runs.error;
 
-  useEffect(() => {
-    if (open.plan) planRef.current?.focus();
-  }, [open.plan]);
+  const invalidatePlan = useCallback(() => {
+    planRevision.current++;
+    setAssessment(null);
+    setReviewed(null);
+  }, []);
 
-  async function perform(operation: "assess" | "start" | "pause" | "resume" | "rollback", run?: MigrationRun) {
+  async function assess(request: MigrationRunStartRequest) {
+    if (busy) return;
+    const revision = planRevision.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.assessMigration({
+        plan_id: request.plan_id,
+        require_full_trust: true,
+        waves: request.waves.map((wave) => ({ ...wave, members: wave.members.map((member) => member.identity_id) })),
+      });
+      if (revision !== planRevision.current) return;
+      setAssessment(result);
+      setReviewed(request);
+      setOpen((current) => ({ ...current, gates: true }));
+    } catch {
+      if (revision === planRevision.current) setError(t("migration.design.operationError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function perform(operation: "start" | "pause" | "resume" | "rollback", run?: MigrationRun) {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      if (operation === "assess") {
-        const request = parseManifest(manifest);
-        if (!request) {
-          setError(t("migration.design.invalidPlan"));
-          return;
-        }
-        setAssessment(
-          await api.assessMigration({
-            plan_id: request.plan_id,
-            require_full_trust: true,
-            waves: request.waves.map((wave) => ({ ...wave, members: wave.members.map((member) => member.identity_id) })),
-          }),
-        );
-        setReviewed(request);
-        setOpen((current) => ({ ...current, gates: true }));
-      } else if (operation === "start" && reviewed) {
+      if (operation === "start" && reviewed) {
         await api.startMigrationRun(reviewed);
         setAssessment(null);
         setReviewed(null);
@@ -122,41 +127,9 @@ export function Migration() {
         title={t("migration.design.disclosure.plan")}
         open={open.plan}
         onToggle={(value) => setOpen((current) => ({ ...current, plan: value }))}
+        keepMounted
       >
-        <form
-          className="grid gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void perform("assess");
-          }}
-        >
-          <div className="grid gap-1">
-            <label htmlFor="migration-plan" className="text-sm font-medium">
-              {t("migration.design.planJson")}
-            </label>
-            <p id="migration-plan-help" className="text-caption text-muted-foreground">
-              {t("migration.design.planHelp")}
-            </p>
-            <Textarea
-              ref={planRef}
-              id="migration-plan"
-              aria-describedby="migration-plan-help"
-              className="min-h-64 font-mono text-xs"
-              value={manifest}
-              onChange={(event) => {
-                setManifest(event.target.value);
-                setAssessment(null);
-                setReviewed(null);
-              }}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" loading={busy}>
-              {t("migration.design.assess")}
-            </Button>
-            <p className="text-caption text-muted-foreground">{t("migration.design.readOnly")}</p>
-          </div>
-        </form>
+        <MigrationPlanEditor busy={busy} onAssess={assess} onPlanChanged={invalidatePlan} />
       </MigrationDisclosure>
 
       <MigrationDisclosure
@@ -320,11 +293,31 @@ export function Migration() {
   );
 }
 
-function MigrationDisclosure({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: ReactNode }) {
+function MigrationDisclosure({
+  title,
+  open,
+  onToggle,
+  children,
+  keepMounted = false,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  children: ReactNode;
+  keepMounted?: boolean;
+}) {
+  const [openedOnce, setOpenedOnce] = useState(open);
   return (
-    <details className="rounded-panel border border-border bg-card shadow-elevation1" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
+    <details
+      className="rounded-panel border border-border bg-card shadow-elevation1"
+      open={open}
+      onToggle={(event) => {
+        if (event.currentTarget.open) setOpenedOnce(true);
+        onToggle(event.currentTarget.open);
+      }}
+    >
       <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{title}</summary>
-      <div className="border-t border-border p-4">{open ? children : null}</div>
+      <div className="border-t border-border p-4">{open || (keepMounted && openedOnce) ? children : null}</div>
     </details>
   );
 }
@@ -352,16 +345,6 @@ function MigrationMemberEvidence({ member }: { member: MigrationRun["waves"][num
       </dl>
     </li>
   );
-}
-
-function parseManifest(value: string): MigrationRunStartRequest | null {
-  try {
-    const request = JSON.parse(value) as MigrationRunStartRequest;
-    const validMembers = request.waves?.every((wave) => wave.members?.every((member) => member.identity_id && member.agent_id && member.trust_anchor_path));
-    return request.plan_id && request.new_authority_id && request.waves?.length && validMembers ? request : null;
-  } catch {
-    return null;
-  }
 }
 
 function canRollback(status: MigrationRun["status"]): boolean {

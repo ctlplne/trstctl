@@ -337,12 +337,18 @@ by `/api/v1/cbom/assets`, `/api/v1/cbom/scans/preview`, `/api/v1/cbom/scans`,
 
 ### CA migration (`/migration`)
 
-Migration separates a read-only assessment from execution. The three-step form takes
-an exact signer-backed CA authority ID, ordered waves, member identities, enrolled
-host-agent IDs, and trust-anchor paths; assessment stops on unknown trust stores,
-deployment targets, or verification listeners before the review step can start a
-run. The server derives the public anchor from the selected authority, so neither a
-CA private key nor pasted certificate text enters the browser manifest.
+Migration separates a read-only assessment from execution. The three-step guided
+form loads active CA authorities, deployable X.509 identities, and enrolled host
+agents from the running tenant, then lets the operator map and reorder waves,
+set trust-anchor paths, and review the exact plan. An explicit Advanced JSON
+view remains available for automation and rejects incomplete or extra fields.
+After the review, assessment stops on unknown trust stores, deployment targets,
+or verification listeners; changing any mapping invalidates the result, including
+when a prior assessment response arrives late. The draft survives collapsing the
+plan section, and the review shows the normalized values sent to assessment.
+Start appears only after a matching ready assessment. The server derives the
+public anchor from the selected authority, so neither a CA private key nor
+pasted certificate text enters the browser plan.
 
 The run table reads the durable event projection and shows every wave's membership,
 phase, and signed trust-plus-live verification percentage beside the run's current
