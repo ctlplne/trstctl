@@ -4,22 +4,90 @@ package server
 
 import (
 	"context"
+	"encoding/pem"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/protocols/ari"
 )
 
 type factoryTestCA struct {
 	err error
+}
+
+func TestExternalARIFetchBindsAdvertisedOriginToIssuerPolicy(t *testing.T) {
+	const certID = "AQID.BAUG"
+	start := time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC)
+	end := start.Add(48 * time.Hour)
+	ariHits := 0
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/renewal-info/"+certID {
+			t.Errorf("ARI path = %q", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		ariHits++
+		w.Header().Set("Retry-After", "21600")
+		_, _ = w.Write([]byte(`{"suggestedWindow":{"start":"2026-12-05T00:00:00Z","end":"2026-12-07T00:00:00Z"}}`))
+	}))
+	t.Cleanup(upstream.Close)
+	advertised := upstream.URL + "/renewal-info"
+	directoryHits := 0
+	directory := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		directoryHits++
+		_, _ = w.Write([]byte(`{"renewalInfo":"` + advertised + `"}`))
+	}))
+	t.Cleanup(directory.Close)
+	rootPath := filepath.Join(t.TempDir(), "roots.pem")
+	roots := append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: directory.Certificate().Raw}),
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: upstream.Certificate().Raw})...)
+	if err := os.WriteFile(rootPath, roots, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	item := config.ExternalCAConfig{
+		ID: "local-acme", Type: "letsencrypt", DirectoryURL: directory.URL + "/directory",
+		Network: config.ExternalCANetworkConfig{
+			AllowPrivateEndpoint: true, PrivateEgressCIDRs: []string{"127.0.0.0/8"},
+			RootCAFile: rootPath,
+		},
+	}
+	guard, err := egress.NewGuard(egress.Config{Enabled: true, AllowHosts: []string{"127.0.0.1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetch := externalARIFetchFromConfig(item, guard)
+	info, retry, err := fetch(t.Context(), certID)
+	if err != nil || !info.SuggestedWindow.Start.Equal(start) || !info.SuggestedWindow.End.Equal(end) ||
+		retry != 6*time.Hour || directoryHits != 1 || ariHits != 1 {
+		t.Fatalf("issuer-bound ARI fetch = %+v retry=%s err=%v hits=%d/%d", info, retry, err, directoryHits, ariHits)
+	}
+	advertised = "http://169.254.169.254/latest/meta-data"
+	if _, _, err := fetch(t.Context(), certID); err == nil {
+		t.Fatal("HTTPS directory advertised an HTTP metadata endpoint without a refusal")
+	}
+	if ariHits != 1 {
+		t.Fatal("downgrade refusal still contacted the ARI receiver")
+	}
+	advertised = "https://localhost:443/renewal-info"
+	if _, _, err := fetch(t.Context(), certID); !errors.Is(err, egress.ErrBlocked) {
+		t.Fatalf("unallowlisted advertised host error = %v, want egress refusal", err)
+	}
+	advertised = ""
+	if _, _, err := fetch(t.Context(), certID); !errors.Is(err, ari.ErrNotAdvertised) {
+		t.Fatalf("missing renewalInfo error = %v, want explicit no-advertisement", err)
+	}
 }
 
 func (factoryTestCA) Name() string { return "factory-test" }

@@ -41,6 +41,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -85,7 +86,11 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 		if err != nil {
 			return nil, fmt.Errorf("external CA %q: %w", item.ID, err)
 		}
-		out = append(out, ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, UpstreamDNS01: item.Type == "letsencrypt" && item.UpstreamDNS01})
+		var ariFetch ExternalARIFetch
+		if item.Type == "letsencrypt" {
+			ariFetch = externalARIFetchFromConfig(item, guard)
+		}
+		out = append(out, ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, ARIFetch: ariFetch, UpstreamDNS01: item.Type == "letsencrypt" && item.UpstreamDNS01})
 	}
 	return out, nil
 }
@@ -562,4 +567,39 @@ func externalCAConfigEndpoint(item config.ExternalCAConfig) string {
 		return strings.TrimSpace(item.DirectoryURL)
 	}
 	return strings.TrimSpace(item.Endpoint)
+}
+
+// externalARIFetchFromConfig follows the advertised renewalInfo URL with the
+// selected issuer's operator policy. The directory and ARI endpoint may use
+// different origins, so each request gets a separate origin-bound transport.
+// Neither request carries an ACME account key or tenant credential.
+func externalARIFetchFromConfig(item config.ExternalCAConfig, guard *egress.Guard) ExternalARIFetch {
+	directoryURL := externalCAConfigEndpoint(item)
+	return func(ctx context.Context, certificateID string) (ari.RenewalInfo, time.Duration, error) {
+		if err := ctx.Err(); err != nil {
+			return ari.RenewalInfo{}, 0, err
+		}
+		directoryClient, directoryCleanup, err := externalCAHTTPClient(directoryURL, item.Network, guard)
+		if err != nil {
+			return ari.RenewalInfo{}, 0, err
+		}
+		base, err := ari.NewClient(directoryClient).DiscoverRenewalInfo(ctx, directoryURL)
+		directoryClient.CloseIdleConnections()
+		directoryCleanup()
+		if err != nil {
+			return ari.RenewalInfo{}, 0, err
+		}
+		if err := guard.CheckURL(base); err != nil {
+			return ari.RenewalInfo{}, 0, err
+		}
+		ariClient, ariCleanup, err := externalCAHTTPClient(base, item.Network, guard)
+		if err != nil {
+			return ari.RenewalInfo{}, 0, err
+		}
+		defer func() {
+			ariClient.CloseIdleConnections()
+			ariCleanup()
+		}()
+		return ari.NewClient(ariClient).FetchRenewalInfo(ctx, base, certificateID)
+	}
 }

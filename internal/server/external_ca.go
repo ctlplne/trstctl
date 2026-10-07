@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -25,6 +26,10 @@ import (
 // connections. The registry stores the factory, never the authority-bearing
 // material used by the client (AN-8).
 type ExternalCAFactory func(context.Context) (implementation ca.CA, cleanup func(), err error)
+
+// ExternalARIFetch gets public RFC 9773 data using the selected ACME issuer's
+// operator-owned egress and TLS policy. It carries no account credential.
+type ExternalARIFetch func(context.Context, string) (ari.RenewalInfo, time.Duration, error)
 
 // ExternalCA is one configured upstream CA registry entry served by the control
 // plane. ID is the operator-facing stable selector; Type is the integration kind
@@ -41,6 +46,7 @@ type ExternalCA struct {
 	Endpoint string
 	CA       ca.CA
 	Factory  ExternalCAFactory
+	ARIFetch ExternalARIFetch
 	// ReplaySafety may opt a custom adapter into retry-after-ambiguous-failure
 	// only when its receiver enforces ca.ProviderIdempotencyKey.
 	ReplaySafety ca.ExternalIssueReplaySafety
@@ -131,6 +137,7 @@ type externalCAEntry struct {
 	tenantID     string
 	svc          *ca.IssuanceService
 	revocationCA ca.CA
+	ariFetch     ExternalARIFetch
 }
 
 // A factory wrapper exposes Revoke even when its real adapter cannot revoke.
@@ -201,8 +208,12 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		if externalCATypeHasReceiverIdempotency(typ) {
 			replaySafety = ca.ExternalIssueReconciled
 		}
+		if cfg.ARIFetch != nil && typ != "letsencrypt" {
+			return nil, fmt.Errorf("server: external CA %q cannot fetch ACME ARI for type %q", id, typ)
+		}
 		reg.byID[id] = externalCAEntry{
 			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID), revocationCA: implementation,
+			ariFetch: cfg.ARIFetch,
 			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithLifetimeWarning(d.Logger, d.LifecycleAlertBefore),
 				ca.WithOutboxIssueWorker(id, s.wakeOutbox), ca.WithExternalIssueReplaySafety(replaySafety)),
 		}
