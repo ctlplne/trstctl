@@ -6964,6 +6964,17 @@ export interface components {
             /** @enum {string} */
             scheduler_status: "pending" | "running" | "succeeded" | "failed" | "not_applicable";
             suggested_window?: components["schemas"]["ACMEARIWindow"];
+            upstream_authority_id?: string;
+            /** @enum {string} */
+            upstream_error_class?: "not_advertised" | "upstream_timeout" | "upstream_unavailable";
+            /** Format: date-time */
+            upstream_fetched_at?: string;
+            /** Format: date-time */
+            upstream_next_poll_at?: string;
+            /** @enum {string} */
+            upstream_status?: "not_requested" | "queued" | "ready" | "error" | "unavailable";
+            /** @enum {string} */
+            window_source: "served_acme" | "upstream_ca" | "local_estimate" | "none";
         };
         ACMEARIPosture: {
             /** Format: date-time */

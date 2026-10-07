@@ -4,8 +4,12 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -57,24 +61,55 @@ func (s *Server) ACMEARIPosture(
 			IdentityName:      row.IdentityName,
 			CertificateStatus: row.CertificateStatus,
 			PublicationStatus: api.ACMEARICertificateIdentifierUnavailable,
+			WindowSource:      api.ACMEARIWindowNone,
 			SchedulerStatus:   initialACMEARISchedulerStatus(row.CertificateStatus, row.IdentityID, posture.SchedulerStatus),
 			SchedulerSource:   api.ACMEARISourceNone,
+		}
+		if row.IssuingExternalCAID != "" {
+			item.UpstreamAuthorityID = row.IssuingExternalCAID
+			item.UpstreamStatus = api.ACMEARIUpstreamNotRequested
 		}
 
 		if len(row.CertificateDER) > 0 {
 			if certID, certErr := certinfo.ARICertID(row.CertificateDER); certErr == nil {
 				item.ARICertificateID = certID
 				item.PublicationStatus = api.ACMEARICertificateNotPublished
-				if publisher != nil {
+				if publisher != nil && row.IssuingExternalCAID == "" {
 					info, published, err := publisher.LookupRenewalInfoContext(ctx, certID, at)
 					if err != nil {
 						return api.ACMEARIPosture{}, "", err
 					}
 					if published {
 						item.PublicationStatus = api.ACMEARICertificatePublished
+						item.WindowSource = api.ACMEARIWindowServedACME
 						item.SuggestedWindow = &api.ACMEARIWindow{
 							Start: info.SuggestedWindow.Start.UTC(),
 							End:   info.SuggestedWindow.End.UTC(),
+						}
+					}
+				}
+				if row.IssuingExternalCAID != "" {
+					observed, err := s.store.GetACMEUpstreamARI(ctx, tenantID, row.CertificateID)
+					if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+						return api.ACMEARIPosture{}, "", err
+					}
+					if err == nil {
+						if observed.AuthorityID != row.IssuingExternalCAID ||
+							observed.Fingerprint != row.Fingerprint || observed.ARICertificateID != certID {
+							return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
+						}
+						item.UpstreamStatus = observed.Status
+						item.UpstreamErrorClass = observed.ErrorClass
+						item.UpstreamFetchedAt = observed.FetchedAt
+						if row.CertificateStatus == "active" && row.NotAfter.After(observed.NextPollAt) {
+							next := observed.NextPollAt.UTC()
+							item.UpstreamNextPollAt = &next
+						}
+						if observed.CanSchedule() {
+							item.SuggestedWindow = &api.ACMEARIWindow{
+								Start: observed.WindowStart.UTC(), End: observed.WindowEnd.UTC(),
+							}
+							item.WindowSource = api.ACMEARIWindowUpstreamCA
 						}
 					}
 				}
@@ -83,6 +118,7 @@ func (s *Server) ACMEARIPosture(
 		if item.SuggestedWindow == nil && row.NotBefore != nil {
 			window := ari.SuggestWindow(row.NotBefore.UTC(), row.NotAfter.UTC(), at, false)
 			item.SuggestedWindow = &api.ACMEARIWindow{Start: window.Start.UTC(), End: window.End.UTC()}
+			item.WindowSource = api.ACMEARIWindowLocalEstimate
 		}
 
 		if row.RotationRunID != "" {

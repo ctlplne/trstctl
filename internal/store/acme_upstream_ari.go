@@ -65,7 +65,7 @@ func (s *Store) TenantsWithMissingACMEUpstreamARI(ctx context.Context, authority
 		limit = 100
 	}
 	rows, err := s.SystemPool().Query(ctx,
-		//trstctl:system-query — leader-only tenant enumeration; the selected certificate data is read later through tenant RLS (AN-1).
+		//trstctl:system-query — leader-only cross-tenant enumeration returns tenant IDs; certificate details are read later under each tenant's RLS context (AN-1).
 		`SELECT DISTINCT c.tenant_id::text FROM certificates c
 		 LEFT JOIN acme_upstream_ari a ON a.tenant_id=c.tenant_id AND a.certificate_id=c.id
 		 WHERE c.issuing_external_ca_id=$1 AND c.status='active'
@@ -280,7 +280,9 @@ func (s *Store) GetACMEUpstreamARI(ctx context.Context, tenantID, certificateID 
 }
 
 func (a ACMEUpstreamARI) CanSchedule() bool {
-	return (a.Status == "ready" || a.Status == "error") &&
+	// A queued refresh retains the last accepted CA window until its result
+	// arrives. Only the first request has no window and cannot schedule from it.
+	return (a.Status == "ready" || a.Status == "error" || a.Status == "queued") &&
 		a.WindowStart != nil && a.WindowEnd != nil && a.WindowEnd.After(*a.WindowStart) &&
 		strings.TrimSpace(a.AuthorityID) != ""
 }

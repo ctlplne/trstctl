@@ -645,7 +645,7 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getByText("Certificate UID: certificate-uid")).toBeInTheDocument();
     expect(within(detail).getByText("No trstctl-managed rotation run is recorded for this leaf. The cert-manager request is shown below.")).toBeInTheDocument();
     expect(within(detail).queryByText("No renewal history for this certificate yet.")).not.toBeInTheDocument();
-    expect(within(detail).getByText(/Secret delivery and the served endpoint require separate verification/)).toBeInTheDocument();
+    expect(within(detail).getByText(/Check the Kubernetes Secret and workload endpoint separately/)).toBeInTheDocument();
     expect(within(detail).queryByText(/Not identity-managed/)).not.toBeInTheDocument();
   });
 

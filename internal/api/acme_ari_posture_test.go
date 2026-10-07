@@ -32,6 +32,7 @@ func TestACMEARIPostureRouteIsReadOnlyTenantScopedAndFailsHonestly(t *testing.T)
 				CertificateID:     "22222222-2222-4222-8222-222222222222",
 				CertificateStatus: "active",
 				PublicationStatus: ACMEARICertificatePublished,
+				WindowSource:      ACMEARIWindowServedACME,
 				SchedulerStatus:   ACMEARIRunPending,
 				SchedulerSource:   ACMEARISourceNone,
 			}},
@@ -55,7 +56,8 @@ func TestACMEARIPostureRouteIsReadOnlyTenantScopedAndFailsHonestly(t *testing.T)
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode ARI posture: %v", err)
 	}
-	if !got.Served || len(got.Items) != 1 || got.Items[0].PublicationStatus != ACMEARICertificatePublished {
+	if !got.Served || len(got.Items) != 1 || got.Items[0].PublicationStatus != ACMEARICertificatePublished ||
+		got.Items[0].WindowSource != ACMEARIWindowServedACME {
 		t.Fatalf("ARI posture lost provider truth: %+v", got)
 	}
 	if req.Header.Get("Idempotency-Key") != "" {

@@ -467,15 +467,23 @@ to the caller's tenant.
 
 The response separates three facts that operators often confuse:
 
-- `publication_status` says whether ACME renewal information is actually served for
-  this tenant;
-- each affected certificate reports its `suggested_window` and its own publication
-  state; `not_published` with a window can mean a local estimate for an external
-  CA certificate, not the CA's authoritative ARI response; and
+- `publication_status` says whether **trstctl's own ACME server** serves renewal
+  information for this tenant. An external CA certificate can have an upstream
+  window while its trstctl publication state is `not_published`;
+- each certificate's `window_source` identifies `served_acme`, `upstream_ca`,
+  `local_estimate`, or `none`. `suggested_window` is the window from that source;
+  never treat a `local_estimate` as the CA's instruction. For an external ACME
+  issuer, `upstream_authority_id`, `upstream_status`, `upstream_error_class`,
+  `upstream_fetched_at`, and `upstream_next_poll_at` show the exact issuer and
+  fetch state. A failed refresh keeps the last valid CA window. `unavailable`
+  means the CA did not advertise ARI, so the scheduler uses its local fallback;
+  and
 - `scheduler_status`, `scheduler_consumed`, and `rotation_run_id` show whether the
-  lifecycle scheduler used that window and how its durable rotation run ended.
+  lifecycle scheduler used an ARI window and how its durable rotation run ended.
 
-No posture read changes renewal behavior or ACME challenge validation. A tenant
+The external CA is polled through the selected issuer's operator egress policy and
+an event-backed outbox worker. The read route and console make no upstream network
+call. No posture read changes renewal behavior or ACME challenge validation. A tenant
 without a mounted ACME publisher receives the honest `not_served` state, and a
 tenant cannot read another tenant's certificate identifiers or rotation evidence.
 

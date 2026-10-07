@@ -66,12 +66,51 @@
           },
           "suggested_window": {
             "$ref": "#/components/schemas/ACMEARIWindow"
+          },
+          "upstream_authority_id": {
+            "type": "string"
+          },
+          "upstream_error_class": {
+            "enum": [
+              "not_advertised",
+              "upstream_timeout",
+              "upstream_unavailable"
+            ],
+            "type": "string"
+          },
+          "upstream_fetched_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "upstream_next_poll_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "upstream_status": {
+            "enum": [
+              "not_requested",
+              "queued",
+              "ready",
+              "error",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "window_source": {
+            "enum": [
+              "served_acme",
+              "upstream_ca",
+              "local_estimate",
+              "none"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "certificate_id",
           "certificate_status",
           "publication_status",
+          "window_source",
           "scheduler_status",
           "scheduler_consumed",
           "scheduler_source"

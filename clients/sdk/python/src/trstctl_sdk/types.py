@@ -18,6 +18,12 @@ ACMEARICertificatePosture = TypedDict(
         'scheduler_source': str,
         'scheduler_status': str,
         'suggested_window': dict[str, Any],
+        'upstream_authority_id': str,
+        'upstream_error_class': str,
+        'upstream_fetched_at': str,
+        'upstream_next_poll_at': str,
+        'upstream_status': str,
+        'window_source': str,
     },
     total=False,
 )

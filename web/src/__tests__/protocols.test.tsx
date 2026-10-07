@@ -1142,6 +1142,35 @@ describe("protocol surface", () => {
     expect(within(panel).queryByText("Consumed")).not.toBeInTheDocument();
   });
 
+  it("labels an external CA window and a failed refresh without calling it locally published", async () => {
+    const upstream = ariPosture();
+    apiMock.acmeARIPosture.mockResolvedValueOnce(
+      ariPosture({
+        summary: { affected_certificates: 1, published: 0, scheduler_pending: 1, scheduler_consumed: 0, scheduler_failed: 0 },
+        items: [
+          {
+            ...upstream.items[0],
+            publication_status: "not_published",
+            window_source: "upstream_ca",
+            upstream_authority_id: "pebble",
+            upstream_status: "error",
+            upstream_error_class: "upstream_timeout",
+            upstream_fetched_at: "2026-07-30T08:00:00Z",
+            upstream_next_poll_at: "2026-07-30T08:05:00Z",
+            scheduler_status: "pending",
+            scheduler_consumed: false,
+          },
+        ],
+      }),
+    );
+    mountProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
+    expect(await within(panel).findByText("Upstream CA window")).toBeInTheDocument();
+    expect(within(panel).getByText("CA fetch failed")).toBeInTheDocument();
+    expect(within(panel).getByText("Not published")).toBeInTheDocument();
+  });
+
   it("renders the ARI loading state before the read contract resolves", async () => {
     let resolvePosture!: (value: ReturnType<typeof ariPosture>) => void;
     apiMock.acmeARIPosture.mockReturnValueOnce(
@@ -1152,7 +1181,7 @@ describe("protocol surface", () => {
     mountProtocols();
 
     const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
-    expect(await within(panel).findByText("Loading ARI renewal posture.")).toBeInTheDocument();
+    expect(await within(panel).findByText("Loading ARI posture.")).toBeInTheDocument();
 
     resolvePosture(ariPosture());
     expect(await within(panel).findByText("payments-api")).toBeInTheDocument();
@@ -1176,7 +1205,7 @@ describe("protocol surface", () => {
     mountProtocols(["issuers:read"]);
 
     const panel = screen.getByRole("region", { name: "ACME Renewal Information (ARI)" });
-    expect(await within(panel).findByText("Your session cannot read this tenant’s ARI renewal posture.")).toBeInTheDocument();
+    expect(await within(panel).findByText("You cannot read ARI posture.")).toBeInTheDocument();
     expect(panel.querySelector('[data-state-primitive="permission-denied"]')).toBeInTheDocument();
     expect(apiMock.acmeARIPosture).not.toHaveBeenCalled();
   });
@@ -2311,6 +2340,7 @@ function ariPosture(overrides: Record<string, unknown> = {}) {
           start: "2026-07-30T09:00:00Z",
           end: "2026-07-31T09:00:00Z",
         },
+        window_source: "served_acme",
         scheduler_status: "succeeded",
         scheduler_consumed: true,
         scheduler_source: "ari",

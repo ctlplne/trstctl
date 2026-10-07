@@ -263,6 +263,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are
 		// then loaded under each tenant's RLS context.
 		"internal/store/ca_horizon.go": 1,
+		// The ARI leader enumerates tenant IDs with an active leaf missing its
+		// first upstream poll. It reads no certificate material through this
+		// system pool; each candidate is loaded inside its tenant's RLS context.
+		"internal/store/acme_upstream_ari.go": 1,
 		// A1: two leader-side job-ledger operations. The lapsed-lease sweep must
 		// cross tenants because a dead agent leaves work in whatever tenant it
 		// served, and it touches lease bookkeeping only. The queue-depth read is

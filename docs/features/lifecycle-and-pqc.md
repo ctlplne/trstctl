@@ -393,13 +393,16 @@ every build through `internal/pqcmigration`.
 - **ARI-driven renewal** covers trstctl-issued deployed X.509 identities. Rows discovered
   from an outside CA stay visible for expiry/risk, but renewing them needs an issuer or
   connector path that can actually replace that external certificate.
-- **External ACME CA timing is not yet consumed.** For a certificate issued through an
-  external ACME authority, the scheduler currently computes its own last-third
-  window from the certificate validity dates. The ARI posture panel displays that
-  local estimate; it does not fetch the authority's `renewalInfo` response. An
-  upstream emergency renewal signal or a different CA window can therefore be
-  missed. Inspect the upstream CA's ARI endpoint with a trusted client and use an
-  explicit renewal when the CA asks for earlier replacement.
+- **External ACME CA timing.** For a certificate issued through a configured
+  external ACME authority, a bounded outbox worker fetches that authority's
+  `renewalInfo` for the exact retained certificate. The scheduler and lifecycle
+  plan use its saved window even when it opens before or after the local estimate.
+  A queued first fetch pauses premature local renewal briefly; a failed refresh
+  retains the last valid CA window. A CA with no ARI advertisement uses the local
+  window, and a near-expiry emergency can override a stale or impossible CA
+  window. Inspect `window_source` and `upstream_status` in the ARI posture before
+  attributing a renewal decision to the CA. Discovered certificates without
+  authenticated external issuer provenance do not gain this upstream poll path.
 - **Unknown issuance time remains unknown.** Inventory discoveries and protocol
   issuance paths without a constructor timestamp or authenticated issuance receipt
   still use the fixed fallback alongside ARI. Discovery time and the backdated X.509

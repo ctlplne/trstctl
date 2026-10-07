@@ -612,9 +612,12 @@ outside the console) support ACME's DNS-01 challenge; an MDM/SCEP panel does the
 for Intune-style SCEP, plus challenge rotation and allow/deny telemetry.
 
 The read-only **ARI posture** panel calls `GET /api/v1/acme/ari/posture` with
-`lifecycle:read`. It shows whether renewal information is really published for the
-current tenant, each affected certificate's locally computed or published renewal window, and the
-durable lifecycle scheduler state that consumed that window. Loading, no affected
+`lifecycle:read`. It separates trstctl's own ACME publication from external CA
+fetching and local estimates. Each row labels its window source, external CA,
+fetch state and next poll when applicable, plus the durable scheduler
+state that consumed an ARI window. The API also exposes the exact external
+authority, closed failure class, and last fetch time.
+Loading, no affected
 certificates, permission denied, API error, and ACME-not-served are distinct states;
 the panel never turns an unavailable publisher into a success-looking empty table.
 

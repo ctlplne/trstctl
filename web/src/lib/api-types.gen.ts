@@ -22,6 +22,12 @@ export interface ACMEARICertificatePosture {
   scheduler_source: "ari" | "fixed_threshold" | "manual" | "none" | "unknown_scheduler";
   scheduler_status: "pending" | "running" | "succeeded" | "failed" | "not_applicable";
   suggested_window?: ACMEARIWindow;
+  upstream_authority_id?: string;
+  upstream_error_class?: "not_advertised" | "upstream_timeout" | "upstream_unavailable";
+  upstream_fetched_at?: string;
+  upstream_next_poll_at?: string;
+  upstream_status?: "not_requested" | "queued" | "ready" | "error" | "unavailable";
+  window_source: "served_acme" | "upstream_ca" | "local_estimate" | "none";
 }
 
 export interface ACMEARIPosture {

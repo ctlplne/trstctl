@@ -2869,6 +2869,18 @@ func componentSchemas() map[string]*Schema {
 			ACMEARICertificateIdentifierUnavailable,
 		}},
 		"suggested_window": ref("ACMEARIWindow"),
+		"window_source": {Type: "string", Enum: []string{
+			ACMEARIWindowServedACME, ACMEARIWindowUpstreamCA,
+			ACMEARIWindowLocalEstimate, ACMEARIWindowNone,
+		}},
+		"upstream_authority_id": str(),
+		"upstream_status": {Type: "string", Enum: []string{
+			ACMEARIUpstreamNotRequested, ACMEARIUpstreamQueued, ACMEARIUpstreamReady,
+			ACMEARIUpstreamError, ACMEARIUpstreamUnavailable,
+		}},
+		"upstream_error_class":  {Type: "string", Enum: []string{"not_advertised", "upstream_timeout", "upstream_unavailable"}},
+		"upstream_fetched_at":   timestamp(),
+		"upstream_next_poll_at": timestamp(),
 		"scheduler_status": {Type: "string", Enum: []string{
 			ACMEARIRunPending,
 			ACMEARIRunRunning,
@@ -2886,7 +2898,7 @@ func componentSchemas() map[string]*Schema {
 		}},
 		"rotation_run_id": uuid(),
 		"consumed_at":     timestamp(),
-	}, "certificate_id", "certificate_status", "publication_status", "scheduler_status", "scheduler_consumed", "scheduler_source")
+	}, "certificate_id", "certificate_status", "publication_status", "window_source", "scheduler_status", "scheduler_consumed", "scheduler_source")
 	acmeARIPosture := object(map[string]*Schema{
 		"served":               {Type: "boolean"},
 		"generated_at":         timestamp(),

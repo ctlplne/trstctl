@@ -19,6 +19,65 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// Migration 0247 must not guess an external ACME authority for old leaves.
+// The separate cursor starts at zero even when the ordinary projection is
+// already ahead, so retained issuance events can repair provenance on upgrade.
+func TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 247)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	for _, row := range []struct{ tenant, id, fingerprint string }{
+		{"11111111-1111-4111-8111-111111111111", "24700000-0000-4000-8000-000000000001", "pre-247-a"},
+		{"22222222-2222-4222-8222-222222222222", "24700000-0000-4000-8000-000000000002", "pre-247-b"},
+	} {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id',$1,true)`, row.tenant); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO certificates(id,tenant_id,subject,fingerprint,source,created_at)
+			VALUES($1,$2,'legacy.example.test',$3,'external-ca:old-observation','2026-09-01T00:00:00Z')`,
+			row.id, row.tenant, row.fingerprint); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatalf("seed pre-0247 certificate: %v", err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("commit pre-0247 certificate: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE projection_checkpoint SET applied_seq=41 WHERE id=1`); err != nil {
+		t.Fatalf("seed pre-0247 checkpoint: %v", err)
+	}
+	const stable = `SELECT id::text,tenant_id::text,subject,fingerprint,source,created_at::text
+		FROM certificates WHERE id IN ('24700000-0000-4000-8000-000000000001','24700000-0000-4000-8000-000000000002')
+		ORDER BY tenant_id,id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0247 changed legacy certificate content: %d/%s before, %d/%s after",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var guessed int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM certificates
+		WHERE id IN ('24700000-0000-4000-8000-000000000001','24700000-0000-4000-8000-000000000002')
+		AND issuing_external_ca_id<>''`).Scan(&guessed); err != nil || guessed != 0 {
+		t.Fatalf("0247 invented external issuer provenance: count=%d err=%v", guessed, err)
+	}
+	var applied, inspected int64
+	if err := pool.QueryRow(ctx, `SELECT applied_seq,external_issuer_checked_through FROM projection_checkpoint WHERE id=1`).Scan(&applied, &inspected); err != nil || applied != 41 || inspected != 0 {
+		t.Fatalf("0247 recovery cursor: applied=%d inspected=%d err=%v", applied, inspected, err)
+	}
+}
+
 // Migration 0244 must leave an old managed-CA receipt unclaimed until the
 // retained issuance event is replayed. A pre-upgrade checkpoint may already be
 // ahead of that event, so the new inspection cursor starts at zero while the
@@ -417,6 +476,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
 	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor
 	237: true, // TestMigration0237PreservesProviderAuthorityReceipts
 	238: true, // TestMigration0238PreservesTenantBrands

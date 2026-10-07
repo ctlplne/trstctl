@@ -30,6 +30,17 @@ const (
 	ACMEARISourceManual           = "manual"
 	ACMEARISourceNone             = "none"
 	ACMEARISourceUnknownScheduler = "unknown_scheduler"
+
+	ACMEARIWindowServedACME    = "served_acme"
+	ACMEARIWindowUpstreamCA    = "upstream_ca"
+	ACMEARIWindowLocalEstimate = "local_estimate"
+	ACMEARIWindowNone          = "none"
+
+	ACMEARIUpstreamNotRequested = "not_requested"
+	ACMEARIUpstreamQueued       = "queued"
+	ACMEARIUpstreamReady        = "ready"
+	ACMEARIUpstreamError        = "error"
+	ACMEARIUpstreamUnavailable  = "unavailable"
 )
 
 // ACMEARIPostureProvider is the narrow server-owned seam for the ARI operator
@@ -64,18 +75,24 @@ type ACMEARIPostureSummary struct {
 }
 
 type ACMEARICertificatePosture struct {
-	CertificateID     string         `json:"certificate_id"`
-	IdentityID        string         `json:"identity_id,omitempty"`
-	IdentityName      string         `json:"identity_name,omitempty"`
-	ARICertificateID  string         `json:"ari_certificate_id,omitempty"`
-	CertificateStatus string         `json:"certificate_status"`
-	PublicationStatus string         `json:"publication_status"`
-	SuggestedWindow   *ACMEARIWindow `json:"suggested_window,omitempty"`
-	SchedulerStatus   string         `json:"scheduler_status"`
-	SchedulerConsumed bool           `json:"scheduler_consumed"`
-	SchedulerSource   string         `json:"scheduler_source"`
-	RotationRunID     string         `json:"rotation_run_id,omitempty"`
-	ConsumedAt        *time.Time     `json:"consumed_at,omitempty"`
+	CertificateID       string         `json:"certificate_id"`
+	IdentityID          string         `json:"identity_id,omitempty"`
+	IdentityName        string         `json:"identity_name,omitempty"`
+	ARICertificateID    string         `json:"ari_certificate_id,omitempty"`
+	CertificateStatus   string         `json:"certificate_status"`
+	PublicationStatus   string         `json:"publication_status"`
+	SuggestedWindow     *ACMEARIWindow `json:"suggested_window,omitempty"`
+	WindowSource        string         `json:"window_source"`
+	UpstreamAuthorityID string         `json:"upstream_authority_id,omitempty"`
+	UpstreamStatus      string         `json:"upstream_status,omitempty"`
+	UpstreamErrorClass  string         `json:"upstream_error_class,omitempty"`
+	UpstreamFetchedAt   *time.Time     `json:"upstream_fetched_at,omitempty"`
+	UpstreamNextPollAt  *time.Time     `json:"upstream_next_poll_at,omitempty"`
+	SchedulerStatus     string         `json:"scheduler_status"`
+	SchedulerConsumed   bool           `json:"scheduler_consumed"`
+	SchedulerSource     string         `json:"scheduler_source"`
+	RotationRunID       string         `json:"rotation_run_id,omitempty"`
+	ConsumedAt          *time.Time     `json:"consumed_at,omitempty"`
 }
 
 // ACMEARIPosture separates three facts that must not be conflated:

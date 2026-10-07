@@ -107,6 +107,34 @@ func TestExternalARIWorkerBindsExactLeafAndReplaysCanonicalOutcome(t *testing.T)
 		},
 	}}
 	server := &Server{store: h.store, log: h.log, proj: projector, externalCAs: h.handler.externalCAs}
+	readPosture := func() api.ACMEARICertificatePosture {
+		t.Helper()
+		posture, _, err := server.ACMEARIPosture(ctx, h.tenant, "", 100, time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range posture.Items {
+			if item.CertificateID == cert.ID {
+				return item
+			}
+		}
+		t.Fatalf("external leaf %s missing from operator posture", cert.ID)
+		return api.ACMEARICertificatePosture{}
+	}
+	initial := readPosture()
+	if initial.UpstreamStatus != api.ACMEARIUpstreamNotRequested || initial.WindowSource != api.ACMEARIWindowLocalEstimate ||
+		initial.UpstreamAuthorityID != "pebble" || initial.PublicationStatus != api.ACMEARICertificateNotPublished {
+		t.Fatalf("initial operator posture conflated estimate with upstream publication: %+v", initial)
+	}
+	after, _, err := server.ACMEARIPosture(ctx, h.tenant, cert.ID, 100, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("ARI posture keyset page after exact certificate: %v", err)
+	}
+	for _, item := range after.Items {
+		if item.CertificateID == cert.ID {
+			t.Fatal("ARI posture keyset repeated its cursor certificate")
+		}
+	}
 	for _, want := range []int{1, 0} {
 		queued, err := server.discoverExternalARICandidates(ctx, time.Now().UTC())
 		if err != nil || queued != want {
@@ -145,6 +173,12 @@ func TestExternalARIWorkerBindsExactLeafAndReplaysCanonicalOutcome(t *testing.T)
 		ready.NextPollAt.Sub(ready.UpdatedAt) != time.Minute {
 		t.Fatalf("CA result was not bounded/projected: %+v err=%v", ready, err)
 	}
+	operatorReady := readPosture()
+	if operatorReady.WindowSource != api.ACMEARIWindowUpstreamCA || operatorReady.UpstreamStatus != api.ACMEARIUpstreamReady ||
+		operatorReady.SuggestedWindow == nil || !operatorReady.SuggestedWindow.Start.Equal(start) ||
+		operatorReady.UpstreamFetchedAt == nil || operatorReady.UpstreamNextPollAt == nil {
+		t.Fatalf("operator did not see fetched CA window and poll state: %+v", operatorReady)
+	}
 	first.Attempts = 2
 	if err := h.handler.deliver(ctx, first); err != nil || calls != 1 {
 		t.Fatalf("outbox retry did not replay canonical observation: err=%v calls=%d", err, calls)
@@ -160,10 +194,20 @@ func TestExternalARIWorkerBindsExactLeafAndReplaysCanonicalOutcome(t *testing.T)
 		failed.WindowEnd == nil || !failed.WindowEnd.Equal(end) {
 		t.Fatalf("upstream outage erased safe window or retained raw diagnostic: %+v err=%v", failed, err)
 	}
+	operatorFailed := readPosture()
+	if operatorFailed.WindowSource != api.ACMEARIWindowUpstreamCA ||
+		operatorFailed.UpstreamStatus != api.ACMEARIUpstreamError ||
+		operatorFailed.UpstreamErrorClass != "upstream_unavailable" ||
+		operatorFailed.SuggestedWindow == nil || !operatorFailed.SuggestedWindow.Start.Equal(start) {
+		t.Fatalf("operator outage posture lost last CA window or status: %+v", operatorFailed)
+	}
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		return h.store.SetCertificateRevokedTx(ctx, tx, h.tenant, cert.Fingerprint, "compromised", time.Now().UTC())
 	}); err != nil {
 		t.Fatal(err)
+	}
+	if revoked := readPosture(); revoked.CertificateStatus != "revoked" || revoked.UpstreamNextPollAt != nil {
+		t.Fatalf("revoked leaf still advertises a scheduled ARI poll: %+v", revoked)
 	}
 	third := readMessage(second.ID)
 	if err := h.handler.deliver(ctx, third); err != nil || calls != 2 {

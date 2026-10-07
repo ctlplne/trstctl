@@ -44,8 +44,16 @@ func TestUpstreamARIRenewalOverridesLocalWindowAndRetainsExpirySafety(t *testing
 	queued := late
 	queued.Status = "queued"
 	queued.UpdatedAt = localOpen.Add(-time.Minute)
-	if reason, due := upstreamARIRenewalReason(cert, queued, localOpen, cutoff(localOpen)); due {
+	firstPoll := queued
+	firstPoll.WindowStart, firstPoll.WindowEnd = nil, nil
+	if reason, due := upstreamARIRenewalReason(cert, firstPoll, localOpen, cutoff(localOpen)); due {
 		t.Fatalf("fresh queued first poll renewed before CA answered: %q", reason)
+	}
+	queued.WindowStart, queued.WindowEnd = &earlyStart, &earlyEnd
+	queued.UpdatedAt = beforeLocal.Add(-time.Minute)
+	if reason, due := upstreamARIRenewalReason(cert, queued, beforeLocal, cutoff(beforeLocal)); !due ||
+		!strings.HasPrefix(reason, lifecycleUpstreamARIRenewalReasonPrefix) {
+		t.Fatalf("queued refresh suppressed retained early CA window: due=%v reason=%q", due, reason)
 	}
 	late.Status = "error" // retain last authoritative window during outage
 	if reason, due := upstreamARIRenewalReason(cert, late, localOpen, cutoff(localOpen)); due {

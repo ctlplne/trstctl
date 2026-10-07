@@ -2051,7 +2051,7 @@ export const messages = {
     description: "Time when the agent reported the cert-manager CertificateRequest leaf.",
   },
   "certificates.kubernetes.limit": {
-    defaultMessage: "The agent observed issuance to the request. Secret delivery and the served endpoint require separate verification.",
+    defaultMessage: "The agent observed issuance to the request. Check the Kubernetes Secret and workload endpoint separately.",
     description: "Limit of cert-manager provenance evidence.",
   },
   "certificates.lifecycle.renewStarted": {
@@ -15483,11 +15483,6 @@ export const messages = {
     defaultMessage: "ACME Renewal Information (ARI)",
     description: "Heading for the read-only ACME renewal posture panel.",
   },
-  "protocols.ari.description": {
-    defaultMessage:
-      "Read-only renewal windows published for this tenant and whether the lifecycle scheduler consumed each window. This panel does not change issuance or renewal policy.",
-    description: "Explanation of the ARI publication and scheduler-consumption panel.",
-  },
   "protocols.ari.listLabel": {
     defaultMessage: "ARI renewal windows",
     description: "Accessible label for the ARI certificate posture grid.",
@@ -15497,8 +15492,8 @@ export const messages = {
     description: "ARI posture grid certificate column.",
   },
   "protocols.ari.publication": {
-    defaultMessage: "Publication",
-    description: "ARI publication summary and grid label.",
+    defaultMessage: "trstctl publication",
+    description: "ARI publication by trstctl's own ACME server, distinct from an upstream CA.",
   },
   "protocols.ari.scheduler": {
     defaultMessage: "Lifecycle scheduler",
@@ -15530,7 +15525,7 @@ export const messages = {
   },
   "protocols.ari.notPublished": {
     defaultMessage: "Not published",
-    description: "Certificate status label when its ARI window is not published.",
+    description: "Certificate status label when its ARI window is not served by trstctl's ACME endpoint.",
   },
   "protocols.ari.identifierUnavailable": {
     defaultMessage: "ARI identifier unavailable",
@@ -15588,6 +15583,30 @@ export const messages = {
     defaultMessage: "{start} to {end}",
     description: "Localized ARI suggested-window range.",
   },
+  "protocols.ari.windowUpstream": {
+    defaultMessage: "Upstream CA window",
+    description: "Renewal window last fetched from the external CA.",
+  },
+  "protocols.ari.windowEstimated": {
+    defaultMessage: "Local estimate",
+    description: "Renewal window calculated locally, not advertised by the CA.",
+  },
+  "protocols.ari.upstreamNotRequested": {
+    defaultMessage: "CA fetch not requested",
+    description: "No upstream ARI fetch has been queued for this certificate.",
+  },
+  "protocols.ari.upstreamFailed": {
+    defaultMessage: "CA fetch failed",
+    description: "An upstream ARI fetch failed; the API names its error class.",
+  },
+  "protocols.ari.upstreamNoARI": {
+    defaultMessage: "CA did not advertise ARI",
+    description: "The external CA returned no ARI support for this certificate.",
+  },
+  "protocols.ari.nextPollAt": {
+    defaultMessage: "Next CA poll {at}",
+    description: "Scheduled next upstream ARI poll.",
+  },
   "protocols.ari.consumedAt": {
     defaultMessage: "Consumed {at}",
     description: "Timestamp when the lifecycle scheduler selected an ARI window.",
@@ -15597,7 +15616,7 @@ export const messages = {
     description: "Identifier of the rotation run associated with an ARI posture row.",
   },
   "protocols.ari.loading": {
-    defaultMessage: "Loading ARI renewal posture.",
+    defaultMessage: "Loading ARI posture.",
     description: "Loading message for the ARI posture grid.",
   },
   "protocols.ari.emptyTitle": {
@@ -15605,11 +15624,11 @@ export const messages = {
     description: "Empty-state title for the ARI posture grid.",
   },
   "protocols.ari.emptyBody": {
-    defaultMessage: "No active tenant certificate has ARI renewal information yet.",
+    defaultMessage: "No certificate has ARI data yet.",
     description: "Empty-state body for the ARI posture grid.",
   },
   "protocols.ari.permissionDenied": {
-    defaultMessage: "Your session cannot read this tenant’s ARI renewal posture.",
+    defaultMessage: "You cannot read ARI posture.",
     description: "Permission-denied message for the ARI posture grid.",
   },
   "protocols.ari.unavailableTitle": {
@@ -15617,7 +15636,7 @@ export const messages = {
     description: "Unavailable-state title for the ARI posture grid.",
   },
   "protocols.ari.unavailableBody": {
-    defaultMessage: "This build or configuration does not expose ARI renewal posture.",
+    defaultMessage: "ARI posture is unavailable.",
     description: "Unavailable-state body for the ARI posture grid.",
   },
   "protocols.ari.loadFailed": {
@@ -15625,7 +15644,7 @@ export const messages = {
     description: "Error-state title for the ARI posture grid.",
   },
   "protocols.ari.loadFailedBody": {
-    defaultMessage: "The server could not return ARI renewal posture.",
+    defaultMessage: "Could not load ARI posture.",
     description: "Error-state body for the ARI posture grid.",
   },
   "protocols.relays.heading": {
@@ -24676,7 +24695,7 @@ export const messages = {
   },
   "certificates.evidence.kubernetesObserved": {
     defaultMessage:
-      "cert-manager issued this exact leaf. trstctl identity rotation, connector delivery, and rollback history do not apply; verify the Kubernetes Secret and served workload separately.",
+      "cert-manager issued this exact leaf. trstctl identity rotation, connector delivery, and rollback history do not apply; verify the Kubernetes Secret and workload endpoint separately.",
     description: "Activity timeline limit for a cert-manager-managed certificate without trstctl identity binding.",
   },
   "certificates.evidence.historical": {

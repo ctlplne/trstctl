@@ -16,27 +16,28 @@ import (
 // surface. Rotation reason and fingerprint likewise stay internal and let the
 // server distinguish an ARI scheduler decision from the fixed-expiry fallback.
 type ACMEARIPostureRow struct {
-	CertificateID      string
-	IdentityID         string
-	IdentityName       string
-	CertificateStatus  string
-	Fingerprint        string
-	NotBefore          *time.Time
-	NotAfter           time.Time
-	CertificateDER     []byte
-	RotationRunID      string
-	RotationRunStatus  string
-	RotationRunTrigger string
-	RotationRunReason  string
-	RotationRunCreated *time.Time
+	CertificateID       string
+	IdentityID          string
+	IdentityName        string
+	CertificateStatus   string
+	Fingerprint         string
+	IssuingExternalCAID string
+	NotBefore           *time.Time
+	NotAfter            time.Time
+	CertificateDER      []byte
+	RotationRunID       string
+	RotationRunStatus   string
+	RotationRunTrigger  string
+	RotationRunReason   string
+	RotationRunCreated  *time.Time
 }
 
 // ListACMEARIPosturePage returns active certificates and consumed predecessors
-// that can participate in either side of ARI: certificates actually issued by
-// the served ACME protocol, and internally-issued certificates associated with
-// a deployed lifecycle identity. The query deliberately keeps superseded
-// predecessors because that row is the durable evidence that the scheduler
-// consumed a suggested window.
+// that can participate in either side of ARI: certificates issued by the
+// served ACME protocol, leaves with an authenticated external ACME issuer,
+// and internally issued leaves associated with a lifecycle identity. The
+// query deliberately keeps superseded predecessors because that row is the
+// durable evidence that the scheduler consumed a suggested window.
 func (s *Store) ListACMEARIPosturePage(ctx context.Context, tenantID, afterID string, limit int) ([]ACMEARIPostureRow, error) {
 	var out []ACMEARIPostureRow
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -46,6 +47,7 @@ func (s *Store) ListACMEARIPosturePage(ctx context.Context, tenantID, afterID st
 			        COALESCE(i.name, ''),
 			        c.status,
 			        c.fingerprint,
+			        c.issuing_external_ca_id,
 			        c.not_before,
 			        c.not_after,
 			        c.certificate_der,
@@ -97,11 +99,12 @@ func (s *Store) ListACMEARIPosturePage(ctx context.Context, tenantID, afterID st
 			         LIMIT 1
 			   ) i ON TRUE
 			  WHERE c.tenant_id = $1
-			    AND c.id > $2
+			    AND c.id > COALESCE(NULLIF($2::text, '')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
 			    AND c.status IN ('active', 'superseded', 'revoked')
 			    AND c.not_after IS NOT NULL
 			    AND (
 			         c.source = 'protocol:acme'
+			         OR c.issuing_external_ca_id <> ''
 			         OR (
 			             c.source = 'issued'
 			             AND (i.id IS NOT NULL OR ari_rr.id IS NOT NULL OR rr.id IS NOT NULL)
@@ -126,6 +129,7 @@ func (s *Store) ListACMEARIPosturePage(ctx context.Context, tenantID, afterID st
 				&row.IdentityName,
 				&row.CertificateStatus,
 				&row.Fingerprint,
+				&row.IssuingExternalCAID,
 				&notBefore,
 				&row.NotAfter,
 				&row.CertificateDER,

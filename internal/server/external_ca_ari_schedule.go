@@ -46,7 +46,7 @@ func upstreamARIRenewalReason(cert store.Certificate, observation store.ACMEUpst
 	if cert.NotAfter == nil {
 		return "", false
 	}
-	if observation.Status == "queued" && now.Sub(observation.UpdatedAt) < upstreamARIQueuedGrace {
+	if observation.Status == "queued" && !observation.CanSchedule() && now.Sub(observation.UpdatedAt) < upstreamARIQueuedGrace {
 		if !externalARIEmergencyDue(cert, now) {
 			return "", false
 		}
