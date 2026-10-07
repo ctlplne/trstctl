@@ -315,7 +315,7 @@ not this file.
 | `internal/server/journey_delivery_served_test.go:36` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:560` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:735` | fabricated test-only credential (CWE-798) |
-| `internal/server/journey_delivery_served_test.go:951` | fabricated test-only credential (CWE-798) |
+| `internal/server/journey_delivery_served_test.go:953` | fabricated test-only credential (CWE-798) |
 | `internal/server/managedkeys_cloudkms_served_test.go:30` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:33` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |
