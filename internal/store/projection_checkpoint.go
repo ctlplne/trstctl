@@ -256,6 +256,7 @@ func (s *Store) ResetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx) erro
 		`UPDATE projection_checkpoint
 		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
 		        failed_at = NULL, legacy_managed_ca_inventory_checked_through = 0,
+		        external_issuer_checked_through = 0,
 		        updated_at = now()
 		  WHERE id = 1`)
 	if err != nil {
@@ -295,6 +296,35 @@ func (s *Store) MarkLegacyManagedCAInventoryCheckedThrough(ctx context.Context, 
 func (s *Store) SetLegacyManagedCAInventoryCheckedThroughTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
 	_, err := tx.Exec(ctx, `UPDATE projection_checkpoint
 		SET legacy_managed_ca_inventory_checked_through=$1,updated_at=now()
+		WHERE id=1 AND applied_seq=$1`, int64(seq)) // #nosec G115 -- log sequence fits PostgreSQL bigint (CWE-190)
+	return err
+}
+
+// ExternalIssuerRecoveryCursor is distinct from applied_seq because a warm
+// upgrade must inspect retained external-CA events the old projection skipped.
+func (s *Store) ExternalIssuerRecoveryCursor(ctx context.Context) (uint64, uint64, error) {
+	var applied, checked int64
+	err := s.poolFor(ctx).QueryRow(ctx, `SELECT applied_seq,external_issuer_checked_through
+		FROM projection_checkpoint WHERE id=1`).Scan(&applied, &checked)
+	if err != nil {
+		return 0, 0, fmt.Errorf("store: read external issuer recovery cursor: %w", err)
+	}
+	if applied < 0 || checked < 0 {
+		return 0, 0, errors.New("store: invalid external issuer recovery cursor")
+	}
+	return uint64(applied), uint64(checked), nil
+}
+
+func (s *Store) MarkExternalIssuerCheckedThrough(ctx context.Context, seq uint64) error {
+	_, err := s.poolFor(ctx).Exec(ctx, `UPDATE projection_checkpoint
+		SET external_issuer_checked_through=$1,updated_at=now()
+		WHERE id=1 AND applied_seq >= $1`, int64(seq)) // #nosec G115 -- log sequence fits PostgreSQL bigint (CWE-190)
+	return err
+}
+
+func (s *Store) SetExternalIssuerCheckedThroughTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
+	_, err := tx.Exec(ctx, `UPDATE projection_checkpoint
+		SET external_issuer_checked_through=$1,updated_at=now()
 		WHERE id=1 AND applied_seq=$1`, int64(seq)) // #nosec G115 -- log sequence fits PostgreSQL bigint (CWE-190)
 	return err
 }

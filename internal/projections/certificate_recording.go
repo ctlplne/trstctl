@@ -45,6 +45,24 @@ func LegacyManagedCALeafEvidence(e events.Event) (bool, error) {
 	return true, nil
 }
 
+// AuthenticatedExternalIssuer accepts only the external CA worker's exact
+// deterministic certificate event and its authenticated request binding.
+// Tenant-authored inventory source text alone is never issuer evidence.
+func AuthenticatedExternalIssuer(e events.Event, fact CertificateRecorded) string {
+	if e.Type != EventCertificateRecorded || !strings.HasPrefix(fact.Source, "external-ca:") {
+		return ""
+	}
+	authorityID := strings.TrimPrefix(fact.Source, "external-ca:")
+	if authorityID == "" || fact.IssuanceIdempotencyKey == "" || len(fact.IssuanceRequestBinding) != 64 {
+		return ""
+	}
+	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte(e.TenantID+"\x00certificate.recorded\x00"+fact.IssuanceIdempotencyKey)).String()
+	if e.ID != expected {
+		return ""
+	}
+	return authorityID
+}
+
 // CertificateRecordingMaterial enumerates the event families that currently
 // update certificate public material. Command recovery and projection share this
 // list so edge reconciliation cannot bypass the same fingerprint fence.

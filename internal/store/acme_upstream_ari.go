@@ -68,8 +68,8 @@ func exactExternalARICertificateTx(ctx context.Context, tx pgx.Tx, a ACMEUpstrea
 	var status string
 	var notAfter time.Time
 	err := tx.QueryRow(ctx, `SELECT status, not_after FROM certificates
-		WHERE tenant_id=$1 AND id=$2 AND fingerprint=$3 AND source=$4 AND not_after IS NOT NULL
-		FOR UPDATE`, a.TenantID, a.CertificateID, a.Fingerprint, "external-ca:"+a.AuthorityID).
+		WHERE tenant_id=$1 AND id=$2 AND fingerprint=$3 AND issuing_external_ca_id=$4 AND not_after IS NOT NULL
+		FOR UPDATE`, a.TenantID, a.CertificateID, a.Fingerprint, a.AuthorityID).
 		Scan(&status, &notAfter)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("store: upstream ARI certificate binding: %w", err)

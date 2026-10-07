@@ -35,6 +35,9 @@ type Certificate struct {
 	ValidityAnchor     *time.Time
 	DeploymentLocation string
 	Source             string
+	// IssuingExternalCAID is set only from the authenticated external issuance
+	// event and survives later observations of the same fingerprint.
+	IssuingExternalCAID string
 	// ObservationOnly binds an import operation independently of its operator-
 	// supplied source label. It travels in the event, not the inventory row.
 	ObservationOnly bool
@@ -378,7 +381,7 @@ const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, 
         certificate_der, issuance_idempotency_key, certificate_pem, created_at,
         status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
         key_origin, key_storage, key_exportable, key_generated_by,
-        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id, validity_anchor`
+        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id, validity_anchor, issuing_external_ca_id`
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
@@ -391,7 +394,7 @@ func scanCertificate(row pgx.Row, c *Certificate) error {
 		// C3: provenance. Which source last confirmed this certificate exists,
 		// and when — distinct from created_at, which only says when trstctl
 		// first recorded it.
-		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID, &c.ValidityAnchor)
+		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID, &c.ValidityAnchor, &c.IssuingExternalCAID)
 }
 
 // GetCertificate loads a certificate in its tenant context.

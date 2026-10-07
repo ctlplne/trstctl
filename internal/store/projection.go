@@ -468,13 +468,13 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		         -- recorded an empty custody origin. A custody claim that lives
 		         -- in the code and not in the row is not auditable, which is the
 		         -- entire reason the column exists.
-		         key_origin, key_storage, key_exportable, key_generated_by, validity_anchor)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+		         key_origin, key_storage, key_exportable, key_generated_by, validity_anchor, issuing_external_ca_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
 		 ON CONFLICT DO NOTHING`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt,
-		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor)
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID)
 	if err != nil {
 		return err
 	}
@@ -499,7 +499,8 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        key_origin = CASE WHEN key_origin = '' AND $19::text <> '' THEN $19 ELSE key_origin END,
 		        key_storage = CASE WHEN key_storage = '' AND $20::text <> '' THEN $20 ELSE key_storage END,
 		        key_exportable = CASE WHEN key_exportable = '' AND $21::text <> '' THEN $21 ELSE key_exportable END,
-		        key_generated_by = CASE WHEN key_generated_by = '' AND $22::text <> '' THEN $22 ELSE key_generated_by END
+		        key_generated_by = CASE WHEN key_generated_by = '' AND $22::text <> '' THEN $22 ELSE key_generated_by END,
+		        issuing_external_ca_id = CASE WHEN issuing_external_ca_id = '' AND $24::text <> '' THEN $24 ELSE issuing_external_ca_id END
 		  WHERE tenant_id = $1 AND fingerprint = $7
 		    AND (issuance_idempotency_key NOT LIKE 'broker-issue:%'
 		      OR (($16::text = '' OR issuance_idempotency_key = $16)
@@ -510,11 +511,12 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		    AND (key_origin = '' OR $19::text = '' OR key_origin = $19)
 		    AND (key_storage = '' OR $20::text = '' OR key_storage = $20)
 		    AND (key_exportable = '' OR $21::text = '' OR key_exportable = $21)
-		    AND (key_generated_by = '' OR $22::text = '' OR key_generated_by = $22)`,
+		    AND (key_generated_by = '' OR $22::text = '' OR key_generated_by = $22)
+		    AND (issuing_external_ca_id = '' OR $24::text = '' OR issuing_external_ca_id = $24)`,
 		c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID,
-		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor)
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID)
 	if err != nil {
 		return err
 	}

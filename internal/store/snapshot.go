@@ -158,7 +158,10 @@ import (
 // Version 49 carries exact upstream ACME ARI observations. An older snapshot
 // would otherwise skip their events after truncation and quietly replace the
 // CA's authoritative renewal window with a local estimate.
-const SnapshotFormatVersion = 49
+// Version 50 replays authenticated external-CA issuance events to recover the
+// immutable issuer of already recorded leaves. A v49 certificate snapshot has
+// only mutable observation source and cannot safely bind an upstream ARI poll.
+const SnapshotFormatVersion = 50
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

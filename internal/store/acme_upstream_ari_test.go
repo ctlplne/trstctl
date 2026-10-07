@@ -29,6 +29,15 @@ func TestUpstreamARIProjectionQueuesOneBoundedFetchAndKeepsLastGoodWindow(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Fixture for the authenticated issuance projection. Source is subsequently
+	// overwritten by endpoint recording; ARI must bind the immutable issuer.
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE certificates SET source='issued', issuing_external_ca_id='local-pebble'
+			WHERE tenant_id=$1 AND id=$2`, tenantA, cert.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	base := store.ACMEUpstreamARI{
 		TenantID: tenantA, CertificateID: cert.ID, AuthorityID: "local-pebble",
 		ARICertificateID: "AQID.BAUG", Fingerprint: cert.Fingerprint,

@@ -9,10 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
-
-	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
@@ -151,14 +148,8 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 			return err
 		}
 		var origin certificateRevocationOrigin
-		if strings.HasPrefix(fact.Source, "external-ca:") {
-			origin.ExternalID = strings.TrimPrefix(fact.Source, "external-ca:")
-			// Only the upstream worker produces this event identity and authenticated
-			// request binding. A tenant-authored inventory source is not issuer proof.
-			expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantID+"\x00certificate.recorded\x00"+fact.IssuanceIdempotencyKey)).String()
-			if origin.ExternalID == "" || fact.IssuanceIdempotencyKey == "" || len(fact.IssuanceRequestBinding) != 64 || event.ID != expected {
-				return nil
-			}
+		if externalID := projections.AuthenticatedExternalIssuer(event, fact); externalID != "" {
+			origin.ExternalID = externalID
 		} else if fact.Source == "issued" && fact.CAID == IssuingCAID() {
 			issuer, err := certinfo.LeafDER(d.chainPEM)
 			if err != nil || crypto.VerifyLeafSignedByCA(cert.CertificateDER, issuer) != nil {

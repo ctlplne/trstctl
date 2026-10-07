@@ -4,9 +4,11 @@ package projections_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
@@ -31,10 +33,24 @@ func TestACMEUpstreamARIObservationSurvivesSnapshotAndEventRebuild(t *testing.T)
 		mustAppend(t, log, events.Event{TenantID: tenantA, Type: eventType, Data: data})
 	}
 	mustAppend(t, log, events.Event{Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("Upstream ARI")})
-	appendJSON(projections.EventCertificateRecorded, projections.CertificateRecorded{
+	externalKey := "ari-recovery-external-issue"
+	external := projections.CertificateRecorded{
 		ID: certificateID, Subject: "CN=ari.example.test", Fingerprint: fingerprint,
 		Source: "external-ca:pebble", NotBefore: &issued, NotAfter: &expires,
+		IssuanceIdempotencyKey: externalKey, IssuanceRequestBinding: strings.Repeat("a", 64),
+	}
+	externalData, err := json.Marshal(external)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustAppend(t, log, events.Event{
+		ID:       uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantA+"\x00certificate.recorded\x00"+externalKey)).String(),
+		TenantID: tenantA, Type: projections.EventCertificateRecorded, Data: externalData,
 	})
+	external.Source = "issued"
+	external.IssuanceIdempotencyKey = "issue:transition:ari-recovery"
+	external.IssuanceRequestBinding = ""
+	appendJSON(projections.EventCertificateRecorded, external)
 	request := projections.ACMEUpstreamARIRequested{
 		CertificateID: certificateID, AuthorityID: "pebble",
 		ARICertificateID: "AQID.BAUG", Fingerprint: fingerprint,
@@ -52,6 +68,10 @@ func TestACMEUpstreamARIObservationSurvivesSnapshotAndEventRebuild(t *testing.T)
 	}
 	assertProjection := func(stage string) {
 		t.Helper()
+		cert, err := s.GetCertificate(ctx, tenantA, certificateID)
+		if err != nil || cert.Source != "issued" || cert.IssuingExternalCAID != "pebble" {
+			t.Fatalf("%s lost immutable external issuer: %+v, %v", stage, cert, err)
+		}
 		got, err := s.GetACMEUpstreamARI(ctx, tenantA, certificateID)
 		if err != nil || got.Status != "ready" || got.WindowStart == nil ||
 			!got.WindowStart.Equal(start) || got.WindowEnd == nil || !got.WindowEnd.Equal(end) {
@@ -66,6 +86,23 @@ func TestACMEUpstreamARIObservationSurvivesSnapshotAndEventRebuild(t *testing.T)
 		}
 	}
 	assertProjection("first projection")
+	// Simulate a warm upgrade from a projector that retained only mutable
+	// source. Its ordinary checkpoint already covers the original CA event.
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE certificates SET issuing_external_ca_id=''
+			WHERE tenant_id=$1 AND id=$2`, tenantA, certificateID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint
+		SET external_issuer_checked_through=0 WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	assertProjection("warm upgrade recovery")
 	if _, err := p.Snapshot(ctx); err != nil {
 		t.Fatal(err)
 	}

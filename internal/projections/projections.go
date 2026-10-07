@@ -4287,6 +4287,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		// Source changes on later observations; the issuer does not.
+		externalIssuerID := AuthenticatedExternalIssuer(e, pl)
 		if (schemaVersionOf(e) == CertificateObservationEventSchemaVersion) != pl.ObservationOnly {
 			return fmt.Errorf("projections: %s observation marker/schema mismatch", e.Type)
 		}
@@ -4314,7 +4316,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
 			ValidityAnchor: pl.ValidityAnchor,
-			Source:         pl.Source, CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
+			Source:         pl.Source, IssuingExternalCAID: externalIssuerID,
+			CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
 			IssuanceResponse:       pl.IssuanceResponse,
 			IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey, IssuanceRequestBinding: pl.IssuanceRequestBinding,
 			BrokerIssuance: pl.BrokerIssuance,
@@ -7420,6 +7423,16 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 	// extensions rebuild is therefore either in both passes or beyond the saved
 	// checkpoint for the next catch-up/tailer; it can never land in core alone.
 	if err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		externalIssuer, err := p.externalIssuerProvenanceNeedsRebuild(ctx, log)
+		if err != nil {
+			return fmt.Errorf("projections: inspect external issuer provenance: %w", err)
+		}
+		if externalIssuer {
+			if err := p.rebuildWithPrivacyBarrier(ctx, log); err != nil {
+				return fmt.Errorf("projections: rebuild external issuer provenance from retained history: %w", err)
+			}
+			return nil
+		}
 		legacyManagedLeaf, err := p.legacyManagedCAInventoryNeedsRebuild(ctx, log)
 		if err != nil {
 			return fmt.Errorf("projections: inspect legacy managed CA inventory: %w", err)
@@ -7678,7 +7691,10 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 			if err := p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead); err != nil {
 				return err
 			}
-			return p.store.SetLegacyManagedCAInventoryCheckedThroughTx(readCtx, tx, replayHead)
+			if err := p.store.SetLegacyManagedCAInventoryCheckedThroughTx(readCtx, tx, replayHead); err != nil {
+				return err
+			}
+			return p.store.SetExternalIssuerCheckedThroughTx(readCtx, tx, replayHead)
 		})
 	})
 }

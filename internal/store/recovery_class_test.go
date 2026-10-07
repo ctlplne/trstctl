@@ -368,6 +368,12 @@ func TestACMEUpstreamARIUsesEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestExternalIssuerProvenanceRequiresHistoricalEventReplay(t *testing.T) {
+	if SnapshotFormatVersion < 50 {
+		t.Fatal("snapshot v49 cannot recover the immutable external issuer after mutable source changed")
+	}
+}
+
 func TestCMDBCIInventoryIsRebuiltAndSnapshotSafeAUD46(t *testing.T) {
 	const table = "cmdb_ci_inventory"
 	if !containsRecoveryTable(ReadModelTables, table) {
