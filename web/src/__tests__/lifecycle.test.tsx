@@ -1124,7 +1124,13 @@ describe("lifecycle actions from the UI", () => {
         { id: "workload:worker", kind: "workload", name: "payments-worker" },
         { id: "resource:db", kind: "resource", name: "payments-db" },
       ],
-      by_kind: { workload: 2, resource: 1 },
+      by_kind: {
+        workload: [
+          { id: "workload:api", kind: "workload", name: "payments-api" },
+          { id: "workload:worker", kind: "workload", name: "payments-worker" },
+        ],
+        resource: [{ id: "resource:db", kind: "resource", name: "payments-db" }],
+      },
     });
     const user = userEvent.setup();
     renderIdentities();
@@ -1142,6 +1148,10 @@ describe("lifecycle actions from the UI", () => {
     expect(within(impact).getByText("2")).toBeInTheDocument();
     expect(within(impact).getByText("resource")).toBeInTheDocument();
     expect(within(impact).getByText("1")).toBeInTheDocument();
+    expect(within(impact).getByText("payments-api")).toBeInTheDocument();
+    expect(within(impact).getByText("payments-worker")).toBeInTheDocument();
+    expect(within(impact).getByText("payments-db")).toBeInTheDocument();
+    expect(impact.textContent).not.toContain('"id":"resource:db"');
   });
 
   it("does not invent blast-radius impact when no graph node mapping exists (FE-083)", async () => {

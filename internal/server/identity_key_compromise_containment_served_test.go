@@ -58,6 +58,7 @@ func TestServedOrdinaryKeyCompromiseRefusesServingX509BeforeApprovalOrEvent(t *t
 		t.Fatal(err)
 	}
 	if preview.Ready || !strings.Contains(strings.Join(preview.Warnings, " "), "host containment") ||
+		!strings.Contains(strings.Join(preview.Warnings, " "), "would queue CA revocation") ||
 		len(preview.PreviewWrites) != 0 || len(preview.PreviewExternalEffects) != 0 {
 		t.Fatalf("ordinary preview advertised incomplete incident as ready: %s", body)
 	}

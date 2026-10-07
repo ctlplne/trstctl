@@ -218,7 +218,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		if orchestrator.KeyCompromiseNeedsContainment(identity, to, req.Reason) {
 			plan.Ready = false
 			plan.Warnings = append(plan.Warnings,
-				"This X.509 identity may still be serving a compromised leaf. The ordinary transition queues CA revocation but no host containment, so it cannot complete a key-compromise response. Use Certificates → Revocation & CT → Revocation center, select the exact host target, and review the compound key-compromise command. If no managed target is available, revoke the exact certificate with its issuing CA and stop the host through an independently verified procedure.")
+				"This X.509 identity may still be serving a compromised leaf. The disabled ordinary transition would queue CA revocation but no host containment, so it cannot complete a key-compromise response. Use Certificates → Revocation & CT → Revocation center, select the exact host target, and review the compound key-compromise command. If no managed target is available, revoke the exact certificate with its issuing CA and stop the host through an independently verified procedure.")
 			plan.Guidance = "Ordinary key-compromise revocation is unavailable for a serving X.509 identity. Review CA revocation and host containment together in the Revocation center."
 			plan.VerificationSteps = append(plan.VerificationSteps,
 				"Follow both CA publication and host containment receipts, then verify signed CA revocation evidence and the fresh served leaf with stock clients.")
@@ -269,7 +269,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 				target = "deployment target " + binding.TargetID
 			}
 			plan.Warnings = append(plan.Warnings,
-				"CA revocation and this identity state change do not stop "+target+
+				"CA revocation and an identity state change alone do not stop "+target+
 					". It may still serve the revoked certificate to clients that do not enforce CRLs or OCSP. For key compromise, stop or replace the serving credential immediately; never roll back to a revoked predecessor.")
 			plan.VerificationSteps = append(plan.VerificationSteps,
 				"Open a fresh connection to the serving target and confirm that no revoked serial or fingerprint is served. Confirm a verified replacement delivery or independently verify service refusal; CA revocation alone is not endpoint containment.")

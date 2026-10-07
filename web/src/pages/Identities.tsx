@@ -1418,7 +1418,10 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   if (!state.impact) return null;
 
   const affected = state.impact.affected.length;
-  const byKind = Object.entries(state.impact.by_kind ?? {});
+  const byKind = new Map<string, GraphImpact["affected"]>();
+  for (const node of state.impact.affected) {
+    byKind.set(node.kind, [...(byKind.get(node.kind) ?? []), node]);
+  }
   return (
     <section
       aria-labelledby="destructive-blast-radius-heading"
@@ -1432,12 +1435,21 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
         {affected} {translateNow("source.downstream.affected.node.0dfbe99d70")}
         {affected === 1 ? "" : "s"} {translateNow("source.before.this.destructive.action.b4c45f22e1")}
       </p>
-      {byKind.length > 0 && (
+      {byKind.size > 0 && (
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
-          {byKind.map(([kind, value]) => (
+          {[...byKind].map(([kind, nodes]) => (
             <div key={kind} className="rounded-control border border-destructive/20 px-2 py-1">
               <dt className="font-medium">{kind}</dt>
-              <dd>{displayValue(value)}</dd>
+              <dd>
+                <span>{nodes.length}</span>
+                <ul>
+                  {nodes.map((node) => (
+                    <li key={node.id}>
+                      <span>{node.name}</span> <code>{node.id}</code>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
             </div>
           ))}
         </dl>
