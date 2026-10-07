@@ -47,6 +47,9 @@ type endpointContainmentPreview struct {
 }
 
 func (a *API) endpointContainmentPlan(ctx context.Context, tenantID, targetID string) (endpointContainmentPreview, error) {
+	if err := a.validateContainmentExecutionReady(); err != nil {
+		return endpointContainmentPreview{}, err
+	}
 	target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
 	if err != nil {
 		return endpointContainmentPreview{}, err

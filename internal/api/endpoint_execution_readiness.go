@@ -35,3 +35,14 @@ func (a *API) validateEndpointExecutionReady(target endpointBindingTargetSummary
 	}
 	return nil
 }
+
+// A containment preview is an operator promise that an enrolled host can claim
+// the stop job. Check the mounted channel and its explicit allowlist before
+// showing a ready review or accepting either the standalone or compound command.
+func (a *API) validateContainmentExecutionReady() error {
+	if a.agentJobClaimable == nil || !a.agentJobClaimable("endpoint.contain") {
+		return errStatus(http.StatusServiceUnavailable,
+			"host containment requires an assembled agent channel with endpoint.contain enabled in agent_channel.claimable_job_kinds; ask the control-plane operator to enable that exact job kind, then preview again")
+	}
+	return nil
+}

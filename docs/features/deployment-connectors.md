@@ -263,6 +263,12 @@ rows select a logical profile name but cannot add a root, executable, or argumen
 }
 ```
 
+The containment and combined key-compromise previews return 503 with the exact
+missing job kind when the channel is absent or `endpoint.contain` is disabled.
+If an operator withdraws that allowlist entry after accepting a command, the
+existing host job remains queued; restore the entry to let the enrolled host
+claim it, then verify the signed receipt and listener independently.
+
 For a host that serves ML-DSA certificates, the optional `tls_probe_openssl`
 property in that same local profile names an absolute OpenSSL executable, for
 example `"tls_probe_openssl": "/opt/openssl-3.5/bin/openssl"`. Install a build that

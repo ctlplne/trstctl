@@ -94,6 +94,9 @@ func (a *API) readKeyCompromise(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) keyCompromisePlan(ctx context.Context, tenantID, identityID, targetID, requester string) (keyCompromisePlan, error) {
+	if err := a.validateContainmentExecutionReady(); err != nil {
+		return keyCompromisePlan{}, err
+	}
 	identity, version, err := a.store.IdentityApprovalTarget(ctx, tenantID, identityID)
 	if err != nil {
 		return keyCompromisePlan{}, err
