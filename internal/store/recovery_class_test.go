@@ -339,6 +339,19 @@ func TestAgentRevocationCachePostureInvalidatesLegacySnapshotsAUD39(t *testing.T
 	}
 }
 
+func TestKubernetesCertificateProvenanceRebuildAndSnapshotRecovery(t *testing.T) {
+	const table = "kubernetes_certificate_provenance"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would lose exact CertificateRequest UIDs", table)
+	}
+	if SnapshotFormatVersion < 48 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v47 payload cannot restore certificate provenance", SnapshotFormatVersion)
+	}
+}
+
 func TestCMDBCIInventoryIsRebuiltAndSnapshotSafeAUD46(t *testing.T) {
 	const table = "cmdb_ci_inventory"
 	if !containsRecoveryTable(ReadModelTables, table) {

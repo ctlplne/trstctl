@@ -46,6 +46,13 @@ func TestSnapshotCaptureIncludesEveryRestoreTableAndTenantRows(t *testing.T) {
 				State: "ready", Reason: "signed", PublicHash: strings.Repeat("b", 64),
 			}},
 		}
+		provenance := store.KubernetesCertificateProvenance{
+			TenantID: tenantID, ClusterID: posture.ClusterID,
+			Namespace: "payments", RequestName: "snapshot-request", RequestUID: tenantID,
+			CertificateName: "snapshot-certificate", CertificateUID: "certificate-" + tenantID,
+			Fingerprint: strings.Repeat("d", 64), ControllerID: posture.ControllerID,
+			ReportID: posture.ReportID, ObservedAt: at, EventSequence: 7,
+		}
 		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 			if err := s.ApplyNotificationRoutingPolicyUpsertedTx(ctx, tx, policy); err != nil {
 				return err
@@ -53,12 +60,18 @@ func TestSnapshotCaptureIncludesEveryRestoreTableAndTenantRows(t *testing.T) {
 			if err := s.ApplyKubernetesControllerPostureTx(ctx, tx, posture); err != nil {
 				return err
 			}
+			if err := s.ApplyKubernetesCertificateProvenanceTx(ctx, tx, provenance); err != nil {
+				return err
+			}
 			rows, err := tx.Query(ctx, `
 SELECT 'notification_routing_policies', to_jsonb(t.*)
 FROM notification_routing_policies t WHERE tenant_id = $1
 UNION ALL
 SELECT 'kubernetes_controller_posture', to_jsonb(t.*)
-FROM kubernetes_controller_posture t WHERE tenant_id = $1`, tenantID)
+FROM kubernetes_controller_posture t WHERE tenant_id = $1
+UNION ALL
+SELECT 'kubernetes_certificate_provenance', to_jsonb(t.*)
+FROM kubernetes_certificate_provenance t WHERE tenant_id = $1`, tenantID)
 			if err != nil {
 				return err
 			}
@@ -82,8 +95,8 @@ FROM kubernetes_controller_posture t WHERE tenant_id = $1`, tenantID)
 		}); err != nil {
 			t.Fatalf("seed tenant-scoped capture fixtures: %v", err)
 		}
-		if len(expected[tenantID]) != 2 {
-			t.Fatalf("fixture inventory for %s = %d, want two nonempty tables", tenantID, len(expected[tenantID]))
+		if len(expected[tenantID]) != 3 {
+			t.Fatalf("fixture inventory for %s = %d, want three nonempty tables", tenantID, len(expected[tenantID]))
 		}
 	}
 	if count, err := s.WriteReadModelSnapshots(ctx); err != nil || count != 2 {
