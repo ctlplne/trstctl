@@ -307,6 +307,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: external CA outbox destination is not configured"))
 		}
 		return d.externalCAs.DeliverExternalCAIssue(ctx, m)
+	case store.ACMEUpstreamARIFetchDestination:
+		return d.deliverExternalCAARI(ctx, m)
 	case orchestrator.DestinationITSMServiceNow:
 		return d.handleServiceNowTicket(ctx, m)
 	case orchestrator.DestinationResponseSplunk:
