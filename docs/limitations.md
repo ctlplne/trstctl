@@ -1491,6 +1491,16 @@ Hierarchy console shows the band, the renew/re-key-by date, and the truncation
 warning. `GET /api/v1/certificates/health` resolves beyond 90 days into 180-day,
 1-year, 2-year and 3-year bands; `later` now means beyond three years.
 
+The scheduler appends `ca.authority.horizon_alerted` audit events for new horizon
+alerts. Builds before the closed privacy schema for that event was registered
+could enqueue an alert and stamp its band, then fail the audit append. Those
+historical missing events cannot be treated as present: inspect the retained
+notification outbox and delivery evidence for those bands. The current schema
+accepts the scheduler's audit payload; an already-stamped band does not fire
+again until it tightens. A separate broker failure between the outbox commit and
+the audit append can still leave the same gap, so the outbox is the authoritative
+delivery record in that failure window.
+
 What is **not** served: an authority with no recorded `not_after` raises nothing
 and is shown as "no recorded expiry" rather than healthy — an unknown expiry is a
 real state, not a passing one. Authorities beyond 36 months raise nothing. The

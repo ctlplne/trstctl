@@ -496,6 +496,28 @@ func TestCoreProductionPrivacyCatalogCoversCertificateExpiring(t *testing.T) {
 	}
 }
 
+func TestCoreProductionPrivacyCatalogCoversCAHorizonAlert(t *testing.T) {
+	const eventType = "ca.authority.horizon_alerted"
+	if !HasPrivacyEventPolicy(eventType, DefaultSchemaVersion) {
+		t.Fatalf("%s v%d has no privacy policy; the live CA sweep cannot append its audit event", eventType, DefaultSchemaVersion)
+	}
+	const subject = "alice@example.com"
+	payload := []byte(`{"ca_authority_id":"authority-1","common_name":"alice@example.com","kind":"root","not_after":"2027-01-02T03:04:05Z","horizon_months":3,"months_remaining":2,"renew_by":"2026-10-02T03:04:05Z","validity_compressed":true,"dependent_certificates":4}`)
+	if err := validateRegisteredPrivacyEventPayload(payload, eventType, DefaultSchemaVersion); err != nil {
+		t.Fatalf("live CA horizon event rejected: %v", err)
+	}
+	rewritten, changed, err := applyRegisteredPrivacyEventPolicy(
+		payload, "11111111-1111-4111-8111-111111111111", subject, eventType, DefaultSchemaVersion,
+	)
+	if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) ||
+		!bytes.Contains(rewritten, []byte(`"ca_authority_id":"authority-1"`)) {
+		t.Fatalf("CA horizon subject erasure = changed %t err %v payload %s", changed, err, rewritten)
+	}
+	if err := validateRegisteredPrivacyEventPayload([]byte(`{"ca_authority_id":"authority-1","common_name":"root","kind":"root","not_after":"2027-01-02T03:04:05Z","horizon_months":3,"months_remaining":2,"renew_by":"2026-10-02T03:04:05Z","validity_compressed":true,"dependent_certificates":4,"undeclared":"subject"}`), eventType, DefaultSchemaVersion); err == nil {
+		t.Fatal("CA horizon audit accepted an undeclared field")
+	}
+}
+
 func TestCoreProductionPrivacyCatalogCoversSignedDNSPluginAuditEvents(t *testing.T) {
 	t.Parallel()
 	const subject = "_acme-challenge.customer.example"

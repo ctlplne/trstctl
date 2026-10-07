@@ -238,6 +238,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"method":"","principal":"","scopes":1}`), true
 	case "breakglass.admin_login":
 		return shape(`{"actor_id":"","outcome":""}`), true
+	case "ca.authority.horizon_alerted":
+		return shape(`{"ca_authority_id":"","common_name":"","kind":"","not_after":"","horizon_months":1,"months_remaining":1,"renew_by":"","validity_compressed":true,"dependent_certificates":1}`), true
 	case "certificate.expiring":
 		return shape(`{"certificate_id":"","serial":"","not_after":""}`), true
 	case "broker.agent_identity.task_bound":

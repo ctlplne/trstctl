@@ -54,6 +54,9 @@ func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T
 	if alerted != 1 {
 		t.Fatalf("first sweep alerted %d authorities, want 1 — a root 30 months out is invisible to leaf expiry alerting", alerted)
 	}
+	if got := servedEventCount(t, h, "ca.authority.horizon_alerted"); got != 1 {
+		t.Fatalf("first sweep retained %d CA horizon audit events, want 1", got)
+	}
 
 	alert := singleCAHorizonAlert(t, ctx, h.store, h.tenant)
 	if alert.Kind != notify.KindCAHorizon {
@@ -78,6 +81,9 @@ func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T
 	if alerted, err = h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 0 {
 		t.Fatalf("repeat sweep alerted %d (err %v), want 0", alerted, err)
 	}
+	if got := servedEventCount(t, h, "ca.authority.horizon_alerted"); got != 1 {
+		t.Fatalf("repeat sweep retained %d CA horizon audit events, want 1", got)
+	}
 
 	// Tighten to five months. That is a new band, so it re-fires, and severity
 	// rises with the shrinking runway — the re-alerting G5 asks for.
@@ -93,6 +99,9 @@ func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T
 	}
 	if tightened.Severity != notify.AlertSeverityWarning {
 		t.Fatalf("severity at 6 months = %q, want %q", tightened.Severity, notify.AlertSeverityWarning)
+	}
+	if got := servedEventCount(t, h, "ca.authority.horizon_alerted"); got != 2 {
+		t.Fatalf("tightened sweep retained %d CA horizon audit events, want 2", got)
 	}
 }
 
