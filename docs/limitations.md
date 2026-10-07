@@ -1482,8 +1482,12 @@ plain horizon alert, because the fix is different: renew or re-key the authority
 Exact contract. Alerts land on the `notification.ca_horizon` outbox destination
 as `ca.horizon` or `ca.validity_compression`, carrying the authority, its band,
 how many active certificates chain to it, and the renew-by date; they fan out
-through the same operator-configured channels as expiry alerts. The alert intent
-and the band stamp commit in one transaction. The reference leaf validity is
+through the same operator-configured channels as expiry alerts. The v2 immutable
+decision is appended first; its alert intent and band stamp then commit in one
+tenant transaction. Startup and each CA-calendar sweep reconcile a retained
+decision whose database transaction was interrupted, including when a tail
+projector stamped the band before the intent was queued. A broker append failure
+leaves neither a stamp nor an intent. The reference leaf validity is
 `lifecycle.leaf_validity` (`TRSTCTL_LIFECYCLE_LEAF_VALIDITY`, default `2160h` /
 90 days) — a yardstick for horizon reporting that caps nothing.
 `GET /api/v1/ca/authorities` carries a `horizon` object per authority, and the CA
@@ -1491,15 +1495,15 @@ Hierarchy console shows the band, the renew/re-key-by date, and the truncation
 warning. `GET /api/v1/certificates/health` resolves beyond 90 days into 180-day,
 1-year, 2-year and 3-year bands; `later` now means beyond three years.
 
-The scheduler appends `ca.authority.horizon_alerted` audit events for new horizon
-alerts. Builds before the closed privacy schema for that event was registered
-could enqueue an alert and stamp its band, then fail the audit append. Those
-historical missing events cannot be treated as present: inspect the retained
-notification outbox and delivery evidence for those bands. The current schema
-accepts the scheduler's audit payload; an already-stamped band does not fire
-again until it tightens. A separate broker failure between the outbox commit and
-the audit append can still leave the same gap, so the outbox is the authoritative
-delivery record in that failure window.
+The scheduler appends `ca.authority.horizon_alerted` v2 events for new horizon
+decisions. Builds before the closed v1 privacy schema was registered could enqueue
+an alert and stamp its band, then fail the audit append; a broker outage in that
+older SQL-first flow could do the same. Those historical missing events cannot be
+treated as present: inspect the retained notification outbox and delivery evidence
+for those bands. V1 events are audit-only history; v2 events carry the exact alert
+facts needed to recover an interrupted outbox command without recomputing it. A
+subject erasure rewrites any still-retained v2 notification outbox command from
+the rewritten event before reconciliation may execute it again.
 
 What is **not** served: an authority with no recorded `not_after` raises nothing
 and is shown as "no recorded expiry" rather than healthy — an unknown expiry is a

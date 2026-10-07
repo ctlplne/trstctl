@@ -89,19 +89,25 @@ func (s *Store) ListCAHorizonCandidates(ctx context.Context, tenantID string) ([
 	return out, err
 }
 
-// MarkCAAuthorityHorizonAlertedTx records the band an authority has just been
-// alerted at, on the caller's transaction so the alert's outbox entry and this
-// stamp commit together (AN-6). The band only ever tightens: GREATEST/LEAST here
-// is deliberate — a clock skew or an out-of-order sweep must not widen the
-// recorded band and re-fire an alert the operator already saw.
+// MarkCAAuthorityHorizonAlertedTx projects an immutable horizon decision in the
+// caller's transaction. A replay of an older band must leave both the tightest
+// band and its timestamp unchanged.
 func (s *Store) MarkCAAuthorityHorizonAlertedTx(ctx context.Context, tx pgx.Tx, tenantID, id string, band int, at time.Time) error {
-	_, err := tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE ca_authorities
-		    SET horizon_alerted_months = LEAST(COALESCE(horizon_alerted_months, $3), $3),
-		        horizon_alerted_at = $4
+		    SET horizon_alerted_at = CASE
+		            WHEN horizon_alerted_months IS NULL OR horizon_alerted_months > $3 THEN $4
+		            ELSE horizon_alerted_at END,
+		        horizon_alerted_months = LEAST(COALESCE(horizon_alerted_months, $3), $3)
 		  WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, band, at.UTC())
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // CountActiveLeavesForAuthority reports how many active certificates were issued

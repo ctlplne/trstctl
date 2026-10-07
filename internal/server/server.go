@@ -3593,8 +3593,14 @@ func (s *Server) runOwnershipReattestationOnce(ctx context.Context) (int, error)
 // has no configurable window to switch it off: an expiring root is not an
 // operator preference, and the thresholds are policy in internal/lifecycle.
 func (s *Server) runCAHorizonAlertsOnce(ctx context.Context) (int, error) {
-	if s.notifications == nil || s.store == nil || s.outbox == nil || s.log == nil {
+	if s.notifications == nil || s.store == nil || s.outbox == nil || s.log == nil || s.orch == nil {
 		return 0, nil
+	}
+	// A tail projector can stamp an appended horizon decision after its command
+	// transaction fails. Heal the retained outbox command before the candidate
+	// query sees that stamp and skips the band for the rest of this process's life.
+	if _, err := s.orch.ReconcileOutbox(ctx, s.log); err != nil {
+		return 0, fmt.Errorf("server: reconcile horizon notification intents: %w", err)
 	}
 	tenants, err := s.store.TenantsWithCAHorizonCandidates(ctx)
 	if err != nil {

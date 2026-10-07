@@ -514,6 +514,17 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/window_after", opaque), catalogPrivacyRule("/window_before", opaque),
 			catalogPrivacyRule("/truncated", opaque)),
 	})
+	catalog = append(catalog, productionPrivacyEventPolicy{
+		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "ca.authority.horizon_alerted", SchemaVersion: 2},
+		Policy: catalogPrivacyPolicy(caHorizonAlertedV2PrivacyPayloadShape(),
+			catalogPrivacyRule("/ca_authority_id", opaque), catalogPrivacyRule("/common_name", token),
+			catalogPrivacyRule("/kind", opaque), catalogPrivacyRule("/not_after", opaque),
+			catalogPrivacyRule("/horizon_months", opaque), catalogPrivacyRule("/months_remaining", opaque),
+			catalogPrivacyRule("/renew_by", opaque), catalogPrivacyRule("/validity_compressed", opaque),
+			catalogPrivacyRule("/dependent_certificates", opaque),
+			catalogPrivacyRule("/alert_kind", opaque), catalogPrivacyRule("/alert_detail", token),
+			catalogPrivacyRule("/severity", opaque)),
+	})
 	sort.Slice(catalog, func(i, j int) bool {
 		if catalog[i].EventType == catalog[j].EventType {
 			return catalog[i].SchemaVersion < catalog[j].SchemaVersion

@@ -4,14 +4,11 @@ package lifecycle
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"trstctl.com/trstctl/internal/notify"
-	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 // DefaultLeafValidity is the reference leaf validity the CA calendar measures a
@@ -27,10 +24,10 @@ const DefaultLeafValidity = 90 * 24 * time.Hour
 // horizon is already short enough to be truncating the leaves issued under it.
 // It returns how many alerts were raised.
 //
-// The alert intent and the "we alerted at this band" stamp commit in one
-// transaction (AN-6), so a crash between them cannot either lose the alert or
-// silently suppress the next one. Re-running the sweep with no time passing
-// raises nothing: the recorded band already matches.
+// The immutable decision is appended before its read-model stamp and alert
+// intent commit together (AN-2/AN-6). Re-running the sweep at the same band
+// recovers that exact decision and its outbox command without inventing a new
+// audit event or notifying twice.
 func (m *Manager) AlertCAHorizon(ctx context.Context, tenantID string) (int, error) {
 	now := m.now().UTC()
 	candidates, err := m.store.ListCAHorizonCandidates(ctx, tenantID)
@@ -88,36 +85,12 @@ func (m *Manager) AlertCAHorizon(ctx context.Context, tenantID string) (int, err
 			RenewBy:               renewBy,
 			DependentCertificates: &dependents,
 		}
-		payload, err := json.Marshal(alert)
-		if err != nil {
-			return alerted, err
-		}
-		// The idempotency key carries the band, so crossing into a tighter band is
-		// a genuinely new delivery while a repeated sweep at the same band
-		// collapses onto the entry already queued.
-		key := fmt.Sprintf("ca-horizon:%s:%d", ca.ID, band)
-		if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			if _, err := m.outbox.Enqueue(ctx, tx, orchestrator.Entry{
-				TenantID: tenantID, Destination: notify.DestinationCAHorizon,
-				IdempotencyKey: key, Payload: payload,
-			}); err != nil {
-				return err
-			}
-			return m.store.MarkCAAuthorityHorizonAlertedTx(ctx, tx, tenantID, ca.ID, band, now)
-		}); err != nil {
-			return alerted, err
-		}
-
-		if err := m.emit(ctx, tenantID, "ca.authority.horizon_alerted", map[string]any{
-			"ca_authority_id":        ca.ID,
-			"common_name":            ca.CommonName,
-			"kind":                   ca.Kind,
-			"not_after":              notAfter,
-			"horizon_months":         band,
-			"months_remaining":       MonthsRemaining(now, notAfter),
-			"renew_by":               renewBy,
-			"validity_compressed":    compressed,
-			"dependent_certificates": dependents,
+		if err := m.orch.RecordCAAuthorityHorizonAlert(ctx, tenantID, projections.CAAuthorityHorizonAlerted{
+			CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
+			NotAfter: notAfter, HorizonMonths: band,
+			MonthsRemaining: MonthsRemaining(now, notAfter), RenewBy: renewBy,
+			ValidityCompressed: compressed, DependentCertificates: dependents,
+			AlertKind: alert.Kind, AlertDetail: alert.Detail, Severity: alert.Severity,
 		}); err != nil {
 			return alerted, err
 		}

@@ -167,6 +167,7 @@ const (
 	EventCAAuthorityImported                      = "ca.authority.imported"
 	EventCAAuthorityRotated                       = "ca.authority.rotated"
 	EventCAAuthorityRekeyed                       = "ca.authority.rekeyed"
+	EventCAAuthorityHorizonAlerted                = "ca.authority.horizon_alerted"
 	EventCAIntermediateCreated                    = "ca.intermediate.created"
 	EventCAIntermediateCSRSignRequested           = "ca.intermediate_csr.sign_requested"
 	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
@@ -291,6 +292,10 @@ const (
 // shape. Legacy v1 events were append-only maps with no run/source authority;
 // they remain replayable as no-ops instead of being fabricated into findings.
 const ADCSTemplateDriftEventSchemaVersion = 2
+
+// V1 horizon events were audit-only and followed the SQL stamp. V2 is the
+// retained command authority for the stamp and notification outbox intent.
+const CAAuthorityHorizonAlertEventSchemaVersion = 2
 
 // ProfileEventSchemaVersion is the first profile event shape that carries the full
 // certificate_profiles row. Version 1 profile events were audit-only
@@ -1668,6 +1673,50 @@ type CAAuthorityRekeyed struct {
 	OfflineRoot            bool      `json:"offline_root,omitempty"`
 	NewSignedByPreviousDER []byte    `json:"new_signed_by_previous_der,omitempty"`
 	PreviousSignedByNewDER []byte    `json:"previous_signed_by_new_der,omitempty"`
+}
+
+// CAAuthorityHorizonAlerted is the immutable v2 CA-calendar decision. The
+// notifier body is reconstructed from these exact facts on command retry and
+// outbox reconciliation, so a later clock or policy change cannot rewrite it.
+type CAAuthorityHorizonAlerted struct {
+	CAAuthorityID         string    `json:"ca_authority_id"`
+	CommonName            string    `json:"common_name"`
+	Kind                  string    `json:"kind"`
+	NotAfter              time.Time `json:"not_after"`
+	HorizonMonths         int       `json:"horizon_months"`
+	MonthsRemaining       int       `json:"months_remaining"`
+	RenewBy               time.Time `json:"renew_by"`
+	ValidityCompressed    bool      `json:"validity_compressed"`
+	DependentCertificates int       `json:"dependent_certificates"`
+	AlertKind             string    `json:"alert_kind"`
+	AlertDetail           string    `json:"alert_detail"`
+	Severity              string    `json:"severity"`
+}
+
+func ValidateCAAuthorityHorizonAlerted(p CAAuthorityHorizonAlerted) error {
+	if _, err := uuid.Parse(p.CAAuthorityID); err != nil {
+		return fmt.Errorf("projections: CA horizon authority id is invalid: %w", err)
+	}
+	if strings.TrimSpace(p.CommonName) == "" || (p.Kind != "root" && p.Kind != "intermediate") ||
+		p.NotAfter.IsZero() || p.RenewBy.IsZero() || !p.RenewBy.Before(p.NotAfter) ||
+		p.DependentCertificates < 0 || strings.TrimSpace(p.AlertDetail) == "" {
+		return fmt.Errorf("projections: CA horizon event has incomplete authority or alert facts")
+	}
+	switch p.HorizonMonths {
+	case 0, 3, 6, 12, 24, 36:
+	default:
+		return fmt.Errorf("projections: CA horizon band %d is invalid", p.HorizonMonths)
+	}
+	if p.ValidityCompressed != (p.AlertKind == "ca.validity_compression") ||
+		(p.AlertKind != "ca.horizon" && p.AlertKind != "ca.validity_compression") {
+		return fmt.Errorf("projections: CA horizon alert kind contradicts compression")
+	}
+	switch p.Severity {
+	case "low", "warning", "critical":
+	default:
+		return fmt.Errorf("projections: CA horizon severity is invalid")
+	}
+	return nil
 }
 
 // CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
@@ -3536,6 +3585,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCAEndEntityIssued:                        {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CAEndEntityInventorySchemaVersion: true},
 	EventCAAuthorityRotated:                       {1: true},
 	EventCAAuthorityRekeyed:                       {1: true},
+	EventCAAuthorityHorizonAlerted:                {1: true, CAAuthorityHorizonAlertEventSchemaVersion: true},
 	EventCACrossSigned:                            {1: true},
 	EventBreakglassIssued:                         {1: true},
 	EventBreakglassCARotated:                      {1: true},
@@ -4593,6 +4643,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Serial: pl.Serial, NotAfter: &pl.NotAfter, MaxPathLen: pl.MaxPathLen,
 			PermittedDNSNames: pl.PermittedDNSNames, EKUs: pl.EKUs, CreatedAt: e.Time,
 		}, pl.PredecessorCAID, pl.CeremonyID)
+	case EventCAAuthorityHorizonAlerted:
+		if schemaVersionOf(e) == 1 {
+			// Historical events were audit-only; their SQL stamp and outbox row
+			// were already committed before the event append.
+			return nil
+		}
+		var pl CAAuthorityHorizonAlerted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := ValidateCAAuthorityHorizonAlerted(pl); err != nil {
+			return err
+		}
+		return p.store.MarkCAAuthorityHorizonAlertedTx(ctx, tx, e.TenantID,
+			pl.CAAuthorityID, pl.HorizonMonths, e.Time)
 	case EventCACrossSigned, EventBreakglassIssued, EventBreakglassCARotated, EventBreakglassCACrossSigned:
 		var pl BreakglassCeremonyCompleted
 		if err := decode(e, &pl); err != nil {

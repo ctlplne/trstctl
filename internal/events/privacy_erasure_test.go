@@ -516,6 +516,24 @@ func TestCoreProductionPrivacyCatalogCoversCAHorizonAlert(t *testing.T) {
 	if err := validateRegisteredPrivacyEventPayload([]byte(`{"ca_authority_id":"authority-1","common_name":"root","kind":"root","not_after":"2027-01-02T03:04:05Z","horizon_months":3,"months_remaining":2,"renew_by":"2026-10-02T03:04:05Z","validity_compressed":true,"dependent_certificates":4,"undeclared":"subject"}`), eventType, DefaultSchemaVersion); err == nil {
 		t.Fatal("CA horizon audit accepted an undeclared field")
 	}
+	const replayableVersion = 2
+	if !HasPrivacyEventPolicy(eventType, replayableVersion) {
+		t.Fatal("replayable CA horizon decision has no closed privacy policy")
+	}
+	v2 := []byte(`{"ca_authority_id":"authority-1","common_name":"alice@example.com","kind":"root","not_after":"2027-01-02T03:04:05Z","horizon_months":3,"months_remaining":2,"renew_by":"2026-10-02T03:04:05Z","validity_compressed":true,"dependent_certificates":4,"alert_kind":"ca.validity_compression","alert_detail":"alice@example.com needs a migration","severity":"critical"}`)
+	if err := validateRegisteredPrivacyEventPayload(v2, eventType, replayableVersion); err != nil {
+		t.Fatalf("replayable CA horizon decision rejected: %v", err)
+	}
+	if err := validateRegisteredPrivacyEventPayload(v2, eventType, DefaultSchemaVersion); err == nil {
+		t.Fatal("legacy v1 CA horizon schema accepted v2 replay authority")
+	}
+	rewritten, changed, err = applyRegisteredPrivacyEventPolicy(
+		v2, "11111111-1111-4111-8111-111111111111", subject, eventType, replayableVersion,
+	)
+	if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) ||
+		!bytes.Contains(rewritten, []byte(`"severity":"critical"`)) {
+		t.Fatalf("replayable CA horizon erasure = changed %t err %v payload %s", changed, err, rewritten)
+	}
 }
 
 func TestCoreProductionPrivacyCatalogCoversSignedDNSPluginAuditEvents(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +14,10 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -102,6 +106,191 @@ func TestServedCAHorizonAlertsYearsAheadAndReAlertsOnEachTightening(t *testing.T
 	}
 	if got := servedEventCount(t, h, "ca.authority.horizon_alerted"); got != 2 {
 		t.Fatalf("tightened sweep retained %d CA horizon audit events, want 2", got)
+	}
+}
+
+func TestServedCAHorizonBrokerFailureCannotCommitAlertStampOrOutbox(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	ctx := t.Context()
+	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "broker failure root", "root", "ca-horizon-broker-failure",
+		time.Now().UTC().Add(30*30*24*time.Hour))
+	failedLog, err := events.Open(ctx, config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "closed-nats"),
+	})
+	if err != nil {
+		t.Fatalf("open isolated event log: %v", err)
+	}
+	if err := failedLog.Close(); err != nil {
+		t.Fatalf("close isolated event log: %v", err)
+	}
+	m := lifecycle.NewManager(h.store, nil, h.srv.outbox, h.srv.idem, failedLog, lifecycle.Config{})
+	if alerted, err := m.AlertCAHorizon(ctx, h.tenant); err == nil || alerted != 0 {
+		t.Fatalf("broker failure alerted %d, err %v, want zero and append failure", alerted, err)
+	}
+	candidates, err := h.store.ListCAHorizonCandidates(ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("read authority after refused append: %v", err)
+	}
+	for _, candidate := range candidates {
+		if candidate.ID == ca.ID && candidate.AlertedMonths != nil {
+			t.Fatalf("broker failure stamped horizon band %d without an event", *candidate.AlertedMonths)
+		}
+	}
+	if got := len(caHorizonAlerts(t, ctx, h.store, h.tenant)); got != 0 {
+		t.Fatalf("broker failure enqueued %d horizon alerts without an event", got)
+	}
+}
+
+func TestServedCAHorizonRetainedDecisionRecoversStampAndOutbox(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	registerServedTenant(t, h, "CA horizon recovery")
+	ctx := t.Context()
+	now := time.Now().UTC()
+	notAfter := now.Add(30 * 30 * 24 * time.Hour)
+	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "recoverable root", "root", "ca-horizon-recovery", notAfter)
+	decision := projections.CAAuthorityHorizonAlerted{
+		CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
+		NotAfter: notAfter, HorizonMonths: 36, MonthsRemaining: 30,
+		RenewBy:   notAfter.Add(-90 * 24 * time.Hour),
+		AlertKind: notify.KindCAHorizon, AlertDetail: "Start the trust-anchor migration",
+		Severity: notify.AlertSeverityLow,
+	}
+	payload, err := json.Marshal(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventID := "ca-horizon:" + h.tenant + ":" + ca.ID + ":36"
+	retained, err := h.log.Append(ctx, events.Event{
+		ID: eventID, Type: projections.EventCAAuthorityHorizonAlerted,
+		SchemaVersion: projections.CAAuthorityHorizonAlertEventSchemaVersion,
+		TenantID:      h.tenant, Data: payload,
+	})
+	if err != nil {
+		t.Fatalf("append before interrupted SQL transaction: %v", err)
+	}
+	if got := len(caHorizonAlerts(t, ctx, h.store, h.tenant)); got != 0 {
+		t.Fatalf("unprojected event already has %d outbox commands", got)
+	}
+	checkpoint, err := h.store.OutboxReconciliationCheckpoint(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpoint >= retained.Sequence {
+		t.Fatalf("recovery checkpoint %d has already skipped retained event %d", checkpoint, retained.Sequence)
+	}
+	if healed, err := h.srv.orch.ReconcileOutbox(ctx, h.log); err != nil || healed != 1 {
+		t.Fatalf("reconcile retained decision healed %d, err %v, want one", healed, err)
+	}
+	if got := len(caHorizonAlerts(t, ctx, h.store, h.tenant)); got != 1 {
+		t.Fatalf("reconciled decision has %d outbox commands, want one", got)
+	}
+	candidates, err := h.store.ListCAHorizonCandidates(ctx, h.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].AlertedMonths == nil || *candidates[0].AlertedMonths != 36 {
+		t.Fatalf("retained decision did not restore the exact 36-month stamp: %+v", candidates)
+	}
+	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 0 {
+		t.Fatalf("repeat scheduler sweep alerted %d, err %v, want zero", alerted, err)
+	}
+	if again, found, err := h.log.EventByID(ctx, eventID); err != nil || !found || again.Sequence != retained.Sequence {
+		t.Fatalf("retained event identity changed: found=%t err=%v event=%+v", found, err, again)
+	}
+	if got := servedEventCount(t, h, projections.EventCAAuthorityHorizonAlerted); got != 1 {
+		t.Fatalf("reconciled decision has %d immutable events, want one", got)
+	}
+}
+
+func TestServedCAHorizonSweepHealsTailProjectedDecision(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	registerServedTenant(t, h, "CA horizon live recovery")
+	ctx := t.Context()
+	notAfter := time.Now().UTC().Add(30 * 30 * 24 * time.Hour)
+	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "tail projected root", "root", "ca-horizon-live-recovery", notAfter)
+	decision := projections.CAAuthorityHorizonAlerted{
+		CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
+		NotAfter: notAfter, HorizonMonths: 36, MonthsRemaining: 30,
+		RenewBy:   notAfter.Add(-90 * 24 * time.Hour),
+		AlertKind: notify.KindCAHorizon, AlertDetail: "Start the trust-anchor migration",
+		Severity: notify.AlertSeverityLow,
+	}
+	payload, err := json.Marshal(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := h.log.Append(ctx, events.Event{
+		ID:            "ca-horizon:" + h.tenant + ":" + ca.ID + ":36",
+		Type:          projections.EventCAAuthorityHorizonAlerted,
+		SchemaVersion: projections.CAAuthorityHorizonAlertEventSchemaVersion,
+		TenantID:      h.tenant, Data: payload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the background projector landing the event after the command's
+	// SQL transaction was interrupted. The stamp now hides this band from an
+	// ordinary candidate sweep, but its notification has not been queued.
+	if err := projections.New(h.store).Apply(ctx, retained); err != nil {
+		t.Fatalf("tail project retained decision: %v", err)
+	}
+	if got := len(caHorizonAlerts(t, ctx, h.store, h.tenant)); got != 0 {
+		t.Fatalf("tail projection created %d notification intents", got)
+	}
+	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 0 {
+		t.Fatalf("live recovery sweep alerted %d, err %v, want recovered intent without a new alert", alerted, err)
+	}
+	if got := len(caHorizonAlerts(t, ctx, h.store, h.tenant)); got != 1 {
+		t.Fatalf("live recovery sweep left %d notification intents, want one", got)
+	}
+	if got := servedEventCount(t, h, projections.EventCAAuthorityHorizonAlerted); got != 1 {
+		t.Fatalf("live recovery appended %d duplicate decisions, want one", got)
+	}
+}
+
+func TestServedCAHorizonRetryKeepsRetainedDecisionAfterBrokerWindow(t *testing.T) {
+	h := newServedHarnessWithEventOptions(t, config.Protocols{},
+		[]events.OpenOption{events.WithDuplicateWindowForTesting(100 * time.Millisecond)})
+	registerServedTenant(t, h, "CA horizon durable retry")
+	ctx := t.Context()
+	notAfter := time.Now().UTC().Add(30 * 30 * 24 * time.Hour)
+	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "retained root", "root", "ca-horizon-window", notAfter)
+	decision := projections.CAAuthorityHorizonAlerted{
+		CAAuthorityID: ca.ID, CommonName: ca.CommonName, Kind: ca.Kind,
+		NotAfter: notAfter, HorizonMonths: 36, MonthsRemaining: 30,
+		RenewBy:   notAfter.Add(-90 * 24 * time.Hour),
+		AlertKind: notify.KindCAHorizon, AlertDetail: "Original migration decision",
+		Severity: notify.AlertSeverityLow,
+	}
+	payload, err := json.Marshal(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventID := "ca-horizon:" + h.tenant + ":" + ca.ID + ":36"
+	retained, err := h.log.Append(ctx, events.Event{
+		ID: eventID, Type: projections.EventCAAuthorityHorizonAlerted,
+		SchemaVersion: projections.CAAuthorityHorizonAlertEventSchemaVersion,
+		TenantID:      h.tenant, Data: payload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond) // Cross JetStream's real duplicate window.
+	retry := decision
+	retry.AlertDetail = "Clock and dependent count changed during retry"
+	if err := h.srv.orch.RecordCAAuthorityHorizonAlert(ctx, h.tenant, retry); err != nil {
+		t.Fatalf("retry retained CA horizon decision: %v", err)
+	}
+	canonical, found, err := h.log.EventByID(ctx, eventID)
+	if err != nil || !found || canonical.Sequence != retained.Sequence {
+		t.Fatalf("retry changed immutable identity: found=%t err=%v canonical=%+v", found, err, canonical)
+	}
+	if got := servedEventCount(t, h, projections.EventCAAuthorityHorizonAlerted); got != 1 {
+		t.Fatalf("retry appended %d CA horizon events, want one", got)
+	}
+	alerts := caHorizonAlerts(t, ctx, h.store, h.tenant)
+	if len(alerts) != 1 || alerts[0].Detail != decision.AlertDetail {
+		t.Fatalf("retry did not preserve the original notification facts: %+v", alerts)
 	}
 }
 

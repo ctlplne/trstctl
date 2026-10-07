@@ -946,9 +946,9 @@ func transitionOutboxIdempotencyKey(eventID, requestKey string) string {
 	return "transition:" + requestKey
 }
 
-// rewriteLifecycleOutboxFromCanonicalHistory keeps executable lifecycle commands
-// and approval notifications in the same privacy generation as their source
-// events. It first validates and collects the complete tenant history, then
+// rewriteLifecycleOutboxFromCanonicalHistory keeps executable lifecycle commands,
+// approval notifications, and CA horizon alerts in the same privacy generation
+// as their source events. It first validates and collects the complete tenant history, then
 // changes PostgreSQL, so malformed or colliding history cannot produce a partial
 // rewrite. The historical name is retained because lifecycle commands were the
 // first consumer of this privacy fence.
@@ -973,6 +973,14 @@ func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Co
 	err := o.log.Replay(ctx, 0, func(ev events.Event) error {
 		if ev.TenantID != tenantID {
 			return nil
+		}
+		if ev.Type == projections.EventCAAuthorityHorizonAlerted &&
+			ev.SchemaVersion == projections.CAAuthorityHorizonAlertEventSchemaVersion {
+			entry, err := caHorizonOutboxEntry(ev)
+			if err != nil {
+				return err
+			}
+			return addEntry(entry.IdempotencyKey, entry)
 		}
 		if ev.Type == projections.EventApprovalRequested {
 			request, err := operationApprovalRequestFromEvent(ev)
@@ -1157,6 +1165,33 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			if restored {
 				healed++
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == projections.EventCAAuthorityHorizonAlerted {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			if ev.SchemaVersion <= 1 {
+				// Legacy audit-only events followed an already committed SQL
+				// stamp/outbox row and carry no replayable receiver command.
+				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+			}
+			entry, err := caHorizonOutboxEntry(ev)
+			if err != nil {
+				return err
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
+					return err
+				}
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+				if inserted {
+					healed++
+				}
+				return err
+			}); err != nil {
+				return err
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
