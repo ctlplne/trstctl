@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/netsec"
@@ -37,18 +39,31 @@ func NewClient(c *http.Client) *Client {
 // FetchRenewalInfo GETs the renewal info for certID from the renewalInfo endpoint
 // and returns it along with the server's Retry-After hint (when to poll again).
 func (c *Client) FetchRenewalInfo(ctx context.Context, renewalInfoBase, certID string) (RenewalInfo, time.Duration, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, renewalInfoBase+"/"+certID, nil)
+	if !ValidCertID(certID) {
+		return RenewalInfo{}, 0, fmt.Errorf("ari: malformed certificate identifier")
+	}
+	base, err := url.Parse(renewalInfoBase)
+	if err != nil || base == nil || (base.Scheme != "https" && base.Scheme != "http") ||
+		base.Host == "" || base.User != nil || base.RawQuery != "" || base.ForceQuery || base.Fragment != "" || base.Opaque != "" {
+		return RenewalInfo{}, 0, fmt.Errorf("ari: invalid renewal info endpoint")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base.String(), "/")+"/"+certID, nil)
 	if err != nil {
 		return RenewalInfo{}, 0, err
 	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "trstctl-ari/1")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return RenewalInfo{}, 0, fmt.Errorf("ari: fetch renewal info: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return RenewalInfo{}, 0, err
+	}
+	if len(data) > maxBody {
+		return RenewalInfo{}, 0, fmt.Errorf("ari: response exceeds %d bytes", maxBody)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return RenewalInfo{}, 0, fmt.Errorf("ari: renewal info returned status %d", resp.StatusCode)
@@ -56,6 +71,9 @@ func (c *Client) FetchRenewalInfo(ctx context.Context, renewalInfoBase, certID s
 	var info RenewalInfo
 	if err := json.Unmarshal(data, &info); err != nil {
 		return RenewalInfo{}, 0, fmt.Errorf("ari: decode renewal info: %w", err)
+	}
+	if info.SuggestedWindow.Start.IsZero() || !info.SuggestedWindow.End.After(info.SuggestedWindow.Start) {
+		return RenewalInfo{}, 0, fmt.Errorf("ari: invalid suggested window")
 	}
 	return info, parseRetryAfter(resp.Header.Get("Retry-After")), nil
 }
