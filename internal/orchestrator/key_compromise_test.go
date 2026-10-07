@@ -4,6 +4,7 @@ package orchestrator_test
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,10 @@ func TestKeyCompromiseQueuesCAAndExactHostFromOneLifecycleEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := orch.Transition(ctx, tenantA, identity.ID, orchestrator.StateDeployed,
+		"fixture host served the recorded leaf"); err != nil {
+		t.Fatal(err)
+	}
 	_, version, err := st.IdentityApprovalTarget(ctx, tenantA, identity.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -105,6 +110,69 @@ func TestKeyCompromiseQueuesCAAndExactHostFromOneLifecycleEvent(t *testing.T) {
 	replayed, err := st.GetConnectorDeliveryReceipt(ctx, tenantA, receipt.ID)
 	if err != nil || replayed.OutboxID == nil || *replayed.OutboxID != *receipt.OutboxID {
 		t.Fatalf("cold replay lost exact host receipt: %+v %v", replayed, err)
+	}
+}
+
+// An ordinary revocation only queues CA publication. For a serving X.509
+// identity, reporting key-compromise success from that path is unsafe because
+// the same compromised leaf can remain live on the host.
+func TestOrdinaryKeyCompromiseRefusesServingX509BeforeEventAndOutbox(t *testing.T) {
+	ctx := t.Context()
+	st, log := newStore(t), openLog(t)
+	mustRegisterTenant(t, st, tenantA)
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
+	owner, err := orch.CreateOwner(ctx, tenantA, "workload", "serving compromise owner", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := orch.CreateIdentity(ctx, tenantA, store.Identity{
+		Kind: store.KindX509Certificate, Name: "serving.example.test", OwnerID: owner.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, to := range []orchestrator.State{orchestrator.StateIssued, orchestrator.StateDeployed} {
+		if err := orch.Transition(ctx, tenantA, identity.ID, to, "fixture"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := countOutboxDestination(t, st, tenantA, "revocation.publish")
+	err = orch.TransitionWithIdempotency(ctx, tenantA, identity.ID,
+		orchestrator.StateRevoked, "keyCompromise", "ordinary-compromise")
+	if !errors.Is(err, orchestrator.ErrKeyCompromiseContainmentRequired) {
+		t.Fatalf("ordinary serving-key compromise = %v, want containment refusal", err)
+	}
+	read, err := st.GetIdentity(ctx, tenantA, identity.ID)
+	if err != nil || read.Status != string(orchestrator.StateDeployed) {
+		t.Fatalf("refused transition changed identity: %+v %v", read, err)
+	}
+	if after := countOutboxDestination(t, st, tenantA, "revocation.publish"); after != before {
+		t.Fatalf("refused transition added %d CA jobs", after-before)
+	}
+}
+
+func TestKeyCompromiseContainmentPolicyCoversEveryServingState(t *testing.T) {
+	for _, status := range []string{"deployed", "renewing", "renewal_failed"} {
+		identity := store.Identity{Kind: store.KindX509Certificate, Status: status}
+		if !orchestrator.KeyCompromiseNeedsContainment(identity, orchestrator.StateRevoked, "keyCompromise") {
+			t.Fatalf("serving state %s allowed a CA-only compromise", status)
+		}
+		identity.Kind = "x509"
+		if !orchestrator.KeyCompromiseNeedsContainment(identity, orchestrator.StateRevoked, "keyCompromise") {
+			t.Fatalf("legacy X.509 kind in %s allowed a CA-only compromise", status)
+		}
+	}
+	for _, identity := range []store.Identity{
+		{Kind: store.KindX509Certificate, Status: "issued"},
+		{Kind: store.KindSSHCertificate, Status: "deployed"},
+	} {
+		if orchestrator.KeyCompromiseNeedsContainment(identity, orchestrator.StateRevoked, "keyCompromise") {
+			t.Fatalf("non-serving or non-X.509 identity needs host containment: %+v", identity)
+		}
+	}
+	if orchestrator.KeyCompromiseNeedsContainment(store.Identity{Kind: store.KindX509Certificate, Status: "deployed"},
+		orchestrator.StateRevoked, "superseded") {
+		t.Fatal("factual superseded revocation was routed to key-compromise containment")
 	}
 }
 

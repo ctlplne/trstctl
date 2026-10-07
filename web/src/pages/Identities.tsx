@@ -1156,6 +1156,17 @@ export function Identities() {
                     ))}
                   </ul>
                 )}
+                {pending.to === "revoked" &&
+                  pendingReason === "keyCompromise" &&
+                  transitionPreview.plan.identity_kind === "x509_certificate" &&
+                  !transitionPreview.plan.ready && (
+                    <Link
+                      to={`/certificates?tab=crlct&identity_id=${encodeURIComponent(pending.id)}`}
+                      className={buttonVariants({ variant: "outline", size: "sm" })}
+                    >
+                      {translateNow("identities.lifecycle.compoundCompromiseAction")}
+                    </Link>
+                  )}
               </section>
             )}
 

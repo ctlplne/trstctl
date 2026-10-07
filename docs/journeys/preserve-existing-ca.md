@@ -327,10 +327,11 @@ by rollback and certificates minted for host jobs that never finished deployment
 An external certificate is recorded as revoked only after its authority accepts
 the request; its serial is not added to trstctl's own CA ledger or CRL.
 
-Preview and execute the identity transition with `identities:write` permission:
+For a routine replacement where the original key is not compromised, preview
+and execute the factual `superseded` transition with `identities:write`:
 
 ```sh
-printf '%s\n' '{"to":"revoked","reason":"keyCompromise"}' > revoke-plan.json
+printf '%s\n' '{"to":"revoked","reason":"superseded"}' > revoke-plan.json
 trstctl-cli identities transition-preview <identity-id> -f revoke-plan.json \
   > revoke-preview.json
 jq '{ready,from,to,expected_version,side_effect_destination,warnings}' revoke-preview.json
@@ -340,6 +341,16 @@ jq --argjson version "$(jq .expected_version revoke-preview.json)" \
 trstctl-cli --idempotency-key preserve-ca-revoke-001 \
   identities transition <identity-id> -f revoke-execute.json
 ```
+
+If the key was compromised while this identity was deployed, renewing, or in
+renewal failure, this ordinary transition refuses before queuing CA publication.
+Open **Certificates → Revocation & CT → Revocation center**, select the exact
+identity and host, and review the combined CA revocation and host containment
+command. The API/CLI equivalent is `identities compromise-preview` followed by
+`identities compromise` with the exact reviewed fields. If the host is not
+managed by trstctl, revoke the exact certificate through its issuing CA and
+stop the workload through an independently verified host procedure. Neither
+path may call a mere `revoked` identity state proof of endpoint containment.
 
 This is asynchronous: the identity's `revoked` status acknowledges the intent,
 not the external outcome. Missing issuance evidence, unavailable credentials, or

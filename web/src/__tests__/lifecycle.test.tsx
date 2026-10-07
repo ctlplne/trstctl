@@ -980,12 +980,34 @@ describe("lifecycle actions from the UI", () => {
     // Confirming requires the credential name and sends the operator reason.
     await user.type(within(dialog).getByLabelText(/type credential name/i), "to-revoke");
     const reason = within(dialog).getByLabelText(/revocation reason/i);
-    await user.selectOptions(reason, "keyCompromise");
+    await user.selectOptions(reason, "cessationOfOperation");
     expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
     await user.click(within(dialog).getByRole("button", { name: "Review updated action" }));
-    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenLastCalledWith("dep-9", "revoked", "keyCompromise"));
+    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenLastCalledWith("dep-9", "revoked", "cessationOfOperation"));
     await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "keyCompromise", undefined, expect.any(String), 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "cessationOfOperation", undefined, expect.any(String), 2));
+  });
+
+  it("directs a serving X.509 key compromise to the exact two-effect review", async () => {
+    const identity = { id: "serving-compromise", name: "compromised.example.test", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.previewIdentityTransition.mockImplementation(async (id: string, to: string, reason: string) => ({
+      ...transitionPlanFor(id, to),
+      ready: reason !== "keyCompromise",
+      warnings: reason === "keyCompromise" ? ["CA-only revocation cannot stop the serving host."] : [],
+    }));
+    const user = userEvent.setup();
+    renderIdentities();
+    const detail = await openIdentityDetails(user, identity.name);
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.selectOptions(within(dialog).getByLabelText(/revocation reason/i), "keyCompromise");
+    await user.click(within(dialog).getByRole("button", { name: "Review updated action" }));
+    const link = await within(dialog).findByRole("link", { name: "Review CA revocation and host containment together" });
+    expect(link).toHaveAttribute("href", "/certificates?tab=crlct&identity_id=serving-compromise");
+    expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
   });
 
   it("keeps the reviewed command across approval refusal and a fresh page mount", async () => {

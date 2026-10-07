@@ -70,6 +70,9 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 		}
 		return 0, nil, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: state}
 	}
+	if orchestrator.KeyCompromiseNeedsContainment(identity, state, req.Reason) && req.compromise == nil {
+		return 0, nil, lifecyclePreviewAPIError(orchestrator.ErrKeyCompromiseContainmentRequired)
+	}
 	if req.ExpectedVersion != nil && targetVersion != *req.ExpectedVersion {
 		return 0, nil, lifecyclePreviewAPIError(orchestrator.ErrStaleLifecyclePreview)
 	}

@@ -27746,6 +27746,10 @@ export const messages = {
     description: "Status while the server builds an effect-free lifecycle plan.",
   },
   "identities.lifecycle.reviewRetry": { defaultMessage: "Retry preview", description: "Retries a failed lifecycle preview read." },
+  "identities.lifecycle.compoundCompromiseAction": {
+    defaultMessage: "Review CA revocation and host containment together",
+    description: "Opens the exact managed certificate in the Revocation center after ordinary key-compromise preview refuses a serving leaf.",
+  },
   "identities.lifecycle.reviewNoChanges": {
     defaultMessage: "No changes made by preview",
     description: "Assurance that the lifecycle preview was effect-free.",

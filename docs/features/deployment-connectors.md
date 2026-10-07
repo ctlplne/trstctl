@@ -410,6 +410,10 @@ profile before submitting a stopped-listener replacement.
 When a managed X.509 identity's key is compromised and one registered host is
 still serving its leaf, open **Certificates → Revocation & CT → Revocation center**,
 select that identity, reason `keyCompromise`, and the exact host target. The
+ordinary identity transition preview is `ready=false` for a serving X.509
+key compromise, and ordinary execution returns 409 with
+`key_compromise_containment_required` before any event or outbox
+intent; a CA-only lifecycle success cannot claim endpoint containment. The
 effect-free preview reads the issuing CA authority for every bounded certificate
 record, the current identity version, target revision, enrolled agent, and last
 served leaf. A missing authority or exact host binding refuses the command.

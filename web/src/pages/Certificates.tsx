@@ -1189,6 +1189,7 @@ function CertificateWorkspace() {
               <RevocationCenter
                 certificates={certificates}
                 targetCertificateID={searchParams.get("certificate_id") ?? undefined}
+                targetIdentityID={searchParams.get("identity_id") ?? undefined}
                 identities={identities}
                 health={revocationHealth}
                 distributions={crlDistributions}

@@ -51,6 +51,14 @@ func lifecyclePreviewAPIError(err error) error {
 	if errors.Is(err, orchestrator.ErrStaleLifecyclePreview) {
 		return errStatus(http.StatusConflict, "The identity changed after this lifecycle action was previewed. Review the current state and preview the action again.")
 	}
+	if errors.Is(err, orchestrator.ErrKeyCompromiseContainmentRequired) {
+		refusal := errStatus(http.StatusConflict, orchestrator.ErrKeyCompromiseContainmentRequired.Error())
+		refusal.ext = map[string]any{
+			"code":                  "key_compromise_containment_required",
+			"recovery_operation_id": "previewKeyCompromise",
+		}
+		return refusal
+	}
 	return err
 }
 
@@ -206,7 +214,15 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 				"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
 		}
 	}
-	if to == orchestrator.StateRevoked && identity.Kind == store.KindX509Certificate {
+	if to == orchestrator.StateRevoked && (identity.Kind == store.KindX509Certificate || identity.Kind == "x509") {
+		if orchestrator.KeyCompromiseNeedsContainment(identity, to, req.Reason) {
+			plan.Ready = false
+			plan.Warnings = append(plan.Warnings,
+				"This X.509 identity may still be serving a compromised leaf. The ordinary transition queues CA revocation but no host containment, so it cannot complete a key-compromise response. Use Certificates → Revocation & CT → Revocation center, select the exact host target, and review the compound key-compromise command. If no managed target is available, revoke the exact certificate with its issuing CA and stop the host through an independently verified procedure.")
+			plan.Guidance = "Ordinary key-compromise revocation is unavailable for a serving X.509 identity. Review CA revocation and host containment together in the Revocation center."
+			plan.VerificationSteps = append(plan.VerificationSteps,
+				"Follow both CA publication and host containment receipts, then verify signed CA revocation evidence and the fresh served leaf with stock clients.")
+		}
 		certs, err := a.store.IdentityRevocationCertificates(r.Context(), tenantID, id, 101)
 		if err != nil {
 			a.writeError(w, err)

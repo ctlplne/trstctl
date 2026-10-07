@@ -208,10 +208,14 @@ describe("RevocationCenter", () => {
     apiMock.previewIdentityTransition.mockReset();
     apiMock.transitionIdentity.mockReset();
     const user = userEvent.setup();
-    renderCenter();
+    renderWithApp(
+      <MemoryRouter>
+        <RevocationCenter identities={identities} distributions={[]} health={null} targetIdentityID={identities[0].id} />
+      </MemoryRouter>,
+    );
 
-    await user.selectOptions(screen.getByLabelText("Managed certificate"), identities[0].id);
-    await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "keyCompromise");
+    expect(screen.getByLabelText("Managed certificate")).toHaveValue(identities[0].id);
+    expect(screen.getByLabelText("RFC 5280 reason")).toHaveValue("keyCompromise");
     await screen.findByRole("option", { name: "payments-apache · apache" });
     await user.selectOptions(screen.getByLabelText("Host serving the compromised certificate"), target.id);
     await user.click(screen.getByRole("button", { name: "Review exact plan" }));

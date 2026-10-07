@@ -68,6 +68,7 @@ export interface RevocationCenterProps {
   onCertificateRevoked?: (certificate: Certificate) => void;
   onRevoked?: (identity: Identity) => void;
   targetCertificateID?: string;
+  targetIdentityID?: string;
 }
 
 const revocableIdentityStates = new Set(["issued", "deployed", "renewing", "renewal_failed"]);
@@ -108,6 +109,7 @@ export function RevocationCenter({
   onCertificateRevoked,
   onRevoked,
   targetCertificateID,
+  targetIdentityID,
 }: RevocationCenterProps) {
   const { t } = useTranslation();
   const linkedFailedCopy = t("certificates.revocation.linkedFailed");
@@ -116,8 +118,8 @@ export function RevocationCenter({
   const [linkedLoading, setLinkedLoading] = useState(Boolean(targetCertificateID));
   const [linkedError, setLinkedError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  const [targetKey, setTargetKey] = useState(() => (targetCertificateID ? certificateTargetKey(targetCertificateID) : ""));
-  const [reason, setReason] = useState<BulkRevokeRequest["reason"]>("unspecified");
+  const [targetKey, setTargetKey] = useState(() => (targetCertificateID ? certificateTargetKey(targetCertificateID) : (targetIdentityID ?? "")));
+  const [reason, setReason] = useState<BulkRevokeRequest["reason"]>(targetIdentityID ? "keyCompromise" : "unspecified");
   const [hostTargetID, setHostTargetID] = useState("");
   const [review, setReview] = useState<ReviewState | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);

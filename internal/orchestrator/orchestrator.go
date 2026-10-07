@@ -565,6 +565,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			if err != nil {
 				return err
 			}
+			if compromise == nil && KeyCompromiseNeedsContainment(locked, to, reason) {
+				return ErrKeyCompromiseContainmentRequired
+			}
 			if expectedVersion != nil && version != *expectedVersion {
 				return ErrStaleLifecyclePreview
 			}

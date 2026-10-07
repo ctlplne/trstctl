@@ -4857,9 +4857,14 @@ certificates rather than revoking them.
 **No silent no-ops.** Exact-certificate revocation against an authority that
 cannot revoke through this build returns a failed item with the unsupported
 reason and queues no upstream effect. The X.509 identity-transition preview
-marks complete revocation not ready and names the affected certificate, even
-though a privileged operator can still record the local identity transition to
-stop automation. That local state does not revoke a leaf at the external CA.
+marks complete revocation not ready and names the affected certificate. For a
+non-compromise or non-serving identity, a privileged operator can still record
+the local lifecycle transition to stop automation; that state does not revoke a
+leaf at the external CA. For a serving X.509 `keyCompromise`, ordinary lifecycle
+execution refuses before an event or outbox intent and directs the operator to
+the reviewed CA-and-host command. Without an exact managed host, the operator
+must revoke the exact certificate at its issuing CA and independently stop the
+workload. The product does not infer host containment from the `revoked` state.
 This is the specific failure the epic exists to remove: an
 operator revoking a compromised key and being told it worked, while the
 authority still considers the certificate valid, is worse off than one told

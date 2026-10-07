@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,27 @@ import (
 
 	"trstctl.com/trstctl/internal/store"
 )
+
+// ErrKeyCompromiseContainmentRequired means CA publication alone cannot be
+// reported as a complete response for an X.509 identity that may be serving a
+// compromised leaf. The reviewed compound command retains both effects.
+var ErrKeyCompromiseContainmentRequired = errors.New("serving X.509 key compromise requires reviewed CA revocation and host containment; use the key-compromise command")
+
+// KeyCompromiseNeedsContainment is shared by operator previews and the command
+// boundary. A failed renewal still leaves the previous certificate serving.
+// Status, not optional target metadata, is the conservative serving signal.
+func KeyCompromiseNeedsContainment(identity store.Identity, to State, reason string) bool {
+	if to != StateRevoked || reason != "keyCompromise" ||
+		(identity.Kind != store.KindX509Certificate && identity.Kind != "x509") {
+		return false
+	}
+	switch State(identity.Status) {
+	case StateDeployed, StateRenewing, StateRenewalFailed:
+		return true
+	default:
+		return false
+	}
+}
 
 func keyCompromiseEventID(tenantID, identityID, key string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID,
