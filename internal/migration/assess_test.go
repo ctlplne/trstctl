@@ -3,6 +3,7 @@
 package migration_test
 
 import (
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/migration"
@@ -46,6 +47,9 @@ func TestAnUnobservedMemberIsAnUnknownNotAPass(t *testing.T) {
 	}
 	if len(a.Waves) != 1 || len(a.Waves[0].Blocked) != 1 {
 		t.Errorf("wave blocked list = %+v, want the unscanned member", a.Waves)
+	}
+	if !strings.Contains(a.Guidance, "blocks the start") || !strings.Contains(a.Guidance, "check again") || strings.Contains(a.Guidance, "accept that") {
+		t.Errorf("unknown-member guidance must explain the fail-closed start gate and recheck, got %q", a.Guidance)
 	}
 }
 

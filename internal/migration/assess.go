@@ -74,9 +74,9 @@ type AssessedWave struct {
 
 const assessGuidance = "This is a read-only assessment: nothing was distributed, issued, or " +
 	"deployed. Unknowns are gaps in what has been OBSERVED, not findings about the estate — a " +
-	"member with no observed trust store is not a member confirmed to have an empty one, and only " +
-	"the second is safe to migrate. Resolve the unknowns, or accept that those members are the " +
-	"ones most likely to break, before starting."
+	"member with no observed trust store is not a member confirmed to have an empty one. " +
+	"Any unknown blocks the start of a migration. Observe the missing trust store, " +
+	"deployment target, or verification listener, then check again."
 
 // MemberFacts is what the caller already knows about one member, gathered from
 // the graph (H1), the deployment targets, and the verification config (D2).
