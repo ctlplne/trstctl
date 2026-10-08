@@ -919,13 +919,13 @@ func proveFullRestoreRuntime(
 	if err != nil {
 		return fmt.Errorf("re-export recovered independent PostgreSQL state: %w", err)
 	}
-	if observed.Records != result.Postgres.Records {
-		return fmt.Errorf("recovered PostgreSQL record count = %d, backup restored %d", observed.Records, result.Postgres.Records)
-	}
 	for _, table := range backup.RecoveredFromPostgresBackup {
 		if observed.Tables[table] != result.Postgres.Tables[table] {
 			return fmt.Errorf("recovered PostgreSQL table %s rows = %d, backup restored %d", table, observed.Tables[table], result.Postgres.Tables[table])
 		}
+	}
+	if observed.Records != result.Postgres.Records {
+		return fmt.Errorf("recovered PostgreSQL record count = %d, backup restored %d", observed.Records, result.Postgres.Records)
 	}
 	result.StoreHealthy = true
 	if err := log.Ping(ctx); err != nil {
