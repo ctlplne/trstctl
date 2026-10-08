@@ -688,7 +688,7 @@ function ManagedKeyPanel({
         <Fact label={t("caHierarchy.custody.state")} value={managedKey.state} />
         <Fact
           label={t("caHierarchy.custody.custodyStatus")}
-          value={`${t(`caHierarchy.custody.status.${managedKey.custody_status ?? "not_checked"}`)}${managedKey.custody_checked_at ? ` · ${new Date(managedKey.custody_checked_at).toLocaleString()}` : ""}`}
+          value={`${t(`caHierarchy.custody.status.${managedKey.custody_status ?? "not_checked"}`)}${managedKey.custody_status !== "pending" && managedKey.custody_checked_at ? ` · ${new Date(managedKey.custody_checked_at).toLocaleString()}` : ""}`}
         />
         <Fact label={t("caHierarchy.custody.extractable")} value={managedKey.extractable ? t("platform.idempotency.yes") : t("platform.idempotency.no")} />
       </dl>

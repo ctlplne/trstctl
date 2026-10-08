@@ -1113,7 +1113,7 @@ describe("CA hierarchy and custody surface", () => {
     const id = "managedkey:" + "a".repeat(64);
     const receipt = { operation_id: id, status: "queued", status_url: `/api/v1/managed-keys/operations/${id}` };
     apiMock.verifyManagedKeyCustody.mockResolvedValueOnce(receipt);
-    const key = { key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active" };
+    const key = { key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active", custody_checked_at: "2026-10-01T00:00:00Z" };
     apiMock.getManagedKey.mockResolvedValueOnce({ ...key, custody_status: "pending" }).mockResolvedValue({ ...key, custody_status: "unavailable" });
     apiMock.getManagedKeyOperation
       .mockResolvedValueOnce(receipt)
