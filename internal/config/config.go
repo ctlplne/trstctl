@@ -1451,10 +1451,10 @@ type AgentBroker struct {
 
 // PAM turns on just-in-time privileged access sessions (AUD-13).
 //
-// The broker requires tenant-bound targets and attestors, but production config
-// does not yet provide protected target references or tenant trust-source
-// selection. Enabling this flag alone fails startup rather than claiming usable
-// privileged access. Do not put an administrator DSN in this config file.
+// The broker requires tenant-bound targets, but production config does not yet
+// provide protected target references. It resolves tenant-managed attester trust
+// at request time. Enabling this flag alone fails startup rather than claiming
+// usable privileged access. Do not put an administrator DSN in this config file.
 type PAM struct {
 	Enabled        bool   `json:"enabled"`
 	DefaultTTL     string `json:"default_ttl,omitempty"`

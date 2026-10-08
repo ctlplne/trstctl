@@ -36,7 +36,7 @@ const (
 // PAMConfig enables the served just-in-time privileged-access broker (PAM-01/F33).
 // Postgres targets use real scoped login roles; SSH targets use the signer-backed
 // SSH CA. Every injected target is tenant-bound. An enabled broker without
-// attestors or targets refuses to start.
+// targets refuses to start; tenant-managed trust is resolved for each request.
 type PAMConfig struct {
 	Enabled         bool
 	DefaultTTL      time.Duration
@@ -70,7 +70,6 @@ type pamService struct {
 	projector      *projections.Projector
 	audit          auditsink.Auditor
 	attestors      []attest.Attestor
-	methods        map[string]struct{}
 	postgres       map[pamTargetID]*pamPostgresTarget
 	sshTargets     map[pamTargetID]PAMSSHTarget
 	sshCA          *sshca.CA
@@ -109,9 +108,6 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: PAM requires store and event log")
 	}
-	if len(cfg.Attestors) == 0 {
-		return nil, errors.New("server: PAM requires at least one attestor")
-	}
 	if len(cfg.PostgresTargets) == 0 && len(cfg.SSHTargets) == 0 {
 		return nil, errors.New("server: PAM requires at least one target")
 	}
@@ -138,12 +134,10 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if audit == nil {
 		audit = auditsink.Nop{}
 	}
-	methods := make(map[string]struct{}, len(cfg.Attestors))
 	for _, a := range cfg.Attestors {
 		if a == nil || strings.TrimSpace(a.Method()) == "" {
 			return nil, errors.New("server: PAM attestor has empty method")
 		}
-		methods[a.Method()] = struct{}{}
 	}
 	postgresTargets := make(map[pamTargetID]*pamPostgresTarget, len(cfg.PostgresTargets))
 	for _, target := range cfg.PostgresTargets {
@@ -197,7 +191,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	}
 	return &pamService{
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
-		attestors: cfg.Attestors, methods: methods, postgres: postgresTargets,
+		attestors: cfg.Attestors, postgres: postgresTargets,
 		sshTargets: sshTargets, sshCA: d.SSHCA, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 	}, nil
@@ -236,9 +230,16 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 	if err := s.validate(tenantID, idempotencyKey, requester, req); err != nil {
 		return api.PAMSession{}, err
 	}
+	attestors, err := resolveWorkloadAttestors(ctx, s.store, s.attestors, tenantID, req.Method)
+	if err != nil {
+		return api.PAMSession{}, fmt.Errorf("server: resolve PAM tenant attester trust: %w", err)
+	}
+	if len(attestors) == 0 {
+		return api.PAMSession{}, fmt.Errorf("%w: tenant has no enabled trust source for method %q", api.ErrPAMRejected, req.Method)
+	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: s.attestors,
+		Attestors: attestors,
 		Audit:     s.audit,
 	})
 	if err != nil {
@@ -454,9 +455,6 @@ func (s *pamService) validate(tenantID, idempotencyKey, requester string, req ap
 	if req.Method == "" {
 		return fmt.Errorf("%w: method is required", api.ErrPAMInvalid)
 	}
-	if _, ok := s.methods[req.Method]; !ok {
-		return fmt.Errorf("%w: unknown attestation method %q", api.ErrPAMInvalid, req.Method)
-	}
 	if len(req.Payload) == 0 {
 		return fmt.Errorf("%w: attestation payload is required", api.ErrPAMInvalid)
 	}
@@ -525,9 +523,9 @@ func jsonMap(raw []byte) map[string]any {
 
 // pamFromConfig maps the operator's config onto the PAM surface.
 //
-// The production config does not yet provide protected target references or
-// tenant trust-source selection. The broker refuses to start if enabled without
-// both; this flag alone is not an operator-ready PAM path.
+// The production config does not yet provide protected target references. The
+// broker refuses to start without targets; tenant-managed attester trust is
+// resolved at request time through the existing trust-source API.
 func pamFromConfig(c config.PAM) PAMConfig {
 	out := PAMConfig{Enabled: c.Enabled}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {

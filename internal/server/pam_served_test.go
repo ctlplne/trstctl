@@ -196,6 +196,54 @@ func TestPAMSSHRequiresAnExplicitPrincipalAllowlist(t *testing.T) {
 	}
 }
 
+func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
+	pgDSN, stopPG := startPAMPostgres(t)
+	defer stopPG()
+	seedPAMPostgresTable(t, pgDSN)
+	fixture := servedDynamicK8sTrustFixture(t, "pam-tenant-trust")
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.PAM = PAMConfig{Enabled: true, MaxTTL: time.Minute, PostgresTargets: []PAMPostgresTarget{{
+			TenantID: servedTestTenant, ID: "tenant-pg", DSN: []byte(pgDSN), Database: "postgres", Schema: "public",
+		}}}
+	})
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-workload-requester", "access:write")
+	owner := seedScopedTokenSubject(t, h.store, h.tenant, "pam-trust-owner", "certs:issue", "issuers:write")
+	request := map[string]any{
+		"target_type": "postgres", "target_id": "tenant-pg", "role": "readonly", "method": "k8s_sat",
+		"payload_base64": base64.StdEncoding.EncodeToString([]byte(fixture.SAT)), "ttl_seconds": 30,
+	}
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester, "pam-before-trust", request)
+	if status != http.StatusForbidden {
+		t.Fatalf("PAM accepted a proof before tenant trust: status=%d body=%s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources", owner,
+		"pam-tenant-trust-create", map[string]any{
+			"name": "pam-k8s", "method": "k8s_sat", "issuer": "https://kubernetes.default.svc",
+			"audience": "trstctl", "jwks": fixture.JWKS,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("register PAM attester trust: status=%d body=%s", status, body)
+	}
+	var source servedWorkloadTrustSourceResponse
+	if err := json.Unmarshal(body, &source); err != nil || source.ID == "" {
+		t.Fatalf("decode PAM attester trust source: %v", err)
+	}
+	issued := servedPAMOpen(t, h, requester, "pam-after-trust", request)
+	if issued.Postgres == nil {
+		t.Fatal("tenant-trusted PAM did not return a PostgreSQL credential")
+	}
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources/"+source.ID+"/revoke",
+		owner, "pam-tenant-trust-revoke", map[string]any{"reason": "retire compromised signer"})
+	if status != http.StatusOK {
+		t.Fatalf("revoke PAM attester trust: status=%d body=%s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester, "pam-after-revoke", request)
+	if status != http.StatusForbidden {
+		t.Fatalf("PAM accepted proof after tenant trust revoke: status=%d body=%s", status, body)
+	}
+}
+
 type servedPAMAttestor struct{}
 
 func (servedPAMAttestor) Method() string { return "stub_pam" }

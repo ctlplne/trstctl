@@ -2680,9 +2680,10 @@ than sending an operator looking for a credential that was never there.
   were wired after their dead `Deps` fields were found: `agent_broker` can turn
   on `POST /api/v1/broker/agent-identities`, while `pam` reaches the broker
   constructor for `POST /api/v1/access/sessions` and its three siblings. PAM still
-  cannot be enabled by an ordinary operator: production config has no target
-  registration or attestor reference, and the broker refuses to start without
-  both. The injection-only target model is tenant-bound and rejects an SSH target
+  cannot be enabled by an ordinary operator: production config has no protected
+  target registration, and the broker refuses to start without targets. PAM now
+  resolves attestors from enabled tenant-managed workload trust at request time.
+  The injection-only target model is tenant-bound and rejects an SSH target
   without an explicit host, port, and principal allowlist. A Postgres DSN must be
   loaded by reference from a protected file or tenant secret; placing it in the
   main config would copy an administrator credential into every config backup.

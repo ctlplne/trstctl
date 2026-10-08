@@ -201,9 +201,11 @@ Ephemeral/JIT credential issuance is served when configured through `POST /api/v
 matching `intent_digest`; PAM-lite sessions are served
 through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
 `GET /api/v1/access/sessions/{id}` only in an assembled server with injected
-targets and attestors. The production configuration does not yet provide a
-target-registration or attestor path, so enabling `pam` alone cannot start the
-broker. The injected target model binds each target to one tenant and requires an
+targets. The broker resolves attestors from the existing tenant-managed workload
+trust-source API at request time and refuses a method with no enabled tenant
+trust. Production configuration does not yet provide a protected
+target-registration path, so enabling `pam` alone cannot start the broker. The
+injected target model binds each target to one tenant and requires an
 explicit SSH host, port, and principal list; an empty principal list grants nobody.
 The PAM path does not yet have a distinct-approver step or early revocation, and
 must not be treated as an enterprise-ready JIT approval workflow. The ephemeral
