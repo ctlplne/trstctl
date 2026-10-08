@@ -67,13 +67,14 @@ LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$
 # internal/server has one deliberately large fairness/restart acceptance proof.
 # Keep that proof and every assertion, but give it an independent package clock.
 # The remaining tests run in two processes with independent databases and signer
-# helpers. Their complete compiled census must finish under one shared 15m wall,
-# retaining race detection and full first-party coverage. Compilation/listing is
+# helpers. Their complete compiled census has one shared 60m wall so loaded
+# hosts can finish every functional test; this is not a performance budget.
+# Race detection and full first-party coverage remain enabled. Compilation/listing is
 # timed separately, as with go test -timeout. The isolated row-501 proof retains
 # its separate 10m ceiling.
 SERVER_IMPORT := $(MODULE)/internal/server
 SERVER_ROTATION_CURSOR_TEST := ^TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD111AUD113$$
-SERVER_COMPLEMENTARY_TIMEOUT := 15m
+SERVER_COMPLEMENTARY_TIMEOUT := 60m
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.7

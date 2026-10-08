@@ -280,7 +280,7 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	for _, want := range []string{
 		"SERVER_IMPORT := $(MODULE)/internal/server",
 		"SERVER_ROTATION_CURSOR_TEST := ^" + proof + "$$",
-		"SERVER_COMPLEMENTARY_TIMEOUT := 15m",
+		"SERVER_COMPLEMENTARY_TIMEOUT := 60m",
 		"COVERPROFILE_SERVER := $(COVERPROFILE).server",
 		"COVERPROFILE_SERVER_ROTATION_CURSOR := $(COVERPROFILE).server-rotation-cursor",
 	} {
