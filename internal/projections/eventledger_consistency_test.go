@@ -107,6 +107,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventHoneyTokenTriggered:                      "EventHoneyTokenTriggered",
 	projections.EventHoneyTokenRevoked:                        "EventHoneyTokenRevoked",
 	projections.EventPAMSessionStarted:                        "EventPAMSessionStarted",
+	projections.EventPAMSessionActivationRequested:            "EventPAMSessionActivationRequested",
 	projections.EventPAMSessionExpired:                        "EventPAMSessionExpired",
 	projections.EventProfileCreated:                           "EventProfileCreated",
 	projections.EventProfileUpdated:                           "EventProfileUpdated",

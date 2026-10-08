@@ -4170,9 +4170,9 @@ export const messages = {
   "admin.access.privilegedSessions": { defaultMessage: "Privileged sessions", description: "Privileged access session section heading." },
   "admin.access.noSessions": { defaultMessage: "No privileged sessions are recorded.", description: "Empty privileged session state." },
   "admin.access.details": { defaultMessage: "Details", description: "Row action for opening a privileged session record." },
-  "admin.access.openSession": { defaultMessage: "Open privileged session", description: "Action and dialog title for a JIT privileged session." },
+  "admin.access.openSession": { defaultMessage: "Request privileged session", description: "Action and dialog title for a reviewed JIT privileged session." },
   "admin.access.sessionDescription": {
-    defaultMessage: "Broker short-lived PostgreSQL or SSH access. The session and its exact evidence land in change history.",
+    defaultMessage: "Request short-lived PostgreSQL or SSH access. Distinct reviewers must approve before the credential is created.",
     description: "ELI5 privileged-session dialog explanation.",
   },
   "admin.access.sessionEvidence": {
@@ -4194,7 +4194,39 @@ export const messages = {
   "admin.access.ssh": { defaultMessage: "SSH", description: "SSH target type; protocol acronym stays literal." },
   "admin.access.sshPrincipal": { defaultMessage: "SSH principal", description: "SSH privileged-session principal field label." },
   "admin.access.payloadBase64": { defaultMessage: "Payload (base64)", description: "Base64 broker payload field label." },
-  "admin.access.openSessionSubmit": { defaultMessage: "Open session", description: "Privileged-session form submit action." },
+  "admin.access.openSessionSubmit": { defaultMessage: "Request review", description: "Submit the exact privileged-session request without granting access." },
+  "admin.access.sessionAwaitingApproval": { defaultMessage: "Review requested. No credential has been created.", description: "Pending PAM approval status." },
+  "admin.access.sessionApprovalNext": {
+    defaultMessage:
+      "Ask {count} different custodian(s) to approve this exact request in Approvals, then activate it here. Keep this window open so the proof and request ID stay available.",
+    description: "PAM approval and activation steps.",
+  },
+  "admin.access.requestId": { defaultMessage: "Request ID", description: "Immutable PAM request identifier." },
+  "admin.access.approvalRequestId": { defaultMessage: "Approval request ID", description: "Immutable PAM approval identifier." },
+  "admin.access.approvalProgress": { defaultMessage: "Approvals", description: "Number of independent PAM reviewers who have approved." },
+  "admin.access.activateApprovedSession": {
+    defaultMessage: "Activate approved session",
+    description: "Consume the reviewed PAM approval to create a short-lived credential.",
+  },
+  "admin.access.postgresCredential": { defaultMessage: "PostgreSQL connection", description: "One-time PAM database credential." },
+  "admin.access.sshCertificate": { defaultMessage: "SSH certificate", description: "One-time PAM SSH user certificate." },
+  "admin.access.revealCredential": {
+    defaultMessage: "Reveal one-time credential",
+    description: "Show the PAM credential only after the operator asks to see it.",
+  },
+  "admin.access.hideCredential": { defaultMessage: "Hide credential", description: "Hide the PAM credential without closing the session result." },
+  "admin.access.credentialOnce": {
+    defaultMessage: "Copy this credential now. It is cleared from this browser when you close the window.",
+    description: "PAM credential reveal retention warning.",
+  },
+  "admin.access.fieldRequired": { defaultMessage: "Enter a value.", description: "Required privileged-session field validation." },
+  "admin.access.ttlPositiveInteger": { defaultMessage: "Enter a whole number of seconds above zero.", description: "Privileged-session TTL validation." },
+  "admin.access.sshKeyRequired": { defaultMessage: "Enter the SSH public key to certify.", description: "SSH privileged-session public key validation." },
+  "admin.access.requestOutcomeUnknown": {
+    defaultMessage: "The request result is unconfirmed. Retry the exact same request; changing fields now could create a different review.",
+    description: "Recover an ambiguous PAM request without changing its protected intent.",
+  },
+  "admin.access.retryRequestUnchanged": { defaultMessage: "Retry unchanged", description: "Retry the identical PAM request after an ambiguous response." },
   "admin.access.started": { defaultMessage: "Started", description: "Privileged-session start time label." },
   "admin.access.target": { defaultMessage: "Target", description: "Privileged-session target label." },
   "admin.access.expires": { defaultMessage: "Expires", description: "Privileged-session expiry time label." },

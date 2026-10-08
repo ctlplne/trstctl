@@ -62,6 +62,9 @@ const (
 	CapabilitiesRead Permission = "capabilities:read"
 	AccessRead       Permission = "access:read"
 	AccessWrite      Permission = "access:write"
+	// AccessApprove lets a distinct custodian review PAM access without the
+	// authority to request or activate a privileged session.
+	AccessApprove    Permission = "access:approve"
 	AccessRoleAssign Permission = "access:role.assign"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
@@ -127,7 +130,7 @@ func allResourcePermissions() []Permission {
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead,
-		AccessRead, AccessWrite, AccessRoleAssign,
+		AccessRead, AccessWrite, AccessApprove, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 		KeysRead, KeysWrite, KeysApprove,
@@ -264,7 +267,7 @@ func (p Principal) Can(perm Permission, target Scope) bool {
 		return false
 	}
 	if perm == ApprovalsReview {
-		return p.Can(CertsIssue, target) || p.Can(SecretsWrite, target) || p.Can(KeysApprove, target)
+		return p.Can(CertsIssue, target) || p.Can(SecretsWrite, target) || p.Can(KeysApprove, target) || p.Can(AccessApprove, target)
 	}
 	for _, g := range p.Grants {
 		if g.Scope.Covers(target) && g.Role.Allows(perm) {

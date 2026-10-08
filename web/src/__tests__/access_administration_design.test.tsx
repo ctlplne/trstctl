@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     createAPIToken: vi.fn(),
+    requestPAMSession: vi.fn(),
     openPAMSession: vi.fn(),
   },
 }));
@@ -162,6 +163,59 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(screen.getByRole("link", { name: "Open access reviews" })).toHaveAttribute("href", "/policy");
     expect(screen.getByRole("link", { name: "Open change history" })).toHaveAttribute("href", "/audit");
     expect(await axe(view.container)).toHaveNoViolations();
+  });
+
+  it("requests review before creating access and clears the one-time database credential on close", async () => {
+    const user = userEvent.setup();
+    apiMock.requestPAMSession.mockResolvedValue({
+      request_id: "22222222-2222-4222-8222-222222222222",
+      approval_request_id: "33333333-3333-4333-8333-333333333333",
+      intent_digest: "reviewed-command",
+      status: "pending",
+      approval_count: 0,
+      required_approvals: 2,
+      target_type: "postgres",
+      target_id: "incident-db",
+      role: "readonly",
+    });
+    apiMock.openPAMSession.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      target_type: "postgres",
+      target_id: "incident-db",
+      role: "readonly",
+      status: "active",
+      subject: "operator",
+      requested_by: "operator",
+      started_at: "2026-10-08T10:00:00Z",
+      expires_at: "2026-10-08T10:10:00Z",
+      postgres: { username: "trstctl_pam_readonly", dsn: "postgres://one-time-secret@localhost/lab" },
+    });
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Request privileged session" }));
+    const dialog = screen.getByRole("dialog", { name: "Request privileged session" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Target ID" }), "incident-db");
+    await user.type(within(dialog).getByRole("textbox", { name: "Role" }), "readonly");
+    await user.type(within(dialog).getByRole("textbox", { name: "Method" }), "oidc");
+    await user.type(within(dialog).getByRole("textbox", { name: "Payload (base64)" }), "Z2VudWluZQ==");
+    await user.click(within(dialog).getByRole("button", { name: "Request review" }));
+    expect(await within(dialog).findByText("Review requested. No credential has been created.")).toBeInTheDocument();
+    expect(apiMock.openPAMSession).not.toHaveBeenCalled();
+    expect(within(dialog).queryByText(/one-time-secret/)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Activate approved session" }));
+    expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/one-time-secret/)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Reveal one-time credential" }));
+    expect(within(dialog).getByText("postgres://one-time-secret@localhost/lab")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Hide credential" }));
+    expect(within(dialog).queryByText(/one-time-secret/)).not.toBeInTheDocument();
+    const activation = apiMock.openPAMSession.mock.calls[0][0];
+    expect(activation.approval_request_id).toBe("33333333-3333-4333-8333-333333333333");
+    expect(activation.intent_digest).toBe("reviewed-command");
+    expect(activation.request_id).toBe(apiMock.requestPAMSession.mock.calls[0][0].request_id);
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByText(/one-time-secret/)).not.toBeInTheDocument();
   });
 
   it("adds a person in a focused dialog and reads the roster back", async () => {

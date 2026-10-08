@@ -24838,6 +24838,72 @@
         ],
         "type": "object"
       },
+      "PAMApprovalRequest": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "postgres",
+              "ssh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "approval_request_id",
+          "intent_digest",
+          "status",
+          "subject",
+          "target_type",
+          "target_id",
+          "role",
+          "approval_count",
+          "required_approvals",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "PAMPostgresCredential": {
         "properties": {
           "dsn": {
@@ -24947,6 +25013,63 @@
         ],
         "type": "object"
       },
+      "PAMSessionActivationRequest": {
+        "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "payload_base64": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "ssh_principal": {
+            "type": "string"
+          },
+          "ssh_public_key": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "postgres",
+              "ssh"
+            ],
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "approval_request_id",
+          "intent_digest",
+          "target_type",
+          "target_id",
+          "role",
+          "method",
+          "payload_base64"
+        ],
+        "type": "object"
+      },
       "PAMSessionList": {
         "properties": {
           "items": {
@@ -24975,6 +25098,10 @@
           "reason": {
             "type": "string"
           },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "role": {
             "type": "string"
           },
@@ -24999,6 +25126,7 @@
           }
         },
         "required": [
+          "request_id",
           "target_type",
           "target_id",
           "role",
@@ -35337,6 +35465,74 @@
         "x-trstctl-permission": "access:read"
       }
     },
+    "/api/v1/access/session-requests": {
+      "post": {
+        "operationId": "requestPAMSession",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMApprovalRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Request a reviewed privileged access session",
+        "x-trstctl-permission": "access:write"
+      }
+    },
     "/api/v1/access/sessions": {
       "get": {
         "operationId": "listPAMSessions",
@@ -35419,7 +35615,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PAMSessionRequest"
+                "$ref": "#/components/schemas/PAMSessionActivationRequest"
               }
             }
           },
@@ -35465,7 +35661,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Open a just-in-time privileged access session",
+        "summary": "Activate an approved just-in-time privileged access session",
         "x-trstctl-permission": "access:write",
         "x-trstctl-sensitive-response": true
       }

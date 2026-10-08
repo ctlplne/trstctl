@@ -14057,6 +14057,7 @@
                 "transitionIdentity",
                 "issueEphemeralCredential",
                 "approveEphemeralCredential",
+                "requestPAMSession",
                 "openPAMSession",
                 "listPAMSessions",
                 "getPAMSession"
@@ -14086,6 +14087,7 @@
                 "identities transition",
                 "ephemeral issue",
                 "ephemeral approve",
+                "access sessions request",
                 "access sessions open",
                 "access sessions list",
                 "access sessions get"
@@ -14159,6 +14161,7 @@
                         "OpenAPI operationId: transitionIdentity",
                         "OpenAPI operationId: issueEphemeralCredential",
                         "OpenAPI operationId: approveEphemeralCredential",
+                        "OpenAPI operationId: requestPAMSession",
                         "OpenAPI operationId: openPAMSession",
                         "OpenAPI operationId: listPAMSessions",
                         "OpenAPI operationId: getPAMSession"
@@ -14177,7 +14180,7 @@
                         "web/src/__tests__/approvals.test.tsx proves /approvals directly reviews a first-class issuance request, exposes its bound scope and decision window, blocks self-approval, records distinct approval or reasoned denial, links audit, and opens the recoverable issuance lifecycle.",
                         "web/src/__tests__/issuance_requests_panel.test.tsx proves failed fulfillment remains approved and retries the same request identity.",
                         "internal/server/ephemeral_served_test.go proves an attested JIT request opens approval, enqueues outbox notification intent, blocks self-issue until approval, and then mints a short-TTL credential.",
-                        "internal/server/pam_served_test.go proves an attested PAM request opens real Postgres and sshd-backed sessions, audits them, and expires them.",
+                        "internal/server/pam_served_test.go proves a tenant-attested PAM request waits for independent quorum, binds the exact reviewed target and command, then opens real Postgres and sshd-backed sessions, audits them, and expires them.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -14202,7 +14205,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listProfiles, listIdentities, createIdentity, listApprovalRequests, approveApprovalRequest, denyApprovalRequest, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession, listPAMSessions, getPAMSession",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listProfiles, listIdentities, createIdentity, listApprovalRequests, approveApprovalRequest, denyApprovalRequest, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, requestPAMSession, openPAMSession, listPAMSessions, getPAMSession",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -14215,9 +14218,9 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: approveApprovalRequest, denyApprovalRequest, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession",
+                        "mutating served surface requires audit/event evidence: approveApprovalRequest, denyApprovalRequest, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, requestPAMSession, openPAMSession",
                         "ephemeral JIT emits ephemeral.approval.requested/granted plus ephemeral.issued and certificate.recorded after distinct approval.",
-                        "PAM-lite emits pam.session.started and pam.session.expired without recording one-time credential material.",
+                        "PAM emits approval.requested and pam.session.activation_requested before pam.session.started; expiry records pam.session.expired without one-time credential material.",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -14355,6 +14358,7 @@
                             "OpenAPI operationId: transitionIdentity",
                             "OpenAPI operationId: issueEphemeralCredential",
                             "OpenAPI operationId: approveEphemeralCredential",
+                            "OpenAPI operationId: requestPAMSession",
                             "OpenAPI operationId: openPAMSession",
                             "OpenAPI operationId: listPAMSessions",
                             "OpenAPI operationId: getPAMSession",
@@ -14371,6 +14375,7 @@
                             "CLI command: identities transition",
                             "CLI command: ephemeral issue",
                             "CLI command: ephemeral approve",
+                            "CLI command: access sessions request",
                             "CLI command: access sessions open",
                             "CLI command: access sessions list",
                             "CLI command: access sessions get"

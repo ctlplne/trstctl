@@ -4537,6 +4537,7 @@ func componentSchemas() map[string]*Schema {
 		"status": {Type: "string", Enum: operationApprovalStatuses},
 	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	pamSessionReq := object(map[string]*Schema{
+		"request_id":     uuid(),
 		"target_type":    {Type: "string", Enum: []string{"postgres", "ssh"}},
 		"target_id":      str(),
 		"role":           str(),
@@ -4546,7 +4547,21 @@ func componentSchemas() map[string]*Schema {
 		"ttl_seconds":    {Type: "integer"},
 		"ssh_public_key": str(),
 		"ssh_principal":  str(),
-	}, "target_type", "target_id", "role", "method", "payload_base64")
+	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
+	pamActivationReq := object(map[string]*Schema{
+		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
+		"target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
+		"target_id":   str(), "role": str(), "reason": str(), "method": str(),
+		"payload_base64": str(), "ttl_seconds": {Type: "integer"},
+		"ssh_public_key": str(), "ssh_principal": str(),
+	}, "request_id", "approval_request_id", "intent_digest", "target_type", "target_id", "role", "method", "payload_base64")
+	pamApprovalRequest := object(map[string]*Schema{
+		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
+		"status": {Type: "string", Enum: operationApprovalStatuses}, "subject": str(),
+		"target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
+		"target_id":   str(), "role": str(), "approval_count": {Type: "integer"},
+		"required_approvals": {Type: "integer"}, "expires_at": timestamp(),
+	}, "request_id", "approval_request_id", "intent_digest", "status", "subject", "target_type", "target_id", "role", "approval_count", "required_approvals", "expires_at")
 	pamPostgresCredential := object(map[string]*Schema{
 		"username": str(), "dsn": str(),
 	}, "username", "dsn")
@@ -6768,6 +6783,8 @@ func componentSchemas() map[string]*Schema {
 		"EphemeralApprovalRequest":                 ephemeralApprovalReq,
 		"EphemeralApproval":                        ephemeralApproval,
 		"PAMSessionRequest":                        pamSessionReq,
+		"PAMSessionActivationRequest":              pamActivationReq,
+		"PAMApprovalRequest":                       pamApprovalRequest,
 		"PAMSession":                               pamSession,
 		"PAMSessionList":                           list("PAMSession"),
 		"PAMPostgresCredential":                    pamPostgresCredential,

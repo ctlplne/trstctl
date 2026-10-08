@@ -1286,6 +1286,47 @@ credential-reference form before accepting traffic. An absent tenant target or
 provider fails its served mutation closed; it never falls back to another tenant or
 to a test registry.
 
+### Privileged access broker targets
+
+The `pam` block registers the targets a tenant may request for short-lived access.
+It carries target references and allowlists, not administrator credentials. Create
+the PostgreSQL dynamic-secret provider first; that provider loads its administrator
+DSN from a mode-`0600` `file:` or tenant `secret://` reference. Enable the
+tenant's attester trust source before requesting a session.
+
+```json
+{
+  "pam": {
+    "enabled": true,
+    "default_ttl": "15m",
+    "max_ttl": "1h",
+    "approval_ttl": "15m",
+    "required_approvals": 2,
+    "postgres_targets": [{
+      "tenant_id": "22222222-2222-4222-8222-222222222222",
+      "id": "incident-db",
+      "provider_id": "tenant-postgres-provider",
+      "allowed_roles": ["readonly"]
+    }],
+    "ssh_targets": [{
+      "tenant_id": "22222222-2222-4222-8222-222222222222",
+      "id": "incident-host",
+      "host": "host.internal.example",
+      "port": 22,
+      "principals": ["incident-operator"]
+    }]
+  }
+}
+```
+
+Startup rejects an enabled broker with no target, an unknown PostgreSQL provider
+or role, an invalid SSH host/port/principal allowlist, and malformed lifetimes.
+The defaults are 15 minutes for session TTL and approval TTL, one hour for the
+session cap, and two distinct reviewers. `required_approvals` sets the quorum;
+zero uses two. An operator must separately configure the SSH server to trust the
+trstctl SSH CA. The request and activation commands are documented in
+[Incident response and JIT access](features/incident-and-jit.md#just-in-time-issuance-with-approval-f33).
+
 For Kubernetes, create a dedicated namespace and an administrator ServiceAccount
 whose Role can create, get, and delete ServiceAccounts, Opaque Secrets, and RoleBindings,
 create `serviceaccounts/token`, and `bind` only the named target Roles or

@@ -1211,10 +1211,27 @@ func TestEphemeralCommandsSendBodiesAndIdempotencyKeys(t *testing.T) {
 }
 
 func TestAccessSessionCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) {
+	requestBody := `{"request_id":"6a7d838a-5902-4955-928e-7f73c61272b6","target_type":"postgres","target_id":"prod-db","role":"readonly","reason":"incident cleanup","method":"oidc","payload_base64":"Z2VudWluZQ==","ttl_seconds":600}`
+	var requestCap capture
+	requestSrv := mockServer(t, 202, `{"request_id":"6a7d838a-5902-4955-928e-7f73c61272b6","approval_request_id":"28b3855a-4fe9-4f66-8cf0-49d2382bc108","intent_digest":"reviewed"}`, &requestCap)
+	code, _, _ := run(t, []string{"access", "sessions", "request", "-f", "-"}, cli.Env{Server: requestSrv.URL, HTTPClient: requestSrv.Client()}, requestBody)
+	if code != 0 {
+		t.Fatalf("request exit = %d", code)
+	}
+	if requestCap.Method != "POST" || requestCap.Path != "/api/v1/access/session-requests" {
+		t.Errorf("request route = %s %s", requestCap.Method, requestCap.Path)
+	}
+	if strings.TrimSpace(string(requestCap.Body)) != requestBody {
+		t.Errorf("request body = %q, want %q", requestCap.Body, requestBody)
+	}
+	if requestCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("access session request should send an Idempotency-Key")
+	}
+
 	var openCap capture
 	openSrv := mockServer(t, 201, `{"id":"pam:session-1","target_type":"postgres","target_id":"prod-db","status":"active"}`, &openCap)
-	openBody := `{"target_type":"postgres","target_id":"prod-db","role":"read_only","reason":"incident cleanup","attestation":{"method":"stub","subject":"ops@example.com","payload_base64":"Z2VudWluZQ=="}}`
-	code, _, _ := run(t, []string{"access", "sessions", "open", "-f", "-"}, cli.Env{Server: openSrv.URL, HTTPClient: openSrv.Client()}, openBody)
+	openBody := `{"request_id":"6a7d838a-5902-4955-928e-7f73c61272b6","approval_request_id":"28b3855a-4fe9-4f66-8cf0-49d2382bc108","intent_digest":"reviewed","target_type":"postgres","target_id":"prod-db","role":"readonly","reason":"incident cleanup","method":"oidc","payload_base64":"Z2VudWluZQ==","ttl_seconds":600}`
+	code, _, _ = run(t, []string{"access", "sessions", "open", "-f", "-"}, cli.Env{Server: openSrv.URL, HTTPClient: openSrv.Client()}, openBody)
 	if code != 0 {
 		t.Fatalf("open exit = %d", code)
 	}

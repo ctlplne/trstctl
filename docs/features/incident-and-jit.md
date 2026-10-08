@@ -156,8 +156,8 @@ with `certs:issue` to approve it. The attested ephemeral lane is **dual-control*
 default (2 required, configurable for m-of-n), has a shorter approval window, and queues
 its approver notification through the transactional outbox. The PAM lane opens a
 short-lived database or SSH session instead of minting a general-purpose certificate.
-The certificate and ephemeral lanes block self-approval. PAM grants are time-bounded,
-but the PAM approval step is still being built.
+All three lanes block self-approval. PAM requires a configurable quorum of distinct
+reviewers with `access:approve` before a target grant or SSH signature can start.
 
 On `/request`, the requester first reviews an exact, effect-free server preview bound to
 the tenant owner, active profile version, requester, subject, and optional requester-held
@@ -171,23 +171,33 @@ and issuance key instead of minting a duplicate.
 
 The generic operation-review surface keeps those domains separate: certificate
 review requires `certs:issue`, secret review requires `secrets:write`, and managed-key
-review requires `keys:approve`. List responses contain only the caller's authorized
+review requires `keys:approve`, and PAM review requires `access:approve`. List responses contain only the caller's authorized
 domains and paginate with an opaque composite cursor. Approve and deny re-check the
 request's exact kind, action, resource, and intent digest while the request row is
 locked. A denial closes only the immutable request; it does not mutate the requested
 resource.
 
 For privileged-access management, the same JIT model opens short-lived sessions instead
-of standing database or shell access. `POST /api/v1/access/sessions` verifies an
-attestation, grants a scoped Postgres login role or signs an OpenSSH user certificate
-for a configured SSH target, returns the one-time credential to the caller, and records a
-tenant-scoped session row. An injected PostgreSQL target references a tenant-bound
+of standing database or shell access. A requester sends the exact target, role, reason,
+attestation proof, TTL, and SSH public key when applicable to
+`POST /api/v1/access/session-requests`, with a UUID `request_id` and an
+`Idempotency-Key`. The response returns the immutable `approval_request_id` and
+`intent_digest`, but no credential. Distinct custodians find it through
+`GET /api/v1/approval-requests` and approve that digest with
+`POST /api/v1/approval-requests/{id}/approvals`; the requester cannot approve it.
+The requester then sends the same fields and both returned approval identifiers to
+`POST /api/v1/access/sessions`. Changing a field or the configured target invalidates
+the review. A PostgreSQL provider reattachment after a control-plane restart
+also changes its configuration revision; request a new review if activation did
+not finish before that restart. The activation consumes approval once before granting a scoped Postgres
+login role or signing an OpenSSH user certificate, returns the one-time credential,
+and records a tenant-scoped session row. A configured PostgreSQL target references a tenant-bound
 dynamic-secret provider, whose administrator DSN is loaded from a 0600 `file:` or
 tenant `secret://` reference. Issuance and removal run through its durable outbox;
 the PAM expiry worker records completion only after provider removal completes.
 PostgreSQL also enforces the credential deadline with `rolvaliduntil` if the
 worker is unavailable. SSH access ends at the certificate `valid_before` time.
-The event trail is filterable by `pam.session.started` and
+The event trail is filterable by `pam.session.activation_requested`, `pam.session.started`, and
 `pam.session.expired`; credential material is not written into those events.
 An exact `Idempotency-Key` retry returns the original credential while its
 protected HTTP result is retained. Once that cache entry has aged out, the
@@ -207,27 +217,26 @@ visible with an explicit safe-retry action.
 Ephemeral/JIT credential issuance is served when configured through `POST /api/v1/ephemeral` plus
 `POST /api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine
 `approval_request_id` and the body carries the same UUID as `request_id` plus its
-matching `intent_digest`; PAM-lite sessions are served
-through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
-`GET /api/v1/access/sessions/{id}` only in an assembled server with injected
-targets. The broker resolves attestors from the existing tenant-managed workload
-trust-source API at request time and refuses a method with no enabled tenant
-trust. Production configuration does not yet provide a protected
-target-registration path, so enabling `pam` alone cannot start the broker. The
-injected target model binds each target to one tenant. PostgreSQL targets require
+matching `intent_digest`; PAM sessions are served
+through `POST /api/v1/access/session-requests`, `POST /api/v1/access/sessions`,
+`GET /api/v1/access/sessions`, and `GET /api/v1/access/sessions/{id}` when
+`pam.enabled` names at least one operator target. The broker resolves attestors from
+the existing tenant-managed workload trust-source API at request time and refuses a
+method with no enabled tenant trust. Operator target configuration binds each target
+to one tenant. PostgreSQL targets require
 an existing tenant PostgreSQL dynamic-secret provider and an explicit role
 allowlist using `readonly` or `writer`; an unlisted role is
 rejected before a credential is created. SSH targets require a host, port, and
 principal list; only the `user` role is valid, and an empty principal list grants
 nobody.
-The PAM path does not yet have a distinct-approver step or early revocation, and
-must not be treated as an enterprise-ready JIT approval workflow. The ephemeral
+The PAM path does not yet offer early revocation, so a live session cannot be
+ended immediately through the operator API. The ephemeral
 path verifies the attestation first,
 writes the approval request and outbox notification intent in the same tenant
 transaction, blocks requester self-approval, then mints a short-TTL credential only
 after a distinct approver records approval. CLI parity is `trstctl-cli identities
 approve issue|rotate|revoke`, `trstctl-cli ephemeral issue`, and `trstctl-cli
-ephemeral approve`; PAM sessions use `trstctl-cli access sessions open`, `trstctl-cli
+ephemeral approve`; PAM sessions use `trstctl-cli access sessions request`, `trstctl-cli access sessions open`, `trstctl-cli
 access sessions list`, and `trstctl-cli access sessions get`.
 
 ### Break-glass procedures (F34)
@@ -593,8 +602,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   trust-before-leaf, signed-live-gated, revoke-after-verify, resumable, and JWS-sealed.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.
-- **PAM-lite:** `/api/v1/access/sessions`; Postgres scoped login roles; OpenSSH user
-  certificates; `pam.session.started`, `pam.session.expired`.
+- **PAM:** `/api/v1/access/session-requests` and `/api/v1/access/sessions`; distinct
+  `access:approve` reviewers; Postgres scoped login roles; OpenSSH user
+  certificates; `pam.session.activation_requested`, `pam.session.started`, `pam.session.expired`.
 - **Break-glass:** ceremony/execution pairs at
   `/api/v1/breakglass/issue-ceremonies` + `/issue`,
   `/api/v1/breakglass/rotation-ceremonies` + `/rotate`, and

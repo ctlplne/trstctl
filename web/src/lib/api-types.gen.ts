@@ -6051,6 +6051,20 @@ export interface OwnershipResolveInput {
   resolution: string;
 }
 
+export interface PAMApprovalRequest {
+  approval_count: number;
+  approval_request_id: string;
+  expires_at: string;
+  intent_digest: string;
+  request_id: string;
+  required_approvals: number;
+  role: string;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+  subject: string;
+  target_id: string;
+  target_type: "postgres" | "ssh";
+}
+
 export interface PAMPostgresCredential {
   dsn: string;
   username: string;
@@ -6082,6 +6096,21 @@ export interface PAMSession {
   target_type: string;
 }
 
+export interface PAMSessionActivationRequest {
+  approval_request_id: string;
+  intent_digest: string;
+  method: string;
+  payload_base64: string;
+  reason?: string;
+  request_id: string;
+  role: string;
+  ssh_principal?: string;
+  ssh_public_key?: string;
+  target_id: string;
+  target_type: "postgres" | "ssh";
+  ttl_seconds?: number;
+}
+
 export interface PAMSessionList {
   items: PAMSession[];
   next_cursor?: string;
@@ -6091,6 +6120,7 @@ export interface PAMSessionRequest {
   method: string;
   payload_base64: string;
   reason?: string;
+  request_id: string;
   role: string;
   ssh_principal?: string;
   ssh_public_key?: string;

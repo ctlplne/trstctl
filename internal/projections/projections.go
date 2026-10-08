@@ -258,6 +258,7 @@ const (
 	EventAWSHoneyScanPage                         = "honeytoken.aws.scan_page"
 	EventAWSHoneyTokenRearmed                     = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                        = "pam.session.started"
+	EventPAMSessionActivationRequested            = "pam.session.activation_requested"
 	EventPAMSessionExpired                        = "pam.session.expired"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
@@ -3199,6 +3200,18 @@ type PAMSessionStarted struct {
 	ExpiresAt      time.Time       `json:"expires_at"`
 }
 
+// PAMSessionActivationRequested consumes one exact approval before any target
+// or signer effect. Retrying this same event may finish an interrupted grant;
+// a different idempotency key cannot reuse the consumed authority.
+type PAMSessionActivationRequested struct {
+	ID             string                     `json:"id"`
+	RequestID      string                     `json:"request_id"`
+	CommandDigest  string                     `json:"command_digest"`
+	IdempotencyKey string                     `json:"idempotency_key"`
+	TTLSeconds     int64                      `json:"ttl_seconds"`
+	Approval       store.OperationApprovalUse `json:"approval"`
+}
+
 // PAMSessionExpired is the payload of pam.session.expired.
 type PAMSessionExpired struct {
 	ID      string    `json:"id"`
@@ -3673,6 +3686,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAWSHoneyScanPage:                         {1: true},
 	EventAWSHoneyTokenRearmed:                     {1: true},
 	EventPAMSessionStarted:                        {1: true},
+	EventPAMSessionActivationRequested:            {1: true},
 	EventMachineSessionStarted:                    {1: true},
 	EventMachineSessionRevoked:                    {1: true},
 	EventMachineAuthMethodDisabled:                {1: true},
@@ -6212,6 +6226,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyAWSHoneyTokenRearmedTx(ctx, tx, e.TenantID, pl.ID, pl.ExpectedGeneration)
+	case EventPAMSessionActivationRequested:
+		var pl PAMSessionActivationRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.RequestID == "" || pl.CommandDigest == "" || pl.IdempotencyKey == "" ||
+			pl.TTLSeconds <= 0 || pl.Approval.ResourceKind != "pam" ||
+			pl.Approval.ResourceID != "pam:"+pl.RequestID || pl.Approval.Action != "activate" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
 		if err := decode(e, &pl); err != nil {

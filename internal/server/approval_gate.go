@@ -254,6 +254,7 @@ func (r storeApprovalRecorder) ListApprovalRequests(ctx context.Context, tenantI
 			CertificateOperations: options.CertificateOperations,
 			SecretOperations:      options.SecretOperations,
 			ManagedKeyOperations:  options.ManagedKeyOperations,
+			PAMOperations:         options.PAMOperations,
 		},
 	})
 	if err != nil {

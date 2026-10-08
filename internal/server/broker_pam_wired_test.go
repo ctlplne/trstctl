@@ -53,6 +53,27 @@ func TestPAMHasAnOperatorSwitch(t *testing.T) {
 	}
 }
 
+func TestPAMOperatorTargetReferencesReachBroker(t *testing.T) {
+	t.Parallel()
+	const tenantID = "22222222-2222-4222-8222-222222222222"
+	out := pamFromConfig(config.PAM{
+		Enabled: true, ApprovalTTL: "12m", RequiredApprovals: 3,
+		PostgresTargets: []config.PAMPostgresTarget{{
+			TenantID: tenantID, ID: "incident-db", ProviderID: "tenant-pg-provider",
+			AllowedRoles: []string{"readonly"},
+		}},
+		SSHTargets: []config.PAMSSHTarget{{
+			TenantID: tenantID, ID: "incident-host", Host: "host.lab.local", Port: 22,
+			Principals: []string{"incident"},
+		}},
+	})
+	if !out.Enabled || out.ApprovalTTL != 12*time.Minute || out.RequiredApprovals != 3 ||
+		len(out.PostgresTargets) != 1 || out.PostgresTargets[0].ProviderID != "tenant-pg-provider" ||
+		len(out.SSHTargets) != 1 || out.SSHTargets[0].Host != "host.lab.local" {
+		t.Fatalf("PAM operator references were lost: %+v", out)
+	}
+}
+
 // A malformed duration must not silently become a LONGER lifetime than the
 // operator wrote. Zero takes the built-in bound; zero cannot lengthen anything.
 func TestAMalformedTTLNeverLengthensABrokeredOrPAMLifetime(t *testing.T) {

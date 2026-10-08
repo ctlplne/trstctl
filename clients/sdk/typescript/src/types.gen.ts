@@ -228,6 +228,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/session-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a reviewed privileged access session */
+        post: operations["requestPAMSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions": {
         parameters: {
             query?: never;
@@ -238,7 +255,7 @@ export interface paths {
         /** List just-in-time privileged access sessions */
         get: operations["listPAMSessions"];
         put?: never;
-        /** Open a just-in-time privileged access session */
+        /** Activate an approved just-in-time privileged access session */
         post: operations["openPAMSession"];
         delete?: never;
         options?: never;
@@ -13458,6 +13475,24 @@ export interface components {
         OwnershipResolveInput: {
             resolution: string;
         };
+        PAMApprovalRequest: {
+            approval_count: number;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
+            required_approvals: number;
+            role: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+            subject: string;
+            target_id: string;
+            /** @enum {string} */
+            target_type: "postgres" | "ssh";
+        };
         PAMPostgresCredential: {
             dsn: string;
             username: string;
@@ -13491,6 +13526,23 @@ export interface components {
             target_id: string;
             target_type: string;
         };
+        PAMSessionActivationRequest: {
+            /** Format: uuid */
+            approval_request_id: string;
+            intent_digest: string;
+            method: string;
+            payload_base64: string;
+            reason?: string;
+            /** Format: uuid */
+            request_id: string;
+            role: string;
+            ssh_principal?: string;
+            ssh_public_key?: string;
+            target_id: string;
+            /** @enum {string} */
+            target_type: "postgres" | "ssh";
+            ttl_seconds?: number;
+        };
         PAMSessionList: {
             items: components["schemas"]["PAMSession"][];
             next_cursor?: string;
@@ -13499,6 +13551,8 @@ export interface components {
             method: string;
             payload_base64: string;
             reason?: string;
+            /** Format: uuid */
+            request_id: string;
             role: string;
             ssh_principal?: string;
             ssh_public_key?: string;
@@ -16614,6 +16668,51 @@ export interface operations {
             };
         };
     };
+    requestPAMSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMApprovalRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listPAMSessions: {
         parameters: {
             query?: {
@@ -16669,7 +16768,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PAMSessionRequest"];
+                "application/json": components["schemas"]["PAMSessionActivationRequest"];
             };
         };
         responses: {

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -64,6 +65,8 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	)
 	startServedExternalCADispatcher(t, h)
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "pam-requester", "access:read", "access:write")
+	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "pam-reviewer-one", "access:approve")
+	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-reviewer-two", "access:approve")
 	for _, tc := range []struct{ targetType, targetID, role string }{
 		{"postgres", "pg-main", "writer"},
 		{"ssh", "ssh-edge", "admin"},
@@ -122,7 +125,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		}
 	}
 
-	pg := servedPAMOpen(t, h, admin, "pam-01-postgres", map[string]any{
+	pg := servedPAMReviewedOpen(t, h, admin, reviewerOne, reviewerTwo, "pam-01-postgres", map[string]any{
 		"target_type":    "postgres",
 		"target_id":      "pg-main",
 		"role":           "readonly",
@@ -183,7 +186,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		"ssh_principal":  "alice",
 		"ttl_seconds":    2,
 	}
-	ssh := servedPAMOpen(t, h, admin, "pam-01-ssh", sshRequest)
+	ssh := servedPAMReviewedOpen(t, h, admin, reviewerOne, reviewerTwo, "pam-01-ssh", sshRequest)
 	if ssh.ID == "" || ssh.TargetType != "ssh" || ssh.Status != "active" || ssh.SSH == nil || ssh.SSH.Certificate == "" {
 		t.Fatalf("ssh PAM response = %+v", ssh)
 	}
@@ -212,7 +215,10 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		t.Fatalf("retired SSH PAM idempotency key signed %d additional certificates", after-issuedBeforeReplay)
 	}
 	if _, err := h.srv.pam.OpenPAMSession(context.Background(), h.tenant, "pam-01-ssh", "pam-requester", api.PAMSessionRequest{
-		TargetType: "ssh", TargetID: "ssh-edge", Role: "user", Reason: "production incident 42",
+		RequestID:         sshRequest["request_id"].(string),
+		ApprovalRequestID: sshRequest["approval_request_id"].(string),
+		IntentDigest:      sshRequest["intent_digest"].(string),
+		TargetType:        "ssh", TargetID: "ssh-edge", Role: "user", Reason: "production incident 42",
 		Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte(publicKey),
 		SSHPrincipal: "alice", TTLSeconds: 2,
 	}); err == nil {
@@ -275,12 +281,15 @@ func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
 	})
 	startServedExternalCADispatcher(t, h)
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-workload-requester", "access:write")
+	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "pam-workload-reviewer-one", "access:approve")
+	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-workload-reviewer-two", "access:approve")
 	owner := seedScopedTokenSubject(t, h.store, h.tenant, "pam-trust-owner", "certs:issue", "issuers:write")
 	request := map[string]any{
 		"target_type": "postgres", "target_id": "tenant-pg", "role": "readonly", "method": "k8s_sat",
 		"payload_base64": base64.StdEncoding.EncodeToString([]byte(fixture.SAT)), "ttl_seconds": 30,
+		"request_id": uuid.NewString(),
 	}
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester, "pam-before-trust", request)
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/session-requests", requester, "pam-before-trust", request)
 	if status != http.StatusForbidden {
 		t.Fatalf("PAM accepted a proof before tenant trust: status=%d body=%s", status, body)
 	}
@@ -296,7 +305,7 @@ func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
 	if err := json.Unmarshal(body, &source); err != nil || source.ID == "" {
 		t.Fatalf("decode PAM attester trust source: %v", err)
 	}
-	issued := servedPAMOpen(t, h, requester, "pam-after-trust", request)
+	issued := servedPAMReviewedOpen(t, h, requester, reviewerOne, reviewerTwo, "pam-after-trust", request)
 	if issued.Postgres == nil {
 		t.Fatal("tenant-trusted PAM did not return a PostgreSQL credential")
 	}
@@ -334,7 +343,9 @@ func TestServedPAMPostgresUsesProtectedProviderOutbox(t *testing.T) {
 	go func() { defer close(workerDone); h.srv.RunPAMSessionExpiry(workerCtx) }()
 	t.Cleanup(func() { stopWorker(); <-workerDone })
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-outbox-requester", "access:write", "access:read")
-	issued := servedPAMOpen(t, h, requester, "pam-provider-backed-postgres", map[string]any{
+	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "pam-outbox-reviewer-one", "access:approve")
+	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-outbox-reviewer-two", "access:approve")
+	issued := servedPAMReviewedOpen(t, h, requester, reviewerOne, reviewerTwo, "pam-provider-backed-postgres", map[string]any{
 		"target_type": "postgres", "target_id": "pg-provider-target", "role": "readonly",
 		"method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
 		"ttl_seconds": 5,
@@ -357,6 +368,177 @@ func TestServedPAMPostgresUsesProtectedProviderOutbox(t *testing.T) {
 		t.Fatal("provider-backed PAM role remained after worker and outbox revocation")
 	}
 	assertPAMPostgresAccess(t, issued.Postgres.DSN, false)
+}
+
+// A PAM request is a proposal, not authority to create a privileged login.
+// The first request must leave an approval intent without enqueueing a provider
+// grant. A distinct custodian can review that exact intent before activation.
+func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
+	pgDSN, stopPG := startPAMPostgres(t)
+	defer stopPG()
+	seedPAMPostgresTable(t, pgDSN)
+	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
+	h := newOperatingServedHarness(t,
+		config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		func(d *Deps) {
+			wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
+			d.PAM = PAMConfig{
+				Enabled: true, MaxTTL: time.Minute, Attestors: []attest.Attestor{servedPAMAttestor{}},
+				PostgresTargets: []PAMPostgresTarget{{
+					TenantID: servedTestTenant, ID: "approval-pg", ProviderID: "pam-pg-provider",
+					AllowedRoles: []string{"readonly"},
+				}},
+				SSHTargets: []PAMSSHTarget{{
+					TenantID: servedTestTenant, ID: "approval-ssh", Host: "127.0.0.1",
+					Port: 22, Principals: []string{"alice"},
+				}},
+			}
+		})
+	startServedExternalCADispatcher(t, h)
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-approval-requester", "access:write", "access:approve")
+	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "pam-bound-reviewer-one", "access:approve")
+	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-bound-reviewer-two", "access:approve")
+	_, sshPublicKey := generatePAMSSHKey(t)
+	for _, tc := range []struct {
+		name      string
+		requestID string
+		body      map[string]any
+		effects   []string
+	}{
+		{"postgres", "e8f4a2d2-782f-4e2d-9da8-01fb2c2d5021",
+			map[string]any{"target_type": "postgres", "target_id": "approval-pg", "role": "readonly"},
+			[]string{"dynsecret.lease.pending", "pam.session.started"}},
+		{"ssh", "2e4abf75-26dc-4cd0-83f8-d08614df914e",
+			map[string]any{"target_type": "ssh", "target_id": "approval-ssh", "role": "user",
+				"ssh_public_key": sshPublicKey, "ssh_principal": "alice"},
+			[]string{"ssh.cert.issued", "pam.session.started"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			approvalsBefore := pamEventCount(t, h, "approval.requested")
+			effectCounts := make(map[string]int, len(tc.effects))
+			for _, eventType := range tc.effects {
+				effectCounts[eventType] = pamEventCount(t, h, eventType)
+			}
+			tc.body["request_id"] = tc.requestID
+			tc.body["reason"] = "on-call production incident 42"
+			tc.body["method"] = "stub_pam"
+			tc.body["payload_base64"] = base64.StdEncoding.EncodeToString([]byte("genuine"))
+			tc.body["ttl_seconds"] = 30
+			status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/session-requests", requester,
+				"pam-approval-request-"+tc.name, tc.body)
+			if status != http.StatusAccepted {
+				t.Fatalf("PAM %s request status=%d, want 202 pending approval; body=%s", tc.name, status, body)
+			}
+			var response map[string]json.RawMessage
+			if err := json.Unmarshal(body, &response); err != nil {
+				t.Fatalf("decode PAM request response: %v", err)
+			}
+			if _, hasPostgres := response["postgres"]; hasPostgres {
+				t.Fatal("unapproved PAM request exposed a credential")
+			}
+			if _, hasSSH := response["ssh"]; hasSSH {
+				t.Fatal("unapproved PAM request exposed a credential")
+			}
+			if len(response["approval_request_id"]) == 0 || len(response["intent_digest"]) == 0 {
+				t.Fatal("PAM request omitted its exact review identity")
+			}
+			var pending api.PAMApprovalRequest
+			if err := json.Unmarshal(body, &pending); err != nil {
+				t.Fatalf("decode exact PAM approval: %v", err)
+			}
+			review, err := h.store.GetOperationApproval(context.Background(), h.tenant, pending.ApprovalRequestID)
+			if err != nil {
+				t.Fatalf("read PAM reviewer evidence: %v", err)
+			}
+			if tc.name == "postgres" && !containsExactString(review.EvidenceRefs, "pam-postgres-provider:pam-pg-provider") {
+				t.Fatalf("PAM reviewer cannot identify PostgreSQL provider: %v", review.EvidenceRefs)
+			}
+			if tc.name == "ssh" && (!containsExactString(review.EvidenceRefs, "pam-ssh-host:127.0.0.1:22") || !containsExactString(review.EvidenceRefs, "pam-ssh-principal:alice")) {
+				t.Fatalf("PAM reviewer cannot identify SSH host and principal: %v", review.EvidenceRefs)
+			}
+			status, body = secretsReqKey(t, h, http.MethodPost,
+				"/api/v1/approval-requests/"+pending.ApprovalRequestID+"/approvals", requester,
+				"pam-self-review-"+tc.name, map[string]any{"intent_digest": pending.IntentDigest})
+			if status != http.StatusForbidden {
+				t.Fatalf("PAM requester self-approval status=%d, want 403; body=%s", status, body)
+			}
+			for _, eventType := range tc.effects {
+				if pamEventCount(t, h, eventType) != effectCounts[eventType] {
+					t.Fatalf("unapproved PAM %s request emitted %s", tc.name, eventType)
+				}
+			}
+			if pamEventCount(t, h, "approval.requested") <= approvalsBefore {
+				t.Fatalf("PAM %s request status=%d without an immutable approval intent", tc.name, status)
+			}
+			tc.body["approval_request_id"] = pending.ApprovalRequestID
+			tc.body["intent_digest"] = pending.IntentDigest
+			status, _ = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,
+				"pam-unapproved-activation-"+tc.name, tc.body)
+			if status == http.StatusCreated {
+				t.Fatalf("PAM %s activated without the approved request", tc.name)
+			}
+			for _, eventType := range tc.effects {
+				if pamEventCount(t, h, eventType) != effectCounts[eventType] {
+					t.Fatalf("unapproved PAM %s activation emitted %s", tc.name, eventType)
+				}
+			}
+			if tc.name != "postgres" {
+				return
+			}
+			status, body = secretsReqKey(t, h, http.MethodPost,
+				"/api/v1/approval-requests/"+pending.ApprovalRequestID+"/approvals", reviewerOne,
+				"pam-first-independent-review", map[string]any{"intent_digest": pending.IntentDigest})
+			if status != http.StatusOK {
+				t.Fatalf("first PAM review status=%d; body=%s", status, body)
+			}
+			status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,
+				"pam-one-review-is-not-quorum", tc.body)
+			if status != http.StatusConflict {
+				t.Fatalf("one reviewer activated PAM: status=%d; body=%s", status, body)
+			}
+			status, body = secretsReqKey(t, h, http.MethodPost,
+				"/api/v1/approval-requests/"+pending.ApprovalRequestID+"/approvals", reviewerTwo,
+				"pam-second-independent-review", map[string]any{"intent_digest": pending.IntentDigest})
+			if status != http.StatusOK {
+				t.Fatalf("second PAM review status=%d; body=%s", status, body)
+			}
+			changedReason := make(map[string]any, len(tc.body))
+			for key, value := range tc.body {
+				changedReason[key] = value
+			}
+			changedReason["reason"] = "a different incident"
+			status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,
+				"pam-changed-approved-command", changedReason)
+			if status != http.StatusForbidden {
+				t.Fatalf("changed PAM command status=%d, want 403; body=%s", status, body)
+			}
+			target := h.srv.pam.postgres[pamTargetID{h.tenant, tc.body["target_id"].(string)}]
+			originalProvider := target.cfg.ProviderID
+			target.cfg.ProviderID = "swapped-provider"
+			status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,
+				"pam-changed-reviewed-target", tc.body)
+			target.cfg.ProviderID = originalProvider
+			if status != http.StatusForbidden {
+				t.Fatalf("changed PAM target binding status=%d, want 403; body=%s", status, body)
+			}
+			originalRevision := target.providerRevision
+			target.providerRevision = "restarted-provider-attachment"
+			status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,
+				"pam-changed-reviewed-provider-revision", tc.body)
+			target.providerRevision = originalRevision
+			if status != http.StatusForbidden {
+				t.Fatalf("changed PAM provider revision status=%d, want 403; body=%s", status, body)
+			}
+			if pamEventCount(t, h, "dynsecret.lease.pending") != effectCounts["dynsecret.lease.pending"] {
+				t.Fatal("a changed or partly reviewed PAM request enqueued a PostgreSQL grant")
+			}
+			issued := servedPAMOpen(t, h, requester, "pam-exact-approved-activation", tc.body)
+			if issued.Postgres == nil || issued.Postgres.DSN == "" {
+				t.Fatalf("exact reviewed PAM request did not open PostgreSQL: %+v", issued)
+			}
+			assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+		})
+	}
 }
 
 type servedPAMAttestor struct{}
@@ -423,6 +605,35 @@ func servedPAMOpen(t *testing.T, h *servedHarness, token, idemKey string, req ma
 		t.Fatalf("decode PAM response: %v; body=%s", err, body)
 	}
 	return out
+}
+
+func servedPAMReviewedOpen(t *testing.T, h *servedHarness, requester, reviewerOne, reviewerTwo, idemKey string, req map[string]any) servedPAMSessionResponse {
+	t.Helper()
+	req["request_id"] = uuid.NewString()
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/session-requests", requester,
+		idemKey+"-request", req)
+	if status != http.StatusAccepted {
+		t.Fatalf("request PAM review status=%d, want 202; body=%s", status, body)
+	}
+	var pending api.PAMApprovalRequest
+	if err := json.Unmarshal(body, &pending); err != nil || pending.ApprovalRequestID == "" || pending.IntentDigest == "" {
+		t.Fatalf("decode PAM approval request: %v; body=%s", err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/approval-requests?status=pending", reviewerOne, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), pending.ApprovalRequestID) {
+		t.Fatalf("PAM reviewer queue status=%d did not include exact request %s; body=%s", status, pending.ApprovalRequestID, body)
+	}
+	for i, reviewer := range []string{reviewerOne, reviewerTwo} {
+		status, body = secretsReqKey(t, h, http.MethodPost,
+			"/api/v1/approval-requests/"+pending.ApprovalRequestID+"/approvals", reviewer,
+			fmt.Sprintf("%s-review-%d", idemKey, i+1), map[string]any{"intent_digest": pending.IntentDigest})
+		if status != http.StatusOK {
+			t.Fatalf("PAM independent review %d status=%d; body=%s", i+1, status, body)
+		}
+	}
+	req["approval_request_id"] = pending.ApprovalRequestID
+	req["intent_digest"] = pending.IntentDigest
+	return servedPAMOpen(t, h, requester, idemKey, req)
 }
 
 func startPAMPostgres(t *testing.T) (string, func()) {

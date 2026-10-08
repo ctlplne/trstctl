@@ -626,6 +626,18 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/idempotency_key", opaque), privacyRule("/audit", clear),
 		privacyRule("/started_at", opaque), privacyRule("/expires_at", opaque),
 	)
+	pamSessionActivationRequested := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/request_id", opaque),
+		privacyRule("/command_digest", opaque), privacyRule("/idempotency_key", opaque),
+		privacyRule("/ttl_seconds", opaque),
+		privacyRule("/approval/request_id", opaque), privacyRule("/approval/intent_digest", opaque),
+		privacyRule("/approval/requester", exact), privacyRule("/approval/resource_kind", opaque),
+		privacyRule("/approval/resource_id", opaque), privacyRule("/approval/action", opaque),
+		privacyRule("/approval/from_state", opaque), privacyRule("/approval/to_state", opaque),
+		privacyRule("/approval/target_version", opaque), privacyRule("/approval/required_approvals", opaque),
+		privacyRule("/approval/reason", clear), privacyRule("/approval/evidence_refs/*", clear),
+		privacyRule("/approval/issuance", opaque),
+	)
 	pamSessionExpired := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/ended_at", opaque),
 		privacyRule("/reason", clear),
@@ -882,6 +894,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAWSHoneyScanPage, 1}:                                        awsHoneyScanPage,
 		{EventAWSHoneyTokenRearmed, 1}:                                    awsHoneyTokenRearmed,
 		{EventPAMSessionStarted, 1}:                                       pamSessionStarted,
+		{EventPAMSessionActivationRequested, 1}:                           pamSessionActivationRequested,
 		{EventPAMSessionExpired, 1}:                                       pamSessionExpired,
 		{EventAgentHeartbeat, 1}:                                          agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:    agentHeartbeat,
@@ -1589,6 +1602,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAWSHoneyScanPage, 1}:                                        privacyPayloadShape[store.AWSHoneyScanPage](),
 		{EventAWSHoneyTokenRearmed, 1}:                                    privacyPayloadShape[AWSHoneyTokenRearmed](),
 		{EventPAMSessionStarted, 1}:                                       privacyPayloadShape[PAMSessionStarted](),
+		{EventPAMSessionActivationRequested, 1}:                           privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSessionExpired, 1}:                                       privacyPayloadShape[PAMSessionExpired](),
 		{EventAgentHeartbeat, 1}:                                          privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:    privacyPayloadShape[AgentHeartbeat](),

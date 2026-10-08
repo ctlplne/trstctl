@@ -75,6 +75,7 @@ type ApprovalRequestListOptions struct {
 	CertificateOperations bool
 	SecretOperations      bool
 	ManagedKeyOperations  bool
+	PAMOperations         bool
 }
 
 type ApprovalRequestLister interface {
@@ -152,7 +153,7 @@ func (a *API) listApprovalRequests(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
 	visibility := a.approvalListVisibility(r, principal, tenantID)
-	if !visibility.CertificateOperations && !visibility.SecretOperations && !visibility.ManagedKeyOperations {
+	if !visibility.CertificateOperations && !visibility.SecretOperations && !visibility.ManagedKeyOperations && !visibility.PAMOperations {
 		a.writeError(w, errStatus(http.StatusForbidden, "forbidden: no approval-review domain is authorized"))
 		return
 	}
@@ -161,6 +162,7 @@ func (a *API) listApprovalRequests(w http.ResponseWriter, r *http.Request) {
 		CertificateOperations: visibility.CertificateOperations,
 		SecretOperations:      visibility.SecretOperations,
 		ManagedKeyOperations:  visibility.ManagedKeyOperations,
+		PAMOperations:         visibility.PAMOperations,
 	})
 	if err != nil {
 		a.writeError(w, err)
@@ -357,6 +359,7 @@ type approvalDomainVisibility struct {
 	CertificateOperations bool
 	SecretOperations      bool
 	ManagedKeyOperations  bool
+	PAMOperations         bool
 }
 
 func (a *API) approvalListVisibility(r *http.Request, principal authz.Principal, tenantID string) approvalDomainVisibility {
@@ -364,6 +367,7 @@ func (a *API) approvalListVisibility(r *http.Request, principal authz.Principal,
 		CertificateOperations: a.approvalPermissionAuthorized(r, principal, tenantID, authz.CertsIssue),
 		SecretOperations:      a.approvalPermissionAuthorized(r, principal, tenantID, authz.SecretsWrite),
 		ManagedKeyOperations:  a.approvalPermissionAuthorized(r, principal, tenantID, authz.KeysApprove),
+		PAMOperations:         a.approvalPermissionAuthorized(r, principal, tenantID, authz.AccessApprove),
 	}
 }
 
@@ -408,6 +412,8 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		return authz.SecretsWrite, action == "create" || action == "rotate" || action == "recover" || action == "delete"
 	case "managed_key":
 		return authz.KeysApprove, action == ManagedKeyActionRotate || action == ManagedKeyActionRevoke || action == ManagedKeyActionZeroize
+	case "pam":
+		return authz.AccessApprove, action == "activate"
 	default:
 		return "", false
 	}

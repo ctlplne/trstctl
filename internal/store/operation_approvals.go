@@ -75,6 +75,7 @@ type OperationApprovalDomainVisibility struct {
 	CertificateOperations bool
 	SecretOperations      bool
 	ManagedKeyOperations  bool
+	PAMOperations         bool
 }
 
 // AllOperationApprovalDomains is for trusted internal callers and tests that need
@@ -85,6 +86,7 @@ func AllOperationApprovalDomains() OperationApprovalDomainVisibility {
 		CertificateOperations: true,
 		SecretOperations:      true,
 		ManagedKeyOperations:  true,
+		PAMOperations:         true,
 	}
 }
 
@@ -550,7 +552,7 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 	if options.Limit <= 0 || options.Limit > 500 {
 		options.Limit = 200
 	}
-	if !options.Visibility.CertificateOperations && !options.Visibility.SecretOperations && !options.Visibility.ManagedKeyOperations {
+	if !options.Visibility.CertificateOperations && !options.Visibility.SecretOperations && !options.Visibility.ManagedKeyOperations && !options.Visibility.PAMOperations {
 		return []OperationApprovalRequest{}, nil
 	}
 	afterID := options.AfterID
@@ -603,13 +605,14 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 			          OR (r.resource_kind = 'code_signing' AND r.action = 'sign')
 			        ))
 			        OR ($7 AND r.resource_kind = 'secret' AND r.action IN ('create', 'rotate', 'recover', 'delete'))
-			        OR ($8 AND r.resource_kind = 'managed_key'
-			             AND r.action IN ('managedkey:rotate', 'managedkey:revoke', 'managedkey:zeroize'))
-			       )
+		        OR ($8 AND r.resource_kind = 'managed_key'
+		             AND r.action IN ('managedkey:rotate', 'managedkey:revoke', 'managedkey:zeroize'))
+		        OR ($9 AND r.resource_kind = 'pam' AND r.action = 'activate')
+		       )
 			 ORDER BY r.created_at DESC, r.id DESC LIMIT $5`,
 			tenantID, options.Status, options.AfterCreatedAt, afterID, options.Limit,
 			options.Visibility.CertificateOperations, options.Visibility.SecretOperations,
-			options.Visibility.ManagedKeyOperations)
+			options.Visibility.ManagedKeyOperations, options.Visibility.PAMOperations)
 		if err != nil {
 			return err
 		}

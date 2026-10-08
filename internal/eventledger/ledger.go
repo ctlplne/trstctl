@@ -136,6 +136,7 @@ const (
 	EventAWSHoneyScanPage                   = "honeytoken.aws.scan_page"
 	EventAWSHoneyTokenRearmed               = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                  = "pam.session.started"
+	EventPAMSessionActivationRequested      = "pam.session.activation_requested"
 	EventPAMSessionExpired                  = "pam.session.expired"
 	EventProfileCreated                     = "profile.created"
 	EventProfileUpdated                     = "profile.updated"
@@ -333,6 +334,7 @@ var ledger = []FeatureEvent{
 
 	// F33 — Just-in-time privileged access sessions.
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
+	{"F33", "Just-in-time issuance with approval flows", "activate_pam_session", "openPAMSession", []string{EventPAMSessionActivationRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
 	{"F33", "Just-in-time issuance with approval flows", "request_operation_approval", "transitionIdentity", []string{
 		EventApprovalRequested,

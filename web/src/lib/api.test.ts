@@ -2637,8 +2637,33 @@ describe("CLI-parity client methods (S3.3)", () => {
     { name: "pamSessions", call: () => api.pamSessions({ limit: 5 }), method: "GET", path: "/api/v1/access/sessions?limit=5" },
     { name: "pamSession", call: () => api.pamSession("s/1"), method: "GET", path: "/api/v1/access/sessions/s%2F1" },
     {
+      name: "requestPAMSession",
+      call: () =>
+        api.requestPAMSession({
+          request_id: "22222222-2222-4222-8222-222222222222",
+          method: "tpm",
+          payload_base64: "cGF5",
+          role: "readonly",
+          target_id: "db1",
+          target_type: "postgres",
+        }),
+      method: "POST",
+      path: "/api/v1/access/session-requests",
+      status: 202,
+    },
+    {
       name: "openPAMSession",
-      call: () => api.openPAMSession({ method: "tpm", payload_base64: "cGF5", role: "dba", target_id: "db1", target_type: "postgres" }),
+      call: () =>
+        api.openPAMSession({
+          request_id: "22222222-2222-4222-8222-222222222222",
+          approval_request_id: "33333333-3333-4333-8333-333333333333",
+          intent_digest: "exact",
+          method: "tpm",
+          payload_base64: "cGF5",
+          role: "readonly",
+          target_id: "db1",
+          target_type: "postgres",
+        }),
       method: "POST",
       path: "/api/v1/access/sessions",
       status: 201,

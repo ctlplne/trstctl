@@ -8325,6 +8325,24 @@ OwnershipResolveInput = TypedDict(
     total=False,
 )
 
+PAMApprovalRequest = TypedDict(
+    'PAMApprovalRequest',
+    {
+        'approval_count': int,
+        'approval_request_id': str,
+        'expires_at': str,
+        'intent_digest': str,
+        'request_id': str,
+        'required_approvals': int,
+        'role': str,
+        'status': str,
+        'subject': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
 PAMPostgresCredential = TypedDict(
     'PAMPostgresCredential',
     {
@@ -8368,6 +8386,25 @@ PAMSession = TypedDict(
     total=False,
 )
 
+PAMSessionActivationRequest = TypedDict(
+    'PAMSessionActivationRequest',
+    {
+        'approval_request_id': str,
+        'intent_digest': str,
+        'method': str,
+        'payload_base64': str,
+        'reason': str,
+        'request_id': str,
+        'role': str,
+        'ssh_principal': str,
+        'ssh_public_key': str,
+        'target_id': str,
+        'target_type': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
 PAMSessionList = TypedDict(
     'PAMSessionList',
     {
@@ -8383,6 +8420,7 @@ PAMSessionRequest = TypedDict(
         'method': str,
         'payload_base64': str,
         'reason': str,
+        'request_id': str,
         'role': str,
         'ssh_principal': str,
         'ssh_public_key': str,

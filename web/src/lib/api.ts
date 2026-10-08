@@ -377,7 +377,9 @@ import type {
   OwnershipExceptionList,
   OwnershipExceptionRequest,
   OwnershipExceptionRevokeRequest,
+  PAMApprovalRequest,
   PAMSession,
+  PAMSessionActivationRequest,
   PAMSessionList,
   PAMSessionRequest,
   PKISecret,
@@ -1055,7 +1057,9 @@ export type {
   OwnershipAssignmentResult,
   OwnershipAttribution,
   OwnershipAttributionItem,
+  PAMApprovalRequest,
   PAMSession,
+  PAMSessionActivationRequest,
   PAMSessionList,
   PAMSessionRequest,
   PKISecret,
@@ -1821,7 +1825,8 @@ export interface Api {
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions(options?: { limit?: number; cursor?: string }): Promise<PAMSessionList>;
   pamSession(id: string): Promise<PAMSession>;
-  openPAMSession(input: PAMSessionRequest): Promise<PAMSession>;
+  requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
+  openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -2455,7 +2460,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
-  openPAMSession: (input) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input),
+  requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
+  openPAMSession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input, idempotencyKey),
   acmeDNS01ProviderConfig: (id) => req<ACMEDNS01ProviderConfig>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`),
   createACMEDNS01ProviderConfig: (input) => mutate<ACMEDNS01ProviderConfig>("POST", "/api/v1/acme/dns-01/provider-configs", input),
   updateACMEDNS01ProviderConfig: (id, input) => mutate<ACMEDNS01ProviderConfig>("PUT", `/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`, input),

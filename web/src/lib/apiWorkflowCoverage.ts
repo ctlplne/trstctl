@@ -11,6 +11,15 @@ export interface ApiWorkflowCoverage {
 
 export const apiWorkflowCoverage = [
   {
+    path: "/api/v1/access/session-requests",
+    route: "/admin/access",
+    owner: "SURFACE/access",
+    kind: "console-flow",
+    workflow: "Reviewable privileged access request",
+    rationale:
+      "The Platform access form records one exact target, role, proof and lifetime without creating a credential; two distinct custodians review it in Approvals before the requester activates it.",
+  },
+  {
     path: "/api/v1/identities/{id}/deployment-evidence",
     route: "/identities",
     owner: "SURFACE/identities",

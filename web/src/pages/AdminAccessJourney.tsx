@@ -1,5 +1,8 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The four named overflow evidence regions must accept keyboard focus so users can scroll them; Route 040 axe tests enforce the resulting behavior. */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import { ChevronDown, History, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
@@ -17,21 +20,42 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, type FormatPolicy } from "@/i18n/format";
-import { ApiError, api, type APIToken, type Member, type OIDCMappingStatus, type PAMSession, type PAMSessionRequest, type RoleList } from "@/lib/api";
+import {
+  ApiError,
+  api,
+  type APIToken,
+  type Member,
+  type OIDCMappingStatus,
+  type PAMApprovalRequest,
+  type PAMSession,
+  type PAMSessionRequest,
+  type RoleList,
+} from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import type { StatusTone } from "@/lib/statusVocab";
 
-type PAMSessionFormState = {
-  target_type: PAMSessionRequest["target_type"];
-  target_id: string;
-  role: string;
-  method: string;
-  payload_base64: string;
-  reason: string;
-  ttl_seconds: string;
-  ssh_principal: string;
-  ssh_public_key: string;
-};
+const pamFormSchema = z
+  .object({
+    target_type: z.enum(["postgres", "ssh"]),
+    target_id: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
+    role: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
+    method: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
+    payload_base64: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
+    reason: z.string().trim(),
+    ttl_seconds: z
+      .string()
+      .trim()
+      .refine((value) => value === "" || (/^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value))), translateNow("admin.access.ttlPositiveInteger")),
+    ssh_principal: z.string().trim(),
+    ssh_public_key: z.string().trim(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.target_type === "ssh" && !value.ssh_public_key) {
+      ctx.addIssue({ code: "custom", path: ["ssh_public_key"], message: translateNow("admin.access.sshKeyRequired") });
+    }
+  });
+
+type PAMSessionFormState = z.infer<typeof pamFormSchema>;
 
 const defaultPAMSessionForm: PAMSessionFormState = {
   target_type: "postgres",
@@ -97,9 +121,11 @@ export function AdminAccess() {
 
   const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
   const [pamFormOpen, setPAMFormOpen] = useState(false);
-  const [pamForm, setPAMForm] = useState<PAMSessionFormState>(defaultPAMSessionForm);
   const [pamBusy, setPAMBusy] = useState(false);
   const [pamFormError, setPAMFormError] = useState<string | null>(null);
+  const [pamRequestID, setPAMRequestID] = useState("");
+  const [pamExact, setPAMExact] = useState<PAMSessionRequest | null>(null);
+  const [pamPending, setPAMPending] = useState<PAMApprovalRequest | null>(null);
   const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
   const [pamCopied, setPAMCopied] = useState(false);
 
@@ -311,31 +337,57 @@ export function AdminAccess() {
   function closePAMDialog() {
     setPAMFormOpen(false);
     setPAMFormError(null);
+    setPAMRequestID("");
+    setPAMExact(null);
+    setPAMPending(null);
     setPAMCreated(null);
     setPAMCopied(false);
   }
 
-  async function openPrivilegedSession(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function requestPrivilegedSession(form: PAMSessionFormState) {
     setPAMBusy(true);
     setPAMFormError(null);
     try {
-      const ttl = Number(pamForm.ttl_seconds.trim());
-      const input: PAMSessionRequest = {
-        method: pamForm.method.trim(),
-        payload_base64: pamForm.payload_base64.trim(),
-        role: pamForm.role.trim(),
-        target_id: pamForm.target_id.trim(),
-        target_type: pamForm.target_type,
-        ...(pamForm.reason.trim() ? { reason: pamForm.reason.trim() } : {}),
-        ...(pamForm.ttl_seconds.trim() && Number.isFinite(ttl) && ttl > 0 ? { ttl_seconds: Math.floor(ttl) } : {}),
-        ...(pamForm.target_type === "ssh" && pamForm.ssh_principal.trim() ? { ssh_principal: pamForm.ssh_principal.trim() } : {}),
-        ...(pamForm.target_type === "ssh" && pamForm.ssh_public_key.trim() ? { ssh_public_key: pamForm.ssh_public_key.trim() } : {}),
+      const ttl = Number(form.ttl_seconds);
+      const requestID = pamRequestID || crypto.randomUUID();
+      setPAMRequestID(requestID);
+      const input: PAMSessionRequest = pamExact ?? {
+        request_id: requestID,
+        method: form.method,
+        payload_base64: form.payload_base64,
+        role: form.role,
+        target_id: form.target_id,
+        target_type: form.target_type,
+        ...(form.reason ? { reason: form.reason } : {}),
+        ...(form.ttl_seconds ? { ttl_seconds: ttl } : {}),
+        ...(form.target_type === "ssh" && form.ssh_principal ? { ssh_principal: form.ssh_principal } : {}),
+        ...(form.target_type === "ssh" ? { ssh_public_key: form.ssh_public_key } : {}),
       };
-      const created = await api.openPAMSession(input);
+      setPAMExact(input);
+      setPAMPending(await api.requestPAMSession(input, `pam-request:${requestID}`));
+    } catch (err) {
+      setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
+    } finally {
+      setPAMBusy(false);
+    }
+  }
+
+  async function activatePrivilegedSession() {
+    if (!pamPending || !pamExact) return;
+    setPAMBusy(true);
+    setPAMFormError(null);
+    try {
+      const created = await api.openPAMSession(
+        {
+          ...pamExact,
+          approval_request_id: pamPending.approval_request_id,
+          intent_digest: pamPending.intent_digest,
+        },
+        `pam-activate:${pamExact.request_id}`,
+      );
       setPAMCreated(created);
       setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
-      setPAMForm(defaultPAMSessionForm);
+      setPAMExact(null);
     } catch (err) {
       setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
     } finally {
@@ -876,15 +928,17 @@ export function AdminAccess() {
       {pamDetail ? <PAMDetailDialog session={pamDetail} formatPolicy={formatPolicy} onClose={() => setPAMDetail(null)} /> : null}
       {pamFormOpen ? (
         <PAMFormDialog
-          form={pamForm}
-          setForm={setPAMForm}
+          locked={pamExact !== null}
           busy={pamBusy}
           error={pamFormError}
+          pending={pamPending}
           created={pamCreated}
           copied={pamCopied}
           returnFocusRef={pamTriggerRef}
           onClose={closePAMDialog}
-          onSubmit={openPrivilegedSession}
+          onRequest={requestPrivilegedSession}
+          onRetry={() => requestPrivilegedSession(defaultPAMSessionForm)}
+          onActivate={activatePrivilegedSession}
           onCopy={copyPAMSessionID}
           formatPolicy={formatPolicy}
         />
@@ -1003,31 +1057,50 @@ function PAMDetailDialog({ session, formatPolicy, onClose }: { session: PAMSessi
 }
 
 function PAMFormDialog({
-  form,
-  setForm,
+  locked,
   busy,
   error,
+  pending,
   created,
   copied,
   returnFocusRef,
   onClose,
-  onSubmit,
+  onRequest,
+  onRetry,
+  onActivate,
   onCopy,
   formatPolicy,
 }: {
-  form: PAMSessionFormState;
-  setForm: (form: PAMSessionFormState) => void;
+  locked: boolean;
   busy: boolean;
   error: string | null;
+  pending: PAMApprovalRequest | null;
   created: PAMSession | null;
   copied: boolean;
   returnFocusRef: React.RefObject<HTMLButtonElement>;
   onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onRequest: (form: PAMSessionFormState) => Promise<void>;
+  onRetry: () => Promise<void>;
+  onActivate: () => Promise<void>;
   onCopy: (id: string) => Promise<void>;
   formatPolicy: FormatPolicy;
 }) {
   const { t } = useTranslation();
+  const [showCredential, setShowCredential] = useState(false);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<PAMSessionFormState>({
+    resolver: zodResolver(pamFormSchema),
+    defaultValues: defaultPAMSessionForm,
+  });
+  const targetType = useWatch({ control, name: "target_type" });
+  useEffect(() => {
+    if (created) reset(defaultPAMSessionForm);
+  }, [created, reset]);
   return (
     <Dialog
       open
@@ -1061,14 +1134,81 @@ function PAMFormDialog({
             </span>
           </DetailRow>
           <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(created.expires_at, formatPolicy)}</DetailRow>
+          <Button type="button" size="sm" variant="outline" onClick={() => setShowCredential((visible) => !visible)}>
+            {showCredential ? t("admin.access.hideCredential") : t("admin.access.revealCredential")}
+          </Button>
+          {showCredential && created.postgres ? (
+            <DetailRow term={t("admin.access.postgresCredential")}>
+              <code className="break-all font-mono text-xs">{created.postgres.dsn}</code>
+            </DetailRow>
+          ) : null}
+          {showCredential && created.ssh ? (
+            <DetailRow term={t("admin.access.sshCertificate")}>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">{created.ssh.certificate}</pre>
+            </DetailRow>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{t("admin.access.credentialOnce")}</p>
           <div className="flex justify-end">
             <Button type="button" variant="outline" onClick={onClose}>
               {translateNow("source.close.7d9eb7acb1")}
             </Button>
           </div>
         </div>
+      ) : pending ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onActivate();
+          }}
+          className="grid gap-3 p-5 text-sm"
+        >
+          {error ? (
+            <ErrorState title={t("admin.access.sessionOpenFailed")}>
+              <ProblemDetail message={error} fallback={t("admin.access.sessionOpenFailed")} />
+            </ErrorState>
+          ) : null}
+          <p role="status" className="rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2">
+            {t("admin.access.sessionAwaitingApproval")}
+          </p>
+          <p>{t("admin.access.sessionApprovalNext", { count: pending.required_approvals })}</p>
+          <DetailRow term={t("admin.access.requestId")} mono>
+            {pending.request_id}
+          </DetailRow>
+          <DetailRow term={t("admin.access.approvalRequestId")} mono>
+            {pending.approval_request_id}
+          </DetailRow>
+          <DetailRow term={t("admin.access.approvalProgress")}>
+            {pending.approval_count}/{pending.required_approvals}
+          </DetailRow>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {translateNow("source.close.7d9eb7acb1")}
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {t("admin.access.activateApprovedSession")}
+            </Button>
+          </div>
+        </form>
+      ) : locked ? (
+        <div className="grid gap-3 p-5 text-sm">
+          {error ? (
+            <ErrorState title={t("admin.access.sessionOpenFailed")}>
+              <ProblemDetail message={error} fallback={t("admin.access.sessionOpenFailed")} />
+            </ErrorState>
+          ) : null}
+          <p>{t("admin.access.requestOutcomeUnknown")}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {translateNow("source.close.7d9eb7acb1")}
+            </Button>
+            <Button type="button" disabled={busy} onClick={() => void onRetry()}>
+              {t("admin.access.retryRequestUnchanged")}
+            </Button>
+          </div>
+        </div>
       ) : (
-        <form onSubmit={(event) => void onSubmit(event)} className="grid gap-3 p-5">
+        <form onSubmit={(event) => void handleSubmit(onRequest)(event)} className="grid gap-3 p-5">
           {error ? (
             <ErrorState title={t("admin.access.sessionOpenFailed")}>
               <ProblemDetail message={error} fallback={t("admin.access.sessionOpenFailed")} />
@@ -1076,54 +1216,45 @@ function PAMFormDialog({
           ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label={t("admin.access.targetType")}>
-              <Select value={form.target_type} onChange={(event) => setForm({ ...form, target_type: event.target.value as PAMSessionRequest["target_type"] })}>
+              <Select {...register("target_type")}>
                 <option value="postgres">{t("admin.access.postgresql")}</option>
                 <option value="ssh">{t("admin.access.ssh")}</option>
               </Select>
             </FormField>
-            <FormField label={t("admin.access.targetId")}>
-              <Input value={form.target_id} onChange={(event) => setForm({ ...form, target_id: event.target.value })} required />
+            <FormField label={t("admin.access.targetId")} hint={errors.target_id?.message}>
+              <Input {...register("target_id")} aria-invalid={Boolean(errors.target_id)} required />
             </FormField>
-            <FormField label={translateNow("source.role.14736a2eb9")}>
-              <Input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} required />
+            <FormField label={translateNow("source.role.14736a2eb9")} hint={errors.role?.message}>
+              <Input {...register("role")} aria-invalid={Boolean(errors.role)} required />
             </FormField>
-            <FormField label={translateNow("source.method.52a0f9b65b")}>
-              <Input value={form.method} onChange={(event) => setForm({ ...form, method: event.target.value })} required />
+            <FormField label={translateNow("source.method.52a0f9b65b")} hint={errors.method?.message}>
+              <Input {...register("method")} aria-invalid={Boolean(errors.method)} required />
             </FormField>
             <FormField label={translateNow("source.reason.f81ab834de")}>
-              <Input value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
+              <Input {...register("reason")} />
             </FormField>
-            <FormField label={translateNow("source.ttl.seconds.862d08de5a")}>
-              <Input type="number" min={1} value={form.ttl_seconds} onChange={(event) => setForm({ ...form, ttl_seconds: event.target.value })} />
+            <FormField label={translateNow("source.ttl.seconds.862d08de5a")} hint={errors.ttl_seconds?.message}>
+              <Input type="number" min={1} {...register("ttl_seconds")} aria-invalid={Boolean(errors.ttl_seconds)} />
             </FormField>
           </div>
-          {form.target_type === "ssh" ? (
+          {targetType === "ssh" ? (
             <>
               <FormField label={t("admin.access.sshPrincipal")}>
-                <Input value={form.ssh_principal} onChange={(event) => setForm({ ...form, ssh_principal: event.target.value })} />
+                <Input {...register("ssh_principal")} />
               </FormField>
-              <FormField label={translateNow("source.ssh.public.key.c9be6a369e")}>
-                <Textarea
-                  className="min-h-24 font-mono text-xs"
-                  value={form.ssh_public_key}
-                  onChange={(event) => setForm({ ...form, ssh_public_key: event.target.value })}
-                />
+              <FormField label={translateNow("source.ssh.public.key.c9be6a369e")} hint={errors.ssh_public_key?.message}>
+                <Textarea className="min-h-24 font-mono text-xs" {...register("ssh_public_key")} aria-invalid={Boolean(errors.ssh_public_key)} />
               </FormField>
             </>
           ) : null}
-          <FormField label={t("admin.access.payloadBase64")}>
-            <Textarea
-              className="min-h-24 font-mono text-xs"
-              value={form.payload_base64}
-              onChange={(event) => setForm({ ...form, payload_base64: event.target.value })}
-              required
-            />
+          <FormField label={t("admin.access.payloadBase64")} hint={errors.payload_base64?.message}>
+            <Textarea className="min-h-24 font-mono text-xs" {...register("payload_base64")} aria-invalid={Boolean(errors.payload_base64)} required />
           </FormField>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>
               {translateNow("source.cancel.19766ed6cc")}
             </Button>
-            <Button type="submit" disabled={busy || !form.target_id.trim() || !form.role.trim() || !form.method.trim() || !form.payload_base64.trim()}>
+            <Button type="submit" disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               {t("admin.access.openSessionSubmit")}
             </Button>

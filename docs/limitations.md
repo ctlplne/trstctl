@@ -2679,21 +2679,24 @@ than sending an operator looking for a credential that was never there.
   decision does not become every tenant's. The other two members of this family
   were wired after their dead `Deps` fields were found: `agent_broker` can turn
   on `POST /api/v1/broker/agent-identities`, while `pam` reaches the broker
-  constructor for `POST /api/v1/access/sessions` and its three siblings. PAM still
-  cannot be enabled by an ordinary operator: production config has no protected
-  target registration, and the broker refuses to start without targets. PAM now
-  resolves attestors from enabled tenant-managed workload trust at request time.
-  The injection-only target model is tenant-bound, requires an explicit
+  constructor for `POST /api/v1/access/sessions` and its companion routes. The
+  operator now registers tenant-bound PostgreSQL provider references and SSH
+  host/principal allowlists in the validated `pam` config block; the broker
+  refuses to start without targets. PAM resolves attestors from enabled
+  tenant-managed workload trust at request time. The target model requires an explicit
   PostgreSQL `readonly`/`writer` role allowlist, and rejects an SSH target
   without an explicit host, port, and principal allowlist. A Postgres DSN must be
   loaded by an existing tenant PostgreSQL dynamic-secret provider from a protected
   file or tenant secret. The injected PAM target contains only that provider ID;
   its issue and remove effects use the provider's durable outbox. PostgreSQL's
   native role deadline prevents a worker outage from extending access, while
-  PAM's final expiry event waits for confirmed provider removal. This source-only
-  path does not enable PAM in a production deployment because target registration
-  is still absent.
-  PAM also lacks distinct approval and early revocation; these are open U6 work.
+  PAM's final expiry event waits for confirmed provider removal. The requester
+  proposes an exact session with `POST /api/v1/access/session-requests`; a
+  configurable quorum of distinct `access:approve` reviewers must approve its
+  immutable digest before `POST /api/v1/access/sessions` consumes that authority.
+  An altered command or target binding cannot reuse the approval. PAM still
+  lacks an operator early-revocation path; the browser workflow and independent
+  cold-start proof remain open U6 work.
   A malformed TTL on any of the three leaves zero so the
   built-in bound applies — silently substituting a LONGER lifetime than the
   operator wrote is the dangerous direction, and zero cannot do that.

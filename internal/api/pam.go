@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const PAMSessionStatusActive = "active"
@@ -27,6 +28,7 @@ var (
 // tenant-scoped HTTP contract; the server implementation owns the attestation
 // verifier, target adapters, SSH CA, event append, projection, and expiry worker.
 type PAMService interface {
+	RequestPAMSession(ctx context.Context, tenantID, requester string, req PAMSessionRequest) (PAMApprovalRequest, error)
 	OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req PAMSessionRequest) (PAMSession, error)
 	GetPAMSession(ctx context.Context, tenantID, id string) (PAMSession, error)
 	ListPAMSessions(ctx context.Context, tenantID string, limit int, cursor string) ([]PAMSession, string, error)
@@ -38,27 +40,49 @@ func WithPAM(svc PAMService) Option {
 }
 
 type PAMSessionRequest struct {
-	TargetType   string
-	TargetID     string
-	Role         string
-	Reason       string
-	Method       string
-	Payload      []byte
-	TTLSeconds   int64
-	SSHPublicKey []byte
-	SSHPrincipal string
+	RequestID         string
+	ApprovalRequestID string
+	IntentDigest      string
+	TargetType        string
+	TargetID          string
+	Role              string
+	Reason            string
+	Method            string
+	Payload           []byte
+	TTLSeconds        int64
+	SSHPublicKey      []byte
+	SSHPrincipal      string
 }
 
 type pamSessionJSON struct {
-	TargetType    string `json:"target_type"`
-	TargetID      string `json:"target_id"`
-	Role          string `json:"role"`
-	Reason        string `json:"reason"`
-	Method        string `json:"method"`
-	PayloadBase64 string `json:"payload_base64"`
-	TTLSeconds    int64  `json:"ttl_seconds"`
-	SSHPublicKey  string `json:"ssh_public_key,omitempty"`
-	SSHPrincipal  string `json:"ssh_principal,omitempty"`
+	RequestID         string `json:"request_id"`
+	ApprovalRequestID string `json:"approval_request_id"`
+	IntentDigest      string `json:"intent_digest"`
+	TargetType        string `json:"target_type"`
+	TargetID          string `json:"target_id"`
+	Role              string `json:"role"`
+	Reason            string `json:"reason"`
+	Method            string `json:"method"`
+	PayloadBase64     string `json:"payload_base64"`
+	TTLSeconds        int64  `json:"ttl_seconds"`
+	SSHPublicKey      string `json:"ssh_public_key,omitempty"`
+	SSHPrincipal      string `json:"ssh_principal,omitempty"`
+}
+
+// PAMApprovalRequest is the non-secret result of proposing one exact privileged
+// access command. A reviewer must decide the returned digest before activation.
+type PAMApprovalRequest struct {
+	RequestID         string    `json:"request_id"`
+	ApprovalRequestID string    `json:"approval_request_id"`
+	IntentDigest      string    `json:"intent_digest"`
+	Status            string    `json:"status"`
+	Subject           string    `json:"subject"`
+	TargetType        string    `json:"target_type"`
+	TargetID          string    `json:"target_id"`
+	Role              string    `json:"role"`
+	ApprovalCount     int       `json:"approval_count"`
+	RequiredApprovals int       `json:"required_approvals"`
+	ExpiresAt         time.Time `json:"expires_at"`
 }
 
 type PAMSession struct {
@@ -118,6 +142,48 @@ func (r *PAMSession) wipeSecrets() {
 	}
 }
 
+//trstctl:mutation
+func (a *API) requestPAMSession(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.pam == nil {
+			return 0, nil, ErrPAMUnavailable
+		}
+		req, err := decodePAMSessionRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		if principal.Subject == "" {
+			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
+		}
+		pending, err := a.pam.RequestPAMSession(ctx, tenantID, principal.Subject, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, pending, nil
+	})
+}
+
+func decodePAMSessionRequest(r *http.Request) (PAMSessionRequest, error) {
+	var body pamSessionJSON
+	if err := decodeJSON(r, &body); err != nil {
+		return PAMSessionRequest{}, errWithStatus(http.StatusBadRequest, err)
+	}
+	payload, err := base64.StdEncoding.DecodeString(body.PayloadBase64)
+	if err != nil || len(payload) == 0 {
+		return PAMSessionRequest{}, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
+	}
+	return PAMSessionRequest{
+		RequestID:         strings.TrimSpace(body.RequestID),
+		ApprovalRequestID: strings.TrimSpace(body.ApprovalRequestID),
+		IntentDigest:      strings.TrimSpace(body.IntentDigest),
+		TargetType:        strings.TrimSpace(body.TargetType), TargetID: strings.TrimSpace(body.TargetID),
+		Role: strings.TrimSpace(body.Role), Reason: strings.TrimSpace(body.Reason),
+		Method: strings.TrimSpace(body.Method), Payload: payload, TTLSeconds: body.TTLSeconds,
+		SSHPublicKey: []byte(strings.TrimSpace(body.SSHPublicKey)), SSHPrincipal: strings.TrimSpace(body.SSHPrincipal),
+	}, nil
+}
+
 // openPAMSession opens a short-lived brokered access session for a configured
 // target. Mutations run through mutate(), so AN-5 replay returns the identical
 // credential response without re-running backend grant creation.
@@ -133,32 +199,17 @@ func (a *API) openPAMSession(w http.ResponseWriter, r *http.Request) {
 			opErr = ErrPAMUnavailable
 			return 0, nil, ErrPAMUnavailable
 		}
-		var req pamSessionJSON
-		if err := decodeJSON(r, &req); err != nil {
+		req, err := decodePAMSessionRequest(r)
+		if err != nil {
 			opErr = err
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		payload, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
-		if err != nil || len(payload) == 0 {
-			opErr = errors.New("payload_base64 must be non-empty standard base64")
-			return 0, nil, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
+			return 0, nil, err
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 		if principal.Subject == "" {
 			opErr = errors.New("an authenticated requester is required")
 			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
 		}
-		session, err := a.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, principal.Subject, PAMSessionRequest{
-			TargetType:   strings.TrimSpace(req.TargetType),
-			TargetID:     strings.TrimSpace(req.TargetID),
-			Role:         strings.TrimSpace(req.Role),
-			Reason:       strings.TrimSpace(req.Reason),
-			Method:       strings.TrimSpace(req.Method),
-			Payload:      payload,
-			TTLSeconds:   req.TTLSeconds,
-			SSHPublicKey: []byte(strings.TrimSpace(req.SSHPublicKey)),
-			SSHPrincipal: strings.TrimSpace(req.SSHPrincipal),
-		})
+		session, err := a.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, principal.Subject, req)
 		if err != nil {
 			opErr = err
 			return 0, nil, err
@@ -220,6 +271,14 @@ func (a *API) writePAMError(w http.ResponseWriter, err error) bool {
 		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, strings.TrimPrefix(err.Error(), ErrPAMInvalid.Error()+": ")))
 	case errors.Is(err, ErrPAMRejected):
 		a.writeProblem(w, problem.New(http.StatusForbidden, strings.TrimPrefix(err.Error(), ErrPAMRejected.Error()+": ")))
+	case errors.Is(err, store.ErrApprovalNotReady):
+		a.writeProblem(w, problem.New(http.StatusConflict, "PAM session is awaiting distinct approval"))
+	case errors.Is(err, store.ErrApprovalExpired):
+		a.writeProblem(w, problem.New(http.StatusConflict, "PAM approval expired; request a new review"))
+	case errors.Is(err, store.ErrApprovalSuperseded), errors.Is(err, store.ErrApprovalConsumed):
+		a.writeProblem(w, problem.New(http.StatusConflict, "PAM approval can no longer activate this session"))
+	case errors.Is(err, store.ErrApprovalDrifted), errors.Is(err, store.ErrApprovalDigestMismatch):
+		a.writeProblem(w, problem.New(http.StatusForbidden, "PAM command differs from the approved intent"))
 	default:
 		return false
 	}

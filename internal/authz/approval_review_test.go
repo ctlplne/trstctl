@@ -18,6 +18,8 @@ func TestApprovalReviewPermissionRequiresOneRealDomainApprovalGrant(t *testing.T
 		{name: "certificate reviewer", perm: authz.CertsIssue, want: true},
 		{name: "secret reviewer", perm: authz.SecretsWrite, want: true},
 		{name: "managed key reviewer", perm: authz.KeysApprove, want: true},
+		{name: "privileged access reviewer", perm: authz.AccessApprove, want: true},
+		{name: "privileged access writer cannot review", perm: authz.AccessWrite, want: false},
 		{name: "read only is not a reviewer", perm: authz.CertsRead, want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

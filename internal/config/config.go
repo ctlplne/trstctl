@@ -1451,15 +1451,34 @@ type AgentBroker struct {
 
 // PAM turns on just-in-time privileged access sessions (AUD-13).
 //
-// The broker requires tenant-bound targets, but production config does not yet
-// provide protected target references. It resolves tenant-managed attester trust
-// at request time. Enabling this flag alone fails startup rather than claiming
-// usable privileged access. Do not put an administrator DSN in this config file.
+// The broker resolves tenant-managed attester trust at request time. PostgreSQL
+// targets reference a separately configured tenant dynamic-secret provider,
+// whose administrator DSN lives in a protected file:/secret:// reference. This
+// config never carries an administrator DSN or a private SSH key.
 type PAM struct {
-	Enabled        bool   `json:"enabled"`
-	DefaultTTL     string `json:"default_ttl,omitempty"`
-	MaxTTL         string `json:"max_ttl,omitempty"`
-	ExpiryInterval string `json:"expiry_interval,omitempty"`
+	Enabled           bool                `json:"enabled"`
+	DefaultTTL        string              `json:"default_ttl,omitempty"`
+	MaxTTL            string              `json:"max_ttl,omitempty"`
+	ExpiryInterval    string              `json:"expiry_interval,omitempty"`
+	ApprovalTTL       string              `json:"approval_ttl,omitempty"`
+	RequiredApprovals int                 `json:"required_approvals,omitempty"`
+	PostgresTargets   []PAMPostgresTarget `json:"postgres_targets,omitempty"`
+	SSHTargets        []PAMSSHTarget      `json:"ssh_targets,omitempty"`
+}
+
+type PAMPostgresTarget struct {
+	TenantID     string   `json:"tenant_id"`
+	ID           string   `json:"id"`
+	ProviderID   string   `json:"provider_id"`
+	AllowedRoles []string `json:"allowed_roles"`
+}
+
+type PAMSSHTarget struct {
+	TenantID   string   `json:"tenant_id"`
+	ID         string   `json:"id"`
+	Host       string   `json:"host"`
+	Port       int      `json:"port"`
+	Principals []string `json:"principals"`
 }
 
 // Reconcile configures cross-authority reconciliation rounds (C4/XREC, AUD-1).
@@ -3782,6 +3801,7 @@ func validateSSHUserPrincipals(principals []string) []error {
 func validateServedSurfaces(c *Config) []error {
 	var errs []error
 	errs = append(errs, validateEphemeralIssuance(c.EphemeralIssuance)...)
+	errs = append(errs, validatePAM(c.PAM)...)
 	// Served OIDC login (EXC-WIRE-01): when enabled it must be FULLY configured, so
 	// the binary never serves a half-wired login (fail closed). When disabled the
 	// block is ignored.
@@ -3870,6 +3890,71 @@ func validateServedSurfaces(c *Config) []error {
 				errs = append(errs, errors.New("agent_channel.public_address must be a trimmed host:port such as agents.example.com:9443 or localhost:19443"))
 			} else if !agentPublicHostIsLoopback(host) && strings.TrimSpace(c.AgentChannel.ServerName) == "" {
 				errs = append(errs, errors.New("agent_channel.public_address for a non-loopback host requires agent_channel.server_name so agents can verify the channel certificate"))
+			}
+		}
+	}
+	return errs
+}
+
+func validatePAM(p PAM) []error {
+	if !p.Enabled {
+		return nil
+	}
+	var errs []error
+	if len(p.PostgresTargets)+len(p.SSHTargets) == 0 {
+		errs = append(errs, errors.New("pam requires at least one postgres_targets or ssh_targets entry"))
+	}
+	parsePositive := func(name, raw string) time.Duration {
+		if strings.TrimSpace(raw) == "" {
+			return 0
+		}
+		d, err := time.ParseDuration(strings.TrimSpace(raw))
+		if err != nil || d <= 0 {
+			errs = append(errs, fmt.Errorf("pam.%s must be a positive duration", name))
+			return 0
+		}
+		return d
+	}
+	defaultTTL := parsePositive("default_ttl", p.DefaultTTL)
+	maxTTL := parsePositive("max_ttl", p.MaxTTL)
+	_ = parsePositive("expiry_interval", p.ExpiryInterval)
+	_ = parsePositive("approval_ttl", p.ApprovalTTL)
+	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {
+		errs = append(errs, errors.New("pam.default_ttl must not exceed pam.max_ttl"))
+	}
+	if p.RequiredApprovals < 0 {
+		errs = append(errs, errors.New("pam.required_approvals must be nonnegative; zero uses two distinct reviewers"))
+	}
+	seen := map[string]bool{}
+	for i, target := range p.PostgresTargets {
+		prefix := fmt.Sprintf("pam.postgres_targets[%d]", i)
+		if _, err := uuid.Parse(target.TenantID); err != nil || target.ID == "" || target.ProviderID == "" || len(target.AllowedRoles) == 0 {
+			errs = append(errs, fmt.Errorf("%s requires tenant_id UUID, id, provider_id, and allowed_roles", prefix))
+		}
+		key := target.TenantID + "/postgres/" + target.ID
+		if seen[key] {
+			errs = append(errs, fmt.Errorf("%s duplicates a tenant target id", prefix))
+		}
+		seen[key] = true
+		for _, role := range target.AllowedRoles {
+			if role != "readonly" && role != "writer" {
+				errs = append(errs, fmt.Errorf("%s role %q must be readonly or writer", prefix, role))
+			}
+		}
+	}
+	for i, target := range p.SSHTargets {
+		prefix := fmt.Sprintf("pam.ssh_targets[%d]", i)
+		if _, err := uuid.Parse(target.TenantID); err != nil || target.ID == "" || target.Host == "" || target.Port < 1 || target.Port > 65535 || len(target.Principals) == 0 {
+			errs = append(errs, fmt.Errorf("%s requires tenant_id UUID, id, host, TCP port, and principals", prefix))
+		}
+		key := target.TenantID + "/ssh/" + target.ID
+		if seen[key] {
+			errs = append(errs, fmt.Errorf("%s duplicates a tenant target id", prefix))
+		}
+		seen[key] = true
+		for _, principal := range target.Principals {
+			if strings.TrimSpace(principal) == "" || principal == "*" {
+				errs = append(errs, fmt.Errorf("%s contains an empty or wildcard principal", prefix))
 			}
 		}
 	}
