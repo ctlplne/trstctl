@@ -173,6 +173,26 @@ func newPAMService(d pamDeps) (*pamService, error) {
 			return nil, errors.New("server: PAM attestor has empty method")
 		}
 	}
+	postgresTargets, err := buildPAMPostgresTargets(d)
+	if err != nil {
+		return nil, err
+	}
+	sshTargets, err := buildPAMSSHTargets(d)
+	if err != nil {
+		return nil, err
+	}
+	return &pamService{
+		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
+		attestors: cfg.Attestors, postgres: postgresTargets,
+		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
+		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
+		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
+		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
+	}, nil
+}
+
+func buildPAMPostgresTargets(d pamDeps) (map[pamTargetID]*pamPostgresTarget, error) {
+	cfg := d.Config
 	postgresTargets := make(map[pamTargetID]*pamPostgresTarget, len(cfg.PostgresTargets))
 	for _, target := range cfg.PostgresTargets {
 		if _, err := uuid.Parse(target.TenantID); err != nil {
@@ -237,6 +257,11 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		}
 		postgresTargets[key] = &pamPostgresTarget{cfg: target, roles: roles, providerRevision: providerRevision}
 	}
+	return postgresTargets, nil
+}
+
+func buildPAMSSHTargets(d pamDeps) (map[pamTargetID]PAMSSHTarget, error) {
+	cfg := d.Config
 	sshTargets := make(map[pamTargetID]PAMSSHTarget, len(cfg.SSHTargets))
 	for _, target := range cfg.SSHTargets {
 		if _, err := uuid.Parse(target.TenantID); err != nil {
@@ -269,14 +294,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		}
 		sshTargets[key] = target
 	}
-	return &pamService{
-		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
-		attestors: cfg.Attestors, postgres: postgresTargets,
-		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
-		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
-		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
-		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
-	}, nil
+	return sshTargets, nil
 }
 
 func (s *Server) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSession, error) {

@@ -90,9 +90,13 @@ func TestDynamicSecretTerminalRetryRecoversCanonicalIssuedResult(t *testing.T) {
 	const tenant = "11111111-1111-4111-8111-111111111127"
 	ctx := context.Background()
 	st, log, _, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+	epoch, err := st.DynamicSecretTenantEpoch(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now().UTC()
 	pending := projections.DynamicSecretLeasePending{
-		ID: "lease-issued-before-terminal", IdempotencyKey: "issued-before-terminal",
+		TenantEpoch: epoch, ID: "lease-issued-before-terminal", IdempotencyKey: "issued-before-terminal",
 		RequestBinding: "sha256:issued-before-terminal", Provider: provider.name, Role: "reader",
 		ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(15 * time.Minute),
 	}
@@ -100,8 +104,11 @@ func TestDynamicSecretTerminalRetryRecoversCanonicalIssuedResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	event, err := log.Append(ctx, events.Event{Type: projections.EventDynamicSecretLeasePending,
-		TenantID: tenant, Time: now, Data: data})
+	event, err := log.Append(ctx, events.Event{
+		ID:   store.DynamicSecretEventID(tenant, epoch, "issue-requested", pending.ID),
+		Type: projections.EventDynamicSecretLeasePending, TenantID: tenant,
+		Time: now, SchemaVersion: projections.DynamicSecretEventSchemaVersion, Data: data,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

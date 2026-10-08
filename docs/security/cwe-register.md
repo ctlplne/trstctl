@@ -524,10 +524,10 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:940` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:941` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:944` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:953` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:951` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:952` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:955` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:964` | positive int64 is exactly representable as uint64. |
 | `internal/server/secrets_rotation_served_test.go:2566` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:112` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:114` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
@@ -650,7 +650,7 @@ not this file.
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
 | `internal/dynsecret/aws_sts.go:143` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/providers_real.go:1348` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
-| `internal/server/secret_integrations_outbox.go:513` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
+| `internal/server/secret_integrations_outbox.go:524` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (2 sites)
 

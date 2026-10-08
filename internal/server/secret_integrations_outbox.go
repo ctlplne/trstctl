@@ -371,26 +371,8 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		return errors.New("server: dynamic-secret issuance command does not match its pending lease")
 	}
 	if record.State != store.DynamicSecretLeasePending {
-		// The current expiry is no longer the issue command's expiry. Verify the
-		// latter against the immutable event before settling an old outbox row.
-		canonical, found, err := d.log.EventByID(ctx,
-			dynamicSecretEventID(m.TenantID, command.TenantEpoch, "issue-requested", command.ID))
-		if err != nil {
-			return fmt.Errorf("server: read canonical dynamic-secret issue command: %w", err)
-		}
-		if !found || canonical.Type != projections.EventDynamicSecretLeasePending || canonical.TenantID != m.TenantID {
-			return errors.New("server: canonical dynamic-secret issue command is missing")
-		}
-		var original projections.DynamicSecretLeasePending
-		if err := json.Unmarshal(canonical.Data, &original); err != nil {
-			return errors.New("server: canonical dynamic-secret issue command is invalid")
-		}
-		if original.TenantEpoch != command.TenantEpoch || original.ID != command.ID ||
-			original.IdempotencyKey != command.IdempotencyKey || original.RequestBinding != command.RequestBinding ||
-			original.Provider != command.Provider || original.Role != command.Role ||
-			!dynamicSecretPersistedTimeEqual(original.ExpiresAt, command.ExpiresAt) ||
-			!dynamicSecretPersistedTimeEqual(original.HardExpiresAt, command.HardExpiresAt) {
-			return errors.New("server: dynamic-secret issue outbox differs from its canonical event")
+		if err := d.verifyCanonicalDynamicSecretIssue(ctx, m, command); err != nil {
+			return err
 		}
 	}
 	if m.ID != 0 && record.IssueOutboxID != m.ID {
@@ -480,6 +462,35 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		Role: command.Role, BackendRef: credential.BackendRef, SealedCredential: sealedCredential,
 		ExpiresAt: command.ExpiresAt, HardExpiresAt: command.HardExpiresAt,
 	})
+}
+
+// verifyCanonicalDynamicSecretIssue binds an old outbox row to its immutable issue event
+// after renewal or revocation changes the lease's current expiry.
+func (d *secretIntegrationOutboxDispatcher) verifyCanonicalDynamicSecretIssue(
+	ctx context.Context, m orchestrator.Message, command projections.DynamicSecretIssueCommand,
+) error {
+	// The current expiry is no longer the issue command's expiry. Verify the
+	// latter against the immutable event before settling an old outbox row.
+	canonical, found, err := d.log.EventByID(ctx,
+		dynamicSecretEventID(m.TenantID, command.TenantEpoch, "issue-requested", command.ID))
+	if err != nil {
+		return fmt.Errorf("server: read canonical dynamic-secret issue command: %w", err)
+	}
+	if !found || canonical.Type != projections.EventDynamicSecretLeasePending || canonical.TenantID != m.TenantID {
+		return errors.New("server: canonical dynamic-secret issue command is missing")
+	}
+	var original projections.DynamicSecretLeasePending
+	if err := json.Unmarshal(canonical.Data, &original); err != nil {
+		return errors.New("server: canonical dynamic-secret issue command is invalid")
+	}
+	if original.TenantEpoch != command.TenantEpoch || original.ID != command.ID ||
+		original.IdempotencyKey != command.IdempotencyKey || original.RequestBinding != command.RequestBinding ||
+		original.Provider != command.Provider || original.Role != command.Role ||
+		!dynamicSecretPersistedTimeEqual(original.ExpiresAt, command.ExpiresAt) ||
+		!dynamicSecretPersistedTimeEqual(original.HardExpiresAt, command.HardExpiresAt) {
+		return errors.New("server: dynamic-secret issue outbox differs from its canonical event")
+	}
+	return nil
 }
 
 // generateDynamicSecretCredential owns the provider preparation state machine.
