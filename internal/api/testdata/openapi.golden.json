@@ -24919,6 +24919,52 @@
         ],
         "type": "object"
       },
+      "PAMRequestProgress": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "approval_request_id",
+          "intent_digest",
+          "status",
+          "approval_count",
+          "required_approvals",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "PAMSSHCredential": {
         "properties": {
           "certificate": {
@@ -35529,6 +35575,64 @@
           }
         ],
         "summary": "Request a reviewed privileged access session",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/session-requests/{id}": {
+      "get": {
+        "operationId": "getPAMRequestProgress",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRequestProgress"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the current approval progress of one's own privileged access request",
         "x-trstctl-permission": "access:write"
       }
     },

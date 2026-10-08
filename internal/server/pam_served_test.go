@@ -428,6 +428,8 @@ func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
 		})
 	startServedExternalCADispatcher(t, h)
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-approval-requester", "access:write", "access:approve")
+	progressReader := seedScopedTokenSubject(t, h.store, h.tenant, "pam-approval-requester", "access:write")
+	otherRequester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-other-requester", "access:write")
 	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "pam-bound-reviewer-one", "access:approve")
 	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-bound-reviewer-two", "access:approve")
 	_, sshPublicKey := generatePAMSSHKey(t)
@@ -478,6 +480,29 @@ func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
 			if err := json.Unmarshal(body, &pending); err != nil {
 				t.Fatalf("decode exact PAM approval: %v", err)
 			}
+			progressPath := "/api/v1/access/session-requests/" + pending.ApprovalRequestID
+			readProgress := func(wantCount int, wantStatus string) {
+				t.Helper()
+				code, raw := secretsReq(t, h, http.MethodGet, progressPath, progressReader, nil)
+				if code != http.StatusOK {
+					t.Fatalf("requester progress status=%d; body=%s", code, raw)
+				}
+				var progress api.PAMRequestProgress
+				if err := json.Unmarshal(raw, &progress); err != nil {
+					t.Fatal(err)
+				}
+				if progress.RequestID != tc.requestID || progress.ApprovalRequestID != pending.ApprovalRequestID ||
+					progress.IntentDigest != pending.IntentDigest || progress.ApprovalCount != wantCount || progress.Status != wantStatus {
+					t.Fatalf("requester progress = %+v, want count=%d status=%s", progress, wantCount, wantStatus)
+				}
+				if len(raw) > 0 && (strings.Contains(string(raw), "payload_base64") || strings.Contains(string(raw), "postgres")) {
+					t.Fatalf("progress exposed credential or target details: %s", raw)
+				}
+			}
+			readProgress(0, "pending")
+			if code, _ := secretsReq(t, h, http.MethodGet, progressPath, otherRequester, nil); code != http.StatusNotFound {
+				t.Fatalf("another requester read PAM progress: HTTP %d, want 404", code)
+			}
 			review, err := h.store.GetOperationApproval(context.Background(), h.tenant, pending.ApprovalRequestID)
 			if err != nil {
 				t.Fatalf("read PAM reviewer evidence: %v", err)
@@ -523,6 +548,7 @@ func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
 			if status != http.StatusOK {
 				t.Fatalf("first PAM review status=%d; body=%s", status, body)
 			}
+			readProgress(1, "pending")
 			status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,
 				"pam-one-review-is-not-quorum", tc.body)
 			if status != http.StatusConflict {
@@ -534,6 +560,7 @@ func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
 			if status != http.StatusOK {
 				t.Fatalf("second PAM review status=%d; body=%s", status, body)
 			}
+			readProgress(2, "approved")
 			changedReason := make(map[string]any, len(tc.body))
 			for key, value := range tc.body {
 				changedReason[key] = value

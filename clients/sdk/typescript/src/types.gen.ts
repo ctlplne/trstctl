@@ -245,6 +245,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/session-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current approval progress of one's own privileged access request */
+        get: operations["getPAMRequestProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions": {
         parameters: {
             query?: never;
@@ -13497,6 +13514,19 @@ export interface components {
             dsn: string;
             username: string;
         };
+        PAMRequestProgress: {
+            approval_count: number;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
+            required_approvals: number;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+        };
         PAMSSHCredential: {
             certificate: string;
             key_id: string;
@@ -16691,6 +16721,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMApprovalRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMRequestProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRequestProgress"];
                 };
             };
             /** @description client error */

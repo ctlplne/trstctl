@@ -583,6 +583,7 @@ public final class OpenApiSchemas {
       "OwnershipResolveInput",
       "PAMApprovalRequest",
       "PAMPostgresCredential",
+      "PAMRequestProgress",
       "PAMSSHCredential",
       "PAMSession",
       "PAMSessionActivationRequest",

@@ -1227,6 +1227,15 @@ func TestAccessSessionCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) 
 	if requestCap.Header.Get("Idempotency-Key") == "" {
 		t.Error("access session request should send an Idempotency-Key")
 	}
+	var progressCap capture
+	progressSrv := mockServer(t, 200, `{"approval_count":2,"required_approvals":2,"status":"approved"}`, &progressCap)
+	code, _, _ = run(t, []string{"access", "sessions", "request-status", "28b3855a-4fe9-4f66-8cf0-49d2382bc108"}, cli.Env{Server: progressSrv.URL, HTTPClient: progressSrv.Client()}, "")
+	if code != 0 || progressCap.Method != "GET" || progressCap.Path != "/api/v1/access/session-requests/28b3855a-4fe9-4f66-8cf0-49d2382bc108" {
+		t.Errorf("request status = exit %d, %s %s", code, progressCap.Method, progressCap.Path)
+	}
+	if progressCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("PAM request status must not send an Idempotency-Key")
+	}
 
 	var openCap capture
 	openSrv := mockServer(t, 201, `{"id":"pam:session-1","target_type":"postgres","target_id":"prod-db","status":"active"}`, &openCap)

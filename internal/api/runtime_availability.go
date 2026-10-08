@@ -67,7 +67,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "previewEphemeralCredential", "issueEphemeralCredential", "approveEphemeralCredential":
 		return runtimeDependency(a.ephemeral != nil,
 			"Attestation-gated temporary credential issuance is not configured in this deployment.")
-	case "requestPAMSession", "openPAMSession", "listPAMSessions", "getPAMSession":
+	case "requestPAMSession", "getPAMRequestProgress", "openPAMSession", "listPAMSessions", "getPAMSession":
 		return runtimeDependency(a.pam != nil,
 			"The just-in-time privileged access broker is not configured in this deployment.")
 	case "listApprovalRequests":

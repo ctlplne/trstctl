@@ -2636,6 +2636,7 @@ describe("CLI-parity client methods (S3.3)", () => {
   const cases: ParityCase[] = [
     { name: "pamSessions", call: () => api.pamSessions({ limit: 5 }), method: "GET", path: "/api/v1/access/sessions?limit=5" },
     { name: "pamSession", call: () => api.pamSession("s/1"), method: "GET", path: "/api/v1/access/sessions/s%2F1" },
+    { name: "pamRequestProgress", call: () => api.pamRequestProgress("review/1"), method: "GET", path: "/api/v1/access/session-requests/review%2F1" },
     {
       name: "requestPAMSession",
       call: () =>

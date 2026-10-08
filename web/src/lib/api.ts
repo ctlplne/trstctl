@@ -378,6 +378,7 @@ import type {
   OwnershipExceptionRequest,
   OwnershipExceptionRevokeRequest,
   PAMApprovalRequest,
+  PAMRequestProgress,
   PAMSession,
   PAMSessionActivationRequest,
   PAMSessionList,
@@ -1058,6 +1059,7 @@ export type {
   OwnershipAttribution,
   OwnershipAttributionItem,
   PAMApprovalRequest,
+  PAMRequestProgress,
   PAMSession,
   PAMSessionActivationRequest,
   PAMSessionList,
@@ -1826,6 +1828,7 @@ export interface Api {
   pamSessions(options?: { limit?: number; cursor?: string }): Promise<PAMSessionList>;
   pamSession(id: string): Promise<PAMSession>;
   requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
+  pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
   openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -2461,6 +2464,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
   requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
+  pamRequestProgress: (approvalId) => req<PAMRequestProgress>(`/api/v1/access/session-requests/${encodeURIComponent(approvalId)}`),
   openPAMSession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input, idempotencyKey),
   acmeDNS01ProviderConfig: (id) => req<ACMEDNS01ProviderConfig>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`),
   createACMEDNS01ProviderConfig: (input) => mutate<ACMEDNS01ProviderConfig>("POST", "/api/v1/acme/dns-01/provider-configs", input),

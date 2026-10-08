@@ -4562,6 +4562,12 @@ func componentSchemas() map[string]*Schema {
 		"target_id":   str(), "role": str(), "approval_count": {Type: "integer"},
 		"required_approvals": {Type: "integer"}, "expires_at": timestamp(),
 	}, "request_id", "approval_request_id", "intent_digest", "status", "subject", "target_type", "target_id", "role", "approval_count", "required_approvals", "expires_at")
+	pamRequestProgress := object(map[string]*Schema{
+		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
+		"status":         {Type: "string", Enum: operationApprovalStatuses},
+		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
+		"expires_at": timestamp(),
+	}, "request_id", "approval_request_id", "intent_digest", "status", "approval_count", "required_approvals", "expires_at")
 	pamPostgresCredential := object(map[string]*Schema{
 		"username": str(), "dsn": str(),
 	}, "username", "dsn")
@@ -6785,6 +6791,7 @@ func componentSchemas() map[string]*Schema {
 		"PAMSessionRequest":                        pamSessionReq,
 		"PAMSessionActivationRequest":              pamActivationReq,
 		"PAMApprovalRequest":                       pamApprovalRequest,
+		"PAMRequestProgress":                       pamRequestProgress,
 		"PAMSession":                               pamSession,
 		"PAMSessionList":                           list("PAMSession"),
 		"PAMPostgresCredential":                    pamPostgresCredential,

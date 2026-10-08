@@ -14058,6 +14058,7 @@
                 "issueEphemeralCredential",
                 "approveEphemeralCredential",
                 "requestPAMSession",
+                "getPAMRequestProgress",
                 "openPAMSession",
                 "listPAMSessions",
                 "getPAMSession"
@@ -14088,6 +14089,7 @@
                 "ephemeral issue",
                 "ephemeral approve",
                 "access sessions request",
+                "access sessions request-status",
                 "access sessions open",
                 "access sessions list",
                 "access sessions get"
@@ -14162,6 +14164,7 @@
                         "OpenAPI operationId: issueEphemeralCredential",
                         "OpenAPI operationId: approveEphemeralCredential",
                         "OpenAPI operationId: requestPAMSession",
+                        "OpenAPI operationId: getPAMRequestProgress",
                         "OpenAPI operationId: openPAMSession",
                         "OpenAPI operationId: listPAMSessions",
                         "OpenAPI operationId: getPAMSession"
@@ -14359,6 +14362,7 @@
                             "OpenAPI operationId: issueEphemeralCredential",
                             "OpenAPI operationId: approveEphemeralCredential",
                             "OpenAPI operationId: requestPAMSession",
+                            "OpenAPI operationId: getPAMRequestProgress",
                             "OpenAPI operationId: openPAMSession",
                             "OpenAPI operationId: listPAMSessions",
                             "OpenAPI operationId: getPAMSession",
@@ -14376,6 +14380,7 @@
                             "CLI command: ephemeral issue",
                             "CLI command: ephemeral approve",
                             "CLI command: access sessions request",
+                            "CLI command: access sessions request-status",
                             "CLI command: access sessions open",
                             "CLI command: access sessions list",
                             "CLI command: access sessions get"

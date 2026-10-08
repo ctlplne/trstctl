@@ -288,6 +288,36 @@ func (s *Server) RequestPAMSession(ctx context.Context, tenantID, requester stri
 	return s.pam.RequestPAMSession(ctx, tenantID, requester, req)
 }
 
+func (s *Server) GetPAMRequestProgress(ctx context.Context, tenantID, requester, approvalID string) (api.PAMRequestProgress, error) {
+	if s.pam == nil {
+		return api.PAMRequestProgress{}, api.ErrPAMUnavailable
+	}
+	return s.pam.GetPAMRequestProgress(ctx, tenantID, requester, approvalID)
+}
+
+func (s *pamService) GetPAMRequestProgress(ctx context.Context, tenantID, requester, approvalID string) (api.PAMRequestProgress, error) {
+	if _, err := uuid.Parse(approvalID); err != nil || requester == "" {
+		return api.PAMRequestProgress{}, store.ErrApprovalRequestNotFound
+	}
+	row, err := s.store.GetOperationApproval(ctx, tenantID, approvalID)
+	if err != nil {
+		return api.PAMRequestProgress{}, err
+	}
+	if row.ResourceKind != "pam" || row.Action != "activate" || row.Requester != requester || !strings.HasPrefix(row.ResourceID, "pam:") {
+		return api.PAMRequestProgress{}, store.ErrApprovalRequestNotFound
+	}
+	status := row.Status
+	if (status == store.ApprovalStatusPending || status == store.ApprovalStatusApproved) && !time.Now().Before(row.ExpiresAt) {
+		status = store.ApprovalStatusExpired
+	}
+	return api.PAMRequestProgress{
+		RequestID: strings.TrimPrefix(row.ResourceID, "pam:"), ApprovalRequestID: row.ID,
+		IntentDigest: row.IntentDigest, Status: status,
+		ApprovalCount: row.ApprovalCount, RequiredApprovals: row.RequiredApprovals,
+		ExpiresAt: row.ExpiresAt,
+	}, nil
+}
+
 // RequestPAMSession records only a reviewable intent. It performs no target
 // call, credential issuance, signer operation, or session-state transition.
 func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester string, req api.PAMSessionRequest) (api.PAMApprovalRequest, error) {

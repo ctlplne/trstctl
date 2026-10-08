@@ -185,6 +185,11 @@ attestation proof, TTL, and SSH public key when applicable to
 `intent_digest`, but no credential. Distinct custodians find it through
 `GET /api/v1/approval-requests` and approve that digest with
 `POST /api/v1/approval-requests/{id}/approvals`; the requester cannot approve it.
+The original requester can read the current non-secret count and status at
+`GET /api/v1/access/session-requests/{approval_request_id}` with `access:write`.
+Other requesters receive 404, even in the same tenant. The console refreshes this
+exact status while its review dialog is open and lets the operator refresh it
+manually. This read never creates a credential or grants reviewer access.
 The requester then sends the same fields and both returned approval identifiers to
 `POST /api/v1/access/sessions`. Changing a field or the configured target invalidates
 the review. A PostgreSQL provider reattachment after a control-plane restart
@@ -225,7 +230,8 @@ Ephemeral/JIT credential issuance is served when configured through `POST /api/v
 `POST /api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine
 `approval_request_id` and the body carries the same UUID as `request_id` plus its
 matching `intent_digest`; PAM sessions are served
-through `POST /api/v1/access/session-requests`, `POST /api/v1/access/sessions`,
+through `POST /api/v1/access/session-requests`, `GET /api/v1/access/session-requests/{id}`,
+`POST /api/v1/access/sessions`,
 `GET /api/v1/access/sessions`, and `GET /api/v1/access/sessions/{id}` when
 `pam.enabled` names at least one operator target. The broker resolves attestors from
 the existing tenant-managed workload trust-source API at request time and refuses a
@@ -243,7 +249,7 @@ writes the approval request and outbox notification intent in the same tenant
 transaction, blocks requester self-approval, then mints a short-TTL credential only
 after a distinct approver records approval. CLI parity is `trstctl-cli identities
 approve issue|rotate|revoke`, `trstctl-cli ephemeral issue`, and `trstctl-cli
-ephemeral approve`; PAM sessions use `trstctl-cli access sessions request`, `trstctl-cli access sessions open`, `trstctl-cli
+ephemeral approve`; PAM sessions use `trstctl-cli access sessions request`, `trstctl-cli access sessions request-status <approval_request_id>`, `trstctl-cli access sessions open`, `trstctl-cli
 access sessions list`, and `trstctl-cli access sessions get`.
 
 ### Break-glass procedures (F34)

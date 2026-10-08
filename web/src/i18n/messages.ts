@@ -4200,6 +4200,15 @@ export const messages = {
   "admin.access.payloadBase64": { defaultMessage: "Payload (base64)", description: "Base64 broker payload field label." },
   "admin.access.openSessionSubmit": { defaultMessage: "Request review", description: "Submit the exact privileged-session request without granting access." },
   "admin.access.sessionAwaitingApproval": { defaultMessage: "Review requested. No credential has been created.", description: "Pending PAM approval status." },
+  "admin.access.sessionApproved": {
+    defaultMessage: "Review complete. Activate this session before the request expires.",
+    description: "PAM review quorum reached before credential creation.",
+  },
+  "admin.access.approvalRefreshFailed": {
+    defaultMessage: "Approval status could not refresh. Activation will still be checked by the server.",
+    description: "PAM approval read failure without weakening server checks.",
+  },
+  "admin.access.refreshApproval": { defaultMessage: "Refresh approval status", description: "Fetch the current PAM approval count." },
   "admin.access.sessionApprovalNext": {
     defaultMessage:
       "Ask {count} different custodian(s) to approve this exact request in Approvals, then activate it here. Keep this window open so the proof and request ID stay available.",

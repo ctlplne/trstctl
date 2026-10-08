@@ -29,6 +29,7 @@ var (
 // verifier, target adapters, SSH CA, event append, projection, and expiry worker.
 type PAMService interface {
 	RequestPAMSession(ctx context.Context, tenantID, requester string, req PAMSessionRequest) (PAMApprovalRequest, error)
+	GetPAMRequestProgress(ctx context.Context, tenantID, requester, approvalID string) (PAMRequestProgress, error)
 	OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req PAMSessionRequest) (PAMSession, error)
 	GetPAMSession(ctx context.Context, tenantID, id string) (PAMSession, error)
 	ListPAMSessions(ctx context.Context, tenantID string, limit int, cursor string) ([]PAMSession, string, error)
@@ -80,6 +81,18 @@ type PAMApprovalRequest struct {
 	TargetType        string    `json:"target_type"`
 	TargetID          string    `json:"target_id"`
 	Role              string    `json:"role"`
+	ApprovalCount     int       `json:"approval_count"`
+	RequiredApprovals int       `json:"required_approvals"`
+	ExpiresAt         time.Time `json:"expires_at"`
+}
+
+// PAMRequestProgress is the current non-secret review state of one request.
+// Only its original requester can read it through the PAM route.
+type PAMRequestProgress struct {
+	RequestID         string    `json:"request_id"`
+	ApprovalRequestID string    `json:"approval_request_id"`
+	IntentDigest      string    `json:"intent_digest"`
+	Status            string    `json:"status"`
 	ApprovalCount     int       `json:"approval_count"`
 	RequiredApprovals int       `json:"required_approvals"`
 	ExpiresAt         time.Time `json:"expires_at"`
@@ -164,6 +177,33 @@ func (a *API) requestPAMSession(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusAccepted, pending, nil
 	})
+}
+
+func (a *API) getPAMRequestProgress(w http.ResponseWriter, r *http.Request) {
+	if a.pam == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "PAM broker is not enabled"))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	progress, err := a.pam.GetPAMRequestProgress(r.Context(), tenantID, principal.Subject, strings.TrimSpace(r.PathValue("id")))
+	if err != nil {
+		if errors.Is(err, store.ErrApprovalRequestNotFound) {
+			a.writeError(w, approvalAPIError(err))
+			return
+		}
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, progress)
 }
 
 func decodePAMSessionRequest(r *http.Request) (PAMSessionRequest, error) {

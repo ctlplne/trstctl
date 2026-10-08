@@ -6070,6 +6070,16 @@ export interface PAMPostgresCredential {
   username: string;
 }
 
+export interface PAMRequestProgress {
+  approval_count: number;
+  approval_request_id: string;
+  expires_at: string;
+  intent_digest: string;
+  request_id: string;
+  required_approvals: number;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+}
+
 export interface PAMSSHCredential {
   certificate: string;
   key_id: string;

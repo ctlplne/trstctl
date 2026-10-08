@@ -32,6 +32,7 @@ import {
   type RoleList,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { useApiQuery } from "@/lib/query";
 import type { StatusTone } from "@/lib/statusVocab";
 
 const pamFormSchema = z
@@ -1085,6 +1086,13 @@ function PAMFormDialog({
 }) {
   const { t } = useTranslation();
   const [showCredential, setShowCredential] = useState(false);
+  const review = useApiQuery(["pam-request-progress", pending?.approval_request_id], () => api.pamRequestProgress(pending?.approval_request_id ?? ""), {
+    enabled: !!pending && !created,
+    retry: false,
+    live: { intervalMs: 5_000 },
+  });
+  const currentReview =
+    review.data?.approval_request_id === pending?.approval_request_id && review.data?.intent_digest === pending?.intent_digest ? review.data : pending;
   const {
     register,
     control,
@@ -1166,7 +1174,7 @@ function PAMFormDialog({
             </ErrorState>
           ) : null}
           <p role="status" className="rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2">
-            {t("admin.access.sessionAwaitingApproval")}
+            {currentReview?.status === "approved" ? t("admin.access.sessionApproved") : t("admin.access.sessionAwaitingApproval")}
           </p>
           <p>{t("admin.access.sessionApprovalNext", { count: pending.required_approvals })}</p>
           <DetailRow term={t("admin.access.requestId")} mono>
@@ -1176,13 +1184,22 @@ function PAMFormDialog({
             {pending.approval_request_id}
           </DetailRow>
           <DetailRow term={t("admin.access.approvalProgress")}>
-            {pending.approval_count}/{pending.required_approvals}
+            {currentReview?.approval_count}/{currentReview?.required_approvals}
           </DetailRow>
+          {review.error ? (
+            <p role="status" className="text-sm text-status-warning">
+              {t("admin.access.approvalRefreshFailed")}
+            </p>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" disabled={review.fetching} onClick={review.refetch}>
+              <RefreshCw className={`h-4 w-4 ${review.fetching ? "animate-spin" : ""}`} aria-hidden="true" />
+              {t("admin.access.refreshApproval")}
+            </Button>
             <Button type="button" variant="ghost" onClick={onClose}>
               {translateNow("source.close.7d9eb7acb1")}
             </Button>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || (currentReview?.status !== "approved" && !review.error)}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               {t("admin.access.activateApprovedSession")}
             </Button>

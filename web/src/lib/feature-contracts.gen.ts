@@ -5099,6 +5099,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: issueEphemeralCredential",
             "OpenAPI operationId: approveEphemeralCredential",
             "OpenAPI operationId: requestPAMSession",
+            "OpenAPI operationId: getPAMRequestProgress",
             "OpenAPI operationId: openPAMSession",
             "OpenAPI operationId: listPAMSessions",
             "OpenAPI operationId: getPAMSession",
@@ -5116,6 +5117,7 @@ export const canonicalCapabilities = [
             "CLI command: ephemeral issue",
             "CLI command: ephemeral approve",
             "CLI command: access sessions request",
+            "CLI command: access sessions request-status",
             "CLI command: access sessions open",
             "CLI command: access sessions list",
             "CLI command: access sessions get"

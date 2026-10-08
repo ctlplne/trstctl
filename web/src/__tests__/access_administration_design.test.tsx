@@ -6,6 +6,7 @@ import { axe } from "vitest-axe";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { ApiError } from "@/lib/api";
+import { AppQueryProvider } from "@/lib/query";
 import { AdminAccess } from "@/pages/AdminAccess";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     offboardMember: vi.fn(),
     createAPIToken: vi.fn(),
     requestPAMSession: vi.fn(),
+    pamRequestProgress: vi.fn(),
     openPAMSession: vi.fn(),
   },
 }));
@@ -35,13 +37,15 @@ vi.mock("@/lib/api", async (original) => {
 
 function renderPage() {
   return render(
-    <ThemeProvider>
-      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
-        <MemoryRouter>
-          <AdminAccess />
-        </MemoryRouter>
-      </IntlProvider>
-    </ThemeProvider>,
+    <AppQueryProvider>
+      <ThemeProvider>
+        <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+          <MemoryRouter>
+            <AdminAccess />
+          </MemoryRouter>
+        </IntlProvider>
+      </ThemeProvider>
+    </AppQueryProvider>,
   );
 }
 
@@ -85,6 +89,15 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
       ],
     });
     apiMock.pamSessions.mockResolvedValue({ items: [] });
+    apiMock.pamRequestProgress.mockResolvedValue({
+      request_id: "22222222-2222-4222-8222-222222222222",
+      approval_request_id: "33333333-3333-4333-8333-333333333333",
+      intent_digest: "reviewed-command",
+      status: "approved",
+      approval_count: 2,
+      required_approvals: 2,
+      expires_at: "2026-10-08T10:05:00Z",
+    });
     apiMock.upsertMember.mockResolvedValue(member);
     apiMock.offboardMember.mockResolvedValue({ member: { ...member, status: "offboarded" }, revoked_token_count: 1 });
     apiMock.createAPIToken.mockResolvedValue({
@@ -167,6 +180,16 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
 
   it("requests review before creating access and clears the one-time database credential on close", async () => {
     const user = userEvent.setup();
+    let reviewCount = 0;
+    apiMock.pamRequestProgress.mockImplementation(async () => ({
+      request_id: "22222222-2222-4222-8222-222222222222",
+      approval_request_id: "33333333-3333-4333-8333-333333333333",
+      intent_digest: "reviewed-command",
+      status: reviewCount === 2 ? "approved" : "pending",
+      approval_count: reviewCount,
+      required_approvals: 2,
+      expires_at: "2026-10-08T10:05:00Z",
+    }));
     apiMock.requestPAMSession.mockResolvedValue({
       request_id: "22222222-2222-4222-8222-222222222222",
       approval_request_id: "33333333-3333-4333-8333-333333333333",
@@ -200,9 +223,20 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     await user.type(within(dialog).getByRole("textbox", { name: "Method" }), "oidc");
     await user.type(within(dialog).getByRole("textbox", { name: "Payload (base64)" }), "Z2VudWluZQ==");
     await user.click(within(dialog).getByRole("button", { name: "Request review" }));
-    expect(await within(dialog).findByText("Review requested. No credential has been created.")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.requestPAMSession).toHaveBeenCalledTimes(1));
     expect(apiMock.openPAMSession).not.toHaveBeenCalled();
     expect(within(dialog).queryByText(/one-time-secret/)).not.toBeInTheDocument();
+    await waitFor(() => expect(apiMock.pamRequestProgress).toHaveBeenCalledTimes(1));
+    expect(within(dialog).getByText("0/2")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Activate approved session" })).toBeDisabled();
+    reviewCount = 1;
+    await user.click(within(dialog).getByRole("button", { name: "Refresh approval status" }));
+    expect(await within(dialog).findByText("1/2")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Activate approved session" })).toBeDisabled();
+    reviewCount = 2;
+    await user.click(within(dialog).getByRole("button", { name: "Refresh approval status" }));
+    expect(await within(dialog).findByText("2/2")).toBeInTheDocument();
+    expect(within(dialog).getByText("Review complete. Activate this session before the request expires.")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Activate approved session" }));
     expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
     expect(within(dialog).queryByText(/one-time-secret/)).not.toBeInTheDocument();

@@ -8352,6 +8352,20 @@ PAMPostgresCredential = TypedDict(
     total=False,
 )
 
+PAMRequestProgress = TypedDict(
+    'PAMRequestProgress',
+    {
+        'approval_count': int,
+        'approval_request_id': str,
+        'expires_at': str,
+        'intent_digest': str,
+        'request_id': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
 PAMSSHCredential = TypedDict(
     'PAMSSHCredential',
     {

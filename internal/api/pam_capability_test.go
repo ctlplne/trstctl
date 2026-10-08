@@ -22,7 +22,7 @@ func TestCapabilitiesPAMRequestNeedsConfiguredBroker(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
 		t.Fatal(err)
 	}
-	for _, operationID := range []string{"requestPAMSession", "openPAMSession", "listPAMSessions", "getPAMSession"} {
+	for _, operationID := range []string{"requestPAMSession", "getPAMRequestProgress", "openPAMSession", "listPAMSessions", "getPAMSession"} {
 		operation, ok := findRuntimeOperation(view, operationID)
 		if !ok || operation.State != "unavailable" || operation.Code != "dependency_not_configured" {
 			t.Fatalf("%s posture = %+v, want configured-broker refusal", operationID, operation)
