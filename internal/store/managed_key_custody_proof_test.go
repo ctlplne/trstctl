@@ -153,4 +153,20 @@ func TestManagedKeyFailureV2BindsAuditKeyToDurableOperation(t *testing.T) {
 	if err != nil || key.CustodyStatus != "unavailable" || key.State != "active" {
 		t.Fatalf("bound failure did not mark point-in-time custody: key=%+v err=%v", key, err)
 	}
+	generate := projections.ManagedKeyCommand{OperationID: "generate-v2", Provider: "aws-kms", Action: "generate",
+		Algorithm: "RSA-2048", RequestBinding: "generate-bound-v2"}
+	if err := apply("generate-v2-request", projections.EventManagedKeyCommandRequested, 1, generate); err != nil {
+		t.Fatal(err)
+	}
+	generateFailure := projections.ManagedKeyCommandFailed{OperationID: generate.OperationID,
+		RequestBinding: generate.RequestBinding, Provider: generate.Provider, Action: generate.Action,
+		Error: "retry budget exhausted"}
+	if err := apply("generate-v2-failed", projections.EventManagedKeyCommandFailed,
+		projections.ManagedKeyFailureEventSchemaVersion, generateFailure); err != nil {
+		t.Fatalf("generation failure without an unminted key ID must project: %v", err)
+	}
+	op, err := s.GetManagedKeyOperation(ctx, tenantA, generate.OperationID)
+	if err != nil || op.Status != "failed" || op.KeyID != "" {
+		t.Fatalf("failed generation operation = %+v, err %v", op, err)
+	}
 }

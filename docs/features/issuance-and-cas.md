@@ -663,7 +663,8 @@ exposes:
   until this challenge succeeds. The console's Refresh status updates both the
   list and the selected key. When provider retries are exhausted, the key reads
   `unavailable` while its lifecycle state remains historical; new failure audit
-  events include the exact provider, action, and key ID. Older v1 failure events
+  events include the exact provider and action, plus the key ID when one already
+  exists. A failed generation has no key ID to name. Older v1 failure events
   remain searchable by their operation ID;
 - `POST /api/v1/managed-keys/approvals` — record a distinct custodian's approval for
   an opaque key handle and `rotate`/`revoke`/`zeroize`;

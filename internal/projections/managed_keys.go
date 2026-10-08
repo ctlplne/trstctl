@@ -260,7 +260,7 @@ func (p *Projector) applyManagedKeyTx(ctx context.Context, tx pgx.Tx, event even
 			return true, fmt.Errorf("projections: %s payload is incomplete", event.Type)
 		}
 		if schemaVersionOf(event) == ManagedKeyFailureEventSchemaVersion &&
-			(payload.Provider == "" || payload.Action == "" || payload.KeyID == "") {
+			(payload.Provider == "" || payload.Action == "" || (payload.Action != "generate" && payload.KeyID == "")) {
 			return true, fmt.Errorf("projections: %s v2 payload lacks exact key identity", event.Type)
 		}
 		return true, p.store.ApplyManagedKeyFailedTx(ctx, tx, event.TenantID,

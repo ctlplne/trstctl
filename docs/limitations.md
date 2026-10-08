@@ -4311,7 +4311,8 @@ point-in-time proof, not a promise the provider will retain the key afterward.
 The default outbox retry budget can leave custody `pending` after the API's
 synchronous wait returns 503; refresh the exact key or the console until the
 durable outcome becomes `verified` or `unavailable`. New terminal failure audit
-events carry the key ID; historical v1 failures carry only the operation ID.
+events carry the key ID when one existed before the action; failed generation
+has no minted key ID. Historical v1 failures carry only the operation ID.
 Every mutation requires `Idempotency-Key`; immutable events
 build the tenant/RLS projection, and the provider call comes only from the sealed
 outbox. Managed-key signing additionally requires a short-lived, request-bound token
