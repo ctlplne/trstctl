@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -171,7 +172,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	}
 	sshd := startPAMSSHD(t, caPub)
 	keyPath, publicKey := generatePAMSSHKey(t)
-	ssh := servedPAMOpen(t, h, admin, "pam-01-ssh", map[string]any{
+	sshRequest := map[string]any{
 		"target_type":    "ssh",
 		"target_id":      "ssh-edge",
 		"role":           "user",
@@ -181,12 +182,44 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		"ssh_public_key": publicKey,
 		"ssh_principal":  "alice",
 		"ttl_seconds":    2,
-	})
+	}
+	ssh := servedPAMOpen(t, h, admin, "pam-01-ssh", sshRequest)
 	if ssh.ID == "" || ssh.TargetType != "ssh" || ssh.Status != "active" || ssh.SSH == nil || ssh.SSH.Certificate == "" {
 		t.Fatalf("ssh PAM response = %+v", ssh)
 	}
 	if ssh.SSH.Principal != "alice" || ssh.SSH.KeyID == "" || ssh.SSH.Serial == 0 {
 		t.Fatalf("ssh PAM certificate metadata = %+v", ssh.SSH)
+	}
+	issuedBeforeReplay := pamEventCount(t, h, "ssh.cert.issued")
+	cacheReplay := servedPAMOpen(t, h, admin, "pam-01-ssh", sshRequest)
+	if cacheReplay.ID != ssh.ID || cacheReplay.SSH == nil || cacheReplay.SSH.Certificate != ssh.SSH.Certificate {
+		t.Fatal("an exact SSH PAM HTTP replay did not return the original one-time certificate")
+	}
+	if after := pamEventCount(t, h, "ssh.cert.issued"); after != issuedBeforeReplay {
+		t.Fatalf("SSH PAM HTTP replay signed %d additional certificates", after-issuedBeforeReplay)
+	}
+	// Simulate normal idempotency-result retention without changing the
+	// event-projected PAM session. The old key must remain spent at the API.
+	if _, err := h.store.SystemPool().Exec(context.Background(),
+		`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, h.tenant, "pam-01-ssh"); err != nil {
+		t.Fatalf("expire protected HTTP replay cache: %v", err)
+	}
+	if status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", admin,
+		"pam-01-ssh", sshRequest); status != http.StatusConflict {
+		t.Fatalf("retired SSH PAM idempotency key status = %d, want 409", status)
+	}
+	if after := pamEventCount(t, h, "ssh.cert.issued"); after != issuedBeforeReplay {
+		t.Fatalf("retired SSH PAM idempotency key signed %d additional certificates", after-issuedBeforeReplay)
+	}
+	if _, err := h.srv.pam.OpenPAMSession(context.Background(), h.tenant, "pam-01-ssh", "pam-requester", api.PAMSessionRequest{
+		TargetType: "ssh", TargetID: "ssh-edge", Role: "user", Reason: "production incident 42",
+		Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte(publicKey),
+		SSHPrincipal: "alice", TTLSeconds: 2,
+	}); err == nil {
+		t.Fatal("replaying an SSH PAM idempotency key after the HTTP cache was bypassed minted a second certificate")
+	}
+	if after := pamEventCount(t, h, "ssh.cert.issued"); after != issuedBeforeReplay {
+		t.Fatalf("SSH PAM replay signed %d additional certificates", after-issuedBeforeReplay)
 	}
 	assertPAMSSHAccess(t, sshd, keyPath, ssh.SSH.Certificate, true)
 
@@ -327,6 +360,20 @@ func TestServedPAMPostgresUsesProtectedProviderOutbox(t *testing.T) {
 }
 
 type servedPAMAttestor struct{}
+
+func pamEventCount(t *testing.T, h *servedHarness, eventType string) int {
+	t.Helper()
+	count := 0
+	if err := h.log.Replay(context.Background(), 0, func(e events.Event) error {
+		if e.TenantID == h.tenant && e.Type == eventType {
+			count++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay PAM event count: %v", err)
+	}
+	return count
+}
 
 func (servedPAMAttestor) Method() string { return "stub_pam" }
 

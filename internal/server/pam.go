@@ -281,6 +281,15 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 	if err := s.validate(tenantID, idempotencyKey, requester, req); err != nil {
 		return api.PAMSession{}, err
 	}
+	// The HTTP result cache is time-bounded, while a PAM session is retained for
+	// audit. Once that cache has aged out, the same key must never mint another
+	// SSH certificate or reopen a PostgreSQL grant under the old session ID.
+	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-session\x00"+tenantID+"\x00"+idempotencyKey)).String()
+	if _, err := s.store.GetPAMSession(ctx, tenantID, id); err == nil {
+		return api.PAMSession{}, fmt.Errorf("%w: PAM session already exists for this key", orchestrator.ErrIdempotencyConflict)
+	} else if !store.IsNotFound(err) {
+		return api.PAMSession{}, err
+	}
 	attestors, err := resolveWorkloadAttestors(ctx, s.store, s.attestors, tenantID, req.Method)
 	if err != nil {
 		return api.PAMSession{}, fmt.Errorf("server: resolve PAM tenant attester trust: %w", err)
@@ -301,7 +310,6 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 		return api.PAMSession{}, fmt.Errorf("%w: %v", api.ErrPAMRejected, err)
 	}
 
-	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-session\x00"+tenantID+"\x00"+idempotencyKey)).String()
 	now := s.clock().UTC()
 	expiresAt := now.Add(s.ttl(req.TTLSeconds))
 	if err := verifier.Bind(ctx, att, "pam:"+id); err != nil {

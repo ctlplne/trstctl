@@ -189,6 +189,10 @@ PostgreSQL also enforces the credential deadline with `rolvaliduntil` if the
 worker is unavailable. SSH access ends at the certificate `valid_before` time.
 The event trail is filterable by `pam.session.started` and
 `pam.session.expired`; credential material is not written into those events.
+An exact `Idempotency-Key` retry returns the original credential while its
+protected HTTP result is retained. Once that cache entry has aged out, the
+durable session identity rejects the old key instead of signing another SSH
+certificate; a new access request needs a new key.
 
 **Status:** the core identity approval gate is served through
 `POST /api/v1/identities/{id}/approvals`. The self-service certificate portal is
