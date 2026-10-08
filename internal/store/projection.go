@@ -848,10 +848,16 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = 0"); err != nil {
 		return fmt.Errorf("store: widen rebuild statement deadline: %w", err)
 	}
+	if err := preserveIndependentAttestationsTx(ctx, tx); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`); err != nil {
 		return err
 	}
 	if err := apply(tx); err != nil {
+		return err
+	}
+	if err := restoreIndependentAttestationsTx(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

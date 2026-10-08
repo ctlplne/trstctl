@@ -635,6 +635,9 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 	if err != nil {
 		return 0, err
 	}
+	if err := preserveIndependentAttestationsTx(ctx, tx); err != nil {
+		return 0, err
+	}
 	// 1) Empty the event-sourced read model (same set the rebuild truncates), so the
 	// reload is a clean rehydration rather than an overlay on possibly-stale rows.
 	if _, err := tx.Exec(ctx, `TRUNCATE `+joinReadModel()+` CASCADE`); err != nil {
@@ -711,6 +714,9 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 	}
 	if restored != complete.metadata.TenantCount {
 		return 0, ErrNoSnapshot
+	}
+	if err := restoreIndependentAttestationsTx(ctx, tx); err != nil {
+		return 0, err
 	}
 	return restored, nil
 }

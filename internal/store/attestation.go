@@ -156,6 +156,10 @@ func (s *Store) ApplyRestoreDrillAttestationTx(
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
+	preserved, err := preservedRestoreDrillAttestationTx(ctx, tx, a)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO attestations
 		        (id, tenant_id, identity_id, kind, evidence, verified_at, created_at)
@@ -163,7 +167,7 @@ func (s *Store) ApplyRestoreDrillAttestationTx(
 		a.ID, a.TenantID, a.Kind, a.Evidence, a.VerifiedAt.UTC(), a.CreatedAt.UTC()); err != nil {
 		return fmt.Errorf("store: insert restore-drill attestation: %w", err)
 	}
-	if alertDestination == "" {
+	if alertDestination == "" || preserved {
 		return nil
 	}
 	var existingDestination string
