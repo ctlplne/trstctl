@@ -189,7 +189,10 @@ The original requester can read the current non-secret count and status at
 `GET /api/v1/access/session-requests/{approval_request_id}` with `access:write`.
 Other requesters receive 404, even in the same tenant. The console refreshes this
 exact status while its review dialog is open and lets the operator refresh it
-manually. This read never creates a credential or grants reviewer access.
+manually. It asks for custodians only while review is pending; approved review
+prompts activation, and denied, expired, superseded, or consumed review explains
+that the operator must close the dialog and inspect or submit a new request.
+This read never creates a credential or grants reviewer access.
 The requester then sends the same fields and both returned approval identifiers to
 `POST /api/v1/access/sessions`. Changing a field or the configured target invalidates
 the review. A PostgreSQL provider reattachment after a control-plane restart

@@ -1093,6 +1093,19 @@ function PAMFormDialog({
   });
   const currentReview =
     review.data?.approval_request_id === pending?.approval_request_id && review.data?.intent_digest === pending?.intent_digest ? review.data : pending;
+  const reviewStatus = currentReview?.status;
+  const reviewMessage =
+    reviewStatus === "approved"
+      ? t("admin.access.sessionApproved")
+      : reviewStatus === "denied"
+        ? t("admin.access.sessionDenied")
+        : reviewStatus === "expired"
+          ? t("admin.access.sessionExpired")
+          : reviewStatus === "superseded"
+            ? t("admin.access.sessionSuperseded")
+            : reviewStatus === "consumed"
+              ? t("admin.access.sessionConsumed")
+              : t("admin.access.sessionAwaitingApproval");
   const {
     register,
     control,
@@ -1174,9 +1187,9 @@ function PAMFormDialog({
             </ErrorState>
           ) : null}
           <p role="status" className="rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2">
-            {currentReview?.status === "approved" ? t("admin.access.sessionApproved") : t("admin.access.sessionAwaitingApproval")}
+            {reviewMessage}
           </p>
-          <p>{t("admin.access.sessionApprovalNext", { count: pending.required_approvals })}</p>
+          {reviewStatus === "pending" ? <p>{t("admin.access.sessionApprovalNext", { count: pending.required_approvals })}</p> : null}
           <DetailRow term={t("admin.access.requestId")} mono>
             {pending.request_id}
           </DetailRow>

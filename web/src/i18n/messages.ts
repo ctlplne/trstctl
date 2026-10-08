@@ -4204,6 +4204,22 @@ export const messages = {
     defaultMessage: "Review complete. Activate this session before the request expires.",
     description: "PAM review quorum reached before credential creation.",
   },
+  "admin.access.sessionDenied": {
+    defaultMessage: "Review denied. No credential was created. Close this window and submit a new request if access is still needed.",
+    description: "PAM review denied by a custodian.",
+  },
+  "admin.access.sessionExpired": {
+    defaultMessage: "Review expired. No credential was created. Close this window and submit a new request.",
+    description: "PAM review deadline passed before activation.",
+  },
+  "admin.access.sessionSuperseded": {
+    defaultMessage: "Review superseded. No credential was created from this request. Close this window and submit a new request.",
+    description: "PAM review was replaced by a newer request.",
+  },
+  "admin.access.sessionConsumed": {
+    defaultMessage: "Review already used. Close this window and check privileged sessions before requesting access again.",
+    description: "PAM review was consumed by a prior activation.",
+  },
   "admin.access.approvalRefreshFailed": {
     defaultMessage: "Approval status could not refresh. Activation will still be checked by the server.",
     description: "PAM approval read failure without weakening server checks.",

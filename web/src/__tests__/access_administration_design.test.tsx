@@ -237,6 +237,7 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     await user.click(within(dialog).getByRole("button", { name: "Refresh approval status" }));
     expect(await within(dialog).findByText("2/2")).toBeInTheDocument();
     expect(within(dialog).getByText("Review complete. Activate this session before the request expires.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Ask 2 different custodian/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Activate approved session" }));
     expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
     expect(within(dialog).queryByText(/one-time-secret/)).not.toBeInTheDocument();
