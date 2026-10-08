@@ -737,7 +737,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3435` | closed test table list above |
+| `internal/store/migration_content_test.go:3475` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 
@@ -1336,8 +1336,8 @@ not this file.
 | `internal/signing/keystore_test.go:109` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:199` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:32` | signer operator supplies the one legacy migration path |
-| `internal/signing/managedkeys.go:565` | the signer's own keystore/journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:708` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:566` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:709` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/spireupstream/plugin.go:239` | operator-configured public CA bundle path (CWE-22) |
 | `internal/spireupstream/plugin.go:318` | operator-configured upstream-authority plugin config path (CWE-22) |
