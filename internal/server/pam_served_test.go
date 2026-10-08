@@ -20,8 +20,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry is the PAM-01
@@ -44,6 +46,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 				ExpiryInterval: 10 * time.Millisecond,
 				Attestors:      []attest.Attestor{servedPAMAttestor{}},
 				PostgresTargets: []PAMPostgresTarget{{
+					TenantID:       servedTestTenant,
 					ID:             "pg-main",
 					DSN:            []byte(pgDSN),
 					Database:       "postgres",
@@ -51,14 +54,41 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 					UsernamePrefix: "trstctl_pam",
 				}},
 				SSHTargets: []PAMSSHTarget{{
+					TenantID:   servedTestTenant,
 					ID:         "ssh-edge",
 					Host:       "127.0.0.1",
+					Port:       22,
 					Principals: []string{"alice"},
 				}},
 			}
 		},
 	)
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "pam-requester", "access:read", "access:write")
+	otherTenant := "22222222-2222-2222-2222-222222222222"
+	for _, targetType := range []string{"postgres", "ssh"} {
+		req := api.PAMSessionRequest{
+			TargetType: targetType, TargetID: map[string]string{"postgres": "pg-main", "ssh": "ssh-edge"}[targetType],
+			Role: "readonly", Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte("test-public-key"),
+		}
+		if err := h.srv.pam.validate(otherTenant, "foreign-tenant-check", "foreign-requester", req); err == nil {
+			t.Fatalf("foreign tenant accepted PAM %s target %q", targetType, req.TargetID)
+		}
+	}
+	if err := h.store.UpsertTenant(context.Background(), store.Tenant{TenantID: otherTenant, Name: "PAM foreign tenant"}); err != nil {
+		t.Fatalf("register foreign tenant: %v", err)
+	}
+	foreign := seedScopedTokenSubject(t, h.store, otherTenant, "foreign-requester", "access:write")
+	for _, targetType := range []string{"postgres", "ssh"} {
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", foreign,
+			"foreign-tenant-"+targetType, map[string]any{
+				"target_type": targetType, "target_id": map[string]string{"postgres": "pg-main", "ssh": "ssh-edge"}[targetType],
+				"role": "readonly", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
+				"ssh_public_key": "test-public-key",
+			})
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("foreign tenant PAM %s target status = %d, want 422; body=%s", targetType, status, body)
+		}
+	}
 	for _, seconds := range []int64{-1, 6, 1 << 62} {
 		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", admin,
 			fmt.Sprintf("pam-invalid-ttl-%d", seconds), map[string]any{
@@ -151,6 +181,18 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	}
 	if h.logContains(t, pg.Postgres.DSN) || h.logContains(t, ssh.SSH.Certificate) {
 		t.Fatal("PAM credential material reached the event log")
+	}
+}
+
+func TestPAMSSHRequiresAnExplicitPrincipalAllowlist(t *testing.T) {
+	if principalAllowed(nil, "alice") {
+		t.Fatal("empty principal list granted SSH access to alice")
+	}
+	if principalAllowed([]string{"alice"}, "bob") {
+		t.Fatal("SSH target granted an unlisted principal")
+	}
+	if !principalAllowed([]string{"alice"}, "alice") {
+		t.Fatal("SSH target refused its explicitly allowed principal")
 	}
 }
 

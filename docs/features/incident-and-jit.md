@@ -200,7 +200,14 @@ Ephemeral/JIT credential issuance is served when configured through `POST /api/v
 `approval_request_id` and the body carries the same UUID as `request_id` plus its
 matching `intent_digest`; PAM-lite sessions are served
 through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
-`GET /api/v1/access/sessions/{id}`. The ephemeral path verifies the attestation first,
+`GET /api/v1/access/sessions/{id}` only in an assembled server with injected
+targets and attestors. The production configuration does not yet provide a
+target-registration or attestor path, so enabling `pam` alone cannot start the
+broker. The injected target model binds each target to one tenant and requires an
+explicit SSH host, port, and principal list; an empty principal list grants nobody.
+The PAM path does not yet have a distinct-approver step or early revocation, and
+must not be treated as an enterprise-ready JIT approval workflow. The ephemeral
+path verifies the attestation first,
 writes the approval request and outbox notification intent in the same tenant
 transaction, blocks requester self-approval, then mints a short-TTL credential only
 after a distinct approver records approval. CLI parity is `trstctl-cli identities

@@ -2677,16 +2677,17 @@ than sending an operator looking for a credential that was never there.
   certificate; unreachable when on was the defect. Attestors stay per-tenant from
   the workload attester-trust API rather than process-wide, so one tenant's trust
   decision does not become every tenant's. The other two members of this family
-  are now fixed too (AUD-12, AUD-13): `agent_broker` turns on
-  `POST /api/v1/broker/agent-identities`, and `pam` turns on
-  `POST /api/v1/access/sessions` and its three siblings. All three were dead for
-  one reason — a `Deps` field never assigned anywhere in production and no
-  config key to populate it — so five routes were registered, documented, and
-  permanently unavailable on every deployment while looking healthy. PAM TARGETS
-  are deliberately NOT config: a Postgres DSN or SSH credential in the main
-  config file is a credential in every backup of that file, so enabling PAM
-  yields a working surface with no targets rather than one that asks for secrets
-  in the wrong place. A malformed TTL on any of the three leaves zero so the
+  were wired after their dead `Deps` fields were found: `agent_broker` can turn
+  on `POST /api/v1/broker/agent-identities`, while `pam` reaches the broker
+  constructor for `POST /api/v1/access/sessions` and its three siblings. PAM still
+  cannot be enabled by an ordinary operator: production config has no target
+  registration or attestor reference, and the broker refuses to start without
+  both. The injection-only target model is tenant-bound and rejects an SSH target
+  without an explicit host, port, and principal allowlist. A Postgres DSN must be
+  loaded by reference from a protected file or tenant secret; placing it in the
+  main config would copy an administrator credential into every config backup.
+  PAM also lacks distinct approval and early revocation; these are open U6 work.
+  A malformed TTL on any of the three leaves zero so the
   built-in bound applies — silently substituting a LONGER lifetime than the
   operator wrote is the dangerous direction, and zero cannot do that.
 - MDM device correlation and per-device enrollment trace (I5): `GET

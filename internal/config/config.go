@@ -1451,12 +1451,10 @@ type AgentBroker struct {
 
 // PAM turns on just-in-time privileged access sessions (AUD-13).
 //
-// Four served routes returned ErrPAMUnavailable on every deployment because
-// Deps.PAM was never assigned and there was no config key. Targets are
-// deliberately NOT configured here yet: a DSN in the main config file is a
-// credential in every backup of that file, and PAM's own target model resolves
-// them by reference. Enabling without targets yields a working surface with
-// nothing to open a session against, which is honest and safe.
+// The broker requires tenant-bound targets and attestors, but production config
+// does not yet provide protected target references or tenant trust-source
+// selection. Enabling this flag alone fails startup rather than claiming usable
+// privileged access. Do not put an administrator DSN in this config file.
 type PAM struct {
 	Enabled        bool   `json:"enabled"`
 	DefaultTTL     string `json:"default_ttl,omitempty"`

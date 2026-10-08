@@ -35,7 +35,8 @@ const (
 
 // PAMConfig enables the served just-in-time privileged-access broker (PAM-01/F33).
 // Postgres targets use real scoped login roles; SSH targets use the signer-backed
-// SSH CA. Empty leaves the API fail-closed.
+// SSH CA. Every injected target is tenant-bound. An enabled broker without
+// attestors or targets refuses to start.
 type PAMConfig struct {
 	Enabled         bool
 	DefaultTTL      time.Duration
@@ -47,6 +48,7 @@ type PAMConfig struct {
 }
 
 type PAMPostgresTarget struct {
+	TenantID       string
 	ID             string
 	DSN            []byte
 	Database       string
@@ -55,6 +57,7 @@ type PAMPostgresTarget struct {
 }
 
 type PAMSSHTarget struct {
+	TenantID   string
 	ID         string
 	Host       string
 	Port       int
@@ -68,8 +71,8 @@ type pamService struct {
 	audit          auditsink.Auditor
 	attestors      []attest.Attestor
 	methods        map[string]struct{}
-	postgres       map[string]*pamPostgresTarget
-	sshTargets     map[string]PAMSSHTarget
+	postgres       map[pamTargetID]*pamPostgresTarget
+	sshTargets     map[pamTargetID]PAMSSHTarget
 	sshCA          *sshca.CA
 	defaultTTL     time.Duration
 	maxTTL         time.Duration
@@ -80,6 +83,13 @@ type pamService struct {
 type pamPostgresTarget struct {
 	cfg     PAMPostgresTarget
 	backend *dynsecret.PostgresBackend
+}
+
+// Target names are tenant-local. In particular, a matching ID in a different
+// tenant must never select an administrator DSN or a trusted SSH principal set.
+type pamTargetID struct {
+	tenantID string
+	id       string
 }
 
 type pamDeps struct {
@@ -135,14 +145,18 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		}
 		methods[a.Method()] = struct{}{}
 	}
-	postgresTargets := make(map[string]*pamPostgresTarget, len(cfg.PostgresTargets))
+	postgresTargets := make(map[pamTargetID]*pamPostgresTarget, len(cfg.PostgresTargets))
 	for _, target := range cfg.PostgresTargets {
+		if _, err := uuid.Parse(target.TenantID); err != nil {
+			return nil, errors.New("server: PAM postgres target tenant_id must be a UUID")
+		}
 		target.ID = strings.TrimSpace(target.ID)
 		if target.ID == "" {
 			return nil, errors.New("server: PAM postgres target id is required")
 		}
-		if _, exists := postgresTargets[target.ID]; exists {
-			return nil, fmt.Errorf("server: duplicate PAM postgres target %q", target.ID)
+		key := pamTargetID{target.TenantID, target.ID}
+		if _, exists := postgresTargets[key]; exists {
+			return nil, fmt.Errorf("server: duplicate PAM postgres target %q in tenant %q", target.ID, target.TenantID)
 		}
 		backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
 			DSN: target.DSN, Database: target.Database, Schema: target.Schema, UsernamePrefix: target.UsernamePrefix,
@@ -150,21 +164,36 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		if err != nil {
 			return nil, fmt.Errorf("server: PAM postgres target %q: %w", target.ID, err)
 		}
-		postgresTargets[target.ID] = &pamPostgresTarget{cfg: target, backend: backend}
+		postgresTargets[key] = &pamPostgresTarget{cfg: target, backend: backend}
 	}
-	sshTargets := make(map[string]PAMSSHTarget, len(cfg.SSHTargets))
+	sshTargets := make(map[pamTargetID]PAMSSHTarget, len(cfg.SSHTargets))
 	for _, target := range cfg.SSHTargets {
+		if _, err := uuid.Parse(target.TenantID); err != nil {
+			return nil, errors.New("server: PAM SSH target tenant_id must be a UUID")
+		}
 		target.ID = strings.TrimSpace(target.ID)
 		if target.ID == "" {
 			return nil, errors.New("server: PAM SSH target id is required")
 		}
-		if _, exists := sshTargets[target.ID]; exists {
-			return nil, fmt.Errorf("server: duplicate PAM SSH target %q", target.ID)
+		key := pamTargetID{target.TenantID, target.ID}
+		if _, exists := sshTargets[key]; exists {
+			return nil, fmt.Errorf("server: duplicate PAM SSH target %q in tenant %q", target.ID, target.TenantID)
+		}
+		if strings.TrimSpace(target.Host) == "" || target.Port < 1 || target.Port > 65535 {
+			return nil, fmt.Errorf("server: PAM SSH target %q requires a host and TCP port", target.ID)
+		}
+		if len(target.Principals) == 0 {
+			return nil, fmt.Errorf("server: PAM SSH target %q requires explicit principals", target.ID)
+		}
+		for _, principal := range target.Principals {
+			if strings.TrimSpace(principal) == "" || principal == "*" {
+				return nil, fmt.Errorf("server: PAM SSH target %q has an invalid principal", target.ID)
+			}
 		}
 		if d.SSHCA == nil {
 			return nil, errors.New("server: PAM SSH targets require the served SSH CA")
 		}
-		sshTargets[target.ID] = target
+		sshTargets[key] = target
 	}
 	return &pamService{
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
@@ -285,7 +314,7 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 }
 
 func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
-	target := s.postgres[req.TargetID]
+	target := s.postgres[pamTargetID{tenantID, req.TargetID}]
 	ref, credential, err := target.backend.Create(ctx, req.Role)
 	if err != nil {
 		return api.PAMSession{}, fmt.Errorf("%w: postgres target %q refused session: %v", api.ErrPAMRejected, req.TargetID, err)
@@ -301,7 +330,7 @@ func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey,
 }
 
 func (s *pamService) openSSH(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
-	target := s.sshTargets[req.TargetID]
+	target := s.sshTargets[pamTargetID{tenantID, req.TargetID}]
 	principal := req.SSHPrincipal
 	if principal == "" {
 		principal = att.Subject
@@ -368,7 +397,7 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 func (s *pamService) expireSession(ctx context.Context, rec store.PAMSession) error {
 	switch rec.TargetType {
 	case pamTargetPostgres:
-		target := s.postgres[rec.TargetID]
+		target := s.postgres[pamTargetID{rec.TenantID, rec.TargetID}]
 		if target == nil {
 			return fmt.Errorf("server: PAM postgres target %q not configured for expiry", rec.TargetID)
 		}
@@ -433,11 +462,11 @@ func (s *pamService) validate(tenantID, idempotencyKey, requester string, req ap
 	}
 	switch req.TargetType {
 	case pamTargetPostgres:
-		if s.postgres[req.TargetID] == nil {
+		if s.postgres[pamTargetID{tenantID, req.TargetID}] == nil {
 			return fmt.Errorf("%w: unknown postgres target %q", api.ErrPAMInvalid, req.TargetID)
 		}
 	case pamTargetSSH:
-		if _, ok := s.sshTargets[req.TargetID]; !ok {
+		if _, ok := s.sshTargets[pamTargetID{tenantID, req.TargetID}]; !ok {
 			return fmt.Errorf("%w: unknown ssh target %q", api.ErrPAMInvalid, req.TargetID)
 		}
 		if len(req.SSHPublicKey) == 0 {
@@ -464,9 +493,6 @@ func (s *pamService) ttl(seconds int64) time.Duration {
 func principalAllowed(allowed []string, principal string) bool {
 	if principal == "" {
 		return false
-	}
-	if len(allowed) == 0 {
-		return true
 	}
 	for _, p := range allowed {
 		if p == principal {
@@ -499,11 +525,9 @@ func jsonMap(raw []byte) map[string]any {
 
 // pamFromConfig maps the operator's config onto the PAM surface.
 //
-// Targets are deliberately absent: a Postgres DSN or SSH credential in the main
-// config file is a credential in every backup of that file. Enabling with no
-// targets gives a working surface with nothing to open a session against, which
-// is honest and safe — and better than the previous state, where the routes
-// existed and could never work at all.
+// The production config does not yet provide protected target references or
+// tenant trust-source selection. The broker refuses to start if enabled without
+// both; this flag alone is not an operator-ready PAM path.
 func pamFromConfig(c config.PAM) PAMConfig {
 	out := PAMConfig{Enabled: c.Enabled}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {
