@@ -4575,7 +4575,7 @@ func componentSchemas() map[string]*Schema {
 		"started_at": timestamp(), "expires_at": timestamp(), "ended_at": timestamp(),
 		"attestation": ref("Attestation"), "postgres": ref("PAMPostgresCredential"),
 		"ssh": ref("PAMSSHCredential"), "audit": {Type: "object"},
-	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at", "attestation")
+	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
 	}, "id", "kind", "name")

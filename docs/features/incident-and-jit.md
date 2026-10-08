@@ -199,6 +199,13 @@ PostgreSQL also enforces the credential deadline with `rolvaliduntil` if the
 worker is unavailable. SSH access ends at the certificate `valid_before` time.
 The event trail is filterable by `pam.session.activation_requested`, `pam.session.started`, and
 `pam.session.expired`; credential material is not written into those events.
+For new sessions, the start event also records the verified attestation method,
+subject, selectors, claims, and verification time. GET and list responses project
+those facts after a restart without returning the one-time credential. Sessions
+created before this evidence field was introduced omit `attestation` on readback;
+their old start events retained an ID and audit summary but not the verified
+selectors, claims, or verification time. The UI identifies that evidence gap instead of displaying
+a zero verification timestamp.
 An exact `Idempotency-Key` retry returns the original credential while its
 protected HTTP result is retained. Once that cache entry has aged out, the
 durable session identity rejects the old key instead of signing another SSH

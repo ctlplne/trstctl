@@ -622,6 +622,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/status", opaque), privacyRule("/subject", exact),
 		privacyRule("/requested_by", exact), privacyRule("/reason", clear),
 		privacyRule("/attestation_id", opaque), privacyRule("/backend_ref", opaque),
+		privacyRule("/attestation", clear),
 		privacyRule("/ssh_key_id", opaque), privacyRule("/ssh_serial", opaque),
 		privacyRule("/idempotency_key", opaque), privacyRule("/audit", clear),
 		privacyRule("/started_at", opaque), privacyRule("/expires_at", opaque),

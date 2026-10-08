@@ -6079,7 +6079,7 @@ export interface PAMSSHCredential {
 }
 
 export interface PAMSession {
-  attestation: Attestation;
+  attestation?: Attestation;
   audit?: Record<string, unknown>;
   ended_at?: string;
   expires_at: string;

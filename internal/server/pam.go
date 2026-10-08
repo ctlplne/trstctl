@@ -743,13 +743,13 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 	session := api.PAMSession{
 		ID: id, TargetID: req.TargetID, TargetType: req.TargetType, Role: req.Role,
 		Status: api.PAMSessionStatusActive, Subject: att.Subject, RequestedBy: requester,
-		Reason: req.Reason, StartedAt: now, ExpiresAt: expiresAt, Attestation: att,
+		Reason: req.Reason, StartedAt: now, ExpiresAt: expiresAt, Attestation: &att,
 		Audit: jsonMap(audit),
 	}
 	return session, projections.PAMSessionStarted{
 		ID: id, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role,
 		Status: api.PAMSessionStatusActive, Subject: att.Subject, RequestedBy: requester,
-		Reason: req.Reason, AttestationID: att.ID, BackendRef: backendRef, SSHKeyID: sshKeyID,
+		Reason: req.Reason, AttestationID: att.ID, Attestation: &att, BackendRef: backendRef, SSHKeyID: sshKeyID,
 		SSHSerial: sshSerial, IdempotencyKey: idempotencyKey, Audit: audit,
 		StartedAt: now, ExpiresAt: expiresAt,
 	}
@@ -879,11 +879,20 @@ func principalAllowed(allowed []string, principal string) bool {
 }
 
 func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
+	var verified *attest.Attestation
+	if len(rec.Attestation) != 0 {
+		var candidate attest.Attestation
+		if err := json.Unmarshal(rec.Attestation, &candidate); err == nil &&
+			candidate.ID == rec.AttestationID && candidate.Subject == rec.Subject &&
+			candidate.Method != "" && !candidate.VerifiedAt.IsZero() {
+			verified = &candidate
+		}
+	}
 	return api.PAMSession{
 		ID: rec.ID, TargetID: rec.TargetID, TargetType: rec.TargetType, Role: rec.Role,
 		Status: rec.Status, Subject: rec.Subject, RequestedBy: rec.RequestedBy, Reason: rec.Reason,
 		StartedAt: rec.StartedAt, ExpiresAt: rec.ExpiresAt, EndedAt: rec.EndedAt,
-		Attestation: attest.Attestation{ID: rec.AttestationID, Subject: rec.Subject},
+		Attestation: verified,
 		Audit:       jsonMap(rec.Audit),
 	}
 }

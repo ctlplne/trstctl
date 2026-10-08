@@ -137,6 +137,23 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	if pg.ID == "" || pg.TargetType != "postgres" || pg.Status != "active" || pg.Postgres == nil || pg.Postgres.DSN == "" {
 		t.Fatalf("postgres PAM response = %+v", pg)
 	}
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/access/sessions/"+pg.ID, admin, nil)
+	if status != http.StatusOK {
+		t.Fatalf("postgres PAM readback status=%d; body=%s", status, body)
+	}
+	var readback servedPAMSessionResponse
+	if err := json.Unmarshal(body, &readback); err != nil {
+		t.Fatalf("decode postgres PAM readback: %v", err)
+	}
+	if readback.Attestation == nil || readback.Attestation.ID != pg.Attestation.ID ||
+		readback.Attestation.Method != "stub_pam" || readback.Attestation.Subject != "pam-workload" ||
+		readback.Attestation.VerifiedAt.IsZero() || len(readback.Attestation.Selectors) != 1 ||
+		readback.Attestation.Selectors[0] != "pam:test" {
+		t.Fatalf("postgres PAM readback lost verified attestation evidence: %+v", readback.Attestation)
+	}
+	if readback.Postgres != nil || readback.SSH != nil {
+		t.Fatal("PAM metadata readback returned one-time credential material")
+	}
 	if !strings.HasPrefix(pg.Postgres.Username, "trstctl_pam_") {
 		t.Fatalf("postgres PAM username = %q", pg.Postgres.Username)
 	}
@@ -264,6 +281,21 @@ func TestPAMSSHRequiresAnExplicitPrincipalAllowlist(t *testing.T) {
 	}
 	if !principalAllowed([]string{"alice"}, "alice") {
 		t.Fatal("SSH target refused its explicitly allowed principal")
+	}
+}
+
+func TestPAMLegacySessionDoesNotInventAttestationEvidence(t *testing.T) {
+	rec := store.PAMSession{ID: uuid.NewString(), Subject: "legacy-workload", AttestationID: "att:legacy"}
+	got := pamSessionFromStore(rec)
+	if got.Attestation != nil {
+		t.Fatalf("legacy session invented verified facts: %+v", got.Attestation)
+	}
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"attestation"`) {
+		t.Fatalf("legacy session serialized an attestation it cannot prove: %s", data)
 	}
 }
 
@@ -571,14 +603,15 @@ func (servedPAMAttestor) Attest(_ context.Context, p []byte) (attest.Attestation
 }
 
 type servedPAMSessionResponse struct {
-	ID         string                       `json:"id"`
-	TargetID   string                       `json:"target_id"`
-	TargetType string                       `json:"target_type"`
-	Status     string                       `json:"status"`
-	Subject    string                       `json:"subject"`
-	ExpiresAt  time.Time                    `json:"expires_at"`
-	Postgres   *servedPAMPostgresCredential `json:"postgres,omitempty"`
-	SSH        *servedPAMSSHCredential      `json:"ssh,omitempty"`
+	ID          string                       `json:"id"`
+	TargetID    string                       `json:"target_id"`
+	TargetType  string                       `json:"target_type"`
+	Status      string                       `json:"status"`
+	Subject     string                       `json:"subject"`
+	ExpiresAt   time.Time                    `json:"expires_at"`
+	Attestation *attest.Attestation          `json:"attestation,omitempty"`
+	Postgres    *servedPAMPostgresCredential `json:"postgres,omitempty"`
+	SSH         *servedPAMSSHCredential      `json:"ssh,omitempty"`
 }
 
 type servedPAMPostgresCredential struct {

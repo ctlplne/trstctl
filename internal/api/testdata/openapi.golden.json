@@ -25008,8 +25008,7 @@
           "subject",
           "requested_by",
           "started_at",
-          "expires_at",
-          "attestation"
+          "expires_at"
         ],
         "type": "object"
       },

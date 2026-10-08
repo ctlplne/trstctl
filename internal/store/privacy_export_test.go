@@ -286,6 +286,10 @@ func TestPrivacySubjectExportIncludesOperationalPIIReadModels(t *testing.T) {
 		if rec.Table == "pam_sessions" && rec.ID == uuid(tenantB, 200) {
 			t.Fatalf("tenant B operational read model leaked into tenant A export: %+v", rec)
 		}
+		if rec.Table == "pam_sessions" && (!strings.Contains(rec.Data, `"method": "k8s_sat"`) ||
+			!strings.Contains(rec.Data, subject)) {
+			t.Fatalf("PAM export omitted verified attestation evidence: %+v", rec)
+		}
 	}
 }
 
@@ -456,6 +460,48 @@ func TestPrivacyRetentionRedactsDiscoveryConfigAndFindingMetadata(t *testing.T) 
 		if hits := countDiscoveryJSONStringHits(t, ctx, s, tenantA, raw); hits != 0 {
 			t.Fatalf("retention left raw discovery JSON value %q in %d source config/finding metadata values", raw, hits)
 		}
+	}
+}
+
+func TestPrivacyRetentionClearsPAMAttestationEvidence(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "PAM retention"}); err != nil {
+		t.Fatal(err)
+	}
+	const subject = "retired-pam-operator@example.test"
+	old := time.Now().UTC().Add(-900 * 24 * time.Hour)
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO pam_sessions
+			(tenant_id,id,target_type,target_id,role,status,subject,requested_by,reason,audit,attestation,started_at,expires_at,ended_at)
+			VALUES ($1,$2,'postgres','incident-db','readonly','expired',$3,$3,'retired access','{}'::jsonb,$4::jsonb,$5,$5,$5)`,
+			tenantA, uuid(tenantA, 1200), subject, `{"method":"k8s_sat","subject":"`+subject+`"}`, old)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.SelectPrivacyRetention(ctx, tenantA, uuid(tenantA, 1201), privacy.DefaultRetentionPolicy(), time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Counts["pam_sessions"] != 1 {
+		t.Fatalf("PAM retention count=%d, want 1", run.Counts["pam_sessions"])
+	}
+	run.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyPrivacyRetentionEnforcedTx(ctx, tx, run)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var raw string
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT coalesce(attestation::text, '') FROM pam_sessions WHERE tenant_id=$1 AND id=$2`,
+			tenantA, uuid(tenantA, 1200)).Scan(&raw)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if raw != "" {
+		t.Fatalf("retained PAM attestation escaped clearing: %s", raw)
 	}
 }
 
@@ -820,9 +866,9 @@ func seedOperationalPrivacyReadModels(t *testing.T, s *store.Store, tenantID, su
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO pam_sessions
-			        (tenant_id, id, target_type, target_id, role, status, subject, requested_by, reason, audit, started_at, expires_at, ended_at)
-			 VALUES ($1, $2, 'postgres', 'prod-db', 'admin', 'expired', $3, $3, $4, $5::jsonb, $6, $6, $6)`,
-			tenantID, uuid(tenantID, base), subject, "access for "+subject, `{"operator":"`+subject+`"}`, now); err != nil {
+			        (tenant_id, id, target_type, target_id, role, status, subject, requested_by, reason, audit, attestation, started_at, expires_at, ended_at)
+			 VALUES ($1, $2, 'postgres', 'prod-db', 'admin', 'expired', $3, $3, $4, $5::jsonb, $6::jsonb, $7, $7, $7)`,
+			tenantID, uuid(tenantID, base), subject, "access for "+subject, `{"operator":"`+subject+`"}`, `{"method":"k8s_sat","subject":"`+subject+`","selectors":["k8s:sa:`+subject+`"]}`, now); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
@@ -934,7 +980,7 @@ func assertNoRawOperationalPII(t *testing.T, ctx context.Context, s *store.Store
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT
-			  (SELECT count(*) FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0)) +
+			  (SELECT count(*) FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0)) +
 			  (SELECT count(*) FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0)) +
 			  (SELECT count(*) FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2)) +
 			  (SELECT count(*) FROM incident_executions WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs))) +

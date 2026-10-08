@@ -1036,11 +1036,9 @@ function PAMDetailDialog({ session, formatPolicy, onClose }: { session: PAMSessi
         <DetailRow term={translateNow("source.reason.f81ab834de")}>{session.reason || "—"}</DetailRow>
         <DetailRow term={t("admin.access.started")}>{formatOptionalDate(session.started_at, formatPolicy)}</DetailRow>
         <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(session.expires_at, formatPolicy)}</DetailRow>
-        {session.attestation ? (
-          <DetailRow term={t("admin.access.attestation")}>
-            <JSONBlock value={session.attestation} />
-          </DetailRow>
-        ) : null}
+        <DetailRow term={t("admin.access.attestation")}>
+          {session.attestation ? <JSONBlock value={session.attestation} /> : t("admin.access.attestationUnavailable")}
+        </DetailRow>
         {session.audit ? (
           <DetailRow term={t("admin.access.audit")}>
             <JSONBlock value={session.audit} />

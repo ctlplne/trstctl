@@ -4181,6 +4181,10 @@ export const messages = {
   },
   "admin.access.id": { defaultMessage: "ID", description: "Technical record identifier label." },
   "admin.access.attestation": { defaultMessage: "Attestation", description: "Privileged-session attestation evidence label." },
+  "admin.access.attestationUnavailable": {
+    defaultMessage: "Verified attestation details were not retained for this earlier session.",
+    description: "Explains why an older privileged session has no retained attestation method or verification time.",
+  },
   "admin.access.audit": { defaultMessage: "Audit", description: "Privileged-session audit evidence label." },
   "admin.access.sessionOpened": { defaultMessage: "Session opened", description: "Successful privileged-session creation status." },
   "admin.access.sessionId": { defaultMessage: "Session ID", description: "Privileged-session identifier label." },

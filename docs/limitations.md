@@ -2697,6 +2697,11 @@ than sending an operator looking for a credential that was never there.
   An altered command or target binding cannot reuse the approval. PAM still
   lacks an operator early-revocation path; the browser workflow and independent
   cold-start proof remain open U6 work.
+  PAM sessions created before the verified-attestation event field was added
+  retained an attestation ID and audit summary. Their verified selectors,
+  claims, and verification time cannot be reconstructed from that start event. The
+  API omits `attestation` for those sessions and the console names the evidence
+  gap; new sessions project the full verified, non-secret facts after replay.
   A malformed TTL on any of the three leaves zero so the
   built-in bound applies — silently substituting a LONGER lifetime than the
   operator wrote is the dangerous direction, and zero cannot do that.

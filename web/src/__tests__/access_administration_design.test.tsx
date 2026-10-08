@@ -218,6 +218,32 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(screen.queryByText(/one-time-secret/)).not.toBeInTheDocument();
   });
 
+  it("labels missing historical PAM attestation evidence without inventing a verification time", async () => {
+    const user = userEvent.setup();
+    apiMock.pamSessions.mockResolvedValue({
+      items: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          target_type: "postgres",
+          target_id: "incident-db",
+          role: "readonly",
+          status: "expired",
+          subject: "legacy-workload",
+          requested_by: "operator",
+          started_at: "2026-10-08T10:00:00Z",
+          expires_at: "2026-10-08T10:10:00Z",
+        },
+      ],
+    });
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Details" }));
+    const dialog = screen.getByRole("dialog", { name: /Privileged session/ });
+    expect(within(dialog).getByText("Verified attestation details were not retained for this earlier session.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/0001-01-01/)).not.toBeInTheDocument();
+  });
+
   it("adds a person in a focused dialog and reads the roster back", async () => {
     const user = userEvent.setup();
     renderPage();

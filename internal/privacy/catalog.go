@@ -191,11 +191,11 @@ func Catalog() []CatalogEntry {
 		},
 		{
 			ID:             "pam_sessions.subjects",
-			Location:       "pam_sessions.subject/requested_by/reason/audit",
-			Category:       "privileged-access requester, target subject, and free-form reason metadata",
+			Location:       "pam_sessions.subject/requested_by/reason/audit/attestation",
+			Category:       "privileged-access requester, verified target subject, and free-form reason and attestation metadata",
 			Purpose:        "JIT/PAM session approval, revocation, audit, and expiry evidence",
 			RetentionClass: "operational:access-terminal-after-90d",
-			Erasure:        "subject export includes matching rows; privacy.subject.erased pseudonymizes matching subject/requester fields and clears free-form reason/audit metadata; privacy.retention.enforced covers terminal PAM session metadata after the access window",
+			Erasure:        "subject export includes matching rows; privacy.subject.erased pseudonymizes matching subject/requester fields and clears free-form reason/audit/attestation metadata; privacy.retention.enforced covers terminal PAM session metadata after the access window",
 			Owner:          "privileged access",
 		},
 		{

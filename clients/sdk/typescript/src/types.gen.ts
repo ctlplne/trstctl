@@ -13506,7 +13506,7 @@ export interface components {
             valid_before: string;
         };
         PAMSession: {
-            attestation: components["schemas"]["Attestation"];
+            attestation?: components["schemas"]["Attestation"];
             audit?: Record<string, never>;
             /** Format: date-time */
             ended_at?: string;

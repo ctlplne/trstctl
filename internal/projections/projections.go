@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
+	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/connector"
@@ -3182,22 +3183,23 @@ type AWSHoneyTokenRearmed struct {
 // session metadata and backend revoke handles; the one-time credential bytes/DSN
 // returned to the caller are intentionally omitted.
 type PAMSessionStarted struct {
-	ID             string          `json:"id"`
-	TargetType     string          `json:"target_type"`
-	TargetID       string          `json:"target_id"`
-	Role           string          `json:"role"`
-	Status         string          `json:"status"`
-	Subject        string          `json:"subject"`
-	RequestedBy    string          `json:"requested_by"`
-	Reason         string          `json:"reason,omitempty"`
-	AttestationID  string          `json:"attestation_id,omitempty"`
-	BackendRef     string          `json:"backend_ref,omitempty"`
-	SSHKeyID       string          `json:"ssh_key_id,omitempty"`
-	SSHSerial      uint64          `json:"ssh_serial,omitempty"`
-	IdempotencyKey string          `json:"idempotency_key,omitempty"`
-	Audit          json.RawMessage `json:"audit,omitempty"`
-	StartedAt      time.Time       `json:"started_at"`
-	ExpiresAt      time.Time       `json:"expires_at"`
+	ID             string              `json:"id"`
+	TargetType     string              `json:"target_type"`
+	TargetID       string              `json:"target_id"`
+	Role           string              `json:"role"`
+	Status         string              `json:"status"`
+	Subject        string              `json:"subject"`
+	RequestedBy    string              `json:"requested_by"`
+	Reason         string              `json:"reason,omitempty"`
+	AttestationID  string              `json:"attestation_id,omitempty"`
+	Attestation    *attest.Attestation `json:"attestation,omitempty"`
+	BackendRef     string              `json:"backend_ref,omitempty"`
+	SSHKeyID       string              `json:"ssh_key_id,omitempty"`
+	SSHSerial      uint64              `json:"ssh_serial,omitempty"`
+	IdempotencyKey string              `json:"idempotency_key,omitempty"`
+	Audit          json.RawMessage     `json:"audit,omitempty"`
+	StartedAt      time.Time           `json:"started_at"`
+	ExpiresAt      time.Time           `json:"expires_at"`
 }
 
 // PAMSessionActivationRequested consumes one exact approval before any target
@@ -6245,6 +6247,22 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.TargetType == "" || pl.TargetID == "" || pl.Status == "" || pl.Subject == "" || pl.ExpiresAt.IsZero() {
 			return fmt.Errorf("projections: %s requires id, target, status, subject, and expires_at", e.Type)
 		}
+		var attestation json.RawMessage
+		// Privacy erasure clears the entire PII-bearing proof snapshot to {}.
+		// That is an unknown legacy-style readback, not a new verification.
+		if pl.Attestation != nil && (pl.Attestation.ID != "" || pl.Attestation.Method != "" ||
+			pl.Attestation.Subject != "" || len(pl.Attestation.Selectors) != 0 ||
+			len(pl.Attestation.Claims) != 0 || !pl.Attestation.VerifiedAt.IsZero()) {
+			if pl.Attestation.ID != pl.AttestationID || pl.Attestation.Subject != pl.Subject ||
+				pl.Attestation.Method == "" || pl.Attestation.VerifiedAt.IsZero() {
+				return fmt.Errorf("projections: %s attestation evidence disagrees with session", e.Type)
+			}
+			var err error
+			attestation, err = json.Marshal(pl.Attestation)
+			if err != nil {
+				return fmt.Errorf("projections: marshal PAM attestation: %w", err)
+			}
+		}
 		startedAt := pl.StartedAt
 		if startedAt.IsZero() {
 			startedAt = e.Time
@@ -6252,7 +6270,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMSessionStartedTx(ctx, tx, store.PAMSession{
 			TenantID: e.TenantID, ID: pl.ID, TargetType: pl.TargetType, TargetID: pl.TargetID,
 			Role: pl.Role, Status: pl.Status, Subject: pl.Subject, RequestedBy: pl.RequestedBy,
-			Reason: pl.Reason, AttestationID: pl.AttestationID, BackendRef: pl.BackendRef,
+			Reason: pl.Reason, AttestationID: pl.AttestationID, Attestation: attestation, BackendRef: pl.BackendRef,
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt,
 		})

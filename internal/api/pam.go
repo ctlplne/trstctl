@@ -86,18 +86,20 @@ type PAMApprovalRequest struct {
 }
 
 type PAMSession struct {
-	ID          string                 `json:"id"`
-	TargetID    string                 `json:"target_id"`
-	TargetType  string                 `json:"target_type"`
-	Role        string                 `json:"role"`
-	Status      string                 `json:"status"`
-	Subject     string                 `json:"subject"`
-	RequestedBy string                 `json:"requested_by"`
-	Reason      string                 `json:"reason,omitempty"`
-	StartedAt   time.Time              `json:"started_at"`
-	ExpiresAt   time.Time              `json:"expires_at"`
-	EndedAt     *time.Time             `json:"ended_at,omitempty"`
-	Attestation attest.Attestation     `json:"attestation"`
+	ID          string     `json:"id"`
+	TargetID    string     `json:"target_id"`
+	TargetType  string     `json:"target_type"`
+	Role        string     `json:"role"`
+	Status      string     `json:"status"`
+	Subject     string     `json:"subject"`
+	RequestedBy string     `json:"requested_by"`
+	Reason      string     `json:"reason,omitempty"`
+	StartedAt   time.Time  `json:"started_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	// Older sessions did not retain verified facts. Omit their attestation
+	// instead of presenting a zero verification time as evidence.
+	Attestation *attest.Attestation    `json:"attestation,omitempty"`
 	Postgres    *PAMPostgresCredential `json:"postgres,omitempty"`
 	SSH         *PAMSSHCredential      `json:"ssh,omitempty"`
 	Audit       map[string]any         `json:"audit,omitempty"`

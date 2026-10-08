@@ -27,6 +27,7 @@ type PAMSession struct {
 	RequestedBy    string
 	Reason         string
 	AttestationID  string
+	Attestation    json.RawMessage
 	BackendRef     string
 	SSHKeyID       string
 	SSHSerial      uint64
@@ -47,10 +48,10 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		`INSERT INTO pam_sessions
 		        (tenant_id, id, target_type, target_id, role, status, subject,
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-		         ssh_serial, idempotency_key, audit, started_at, expires_at, ended_at)
+		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
-		         $13, $14, $15::jsonb, $16, $17, $18)
+		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -65,12 +66,13 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        ssh_serial = EXCLUDED.ssh_serial,
 		        idempotency_key = EXCLUDED.idempotency_key,
 		        audit = EXCLUDED.audit,
+		        attestation = EXCLUDED.attestation,
 		        started_at = EXCLUDED.started_at,
 		        expires_at = EXCLUDED.expires_at,
 		        ended_at = EXCLUDED.ended_at`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
-		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.StartedAt, p.ExpiresAt, p.EndedAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -93,7 +95,7 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 		row := tx.QueryRow(ctx,
 			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-			        ssh_serial, idempotency_key, audit, started_at, expires_at, ended_at
+			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -112,7 +114,7 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 		rows, err := tx.Query(ctx,
 			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-			        ssh_serial, idempotency_key, audit, started_at, expires_at, ended_at
+			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -143,7 +145,7 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		//trstctl:system-query — cross-tenant system expiry worker scans every tenant for active PAM sessions due to be closed; it returns no credential material, and each follow-up mutation appends a tenant_id-scoped pam.session.expired event.
 		`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-		        ssh_serial, idempotency_key, audit, started_at, expires_at, ended_at
+		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -173,7 +175,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 	if err := row.Scan(
 		&out.TenantID, &out.ID, &out.TargetType, &out.TargetID, &out.Role, &out.Status,
 		&out.Subject, &out.RequestedBy, &out.Reason, &out.AttestationID, &out.BackendRef, &out.SSHKeyID,
-		&serial, &out.IdempotencyKey, &out.Audit, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
+		&serial, &out.IdempotencyKey, &out.Audit, &out.Attestation, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows
