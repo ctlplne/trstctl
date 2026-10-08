@@ -35,10 +35,12 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	pgDSN, stopPG := startPAMPostgres(t)
 	defer stopPG()
 	seedPAMPostgresTable(t, pgDSN)
+	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 
 	h := newOperatingServedHarness(t,
 		config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		func(d *Deps) {
+			wirePAMPostgresProvider(d, adminDSNRef, 5*time.Second)
 			d.PAM = PAMConfig{
 				Enabled:        true,
 				DefaultTTL:     2 * time.Second,
@@ -46,13 +48,8 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 				ExpiryInterval: 10 * time.Millisecond,
 				Attestors:      []attest.Attestor{servedPAMAttestor{}},
 				PostgresTargets: []PAMPostgresTarget{{
-					TenantID:       servedTestTenant,
-					ID:             "pg-main",
-					DSN:            []byte(pgDSN),
-					Database:       "postgres",
-					Schema:         "public",
-					UsernamePrefix: "trstctl_pam",
-					AllowedRoles:   []string{"readonly"},
+					TenantID: servedTestTenant, ID: "pg-main", ProviderID: "pam-pg-provider",
+					AllowedRoles: []string{"readonly"},
 				}},
 				SSHTargets: []PAMSSHTarget{{
 					TenantID:   servedTestTenant,
@@ -64,6 +61,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 			}
 		},
 	)
+	startServedExternalCADispatcher(t, h)
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "pam-requester", "access:read", "access:write")
 	for _, tc := range []struct{ targetType, targetID, role string }{
 		{"postgres", "pg-main", "writer"},
@@ -234,12 +232,15 @@ func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
 	pgDSN, stopPG := startPAMPostgres(t)
 	defer stopPG()
 	seedPAMPostgresTable(t, pgDSN)
+	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	fixture := servedDynamicK8sTrustFixture(t, "pam-tenant-trust")
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
 		d.PAM = PAMConfig{Enabled: true, MaxTTL: time.Minute, PostgresTargets: []PAMPostgresTarget{{
-			TenantID: servedTestTenant, ID: "tenant-pg", DSN: []byte(pgDSN), Database: "postgres", Schema: "public", AllowedRoles: []string{"readonly"},
+			TenantID: servedTestTenant, ID: "tenant-pg", ProviderID: "pam-pg-provider", AllowedRoles: []string{"readonly"},
 		}}}
 	})
+	startServedExternalCADispatcher(t, h)
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-workload-requester", "access:write")
 	owner := seedScopedTokenSubject(t, h.store, h.tenant, "pam-trust-owner", "certs:issue", "issuers:write")
 	request := map[string]any{
@@ -276,6 +277,53 @@ func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
 	if status != http.StatusForbidden {
 		t.Fatalf("PAM accepted proof after tenant trust revoke: status=%d body=%s", status, body)
 	}
+}
+
+func TestServedPAMPostgresUsesProtectedProviderOutbox(t *testing.T) {
+	pgDSN, stopPG := startPAMPostgres(t)
+	defer stopPG()
+	seedPAMPostgresTable(t, pgDSN)
+	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		wirePAMPostgresProvider(d, adminDSNRef, 10*time.Second)
+		d.PAM = PAMConfig{
+			Enabled: true, MaxTTL: 10 * time.Second, ExpiryInterval: 10 * time.Millisecond,
+			Attestors: []attest.Attestor{servedPAMAttestor{}},
+			PostgresTargets: []PAMPostgresTarget{{
+				TenantID: servedTestTenant, ID: "pg-provider-target", ProviderID: "pam-pg-provider",
+				AllowedRoles: []string{"readonly"},
+			}},
+		}
+	})
+	startServedExternalCADispatcher(t, h)
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); h.srv.RunPAMSessionExpiry(workerCtx) }()
+	t.Cleanup(func() { stopWorker(); <-workerDone })
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-outbox-requester", "access:write", "access:read")
+	issued := servedPAMOpen(t, h, requester, "pam-provider-backed-postgres", map[string]any{
+		"target_type": "postgres", "target_id": "pg-provider-target", "role": "readonly",
+		"method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
+		"ttl_seconds": 5,
+	})
+	if issued.Postgres == nil {
+		t.Fatal("provider-backed PAM did not return one PostgreSQL credential")
+	}
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	if !h.hasEvent(t, "dynsecret.lease.pending") || !h.hasEvent(t, "pam.session.started") {
+		t.Fatal("provider-backed PAM did not record the durable lease request and session start")
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if !pamPostgresRoleExists(t, pgDSN, issued.Postgres.Username) && h.hasEvent(t, "pam.session.expired") {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if pamPostgresRoleExists(t, pgDSN, issued.Postgres.Username) {
+		t.Fatal("provider-backed PAM role remained after worker and outbox revocation")
+	}
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, false)
 }
 
 type servedPAMAttestor struct{}
@@ -358,6 +406,26 @@ func startPAMPostgres(t *testing.T) (string, func()) {
 		_ = db.Stop()
 		_ = os.RemoveAll(dir)
 	}
+}
+
+func pamPostgresAdminFileRef(t *testing.T, dsn string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "pam-postgres-admin-dsn")
+	if err := os.WriteFile(path, []byte(dsn), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return "file:" + path
+}
+
+func wirePAMPostgresProvider(d *Deps, adminDSNRef string, maxTTL time.Duration) {
+	cfg := config.DynamicSecretProviderConfig{
+		TenantID: servedTestTenant, ID: "pam-pg-provider", Type: "postgresql",
+		AdminDSNRef: adminDSNRef, Database: "postgres", Schema: "public",
+		UsernamePrefix: "trstctl_pam", AllowedRoles: []string{"readonly"}, MaxTTL: maxTTL.String(),
+	}
+	provider := newConfiguredDynamicProvider(cfg, map[string]bool{"readonly": true}, maxTTL,
+		integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}, nil)
+	d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: {provider}}
 }
 
 func seedPAMPostgresTable(t *testing.T, dsn string) {

@@ -16,12 +16,15 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 const (
@@ -48,13 +51,12 @@ type PAMConfig struct {
 }
 
 type PAMPostgresTarget struct {
-	TenantID       string
-	ID             string
-	DSN            []byte
-	Database       string
-	Schema         string
-	UsernamePrefix string
-	AllowedRoles   []string
+	TenantID string
+	ID       string
+	// ProviderID references a tenant-bound PostgreSQL dynamic-secret provider.
+	// Its admin DSN remains a protected file:/secret:// reference in that provider.
+	ProviderID   string
+	AllowedRoles []string
 }
 
 type PAMSSHTarget struct {
@@ -72,6 +74,11 @@ type pamService struct {
 	audit          auditsink.Auditor
 	attestors      []attest.Attestor
 	postgres       map[pamTargetID]*pamPostgresTarget
+	providers      DynamicSecretProviderRegistry
+	kek            seal.KeyWrapper
+	outbox         *orchestrator.Outbox
+	wakeOutbox     func()
+	tenantCrypto   tenantseal.Access
 	sshTargets     map[pamTargetID]PAMSSHTarget
 	sshCA          *sshca.CA
 	defaultTTL     time.Duration
@@ -81,9 +88,8 @@ type pamService struct {
 }
 
 type pamPostgresTarget struct {
-	cfg     PAMPostgresTarget
-	backend *dynsecret.PostgresBackend
-	roles   map[string]struct{}
+	cfg   PAMPostgresTarget
+	roles map[string]struct{}
 }
 
 // Target names are tenant-local. In particular, a matching ID in a different
@@ -94,12 +100,17 @@ type pamTargetID struct {
 }
 
 type pamDeps struct {
-	Config PAMConfig
-	Store  *store.Store
-	Log    *events.Log
-	SSHCA  *sshca.CA
-	Audit  auditsink.Auditor
-	Clock  func() time.Time
+	Config       PAMConfig
+	Store        *store.Store
+	Log          *events.Log
+	SSHCA        *sshca.CA
+	Audit        auditsink.Auditor
+	Clock        func() time.Time
+	Providers    DynamicSecretProviderRegistry
+	KEK          seal.KeyWrapper
+	Outbox       *orchestrator.Outbox
+	WakeOutbox   func()
+	TenantCrypto tenantseal.Access
 }
 
 func newPAMService(d pamDeps) (*pamService, error) {
@@ -167,13 +178,37 @@ func newPAMService(d pamDeps) (*pamService, error) {
 			}
 			roles[role] = struct{}{}
 		}
-		backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
-			DSN: target.DSN, Database: target.Database, Schema: target.Schema, UsernamePrefix: target.UsernamePrefix,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("server: PAM postgres target %q: %w", target.ID, err)
+		if target.ProviderID == "" || d.KEK == nil || d.Outbox == nil || d.WakeOutbox == nil {
+			return nil, fmt.Errorf("server: PAM postgres target %q requires a durable provider and its outbox dependencies", target.ID)
 		}
-		postgresTargets[key] = &pamPostgresTarget{cfg: target, backend: backend, roles: roles}
+		var matched bool
+		for _, provider := range d.Providers.ForTenant(target.TenantID) {
+			if provider == nil || provider.Name() != target.ProviderID {
+				continue
+			}
+			profile, ok := provider.(interface {
+				DynamicSecretProviderType() string
+				DynamicSecretAllowedRoles() []string
+			})
+			if !ok || profile.DynamicSecretProviderType() != "postgresql" {
+				return nil, fmt.Errorf("server: PAM target %q provider must be PostgreSQL", target.ID)
+			}
+			providerRoles := make(map[string]bool)
+			for _, role := range profile.DynamicSecretAllowedRoles() {
+				providerRoles[role] = true
+			}
+			for role := range roles {
+				if !providerRoles[role] {
+					return nil, fmt.Errorf("server: PAM target %q role %q is not enabled on its provider", target.ID, role)
+				}
+			}
+			matched = true
+			break
+		}
+		if !matched {
+			return nil, fmt.Errorf("server: PAM target %q provider %q is not configured for its tenant", target.ID, target.ProviderID)
+		}
+		postgresTargets[key] = &pamPostgresTarget{cfg: target, roles: roles}
 	}
 	sshTargets := make(map[pamTargetID]PAMSSHTarget, len(cfg.SSHTargets))
 	for _, target := range cfg.SSHTargets {
@@ -207,6 +242,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	return &pamService{
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, postgres: postgresTargets,
+		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
 		sshTargets: sshTargets, sshCA: d.SSHCA, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 	}, nil
@@ -265,7 +301,7 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 		return api.PAMSession{}, fmt.Errorf("%w: %v", api.ErrPAMRejected, err)
 	}
 
-	id := uuid.NewString()
+	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-session\x00"+tenantID+"\x00"+idempotencyKey)).String()
 	now := s.clock().UTC()
 	expiresAt := now.Add(s.ttl(req.TTLSeconds))
 	if err := verifier.Bind(ctx, att, "pam:"+id); err != nil {
@@ -331,22 +367,41 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 
 func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
 	target := s.postgres[pamTargetID{tenantID, req.TargetID}]
-	// The database must enforce the same deadline even when the PAM expiry
-	// worker is unavailable. Backend.Create uses its general 24-hour fallback;
-	// a privileged session must carry its reviewed lifetime to PostgreSQL.
-	ref, credential, err := target.backend.CreateCredential(ctx, dynsecret.GenerateRequest{
-		Role: req.Role, TTL: expiresAt.Sub(now), LeaseID: id,
-	})
+	return s.openPostgresProvider(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, target)
+}
+
+func (s *pamService) postgresLifecycle(tenantID string) (*durableDynamicSecretLifecycle, error) {
+	return newDurableDynamicSecretLifecycle(tenantID, s.providers.ForTenant(tenantID),
+		s.store, s.log, s.kek, s.outbox, s.wakeOutbox, s.tenantCrypto)
+}
+
+func (s *pamService) openPostgresProvider(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest, target *pamPostgresTarget) (api.PAMSession, error) {
+	lifecycle, err := s.postgresLifecycle(tenantID)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	material, err := json.Marshal(struct {
+		Tenant, Requester, Target, Role, Reason, Method, Subject, PayloadDigest string
+		TTLSeconds                                                              int64
+	}{tenantID, requester, req.TargetID, req.Role, req.Reason, req.Method, att.Subject,
+		crypto.SHA256Hex(req.Payload), req.TTLSeconds})
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	binding := crypto.SHA256Hex(material)
+	secret.Wipe(material)
+	lease, credential, err := lifecycle.IssueBoundNonRenewable(ctx, target.cfg.ProviderID, req.Role,
+		expiresAt.Sub(now), "pam-postgres:"+idempotencyKey, binding)
 	if err != nil {
 		return api.PAMSession{}, fmt.Errorf("%w: postgres target %q refused session: %v", api.ErrPAMRejected, req.TargetID, err)
 	}
-	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, ref, "", 0)
+	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, lease.ID, "", 0)
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload); err != nil {
 		secret.Wipe(credential)
-		_ = target.backend.Revoke(context.Background(), ref)
+		_ = lifecycle.Revoke(context.Background(), lease.ID)
 		return api.PAMSession{}, err
 	}
-	session.Postgres = api.NewPAMPostgresCredential(ref, credential)
+	session.Postgres = api.NewPAMPostgresCredential(lease.BackendRef, credential)
 	return session, nil
 }
 
@@ -422,8 +477,19 @@ func (s *pamService) expireSession(ctx context.Context, rec store.PAMSession) er
 		if target == nil {
 			return fmt.Errorf("server: PAM postgres target %q not configured for expiry", rec.TargetID)
 		}
-		if err := target.backend.Revoke(ctx, rec.BackendRef); err != nil {
+		lifecycle, err := s.postgresLifecycle(rec.TenantID)
+		if err != nil {
 			return err
+		}
+		if err := lifecycle.Revoke(ctx, rec.BackendRef); err != nil {
+			return err
+		}
+		lease, err := lifecycle.GetLeaseContext(ctx, rec.BackendRef)
+		if err != nil {
+			return err
+		}
+		if lease.RevocationCompletedAt == nil {
+			return nil // outbox has the removal intent; a later tick observes completion
 		}
 	case pamTargetSSH:
 		// SSH user certificates auto-expire cryptographically. The read model still

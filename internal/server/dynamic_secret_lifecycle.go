@@ -79,7 +79,7 @@ func newDurableDynamicSecretLifecycle(tenantID string, providers []dynsecret.Pro
 
 func (l *durableDynamicSecretLifecycle) Issue(ctx context.Context, providerID, role string, ttl time.Duration, idempotencyKey string) (dynsecret.Lease, []byte, error) {
 	material := []byte(providerID + "\x00" + role + "\x00" + ttl.String())
-	return l.issue(ctx, providerID, role, ttl, idempotencyKey, "legacy:"+crypto.SHA256Hex(material))
+	return l.issue(ctx, providerID, role, ttl, 0, idempotencyKey, "legacy:"+crypto.SHA256Hex(material))
 }
 
 // IssueBound persists the API's authenticated principal + canonical command
@@ -90,10 +90,20 @@ func (l *durableDynamicSecretLifecycle) IssueBound(ctx context.Context, provider
 	if requestBinding == "" {
 		return dynsecret.Lease{}, nil, errors.New("dynsecret: authenticated request binding is required")
 	}
-	return l.issue(ctx, providerID, role, ttl, idempotencyKey, requestBinding)
+	return l.issue(ctx, providerID, role, ttl, 0, idempotencyKey, requestBinding)
 }
 
-func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, role string, ttl time.Duration, idempotencyKey, requestBinding string) (dynsecret.Lease, []byte, error) {
+// IssueBoundNonRenewable gives a JIT grant one native credential deadline equal
+// to its reviewed lease TTL. It uses the same event and outbox path as an ordinary
+// lease, but a later lease renewal cannot extend the underlying credential.
+func (l *durableDynamicSecretLifecycle) IssueBoundNonRenewable(ctx context.Context, providerID, role string, ttl time.Duration, idempotencyKey, requestBinding string) (dynsecret.Lease, []byte, error) {
+	if requestBinding == "" {
+		return dynsecret.Lease{}, nil, errors.New("dynsecret: authenticated request binding is required")
+	}
+	return l.issue(ctx, providerID, role, ttl, ttl, idempotencyKey, requestBinding)
+}
+
+func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, role string, ttl, nativeTTL time.Duration, idempotencyKey, requestBinding string) (dynsecret.Lease, []byte, error) {
 	if idempotencyKey == "" {
 		return dynsecret.Lease{}, nil, errors.New("dynsecret: idempotency key is required")
 	}
@@ -150,8 +160,14 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 		if bounded, ok := provider.(maximumTTLProvider); ok {
 			maxTTL = bounded.MaximumTTL()
 		}
-		if maxTTL <= 0 || ttl > maxTTL {
+		if maxTTL <= 0 || ttl > maxTTL || nativeTTL > maxTTL {
 			return dynsecret.Lease{}, nil, fmt.Errorf("dynsecret: requested TTL %s exceeds provider maximum %s", ttl, maxTTL)
+		}
+		if nativeTTL == 0 {
+			nativeTTL = maxTTL
+		}
+		if nativeTTL < ttl {
+			return dynsecret.Lease{}, nil, errors.New("dynsecret: native credential TTL cannot be shorter than its initial lease")
 		}
 		// PostgreSQL timestamptz persists microseconds. Canonicalize the immutable
 		// command before it enters the event log/outbox so its binding has one
@@ -161,9 +177,9 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 			TenantEpoch: tenantEpoch, ID: leaseID, IdempotencyKey: idempotencyKey,
 			RequestBinding: requestBinding, Provider: providerID, Role: role,
 			ExpiresAt:     now.Add(ttl).Truncate(time.Microsecond),
-			HardExpiresAt: now.Add(maxTTL).Truncate(time.Microsecond),
+			HardExpiresAt: now.Add(nativeTTL).Truncate(time.Microsecond),
 		}
-		if err := l.appendAndProjectIssueRequest(ctx, dynamicSecretEventID(l.tenantID, tenantEpoch, "issue-requested", leaseID), pending, now, ttl, maxTTL); err != nil {
+		if err := l.appendAndProjectIssueRequest(ctx, dynamicSecretEventID(l.tenantID, tenantEpoch, "issue-requested", leaseID), pending, now, ttl, nativeTTL); err != nil {
 			return dynsecret.Lease{}, nil, err
 		}
 		op, err = l.store.GetDynamicSecretOperationByIdempotencyKey(ctx, l.tenantID, idempotencyKey)

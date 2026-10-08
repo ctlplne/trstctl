@@ -2686,8 +2686,13 @@ than sending an operator looking for a credential that was never there.
   The injection-only target model is tenant-bound, requires an explicit
   PostgreSQL `readonly`/`writer` role allowlist, and rejects an SSH target
   without an explicit host, port, and principal allowlist. A Postgres DSN must be
-  loaded by reference from a protected file or tenant secret; placing it in the
-  main config would copy an administrator credential into every config backup.
+  loaded by an existing tenant PostgreSQL dynamic-secret provider from a protected
+  file or tenant secret. The injected PAM target contains only that provider ID;
+  its issue and remove effects use the provider's durable outbox. PostgreSQL's
+  native role deadline prevents a worker outage from extending access, while
+  PAM's final expiry event waits for confirmed provider removal. This source-only
+  path does not enable PAM in a production deployment because target registration
+  is still absent.
   PAM also lacks distinct approval and early revocation; these are open U6 work.
   A malformed TTL on any of the three leaves zero so the
   built-in bound applies — silently substituting a LONGER lifetime than the

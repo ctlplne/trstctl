@@ -156,7 +156,8 @@ with `certs:issue` to approve it. The attested ephemeral lane is **dual-control*
 default (2 required, configurable for m-of-n), has a shorter approval window, and queues
 its approver notification through the transactional outbox. The PAM lane opens a
 short-lived database or SSH session instead of minting a general-purpose certificate.
-All three block self-approval and keep the grant time-bounded.
+The certificate and ephemeral lanes block self-approval. PAM grants are time-bounded,
+but the PAM approval step is still being built.
 
 On `/request`, the requester first reviews an exact, effect-free server preview bound to
 the tenant owner, active profile version, requester, subject, and optional requester-held
@@ -180,9 +181,13 @@ For privileged-access management, the same JIT model opens short-lived sessions 
 of standing database or shell access. `POST /api/v1/access/sessions` verifies an
 attestation, grants a scoped Postgres login role or signs an OpenSSH user certificate
 for a configured SSH target, returns the one-time credential to the caller, and records a
-tenant-scoped session row. The session expires automatically: Postgres roles are revoked
-by the background expiry worker, and SSH access ends at the certificate `valid_before`
-time. The event trail is filterable by `pam.session.started` and
+tenant-scoped session row. An injected PostgreSQL target references a tenant-bound
+dynamic-secret provider, whose administrator DSN is loaded from a 0600 `file:` or
+tenant `secret://` reference. Issuance and removal run through its durable outbox;
+the PAM expiry worker records completion only after provider removal completes.
+PostgreSQL also enforces the credential deadline with `rolvaliduntil` if the
+worker is unavailable. SSH access ends at the certificate `valid_before` time.
+The event trail is filterable by `pam.session.started` and
 `pam.session.expired`; credential material is not written into those events.
 
 **Status:** the core identity approval gate is served through
@@ -206,7 +211,8 @@ trust-source API at request time and refuses a method with no enabled tenant
 trust. Production configuration does not yet provide a protected
 target-registration path, so enabling `pam` alone cannot start the broker. The
 injected target model binds each target to one tenant. PostgreSQL targets require
-an explicit role allowlist using `readonly` or `writer`; an unlisted role is
+an existing tenant PostgreSQL dynamic-secret provider and an explicit role
+allowlist using `readonly` or `writer`; an unlisted role is
 rejected before a credential is created. SSH targets require a host, port, and
 principal list; only the `user` role is valid, and an empty principal list grants
 nobody.
@@ -554,8 +560,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   don't shortcut it, or you risk an outage mid-incident.
 - **JIT needs real approvers configured** and a notifier wired, or requests will sit in
   `awaiting-approval` until they expire.
-- **PAM sessions need configured targets and attestors.** Postgres targets need an
-  administrative DSN that can create and drop scoped roles. SSH targets need hosts that
+- **PAM sessions need configured targets and attestors.** Postgres targets need a
+  tenant-bound provider with an administrative DSN reference that can create and
+  drop scoped roles. SSH targets need hosts that
   trust the trstctl SSH CA; trstctl does not weaken host `sshd` trust on your behalf.
 - **Break-glass is a last resort.** It trades the control plane's guarantees for offline
   availability; reconcile the bundles promptly so the audit log is complete.

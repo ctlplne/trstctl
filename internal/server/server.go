@@ -2032,7 +2032,8 @@ func (s *Server) configurePAMSurface(d Deps) error {
 	}
 	svc, err := newPAMService(pamDeps{
 		Config: d.PAM, Store: d.Store, Log: d.Log, SSHCA: sshCA,
-		Audit: attestedIssuanceAuditor(d.Log),
+		Audit: attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
+		KEK: d.KEK, Outbox: s.outbox, WakeOutbox: s.wakeOutbox, TenantCrypto: d.TenantCrypto,
 	})
 	if err != nil {
 		return err
