@@ -674,7 +674,15 @@ exposes:
   an opaque key handle and `rotate`/`revoke`/`zeroize`;
 - `POST /api/v1/managed-keys/rotate` — mint a successor key;
 - `POST /api/v1/managed-keys/revoke` — disable the current key at the provider;
-- `POST /api/v1/managed-keys/zeroize` — schedule provider-side destruction.
+- `POST /api/v1/managed-keys/zeroize` — destroy a local device key, or request
+  provider-side deletion for a cloud key. Cloud KMS responses and inventory read
+  `deletion_pending` after the provider accepts the request. That state means
+  signing is blocked; it does not claim the provider has erased retained key
+  material. Read the provider's deletion deadline with its stock client. Local
+  PKCS#11, TPM, and YubiHSM keys read `zeroized` after confirmed device removal.
+  Older cloud events that reported `zeroized` remain immutable; the API and
+  console present their historical projection as `deletion_pending` rather than
+  making an unsupported physical-destruction claim.
 
 The **Certificate authorities → Key custody** console turns those first two routes
 into a three-step ELI5 journey: choose a provider and algorithm, review proof that

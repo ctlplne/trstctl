@@ -5,7 +5,23 @@ package api
 import (
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestManagedKeyResponsesDoNotClaimLegacyCloudDeletionIsComplete(t *testing.T) {
+	legacy := store.ManagedKey{Provider: "aws-kms", KeyID: "opaque-kms-key", State: "zeroized"}
+	if got := toManagedKeyRecordResponse(legacy).State; got != "deletion_pending" {
+		t.Fatalf("legacy cloud inventory state = %q, want deletion_pending", got)
+	}
+	if got := toManagedKeyResponse(ManagedKey{KeyID: legacy.KeyID, State: legacy.State}, legacy.Provider).State; got != "deletion_pending" {
+		t.Fatalf("legacy cloud mutation response state = %q, want deletion_pending", got)
+	}
+	local := store.ManagedKey{Provider: "pkcs11", KeyID: "device-key", State: "zeroized"}
+	if got := toManagedKeyRecordResponse(local).State; got != "zeroized" {
+		t.Fatalf("confirmed device destruction state = %q, want zeroized", got)
+	}
+}
 
 func TestManagedKeyInventoryCursorBindsProviderAndKey(t *testing.T) {
 	encoded := managedKeyCursor("aws-kms", "key-1")

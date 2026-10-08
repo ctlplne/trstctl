@@ -453,7 +453,7 @@ describe("CA hierarchy and custody surface", () => {
     });
     apiMock.rotateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "active", public_der: "ROTATEDDER" });
     apiMock.revokeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "revoked", public_der: "ROTATEDDER" });
-    apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" });
+    apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "deletion_pending" });
     apiMock.issueExternalCA.mockResolvedValue({
       certificate_pem: "-----BEGIN CERTIFICATE-----\nISSUED\n-----END CERTIFICATE-----",
       issuer: "digicert-prod",
@@ -1038,7 +1038,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("kms/root-1")).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Verify provider key" }));
+    await user.click(screen.getByRole("button", { name: "Verify key" }));
     await waitFor(() => expect(apiMock.verifyManagedKeyCustody).toHaveBeenCalledWith("kms/root-1", undefined));
     expect(await screen.findByText(/Verified then/)).toBeInTheDocument();
 
@@ -1050,9 +1050,10 @@ describe("CA hierarchy and custody surface", () => {
     await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("revoked")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Zeroize key kms/root-1" }));
+    await user.click(screen.getByRole("button", { name: "Request deletion kms/root-1" }));
     await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
-    expect(await screen.findByText("zeroized")).toBeInTheDocument();
+    expect((await screen.findAllByText("Deletion pending")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Provider may retain this key/)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
   });
@@ -1079,7 +1080,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("kms/lost").length).toBeGreaterThan(1);
     expect(screen.getAllByText(/Could not verify/).length).toBeGreaterThan(0);
     expect(screen.getByText("Lifecycle state")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Verify provider key" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Verify key" })).toBeEnabled();
   });
 
   it("refreshes the selected managed-key detail when a queued proof fails", async () => {
@@ -1125,16 +1126,16 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
     await user.click(await screen.findByRole("button", { name: "Continue to generation" }));
     await user.click(screen.getByRole("button", { name: "Generate managed key" }));
-    await user.click(await screen.findByRole("button", { name: "Verify provider key" }));
-    expect(await screen.findByText("Accepted; checking the provider automatically.")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Verify key" }));
+    expect(await screen.findByText("Accepted. Checking provider.")).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
     const detail = screen.getByRole("heading", { name: /^Managed key$/ }).closest<HTMLElement>("section");
     expect(within(detail!).getByText("Checking provider")).toBeInTheDocument();
     expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
     await waitFor(() => expect(apiMock.getManagedKeyOperation).toHaveBeenCalledWith(id));
-    const operationPanel = screen.getByText("Accepted; checking the provider automatically.").closest<HTMLElement>('[role="status"]');
+    const operationPanel = screen.getByText("Accepted. Checking provider.").closest<HTMLElement>('[role="status"]');
     await user.click(within(operationPanel!).getByRole("button", { name: "Refresh status" }));
-    expect(await screen.findByText(/Provider failed. Review audit/)).toBeInTheDocument();
+    expect(await screen.findByText(/Provider failed. Check audit/)).toBeInTheDocument();
     expect(within(detail!).getByText(/Could not verify/)).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
   });
@@ -1160,10 +1161,10 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(screen.getByRole("button", { name: "Generate managed key" }));
     await user.click(await screen.findByRole("button", { name: "Rotate key kms/root-1" }));
 
-    expect(await screen.findByText("Managed key approval needed")).toBeInTheDocument();
+    expect(await screen.findByText("Approval needed")).toBeInTheDocument();
     expect(screen.getByText(requestId)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open approval requests" })).toHaveAttribute("href", "/approvals");
-    expect(screen.getByText("The key has not changed.", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Key unchanged.", { exact: false })).toBeInTheDocument();
     expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
     const firstRequestKey = apiMock.rotateManagedKey.mock.calls[0]?.[1];
@@ -1187,7 +1188,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(await screen.findByRole("button", { name: "Rotate key kms/root-1" }));
 
     expect(await screen.findByText("Managed key action failed")).toBeInTheDocument();
-    expect(screen.queryByText("Managed key approval needed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Approval needed")).not.toBeInTheDocument();
   });
 
   it("keeps generation locked when the server preview names a deployment blocker", async () => {

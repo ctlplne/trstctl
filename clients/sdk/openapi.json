@@ -19817,6 +19817,7 @@
             "type": "string"
           },
           "state": {
+            "description": "States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed.",
             "type": "string"
           },
           "version": {
@@ -20321,6 +20322,7 @@
             "type": "string"
           },
           "state": {
+            "description": "States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed.",
             "type": "string"
           },
           "updated_at": {

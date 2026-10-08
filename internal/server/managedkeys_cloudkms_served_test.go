@@ -118,8 +118,8 @@ func TestServedCloudKMSManagedKeyLifecycleCAPKEY02(t *testing.T) {
 				t.Fatalf("%s managed-key zeroize = %d, want 200; body=%s", tc.name, code, body)
 			}
 			zeroized := decodeManagedKey(t, body)
-			if zeroized.State != "zeroized" {
-				t.Fatalf("%s zeroized state = %q, want zeroized", tc.name, zeroized.State)
+			if zeroized.State != "deletion_pending" {
+				t.Fatalf("%s deletion state = %q, want deletion_pending", tc.name, zeroized.State)
 			}
 		})
 	}

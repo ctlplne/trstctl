@@ -383,7 +383,7 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 				}
 			case "managed_key":
 				managedAction := strings.TrimPrefix(request.Action, "managedkey:")
-				managedToState, actionOK := projections.ManagedKeyCommandTargetState(managedAction)
+				managedToState, actionOK := projections.ManagedKeyCommandTargetState(managedAction, managedKey.Provider)
 				targetDrifted = !managedShapeValid || !managedKeyExists || !actionOK || managedKey.Version < 0 ||
 					managedKey.State != request.FromState || managedKey.Algorithm != managedAlgorithm ||
 					uint64(managedKey.Version) != request.TargetVersion || request.ToState != managedToState // #nosec G115 -- a negative stored version is classified as drift before conversion (CWE-190).

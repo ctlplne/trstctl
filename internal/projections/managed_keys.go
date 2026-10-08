@@ -12,6 +12,7 @@ import (
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/managedkeystate"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -20,11 +21,10 @@ const (
 	EventManagedKeyCommandCompleted = "managed_key.command.completed"
 	EventManagedKeyCommandFailed    = "managed_key.command.failed"
 
-	// ManagedKeyApprovalEventSchemaVersion is the first managed-key command
-	// payload that carries an exact, one-shot operation approval. Version-one
-	// generate history remains replayable, but a destructive command without the
-	// v2 authority fields always fails closed.
-	ManagedKeyApprovalEventSchemaVersion = 2
+	// V3 names a cloud deletion that was accepted but not physically completed.
+	// V2 approvals remain replayable with their historical zeroized target.
+	ManagedKeyApprovalEventSchemaVersion  = 3
+	ManagedKeyApprovalLegacySchemaVersion = 2
 	// Failure v2 names the exact key and action, so an operator can find the
 	// immutable failure audit event from that key's inventory record. Replay of
 	// historical v1 failures remains supported.
@@ -70,8 +70,8 @@ type managedKeyCommandFailedV1 struct {
 }
 
 func init() {
-	knownSchemaVersions[EventManagedKeyCommandRequested] = map[int]bool{1: true, ManagedKeyApprovalEventSchemaVersion: true}
-	knownSchemaVersions[EventManagedKeyCommandCompleted] = map[int]bool{1: true, ManagedKeyApprovalEventSchemaVersion: true}
+	knownSchemaVersions[EventManagedKeyCommandRequested] = map[int]bool{1: true, ManagedKeyApprovalLegacySchemaVersion: true, ManagedKeyApprovalEventSchemaVersion: true}
+	knownSchemaVersions[EventManagedKeyCommandCompleted] = map[int]bool{1: true, ManagedKeyApprovalLegacySchemaVersion: true, ManagedKeyApprovalEventSchemaVersion: true}
 	knownSchemaVersions[EventManagedKeyCommandFailed] = map[int]bool{1: true, ManagedKeyFailureEventSchemaVersion: true}
 }
 
@@ -125,14 +125,14 @@ func ManagedKeyIdempotencyKeyDigest(idempotencyKey string) string {
 // ManagedKeyCommandTargetState maps a destructive command to the state of the
 // approved target after execution. Rotate supersedes the reviewed generation;
 // its successor is a different managed-key row in active state.
-func ManagedKeyCommandTargetState(action string) (string, bool) {
+func ManagedKeyCommandTargetState(action, provider string) (string, bool) {
 	switch action {
 	case "rotate":
 		return "superseded", true
 	case "revoke":
 		return "revoked", true
 	case "zeroize":
-		return "zeroized", true
+		return managedkeystate.ZeroizeOutcome(provider), true
 	default:
 		return "", false
 	}
@@ -169,14 +169,17 @@ func (p *Projector) applyManagedKeyTx(ctx context.Context, tx pgx.Tx, event even
 				return true, fmt.Errorf("projections: custody verification requires a key id")
 			}
 		case "rotate", "revoke", "zeroize":
-			if schemaVersionOf(event) != ManagedKeyApprovalEventSchemaVersion {
+			if schemaVersionOf(event) != ManagedKeyApprovalEventSchemaVersion && schemaVersionOf(event) != ManagedKeyApprovalLegacySchemaVersion {
 				return true, fmt.Errorf("%w: destructive managed-key command has no approval schema", store.ErrApprovalNotReady)
 			}
 			if payload.KeyID == "" || payload.Requester == "" || payload.FromState == "" ||
 				payload.ToState == "" || payload.TargetVersion == 0 || payload.Approval == nil {
 				return true, fmt.Errorf("%w: destructive managed-key command has no exact authority", store.ErrApprovalNotReady)
 			}
-			toState, _ := ManagedKeyCommandTargetState(payload.Action)
+			toState, _ := ManagedKeyCommandTargetState(payload.Action, payload.Provider)
+			if schemaVersionOf(event) == ManagedKeyApprovalLegacySchemaVersion && payload.Action == "zeroize" {
+				toState = "zeroized"
+			}
 			if payload.ToState != toState || payload.Approval.ResourceKind != "managed_key" ||
 				payload.Approval.ResourceID != payload.KeyID ||
 				payload.Approval.Action != "managedkey:"+payload.Action ||
@@ -242,8 +245,12 @@ func (p *Projector) applyManagedKeyTx(ctx context.Context, tx pgx.Tx, event even
 		if payload.OperationID == "" || payload.ResultKeyID == "" || payload.Provider == "" || payload.Action == "" || payload.Algorithm == "" || payload.RequestBinding == "" || payload.State == "" || len(payload.PublicDER) == 0 {
 			return true, fmt.Errorf("projections: %s payload is incomplete", event.Type)
 		}
-		if hasApproval := payload.Approval != nil; hasApproval != (schemaVersionOf(event) == ManagedKeyApprovalEventSchemaVersion) {
+		if hasApproval := payload.Approval != nil; hasApproval != (schemaVersionOf(event) == ManagedKeyApprovalLegacySchemaVersion || schemaVersionOf(event) == ManagedKeyApprovalEventSchemaVersion) {
 			return true, fmt.Errorf("projections: %s approval payload/schema mismatch", event.Type)
+		}
+		if schemaVersionOf(event) == ManagedKeyApprovalEventSchemaVersion && payload.Action == "zeroize" &&
+			(payload.ToState != managedkeystate.ZeroizeOutcome(payload.Provider) || payload.State != payload.ToState) {
+			return true, fmt.Errorf("projections: %s cloud deletion outcome does not match approved target", event.Type)
 		}
 		return true, p.store.ApplyManagedKeyCompletedTx(ctx, tx, store.ManagedKeyOperation{
 			TenantID: event.TenantID, OperationID: payload.OperationID, Provider: payload.Provider,

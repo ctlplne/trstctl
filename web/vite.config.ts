@@ -36,7 +36,7 @@ export default defineConfig({
     // Repeated safe compression passes remove route scaffolding while
     // preserving the existing shipped-byte budgets.
     minify: "terser",
-    terserOptions: { module: true, toplevel: true, compress: { passes: 4 } },
+    terserOptions: { module: true, toplevel: true, compress: { passes: 6 } },
     rollupOptions: {
       output: {
         // Route splitting otherwise emits one sub-kilobyte file per shared

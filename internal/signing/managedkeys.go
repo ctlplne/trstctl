@@ -25,6 +25,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/managedkeystate"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
@@ -490,7 +491,7 @@ func (r *managedKeyRuntime) apply(ctx context.Context, provider crypto.RemoteKey
 			return managedKeyJournalResult{}, err
 		}
 		owner := r.owners[managedKeyOwnerKey(req.Provider, req.KeyID)]
-		return managedKeyJournalResult{Provider: req.Provider, KeyID: req.KeyID, Algorithm: req.Algorithm, PublicDER: bytes.Clone(owner.PublicDER), State: "zeroized"}, nil
+		return managedKeyJournalResult{Provider: req.Provider, KeyID: req.KeyID, Algorithm: req.Algorithm, PublicDER: bytes.Clone(owner.PublicDER), State: managedkeystate.ZeroizeOutcome(req.Provider)}, nil
 	default:
 		return managedKeyJournalResult{}, fmt.Errorf("unsupported action")
 	}

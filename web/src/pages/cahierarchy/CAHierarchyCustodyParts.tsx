@@ -330,7 +330,8 @@ export function ManagedKeyCustodyWorkspace() {
                       >
                         <span className="text-sm">
                           <CredentialChip value={key.key_id} label={t("caHierarchy.custody.keyID")} /> · {key.provider} · {t("caHierarchy.custody.state")}:{" "}
-                          {key.state} · {t("caHierarchy.custody.custodyStatus")}: {t(`caHierarchy.custody.status.${key.custody_status ?? "not_checked"}`)}
+                          {key.state === "deletion_pending" ? t("caHierarchy.custody.deletionPending") : key.state} · {t("caHierarchy.custody.custodyStatus")}:{" "}
+                          {t(`caHierarchy.custody.status.${key.custody_status ?? "not_checked"}`)}
                         </span>
                         <Button type="button" size="sm" variant="outline" disabled={keyBusy} onClick={() => void selectManagedKey(key)}>
                           {t("caHierarchy.custody.inspectKey")}
@@ -665,6 +666,7 @@ function ManagedKeyPanel({
   actionsDisabled: boolean;
 }) {
   const { t } = useTranslation();
+  const deletionPending = managedKey.state === "deletion_pending";
   return (
     <section aria-labelledby="managed-key-heading" className="ui-panel p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -691,7 +693,11 @@ function ManagedKeyPanel({
               type="button"
               size="sm"
               variant="outline"
-              disabled={busy || actionsDisabled}
+              disabled={
+                busy ||
+                actionsDisabled ||
+                (action === "zeroize" ? managedKey.state !== "active" && managedKey.state !== "revoked" : managedKey.state !== "active")
+              }
               onClick={() => onAction(action, managedKey.key_id)}
               aria-label={t(`caHierarchy.custody.actions.${action}.label`, { keyId: managedKey.key_id })}
             >
@@ -704,13 +710,14 @@ function ManagedKeyPanel({
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Fact label={t("caHierarchy.custody.algorithm")} value={managedKey.algorithm} />
         <Fact label={t("caHierarchy.custody.version")} value={t("caHierarchy.custody.versionValue", { version: managedKey.version })} />
-        <Fact label={t("caHierarchy.custody.state")} value={managedKey.state} />
+        <Fact label={t("caHierarchy.custody.state")} value={deletionPending ? t("caHierarchy.custody.deletionPending") : managedKey.state} />
         <Fact
           label={t("caHierarchy.custody.custodyStatus")}
           value={`${t(`caHierarchy.custody.status.${managedKey.custody_status ?? "not_checked"}`)}${managedKey.custody_status !== "pending" && managedKey.custody_checked_at ? ` · ${new Date(managedKey.custody_checked_at).toLocaleString()}` : ""}`}
         />
         <Fact label={t("caHierarchy.custody.extractable")} value={managedKey.extractable ? t("platform.idempotency.yes") : t("platform.idempotency.no")} />
       </dl>
+      {deletionPending ? <p className="mt-3 text-sm text-status-warning">{t("caHierarchy.custody.deletionPendingDetail")}</p> : null}
     </section>
   );
 }

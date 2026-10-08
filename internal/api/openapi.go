@@ -6128,8 +6128,9 @@ func componentSchemas() map[string]*Schema {
 		"resource": str(), "action": {Type: "string", Enum: managedKeyCanonicalApprovalActions},
 		"approver": str(), "approvals": {Type: "integer"},
 	}, "resource", "action", "approver", "approvals")
+	managedKeyState := &Schema{Type: "string", Description: "States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed."}
 	managedKey := object(map[string]*Schema{
-		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": str(),
+		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": managedKeyState,
 		"public_der":         {Type: "string", Format: "byte"},
 		"extractable":        {Type: "boolean"},
 		"custody_status":     {Type: "string", Enum: []string{"not_checked", "pending", "verified", "unavailable"}},
@@ -6137,7 +6138,7 @@ func componentSchemas() map[string]*Schema {
 	}, "key_id", "algorithm", "version", "state")
 	managedKeyRecord := object(map[string]*Schema{
 		"provider": str(), "key_id": str(), "algorithm": str(), "version": {Type: "integer"},
-		"state": str(), "public_der": {Type: "string", Format: "byte"},
+		"state": managedKeyState, "public_der": {Type: "string", Format: "byte"},
 		"extractable": {Type: "boolean"}, "created_at": timestamp(), "updated_at": timestamp(),
 		"custody_status":     {Type: "string", Enum: []string{"not_checked", "pending", "verified", "unavailable"}},
 		"custody_checked_at": timestamp(),

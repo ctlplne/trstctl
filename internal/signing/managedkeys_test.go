@@ -727,7 +727,7 @@ func TestManagedKeyExecutingJournalReconcilesCommittedProviderEffectAfterSignerR
 		t.Fatalf("lost zeroize response status=%v, want retryable Unavailable", status.Code(err))
 	}
 	zeroized, err := newServer().ManageKey(context.Background(), zeroize)
-	if err != nil || !zeroized.GetReplayed() || zeroized.GetState() != "zeroized" || provider.delegate.zeroize != 1 {
+	if err != nil || !zeroized.GetReplayed() || zeroized.GetState() != "deletion_pending" || provider.delegate.zeroize != 1 {
 		t.Fatalf("reconciled zeroize=%+v err=%v provider effects=%d", zeroized, err, provider.delegate.zeroize)
 	}
 }

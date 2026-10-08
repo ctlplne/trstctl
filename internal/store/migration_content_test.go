@@ -68,6 +68,45 @@ func testMigration0250ManagedKeyCustodyStartsUnproven(t *testing.T) {
 		})
 }
 
+// The new state must fit the projection constraint without rewriting historical
+// event-derived rows. In particular, an old cloud zeroized claim is corrected at
+// the API boundary, not by mutating the read model during migration.
+func testMigration0251ManagedKeyDeletionPendingPreservesHistory(t *testing.T) {
+	const stable = `SELECT tenant_id::text, provider, key_id, algorithm, version,
+		state, encode(public_der, 'hex'), created_at::text, updated_at::text
+		FROM managed_keys ORDER BY tenant_id, provider, key_id`
+	runPopulatedDefaultMigrationHarness(t, 251, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx,
+					`INSERT INTO tenants (tenant_id, name) VALUES ($1, $2)
+					 ON CONFLICT (tenant_id) DO NOTHING`, tenantID, fmt.Sprintf("pre-0251-tenant-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO managed_keys
+					(tenant_id, provider, key_id, algorithm, version, state, public_der, created_at, updated_at)
+					VALUES ($1, 'aws-kms', $2, 'ECDSA-P256', 1, 'zeroized', $3, now(), now())`,
+					tenantID, fmt.Sprintf("pre-0251-key-%d", index), []byte("historical-public")); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var legacy int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM managed_keys
+				WHERE key_id LIKE 'pre-0251-key-%' AND state = 'zeroized'`).Scan(&legacy); err != nil {
+				t.Fatal(err)
+			}
+			if legacy != want {
+				t.Fatalf("historical zeroized rows = %d, want %d", legacy, want)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE managed_keys SET state = 'deletion_pending'
+				WHERE tenant_id = $1 AND key_id = 'pre-0251-key-0'`, tenantA); err != nil {
+				t.Fatalf("new deletion_pending projection state rejected: %v", err)
+			}
+		})
+}
+
 // Migration 0247 must not guess an external ACME authority for old leaves.
 // The separate cursor starts at zero even when the ordinary projection is
 // already ahead, so retained issuance events can repair provenance on upgrade.
@@ -1585,6 +1624,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0250_managed_key_custody_starts_unproven", testMigration0250ManagedKeyCustodyStartsUnproven)
+	t.Run("0251_managed_key_deletion_pending_preserves_history", testMigration0251ManagedKeyDeletionPendingPreservesHistory)
 	t.Run("0175_agent_revocation_cache_posture", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 175)

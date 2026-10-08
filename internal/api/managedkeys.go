@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/managedkeystate"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -412,12 +413,12 @@ type managedKeyResponse struct {
 	CustodyCheckedAt *time.Time `json:"custody_checked_at,omitempty"`
 }
 
-func toManagedKeyResponse(r ManagedKey) managedKeyResponse {
+func toManagedKeyResponse(r ManagedKey, provider string) managedKeyResponse {
 	return managedKeyResponse{
 		KeyID:         r.KeyID,
 		Algorithm:     string(r.Algorithm),
 		Version:       r.Version,
-		State:         string(r.State),
+		State:         managedkeystate.PublicState(provider, r.State),
 		PublicDER:     r.PublicDER,
 		Extractable:   r.Extractable,
 		CustodyStatus: r.CustodyStatus, CustodyCheckedAt: r.CustodyCheckedAt,
@@ -448,7 +449,7 @@ type managedKeyRecordListResponse struct {
 func toManagedKeyRecordResponse(key store.ManagedKey) managedKeyRecordResponse {
 	return managedKeyRecordResponse{
 		Provider: key.Provider, KeyID: key.KeyID, Algorithm: key.Algorithm,
-		Version: key.Version, State: key.State, PublicDER: key.PublicDER,
+		Version: key.Version, State: managedkeystate.PublicState(key.Provider, key.State), PublicDER: key.PublicDER,
 		Extractable: false, CreatedAt: key.CreatedAt, UpdatedAt: key.UpdatedAt,
 		CustodyStatus: key.CustodyStatus, CustodyCheckedAt: key.CustodyCheckedAt,
 	}
@@ -669,7 +670,7 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, mapManagedKeyError(err)
 		}
-		return http.StatusCreated, toManagedKeyResponse(res), nil
+		return http.StatusCreated, toManagedKeyResponse(res, a.managedKeyCustody.Provider), nil
 	})
 }
 
@@ -847,7 +848,7 @@ func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempoten
 			}
 			return 0, nil, mapManagedKeyError(err)
 		}
-		return http.StatusOK, toManagedKeyResponse(res), nil
+		return http.StatusOK, toManagedKeyResponse(res, a.managedKeyCustody.Provider), nil
 	})
 }
 

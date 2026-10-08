@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/managedkeystate"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/server"
@@ -186,7 +187,7 @@ func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester,
 			command.Requester = requester
 			command.FromState = key.State
 			command.TargetVersion = uint64(key.Version)
-			command.ToState, _ = projections.ManagedKeyCommandTargetState(command.Action)
+			command.ToState, _ = projections.ManagedKeyCommandTargetState(command.Action, command.Provider)
 			command.IdempotencyKeyDigest = projections.ManagedKeyIdempotencyKeyDigest(idempotencyKey)
 			evidence, err := projections.ManagedKeyApprovalEvidence(command)
 			if err != nil {
@@ -344,7 +345,7 @@ func (s *durableService) wait(ctx context.Context, tenantID, operationID string)
 			if err != nil {
 				return Result{}, err
 			}
-			return Result{KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: key.State, PublicDER: key.PublicDER,
+			return Result{KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: managedkeystate.PublicState(key.Provider, key.State), PublicDER: key.PublicDER,
 				CustodyStatus: key.CustodyStatus, CustodyCheckedAt: key.CustodyCheckedAt}, nil
 		case "failed":
 			return Result{}, fmt.Errorf("managedkeys: signer operation failed: %s", op.LastError)
@@ -499,6 +500,13 @@ func (h *durableOutboxHandler) DeliverLicensed(ctx context.Context, message orch
 	schemaVersion := events.DefaultSchemaVersion
 	if command.Approval != nil {
 		schemaVersion = projections.ManagedKeyApprovalEventSchemaVersion
+		// A queued v2 cloud command can finish after this upgrade. Its approved
+		// zeroized target is immutable; retain the v2 envelope while reporting
+		// the signer's honest deletion_pending provider result.
+		if command.Action == "zeroize" && command.ToState == "zeroized" &&
+			managedkeystate.ZeroizeOutcome(command.Provider) == managedkeystate.DeletionPending {
+			schemaVersion = projections.ManagedKeyApprovalLegacySchemaVersion
+		}
 	}
 	event, err := h.log.Append(ctx, events.Event{
 		Type: projections.EventManagedKeyCommandCompleted, TenantID: message.TenantID,

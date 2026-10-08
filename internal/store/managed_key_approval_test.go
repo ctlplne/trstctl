@@ -125,6 +125,65 @@ func TestManagedKeyCommandConsumesExactApprovalBesideOperationAndOutbox(t *testi
 	}
 }
 
+func TestManagedKeyCloudDeletionReplaysLegacyAndCurrentApprovalEvents(t *testing.T) {
+	for _, tc := range []struct {
+		name, toState, resultState string
+		schemaVersion              int
+	}{
+		{"legacy-v2", "zeroized", "zeroized", projections.ManagedKeyApprovalLegacySchemaVersion},
+		{"legacy-v2-queued-at-upgrade", "zeroized", "deletion_pending", projections.ManagedKeyApprovalLegacySchemaVersion},
+		{"current-v3", "deletion_pending", "deletion_pending", projections.ManagedKeyApprovalEventSchemaVersion},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newOperationApprovalStore(t)
+			seedManagedKeyApprovalTarget(t, s)
+			ctx := context.Background()
+			command := managedKeyApprovalCommand(t, "managedkey:zeroize-"+tc.name, "sha256:zeroize-"+tc.name)
+			command.Action = "zeroize"
+			command.ToState = tc.toState
+			var err error
+			command.ApprovalEvidenceRefs, err = projections.ManagedKeyApprovalEvidence(command)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := approvedManagedKeyRequest(t, s, command,
+				"77000000-0000-4000-8000-000000000090", "sha256:managed-key-zeroize-"+tc.name)
+			use := operationApprovalUse(request)
+			command.Approval = &use
+			requested, err := json.Marshal(command)
+			if err != nil {
+				t.Fatal(err)
+			}
+			projector := projections.New(s)
+			requestEvent := events.Event{ID: "77000000-0000-4000-8000-000000000192",
+				Type: projections.EventManagedKeyCommandRequested, TenantID: tenantA,
+				Time: operationApprovalBaseTime.Add(20 * time.Minute), SchemaVersion: tc.schemaVersion, Data: requested}
+			if err := projector.Apply(ctx, requestEvent); err != nil {
+				t.Fatalf("project %s request: %v", tc.name, err)
+			}
+			completed, err := json.Marshal(projections.ManagedKeyCommandCompleted{
+				ManagedKeyCommand: command, ResultKeyID: command.KeyID,
+				PublicDER: []byte("public-key"), State: tc.resultState,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			completeEvent := events.Event{ID: "77000000-0000-4000-8000-000000000193",
+				Type: projections.EventManagedKeyCommandCompleted, TenantID: tenantA,
+				Time: operationApprovalBaseTime.Add(21 * time.Minute), SchemaVersion: tc.schemaVersion, Data: completed}
+			for replay := 0; replay < 2; replay++ {
+				if err := projector.Apply(ctx, completeEvent); err != nil {
+					t.Fatalf("project %s completion replay %d: %v", tc.name, replay, err)
+				}
+			}
+			key, err := s.GetManagedKey(ctx, tenantA, command.Provider, command.KeyID)
+			if err != nil || key.State != tc.resultState {
+				t.Fatalf("%s projected state = %q, err=%v, want %q", tc.name, key.State, err, tc.resultState)
+			}
+		})
+	}
+}
+
 func TestManagedKeyApprovalConsumptionRollsBackWhenOutboxIntentConflicts(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	seedManagedKeyApprovalTarget(t, s)

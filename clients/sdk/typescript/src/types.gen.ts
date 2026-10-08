@@ -12130,6 +12130,7 @@ export interface components {
             key_id: string;
             /** Format: byte */
             public_der?: string;
+            /** @description States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed. */
             state: string;
             version: number;
         };
@@ -12253,6 +12254,7 @@ export interface components {
             provider: string;
             /** Format: byte */
             public_der?: string;
+            /** @description States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed. */
             state: string;
             /** Format: date-time */
             updated_at: string;

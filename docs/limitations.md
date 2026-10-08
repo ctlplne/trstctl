@@ -4298,7 +4298,13 @@ deterministic provider resource names; PKCS#11 and YubiHSM use deterministic `CK
 TPM enumerates persistent objects and accepts only a full SHA-256 operation tag from
 immutable `TPM Public.AuthPolicy`, probing past foreign handles without adopting or
 overwriting them. Revoke and zeroize read provider/device state before and after the
-terminal transition, so a lost response does not repeat the effect. The swtpm gate also
+accepted transition, so a lost response does not repeat the effect. For cloud KMS,
+the product reports `deletion_pending` while the provider may retain material;
+the local emulator and current QA window cannot prove the later provider retention
+deadline or physical erasure. A stock provider client must check that deadline,
+and a later provider readback is needed to close the destruction claim. Historical
+cloud `zeroized` events remain immutable and appear as `deletion_pending` in the
+API and console. The swtpm gate also
 pre-occupies the first deterministic handle with a same-algorithm foreign object and
 proves that object remains untouched.
 

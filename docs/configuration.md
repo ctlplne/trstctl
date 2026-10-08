@@ -1698,8 +1698,13 @@ Every shipped provider also carries that identity into provider state: an atomic
 deterministic Azure/GCP resource identity, deterministic PKCS#11 `CKA_ID` (including
 YubiHSM), or a full-width TPM public tag plus deterministic handle probing. If a provider
 commits and the signer dies before journaling the response, restart finds the same effect;
-revoke/zeroize likewise confirm terminal provider state rather than blindly repeating a
-mutation. Managed-key outbox circuits are partitioned by provider and current key (or
+revoke/zeroize likewise confirm the provider accepted the effect rather than blindly
+repeating a mutation. For cloud KMS, zeroize returns `deletion_pending`: signing is
+blocked, while provider-held material may remain until its retention period ends.
+Check the provider's deletion deadline with its stock client. `zeroized` is reserved
+for confirmed local device destruction; older cloud events remain immutable and are
+presented conservatively as `deletion_pending` by the API and console. Managed-key
+outbox circuits are partitioned by provider and current key (or
 operation ID before a key exists), so one unavailable key does not stall every managed-key
 command. All six exact backend census rows are `SERVED + REQUIRED`.
 For an externally deployed signer, mount the same file-backed provider descriptor

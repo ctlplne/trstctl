@@ -854,7 +854,11 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	runtime.approveManagedKeyAction(rotated.KeyID, "zeroize")
 	zeroized := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/zeroize", "zeroize", map[string]string{"key_id": rotated.KeyID})))
 	runtime.requireHardwareKeyID(zeroized.KeyID)
-	if zeroized.KeyID != rotated.KeyID || zeroized.State != "zeroized" {
+	wantZeroizeState := "zeroized"
+	if provider == config.ManagedKeyProviderAWS || provider == config.ManagedKeyProviderAzureKeyVault || provider == config.ManagedKeyProviderGCPKMS {
+		wantZeroizeState = "deletion_pending"
+	}
+	if zeroized.KeyID != rotated.KeyID || zeroized.State != wantZeroizeState {
 		t.Fatalf("zeroize state = %q", zeroized.State)
 	}
 	if provider == config.ManagedKeyProviderAWS || provider == config.ManagedKeyProviderAzureKeyVault || provider == config.ManagedKeyProviderGCPKMS {

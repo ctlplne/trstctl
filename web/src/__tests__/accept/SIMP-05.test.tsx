@@ -136,7 +136,7 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
     });
     apiMock.rotateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "active", public_der: "ROTATEDDER" });
     apiMock.revokeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "revoked", public_der: "ROTATEDDER" });
-    apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" });
+    apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "deletion_pending" });
   });
 
   it("starts and approves a real CA key ceremony from served responses", async () => {
@@ -192,9 +192,9 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
     await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("revoked")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Zeroize key kms/root-1" }));
+    await user.click(screen.getByRole("button", { name: "Request deletion kms/root-1" }));
     await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
-    expect(await screen.findByText("zeroized")).toBeInTheDocument();
+    expect((await screen.findAllByText("Deletion pending")).length).toBeGreaterThan(0);
   });
 
   it("removes CA ceremony and custody fixtures from the module", () => {

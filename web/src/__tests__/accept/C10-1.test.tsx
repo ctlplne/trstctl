@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
+import { AppQueryProvider } from "@/lib/query";
 import { ApiError, type Issuer } from "@/lib/api";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 
@@ -19,11 +20,14 @@ const { apiMock } = vi.hoisted(() => ({
     rotateManagedKey: vi.fn(),
     revokeManagedKey: vi.fn(),
     zeroizeManagedKey: vi.fn(),
+    managedKeyCustody: vi.fn(),
     caAuthorities: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
   },
 }));
+
+vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { tenant_id: "tenant-a", subject: "eval-admin" } }) }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
@@ -46,9 +50,11 @@ function issuer(partial: Partial<Issuer>): Issuer {
 function renderCAHierarchy() {
   return render(
     <MemoryRouter>
-      <ToastProvider>
-        <CAHierarchy />
-      </ToastProvider>
+      <AppQueryProvider>
+        <ToastProvider>
+          <CAHierarchy />
+        </ToastProvider>
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -99,7 +105,8 @@ describe("C10-1 issuer catalog and connection tests", () => {
     apiMock.generateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active", public_der: "BASE64PUBLICDER" });
     apiMock.rotateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "active", public_der: "ROTATEDDER" });
     apiMock.revokeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "revoked", public_der: "ROTATEDDER" });
-    apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" });
+    apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "deletion_pending" });
+    apiMock.managedKeyCustody.mockResolvedValue({ enabled: false, lifecycle_attached: false, configured_provider: "", providers: [], blockers: [] });
   });
 
   it("keeps Vault integration setup operator-owned instead of collecting discarded credentials", async () => {
