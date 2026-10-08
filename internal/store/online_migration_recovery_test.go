@@ -169,7 +169,9 @@ func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
 				case 219:
 					remove = "-ARRAY['routing_source','routing_policy_id','routing_policy_scope','routing_policy_digest']"
 				case 253:
-					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at']"
+					// Migrate applies the whole remaining sequence. Remove the
+					// additive 0253 and 0254 fields before comparing N-1 content.
+					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at','revocation_idempotency_key','revocation_failure','revocation_failed_at']"
 				}
 				afterSQL := strings.Replace(beforeSQL, "to_jsonb(o)::text", "(to_jsonb(o)"+remove+")::text", 1)
 				afterCount, afterChecksum := checksumQuery(t, ctx, pool, afterSQL)
