@@ -175,7 +175,6 @@ export function ManagedKeyCustodyWorkspace() {
       const current = await api.getManagedKey(selected.provider, selected.keyId);
       setManagedKey((previous) => (previous?.key_id === selected.keyId ? current : previous));
     } catch (error) {
-      setManagedKey((previous) => (previous?.key_id === selected?.keyId ? null : previous));
       setKeyError(apiProblemMessage(error, t("caHierarchy.custody.inventoryLoadFailed")));
     } finally {
       setKeyBusy(false);
@@ -248,6 +247,7 @@ export function ManagedKeyCustodyWorkspace() {
   }
 
   async function runManagedKeyAction(action: "rotate" | "revoke" | "zeroize" | "verify_custody", keyId: string) {
+    let accepted = false;
     setKeyBusy(true);
     setKeyError(null);
     setPendingApproval(null);
@@ -262,6 +262,7 @@ export function ManagedKeyCustodyWorkspace() {
       const next = await actionMethods[action](keyId);
       if (isManagedKeyOperation(next)) {
         setOperation(next);
+        accepted = true;
         return;
       }
       setManagedKey(next);
@@ -270,7 +271,8 @@ export function ManagedKeyCustodyWorkspace() {
       if (pending) setPendingApproval(pending);
       else setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action: action === "verify_custody" ? "verify" : action })));
     } finally {
-      await loadInventory();
+      if (accepted) await refreshInventory();
+      else await loadInventory();
       setKeyBusy(false);
     }
   }

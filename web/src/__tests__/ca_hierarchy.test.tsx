@@ -1113,7 +1113,8 @@ describe("CA hierarchy and custody surface", () => {
     const id = "managedkey:" + "a".repeat(64);
     const receipt = { operation_id: id, status: "queued", status_url: `/api/v1/managed-keys/operations/${id}` };
     apiMock.verifyManagedKeyCustody.mockResolvedValueOnce(receipt);
-    apiMock.getManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active", custody_status: "unavailable" });
+    const key = { key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active" };
+    apiMock.getManagedKey.mockResolvedValueOnce({ ...key, custody_status: "pending" }).mockResolvedValue({ ...key, custody_status: "unavailable" });
     apiMock.getManagedKeyOperation
       .mockResolvedValueOnce(receipt)
       .mockResolvedValue({ ...receipt, status: "failed", provider: "gcp-kms", action: "verify_custody", key_id: "kms/root-1" });
@@ -1124,11 +1125,14 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(await screen.findByRole("button", { name: "Verify provider key" }));
     expect(await screen.findByText("Accepted; checking the provider automatically.")).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
+    const detail = screen.getByRole("heading", { name: /^Managed key$/ }).closest<HTMLElement>("section");
+    expect(within(detail!).getByText("Checking provider")).toBeInTheDocument();
     expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
     await waitFor(() => expect(apiMock.getManagedKeyOperation).toHaveBeenCalledWith(id));
     const operationPanel = screen.getByText("Accepted; checking the provider automatically.").closest<HTMLElement>('[role="status"]');
     await user.click(within(operationPanel!).getByRole("button", { name: "Refresh status" }));
     expect(await screen.findByText(/Provider failed. Check audit/)).toBeInTheDocument();
+    expect(within(detail!).getByText(/Could not verify/)).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
   });
 
