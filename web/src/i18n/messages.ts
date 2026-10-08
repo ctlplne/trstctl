@@ -11377,6 +11377,10 @@ export const messages = {
     defaultMessage: "This permits a separate permanent removal. Review dependency and recovery evidence first.",
     description: "Delete approval consequence.",
   },
+  "approvals.design.consequence.managedKeyDelete": {
+    defaultMessage: "A later deletion command can stop signing while cloud providers retain the key until their deadline.",
+    description: "Managed-key deletion approval consequence; approval itself does not destroy material.",
+  },
   "nav.item.audit": {
     defaultMessage: "Change history",
     description: "Primary navigation item. Matches the plain-language immutable event history page heading.",

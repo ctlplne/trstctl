@@ -710,7 +710,8 @@ function ReviewFact({ label, value, mono = false, className = "" }: { label: str
 
 function actionSummary(row: ApprovalQueueRow): string {
   const resource = row.resource_name || row.resource_id;
-  return translateNow(actionSummaryKey(row.action), { resource });
+  const key = actionSummaryKey(row.action);
+  return key === "caHierarchy.custody.actions.zeroize.label" ? translateNow(key, { keyId: resource }) : translateNow(key, { resource });
 }
 
 function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
@@ -730,8 +731,9 @@ function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
     case "recover":
       return "approvals.design.action.recover";
     case "delete":
-    case "managedkey:zeroize":
       return "approvals.design.action.delete";
+    case "managedkey:zeroize":
+      return "caHierarchy.custody.actions.zeroize.label";
   }
 }
 
@@ -752,8 +754,9 @@ function consequenceKey(action: ApprovalQueueRow["action"]): MessageKey {
     case "recover":
       return "approvals.design.consequence.recover";
     case "delete":
-    case "managedkey:zeroize":
       return "approvals.design.consequence.delete";
+    case "managedkey:zeroize":
+      return "approvals.design.consequence.managedKeyDelete";
   }
 }
 

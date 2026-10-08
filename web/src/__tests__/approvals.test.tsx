@@ -341,6 +341,26 @@ describe("dedicated approvals inbox", () => {
     expect(apiMock.approveApprovalRequest).not.toHaveBeenCalled();
   });
 
+  it("describes managed-key deletion honestly while a cloud provider retains material", async () => {
+    apiMock.approvalRequests.mockResolvedValue([
+      approvalRequest({
+        resource_id: "6c42aaca-baff-4585-adba-0006f8e29ac2",
+        resource_name: "6c42aaca-baff-4585-adba-0006f8e29ac2",
+        resource_kind: "managed_key",
+        action: "managedkey:zeroize",
+        reason: "authorize one exact managed-key zeroize command",
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    expect(await screen.findByRole("heading", { name: "Request deletion 6c42aaca-baff-4585-adba-0006f8e29ac2" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    expect(within(dialog).getByText(/cloud providers retain the key until their deadline/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/permanently remove|permanent removal/i)).not.toBeInTheDocument();
+  });
+
   it("binds an ephemeral client request id to the genuine queue UUID and digest", async () => {
     apiMock.approvalRequests.mockResolvedValue([
       approvalRequest({
