@@ -803,8 +803,19 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	mustContainAll(t, "release keyless OIDC permission", wf, "id-token")
 	// Reproducible build inputs.
 	mustContainAny(t, "release reproducibility", wf, "SOURCE_DATE_EPOCH", "rewrite-timestamp", "reproducib")
-	// The image size budget is enforced in the pipeline.
-	mustContainAny(t, "release image size gate", wf, "83886080", "MAX_IMAGE")
+	// Both release image gates use the same decimal-byte budget and measure the
+	// exported runtime filesystem, not Docker's layer-accounting image size.
+	mustContainAll(t, "release image size gate", wf,
+		`MAX_IMAGE_BYTES: "180000000"`,
+		`docker create trstctl:sizecheck`,
+		`docker export "$container" | wc -c`,
+	)
+	ci := readArtifact(t, filepath.Join("..", "..", ".github", "workflows", "ci.yml"))
+	mustContainAll(t, "FIPS image size gate", ci,
+		`MAX_FIPS_IMAGE_BYTES: "180000000"`,
+		`docker create trstctl:ci-fips`,
+		`docker export "$container" | wc -c`,
+	)
 }
 
 // TestReleaseWorkflowPublishesSLSAProvenance is the DIST-10 acceptance proof:

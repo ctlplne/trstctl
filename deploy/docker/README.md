@@ -158,9 +158,12 @@ or outbox waves.
 ## The image
 
 - **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no package
-  manager, runs as uid/gid 65532. The image is ~40 MB — two static Go binaries
-  plus the embedded web UI — and stays under an 80 MB budget, enforced in CI.
-- **Contents:** both `trstctl` and `trstctl-signer`. In single-node mode the
+  manager, runs as uid/gid 65532. The standard and FIPS images each have a
+  180,000,000-byte (decimal 180 MB) exported-runtime-filesystem cap. The gates
+  create a container and measure `docker export | wc -c` so retained layers do
+  not inflate the result on a particular Docker builder.
+- **Contents:** `trstctl`, `trstctl-signer`, `trstctl-agent`, and
+  `trstctl-operator`, with the embedded web UI. In single-node mode the
   control plane supervises the signer as a child process (AN-4); shipping both in
   one image keeps that boundary intact.
 - **Reproducible:** built with `CGO_ENABLED=0`, `-trimpath`, `-buildid=`, and
@@ -173,7 +176,7 @@ or outbox waves.
 `.github/workflows/release.yml` runs on a `v*` tag:
 
 1. builds the multi-arch image reproducibly,
-2. enforces the image size budget (80 MB),
+2. enforces the 180 MB exported-runtime-filesystem budget,
 3. pushes to GHCR (primary) and Docker Hub (mirror),
 4. generates a CycloneDX SBOM, and
 5. cosign-signs the image and attests the SBOM (keyless, via OIDC).

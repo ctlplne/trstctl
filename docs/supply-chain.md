@@ -9,7 +9,7 @@ nothing here is aspirational, and every gate below runs in CI.
 A version tag (`vX.Y.Z`) drives `.github/workflows/release.yml`, which:
 
 - builds a reproducible distroless image (`CGO_ENABLED=0`, `-trimpath`, layer
-  timestamps pinned to the commit) under an 80 MB size budget;
+  timestamps pinned to the commit) under a 180,000,000-byte exported-runtime-filesystem cap;
 - pushes it to GHCR (with an optional Docker Hub mirror);
 - generates **BuildKit image provenance** (`provenance: true`) and attaches a
   **CycloneDX SBOM**;

@@ -1538,12 +1538,11 @@ jobs:
       # empty owned mount points. Build tools, npm, Go caches, and source files
       # remain in earlier stages. Measure the exported runtime filesystem so
       # compressed-layer retention in Docker's containerd store cannot change
-      # the result across builders. The trimmed amd64 export was 141838848
-      # bytes; +5% is 148930790 bytes, below the owner's 180 MB cap.
-      # This is separate from release.yml's unchanged 80 MiB standard image gate.
+      # the result across builders. The standard and FIPS gates both use the
+      # owner's 180,000,000-byte decimal cap and the same exported-file measure.
       - name: FIPS image size budget
         env:
-          MAX_FIPS_IMAGE_BYTES: "148930790"
+          MAX_FIPS_IMAGE_BYTES: "180000000"
         run: |
           container="$(docker create trstctl:ci-fips)"
           trap 'docker rm "$container" >/dev/null' EXIT

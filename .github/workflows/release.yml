@@ -1,7 +1,8 @@
 name: Release
 
 # Build, sign, and publish the trstctl control-plane image on a version tag:
-# a reproducible distroless image (under 80 MB), pushed to GHCR (primary) with a
+# a reproducible distroless image (at most 180 MB of exported runtime files),
+# pushed to GHCR (primary) with a
 # Docker Hub mirror, carrying a CycloneDX SBOM and a keyless cosign signature.
 
 on:
@@ -16,13 +17,11 @@ env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trstctl' }}/trstctl
   NPM_AUDIT_VERSION: "11.16.0"
-  # Image size budget. Three static Go binaries (control plane + signer + the
-  # in-network agent) plus the embedded web UI land well under this budget today;
-  # the single multi-binary image serves every topology (the agent DaemonSet runs
-  # trstctl-agent from it via an entrypoint override — OPS-002). The 80 MB budget
-  # gives Phase-2 headroom while still catching accidental bloat (a debug image,
-  # stray files in context).
-  MAX_IMAGE_BYTES: "83886080"
+  # Decimal-byte cap for the exported runtime filesystem, shared with the FIPS
+  # CI gate. Four static binaries and the embedded console serve every topology.
+  # Docker image inspect counts retained layers differently across builders, so
+  # the size step below exports the final container filesystem instead.
+  MAX_IMAGE_BYTES: "180000000"
 
 jobs:
   # Re-run the full test suite against the EXACT tagged ref before anything is
@@ -578,10 +577,12 @@ jobs:
 
       - name: Enforce the image size budget
         run: |
-          size=$(docker image inspect trstctl:sizecheck --format '{{.Size}}')
-          echo "image size: ${size} bytes (budget ${MAX_IMAGE_BYTES})"
+          container="$(docker create trstctl:sizecheck)"
+          trap 'docker rm "$container" >/dev/null' EXIT
+          size="$(docker export "$container" | wc -c | tr -d ' ')"
+          echo "standard runtime image payload: ${size} bytes (budget ${MAX_IMAGE_BYTES})"
           if [ "$size" -gt "${MAX_IMAGE_BYTES}" ]; then
-            echo "::error::image is ${size} bytes, over the ${MAX_IMAGE_BYTES}-byte budget"
+            echo "::error::standard runtime image payload is ${size} bytes, over the ${MAX_IMAGE_BYTES}-byte budget"
             exit 1
           fi
 

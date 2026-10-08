@@ -2,11 +2,9 @@
 
 # trstctl control-plane image.
 #
-# Reproducible and minimal: distroless "static" with separate standard-image
-# and FIPS-image size gates in CI. The standard release budget is 80 MiB;
-# the FIPS image carries the regulated Go module and has its own 180 MB cap.
-# Both run
-# unprivileged. It carries the control plane, the isolated signing service
+# Reproducible and minimal: distroless "static" with standard and FIPS image
+# gates that each cap the exported runtime filesystem at 180,000,000 bytes.
+# Both run unprivileged. It carries the control plane, the isolated signing service
 # (AN-4), the in-network agent, AND the Kubernetes Operator: in single-node mode
 # trstctl supervises trstctl-signer as a child process; the Kubernetes
 # DaemonSet runs trstctl-agent from this same image (overriding the entrypoint);
