@@ -72,22 +72,35 @@ func preservedRestoreDrillAttestationTx(ctx context.Context, tx pgx.Tx, a Attest
 	if !hasSnapshot {
 		return false, nil
 	}
-	var exact bool
+	var sameKind, unbound, exact bool
 	err := tx.QueryRow(ctx,
-		`SELECT kind = $3 AND evidence = $4::jsonb
-		        AND verified_at = $5 AND created_at = $6
-		        AND identity_id IS NOT DISTINCT FROM $7::uuid
+		`SELECT kind = $3, identity_id IS NULL,
+		        evidence = $4::jsonb AND verified_at = $5 AND created_at = $6
 		   FROM pg_temp.trstctl_rebuild_attestations
 		  WHERE tenant_id = $1 AND id = $2`,
-		a.TenantID, a.ID, a.Kind, a.Evidence, a.VerifiedAt.UTC(), a.CreatedAt.UTC(), a.IdentityID).Scan(&exact)
+		a.TenantID, a.ID, a.Kind, a.Evidence, a.VerifiedAt.UTC(), a.CreatedAt.UTC()).Scan(&sameKind, &unbound, &exact)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	if !exact {
+	if !sameKind || !unbound {
 		return false, fmt.Errorf("%w: preserved restore-drill attestation differs from signed event", ErrIdempotencyConflict)
 	}
-	return true, nil
+	if exact {
+		return true, nil
+	}
+	// The caller verified the immutable event signature before reaching this
+	// point. A stored row with altered evidence or timestamps is a corrupt
+	// projection, not a reason to keep serving it after a cold rebuild. Remove
+	// only this event-backed row from the temporary preservation set so replay
+	// restores the signed body and its alert intent. Other independent rows stay.
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM pg_temp.trstctl_rebuild_attestations
+		  WHERE tenant_id = $1 AND id = $2 AND kind = $3 AND identity_id IS NULL`,
+		a.TenantID, a.ID, a.Kind); err != nil {
+		return false, fmt.Errorf("store: discard corrupt restore-drill projection during replay: %w", err)
+	}
+	return false, nil
 }
