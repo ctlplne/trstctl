@@ -514,14 +514,14 @@ not this file.
 | `internal/query/adversarial_test.go:51` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/agentchannel_served_test.go:806` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
-| `internal/server/backup.go:215` | record counts bounded by the event log (CWE-190) |
-| `internal/server/backup.go:383` | record counts bounded by the event log (CWE-190) |
+| `internal/server/backup.go:220` | record counts bounded by the event log (CWE-190) |
+| `internal/server/backup.go:388` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:78` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:912` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:914` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
+| `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:905` | positive int64 is exactly representable as uint64. |
@@ -681,7 +681,7 @@ not this file.
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/backup_test.go:899` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/protect_correct102_guard_test.go:119` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -859,7 +859,7 @@ not this file.
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:267` | fixed binary built by this test; arguments are fixed/test-owned paths and enum values (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:292` | fixed repository binary and test-owned destination (CWE-78) |
-| `internal/server/backup_test.go:858` | fixed repository binary and test-owned destination (CWE-78) |
+| `internal/server/backup_test.go:900` | fixed repository binary and test-owned destination (CWE-78) |
 | `internal/server/bundled_pg_dependency_test.go:19` | fixed local Go tool and package pattern (CWE-78) |
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
 | `internal/server/compose_e2e_tls_test.go:234` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
@@ -1266,18 +1266,18 @@ not this file.
 | `internal/server/agent_roles_served_test.go:483` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:487` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agentchannel.go:125` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
-| `internal/server/backup.go:138` | operator-configured public trust anchor path (CWE-22) |
-| `internal/server/backup.go:202` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:374` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:435` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:527` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:769` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:871` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:875` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:143` | operator-configured public trust anchor path (CWE-22) |
+| `internal/server/backup.go:207` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:379` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:440` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:532` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:775` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:877` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:881` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup_test.go:387` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:435` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:574` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/backup_test.go:899` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/breakglass.go:152` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |

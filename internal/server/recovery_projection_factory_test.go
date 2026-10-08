@@ -71,6 +71,7 @@ func TestRecoveryProjectionFactoryJoinsTheActualRebuild(t *testing.T) {
 		return []projections.Option{projections.WithEventProjection(receipt)}, nil
 	}
 	options, err := recoveryProjectionOptions(ctx, config.Default(), st, log,
+		testAuditSigningKey(t),
 		[]EditionProjectionOptionsFactory{factory})
 	if err != nil {
 		t.Fatalf("recoveryProjectionOptions: %v", err)

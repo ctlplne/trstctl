@@ -24,6 +24,7 @@ import (
 // This is an adversarial source regression, not a claim of a public API exploit.
 func TestOwnershipEvidenceCannotAuthorizeDifferentIdentity(t *testing.T) {
 	cfg := config.Default()
+	auditKey := testAuditSigningKey(t)
 	cadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +88,7 @@ func TestOwnershipEvidenceCannotAuthorizeDifferentIdentity(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if err := rebuildRestoredReadModel(ctx, cfg, target, log, "binding prefix", nil); err != nil {
+				if err := rebuildRestoredReadModel(ctx, cfg, target, log, auditKey, "binding prefix", nil); err != nil {
 					t.Fatal(err)
 				}
 				before := ownershipTargetBindingState(t, target, h.tenant, identityB)
@@ -137,7 +138,7 @@ func TestOwnershipEvidenceCannotAuthorizeDifferentIdentity(t *testing.T) {
 				}
 				switch mode {
 				case "live-projection":
-					opts, err := recoveryProjectionOptions(ctx, cfg, target, log, nil)
+					opts, err := recoveryProjectionOptions(ctx, cfg, target, log, auditKey, nil)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -149,7 +150,7 @@ func TestOwnershipEvidenceCannotAuthorizeDifferentIdentity(t *testing.T) {
 					if _, err := log.Append(ctx, candidate); err != nil {
 						t.Fatal(err)
 					}
-					err = rebuildRestoredReadModel(ctx, cfg, target, log, "binding adversarial replay", nil)
+					err = rebuildRestoredReadModel(ctx, cfg, target, log, auditKey, "binding adversarial replay", nil)
 					if err == nil || !strings.Contains(err.Error(), "ownership-readiness target mismatch") {
 						t.Errorf("retargeted full replay: %v", err)
 					}

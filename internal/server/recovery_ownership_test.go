@@ -17,6 +17,7 @@ import (
 // options, which is how a real full restore rejected a valid deployed event.
 func TestRecoveryReplaysServedOwnershipDecision(t *testing.T) {
 	cfg := config.Default()
+	auditKey := testAuditSigningKey(t)
 	cadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +67,7 @@ func TestRecoveryReplaysServedOwnershipDecision(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target := newServerTestStore(t)
-			if err := rebuildRestoredReadModel(ctx, cfg, target, h.log, "cold recovery", tc.factories); err != nil {
+			if err := rebuildRestoredReadModel(ctx, cfg, target, h.log, auditKey, "cold recovery", tc.factories); err != nil {
 				t.Fatalf("recover emitted ownership decision: %v", err)
 			}
 			identity, err := target.GetIdentity(ctx, h.tenant, identityID)
@@ -84,7 +85,7 @@ func TestRecoveryReplaysServedOwnershipDecision(t *testing.T) {
 func TestRecoveryRejectsMalformedOwnershipCadence(t *testing.T) {
 	cfg := config.Default()
 	cfg.Lifecycle.OwnershipAttestationCadence = "invalid"
-	if _, err := recoveryProjectionOptions(context.Background(), cfg, nil, nil, nil); err == nil {
+	if _, err := recoveryProjectionOptions(context.Background(), cfg, nil, nil, testAuditSigningKey(t), nil); err == nil {
 		t.Fatal("recovery accepted an invalid ownership cadence without edition factories")
 	}
 }

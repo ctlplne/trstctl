@@ -762,6 +762,48 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 		t.Fatalf("provision source CA: %v", err)
 	}
 	signerRuntime.Close()
+	// A second backup must restore signed drill history already recorded by the
+	// first one. Older test artifacts contained only tenant registration, so
+	// they missed the production replay failure after the first scheduled drill.
+	evidenceRuntime, auditKey, err := openAuditSigningRuntime(ctx, cfg)
+	if err != nil {
+		t.Fatalf("open source audit signing runtime: %v", err)
+	}
+	const drillID = "source-drill-before-next-backup"
+	drillEvidence, err := backup.SignDrillEvidence(ctx, auditKey, drillID, backup.DrillAttestation{
+		Outcome: backup.DrillRestored, StartedAt: now.Add(-time.Minute),
+		CompletedAt: now, EventsRestored: 1, PostgresRecordsRestored: 2,
+		ArtifactsRestored: []string{"event-log", "postgres-state", "signer-keystore"},
+		FullSetRestored:   true, StoreHealthy: true, EventLogHealthy: true,
+		SignerHealthy: true, ServerHealthy: true, Detail: "source restore verified",
+	}, 24*time.Hour, time.Hour)
+	if err != nil {
+		evidenceRuntime.Close()
+		t.Fatalf("sign source restore drill: %v", err)
+	}
+	data, err := json.Marshal(projections.RestoreDrillRecorded{
+		AttestationID: projections.RestoreDrillAttestationID(tenantID, drillID), Evidence: drillEvidence,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceLog, err = events.Open(ctx, cfg.NATS)
+	if err != nil {
+		t.Fatalf("reopen source event log: %v", err)
+	}
+	if _, err := sourceLog.Append(ctx, events.Event{
+		ID: "drill-evidence-event", Type: projections.EventRestoreDrillRecorded,
+		TenantID: tenantID, SchemaVersion: 1, Time: now, Data: data,
+	}); err != nil {
+		t.Fatalf("append source restore-drill evidence: %v", err)
+	}
+	if err := projections.New(st, projections.WithRestoreDrillVerificationKeys(auditKey.JWKS())).Rebuild(ctx, sourceLog); err != nil {
+		t.Fatalf("project source signed drill history before backup: %v", err)
+	}
+	evidenceRuntime.Close()
+	if err := sourceLog.Close(); err != nil {
+		t.Fatalf("close source event log with drill history: %v", err)
+	}
 
 	backupDir := filepath.Join(dir, "delivered-backup")
 	if _, err := RunFullBackup(ctx, cfg, backupDir); err != nil {
@@ -789,8 +831,8 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	if att.Outcome != backup.DrillRestored || !att.FullSetRestored {
 		t.Fatalf("drill outcome = %q full_set=%v: %s", att.Outcome, att.FullSetRestored, att.Detail)
 	}
-	if att.EventsRestored != 1 {
-		t.Errorf("events restored = %d, want 1", att.EventsRestored)
+	if att.EventsRestored != 2 {
+		t.Errorf("events restored = %d, want 2 including signed drill history", att.EventsRestored)
 	}
 	if att.PostgresTablesRestored["provider_tenants"] != 1 ||
 		att.PostgresTablesRestored["provider_breakglass_grants"] != 1 {
@@ -834,8 +876,8 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 		t.Fatalf("write incomplete manifest: %v", err)
 	}
 	missing, err := RunRestoreDrill(ctx, cfg, backupDir)
-	if err != nil {
-		t.Fatalf("failed drill must attest rather than disappear: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "manifest missing artifact signer-keystore") {
+		t.Fatalf("failed drill must attest and return its private diagnostic: %v", err)
 	}
 	if missing.Outcome != backup.DrillFailed || missing.FullSetRestored {
 		t.Fatalf("missing signer-keystore drill = outcome:%q full_set:%v detail:%s",

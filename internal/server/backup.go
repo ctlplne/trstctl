@@ -49,8 +49,12 @@ func recoveryProjectionOptions(
 	cfg *config.Config,
 	st *store.Store,
 	log *events.Log,
+	auditKey *jose.SigningKey,
 	factories []EditionProjectionOptionsFactory,
 ) ([]projections.Option, error) {
+	if auditKey == nil {
+		return nil, errors.New("recovery requires the restored audit signing key to verify restore-drill history")
+	}
 	cadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
 	if err != nil {
 		return nil, err
@@ -58,6 +62,7 @@ func recoveryProjectionOptions(
 	// Recovery validates the same ownership authority as the running server.
 	// Core options must not depend on the presence of an edition factory.
 	options := ownershipProjectionOptions(cadence)
+	options = append(options, projections.WithRestoreDrillVerificationKeys(auditKey.JWKS()))
 	if len(factories) == 0 {
 		return options, nil
 	}
@@ -635,7 +640,7 @@ func restoreEventLog(
 	); err != nil {
 		return n, fmt.Errorf("sanitize restored scheduler history before rebuild: %w", err)
 	}
-	if err := rebuildRestoredReadModel(ctx, cfg, st, log, rebuildLabel, factories); err != nil {
+	if err := rebuildRestoredReadModel(ctx, cfg, st, log, auditKey, rebuildLabel, factories); err != nil {
 		return n, err
 	}
 	return n, nil
@@ -649,10 +654,11 @@ func rebuildRestoredReadModel(
 	cfg *config.Config,
 	st *store.Store,
 	log *events.Log,
+	auditKey *jose.SigningKey,
 	label string,
 	factories []EditionProjectionOptionsFactory,
 ) error {
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, factories)
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories)
 	if err != nil {
 		return err
 	}
@@ -799,7 +805,7 @@ func runFullRestore(
 		return result, fmt.Errorf("open event log for final full-restore rebuild: %w", err)
 	}
 	defer func() { _ = log.Close() }()
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, factories)
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories)
 	if err != nil {
 		return result, err
 	}
@@ -1044,7 +1050,7 @@ func RunRebuild(ctx context.Context, cfg *config.Config, factories ...EditionPro
 	if err := log.Replay(ctx, 0, func(events.Event) error { n++; return nil }); err != nil {
 		return 0, fmt.Errorf("count event log: %w", err)
 	}
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, factories)
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories)
 	if err != nil {
 		return 0, err
 	}
