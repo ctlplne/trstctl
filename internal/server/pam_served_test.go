@@ -101,21 +101,6 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		}
 	}
 
-	worker, ok := any(h.srv).(interface{ RunPAMSessionExpiry(context.Context) })
-	if !ok {
-		t.Fatal("served PAM expiry worker is not wired")
-	}
-	workerCtx, cancelWorker := context.WithCancel(context.Background())
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		worker.RunPAMSessionExpiry(workerCtx)
-	}()
-	t.Cleanup(func() {
-		cancelWorker()
-		<-workerDone
-	})
-
 	pg := servedPAMOpen(t, h, admin, "pam-01-postgres", map[string]any{
 		"target_type":    "postgres",
 		"target_id":      "pg-main",
@@ -132,6 +117,33 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		t.Fatalf("postgres PAM username = %q", pg.Postgres.Username)
 	}
 	assertPAMPostgresAccess(t, pg.Postgres.DSN, true)
+	if nativeExpiry := pamPostgresRoleValidUntil(t, pgDSN, pg.Postgres.Username); nativeExpiry.After(pg.ExpiresAt.Add(time.Second)) {
+		t.Fatalf("PostgreSQL role natively valid until %s, after PAM session deadline %s", nativeExpiry, pg.ExpiresAt)
+	}
+	// Leave the PAM cleanup worker stopped until after the native deadline.
+	// PostgreSQL itself must reject a new login even while the role still exists.
+	for time.Now().Before(pg.ExpiresAt.Add(250 * time.Millisecond)) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if !pamPostgresRoleExists(t, pgDSN, pg.Postgres.Username) {
+		t.Fatal("PostgreSQL role disappeared before the PAM cleanup worker ran")
+	}
+	assertPAMPostgresAccess(t, pg.Postgres.DSN, false)
+
+	worker, ok := any(h.srv).(interface{ RunPAMSessionExpiry(context.Context) })
+	if !ok {
+		t.Fatal("served PAM expiry worker is not wired")
+	}
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		worker.RunPAMSessionExpiry(workerCtx)
+	}()
+	t.Cleanup(func() {
+		cancelWorker()
+		<-workerDone
+	})
 
 	caPub, err := h.srv.protocols.ssh.AuthorityKey()
 	if err != nil {
@@ -337,6 +349,21 @@ func seedPAMPostgresTable(t *testing.T, dsn string) {
 	if _, err := conn.Exec(ctx, `CREATE TABLE public.pam_smoke (id int PRIMARY KEY); INSERT INTO public.pam_smoke VALUES (1);`); err != nil {
 		t.Fatalf("seed target postgres: %v", err)
 	}
+}
+
+func pamPostgresRoleValidUntil(t *testing.T, adminDSN, username string) time.Time {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		t.Fatalf("connect target PostgreSQL for role readback: %v", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var validUntil time.Time
+	if err := conn.QueryRow(ctx, `SELECT rolvaliduntil FROM pg_roles WHERE rolname = $1`, username).Scan(&validUntil); err != nil {
+		t.Fatalf("read PostgreSQL role native expiry: %v", err)
+	}
+	return validUntil
 }
 
 func assertPAMPostgresAccess(t *testing.T, dsn string, wantOK bool) {

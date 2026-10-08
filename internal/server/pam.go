@@ -316,7 +316,12 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 
 func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
 	target := s.postgres[pamTargetID{tenantID, req.TargetID}]
-	ref, credential, err := target.backend.Create(ctx, req.Role)
+	// The database must enforce the same deadline even when the PAM expiry
+	// worker is unavailable. Backend.Create uses its general 24-hour fallback;
+	// a privileged session must carry its reviewed lifetime to PostgreSQL.
+	ref, credential, err := target.backend.CreateCredential(ctx, dynsecret.GenerateRequest{
+		Role: req.Role, TTL: expiresAt.Sub(now), LeaseID: id,
+	})
 	if err != nil {
 		return api.PAMSession{}, fmt.Errorf("%w: postgres target %q refused session: %v", api.ErrPAMRejected, req.TargetID, err)
 	}
