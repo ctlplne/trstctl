@@ -9,7 +9,7 @@ import (
 )
 
 func TestHistoricalOnlinePlansAreBoundToShippedBytes(t *testing.T) {
-	for _, name := range []string{"0211_connector_rollback_projection_order.sql", "0219_notification_delivery_routing.sql"} {
+	for _, name := range []string{"0211_connector_rollback_projection_order.sql", "0219_notification_delivery_routing.sql", "0253_pam_early_revocation.sql"} {
 		t.Run(name, func(t *testing.T) {
 			body, err := migrationFS.ReadFile("migrations/" + name)
 			if err != nil {

@@ -41,14 +41,21 @@ func prepareHistoricalOnlineUpgrade(t *testing.T, version int) (*store.Store, *p
 	for i, tenant := range []string{tenantA, tenantB} {
 		id := fmt.Sprintf("71100000-0000-4000-8000-%012d", i+1)
 		var seed string
-		if version == 211 {
+		switch version {
+		case 211:
 			seed = `INSERT INTO connector_delivery_receipts
 			 (id,tenant_id,destination,connector,target,status,attempts,fingerprint,created_at,updated_at)
 			 VALUES ($1,$2,'connector.rollback','nginx','original-target','failed',7,'original-leaf',now(),now())`
-		} else {
+		case 219:
 			seed = `INSERT INTO notification_delivery_receipts
 			 (id,tenant_id,destination,notification_key_digest,payload_digest,channel,attempts,delivered_at)
 			 VALUES ($1,$2,'notification.send','original-command','original-payload','email',7,now())`
+		case 253:
+			seed = `INSERT INTO pam_sessions
+			 (id,tenant_id,target_type,target_id,role,status,subject,requested_by,reason,started_at,expires_at)
+			 VALUES ($1,$2,'ssh','qa-host','user','active','qa-requester','qa-operator','historical access',now(),now()+interval '10 minutes')`
+		default:
+			t.Fatalf("unsupported online migration fixture: %d", version)
 		}
 		if _, err := pool.Exec(ctx, seed, id, tenant); err != nil {
 			t.Fatal(err)
@@ -88,14 +95,17 @@ func assertHistoricalOnlineLedger(t *testing.T, pool *pgxpool.Pool, target migra
 }
 
 func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
-	for _, version := range []int{211, 219} {
+	for _, version := range []int{211, 219, 253} {
 		for _, phase := range []string{"unstarted", "expanded", "built", "invalid-index"} {
 			t.Run(fmt.Sprintf("%d/%s", version, phase), func(t *testing.T) {
 				ctx := t.Context()
 				s, pool, target, statements := prepareHistoricalOnlineUpgrade(t, version)
 				table, index := "connector_delivery_receipts", "connector_rollback_receipts_unordered"
-				if version == 219 {
+				switch version {
+				case 219:
 					table, index = "notification_delivery_receipts", "notification_delivery_receipts_command_idx"
+				case 253:
+					table, index = "pam_sessions", "pam_sessions_revoking_idx"
 				}
 				beforeSQL := "SELECT tenant_id::text,id::text,to_jsonb(o)::text FROM " + table + " o WHERE tenant_id IN ('" + tenantA + "','" + tenantB + "') ORDER BY tenant_id,id"
 				beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, beforeSQL)
@@ -118,7 +128,11 @@ func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer func() { _ = writer.Rollback(context.Background()) }()
-					if _, err := writer.Exec(ctx, "UPDATE "+table+" SET attempts=attempts+1 WHERE tenant_id=$1", tenantB); err != nil {
+					update := "UPDATE " + table + " SET attempts=attempts+1 WHERE tenant_id=$1"
+					if version == 253 {
+						update = "UPDATE pam_sessions SET status='revoking' WHERE tenant_id=$1"
+					}
+					if _, err := writer.Exec(ctx, update, tenantB); err != nil {
 						t.Fatal(err)
 					}
 					builder, err := pool.Acquire(ctx)
@@ -151,8 +165,11 @@ func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
 				assertIndexReady(t, ctx, pool, index)
 				assertHistoricalOnlineLedger(t, pool, target)
 				remove := "-'latest_event_sequence'"
-				if version == 219 {
+				switch version {
+				case 219:
 					remove = "-ARRAY['routing_source','routing_policy_id','routing_policy_scope','routing_policy_digest']"
+				case 253:
+					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at']"
 				}
 				afterSQL := strings.Replace(beforeSQL, "to_jsonb(o)::text", "(to_jsonb(o)"+remove+")::text", 1)
 				afterCount, afterChecksum := checksumQuery(t, ctx, pool, afterSQL)
@@ -175,8 +192,11 @@ func TestHistoricalOnlineMigrationRefusesSchemaLookalikes(t *testing.T) {
 	}{
 		{211, "wrong-index", `CREATE INDEX connector_rollback_receipts_unordered ON connector_delivery_receipts (id)`, "different definition"},
 		{219, "wrong-index", `CREATE INDEX notification_delivery_receipts_command_idx ON notification_delivery_receipts (tenant_id)`, "different definition"},
+		{253, "wrong-index", `CREATE INDEX pam_sessions_revoking_idx ON pam_sessions (id)`, "different definition"},
 		{211, "wrong-column", `ALTER TABLE connector_delivery_receipts ALTER COLUMN latest_event_sequence SET DEFAULT 9`, "mismatched column"},
 		{219, "partial-columns", `ALTER TABLE notification_delivery_receipts DROP COLUMN routing_source`, "partial column expansion"},
+		{253, "wrong-column", `ALTER TABLE pam_sessions ALTER COLUMN revocation_reason SET DEFAULT 'invented'`, "mismatched column"},
+		{253, "partial-columns", `ALTER TABLE pam_sessions DROP COLUMN revocation_reason`, "partial column expansion"},
 		{211, "weaker-check", `ALTER TABLE connector_delivery_receipts DROP CONSTRAINT connector_delivery_receipts_latest_event_sequence_check;
 		 ALTER TABLE connector_delivery_receipts ADD CONSTRAINT connector_delivery_receipts_latest_event_sequence_check CHECK (latest_event_sequence>=-1)`, "mismatched constraint"},
 	} {

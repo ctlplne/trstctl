@@ -35,7 +35,7 @@ const onlineSafeBaseline = 25
 // the playbook in docs/migrations.md as an enforced precedent so the first
 // lock-heavy change to a live table cannot silently ship.
 //
-// The guard inspects the actual checksum-bound execution plan for the two
+// The guard inspects the actual checksum-bound execution plan for the three
 // historical online repairs, and original SQL for every other migration. This is
 // not an exemption: non-concurrent index work in either path still fails.
 //

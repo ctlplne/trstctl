@@ -102,18 +102,21 @@ per-version, audited write to the ledger, not a switch that can be left on.
 
 ## Online execution of historical index migrations
 
-Pending migrations `0211_connector_rollback_projection_order.sql` and
-`0219_notification_delivery_routing.sql` build their indexes concurrently so a
-populated control plane can continue database writes during index construction.
-Their shipped SQL files and original checksums remain unchanged. A database that
-already applied either file keeps its ledger row; startup does not re-run it.
+Pending migrations `0211_connector_rollback_projection_order.sql`,
+`0219_notification_delivery_routing.sql`, and `0253_pam_early_revocation.sql`
+build their indexes concurrently so a populated control plane can continue
+database writes during index construction. Their shipped SQL files and original
+checksums remain unchanged. A database that already applied one keeps its
+ledger row; startup does not re-run it.
 
 For a pending version, the runner first matches the immutable file digest. It
 commits the additive column expansion in a short transaction, then builds the
 index outside a transaction with `CREATE INDEX CONCURRENTLY`. Migration 0211
 adds its nonnegative-sequence check as `NOT VALID` and validates existing rows
-after the index is ready. Existing tenant evidence and conservative defaults
-are preserved. The five-second lock-wait limit still applies: column expansion
+after the index is ready. Migration 0253 adds nullable/constant-default PAM
+revocation evidence columns and builds the partial `revoking` lookup index by
+the same online path. Existing tenant evidence and conservative defaults are
+preserved. The five-second lock-wait limit still applies: column expansion
 can briefly require an exclusive table lock, and long-running writers can make
 a concurrent build wait. This is not a promise of a lock-free upgrade.
 

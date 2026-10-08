@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// These two already-shipped files are immutable. A pending upgrade uses a
+// These already-shipped files are immutable. A pending upgrade uses a
 // checksum-bound online execution plan; an applied ledger row is never rerun.
 // Unknown bytes cannot fall back to the unsafe historical execution path. The
 // digests are migrationChecksum digests, so the SPDX license line is outside
@@ -63,6 +63,25 @@ func historicalOnlinePlan(name string, body []byte) (*onlineCompatibilityPlan, e
 			indexColumns: []string{"tenant_id", "destination", "notification_key_digest"},
 			createSQL: `CREATE INDEX CONCURRENTLY notification_delivery_receipts_command_idx
 			 ON public.notification_delivery_receipts (tenant_id,destination,notification_key_digest)`,
+		}
+	case "0253_pam_early_revocation.sql":
+		p = onlineCompatibilityPlan{
+			name: name, digest: "sha256:2d176dce948b0d8d60d3398d1dca2520eae2828a7a2b2af4a67561ca5b89a7ab",
+			table: "public.pam_sessions", index: "pam_sessions_revoking_idx",
+			columns: []onlineCompatibilityColumn{
+				{name: "revocation_requested_by", dataType: "text", defaultExpression: "''::text", notNull: true},
+				{name: "revocation_reason", dataType: "text", defaultExpression: "''::text", notNull: true},
+				{name: "revocation_requested_at", dataType: "timestamp with time zone"},
+			},
+			expandSQL: `ALTER TABLE public.pam_sessions
+			 ADD COLUMN revocation_requested_by text NOT NULL DEFAULT '',
+			 ADD COLUMN revocation_reason text NOT NULL DEFAULT '',
+			 ADD COLUMN revocation_requested_at timestamptz;`,
+			indexColumns: []string{"tenant_id", "revocation_requested_at", "id"},
+			predicate:    "status = 'revoking'::text",
+			createSQL: `CREATE INDEX CONCURRENTLY pam_sessions_revoking_idx
+			 ON public.pam_sessions (tenant_id,revocation_requested_at,id)
+			 WHERE status='revoking'`,
 		}
 	default:
 		return nil, nil

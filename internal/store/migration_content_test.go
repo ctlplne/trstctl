@@ -107,6 +107,53 @@ func testMigration0251ManagedKeyDeletionPendingPreservesHistory(t *testing.T) {
 		})
 }
 
+// Historical pending PAM removals keep their original decision evidence. 0254
+// must not invent a failed provider attempt or a retry key for those sessions.
+func testMigration0254PAMRevocationFailureStartsUnknown(t *testing.T) {
+	const stable = `SELECT tenant_id::text,id::text,target_type,target_id,role,status,
+		subject,requested_by,reason,revocation_requested_by,revocation_reason,
+		coalesce(revocation_requested_at::text,''),started_at::text,expires_at::text
+		FROM pam_sessions ORDER BY tenant_id,id`
+	runPopulatedDefaultMigrationHarness(t, 254, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for i, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id,name) VALUES ($1,$2)
+					ON CONFLICT (tenant_id) DO NOTHING`, tenantID, fmt.Sprintf("pre-0254-%d", i)); err != nil {
+					t.Fatal(err)
+				}
+				status, reviewer, reviewReason := "active", "", ""
+				var requestedAt any
+				if i == 0 {
+					status, reviewer, reviewReason = "revoking", "independent-custodian", "incident containment"
+					requestedAt = "2026-10-08T12:01:00Z"
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO pam_sessions
+					(tenant_id,id,target_type,target_id,role,status,subject,requested_by,reason,
+					 revocation_requested_by,revocation_reason,revocation_requested_at,started_at,expires_at)
+					VALUES ($1,$2,'ssh','qa-host','user',$3,'qa-requester','qa-operator',
+					 'historical access',$4,$5,$6,'2026-10-08T12:00:00Z','2026-10-08T12:10:00Z')`,
+					tenantID, fmt.Sprintf("25400000-0000-4000-8000-%012d", i+1), status,
+					reviewer, reviewReason, requestedAt); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var noRetryKey, noFailure, noFailureTime bool
+			if err := pool.QueryRow(ctx, `SELECT count(*),
+				bool_and(revocation_idempotency_key=''), bool_and(revocation_failure=''),
+				bool_and(revocation_failed_at IS NULL) FROM pam_sessions WHERE target_id='qa-host'`).
+				Scan(&rows, &noRetryKey, &noFailure, &noFailureTime); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !noRetryKey || !noFailure || !noFailureTime {
+				t.Fatalf("0254 invented failed removal or retry: rows=%d/%d key=%t failure=%t time=%t",
+					rows, want, noRetryKey, noFailure, noFailureTime)
+			}
+		})
+}
+
 // Migration 0247 must not guess an external ACME authority for old leaves.
 // The separate cursor starts at zero even when the ordinary projection is
 // already ahead, so retained issuance events can repair provenance on upgrade.
@@ -564,6 +611,8 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
+	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
 	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor
@@ -1625,6 +1674,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0250_managed_key_custody_starts_unproven", testMigration0250ManagedKeyCustodyStartsUnproven)
 	t.Run("0251_managed_key_deletion_pending_preserves_history", testMigration0251ManagedKeyDeletionPendingPreservesHistory)
+	t.Run("0254_pam_revocation_failure_starts_unknown", testMigration0254PAMRevocationFailureStartsUnknown)
 	t.Run("0175_agent_revocation_cache_posture", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 175)
