@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -24,13 +25,14 @@ import (
 )
 
 type journalProvider struct {
-	mu       sync.Mutex
-	keys     map[string]*crypto.LockedSigner
-	next     int
-	generate int
-	revoke   int
-	zeroize  int
-	sign     int
+	mu         sync.Mutex
+	keys       map[string]*crypto.LockedSigner
+	next       int
+	generate   int
+	revoke     int
+	zeroize    int
+	sign       int
+	signHashes []crypto.Hash
 }
 
 type journalSigner struct{ key *crypto.LockedSigner }
@@ -240,7 +242,44 @@ func (p *journalProvider) SignManagedDigest(_ context.Context, ref crypto.KeyRef
 		return nil, fmt.Errorf("unknown key")
 	}
 	p.sign++
+	p.signHashes = append(p.signHashes, opts.Hash)
 	return key.SignDigest(digest, opts)
+}
+
+func TestManagedKeyCustodyVerificationUsesProviderSupportedCurveHash(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		algorithm crypto.Algorithm
+		wire      signerpb.Algorithm
+		wantHash  crypto.Hash
+	}{
+		{"P-256", crypto.ECDSAP256, signerpb.Algorithm_ALGORITHM_ECDSA_P256, crypto.SHA256},
+		{"P-384", crypto.ECDSAP384, signerpb.Algorithm_ALGORITHM_ECDSA_P384, crypto.SHA384},
+		{"P-521", crypto.ECDSAP521, signerpb.Algorithm_ALGORITHM_ECDSA_P521, crypto.SHA512},
+		{"RSA-2048", crypto.RSA2048, signerpb.Algorithm_ALGORITHM_RSA_2048, crypto.SHA256},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := newJournalProvider()
+			t.Cleanup(provider.cleanup)
+			server := signing.NewServer(signing.WithManagedKeyProviders(t.TempDir(), map[string]crypto.RemoteKeyLifecycle{"aws-kms": provider}))
+			created, err := server.ManageKey(context.Background(), &signerpb.ManageKeyRequest{
+				TenantId: "tenant-a", Provider: "aws-kms", OperationId: "generate-key", Action: signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_GENERATE,
+				Algorithm: tc.wire,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := server.ManageKey(context.Background(), &signerpb.ManageKeyRequest{
+				TenantId: "tenant-a", Provider: "aws-kms", OperationId: "verify-key", Action: signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY,
+				KeyId: created.GetKeyId(), Algorithm: tc.wire,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(provider.signHashes) != 1 || provider.signHashes[0] != tc.wantHash {
+				t.Fatalf("provider hash = %v, want %s for %s", provider.signHashes, tc.wantHash, tc.algorithm)
+			}
+		})
+	}
 }
 
 func (p *journalProvider) cleanup() {
@@ -249,6 +288,75 @@ func (p *journalProvider) cleanup() {
 	for id, key := range p.keys {
 		key.Destroy()
 		delete(p.keys, id)
+	}
+}
+
+func TestManagedKeyCustodyVerificationUsesFreshProviderSignatureAndOwnedPublicKey(t *testing.T) {
+	provider := newJournalProvider()
+	t.Cleanup(provider.cleanup)
+	journal := t.TempDir()
+	server := signing.NewServer(signing.WithManagedKeyProviders(journal, map[string]crypto.RemoteKeyLifecycle{"aws-kms": provider}))
+	created, err := server.ManageKey(context.Background(), &signerpb.ManageKeyRequest{
+		TenantId: "tenant-a", Provider: "aws-kms", OperationId: "create-custody-key",
+		Action:    signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_GENERATE,
+		Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verify := &signerpb.ManageKeyRequest{
+		TenantId: "tenant-a", Provider: "aws-kms", OperationId: "verify-custody-1",
+		Action: signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY,
+		KeyId:  created.GetKeyId(), Algorithm: created.GetAlgorithm(),
+	}
+	got, err := server.ManageKey(context.Background(), verify)
+	if err != nil || got.GetState() != "verified" || !bytes.Equal(got.GetPublicKey(), created.GetPublicKey()) {
+		t.Fatalf("fresh custody proof = %+v, %v", got, err)
+	}
+	if provider.sign != 1 {
+		t.Fatalf("custody proof contacted provider %d times, want 1", provider.sign)
+	}
+	if _, err := server.ManageKey(context.Background(), &signerpb.ManageKeyRequest{
+		TenantId: "tenant-b", Provider: "aws-kms", OperationId: "foreign-custody-proof",
+		Action: signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY,
+		KeyId:  created.GetKeyId(), Algorithm: created.GetAlgorithm(),
+	}); err == nil {
+		t.Fatal("another tenant verified an unowned key")
+	}
+	provider.mu.Lock()
+	key := provider.keys[created.GetKeyId()]
+	delete(provider.keys, created.GetKeyId())
+	provider.mu.Unlock()
+	missing := proto.Clone(verify).(*signerpb.ManageKeyRequest)
+	missing.OperationId = "verify-custody-missing"
+	if _, err := server.ManageKey(context.Background(), missing); status.Code(err) != codes.Unavailable {
+		t.Fatalf("missing provider key returned %v, want Unavailable", err)
+	}
+	provider.mu.Lock()
+	provider.keys[created.GetKeyId()] = key
+	provider.mu.Unlock()
+	if _, err := server.ManageKey(context.Background(), missing); err != nil {
+		t.Fatalf("safe replay after provider recovery: %v", err)
+	}
+	foreignKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.mu.Lock()
+	provider.keys[created.GetKeyId()] = foreignKey
+	provider.mu.Unlock()
+	mismatch := proto.Clone(verify).(*signerpb.ManageKeyRequest)
+	mismatch.OperationId = "verify-custody-wrong-key"
+	if _, err := server.ManageKey(context.Background(), mismatch); status.Code(err) != codes.Unavailable {
+		t.Fatalf("provider handle reused for a different key returned %v, want Unavailable", err)
+	}
+	provider.mu.Lock()
+	provider.keys[created.GetKeyId()] = key
+	provider.mu.Unlock()
+	foreignKey.Destroy()
+	server = signing.NewServer(signing.WithManagedKeyProviders(journal, map[string]crypto.RemoteKeyLifecycle{"aws-kms": provider}))
+	if replay, err := server.ManageKey(context.Background(), verify); err != nil || !replay.GetReplayed() || provider.sign != 3 {
+		t.Fatalf("completed proof replay after signer restart = %+v, %v, signs=%d", replay, err, provider.sign)
 	}
 }
 

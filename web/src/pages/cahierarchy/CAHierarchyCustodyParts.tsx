@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, KeyRound, ShieldCheck } from "lucide-react";
 import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
@@ -86,9 +85,8 @@ export function ManagedKeyCustodyWorkspace() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    const custodyRead =
-      typeof api.managedKeyCustody === "function" ? api.managedKeyCustody() : Promise.reject(new Error("managed-key custody planning is unavailable"));
-    custodyRead
+    api
+      .managedKeyCustody()
       .then((next) => {
         if (!active) return;
         // Older test fixtures and rolling-upgrade peers may omit newly added
@@ -138,7 +136,7 @@ export function ManagedKeyCustodyWorkspace() {
     }
   }
 
-  const selectedProvider = useMemo(() => plan?.providers.find((item) => item.id === provider) ?? null, [plan, provider]);
+  const selectedProvider = plan?.providers.find((item) => item.id === provider) ?? null;
   const previewIsSafe = Boolean(preview?.ready && preview.effect_free && preview.preview_writes.length === 0 && preview.preview_external_effects.length === 0);
   const localizedSteps: CarouselStep[] = [
     { id: "configure", label: t("caHierarchy.custody.steps.configure.label"), description: t("caHierarchy.custody.steps.configure.description") },
@@ -195,34 +193,38 @@ export function ManagedKeyCustodyWorkspace() {
     }
   }
 
-  async function runManagedKeyAction(action: "rotate" | "revoke" | "zeroize", keyId: string) {
+  async function runManagedKeyAction(action: "rotate" | "revoke" | "zeroize" | "verify_custody", keyId: string) {
     setKeyBusy(true);
     setKeyError(null);
     setPendingApproval(null);
     try {
       const next =
-        action === "rotate" ? await api.rotateManagedKey(keyId) : action === "revoke" ? await api.revokeManagedKey(keyId) : await api.zeroizeManagedKey(keyId);
+        action === "rotate"
+          ? await api.rotateManagedKey(keyId)
+          : action === "revoke"
+            ? await api.revokeManagedKey(keyId)
+            : action === "zeroize"
+              ? await api.zeroizeManagedKey(keyId)
+              : await api.verifyManagedKeyCustody(keyId);
       setManagedKey(next);
-      await loadInventory();
     } catch (error) {
       const pending = pendingManagedKeyApproval(error);
       if (pending) setPendingApproval(pending);
-      else setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action })));
+      else setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action: action === "verify_custody" ? "verify" : action })));
+      if (action === "verify_custody") setManagedKey(null);
     } finally {
+      await loadInventory();
       setKeyBusy(false);
     }
   }
 
   return (
     <section aria-labelledby="custody-heading" className="grid gap-4 border-y border-border py-4">
-      <div className="flex items-start gap-3">
-        <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <h2 id="custody-heading" className="text-title font-semibold">
-            {t("caHierarchy.custody.title")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.custody.description")}</p>
-        </div>
+      <div>
+        <h2 id="custody-heading" className="text-title font-semibold">
+          {t("caHierarchy.custody.title")}
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.custody.description")}</p>
       </div>
 
       {loading ? <LoadingState>{t("caHierarchy.custody.loading")}</LoadingState> : null}
@@ -236,6 +238,9 @@ export function ManagedKeyCustodyWorkspace() {
               </CardHeader>
               <CardContent className="grid gap-3">
                 <p className="text-sm text-muted-foreground">{t("caHierarchy.custody.inventoryDetail")}</p>
+                <Button type="button" size="sm" variant="outline" disabled={inventoryBusy} onClick={() => void loadInventory()}>
+                  {t("caHierarchy.workspace.refresh")}
+                </Button>
                 {inventoryError ? <ErrorState title={t("caHierarchy.custody.inventoryLoadFailed")}>{inventoryError}</ErrorState> : null}
                 {inventory.length === 0 && !inventoryBusy && !inventoryError ? <EmptyState title={t("caHierarchy.custody.inventoryEmpty")} /> : null}
                 {inventory.length > 0 ? (
@@ -246,7 +251,8 @@ export function ManagedKeyCustodyWorkspace() {
                         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"
                       >
                         <span className="text-sm">
-                          <CredentialChip value={key.key_id} label={t("caHierarchy.custody.keyID")} /> · {key.provider} · {key.state}
+                          <CredentialChip value={key.key_id} label={t("caHierarchy.custody.keyID")} /> · {key.provider} · {t("caHierarchy.custody.state")}:{" "}
+                          {key.state} · {t("caHierarchy.custody.custodyStatus")}: {t(`caHierarchy.custody.status.${key.custody_status ?? "not_checked"}`)}
                         </span>
                         <Button type="button" size="sm" variant="outline" disabled={keyBusy} onClick={() => void selectManagedKey(key)}>
                           {t("caHierarchy.custody.inspectKey")}
@@ -454,19 +460,10 @@ function CustodyPreview({ preview, error }: { preview: ManagedKeyGenerationPrevi
     <div className="grid gap-4">
       <Card className={preview.effect_free ? "border-status-success/40" : "border-destructive/40"}>
         <CardHeader>
-          <div className="flex items-start gap-2">
-            {preview.effect_free ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
-            ) : (
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
-            )}
-            <div>
-              <CardTitle>{t("caHierarchy.custody.nothingChanged")}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("caHierarchy.custody.previewCounts", { writes: preview.preview_writes.length, calls: preview.preview_external_effects.length })}
-              </p>
-            </div>
-          </div>
+          <CardTitle>{t(preview.effect_free ? "caHierarchy.custody.nothingChanged" : "caHierarchy.custody.blocked")}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("caHierarchy.custody.previewCounts", { writes: preview.preview_writes.length, calls: preview.preview_external_effects.length })}
+          </p>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -514,7 +511,7 @@ function CustodyGeneration({
   pendingApproval: PendingManagedKeyApproval | null;
   managedKey: ManagedKey | null;
   preview: ManagedKeyGenerationPreview;
-  onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
+  onAction: (action: "rotate" | "revoke" | "zeroize" | "verify_custody", keyId: string) => void;
   onGenerate: () => void;
   actionsDisabled: boolean;
 }) {
@@ -523,15 +520,10 @@ function CustodyGeneration({
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
-            <div>
-              <CardTitle>{t("caHierarchy.custody.reviewedReady")}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("caHierarchy.custody.reviewedReadyDetail", { provider: preview.provider_label, algorithm: preview.algorithm })}
-              </p>
-            </div>
-          </div>
+          <CardTitle>{t("caHierarchy.custody.reviewedReady")}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("caHierarchy.custody.reviewedReadyDetail", { provider: preview.provider_label, algorithm: preview.algorithm })}
+          </p>
         </CardHeader>
         <CardContent>
           <Button type="button" disabled={busy || Boolean(managedKey)} onClick={onGenerate}>
@@ -574,7 +566,7 @@ function ManagedKeyPanel({
 }: {
   busy: boolean;
   managedKey: ManagedKey;
-  onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
+  onAction: (action: "rotate" | "revoke" | "zeroize" | "verify_custody", keyId: string) => void;
   actionsDisabled: boolean;
 }) {
   const { t } = useTranslation();
@@ -590,6 +582,14 @@ function ManagedKeyPanel({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={busy || actionsDisabled || managedKey.state !== "active"}
+            onClick={() => onAction("verify_custody", managedKey.key_id)}
+          >
+            {t("caHierarchy.custody.verifyButton")}
+          </Button>
           {(["rotate", "revoke", "zeroize"] as const).map((action) => (
             <Button
               key={action}
@@ -611,8 +611,8 @@ function ManagedKeyPanel({
         <Fact label={t("caHierarchy.custody.version")} value={t("caHierarchy.custody.versionValue", { version: managedKey.version })} />
         <Fact label={t("caHierarchy.custody.state")} value={managedKey.state} />
         <Fact
-          label={t("caHierarchy.custody.publicDER")}
-          value={managedKey.public_der ? t("caHierarchy.custody.bytes", { count: managedKey.public_der.length }) : "-"}
+          label={t("caHierarchy.custody.custodyStatus")}
+          value={`${t(`caHierarchy.custody.status.${managedKey.custody_status ?? "not_checked"}`)}${managedKey.custody_checked_at ? ` · ${new Date(managedKey.custody_checked_at).toLocaleString()}` : ""}`}
         />
         <Fact label={t("caHierarchy.custody.extractable")} value={managedKey.extractable ? t("platform.idempotency.yes") : t("platform.idempotency.no")} />
       </dl>

@@ -148,9 +148,12 @@ func (p *Projector) applyManagedKeyTx(ctx context.Context, tx pgx.Tx, event even
 			return true, fmt.Errorf("projections: %s payload is incomplete", event.Type)
 		}
 		switch payload.Action {
-		case "generate":
+		case "generate", "verify_custody":
 			if schemaVersionOf(event) != events.DefaultSchemaVersion || payload.Approval != nil || len(payload.ApprovalEvidenceRefs) != 0 {
-				return true, fmt.Errorf("projections: generate cannot consume destructive-operation approval")
+				return true, fmt.Errorf("projections: non-destructive managed-key command cannot consume approval")
+			}
+			if payload.Action == "verify_custody" && payload.KeyID == "" {
+				return true, fmt.Errorf("projections: custody verification requires a key id")
 			}
 		case "rotate", "revoke", "zeroize":
 			if schemaVersionOf(event) != ManagedKeyApprovalEventSchemaVersion {

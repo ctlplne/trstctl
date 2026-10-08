@@ -30,6 +30,7 @@ const { apiMock } = vi.hoisted(() => ({
     managedKeyCustody: vi.fn(),
     listManagedKeys: vi.fn(),
     getManagedKey: vi.fn(),
+    verifyManagedKeyCustody: vi.fn(),
     previewManagedKeyGeneration: vi.fn(),
     generateManagedKey: vi.fn(),
     rotateManagedKey: vi.fn(),
@@ -302,6 +303,15 @@ describe("CA hierarchy and custody surface", () => {
       created_at: "2026-06-26T14:00:00Z",
     });
     apiMock.generateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active", public_der: "BASE64PUBLICDER" });
+    apiMock.verifyManagedKeyCustody.mockResolvedValue({
+      key_id: "kms/root-1",
+      algorithm: "ECDSA-P256",
+      version: 1,
+      state: "active",
+      public_der: "BASE64PUBLICDER",
+      custody_status: "verified",
+      custody_checked_at: "2026-10-07T20:00:00Z",
+    });
     apiMock.managedKeyCustody.mockResolvedValue({
       enabled: true,
       lifecycle_attached: true,
@@ -1000,7 +1010,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy("/ca-hierarchy?tab=custody");
 
     expect(await screen.findByRole("heading", { name: "Managed key custody" })).toBeInTheDocument();
-    expect(screen.getByText("Saved key records survive restart. Verify the custody provider still holds a key before using it.")).toBeInTheDocument();
+    expect(screen.getByText("Saved records survive restart. Verify the provider before using a key.")).toBeInTheDocument();
     const provider = await screen.findByRole("combobox", { name: "Custody provider" });
     expect(within(provider).getAllByRole("option")).toHaveLength(6);
     expect(screen.getByText("Configured now: Google Cloud KMS")).toBeInTheDocument();
@@ -1021,6 +1031,10 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("kms/root-1")).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Verify provider key" }));
+    await waitFor(() => expect(apiMock.verifyManagedKeyCustody).toHaveBeenCalledWith("kms/root-1"));
+    expect(await screen.findByText(/Verified then/)).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
     await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1"));
     expect(await screen.findByText("Version 2")).toBeInTheDocument();
@@ -1034,6 +1048,31 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("zeroized")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
+  });
+
+  it("shows an old active lifecycle key as unavailable when the last provider proof failed", async () => {
+    const user = userEvent.setup();
+    const lost = {
+      provider: "gcp-kms",
+      key_id: "kms/lost",
+      algorithm: "ECDSA-P256",
+      version: 1,
+      state: "active",
+      public_der: "SAVEDPUBLIC",
+      extractable: false,
+      custody_status: "unavailable",
+      custody_checked_at: "2026-10-07T20:00:00Z",
+      created_at: "2026-10-01T00:00:00Z",
+      updated_at: "2026-10-01T00:00:00Z",
+    };
+    apiMock.listManagedKeys.mockResolvedValue({ items: [lost], next_cursor: "" });
+    apiMock.getManagedKey.mockResolvedValue(lost);
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    await user.click(await screen.findByRole("button", { name: "Inspect key" }));
+    expect(screen.getAllByText("kms/lost").length).toBeGreaterThan(1);
+    expect(screen.getAllByText(/Could not verify/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Lifecycle state")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Verify provider key" })).toBeEnabled();
   });
 
   it("shows a genuine pending managed-key approval as a waiting state with the exact request", async () => {
@@ -1060,7 +1099,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("Managed key action awaits approval")).toBeInTheDocument();
     expect(screen.getByText(requestId)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open approval requests" })).toHaveAttribute("href", "/approvals");
-    expect(screen.getByText("The key has not changed yet.", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("The key has not changed.", { exact: false })).toBeInTheDocument();
     expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
   });

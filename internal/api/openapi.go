@@ -6123,14 +6123,18 @@ func componentSchemas() map[string]*Schema {
 	}, "resource", "action", "approver", "approvals")
 	managedKey := object(map[string]*Schema{
 		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": str(),
-		"public_der":  {Type: "string", Format: "byte"},
-		"extractable": {Type: "boolean"},
+		"public_der":         {Type: "string", Format: "byte"},
+		"extractable":        {Type: "boolean"},
+		"custody_status":     {Type: "string", Enum: []string{"not_checked", "pending", "verified", "unavailable"}},
+		"custody_checked_at": timestamp(),
 	}, "key_id", "algorithm", "version", "state")
 	managedKeyRecord := object(map[string]*Schema{
 		"provider": str(), "key_id": str(), "algorithm": str(), "version": {Type: "integer"},
 		"state": str(), "public_der": {Type: "string", Format: "byte"},
 		"extractable": {Type: "boolean"}, "created_at": timestamp(), "updated_at": timestamp(),
-	}, "provider", "key_id", "algorithm", "version", "state", "extractable", "created_at", "updated_at")
+		"custody_status":     {Type: "string", Enum: []string{"not_checked", "pending", "verified", "unavailable"}},
+		"custody_checked_at": timestamp(),
+	}, "provider", "key_id", "algorithm", "version", "state", "extractable", "created_at", "updated_at", "custody_status")
 	managedKeyRecordList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ManagedKeyRecord")}, "next_cursor": str(),
 	}, "items", "next_cursor")

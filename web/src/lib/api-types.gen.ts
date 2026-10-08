@@ -4807,6 +4807,8 @@ export interface MachineSessionList {
 
 export interface ManagedKey {
   algorithm: string;
+  custody_checked_at?: string;
+  custody_status?: "not_checked" | "pending" | "verified" | "unavailable";
   extractable?: boolean;
   key_id: string;
   public_der?: string;
@@ -4906,6 +4908,8 @@ export interface ManagedKeyGenerationPreviewRequest {
 export interface ManagedKeyRecord {
   algorithm: string;
   created_at: string;
+  custody_checked_at?: string;
+  custody_status: "not_checked" | "pending" | "verified" | "unavailable";
   extractable: boolean;
   key_id: string;
   provider: string;

@@ -25,6 +25,7 @@ type stubManagedKeys struct {
 	rotateCalls   int
 	revokeCalls   int
 	zeroizeCalls  int
+	verifyCalls   int
 	lastAlgorithm crypto.Algorithm
 	lastKeyID     string
 	lastRequester string
@@ -72,6 +73,13 @@ func (s *stubManagedKeys) Zeroize(_ context.Context, _, keyID, requester, idempo
 	return api.ManagedKey{KeyID: "fake-kms-key-0001", Algorithm: crypto.ECDSAP256, Version: 1, State: "zeroized"}, nil
 }
 
+func (s *stubManagedKeys) VerifyCustody(_ context.Context, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
+	s.verifyCalls++
+	s.lastKeyID, s.lastRequester, s.lastIdem = keyID, requester, idempotencyKey
+	s.lastBinding = requestBinding
+	return api.ManagedKey{KeyID: keyID, Algorithm: crypto.ECDSAP256, Version: 1, State: "active", CustodyStatus: "verified"}, nil
+}
+
 const managedKeyTestTenant = "11111111-1111-1111-1111-111111111111"
 
 func managedKeyRequest(t *testing.T, handler http.Handler, path, idempotencyKey, subject, body string) *httptest.ResponseRecorder {
@@ -94,7 +102,7 @@ func managedKeyHarness(service *stubManagedKeys, idem *orchestrator.Idempotency)
 }
 
 func managedKeyServiceCalls(service *stubManagedKeys) int {
-	return service.generateCalls + service.rotateCalls + service.revokeCalls + service.zeroizeCalls
+	return service.generateCalls + service.rotateCalls + service.revokeCalls + service.zeroizeCalls + service.verifyCalls
 }
 
 func TestManagedKeyIdempotencyExactReplayInvokesEachServiceActionOnce(t *testing.T) {
@@ -109,6 +117,7 @@ func TestManagedKeyIdempotencyExactReplayInvokesEachServiceActionOnce(t *testing
 		{name: "rotate", path: "/api/v1/managed-keys/rotate", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.rotateCalls }},
 		{name: "revoke", path: "/api/v1/managed-keys/revoke", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.revokeCalls }},
 		{name: "zeroize", path: "/api/v1/managed-keys/zeroize", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.zeroizeCalls }},
+		{name: "verify_custody", path: "/api/v1/managed-keys/verify-custody", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.verifyCalls }},
 	}
 
 	for _, test := range tests {
@@ -312,11 +321,12 @@ func TestManagedKeysServedReflectsWiring(t *testing.T) {
 // served route registry (and therefore the OpenAPI surface and the CLI parity set).
 func TestManagedKeyRouteIsRegistered(t *testing.T) {
 	want := map[string]bool{
-		"POST /api/v1/managed-keys":           false,
-		"POST /api/v1/managed-keys/approvals": false,
-		"POST /api/v1/managed-keys/rotate":    false,
-		"POST /api/v1/managed-keys/revoke":    false,
-		"POST /api/v1/managed-keys/zeroize":   false,
+		"POST /api/v1/managed-keys":                false,
+		"POST /api/v1/managed-keys/approvals":      false,
+		"POST /api/v1/managed-keys/rotate":         false,
+		"POST /api/v1/managed-keys/revoke":         false,
+		"POST /api/v1/managed-keys/zeroize":        false,
+		"POST /api/v1/managed-keys/verify-custody": false,
 	}
 	for _, rt := range api.New(nil, nil, nil).Routes() {
 		key := rt.Method + " " + rt.Path

@@ -936,6 +936,10 @@ JSON
 trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.json
 trstctl-cli managed-keys list --limit 20
 trstctl-cli managed-keys get aws-kms <key-id> # provider comes from the list result
+# A saved active record is historical. Prove the provider still holds this exact
+# key before using it; inspect custody_status and custody_checked_at afterward.
+printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-proof managed-keys verify-custody -f - --force
+trstctl-cli managed-keys get aws-kms <key-id>
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-a managed-keys approve -f -
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-b managed-keys approve -f -
 printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f - --force

@@ -3722,6 +3722,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/managed-keys/verify-custody": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prove an existing provider key still signs under its owned public key; record the time of that proof */
+        post: operations["verifyManagedKeyCustody"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/managed-keys/zeroize": {
         parameters: {
             query?: never;
@@ -12088,6 +12105,10 @@ export interface components {
         };
         ManagedKey: {
             algorithm: string;
+            /** Format: date-time */
+            custody_checked_at?: string;
+            /** @enum {string} */
+            custody_status?: "not_checked" | "pending" | "verified" | "unavailable";
             extractable?: boolean;
             key_id: string;
             /** Format: byte */
@@ -12194,6 +12215,10 @@ export interface components {
             algorithm: string;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            custody_checked_at?: string;
+            /** @enum {string} */
+            custody_status: "not_checked" | "pending" | "verified" | "unavailable";
             extractable: boolean;
             key_id: string;
             provider: string;
@@ -26444,6 +26469,51 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ManagedKeyApprovalProblem"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyManagedKeyCustody: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedKeyActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKey"];
                 };
             };
             /** @description client error */

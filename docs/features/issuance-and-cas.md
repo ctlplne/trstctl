@@ -655,6 +655,12 @@ exposes:
   configuration change;
 - `GET /api/v1/managed-keys/{provider}/{key_id}` — read the current state and public
   material of one exact provider/handle pair after a lost response or restart;
+- `POST /api/v1/managed-keys/verify-custody` — ask the isolated signer to sign a
+  fresh random challenge with the exact owned key, then verify the signature
+  against the saved public key. The response and inventory show the last proof
+  status and time separately from lifecycle state. A historical `active` state
+  does not prove the provider still has the key; a new key reads `not_checked`
+  until this challenge succeeds;
 - `POST /api/v1/managed-keys/approvals` — record a distinct custodian's approval for
   an opaque key handle and `rotate`/`revoke`/`zeroize`;
 - `POST /api/v1/managed-keys/rotate` — mint a successor key;

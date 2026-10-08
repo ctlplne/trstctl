@@ -4303,9 +4303,12 @@ pre-occupies the first deterministic handle with a same-algorithm foreign object
 proves that object remains untouched.
 
 The handlers at `POST /api/v1/managed-keys`, its dedicated JSON approval route, and
-its rotate, revoke, and zeroize
+its verify-custody, rotate, revoke, and zeroize
 companions return only opaque handles, public DER, algorithm, non-extractable state,
-and lifecycle state. Every mutation requires `Idempotency-Key`; immutable events
+and lifecycle state. Verification uses a fresh signer-generated challenge signature
+and records its last result and time independently of the lifecycle. This is a
+point-in-time proof, not a promise the provider will retain the key afterward.
+Every mutation requires `Idempotency-Key`; immutable events
 build the tenant/RLS projection, and the provider call comes only from the sealed
 outbox. Managed-key signing additionally requires a short-lived, request-bound token
 from the configured content-authority command. The signer consumes its random nonce

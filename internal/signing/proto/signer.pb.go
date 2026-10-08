@@ -299,6 +299,8 @@ const (
 	ManagedKeyAction_MANAGED_KEY_ACTION_ROTATE      ManagedKeyAction = 2
 	ManagedKeyAction_MANAGED_KEY_ACTION_REVOKE      ManagedKeyAction = 3
 	ManagedKeyAction_MANAGED_KEY_ACTION_ZEROIZE     ManagedKeyAction = 4
+	// Prove an existing key can still sign without changing lifecycle state.
+	ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY ManagedKeyAction = 5
 )
 
 // Enum value maps for ManagedKeyAction.
@@ -309,13 +311,15 @@ var (
 		2: "MANAGED_KEY_ACTION_ROTATE",
 		3: "MANAGED_KEY_ACTION_REVOKE",
 		4: "MANAGED_KEY_ACTION_ZEROIZE",
+		5: "MANAGED_KEY_ACTION_VERIFY_CUSTODY",
 	}
 	ManagedKeyAction_value = map[string]int32{
-		"MANAGED_KEY_ACTION_UNSPECIFIED": 0,
-		"MANAGED_KEY_ACTION_GENERATE":    1,
-		"MANAGED_KEY_ACTION_ROTATE":      2,
-		"MANAGED_KEY_ACTION_REVOKE":      3,
-		"MANAGED_KEY_ACTION_ZEROIZE":     4,
+		"MANAGED_KEY_ACTION_UNSPECIFIED":    0,
+		"MANAGED_KEY_ACTION_GENERATE":       1,
+		"MANAGED_KEY_ACTION_ROTATE":         2,
+		"MANAGED_KEY_ACTION_REVOKE":         3,
+		"MANAGED_KEY_ACTION_ZEROIZE":        4,
+		"MANAGED_KEY_ACTION_VERIFY_CUSTODY": 5,
 	}
 )
 
@@ -1453,7 +1457,7 @@ type ManageKeyRequest struct {
 	// operation_id is the durable control-plane outbox idempotency identity.
 	OperationId string           `protobuf:"bytes,3,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
 	Action      ManagedKeyAction `protobuf:"varint,4,opt,name=action,proto3,enum=trstctl.signing.v1.ManagedKeyAction" json:"action,omitempty"`
-	// key_id is empty for generate and required for rotate/revoke/zeroize.
+	// key_id is empty for generate and required for other actions.
 	KeyId         string    `protobuf:"bytes,5,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	Algorithm     Algorithm `protobuf:"varint,6,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1538,7 +1542,7 @@ type ManageKeyResponse struct {
 	KeyId     string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	Algorithm Algorithm              `protobuf:"varint,3,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	PublicKey []byte                 `protobuf:"bytes,4,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
-	// state is one of active, revoked, or zeroized.
+	// state is a lifecycle state, or "verified" for a custody proof.
 	State string `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
 	// replayed is true when the signer returned a durable completed operation
 	// rather than touching the provider again.
@@ -2820,13 +2824,14 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x15KEY_PURPOSE_CODE_SIGN\x10\x04\x12\x17\n" +
 	"\x13KEY_PURPOSE_GENERIC\x10\x05\x12\x1c\n" +
 	"\x18KEY_PURPOSE_ACME_ACCOUNT\x10\x06\x12\x1e\n" +
-	"\x1aKEY_PURPOSE_AUDIT_EVIDENCE\x10\a*\xb5\x01\n" +
+	"\x1aKEY_PURPOSE_AUDIT_EVIDENCE\x10\a*\xdc\x01\n" +
 	"\x10ManagedKeyAction\x12\"\n" +
 	"\x1eMANAGED_KEY_ACTION_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bMANAGED_KEY_ACTION_GENERATE\x10\x01\x12\x1d\n" +
 	"\x19MANAGED_KEY_ACTION_ROTATE\x10\x02\x12\x1d\n" +
 	"\x19MANAGED_KEY_ACTION_REVOKE\x10\x03\x12\x1e\n" +
-	"\x1aMANAGED_KEY_ACTION_ZEROIZE\x10\x042\xaf\v\n" +
+	"\x1aMANAGED_KEY_ACTION_ZEROIZE\x10\x04\x12%\n" +
+	"!MANAGED_KEY_ACTION_VERIFY_CUSTODY\x10\x052\xaf\v\n" +
 	"\rSignerService\x12^\n" +
 	"\vGenerateKey\x12&.trstctl.signing.v1.GenerateKeyRequest\x1a'.trstctl.signing.v1.GenerateKeyResponse\x12a\n" +
 	"\fGetPublicKey\x12'.trstctl.signing.v1.GetPublicKeyRequest\x1a(.trstctl.signing.v1.GetPublicKeyResponse\x12I\n" +

@@ -294,8 +294,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// Exact enrolled-controller cert-manager posture adds one read command.
 	// F33's exact issuance-request show gives headless operators the same
 	// decision and issuance evidence after the recent list rolls over.
-	if len(out) != 481 {
-		t.Fatalf("CLI commands = %d, want 481", len(out))
+	if len(out) != 482 {
+		t.Fatalf("CLI commands = %d, want 482", len(out))
 	}
 	return out
 }

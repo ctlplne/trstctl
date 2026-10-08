@@ -123,6 +123,10 @@ func (s *durableService) Zeroize(ctx context.Context, tenantID, keyID, requester
 	return s.submit(ctx, tenantID, keyID, requester, ActionZeroize, "", idempotencyKey, requestBinding)
 }
 
+func (s *durableService) VerifyCustody(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
+	return s.submit(ctx, tenantID, keyID, requester, ActionVerifyCustody, "", idempotencyKey, requestBinding)
+}
+
 func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester, action string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (Result, error) {
 	if tenantID == "" {
 		return Result{}, ErrTenantRequired
@@ -173,49 +177,55 @@ func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester,
 			return Result{}, store.ErrApprovalDrifted
 		}
 		command.Algorithm = string(alg)
-		command.Requester = requester
-		command.FromState = key.State
-		command.TargetVersion = uint64(key.Version)
-		command.ToState, _ = projections.ManagedKeyCommandTargetState(command.Action)
-		command.IdempotencyKeyDigest = projections.ManagedKeyIdempotencyKeyDigest(idempotencyKey)
-		evidence, err := projections.ManagedKeyApprovalEvidence(command)
-		if err != nil {
-			return Result{}, err
-		}
-		command.ApprovalEvidenceRefs = evidence
-		if s.approvals == nil {
-			return Result{}, fmt.Errorf("%w: exact one-shot approval authority is unavailable", ErrNotApproved)
-		}
-		authority, approved, reason := s.approvals.AuthorizeApproval(ctx, api.ApprovalIntent{
-			TenantID: tenantID, ResourceKind: "managed_key", ResourceID: keyID,
-			ResourceName: keyID, Action: action, Requester: requester,
-			FromState: key.State, ToState: command.ToState, TargetVersion: uint64(key.Version),
-			Reason: "authorize one exact managed-key " + command.Action + " command", EvidenceRefs: evidence,
-		})
-		if !approved {
-			// Another copy of the same request may have committed while this one
-			// was opening/checking the authority. Durable operation state wins over
-			// a now-consumed approval on an exact replay.
-			if replay, replayErr := s.operation(ctx, tenantID, operationID); replayErr == nil &&
-				managedKeyCommandMatches(replay, command, false) {
-				return s.wait(ctx, tenantID, operationID)
+		if action == ActionVerifyCustody {
+			if key.State != "active" {
+				return Result{}, fmt.Errorf("managedkeys: custody verification requires an active lifecycle key")
 			}
-			if reason == "" {
-				reason = "an exact approved operation request is required"
+		} else {
+			command.Requester = requester
+			command.FromState = key.State
+			command.TargetVersion = uint64(key.Version)
+			command.ToState, _ = projections.ManagedKeyCommandTargetState(command.Action)
+			command.IdempotencyKeyDigest = projections.ManagedKeyIdempotencyKeyDigest(idempotencyKey)
+			evidence, err := projections.ManagedKeyApprovalEvidence(command)
+			if err != nil {
+				return Result{}, err
 			}
-			if authority.Disposition == api.ApprovalDispositionPending && authority.RequestID != "" && authority.IntentDigest != "" {
-				return Result{}, &api.ManagedKeyApprovalPendingError{
-					RequestID: authority.RequestID, IntentDigest: authority.IntentDigest, Reason: reason,
+			command.ApprovalEvidenceRefs = evidence
+			if s.approvals == nil {
+				return Result{}, fmt.Errorf("%w: exact one-shot approval authority is unavailable", ErrNotApproved)
+			}
+			authority, approved, reason := s.approvals.AuthorizeApproval(ctx, api.ApprovalIntent{
+				TenantID: tenantID, ResourceKind: "managed_key", ResourceID: keyID,
+				ResourceName: keyID, Action: action, Requester: requester,
+				FromState: key.State, ToState: command.ToState, TargetVersion: uint64(key.Version),
+				Reason: "authorize one exact managed-key " + command.Action + " command", EvidenceRefs: evidence,
+			})
+			if !approved {
+				// Another copy of the same request may have committed while this one
+				// was opening/checking the authority. Durable operation state wins over
+				// a now-consumed approval on an exact replay.
+				if replay, replayErr := s.operation(ctx, tenantID, operationID); replayErr == nil &&
+					managedKeyCommandMatches(replay, command, false) {
+					return s.wait(ctx, tenantID, operationID)
 				}
+				if reason == "" {
+					reason = "an exact approved operation request is required"
+				}
+				if authority.Disposition == api.ApprovalDispositionPending && authority.RequestID != "" && authority.IntentDigest != "" {
+					return Result{}, &api.ManagedKeyApprovalPendingError{
+						RequestID: authority.RequestID, IntentDigest: authority.IntentDigest, Reason: reason,
+					}
+				}
+				return Result{}, fmt.Errorf("%w: %s", ErrNotApproved, reason)
 			}
-			return Result{}, fmt.Errorf("%w: %s", ErrNotApproved, reason)
-		}
-		command.Approval = &store.OperationApprovalUse{
-			RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
-			Requester: authority.Requester, ResourceKind: authority.ResourceKind,
-			ResourceID: authority.ResourceID, Action: authority.Action,
-			FromState: authority.FromState, ToState: authority.ToState,
-			TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+			command.Approval = &store.OperationApprovalUse{
+				RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
+				Requester: authority.Requester, ResourceKind: authority.ResourceKind,
+				ResourceID: authority.ResourceID, Action: authority.Action,
+				FromState: authority.FromState, ToState: authority.ToState,
+				TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+			}
 		}
 	}
 	payload, err := json.Marshal(command)
@@ -327,7 +337,8 @@ func (s *durableService) wait(ctx context.Context, tenantID, operationID string)
 			if err != nil {
 				return Result{}, err
 			}
-			return Result{KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: key.State, PublicDER: key.PublicDER}, nil
+			return Result{KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: key.State, PublicDER: key.PublicDER,
+				CustodyStatus: key.CustodyStatus, CustodyCheckedAt: key.CustodyCheckedAt}, nil
 		case "failed":
 			return Result{}, fmt.Errorf("managedkeys: signer operation failed: %s", op.LastError)
 		}
@@ -461,8 +472,8 @@ func (h *durableOutboxHandler) DeliverLicensed(ctx context.Context, message orch
 	if result.Provider != command.Provider || result.KeyID == "" || result.Algorithm != crypto.Algorithm(command.Algorithm) || len(result.PublicDER) == 0 {
 		return true, errors.New("managedkeys: signer returned a result that does not match the durable command")
 	}
-	if (command.Action == "revoke" || command.Action == "zeroize") && result.KeyID != command.KeyID {
-		return true, errors.New("managedkeys: signer returned a different key for a destructive command")
+	if (command.Action == "revoke" || command.Action == "zeroize" || command.Action == "verify_custody") && result.KeyID != command.KeyID {
+		return true, errors.New("managedkeys: signer returned a different key for a key-bound command")
 	}
 	payload, err := json.Marshal(projections.ManagedKeyCommandCompleted{
 		ManagedKeyCommand: command, ResultKeyID: result.KeyID,

@@ -19793,6 +19793,19 @@
           "algorithm": {
             "type": "string"
           },
+          "custody_checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custody_status": {
+            "enum": [
+              "not_checked",
+              "pending",
+              "verified",
+              "unavailable"
+            ],
+            "type": "string"
+          },
           "extractable": {
             "type": "boolean"
           },
@@ -20241,6 +20254,19 @@
             "format": "date-time",
             "type": "string"
           },
+          "custody_checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custody_status": {
+            "enum": [
+              "not_checked",
+              "pending",
+              "verified",
+              "unavailable"
+            ],
+            "type": "string"
+          },
           "extractable": {
             "type": "boolean"
           },
@@ -20273,7 +20299,8 @@
           "state",
           "extractable",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "custody_status"
         ],
         "type": "object"
       },
@@ -49914,6 +49941,74 @@
           }
         ],
         "summary": "Rotate a managed key (mint a successor; requires dual-control approval)",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-keys/verify-custody": {
+      "post": {
+        "operationId": "verifyManagedKeyCustody",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Prove an existing provider key still signs under its owned public key; record the time of that proof",
         "x-trstctl-permission": "keys:write"
       }
     },

@@ -6627,6 +6627,8 @@ ManagedKey = TypedDict(
     'ManagedKey',
     {
         'algorithm': str,
+        'custody_checked_at': str,
+        'custody_status': str,
         'extractable': bool,
         'key_id': str,
         'public_der': str,
@@ -6770,6 +6772,8 @@ ManagedKeyRecord = TypedDict(
     {
         'algorithm': str,
         'created_at': str,
+        'custody_checked_at': str,
+        'custody_status': str,
         'extractable': bool,
         'key_id': str,
         'provider': str,

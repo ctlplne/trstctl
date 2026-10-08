@@ -22,10 +22,11 @@ const managedKeySignAuthorizationTTL = 30 * time.Second
 type ManagedKeyAction string
 
 const (
-	ManagedKeyGenerate ManagedKeyAction = "generate"
-	ManagedKeyRotate   ManagedKeyAction = "rotate"
-	ManagedKeyRevoke   ManagedKeyAction = "revoke"
-	ManagedKeyZeroize  ManagedKeyAction = "zeroize"
+	ManagedKeyGenerate      ManagedKeyAction = "generate"
+	ManagedKeyRotate        ManagedKeyAction = "rotate"
+	ManagedKeyRevoke        ManagedKeyAction = "revoke"
+	ManagedKeyZeroize       ManagedKeyAction = "zeroize"
+	ManagedKeyVerifyCustody ManagedKeyAction = "verify_custody"
 )
 
 // ManagedKeyCommand is the durable outbox command contract used by the control
@@ -189,6 +190,8 @@ func managedKeyActionToProto(action ManagedKeyAction) (signerpb.ManagedKeyAction
 		return signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_REVOKE, nil
 	case ManagedKeyZeroize:
 		return signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_ZEROIZE, nil
+	case ManagedKeyVerifyCustody:
+		return signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY, nil
 	default:
 		return signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_UNSPECIFIED, fmt.Errorf("signing: unsupported managed-key action %q", action)
 	}

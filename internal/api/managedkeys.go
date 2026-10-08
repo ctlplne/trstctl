@@ -34,12 +34,20 @@ import (
 // managed-key implementation. Core API owns this DTO so the route handlers do not
 // link the EE service package.
 type ManagedKey struct {
-	KeyID       string           `json:"key_id"`
-	Algorithm   crypto.Algorithm `json:"algorithm"`
-	Version     int              `json:"version"`
-	State       string           `json:"state"`
-	PublicDER   []byte           `json:"public_der,omitempty"`
-	Extractable bool             `json:"extractable"`
+	KeyID            string           `json:"key_id"`
+	Algorithm        crypto.Algorithm `json:"algorithm"`
+	Version          int              `json:"version"`
+	State            string           `json:"state"`
+	PublicDER        []byte           `json:"public_der,omitempty"`
+	Extractable      bool             `json:"extractable"`
+	CustodyStatus    string           `json:"custody_status,omitempty"`
+	CustodyCheckedAt *time.Time       `json:"custody_checked_at,omitempty"`
+}
+
+// ManagedKeyCustodyVerifier is attached by the durable licensed service. A
+// fresh proof is a provider signature over a signer-generated challenge.
+type ManagedKeyCustodyVerifier interface {
+	VerifyCustody(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
 }
 
 var (
@@ -334,10 +342,11 @@ type managedKeyApprovalResponse struct {
 // The core recorder and licensed lifecycle both compile against these values, so
 // an approval can never drift onto a lookalike action string.
 const (
-	ManagedKeyActionGenerate = "managedkey:generate"
-	ManagedKeyActionRotate   = "managedkey:rotate"
-	ManagedKeyActionRevoke   = "managedkey:revoke"
-	ManagedKeyActionZeroize  = "managedkey:zeroize"
+	ManagedKeyActionGenerate      = "managedkey:generate"
+	ManagedKeyActionRotate        = "managedkey:rotate"
+	ManagedKeyActionRevoke        = "managedkey:revoke"
+	ManagedKeyActionZeroize       = "managedkey:zeroize"
+	ManagedKeyActionVerifyCustody = "managedkey:verify_custody"
 )
 
 var managedKeyApprovalActions = []string{"rotate", "revoke", "zeroize"}
@@ -351,37 +360,42 @@ var managedKeyCanonicalApprovalActions = []string{
 // managedKeyResponse is the public view of a managed key: identity, algorithm,
 // version, state, and PKIX public key — never the private material.
 type managedKeyResponse struct {
-	KeyID       string `json:"key_id"`
-	Algorithm   string `json:"algorithm"`
-	Version     int    `json:"version"`
-	State       string `json:"state"`
-	PublicDER   []byte `json:"public_der,omitempty"`
-	Extractable bool   `json:"extractable"`
+	KeyID            string     `json:"key_id"`
+	Algorithm        string     `json:"algorithm"`
+	Version          int        `json:"version"`
+	State            string     `json:"state"`
+	PublicDER        []byte     `json:"public_der,omitempty"`
+	Extractable      bool       `json:"extractable"`
+	CustodyStatus    string     `json:"custody_status,omitempty"`
+	CustodyCheckedAt *time.Time `json:"custody_checked_at,omitempty"`
 }
 
 func toManagedKeyResponse(r ManagedKey) managedKeyResponse {
 	return managedKeyResponse{
-		KeyID:       r.KeyID,
-		Algorithm:   string(r.Algorithm),
-		Version:     r.Version,
-		State:       string(r.State),
-		PublicDER:   r.PublicDER,
-		Extractable: r.Extractable,
+		KeyID:         r.KeyID,
+		Algorithm:     string(r.Algorithm),
+		Version:       r.Version,
+		State:         string(r.State),
+		PublicDER:     r.PublicDER,
+		Extractable:   r.Extractable,
+		CustodyStatus: r.CustodyStatus, CustodyCheckedAt: r.CustodyCheckedAt,
 	}
 }
 
 // The inventory contains only the durable, event-projected public metadata.
 // Provider is part of the identity: a key handle can occur in two backends.
 type managedKeyRecordResponse struct {
-	Provider    string    `json:"provider"`
-	KeyID       string    `json:"key_id"`
-	Algorithm   string    `json:"algorithm"`
-	Version     int       `json:"version"`
-	State       string    `json:"state"`
-	PublicDER   []byte    `json:"public_der,omitempty"`
-	Extractable bool      `json:"extractable"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Provider         string     `json:"provider"`
+	KeyID            string     `json:"key_id"`
+	Algorithm        string     `json:"algorithm"`
+	Version          int        `json:"version"`
+	State            string     `json:"state"`
+	PublicDER        []byte     `json:"public_der,omitempty"`
+	Extractable      bool       `json:"extractable"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	CustodyStatus    string     `json:"custody_status"`
+	CustodyCheckedAt *time.Time `json:"custody_checked_at,omitempty"`
 }
 
 type managedKeyRecordListResponse struct {
@@ -394,6 +408,7 @@ func toManagedKeyRecordResponse(key store.ManagedKey) managedKeyRecordResponse {
 		Provider: key.Provider, KeyID: key.KeyID, Algorithm: key.Algorithm,
 		Version: key.Version, State: key.State, PublicDER: key.PublicDER,
 		Extractable: false, CreatedAt: key.CreatedAt, UpdatedAt: key.UpdatedAt,
+		CustodyStatus: key.CustodyStatus, CustodyCheckedAt: key.CustodyCheckedAt,
 	}
 }
 
@@ -618,6 +633,23 @@ func (a *API) zeroizeManagedKey(w http.ResponseWriter, r *http.Request) {
 	a.managedKeyAction(w, r, idempotencyKey, "zeroize", a.managedKeys.Zeroize)
 }
 
+// verifyManagedKeyCustody queues a signer-isolated challenge signature. It
+// updates only the event-projected last proof; lifecycle state is untouched.
+//
+//trstctl:mutation
+func (a *API) verifyManagedKeyCustody(w http.ResponseWriter, r *http.Request) {
+	if a.managedKeys == nil {
+		a.writeError(w, managedKeysDisabledProblem())
+		return
+	}
+	verifier, ok := a.managedKeys.(ManagedKeyCustodyVerifier)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusNotImplemented, "managed-key custody verification is not attached"))
+		return
+	}
+	a.managedKeyAction(w, r, r.Header.Get("Idempotency-Key"), "verify_custody", verifier.VerifyCustody)
+}
+
 // approveManagedKeyAction records one distinct principal's approval for an exact
 // opaque provider key handle and destructive action. The key id stays in JSON: HSM
 // and cloud-KMS handles routinely contain slashes and must never be reinterpreted
@@ -697,7 +729,7 @@ func canonicalManagedKeyApprovalAction(action string) (string, bool) {
 	}
 }
 
-// managedKeyAction is the shared body of the destructive handlers. It decodes and
+// managedKeyAction is the shared body of key-bound handlers. It decodes and
 // validates the command and authenticated requester before the recorder can return
 // a cached response, then binds both to the raw tenant-global idempotency key. A
 // changed key, action, or caller therefore receives 409 without reaching approval

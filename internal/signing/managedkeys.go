@@ -270,14 +270,14 @@ func (r *managedKeyRuntime) execute(ctx context.Context, req *signerpb.ManageKey
 		case "failed":
 			return managedKeyJournalResult{}, true, managedKeyClosedFailure(codes.FailedPrecondition, closedManagedKeyFailureCode(prior.Failure))
 		case "executing":
-			if _, ok := provider.(crypto.OperationAwareRemoteKeyLifecycle); !ok {
+			if _, ok := provider.(crypto.OperationAwareRemoteKeyLifecycle); !ok && jr.Action != int32(signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY) {
 				return managedKeyJournalResult{}, true, status.Error(codes.Aborted, "managed-key operation has an indeterminate provider outcome; configured provider cannot reconcile the durable operation id")
 			}
 			result, execErr := r.apply(ctx, provider, jr)
 			if execErr != nil {
 				// Keep the intent executing. Provider text is untrusted and never
-				// persisted; an identical retry asks the operation-aware provider to
-				// find/reconcile the same effect again.
+				// persisted; an identical retry reconciles a provider mutation or
+				// safely repeats this read-only custody proof.
 				return managedKeyJournalResult{}, true, managedKeyClosedFailure(codes.Unavailable, managedKeyFailureProviderAction)
 			}
 			if err := r.completeOperation(&prior, result); err != nil {
@@ -295,10 +295,10 @@ func (r *managedKeyRuntime) execute(ctx context.Context, req *signerpb.ManageKey
 	}
 	result, execErr := r.apply(ctx, provider, jr)
 	if execErr != nil {
-		if _, ok := provider.(crypto.OperationAwareRemoteKeyLifecycle); ok {
-			// The provider owns a deterministic operation identity, so an error may
-			// be reconciled safely. Leave the already-durable intent in executing
-			// state instead of converting an ambiguous response into a terminal fact.
+		if _, ok := provider.(crypto.OperationAwareRemoteKeyLifecycle); ok || jr.Action == int32(signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY) {
+			// An operation-aware provider can reconcile a mutation; a read-only
+			// custody proof can be repeated safely. Preserve the durable intent
+			// for retry instead of treating an ambiguous response as final.
 			return managedKeyJournalResult{}, false, managedKeyClosedFailure(codes.Unavailable, managedKeyFailureProviderAction)
 		}
 		op.Status = "failed"
@@ -370,7 +370,8 @@ func validateManagedKeyRequest(req *signerpb.ManageKeyRequest) (managedKeyJourna
 		}
 	case signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_ROTATE,
 		signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_REVOKE,
-		signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_ZEROIZE:
+		signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_ZEROIZE,
+		signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY:
 		if req.GetKeyId() == "" || len(req.GetKeyId()) > 2048 {
 			return managedKeyJournalRequest{}, status.Error(codes.InvalidArgument, "managed-key action requires a bounded key id")
 		}
@@ -396,6 +397,42 @@ func (r *managedKeyRuntime) apply(ctx context.Context, provider crypto.RemoteKey
 		}
 	}
 	switch signerpb.ManagedKeyAction(req.Action) {
+	case signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY:
+		owner := r.owners[managedKeyOwnerKey(req.Provider, req.KeyID)]
+		if owner.State != "active" || len(owner.PublicDER) == 0 {
+			return managedKeyJournalResult{}, fmt.Errorf("only an active owned key can prove custody")
+		}
+		signer, ok := provider.(crypto.RemoteKeyDigestSigner)
+		if !ok {
+			return managedKeyJournalResult{}, fmt.Errorf("provider does not support existing-key signing")
+		}
+		challenge, err := crypto.RandomBytes(32)
+		if err != nil {
+			return managedKeyJournalResult{}, err
+		}
+		probe := append([]byte("trstctl managed-key custody verification v1\x00"), challenge...)
+		// Cloud KMS signing algorithms bind the digest hash to the EC curve.
+		// Use the matching hash so the same proof works for every supported key.
+		hash := crypto.SHA256
+		switch owner.Algorithm {
+		case crypto.ECDSAP384:
+			hash = crypto.SHA384
+		case crypto.ECDSAP521:
+			hash = crypto.SHA512
+		}
+		digest, err := crypto.Digest(hash, probe)
+		if err != nil {
+			return managedKeyJournalResult{}, err
+		}
+		opts := crypto.SignOptions{Hash: hash}
+		signature, err := signer.SignManagedDigest(ctx, ref, digest, opts)
+		if err != nil {
+			return managedKeyJournalResult{}, err
+		}
+		if err := crypto.VerifyDigest(crypto.PublicKey{Algorithm: owner.Algorithm, DER: owner.PublicDER}, digest, signature, opts); err != nil {
+			return managedKeyJournalResult{}, fmt.Errorf("provider signature does not match the owned public key: %w", err)
+		}
+		return managedKeyJournalResult{Provider: req.Provider, KeyID: req.KeyID, Algorithm: req.Algorithm, PublicDER: bytes.Clone(owner.PublicDER), State: "verified"}, nil
 	case signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_GENERATE:
 		var signer crypto.Signer
 		var next crypto.KeyRef
@@ -493,6 +530,9 @@ func managedKeyResult(provider string, ref crypto.KeyRef, pub crypto.PublicKey, 
 func managedKeyOwnerKey(provider, keyID string) string { return provider + "\x00" + keyID }
 
 func (r *managedKeyRuntime) recordOwner(req managedKeyJournalRequest, result managedKeyJournalResult) error {
+	if signerpb.ManagedKeyAction(req.Action) == signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY {
+		return nil
+	}
 	if signerpb.ManagedKeyAction(req.Action) == signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_ROTATE {
 		prior := r.owners[managedKeyOwnerKey(req.Provider, req.KeyID)]
 		prior.State = "superseded"

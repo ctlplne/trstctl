@@ -5239,6 +5239,7 @@
                 "getManagedKeyCustody",
                 "listManagedKeys",
                 "getManagedKey",
+                "verifyManagedKeyCustody",
                 "previewManagedKeyGeneration",
                 "generateManagedKey",
                 "approveManagedKeyAction",
@@ -5251,6 +5252,7 @@
                 "managed-keys custody",
                 "managed-keys list",
                 "managed-keys get",
+                "managed-keys verify-custody",
                 "managed-keys preview",
                 "managed-keys generate",
                 "managed-keys approve",
@@ -5283,7 +5285,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: /ca-hierarchy?tab=custody presents a three-step choose, preview, and generate/manage journey for AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2; it shows only secret-free startup requirement descriptors, provider/signer readiness, exact blockers, zero-effect preview evidence, execution effects, public key metadata, and lifecycle actions",
+                        "current_frontend_mapping: /ca-hierarchy?tab=custody serves six providers with startup requirements, effect-free preview, generation, lifecycle actions, and a dated signature proof of provider custody",
                         "web/src/__tests__/ca_hierarchy.test.tsx proves the ready journey and a deliberately disabled/unattached oracle that must keep generation locked",
                         "target_gui_mapping: delivered for the operator lifecycle; dedicated continuous device-health history is separately deferred as an observability enhancement"
                     ],
@@ -5297,7 +5299,7 @@
                 },
                 "cli": {
                     "evidence": [
-                        "CLI parity exposes the secret-free managed-keys custody read, tenant-scoped paginated list and exact provider/handle get for recovery after restart, effect-free managed-keys preview, and generate, approve, rotate, revoke, and zeroize lifecycle commands against the same licensed/configured API. The preview carries no idempotency key because it cannot write state or contact a provider; mutations remain safely retryable. Approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
+                        "CLI covers custody readiness, paginated inventory, exact key read, effect-free preview, generate, verify-custody, approve, rotate, revoke, and zeroize. Mutations use idempotency keys. Keys:approve is separate from Keys:write; launched-binary receipts prove runtime wiring."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -5306,8 +5308,8 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI includes an authenticated secret-free custody readiness plan for all six providers, tenant-scoped event-projected list and exact provider/handle reads for recovery after restart, and an exact effect-free generation preview.",
-                        "OpenAPI includes the managed-key lifecycle and dedicated approval routes with key-material-free request/response schemas.",
+                        "OpenAPI serves secret-free readiness for six providers, tenant inventory and exact reads, effect-free preview, and a dated custody signature proof.",
+                        "Lifecycle and exact approval routes exchange public metadata, never private key material.",
                         "ManagedKey includes extractable=false so generated clients and the console can display non-extractable custody without exposing private material.",
                         "OpenAPI operation getEditions includes additive FIPS posture fields for the validated-module path without making product certification a required claim."
                     ],
@@ -5492,6 +5494,7 @@
                             "OpenAPI operationId: getManagedKeyCustody",
                             "OpenAPI operationId: previewManagedKeyGeneration",
                             "OpenAPI operationId: generateManagedKey",
+                            "OpenAPI operationId: verifyManagedKeyCustody",
                             "OpenAPI operationId: approveManagedKeyAction",
                             "OpenAPI operationId: rotateManagedKey",
                             "OpenAPI operationId: revokeManagedKey",
@@ -5500,6 +5503,7 @@
                             "CLI command: managed-keys custody",
                             "CLI command: managed-keys preview",
                             "CLI command: managed-keys generate",
+                            "CLI command: managed-keys verify-custody",
                             "CLI command: managed-keys approve",
                             "CLI command: managed-keys rotate",
                             "CLI command: managed-keys revoke",

@@ -77,10 +77,11 @@ type Idempotency interface {
 // checks, distinct from the read-only generate (which mints new material and needs
 // no prior approval — there is nothing yet to destroy).
 const (
-	ActionGenerate = api.ManagedKeyActionGenerate
-	ActionRotate   = api.ManagedKeyActionRotate
-	ActionRevoke   = api.ManagedKeyActionRevoke
-	ActionZeroize  = api.ManagedKeyActionZeroize
+	ActionGenerate      = api.ManagedKeyActionGenerate
+	ActionRotate        = api.ManagedKeyActionRotate
+	ActionRevoke        = api.ManagedKeyActionRevoke
+	ActionZeroize       = api.ManagedKeyActionZeroize
+	ActionVerifyCustody = api.ManagedKeyActionVerifyCustody
 )
 
 // Errors the service returns.

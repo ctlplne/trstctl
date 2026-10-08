@@ -318,6 +318,8 @@ enum ManagedKeyAction {
   MANAGED_KEY_ACTION_ROTATE = 2;
   MANAGED_KEY_ACTION_REVOKE = 3;
   MANAGED_KEY_ACTION_ZEROIZE = 4;
+  // Prove an existing key can still sign without changing lifecycle state.
+  MANAGED_KEY_ACTION_VERIFY_CUSTODY = 5;
 }
 
 message ManageKeyRequest {
@@ -330,7 +332,7 @@ message ManageKeyRequest {
   // operation_id is the durable control-plane outbox idempotency identity.
   string operation_id = 3;
   ManagedKeyAction action = 4;
-  // key_id is empty for generate and required for rotate/revoke/zeroize.
+  // key_id is empty for generate and required for other actions.
   string key_id = 5;
   Algorithm algorithm = 6;
 }
@@ -340,7 +342,7 @@ message ManageKeyResponse {
   string key_id = 2;
   Algorithm algorithm = 3;
   bytes public_key = 4;
-  // state is one of active, revoked, or zeroized.
+  // state is a lifecycle state, or "verified" for a custody proof.
   string state = 5;
   // replayed is true when the signer returned a durable completed operation
   // rather than touching the provider again.

@@ -1741,6 +1741,7 @@ export interface Api {
   managedKeyCustody(): Promise<ManagedKeyCustodyPlan>;
   listManagedKeys(options?: { limit?: number; cursor?: string }): Promise<ManagedKeyRecordList>;
   getManagedKey(provider: string, keyId: string): Promise<ManagedKeyRecord>;
+  verifyManagedKeyCustody(keyId: string): Promise<ManagedKey>;
   previewManagedKeyGeneration(input: ManagedKeyGenerationPreviewRequest): Promise<ManagedKeyGenerationPreview>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
   rotateManagedKey(keyId: string): Promise<ManagedKey>;
@@ -2367,6 +2368,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     return req<ManagedKeyRecordList>(`/api/v1/managed-keys${query.size ? `?${query}` : ""}`);
   },
   getManagedKey: (provider, keyId) => req<ManagedKeyRecord>(`/api/v1/managed-keys/${encodeURIComponent(provider)}/${encodeURIComponent(keyId)}`),
+  verifyManagedKeyCustody: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/verify-custody", { key_id: keyId }),
   previewManagedKeyGeneration: (input) => postRead<ManagedKeyGenerationPreview>("/api/v1/managed-keys/preview", input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
   rotateManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/rotate", { key_id: keyId }),
