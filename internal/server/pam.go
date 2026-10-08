@@ -419,6 +419,9 @@ func (s *pamService) validate(tenantID, idempotencyKey, requester string, req ap
 	if req.Role == "" {
 		return fmt.Errorf("%w: role is required", api.ErrPAMInvalid)
 	}
+	if req.TTLSeconds < 0 || req.TTLSeconds > int64(s.maxTTL/time.Second) {
+		return fmt.Errorf("%w: ttl_seconds must be between 0 and %d", api.ErrPAMInvalid, int64(s.maxTTL/time.Second))
+	}
 	if req.Method == "" {
 		return fmt.Errorf("%w: method is required", api.ErrPAMInvalid)
 	}

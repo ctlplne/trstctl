@@ -59,6 +59,17 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		},
 	)
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "pam-requester", "access:read", "access:write")
+	for _, seconds := range []int64{-1, 6, 1 << 62} {
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", admin,
+			fmt.Sprintf("pam-invalid-ttl-%d", seconds), map[string]any{
+				"target_type": "postgres", "target_id": "pg-main", "role": "readonly",
+				"method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
+				"ttl_seconds": seconds,
+			})
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("PAM TTL %d status = %d, want 422 before mint; body=%s", seconds, status, body)
+		}
+	}
 
 	worker, ok := any(h.srv).(interface{ RunPAMSessionExpiry(context.Context) })
 	if !ok {

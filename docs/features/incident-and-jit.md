@@ -466,7 +466,9 @@ curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v
 
 The response includes the session id, expiry, and a one-time Postgres DSN. Store it
 only in the process that will use it. After `expires_at`, the background worker revokes
-the generated database role and records `pam.session.expired`.
+the generated database role and records `pam.session.expired`. `ttl_seconds` may be
+omitted to use the configured default; a negative value or a value above the
+configured maximum returns HTTP 422 before any target credential is created.
 
 Open a short-lived SSH session:
 
