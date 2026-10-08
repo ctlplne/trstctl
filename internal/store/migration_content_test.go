@@ -19,6 +19,55 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// Migration 0250 must not turn a historical active key into a claimed live
+// provider proof. Existing tenant rows acquire an explicit not_checked result
+// and no check time; their lifecycle and public material remain byte-identical.
+func testMigration0250ManagedKeyCustodyStartsUnproven(t *testing.T) {
+	const stable = `SELECT tenant_id::text, provider, key_id, algorithm, version,
+		state, encode(public_der, 'hex'), created_at::text, updated_at::text
+		FROM managed_keys ORDER BY tenant_id, provider, key_id`
+	runPopulatedDefaultMigrationHarness(t, 250, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx,
+					`INSERT INTO tenants (tenant_id, name) VALUES ($1, $2)
+					 ON CONFLICT (tenant_id) DO NOTHING`,
+					tenantID, fmt.Sprintf("pre-0250-tenant-%d", index)); err != nil {
+					t.Fatalf("seed pre-0250 tenant %s: %v", tenantID, err)
+				}
+				state := "active"
+				if index == 1 {
+					state = "superseded"
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO managed_keys
+					(tenant_id, provider, key_id, algorithm, version, state,
+					 public_der, created_at, updated_at)
+					VALUES ($1, 'aws-kms', $2, 'RSA-2048', 1, $3, $4,
+					        '2026-10-01T00:00:00Z'::timestamptz,
+					        '2026-10-01T00:00:01Z'::timestamptz)`,
+					tenantID, fmt.Sprintf("pre-0250-key-%d", index), state,
+					[]byte(fmt.Sprintf("public-der-%d", index))); err != nil {
+					t.Fatalf("seed pre-0250 managed key %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unchecked, undated bool
+			if err := pool.QueryRow(ctx, `SELECT count(*),
+				bool_and(custody_status = 'not_checked'),
+				bool_and(custody_checked_at IS NULL)
+				FROM managed_keys WHERE key_id LIKE 'pre-0250-key-%'`).Scan(
+				&rows, &unchecked, &undated); err != nil {
+				t.Fatalf("read 0250 historical custody defaults: %v", err)
+			}
+			if rows != want || !unchecked || !undated {
+				t.Fatalf("0250 invented custody proof: rows=%d want=%d unchecked=%t undated=%t",
+					rows, want, unchecked, undated)
+			}
+		})
+}
+
 // Migration 0247 must not guess an external ACME authority for old leaves.
 // The separate cursor starts at zero even when the ordinary projection is
 // already ahead, so retained issuance events can repair provenance on upgrade.
@@ -476,6 +525,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
 	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor
 	237: true, // TestMigration0237PreservesProviderAuthorityReceipts
@@ -1534,6 +1584,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0250_managed_key_custody_starts_unproven", testMigration0250ManagedKeyCustodyStartsUnproven)
 	t.Run("0175_agent_revocation_cache_posture", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 175)
