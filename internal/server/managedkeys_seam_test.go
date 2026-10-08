@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/api"
@@ -38,11 +39,13 @@ func (fakeManagedKeyService) Zeroize(context.Context, string, string, string, st
 type dualControlManagedKeyService struct {
 	checker api.ExactApprovalChecker
 	calls   map[string]int
+	issued  int
 }
 
 func (s *dualControlManagedKeyService) Generate(_ context.Context, _ string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
+	s.issued++
 	return api.ManagedKey{
-		KeyID: "https://managed-hsm.example.test/keys/tenant/root/v1", Algorithm: alg,
+		KeyID: fmt.Sprintf("https://managed-hsm.example.test/keys/tenant/root-%d/v1", s.issued), Algorithm: alg,
 		Version: 1, State: "active", PublicDER: []byte("public-key-metadata"),
 	}, nil
 }
@@ -65,17 +68,13 @@ func (s *dualControlManagedKeyService) Zeroize(ctx context.Context, tenantID, ke
 	if err := s.authorize(ctx, tenantID, keyID, api.ManagedKeyActionZeroize, requester); err != nil {
 		return api.ManagedKey{}, err
 	}
-	return api.ManagedKey{KeyID: keyID, Algorithm: crypto.RSA2048, Version: 2, State: "zeroized"}, nil
+	state, _ := projections.ManagedKeyCommandTargetState("zeroize", dualControlManagedKeyProvider)
+	return api.ManagedKey{KeyID: keyID, Algorithm: crypto.RSA2048, Version: 2,
+		State: state}, nil
 }
 
 func (s *dualControlManagedKeyService) authorize(ctx context.Context, tenantID, keyID, action, requester string) error {
-	toState := "superseded"
-	switch action {
-	case api.ManagedKeyActionRevoke:
-		toState = "revoked"
-	case api.ManagedKeyActionZeroize:
-		toState = "zeroized"
-	}
+	toState, _ := projections.ManagedKeyCommandTargetState(strings.TrimPrefix(action, "managedkey:"), dualControlManagedKeyProvider)
 	_, approved, reason := s.checker.AuthorizeApproval(ctx, api.ApprovalIntent{
 		TenantID: tenantID, ResourceKind: "managed_key", ResourceID: keyID,
 		ResourceName: keyID, Action: action, Requester: requester,
@@ -95,11 +94,11 @@ func (s *dualControlManagedKeyService) authorize(ctx context.Context, tenantID, 
 	return nil
 }
 
-func projectDualControlManagedKey(t *testing.T, h *servedHarness, key api.ManagedKey) {
+func projectDualControlManagedKey(t *testing.T, h *servedHarness, key api.ManagedKey, action string) {
 	t.Helper()
 	command := projections.ManagedKeyCommand{
-		OperationID: "managed-key-dual-generate-operation", Provider: dualControlManagedKeyProvider,
-		Action: "generate", Algorithm: string(key.Algorithm), RequestBinding: "managed-key-dual-generate-binding",
+		OperationID: "managed-key-dual-generate-operation-" + action, Provider: dualControlManagedKeyProvider,
+		Action: "generate", Algorithm: string(key.Algorithm), RequestBinding: "managed-key-dual-generate-binding-" + action,
 	}
 	appendAndProject := func(eventType string, payload any) {
 		t.Helper()
@@ -179,19 +178,6 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 		string(authz.KeysApprove),
 	})
 
-	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", requester, "managed-key-dual-generate", map[string]string{
-		"provider":  config.ManagedKeyProviderAWS,
-		"algorithm": string(crypto.RSA2048),
-	})
-	if status != http.StatusCreated {
-		t.Fatalf("generate managed key = %d body=%s", status, body)
-	}
-	var key api.ManagedKey
-	if err := json.Unmarshal(body, &key); err != nil {
-		t.Fatalf("decode generated managed key: %v", err)
-	}
-	projectDualControlManagedKey(t, h, key)
-
 	for _, action := range []struct {
 		name      string
 		path      string
@@ -200,8 +186,25 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 	}{
 		{name: "rotate", path: "/api/v1/managed-keys/rotate", canonical: api.ManagedKeyActionRotate, state: "active"},
 		{name: "revoke", path: "/api/v1/managed-keys/revoke", canonical: api.ManagedKeyActionRevoke, state: "revoked"},
-		{name: "zeroize", path: "/api/v1/managed-keys/zeroize", canonical: api.ManagedKeyActionZeroize, state: "zeroized"},
+		{name: "zeroize", path: "/api/v1/managed-keys/zeroize", canonical: api.ManagedKeyActionZeroize, state: "deletion_pending"},
 	} {
+		// Each destructive action needs its own event-projected active target.
+		// A prior revoke changes that target's state and must make later stale
+		// approvals fail closed rather than masquerade as a dual-control failure.
+		status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", requester,
+			"managed-key-dual-generate-"+action.name, map[string]string{
+				"provider":  config.ManagedKeyProviderAWS,
+				"algorithm": string(crypto.RSA2048),
+			})
+		if status != http.StatusCreated {
+			t.Fatalf("generate %s managed key = %d body=%s", action.name, status, body)
+		}
+		var key api.ManagedKey
+		if err := json.Unmarshal(body, &key); err != nil {
+			t.Fatalf("decode %s generated managed key: %v", action.name, err)
+		}
+		projectDualControlManagedKey(t, h, key, action.name)
+
 		idempotencyKey := "managed-key-dual-" + action.name
 		status, body = doBearer(t, h.ts, http.MethodPost, action.path, requester, idempotencyKey, map[string]string{"key_id": key.KeyID})
 		if status != http.StatusForbidden {
@@ -279,8 +282,6 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 			t.Fatalf("%s state = %q, want %q", action.name, result.State, action.state)
 		}
 		// This seam service proves the core approval wiring only; the EE durable
-		// lifecycle owns mutation projection and consumption. Keep every action
-		// aimed at the same event-projected active generation so each independent
-		// two-person gate is checked against real target authority.
+		// lifecycle owns mutation projection and consumption.
 	}
 }
