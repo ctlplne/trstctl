@@ -121,6 +121,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("OwnerRemediationAction", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:ownerRemediationActionFromFinding"),
 	evidence("OwnerRemediationQueue", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:ownerRemediationSummaryFor"),
 	evidence("OwnerRemediationRun", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:API.acceptedOwnerRemediationRuns"),
+	evidence("PAMApprovalRequest", "status", operationApprovalPredicate, "internal/server/pam.go:pamService.RequestPAMSession"),
 	evidence("PAMSession", "status", observationPredicate, "internal/api/pam.go:API.listPAMSessions"),
 	evidence("PendingApprovalRequest", "status", operationApprovalPredicate, "internal/server/approval_gate.go:approvalRequestRecord"),
 	evidence("PQCMigrationCampaign", "status", eventProjectionPredicate, "internal/pqcmigration/server.go:pqcMigrationService.Progress"),

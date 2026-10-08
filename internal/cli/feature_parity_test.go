@@ -294,8 +294,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// Exact enrolled-controller cert-manager posture adds one read command.
 	// F33's exact issuance-request show gives headless operators the same
 	// decision and issuance evidence after the recent list rolls over.
-	if len(out) != 483 {
-		t.Fatalf("CLI commands = %d, want 483", len(out))
+	// U6 adds a separate reviewed PAM session request before activation.
+	if len(out) != 484 {
+		t.Fatalf("CLI commands = %d, want 484", len(out))
 	}
 	return out
 }
