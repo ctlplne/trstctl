@@ -1186,15 +1186,15 @@ export const messages = {
     description: "A provider operation completed and inventory will refresh.",
   },
   "caHierarchy.custody.operation.failed": {
-    defaultMessage: "Provider failed. Check audit, restore it, then retry with a new request key.",
+    defaultMessage: "Provider failed. Review audit, restore it, then retry.",
     description: "A provider operation exhausted its retries.",
   },
   "caHierarchy.custody.approvalPendingTitle": {
-    defaultMessage: "Managed key action awaits approval",
+    defaultMessage: "Managed key approval needed",
     description: "Heading for an exact pending managed-key dual-control request.",
   },
   "caHierarchy.custody.approvalPendingDetail": {
-    defaultMessage: "Another custodian must approve; the requester cannot.",
+    defaultMessage: "A different custodian must approve.",
     description: "Explain the managed-key dual-control boundary.",
   },
   "caHierarchy.custody.approvalRequestID": {
@@ -1202,8 +1202,12 @@ export const messages = {
     description: "Accessible label for the exact pending managed-key request ID.",
   },
   "caHierarchy.custody.approvalPendingNext": {
-    defaultMessage: "Open approvals, then retry. The key has not changed.",
-    description: "Next operator step after a managed-key action opens an approval request.",
+    defaultMessage: "After approval, retry here. The key has not changed.",
+    description: "Next step and exact browser request retention after a protected managed-key action opens approval.",
+  },
+  "caHierarchy.custody.intent.unavailable": {
+    defaultMessage: "Sign in and allow site storage. If approval is pending, ask an admin to check it.",
+    description: "Fail closed when the browser cannot safely retain the exact managed-key action request through approval.",
   },
   "caHierarchy.custody.openApprovalRequests": {
     defaultMessage: "Open approval requests",

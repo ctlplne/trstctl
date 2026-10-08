@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/auth/AuthProvider";
 import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
@@ -21,6 +22,7 @@ import {
   type ManagedKeyGenerationPreviewRequest,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { clearManagedKeyActionIntent, getOrCreateManagedKeyActionIntent } from "@/lib/managedKeyActionIntent";
 import { useApiQuery } from "@/lib/query";
 
 const algorithms: ManagedKeyGenerateRequest["algorithm"][] = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "RSA-2048", "RSA-3072", "RSA-4096"];
@@ -55,6 +57,7 @@ function pendingManagedKeyApproval(error: unknown): PendingManagedKeyApproval | 
  * this component never accepts, stores, or sends those values. */
 export function ManagedKeyCustodyWorkspace() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [plan, setPlan] = useState<ManagedKeyCustodyPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +73,7 @@ export function ManagedKeyCustodyWorkspace() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<PendingManagedKeyApproval | null>(null);
   const [operation, setOperation] = useState<ManagedKeyOperation | null>(null);
+  const [operationAction, setOperationAction] = useState<{ action: "rotate" | "revoke" | "zeroize"; keyId: string } | null>(null);
   const [inventory, setInventory] = useState<ManagedKeyRecord[]>([]);
   const [inventoryCursor, setInventoryCursor] = useState("");
   const [inventoryBusy, setInventoryBusy] = useState(false);
@@ -134,6 +138,10 @@ export function ManagedKeyCustodyWorkspace() {
   useEffect(() => {
     const next = operationRead.data;
     if (!next || !operation || next.operation_id !== operation.operation_id || next.status === "queued" || next.status === operation.status) return;
+    if (operationAction && user) {
+      clearManagedKeyActionIntent(user, operationAction.action, operationAction.keyId);
+      setOperationAction(null);
+    }
     setOperation(next);
     void loadInventory();
     if (next.provider && (next.result_key_id || next.key_id)) {
@@ -145,7 +153,7 @@ export function ManagedKeyCustodyWorkspace() {
         })
         .catch((error) => setKeyError(apiProblemMessage(error, translateNow("caHierarchy.custody.inventoryLoadFailed"))));
     }
-  }, [operationRead.data, operation, loadInventory]);
+  }, [operationRead.data, operation, operationAction, user, loadInventory]);
 
   async function selectManagedKey(key: ManagedKeyRecord) {
     setKeyBusy(true);
@@ -252,14 +260,25 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyError(null);
     setPendingApproval(null);
     setOperation(null);
+    setOperationAction(null);
     try {
-      const actionMethods = {
+      const requestKey = action === "verify_custody" ? undefined : user ? getOrCreateManagedKeyActionIntent(user, action, keyId) : null;
+      if (requestKey === null) {
+        setKeyError(t("caHierarchy.custody.intent.unavailable"));
+        return;
+      }
+      const actionMethods: Record<typeof action, (keyId: string, requestKey?: string) => Promise<ManagedKey | ManagedKeyOperation>> = {
         rotate: api.rotateManagedKey,
         revoke: api.revokeManagedKey,
         zeroize: api.zeroizeManagedKey,
         verify_custody: api.verifyManagedKeyCustody,
       };
-      const next = await actionMethods[action](keyId);
+      const next = await actionMethods[action](keyId, requestKey);
+      const queued = isManagedKeyOperation(next) && next.status === "queued";
+      if (action !== "verify_custody") {
+        if (queued) setOperationAction({ action, keyId });
+        else clearManagedKeyActionIntent(user!, action, keyId);
+      }
       if (isManagedKeyOperation(next)) {
         setOperation(next);
         accepted = true;

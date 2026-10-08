@@ -6,6 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
 import { CAHierarchy } from "@/pages/CAHierarchy";
+import { AppQueryProvider } from "@/lib/query";
+
+vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { tenant_id: "tenant-a", subject: "eval-admin" } }) }));
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -32,15 +35,18 @@ vi.mock("@/lib/api", async (orig) => {
 function renderCAHierarchy() {
   return render(
     <MemoryRouter>
-      <ToastProvider>
-        <CAHierarchy />
-      </ToastProvider>
+      <AppQueryProvider>
+        <ToastProvider>
+          <CAHierarchy />
+        </ToastProvider>
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
 
 describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.issuers.mockResolvedValue([
@@ -179,15 +185,15 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
     expect(screen.queryByText(/BEGIN PRIVATE KEY|PRIVATE KEY-----/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
-    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("Version 2")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Revoke key kms/root-1" }));
-    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("revoked")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Zeroize key kms/root-1" }));
-    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("zeroized")).toBeInTheDocument();
   });
 

@@ -9,6 +9,8 @@ import { CAHierarchy } from "@/pages/CAHierarchy";
 import { ToastProvider } from "@/components/ToastProvider";
 import { AppQueryProvider } from "@/lib/query";
 
+vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { tenant_id: "tenant-a", subject: "eval-admin" } }) }));
+
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     issuers: vi.fn(),
@@ -107,6 +109,7 @@ function externalCAUnavailableRuntime(): CapabilityView {
 
 describe("CA hierarchy and custody surface", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.listManagedKeys.mockResolvedValue({ items: [], next_cursor: "" });
@@ -1036,19 +1039,19 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("Version 1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Verify provider key" }));
-    await waitFor(() => expect(apiMock.verifyManagedKeyCustody).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.verifyManagedKeyCustody).toHaveBeenCalledWith("kms/root-1", undefined));
     expect(await screen.findByText(/Verified then/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
-    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("Version 2")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Revoke key kms/root-1" }));
-    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("revoked")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Zeroize key kms/root-1" }));
-    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1"));
+    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
     expect(await screen.findByText("zeroized")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
@@ -1131,7 +1134,7 @@ describe("CA hierarchy and custody surface", () => {
     await waitFor(() => expect(apiMock.getManagedKeyOperation).toHaveBeenCalledWith(id));
     const operationPanel = screen.getByText("Accepted; checking the provider automatically.").closest<HTMLElement>('[role="status"]');
     await user.click(within(operationPanel!).getByRole("button", { name: "Refresh status" }));
-    expect(await screen.findByText(/Provider failed. Check audit/)).toBeInTheDocument();
+    expect(await screen.findByText(/Provider failed. Review audit/)).toBeInTheDocument();
     expect(within(detail!).getByText(/Could not verify/)).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
   });
@@ -1157,12 +1160,21 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(screen.getByRole("button", { name: "Generate managed key" }));
     await user.click(await screen.findByRole("button", { name: "Rotate key kms/root-1" }));
 
-    expect(await screen.findByText("Managed key action awaits approval")).toBeInTheDocument();
+    expect(await screen.findByText("Managed key approval needed")).toBeInTheDocument();
     expect(screen.getByText(requestId)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open approval requests" })).toHaveAttribute("href", "/approvals");
     expect(screen.getByText("The key has not changed.", { exact: false })).toBeInTheDocument();
     expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
+    const firstRequestKey = apiMock.rotateManagedKey.mock.calls[0]?.[1];
+    expect(firstRequestKey).toEqual(expect.any(String));
+    await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledTimes(2));
+    expect(apiMock.rotateManagedKey.mock.calls[1]?.[1]).toBe(firstRequestKey);
+    expect(await screen.findByText("Version 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledTimes(3));
+    expect(apiMock.rotateManagedKey.mock.calls[2]?.[1]).not.toBe(firstRequestKey);
   });
 
   it("does not present an unrelated managed-key refusal as an approval request", async () => {
@@ -1175,7 +1187,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(await screen.findByRole("button", { name: "Rotate key kms/root-1" }));
 
     expect(await screen.findByText("Managed key action failed")).toBeInTheDocument();
-    expect(screen.queryByText("Managed key action awaits approval")).not.toBeInTheDocument();
+    expect(screen.queryByText("Managed key approval needed")).not.toBeInTheDocument();
   });
 
   it("keeps generation locked when the server preview names a deployment blocker", async () => {

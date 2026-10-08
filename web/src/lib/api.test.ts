@@ -1008,9 +1008,9 @@ describe("api CA hierarchy and managed keys", () => {
     ]);
 
     await api.generateManagedKey({ provider: "aws", algorithm: "ECDSA-P256" });
-    await api.rotateManagedKey("kms/root-1");
-    await api.revokeManagedKey("kms/root-1");
-    await api.zeroizeManagedKey("kms/root-1");
+    await api.rotateManagedKey("kms/root-1", "approved-rotate-request");
+    await api.revokeManagedKey("kms/root-1", "approved-revoke-request");
+    await api.zeroizeManagedKey("kms/root-1", "approved-zeroize-request");
 
     expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
       "/api/v1/managed-keys",
@@ -1018,6 +1018,12 @@ describe("api CA hierarchy and managed keys", () => {
       "/api/v1/managed-keys/revoke",
       "/api/v1/managed-keys/zeroize",
     ]);
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.slice(1)
+        .map((call) => (call[1]?.headers as Record<string, string>)["Idempotency-Key"]),
+    ).toEqual(["approved-rotate-request", "approved-revoke-request", "approved-zeroize-request"]);
   });
 });
 

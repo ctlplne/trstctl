@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
 import { CAHierarchy } from "@/pages/CAHierarchy";
+import { AppQueryProvider } from "@/lib/query";
+
+vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { tenant_id: "tenant-a", subject: "eval-admin" } }) }));
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -23,6 +26,7 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 beforeEach(() => {
+  localStorage.clear();
   apiMock.issuers.mockReset().mockResolvedValue([]);
   apiMock.managedKeyCustody.mockReset().mockResolvedValue({
     enabled: true,
@@ -67,9 +71,11 @@ describe("U7-4 ceremony + KMS custody console", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/ca-hierarchy?tab=custody"]}>
-        <ToastProvider>
-          <CAHierarchy />
-        </ToastProvider>
+        <AppQueryProvider>
+          <ToastProvider>
+            <CAHierarchy />
+          </ToastProvider>
+        </AppQueryProvider>
       </MemoryRouter>,
     );
     await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
@@ -79,7 +85,7 @@ describe("U7-4 ceremony + KMS custody console", () => {
 
     const rotate = await screen.findByRole("button", { name: "Rotate key key-1" });
     await user.click(rotate);
-    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("key-1"));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("key-1", expect.any(String)));
   });
 
   it("recovers a projected managed key after a fresh mount without replaying generation", async () => {
@@ -99,9 +105,11 @@ describe("U7-4 ceremony + KMS custody console", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/ca-hierarchy?tab=custody"]}>
-        <ToastProvider>
-          <CAHierarchy />
-        </ToastProvider>
+        <AppQueryProvider>
+          <ToastProvider>
+            <CAHierarchy />
+          </ToastProvider>
+        </AppQueryProvider>
       </MemoryRouter>,
     );
     await user.click(await screen.findByRole("button", { name: "Inspect key" }));
@@ -127,13 +135,15 @@ describe("U7-4 ceremony + KMS custody console", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/ca-hierarchy?tab=custody"]}>
-        <ToastProvider>
-          <CAHierarchy />
-        </ToastProvider>
+        <AppQueryProvider>
+          <ToastProvider>
+            <CAHierarchy />
+          </ToastProvider>
+        </AppQueryProvider>
       </MemoryRouter>,
     );
     await user.click(await screen.findByRole("button", { name: "Inspect key" }));
     expect(await screen.findByRole("button", { name: "Rotate key old-key" })).toBeDisabled();
-    expect(screen.getByText(/provider that is not attached/)).toBeInTheDocument();
+    expect(screen.getByText("Restore this provider before changing the key.")).toBeInTheDocument();
   });
 });

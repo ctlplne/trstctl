@@ -1747,9 +1747,9 @@ export interface Api {
   verifyManagedKeyCustody(keyId: string): Promise<ManagedKey | ManagedKeyOperation>;
   previewManagedKeyGeneration(input: ManagedKeyGenerationPreviewRequest): Promise<ManagedKeyGenerationPreview>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey | ManagedKeyOperation>;
-  rotateManagedKey(keyId: string): Promise<ManagedKey | ManagedKeyOperation>;
-  revokeManagedKey(keyId: string): Promise<ManagedKey | ManagedKeyOperation>;
-  zeroizeManagedKey(keyId: string): Promise<ManagedKey | ManagedKeyOperation>;
+  rotateManagedKey(keyId: string, idempotencyKey?: string): Promise<ManagedKey | ManagedKeyOperation>;
+  revokeManagedKey(keyId: string, idempotencyKey?: string): Promise<ManagedKey | ManagedKeyOperation>;
+  zeroizeManagedKey(keyId: string, idempotencyKey?: string): Promise<ManagedKey | ManagedKeyOperation>;
   accessRoles(): Promise<RoleList>;
   oidcMappingStatus(): Promise<OIDCMappingStatus>;
   members(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): Promise<MemberList>;
@@ -2055,8 +2055,12 @@ async function allPendingApprovalRequests(): Promise<PendingApprovalRequest[]> {
   return items;
 }
 
-function managedKeyAction(action: "rotate" | "revoke" | "zeroize" | "verify-custody", keyId: string): Promise<ManagedKey | ManagedKeyOperation> {
-  return mutate("POST", `/api/v1/managed-keys/${action}`, { key_id: keyId });
+function managedKeyAction(
+  action: "rotate" | "revoke" | "zeroize" | "verify-custody",
+  keyId: string,
+  idempotencyKey?: string,
+): Promise<ManagedKey | ManagedKeyOperation> {
+  return mutate("POST", `/api/v1/managed-keys/${action}`, { key_id: keyId }, idempotencyKey);
 }
 
 const liveApi: Omit<Api, keyof BootstrapApi> = {
@@ -2379,9 +2383,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   verifyManagedKeyCustody: (keyId) => managedKeyAction("verify-custody", keyId),
   previewManagedKeyGeneration: (input) => postRead<ManagedKeyGenerationPreview>("/api/v1/managed-keys/preview", input),
   generateManagedKey: (input) => mutate<ManagedKey | ManagedKeyOperation>("POST", "/api/v1/managed-keys", input),
-  rotateManagedKey: (keyId) => managedKeyAction("rotate", keyId),
-  revokeManagedKey: (keyId) => managedKeyAction("revoke", keyId),
-  zeroizeManagedKey: (keyId) => managedKeyAction("zeroize", keyId),
+  rotateManagedKey: (keyId, idempotencyKey) => managedKeyAction("rotate", keyId, idempotencyKey),
+  revokeManagedKey: (keyId, idempotencyKey) => managedKeyAction("revoke", keyId, idempotencyKey),
+  zeroizeManagedKey: (keyId, idempotencyKey) => managedKeyAction("zeroize", keyId, idempotencyKey),
   accessRoles: () => req<RoleList>("/api/v1/access/roles"),
   oidcMappingStatus: () => req<OIDCMappingStatus>("/api/v1/access/oidc-mapping"),
   members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),

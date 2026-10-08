@@ -1686,7 +1686,12 @@ When the licensed attach seam succeeds, operators with `keys:write` can exercise
 each destructive action, two different principals with `keys:approve` record the
 exact opaque `key_id` and `rotate`, `revoke`, or `zeroize` action through
 `POST /api/v1/managed-keys/approvals`; the requester cannot self-approve. Requests
-require `Idempotency-Key`; lifecycle events omit private bytes; tenant projections
+require `Idempotency-Key`; the requester must replay that same key after approval,
+because a different key creates and supersedes a different immutable request. The
+console retains its key in first-party storage for the signed-in tenant, requester,
+key, and action until the provider effect is terminal. Clearing site storage or
+switching browser profiles requires a new request and two new approvals. Lifecycle
+events omit private bytes; tenant projections
 use PostgreSQL RLS; and provider work is delivered by the durable outbox to the
 separate signer. The signer writes an fsync-backed operation intent before provider I/O.
 Every shipped provider also carries that identity into provider state: an atomic AWS tag,

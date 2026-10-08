@@ -691,6 +691,17 @@ operation ID. It checks for a terminal result while the tab is visible and
 refreshes on return; **Refresh status** checks immediately. Copy the ID to
 continue with the CLI after leaving the page.
 
+Rotate, revoke, and zeroize require two distinct custodians to approve one exact
+request before the requester retries the action. The console retains that
+request's `Idempotency-Key` in first-party browser storage, scoped to the signed-in
+tenant, requester, key, and action, through navigation and browser reloads. Return
+to the same browser profile after approval and click the action again. The console
+clears the saved request only after a terminal provider result. If site storage is
+cleared or the requester switches browser profiles, a fresh action key opens a
+new approval request and supersedes the old one; the custodians must approve the
+new request. API and CLI callers must likewise retain and reuse their original
+`Idempotency-Key` across the approval wait. A different key is a new intent.
+
 The CLI mirrors those verbs under `trstctl managed-keys`, including `list`,
 `get <provider> <key_id>`, and `approve`.
 `operation <operation_id>` reads a pending command without issuing it again.
