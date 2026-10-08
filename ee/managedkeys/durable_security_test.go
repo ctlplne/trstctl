@@ -189,7 +189,9 @@ func TestManagedKeyTerminalFailureCarriesRequestBinding(t *testing.T) {
 	if err := json.Unmarshal(payload, &failure); err != nil {
 		t.Fatal(err)
 	}
-	if failure.OperationID != command.OperationID || failure.RequestBinding != command.RequestBinding || failure.Error == "" {
+	if failure.OperationID != command.OperationID || failure.RequestBinding != command.RequestBinding ||
+		failure.Provider != command.Provider || failure.Action != command.Action ||
+		failure.KeyID != command.KeyID || failure.Error == "" {
 		t.Fatalf("terminal failure lost durable identity: %+v", failure)
 	}
 }

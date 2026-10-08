@@ -259,17 +259,18 @@ func (s *Store) upsertManagedKeyTx(ctx context.Context, tx pgx.Tx, key ManagedKe
 	return err
 }
 
-func (s *Store) ApplyManagedKeyFailedTx(ctx context.Context, tx pgx.Tx, tenantID, operationID, requestBinding, failure string, failedAt time.Time) error {
+func (s *Store) ApplyManagedKeyFailedTx(ctx context.Context, tx pgx.Tx, tenantID, operationID, requestBinding, provider, action, keyID, failure string, failedAt time.Time) error {
 	if tenantID == "" || operationID == "" || requestBinding == "" || failure == "" {
 		return fmt.Errorf("store: managed-key failure is incomplete")
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE managed_key_operations
 		    SET status = CASE WHEN status = 'completed' THEN status ELSE 'failed' END,
-		        last_error = CASE WHEN status = 'completed' THEN last_error ELSE $4 END,
-		        updated_at = GREATEST(updated_at, $5)
-		  WHERE tenant_id = $1 AND operation_id = $2 AND request_binding = $3`,
-		tenantID, operationID, requestBinding, failure, failedAt)
+		        last_error = CASE WHEN status = 'completed' THEN last_error ELSE $7 END,
+		        updated_at = GREATEST(updated_at, $8)
+		  WHERE tenant_id = $1 AND operation_id = $2 AND request_binding = $3
+		    AND ($4 = '' OR (provider = $4 AND action = $5 AND key_id = $6))`,
+		tenantID, operationID, requestBinding, provider, action, keyID, failure, failedAt)
 	if err != nil {
 		return err
 	}

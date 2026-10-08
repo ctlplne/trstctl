@@ -409,6 +409,7 @@ func (h *durableOutboxHandler) DeliverLicensedTerminalFailure(ctx context.Contex
 	}
 	event, err := h.log.Append(ctx, events.Event{
 		Type: projections.EventManagedKeyCommandFailed, TenantID: message.TenantID, Data: payload,
+		SchemaVersion: projections.ManagedKeyFailureEventSchemaVersion,
 	})
 	if err != nil {
 		return true, err
@@ -420,6 +421,9 @@ func managedKeyTerminalFailurePayload(command projections.ManagedKeyCommand) ([]
 	return json.Marshal(projections.ManagedKeyCommandFailed{
 		OperationID:    command.OperationID,
 		RequestBinding: command.RequestBinding,
+		Provider:       command.Provider,
+		Action:         command.Action,
+		KeyID:          command.KeyID,
 		Error:          "isolated signer operation exhausted its retry budget",
 	})
 }

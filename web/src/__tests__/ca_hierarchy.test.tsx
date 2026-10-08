@@ -1010,7 +1010,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy("/ca-hierarchy?tab=custody");
 
     expect(await screen.findByRole("heading", { name: "Managed key custody" })).toBeInTheDocument();
-    expect(screen.getByText("Saved records survive restart. Verify the provider before using a key.")).toBeInTheDocument();
+    expect(screen.getByText("Records survive restart. Prove custody before use.")).toBeInTheDocument();
     const provider = await screen.findByRole("combobox", { name: "Custody provider" });
     expect(within(provider).getAllByRole("option")).toHaveLength(6);
     expect(screen.getByText("Configured now: Google Cloud KMS")).toBeInTheDocument();
@@ -1073,6 +1073,35 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText(/Could not verify/).length).toBeGreaterThan(0);
     expect(screen.getByText("Lifecycle state")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Verify provider key" })).toBeEnabled();
+  });
+
+  it("refreshes the selected managed-key detail when a queued proof fails", async () => {
+    const user = userEvent.setup();
+    const pending = {
+      provider: "aws-kms",
+      key_id: "kms/lost-after-restart",
+      algorithm: "RSA-2048",
+      version: 1,
+      state: "active",
+      extractable: false,
+      custody_status: "pending",
+      created_at: "2026-10-01T00:00:00Z",
+      updated_at: "2026-10-01T00:00:00Z",
+    };
+    const unavailable = { ...pending, custody_status: "unavailable", custody_checked_at: "2026-10-07T20:00:00Z" };
+    apiMock.listManagedKeys.mockResolvedValueOnce({ items: [pending], next_cursor: "" }).mockResolvedValue({ items: [unavailable], next_cursor: "" });
+    apiMock.getManagedKey.mockResolvedValueOnce(pending).mockResolvedValue(unavailable);
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    await user.click(await screen.findByRole("button", { name: "Inspect key" }));
+    const detail = screen.getByRole("heading", { name: "Managed key", exact: true }).closest("section");
+    expect(detail).not.toBeNull();
+    expect(within(detail!).getByText("Checking provider")).toBeInTheDocument();
+
+    const custody = screen.getByRole("heading", { name: "Managed key custody" }).closest("section");
+    expect(custody).not.toBeNull();
+    await user.click(within(custody!).getByRole("button", { name: "Refresh status" }));
+    await waitFor(() => expect(within(detail!).getByText(/Could not verify/)).toBeInTheDocument());
+    expect(apiMock.getManagedKey).toHaveBeenCalledTimes(2);
   });
 
   it("shows a genuine pending managed-key approval as a waiting state with the exact request", async () => {

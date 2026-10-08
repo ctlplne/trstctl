@@ -104,3 +104,53 @@ func TestManagedKeyCustodyProofProjectionKeepsLifecycleAndTenantBoundary(t *test
 		t.Fatalf("generation redelivery erased the later signature proof: key=%+v err=%v", newKey, err)
 	}
 }
+
+func TestManagedKeyFailureV2BindsAuditKeyToDurableOperation(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: tenantA}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		`INSERT INTO managed_keys (tenant_id,provider,key_id,algorithm,version,state,public_der,created_at,updated_at)
+		 VALUES ($1,'aws-kms','owned-key','RSA-2048',1,'active',$2,now(),now())`, tenantA, []byte("saved-public-key")); err != nil {
+		t.Fatal(err)
+	}
+	command := projections.ManagedKeyCommand{OperationID: "proof-v2", Provider: "aws-kms", Action: "verify_custody",
+		KeyID: "owned-key", Algorithm: "RSA-2048", RequestBinding: "bound-v2"}
+	apply := func(id, kind string, version int, payload any) error {
+		t.Helper()
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		return projections.New(s).Apply(ctx, events.Event{
+			ID: id, TenantID: tenantA, Type: kind, SchemaVersion: version,
+			Time: time.Now().UTC(), Data: body,
+		})
+	}
+	if err := apply("proof-v2-request", projections.EventManagedKeyCommandRequested, 1, command); err != nil {
+		t.Fatal(err)
+	}
+	failure := projections.ManagedKeyCommandFailed{
+		OperationID: command.OperationID, RequestBinding: command.RequestBinding,
+		Provider: command.Provider, Action: command.Action, KeyID: "another-key", Error: "retry budget exhausted",
+	}
+	if err := apply("proof-v2-wrong-key", projections.EventManagedKeyCommandFailed,
+		projections.ManagedKeyFailureEventSchemaVersion, failure); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("failure event with foreign key identity = %v, want no matching durable operation", err)
+	}
+	key, err := s.GetManagedKey(ctx, tenantA, "aws-kms", command.KeyID)
+	if err != nil || key.CustodyStatus != "pending" {
+		t.Fatalf("foreign failure altered owned key: key=%+v err=%v", key, err)
+	}
+	failure.KeyID = command.KeyID
+	if err := apply("proof-v2-failed", projections.EventManagedKeyCommandFailed,
+		projections.ManagedKeyFailureEventSchemaVersion, failure); err != nil {
+		t.Fatal(err)
+	}
+	key, err = s.GetManagedKey(ctx, tenantA, "aws-kms", command.KeyID)
+	if err != nil || key.CustodyStatus != "unavailable" || key.State != "active" {
+		t.Fatalf("bound failure did not mark point-in-time custody: key=%+v err=%v", key, err)
+	}
+}

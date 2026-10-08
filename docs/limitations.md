@@ -4308,6 +4308,10 @@ companions return only opaque handles, public DER, algorithm, non-extractable st
 and lifecycle state. Verification uses a fresh signer-generated challenge signature
 and records its last result and time independently of the lifecycle. This is a
 point-in-time proof, not a promise the provider will retain the key afterward.
+The default outbox retry budget can leave custody `pending` after the API's
+synchronous wait returns 503; refresh the exact key or the console until the
+durable outcome becomes `verified` or `unavailable`. New terminal failure audit
+events carry the key ID; historical v1 failures carry only the operation ID.
 Every mutation requires `Idempotency-Key`; immutable events
 build the tenant/RLS projection, and the provider call comes only from the sealed
 outbox. Managed-key signing additionally requires a short-lived, request-bound token

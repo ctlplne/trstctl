@@ -660,7 +660,11 @@ exposes:
   against the saved public key. The response and inventory show the last proof
   status and time separately from lifecycle state. A historical `active` state
   does not prove the provider still has the key; a new key reads `not_checked`
-  until this challenge succeeds;
+  until this challenge succeeds. The console's Refresh status updates both the
+  list and the selected key. When provider retries are exhausted, the key reads
+  `unavailable` while its lifecycle state remains historical; new failure audit
+  events include the exact provider, action, and key ID. Older v1 failure events
+  remain searchable by their operation ID;
 - `POST /api/v1/managed-keys/approvals` — record a distinct custodian's approval for
   an opaque key handle and `rotate`/`revoke`/`zeroize`;
 - `POST /api/v1/managed-keys/rotate` — mint a successor key;

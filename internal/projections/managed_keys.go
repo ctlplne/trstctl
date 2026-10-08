@@ -25,6 +25,10 @@ const (
 	// generate history remains replayable, but a destructive command without the
 	// v2 authority fields always fails closed.
 	ManagedKeyApprovalEventSchemaVersion = 2
+	// Failure v2 names the exact key and action, so an operator can find the
+	// immutable failure audit event from that key's inventory record. Replay of
+	// historical v1 failures remains supported.
+	ManagedKeyFailureEventSchemaVersion = 2
 )
 
 type ManagedKeyCommand struct {
@@ -53,13 +57,22 @@ type ManagedKeyCommandCompleted struct {
 type ManagedKeyCommandFailed struct {
 	OperationID    string `json:"operation_id"`
 	RequestBinding string `json:"request_binding"`
+	Provider       string `json:"provider,omitempty"`
+	Action         string `json:"action,omitempty"`
+	KeyID          string `json:"key_id,omitempty"`
+	Error          string `json:"error"`
+}
+
+type managedKeyCommandFailedV1 struct {
+	OperationID    string `json:"operation_id"`
+	RequestBinding string `json:"request_binding"`
 	Error          string `json:"error"`
 }
 
 func init() {
 	knownSchemaVersions[EventManagedKeyCommandRequested] = map[int]bool{1: true, ManagedKeyApprovalEventSchemaVersion: true}
 	knownSchemaVersions[EventManagedKeyCommandCompleted] = map[int]bool{1: true, ManagedKeyApprovalEventSchemaVersion: true}
-	knownSchemaVersions[EventManagedKeyCommandFailed] = map[int]bool{1: true}
+	knownSchemaVersions[EventManagedKeyCommandFailed] = map[int]bool{1: true, ManagedKeyFailureEventSchemaVersion: true}
 }
 
 // ManagedKeyApprovalEvidence derives non-secret receipts reviewers see: provider
@@ -246,7 +259,13 @@ func (p *Projector) applyManagedKeyTx(ctx context.Context, tx pgx.Tx, event even
 		if payload.OperationID == "" || payload.RequestBinding == "" || payload.Error == "" {
 			return true, fmt.Errorf("projections: %s payload is incomplete", event.Type)
 		}
-		return true, p.store.ApplyManagedKeyFailedTx(ctx, tx, event.TenantID, payload.OperationID, payload.RequestBinding, payload.Error, event.Time)
+		if schemaVersionOf(event) == ManagedKeyFailureEventSchemaVersion &&
+			(payload.Provider == "" || payload.Action == "" || payload.KeyID == "") {
+			return true, fmt.Errorf("projections: %s v2 payload lacks exact key identity", event.Type)
+		}
+		return true, p.store.ApplyManagedKeyFailedTx(ctx, tx, event.TenantID,
+			payload.OperationID, payload.RequestBinding, payload.Provider, payload.Action, payload.KeyID,
+			payload.Error, event.Time)
 	default:
 		return false, nil
 	}

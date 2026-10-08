@@ -1057,34 +1057,34 @@ export const messages = {
   },
   "caHierarchy.custody.title": { defaultMessage: "Managed key custody", description: "Heading for the managed-key custody workspace." },
   "caHierarchy.custody.description": {
-    defaultMessage: "Choose a provider, review the plan, then create and manage a key. Private bytes stay outside trstctl and your browser.",
+    defaultMessage: "Create and manage provider-held keys.",
     description: "Plain-language explanation of the managed-key custody journey and its private-key boundary.",
   },
   "caHierarchy.custody.loading": {
-    defaultMessage: "Checking available custody providers and signer configuration.",
+    defaultMessage: "Checking providers and signer.",
     description: "Managed-key custody loading state.",
   },
   "caHierarchy.custody.unavailable": {
-    defaultMessage: "Key custody configuration is unavailable",
+    defaultMessage: "Key custody is unavailable",
     description: "Heading when the custody plan cannot be read.",
   },
   "caHierarchy.custody.loadFailed": {
-    defaultMessage: "Could not load key custody configuration",
+    defaultMessage: "Could not load custody setup",
     description: "Fallback error when the custody plan request fails.",
   },
   "caHierarchy.custody.steps.configure.label": { defaultMessage: "Choose custody", description: "First managed-key journey step." },
   "caHierarchy.custody.steps.configure.description": {
-    defaultMessage: "Choose where the private key will live and which public-key algorithm it will use.",
+    defaultMessage: "Choose the provider and key algorithm.",
     description: "Description of the managed-key custody selection step.",
   },
   "caHierarchy.custody.steps.preview.label": { defaultMessage: "Review the plan", description: "Second managed-key journey step." },
   "caHierarchy.custody.steps.preview.description": {
-    defaultMessage: "Ask the server to prove what generation will do before anything changes.",
+    defaultMessage: "Check the plan before creating a key.",
     description: "Description of the effect-free managed-key preview step.",
   },
   "caHierarchy.custody.steps.generate.label": { defaultMessage: "Generate and manage", description: "Third managed-key journey step." },
   "caHierarchy.custody.steps.generate.description": {
-    defaultMessage: "Create the reviewed non-extractable key, then manage its lifecycle.",
+    defaultMessage: "Create and manage the reviewed key.",
     description: "Description of the managed-key execution step.",
   },
   "caHierarchy.custody.progress": { defaultMessage: "Managed key custody progress", description: "Accessible label for managed-key journey progress." },
@@ -1092,17 +1092,17 @@ export const messages = {
   "caHierarchy.custody.continue": { defaultMessage: "Continue to generation", description: "Action that advances from a safe preview to generation." },
   "caHierarchy.custody.chooseTitle": { defaultMessage: "Where should this key live?", description: "Heading above custody provider and algorithm selection." },
   "caHierarchy.custody.chooseDescription": {
-    defaultMessage: "The provider keeps private bytes. trstctl stores its key handle and public key.",
+    defaultMessage: "Private bytes stay with the provider; trstctl keeps the handle.",
     description: "Explanation of custody provider selection and non-extractability.",
   },
   "caHierarchy.custody.provider": { defaultMessage: "Custody provider", description: "Label for the managed-key custody provider selection." },
   "caHierarchy.custody.providerHelp": {
-    defaultMessage: "This must match the provider configured when the server started.",
+    defaultMessage: "Match the provider running on this server.",
     description: "Help below custody provider selection.",
   },
   "caHierarchy.custody.algorithm": { defaultMessage: "Key algorithm", description: "Label for managed-key algorithm selection." },
   "caHierarchy.custody.algorithmHelp": {
-    defaultMessage: "Choose the algorithm required by the certificate policy and relying systems.",
+    defaultMessage: "Match the certificate policy and clients.",
     description: "Help below managed-key algorithm selection.",
   },
   "caHierarchy.custody.configured": {
@@ -1111,7 +1111,7 @@ export const messages = {
   },
   "caHierarchy.custody.notConfigured": { defaultMessage: "No provider is configured yet", description: "Heading when managed-key custody is disabled." },
   "caHierarchy.custody.startupOnly": {
-    defaultMessage: "Set file references on the host, then restart the control plane and isolated signer.",
+    defaultMessage: "Set host file references; restart the control plane and signer.",
     description: "Security guidance for custody configuration changes.",
   },
   "caHierarchy.custody.signerAttached": {
@@ -1130,12 +1130,12 @@ export const messages = {
     description: "Badge for a signer-only file reference that locates a secret.",
   },
   "caHierarchy.custody.noRequirements": {
-    defaultMessage: "This provider has no additional startup requirements.",
+    defaultMessage: "No extra startup settings.",
     description: "Empty state for a provider without settings.",
   },
-  "caHierarchy.custody.setupNeeded": { defaultMessage: "Setup is needed before generation", description: "Heading above custody configuration blockers." },
+  "caHierarchy.custody.setupNeeded": { defaultMessage: "Setup required", description: "Heading above custody configuration blockers." },
   "caHierarchy.custody.previewLoading": {
-    defaultMessage: "Reviewing the generation plan without changing anything.",
+    defaultMessage: "Checking the plan without changes.",
     description: "Managed-key preview loading state.",
   },
   "caHierarchy.custody.previewFailed": {
@@ -1153,11 +1153,11 @@ export const messages = {
   "caHierarchy.custody.approval": { defaultMessage: "Extra approval required", description: "Label for managed-key generation approval policy." },
   "caHierarchy.custody.blocked": { defaultMessage: "Generation stays locked", description: "Heading above blockers returned by the managed-key preview." },
   "caHierarchy.custody.executionWrites": {
-    defaultMessage: "What generation will record",
+    defaultMessage: "Records to write",
     description: "Heading above state writes expected during managed-key generation.",
   },
   "caHierarchy.custody.outsideEffects": {
-    defaultMessage: "What generation will ask outside trstctl",
+    defaultMessage: "Outside calls",
     description: "Heading above external effects expected during managed-key generation.",
   },
   "caHierarchy.custody.proof": { defaultMessage: "How to prove it worked", description: "Heading above managed-key verification evidence." },
@@ -1169,7 +1169,7 @@ export const messages = {
   "caHierarchy.custody.generating": { defaultMessage: "Generating key...", description: "Busy label while managed-key generation runs." },
   "caHierarchy.custody.generate": { defaultMessage: "Generate managed key", description: "Action that executes the reviewed managed-key plan." },
   "caHierarchy.custody.generateFailed": {
-    defaultMessage: "Could not generate the reviewed managed key",
+    defaultMessage: "Could not create managed key",
     description: "Fallback error for managed-key generation.",
   },
   "caHierarchy.custody.actionFailed": {
@@ -1182,7 +1182,7 @@ export const messages = {
     description: "Heading for an exact pending managed-key dual-control request.",
   },
   "caHierarchy.custody.approvalPendingDetail": {
-    defaultMessage: "Other custodians must approve this exact request. The requester cannot approve it.",
+    defaultMessage: "Another custodian must approve; the requester cannot.",
     description: "Explain the managed-key dual-control boundary.",
   },
   "caHierarchy.custody.approvalRequestID": {
@@ -1190,7 +1190,7 @@ export const messages = {
     description: "Accessible label for the exact pending managed-key request ID.",
   },
   "caHierarchy.custody.approvalPendingNext": {
-    defaultMessage: "Open approvals, then retry after approval. The key has not changed.",
+    defaultMessage: "Open approvals, then retry. The key has not changed.",
     description: "Next operator step after a managed-key action opens an approval request.",
   },
   "caHierarchy.custody.openApprovalRequests": {
@@ -1199,13 +1199,13 @@ export const messages = {
   },
   "caHierarchy.custody.noKey": { defaultMessage: "No managed key has been generated", description: "Empty-state heading before reviewed key generation." },
   "caHierarchy.custody.noKeyDetail": {
-    defaultMessage: "Generate the reviewed key to see its public identifier, version, and lifecycle state.",
+    defaultMessage: "Create one to see its ID and state.",
     description: "Empty-state guidance before managed-key generation.",
   },
   "caHierarchy.custody.managedKey": { defaultMessage: "Managed key", description: "Heading for generated managed-key metadata." },
   "caHierarchy.custody.inventoryTitle": { defaultMessage: "Managed keys", description: "Heading for durable managed-key inventory." },
   "caHierarchy.custody.inventoryDetail": {
-    defaultMessage: "Saved records survive restart. Verify the provider before using a key.",
+    defaultMessage: "Records survive restart. Prove custody before use.",
     description: "Distinguishes the durable managed-key record from the provider's actual retained key.",
   },
   "caHierarchy.custody.inventoryEmpty": { defaultMessage: "No managed keys yet", description: "Empty durable managed-key inventory." },
@@ -1229,7 +1229,7 @@ export const messages = {
   "caHierarchy.custody.status.unavailable": { defaultMessage: "Could not verify", description: "The last challenge could not prove provider custody." },
   "caHierarchy.custody.loadMore": { defaultMessage: "Load more keys", description: "Read the next page of durable managed keys." },
   "caHierarchy.custody.providerUnavailable": {
-    defaultMessage: "This key's provider is not attached. Restore it before changing the key.",
+    defaultMessage: "Restore this provider before changing the key.",
     description: "Prevents lifecycle actions on a key whose provider is not currently attached.",
   },
   "caHierarchy.custody.keyID": { defaultMessage: "key ID", description: "Accessible copy label for a managed-key identifier." },

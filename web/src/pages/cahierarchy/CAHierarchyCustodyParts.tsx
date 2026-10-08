@@ -126,10 +126,27 @@ export function ManagedKeyCustodyWorkspace() {
     try {
       const current = await api.getManagedKey(key.provider, key.key_id);
       setManagedKey(current);
-      setManagedKeyProvider(current.provider);
+      setManagedKeyProvider(key.provider);
       setPreview(null);
       setCurrentIndex(0);
     } catch (error) {
+      setManagedKey(null);
+      setKeyError(apiProblemMessage(error, t("caHierarchy.custody.inventoryLoadFailed")));
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function refreshInventory() {
+    const selected = managedKey && managedKeyProvider ? { provider: managedKeyProvider, keyId: managedKey.key_id } : null;
+    setKeyBusy(true);
+    try {
+      await loadInventory();
+      if (!selected) return;
+      const current = await api.getManagedKey(selected.provider, selected.keyId);
+      setManagedKey((previous) => (previous?.key_id === selected.keyId ? current : previous));
+    } catch (error) {
+      setManagedKey((previous) => (previous?.key_id === selected?.keyId ? null : previous));
       setKeyError(apiProblemMessage(error, t("caHierarchy.custody.inventoryLoadFailed")));
     } finally {
       setKeyBusy(false);
@@ -183,8 +200,10 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyError(null);
     setPendingApproval(null);
     try {
-      setManagedKey(await api.generateManagedKey({ provider: preview.provider, algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] }));
-      setManagedKeyProvider(plan?.configured_provider === "aws" ? "aws-kms" : (plan?.configured_provider ?? ""));
+      const generated = await api.generateManagedKey({ provider: preview.provider, algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] });
+      const generatedProvider = plan?.configured_provider === "aws" ? "aws-kms" : (plan?.configured_provider ?? "");
+      setManagedKey(generated);
+      setManagedKeyProvider(generatedProvider);
       await loadInventory();
     } catch (error) {
       setKeyError(apiProblemMessage(error, t("caHierarchy.custody.generateFailed")));
@@ -238,7 +257,7 @@ export function ManagedKeyCustodyWorkspace() {
               </CardHeader>
               <CardContent className="grid gap-3">
                 <p className="text-sm text-muted-foreground">{t("caHierarchy.custody.inventoryDetail")}</p>
-                <Button type="button" size="sm" variant="outline" disabled={inventoryBusy} onClick={() => void loadInventory()}>
+                <Button type="button" size="sm" variant="outline" disabled={inventoryBusy} onClick={() => void refreshInventory()}>
                   {t("caHierarchy.workspace.refresh")}
                 </Button>
                 {inventoryError ? <ErrorState title={t("caHierarchy.custody.inventoryLoadFailed")}>{inventoryError}</ErrorState> : null}
