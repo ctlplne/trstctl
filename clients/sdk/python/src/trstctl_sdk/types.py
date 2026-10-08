@@ -8389,6 +8389,9 @@ PAMSession = TypedDict(
         'postgres': dict[str, Any],
         'reason': str,
         'requested_by': str,
+        'revocation_reason': str,
+        'revocation_requested_at': str,
+        'revocation_requested_by': str,
         'role': str,
         'ssh': dict[str, Any],
         'started_at': str,
@@ -8441,6 +8444,14 @@ PAMSessionRequest = TypedDict(
         'target_id': str,
         'target_type': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+PAMSessionRevocationRequest = TypedDict(
+    'PAMSessionRevocationRequest',
+    {
+        'reason': str,
     },
     total=False,
 )

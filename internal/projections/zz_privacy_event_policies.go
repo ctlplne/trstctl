@@ -643,6 +643,14 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/ended_at", opaque),
 		privacyRule("/reason", clear),
 	)
+	pamSessionRevocationRequested := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/requested_by", exact),
+		privacyRule("/reason", clear), privacyRule("/requested_at", opaque),
+		privacyRule("/ssh_serial", opaque), privacyRule("/ssh_key_id", opaque),
+	)
+	pamSessionRevoked := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/ended_at", opaque),
+	)
 	accessReviewCampaign := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", opaque),
 		privacyRule("/scope", opaque), privacyRule("/reviewer_subject", exact),
@@ -897,6 +905,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMSessionStarted, 1}:                                       pamSessionStarted,
 		{EventPAMSessionActivationRequested, 1}:                           pamSessionActivationRequested,
 		{EventPAMSessionExpired, 1}:                                       pamSessionExpired,
+		{EventPAMSessionRevocationRequested, 1}:                           pamSessionRevocationRequested,
+		{EventPAMSessionRevoked, 1}:                                       pamSessionRevoked,
 		{EventAgentHeartbeat, 1}:                                          agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:    agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}: agentHeartbeat,
@@ -1605,6 +1615,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMSessionStarted, 1}:                                       privacyPayloadShape[PAMSessionStarted](),
 		{EventPAMSessionActivationRequested, 1}:                           privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSessionExpired, 1}:                                       privacyPayloadShape[PAMSessionExpired](),
+		{EventPAMSessionRevocationRequested, 1}:                           privacyPayloadShape[PAMSessionRevocationRequested](),
+		{EventPAMSessionRevoked, 1}:                                       privacyPayloadShape[PAMSessionRevoked](),
 		{EventAgentHeartbeat, 1}:                                          privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:    privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}: privacyPayloadShape[AgentHeartbeat](),

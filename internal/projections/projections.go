@@ -261,6 +261,8 @@ const (
 	EventPAMSessionStarted                        = "pam.session.started"
 	EventPAMSessionActivationRequested            = "pam.session.activation_requested"
 	EventPAMSessionExpired                        = "pam.session.expired"
+	EventPAMSessionRevocationRequested            = "pam.session.revocation_requested"
+	EventPAMSessionRevoked                        = "pam.session.revoked"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -3221,6 +3223,20 @@ type PAMSessionExpired struct {
 	Reason  string    `json:"reason,omitempty"`
 }
 
+type PAMSessionRevocationRequested struct {
+	ID          string    `json:"id"`
+	RequestedBy string    `json:"requested_by"`
+	Reason      string    `json:"reason"`
+	RequestedAt time.Time `json:"requested_at"`
+	SSHSerial   uint64    `json:"ssh_serial,omitempty"`
+	SSHKeyID    string    `json:"ssh_key_id,omitempty"`
+}
+
+type PAMSessionRevoked struct {
+	ID      string    `json:"id"`
+	EndedAt time.Time `json:"ended_at"`
+}
+
 // MachineSessionStarted is the payload of secrets.session.started (C-S3,
 // DA-02). It carries session metadata plus only the one-way hash of the issued
 // API bearer. The raw credential never enters the event log (AN-8).
@@ -3694,6 +3710,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventMachineAuthMethodDisabled:                {1: true},
 	EventMachineAuthMethodEnabled:                 {1: true},
 	EventPAMSessionExpired:                        {1: true},
+	EventPAMSessionRevocationRequested:            {1: true},
+	EventPAMSessionRevoked:                        {1: true},
 	EventNHIAccessReviewCampaignStarted:           {1: true},
 	EventNHIAccessReviewItemDecided:               {1: true},
 	EventPQCMigrationCampaignStarted:              {1: true},
@@ -6287,6 +6305,32 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			endedAt = e.Time
 		}
 		return p.store.ApplyPAMSessionExpiredTx(ctx, tx, e.TenantID, pl.ID, endedAt)
+	case EventPAMSessionRevocationRequested:
+		var pl PAMSessionRevocationRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.RequestedBy == "" || pl.Reason == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		at := pl.RequestedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		return p.store.ApplyPAMSessionRevocationRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.RequestedBy, pl.Reason, at)
+	case EventPAMSessionRevoked:
+		var pl PAMSessionRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		at := pl.EndedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		return p.store.ApplyPAMSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, at)
 	case EventMachineSessionStarted:
 		var pl MachineSessionStarted
 		if err := decode(e, &pl); err != nil {

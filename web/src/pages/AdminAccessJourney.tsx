@@ -129,6 +129,10 @@ export function AdminAccess() {
   const [pamPending, setPAMPending] = useState<PAMApprovalRequest | null>(null);
   const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
   const [pamCopied, setPAMCopied] = useState(false);
+  const updatePAMSession = useCallback((next: PAMSession) => {
+    setPAMRows((current) => current?.map((item) => (item.id === next.id ? next : item)) ?? null);
+    setPAMDetail((current) => (current?.id === next.id ? next : current));
+  }, []);
 
   const addPersonTriggerRef = useRef<HTMLButtonElement>(null);
   const accessKeyTriggerRef = useRef<HTMLButtonElement>(null);
@@ -926,7 +930,15 @@ export function AdminAccess() {
         </Dialog>
       ) : null}
 
-      {pamDetail ? <PAMDetailDialog session={pamDetail} formatPolicy={formatPolicy} onClose={() => setPAMDetail(null)} /> : null}
+      {pamDetail ? (
+        <PAMDetailDialog
+          session={pamDetail}
+          formatPolicy={formatPolicy}
+          canRevoke={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")}
+          onUpdate={updatePAMSession}
+          onClose={() => setPAMDetail(null)}
+        />
+      ) : null}
       {pamFormOpen ? (
         <PAMFormDialog
           locked={pamExact !== null}
@@ -1000,8 +1012,45 @@ function ProblemDetail({ message, fallback }: { message: string; fallback: strin
   return message === fallback ? null : <p>{message}</p>;
 }
 
-function PAMDetailDialog({ session, formatPolicy, onClose }: { session: PAMSession; formatPolicy: FormatPolicy; onClose: () => void }) {
+function PAMDetailDialog({
+  session,
+  formatPolicy,
+  canRevoke,
+  onUpdate,
+  onClose,
+}: {
+  session: PAMSession;
+  formatPolicy: FormatPolicy;
+  canRevoke: boolean;
+  onUpdate: (session: PAMSession) => void;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
+  const [revokeReason, setRevokeReason] = useState("");
+  const [revokeBusy, setRevokeBusy] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [mutated, setMutated] = useState<PAMSession | null>(null);
+  const live = useApiQuery(["pam-session", session.id], () => api.pamSession(session.id), { retry: false, live: { intervalMs: 5_000 } });
+  const current = mutated && live.data?.status === "active" ? mutated : (live.data ?? mutated ?? session);
+  useEffect(() => {
+    if (live.data && !(mutated && live.data.status === "active")) onUpdate(live.data);
+  }, [live.data, mutated, onUpdate]);
+  async function revoke() {
+    const reason = revokeReason.trim();
+    if (!reason || reason.length > 1000 || revokeBusy) return;
+    setRevokeBusy(true);
+    setRevokeError(null);
+    try {
+      const next = await api.revokePAMSession(current.id, reason, `pam-revoke:${current.id}`);
+      setMutated(next);
+      onUpdate(next);
+      live.refetch();
+    } catch (err) {
+      setRevokeError(accessProblemMessage(err, t("admin.access.revokeFailed")));
+    } finally {
+      setRevokeBusy(false);
+    }
+  }
   return (
     <Dialog
       open
@@ -1014,7 +1063,7 @@ function PAMDetailDialog({ session, formatPolicy, onClose }: { session: PAMSessi
     >
       <header className="border-b border-border px-5 py-4">
         <h2 id="pam-session-detail-heading" className="text-title font-semibold">
-          {translateNow("source.privileged.session.value1.2958e09fb1", { value1: session.id })}
+          {translateNow("source.privileged.session.value1.2958e09fb1", { value1: current.id })}
         </h2>
         <p id="pam-session-detail-description" className="mt-1 text-sm text-muted-foreground">
           {t("admin.access.sessionEvidence")}
@@ -1022,31 +1071,64 @@ function PAMDetailDialog({ session, formatPolicy, onClose }: { session: PAMSessi
       </header>
       <dl className="grid gap-2 p-5 text-sm">
         <DetailRow term={t("admin.access.id")} mono>
-          {session.id}
+          {current.id}
         </DetailRow>
         <DetailRow term={translateNow("source.status.920e413c7d")}>
-          <StatusBadge value={session.status} label={session.status} tone={pamStatusTone(session.status)} />
+          <StatusBadge value={current.status} label={current.status} tone={pamStatusTone(current.status)} />
         </DetailRow>
         <DetailRow term={translateNow("source.subject.6897128384")} mono>
-          {session.subject}
+          {current.subject}
         </DetailRow>
-        <DetailRow term={translateNow("source.role.14736a2eb9")}>{session.role}</DetailRow>
+        <DetailRow term={translateNow("source.role.14736a2eb9")}>{current.role}</DetailRow>
         <DetailRow term={t("admin.access.target")} mono>
-          {session.target_type}:{session.target_id}
+          {current.target_type}:{current.target_id}
         </DetailRow>
-        <DetailRow term={translateNow("source.reason.f81ab834de")}>{session.reason || "—"}</DetailRow>
-        <DetailRow term={t("admin.access.started")}>{formatOptionalDate(session.started_at, formatPolicy)}</DetailRow>
-        <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(session.expires_at, formatPolicy)}</DetailRow>
+        <DetailRow term={translateNow("source.reason.f81ab834de")}>{current.reason || "—"}</DetailRow>
+        <DetailRow term={t("admin.access.started")}>{formatOptionalDate(current.started_at, formatPolicy)}</DetailRow>
+        <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(current.expires_at, formatPolicy)}</DetailRow>
+        {current.revocation_requested_by ? <DetailRow term={t("admin.access.revokeRequestedBy")}>{current.revocation_requested_by}</DetailRow> : null}
+        {current.revocation_reason ? <DetailRow term={t("admin.access.revokeReason")}>{current.revocation_reason}</DetailRow> : null}
+        {current.ended_at ? <DetailRow term={t("admin.access.ended")}>{formatOptionalDate(current.ended_at, formatPolicy)}</DetailRow> : null}
         <DetailRow term={t("admin.access.attestation")}>
-          {session.attestation ? <JSONBlock value={session.attestation} /> : t("admin.access.attestationUnavailable")}
+          {current.attestation ? <JSONBlock value={current.attestation} /> : t("admin.access.attestationUnavailable")}
         </DetailRow>
-        {session.audit ? (
+        {current.audit ? (
           <DetailRow term={t("admin.access.audit")}>
-            <JSONBlock value={session.audit} />
+            <JSONBlock value={current.audit} />
           </DetailRow>
         ) : null}
       </dl>
+      {current.status === "revoking" ? (
+        <p className="px-5 pb-3 text-sm" role="status">
+          {t("admin.access.revokingPending")}
+        </p>
+      ) : null}
+      {current.status === "revoked" ? (
+        <p className="px-5 pb-3 text-sm" role="status">
+          {t("admin.access.revokedConfirmed")}
+        </p>
+      ) : null}
+      {canRevoke && current.status === "active" ? (
+        <div className="grid gap-2 border-t border-border px-5 py-4">
+          <label htmlFor="pam-revoke-reason" className="text-sm font-medium">
+            {t("admin.access.revokeReason")}
+          </label>
+          <Textarea id="pam-revoke-reason" value={revokeReason} maxLength={1000} onChange={(event) => setRevokeReason(event.target.value)} />
+          <p className="text-xs text-muted-foreground">{t("admin.access.revokeExplanation")}</p>
+          {revokeError ? (
+            <ErrorState title={t("admin.access.revokeFailed")}>
+              <ProblemDetail message={revokeError} fallback={t("admin.access.revokeFailed")} />
+            </ErrorState>
+          ) : null}
+          <Button type="button" variant="destructive" disabled={!revokeReason.trim() || revokeBusy} onClick={() => void revoke()}>
+            {revokeBusy ? t("admin.access.revoking") : t("admin.access.revokeSession")}
+          </Button>
+        </div>
+      ) : null}
       <div className="flex justify-end border-t border-border px-5 py-4">
+        <Button type="button" variant="outline" onClick={() => live.refetch()} disabled={live.fetching}>
+          {t("admin.access.refreshSession")}
+        </Button>
         <Button type="button" variant="outline" onClick={onClose}>
           {translateNow("source.close.7d9eb7acb1")}
         </Button>

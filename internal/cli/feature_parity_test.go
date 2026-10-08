@@ -295,8 +295,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F33's exact issuance-request show gives headless operators the same
 	// decision and issuance evidence after the recent list rolls over.
 	// U6 adds a separate reviewed PAM session request before activation.
-	if len(out) != 485 {
-		t.Fatalf("CLI commands = %d, want 485", len(out))
+	if len(out) != 486 {
+		t.Fatalf("CLI commands = %d, want 486", len(out))
 	}
 	return out
 }

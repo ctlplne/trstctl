@@ -22,6 +22,7 @@ var (
 	ErrPAMUnavailable = errors.New("api: PAM broker is not enabled")
 	ErrPAMInvalid     = errors.New("api: invalid PAM session request")
 	ErrPAMRejected    = errors.New("api: PAM session rejected")
+	ErrPAMTerminal    = errors.New("api: PAM session already ending or ended")
 )
 
 // PAMService is the served privileged-access broker. The API owns the
@@ -33,6 +34,7 @@ type PAMService interface {
 	OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req PAMSessionRequest) (PAMSession, error)
 	GetPAMSession(ctx context.Context, tenantID, id string) (PAMSession, error)
 	ListPAMSessions(ctx context.Context, tenantID string, limit int, cursor string) ([]PAMSession, string, error)
+	RevokePAMSession(ctx context.Context, tenantID, id, requester, reason string) (PAMSession, error)
 }
 
 // WithPAM wires the served PAM broker. When unset, routes fail closed with 503.
@@ -99,17 +101,20 @@ type PAMRequestProgress struct {
 }
 
 type PAMSession struct {
-	ID          string     `json:"id"`
-	TargetID    string     `json:"target_id"`
-	TargetType  string     `json:"target_type"`
-	Role        string     `json:"role"`
-	Status      string     `json:"status"`
-	Subject     string     `json:"subject"`
-	RequestedBy string     `json:"requested_by"`
-	Reason      string     `json:"reason,omitempty"`
-	StartedAt   time.Time  `json:"started_at"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	ID                    string     `json:"id"`
+	TargetID              string     `json:"target_id"`
+	TargetType            string     `json:"target_type"`
+	Role                  string     `json:"role"`
+	Status                string     `json:"status"`
+	Subject               string     `json:"subject"`
+	RequestedBy           string     `json:"requested_by"`
+	Reason                string     `json:"reason,omitempty"`
+	StartedAt             time.Time  `json:"started_at"`
+	ExpiresAt             time.Time  `json:"expires_at"`
+	EndedAt               *time.Time `json:"ended_at,omitempty"`
+	RevocationRequestedBy string     `json:"revocation_requested_by,omitempty"`
+	RevocationReason      string     `json:"revocation_reason,omitempty"`
+	RevocationRequestedAt *time.Time `json:"revocation_requested_at,omitempty"`
 	// Older sessions did not retain verified facts. Omit their attestation
 	// instead of presenting a zero verification time as evidence.
 	Attestation *attest.Attestation    `json:"attestation,omitempty"`
@@ -305,6 +310,34 @@ func (a *API) getPAMSession(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, session)
 }
 
+//trstctl:mutation
+func (a *API) revokePAMSession(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.pam == nil {
+			return 0, nil, ErrPAMUnavailable
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		body.Reason = strings.TrimSpace(body.Reason)
+		if body.Reason == "" || len(body.Reason) > 1000 {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, "a revocation reason of 1-1000 characters is required")
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		if principal.Subject == "" {
+			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated revoker is required")
+		}
+		session, err := a.pam.RevokePAMSession(ctx, tenantID, strings.TrimSpace(r.PathValue("id")), principal.Subject, body.Reason)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, session, nil
+	})
+}
+
 func (a *API) writePAMError(w http.ResponseWriter, err error) bool {
 	switch {
 	case errors.Is(err, ErrPAMUnavailable):
@@ -313,6 +346,8 @@ func (a *API) writePAMError(w http.ResponseWriter, err error) bool {
 		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, strings.TrimPrefix(err.Error(), ErrPAMInvalid.Error()+": ")))
 	case errors.Is(err, ErrPAMRejected):
 		a.writeProblem(w, problem.New(http.StatusForbidden, strings.TrimPrefix(err.Error(), ErrPAMRejected.Error()+": ")))
+	case errors.Is(err, ErrPAMTerminal):
+		a.writeProblem(w, problem.New(http.StatusConflict, "PAM session is already ending or ended"))
 	case errors.Is(err, store.ErrApprovalNotReady):
 		a.writeProblem(w, problem.New(http.StatusConflict, "PAM session is awaiting distinct approval"))
 	case errors.Is(err, store.ErrApprovalExpired):

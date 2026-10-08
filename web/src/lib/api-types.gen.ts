@@ -6097,6 +6097,9 @@ export interface PAMSession {
   postgres?: PAMPostgresCredential;
   reason?: string;
   requested_by: string;
+  revocation_reason?: string;
+  revocation_requested_at?: string;
+  revocation_requested_by?: string;
   role: string;
   ssh?: PAMSSHCredential;
   started_at: string;
@@ -6137,6 +6140,10 @@ export interface PAMSessionRequest {
   target_id: string;
   target_type: "postgres" | "ssh";
   ttl_seconds?: number;
+}
+
+export interface PAMSessionRevocationRequest {
+  reason: string;
 }
 
 export interface PKISecret {

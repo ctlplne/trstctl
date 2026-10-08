@@ -297,6 +297,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request early revocation of a privileged access session */
+        post: operations["revokePAMSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/ari/posture": {
         parameters: {
             query?: never;
@@ -13547,6 +13564,10 @@ export interface components {
             postgres?: components["schemas"]["PAMPostgresCredential"];
             reason?: string;
             requested_by: string;
+            revocation_reason?: string;
+            /** Format: date-time */
+            revocation_requested_at?: string;
+            revocation_requested_by?: string;
             role: string;
             ssh?: components["schemas"]["PAMSSHCredential"];
             /** Format: date-time */
@@ -13590,6 +13611,9 @@ export interface components {
             /** @enum {string} */
             target_type: "postgres" | "ssh";
             ttl_seconds?: number;
+        };
+        PAMSessionRevocationRequest: {
+            reason: string;
         };
         PKISecret: {
             certificate: string;
@@ -16884,6 +16908,53 @@ export interface operations {
         responses: {
             /** @description success */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokePAMSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMSessionRevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

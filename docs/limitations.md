@@ -2696,8 +2696,15 @@ than sending an operator looking for a credential that was never there.
   immutable digest before `POST /api/v1/access/sessions` consumes that authority.
   An altered command or target binding cannot reuse the approval. The local
   browser activation, stock PostgreSQL use and expiry, and paired cold restart
-  have been exercised. PAM still lacks an operator early-revocation path, so
-  the complete U6 journey remains open.
+  have been exercised. Early revocation is now requested through the tenant
+  API and console; PostgreSQL completion waits for native role removal, while
+  SSH completion means the served KRL contains the serial and key ID. Hosts
+  must load the refreshed KRL to enforce rejection. The full live operator
+  replay and cold restart for early revocation remain open. A terminal
+  PostgreSQL provider-removal failure still leaves the PAM session labelled
+  `revoking`; the underlying lease records `failed` and can be retried by its
+  native API, but the PAM console does not yet expose that failure and recovery.
+  That operator gap must close before the U6 journey is marked complete.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The

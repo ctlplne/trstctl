@@ -1523,15 +1523,21 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			          WHEN requested_by LIKE 'retained:%' OR requested_by LIKE 'erased:%' THEN requested_by
 			          ELSE 'retained:' || left(md5($1::text || ':' || requested_by), 12)
 			        END,
-			        reason = '',
+		        reason = '', revocation_reason = '',
+		        revocation_requested_by = CASE
+		          WHEN revocation_requested_by = '' OR revocation_requested_by LIKE 'retained:%' OR revocation_requested_by LIKE 'erased:%' THEN revocation_requested_by
+		          ELSE 'retained:' || left(md5($1::text || ':' || revocation_requested_by), 12)
+		        END,
 			        audit = '{}'::jsonb,
 			        attestation = NULL
 			  WHERE tenant_id = $1
 			    AND COALESCE(ended_at, expires_at) < $2
 			    AND (
 			          subject NOT LIKE 'retained:%'
-			       OR requested_by NOT LIKE 'retained:%'
-			       OR reason <> ''
+		       OR requested_by NOT LIKE 'retained:%'
+		       OR (revocation_requested_by <> '' AND revocation_requested_by NOT LIKE 'retained:%' AND revocation_requested_by NOT LIKE 'erased:%')
+		       OR reason <> ''
+		       OR revocation_reason <> ''
 			       OR audit <> '{}'::jsonb
 			       OR attestation IS NOT NULL
 			    )`,
@@ -2261,7 +2267,7 @@ func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadMode
 			       ORDER BY d.request_id, d.event_id`,
 			args: []any{tenantID, subject},
 		},
-		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR revocation_requested_by = $2 OR position($2 in reason) > 0 OR position($2 in revocation_reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_threshold_deliveries", sql: `SELECT ''::text, ''::text, threshold_days FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2) GROUP BY threshold_days ORDER BY threshold_days`, args: []any{tenantID, subject}},
@@ -2714,15 +2720,15 @@ func erasePAMSessionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjec
 	if len(ids) == 0 {
 		return nil
 	}
-	type row struct{ id, subject, requestedBy string }
+	type row struct{ id, subject, requestedBy, revocationRequestedBy string }
 	var rowsToUpdate []row
-	rows, err := tx.Query(ctx, `SELECT id::text, subject, requested_by FROM pam_sessions WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
+	rows, err := tx.Query(ctx, `SELECT id::text, subject, requested_by, revocation_requested_by FROM pam_sessions WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.subject, &r.requestedBy); err != nil {
+		if err := rows.Scan(&r.id, &r.subject, &r.requestedBy, &r.revocationRequestedBy); err != nil {
 			rows.Close()
 			return err
 		}
@@ -2738,11 +2744,13 @@ func erasePAMSessionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjec
 			`UPDATE pam_sessions
 			    SET subject = $3,
 			        requested_by = $4,
+			        revocation_requested_by = $5,
 			        reason = '',
+			        revocation_reason = '',
 			        audit = '{}'::jsonb,
 			        attestation = NULL
 			  WHERE tenant_id = $1 AND id::text = $2`,
-			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.subject), redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy)); err != nil {
+			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.subject), redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy), redactSubjectValue(tenantID, subjectRef, placeholder, r.revocationRequestedBy)); err != nil {
 			return err
 		}
 	}

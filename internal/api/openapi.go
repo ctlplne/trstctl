@@ -4579,6 +4579,7 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "target_id": str(), "target_type": str(), "role": str(),
 		"status": str(), "subject": str(), "requested_by": str(), "reason": str(),
 		"started_at": timestamp(), "expires_at": timestamp(), "ended_at": timestamp(),
+		"revocation_requested_by": str(), "revocation_reason": str(), "revocation_requested_at": timestamp(),
 		"attestation": ref("Attestation"), "postgres": ref("PAMPostgresCredential"),
 		"ssh": ref("PAMSSHCredential"), "audit": {Type: "object"},
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
@@ -6793,6 +6794,7 @@ func componentSchemas() map[string]*Schema {
 		"PAMApprovalRequest":                       pamApprovalRequest,
 		"PAMRequestProgress":                       pamRequestProgress,
 		"PAMSession":                               pamSession,
+		"PAMSessionRevocationRequest":              object(map[string]*Schema{"reason": str()}, "reason"),
 		"PAMSessionList":                           list("PAMSession"),
 		"PAMPostgresCredential":                    pamPostgresCredential,
 		"PAMSSHCredential":                         pamSSHCredential,

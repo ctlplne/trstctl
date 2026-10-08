@@ -1830,6 +1830,7 @@ export interface Api {
   requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
   openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
+  revokePAMSession(id: string, reason: string, idempotencyKey?: string): Promise<PAMSession>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -2466,6 +2467,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
   pamRequestProgress: (approvalId) => req<PAMRequestProgress>(`/api/v1/access/session-requests/${encodeURIComponent(approvalId)}`),
   openPAMSession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input, idempotencyKey),
+  revokePAMSession: (id, reason, idempotencyKey) =>
+    mutate<PAMSession>("POST", `/api/v1/access/sessions/${encodeURIComponent(id)}/revoke`, { reason }, idempotencyKey),
   acmeDNS01ProviderConfig: (id) => req<ACMEDNS01ProviderConfig>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`),
   createACMEDNS01ProviderConfig: (input) => mutate<ACMEDNS01ProviderConfig>("POST", "/api/v1/acme/dns-01/provider-configs", input),
   updateACMEDNS01ProviderConfig: (id, input) => mutate<ACMEDNS01ProviderConfig>("PUT", `/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`, input),

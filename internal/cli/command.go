@@ -359,6 +359,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "sessions", "request-status"}, Method: "GET", Path: "/api/v1/access/session-requests/{id}", Summary: "Read the current approval progress of your privileged access request"},
 	{Name: []string{"access", "sessions", "open"}, Method: "POST", Path: "/api/v1/access/sessions", Body: bodyFile, Summary: "Activate one approved privileged access session"},
 	{Name: []string{"access", "sessions", "get"}, Method: "GET", Path: "/api/v1/access/sessions/{id}", Summary: "Get a privileged access session"},
+	{Name: []string{"access", "sessions", "revoke"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/revoke", Body: bodyFile, Summary: "Request early revocation of a privileged access session"},
 	{Name: []string{"access", "requests", "create"}, Method: "POST", Path: "/api/v1/access/requests", Body: bodyFile, Summary: "Create an NHI access-change request with PR/change evidence"},
 	{Name: []string{"access", "requests", "list"}, Method: "GET", Path: "/api/v1/access/requests", Query: []string{"limit", "cursor"}, Summary: "List NHI access-change requests"},
 	{Name: []string{"access", "requests", "get"}, Method: "GET", Path: "/api/v1/access/requests/{id}", Summary: "Get an NHI access-change request"},

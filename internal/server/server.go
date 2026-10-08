@@ -2027,11 +2027,13 @@ func (s *Server) configureEphemeralIssuanceSurface(d Deps, idem *orchestrator.Id
 
 func (s *Server) configurePAMSurface(d Deps) error {
 	var sshCA *sshca.CA
+	var sshSurface *sshProtocol
 	if s.protocols != nil && s.protocols.ssh != nil {
-		sshCA = s.protocols.ssh.CA()
+		sshSurface = s.protocols.ssh
+		sshCA = sshSurface.CA()
 	}
 	svc, err := newPAMService(pamDeps{
-		Config: d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA,
+		Config: d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,
 		Audit: attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
 		KEK: d.KEK, Outbox: s.outbox, WakeOutbox: s.wakeOutbox, TenantCrypto: d.TenantCrypto,
 	})

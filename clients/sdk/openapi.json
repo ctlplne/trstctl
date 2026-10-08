@@ -25022,6 +25022,16 @@
           "requested_by": {
             "type": "string"
           },
+          "revocation_reason": {
+            "type": "string"
+          },
+          "revocation_requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revocation_requested_by": {
+            "type": "string"
+          },
           "role": {
             "type": "string"
           },
@@ -25177,6 +25187,17 @@
           "role",
           "method",
           "payload_base64"
+        ],
+        "type": "object"
+      },
+      "PAMSessionRevocationRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "type": "object"
       },
@@ -35825,6 +35846,84 @@
         ],
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/revoke": {
+      "post": {
+        "operationId": "revokePAMSession",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMSessionRevocationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Request early revocation of a privileged access session",
+        "x-trstctl-permission": "access:write",
         "x-trstctl-sensitive-response": true
       }
     },

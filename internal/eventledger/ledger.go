@@ -138,6 +138,8 @@ const (
 	EventPAMSessionStarted                  = "pam.session.started"
 	EventPAMSessionActivationRequested      = "pam.session.activation_requested"
 	EventPAMSessionExpired                  = "pam.session.expired"
+	EventPAMSessionRevocationRequested      = "pam.session.revocation_requested"
+	EventPAMSessionRevoked                  = "pam.session.revoked"
 	EventProfileCreated                     = "profile.created"
 	EventProfileUpdated                     = "profile.updated"
 	EventPrivacySubjectErased               = "privacy.subject.erased"
@@ -336,6 +338,7 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
 	{"F33", "Just-in-time issuance with approval flows", "activate_pam_session", "openPAMSession", []string{EventPAMSessionActivationRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
+	{"F33", "Just-in-time issuance with approval flows", "revoke_pam_session", "revokePAMSession", []string{EventPAMSessionRevocationRequested, EventPAMSessionRevoked}},
 	{"F33", "Just-in-time issuance with approval flows", "request_operation_approval", "transitionIdentity", []string{
 		EventApprovalRequested,
 		EventApprovalStatusChanged,

@@ -4122,6 +4122,26 @@ export const messages = {
   },
   "admin.access.sessionsLoading": { defaultMessage: "Reading sessions and access-key metadata.", description: "Session detail loading state." },
   "admin.access.sessionsFailed": { defaultMessage: "Access-key metadata is unavailable", description: "Session detail error title." },
+  "admin.access.revokeSession": { defaultMessage: "Revoke this session", description: "Early PAM session revocation action." },
+  "admin.access.revokeReason": { defaultMessage: "Revocation reason", description: "Reason recorded with an early PAM revocation." },
+  "admin.access.revokeRequestedBy": { defaultMessage: "Revocation requested by", description: "Authenticated operator who requested early PAM revocation." },
+  "admin.access.revokeExplanation": {
+    defaultMessage:
+      "The session stays pending until the target removes the PostgreSQL role or the SSH revocation appears in the served KRL. Hosts must load the new KRL to reject the SSH certificate.",
+    description: "Explain the external effect and SSH host responsibility without claiming premature completion.",
+  },
+  "admin.access.revoking": { defaultMessage: "Requesting revocation…", description: "PAM revoke mutation pending label." },
+  "admin.access.revokingPending": {
+    defaultMessage: "Revocation requested. Waiting for target confirmation; refreshes automatically.",
+    description: "PAM revoking state explanation.",
+  },
+  "admin.access.revokedConfirmed": {
+    defaultMessage: "Target removal confirmed. For SSH, the served KRL contains the certificate; check that each host loaded it.",
+    description: "Qualified PAM revocation completion state.",
+  },
+  "admin.access.revokeFailed": { defaultMessage: "Could not request revocation", description: "PAM revoke mutation failure title." },
+  "admin.access.ended": { defaultMessage: "Ended", description: "PAM session terminal time." },
+  "admin.access.refreshSession": { defaultMessage: "Refresh session status", description: "Manual readback of PAM external-effect status." },
   "admin.access.accessKeys": { defaultMessage: "Access keys", description: "API-token metadata section heading using ELI5 language." },
   "admin.access.accessKeysRegion": { defaultMessage: "Access-key metadata", description: "Keyboard-scroll region label for access-key metadata." },
   "admin.access.createAccessKey": { defaultMessage: "Create access key", description: "Secondary action and dialog title for an API token." },

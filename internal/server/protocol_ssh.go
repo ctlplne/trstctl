@@ -290,6 +290,19 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 		}
 		p.Revoke(req.Serial, req.KeyID)
 	}
+	if event.Type == "pam.session.revocation_requested" && event.TenantID == p.tenantID {
+		var req struct {
+			ID     string `json:"id"`
+			Serial uint64 `json:"ssh_serial"`
+			KeyID  string `json:"ssh_key_id"`
+		}
+		if err := json.Unmarshal(event.Data, &req); err != nil {
+			return fmt.Errorf("decode PAM SSH revocation event %d: %w", event.Sequence, err)
+		}
+		if req.Serial != 0 && req.KeyID == "pam:"+req.ID {
+			p.Revoke(req.Serial, req.KeyID)
+		}
+	}
 	if event.Sequence > p.applied {
 		p.applied = event.Sequence
 	}

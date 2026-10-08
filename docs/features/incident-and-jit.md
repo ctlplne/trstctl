@@ -207,6 +207,17 @@ PostgreSQL also enforces the credential deadline with `rolvaliduntil` if the
 worker is unavailable. SSH access ends at the certificate `valid_before` time.
 The event trail is filterable by `pam.session.activation_requested`, `pam.session.started`, and
 `pam.session.expired`; credential material is not written into those events.
+For early incident containment, `POST /api/v1/access/sessions/{id}/revoke`
+requires `access:write`, an `Idempotency-Key`, and a nonempty `reason`. It first
+records `pam.session.revocation_requested` with the authenticated actor and moves
+the session to `revoking`. The worker marks it `revoked` only after the PostgreSQL
+provider confirms role removal, or after the tenant's served SSH KRL includes the
+exact PAM certificate serial and key ID. The latter confirms publication, not that
+every host downloaded the KRL: sshd must use `RevokedKeys` with the current
+`GET /ssh/krl` artifact. The console shows these two states and polls readback.
+`pam.session.revoked` records completion. Native expiry remains an independent
+deadline; a stopped worker cannot extend a PostgreSQL role beyond `rolvaliduntil`
+or an SSH certificate beyond `valid_before`.
 For new sessions, the start event also records the verified attestation method,
 subject, selectors, claims, and verification time. GET and list responses project
 those facts after a restart without returning the one-time credential. Sessions
@@ -235,7 +246,8 @@ Ephemeral/JIT credential issuance is served when configured through `POST /api/v
 matching `intent_digest`; PAM sessions are served
 through `POST /api/v1/access/session-requests`, `GET /api/v1/access/session-requests/{id}`,
 `POST /api/v1/access/sessions`,
-`GET /api/v1/access/sessions`, and `GET /api/v1/access/sessions/{id}` when
+`GET /api/v1/access/sessions`, `GET /api/v1/access/sessions/{id}`, and
+`POST /api/v1/access/sessions/{id}/revoke` when
 `pam.enabled` names at least one operator target. The broker resolves attestors from
 the existing tenant-managed workload trust-source API at request time and refuses a
 method with no enabled tenant trust. Operator target configuration binds each target
@@ -245,15 +257,16 @@ allowlist using `readonly` or `writer`; an unlisted role is
 rejected before a credential is created. SSH targets require a host, port, and
 principal list; only the `user` role is valid, and an empty principal list grants
 nobody.
-The PAM path does not yet offer early revocation, so a live session cannot be
-ended immediately through the operator API. The ephemeral
-path verifies the attestation first,
+An SSH PAM target must belong to the tenant of the served SSH protocol and KRL;
+the broker refuses to start with an unmatched target. The ephemeral path verifies the attestation first,
 writes the approval request and outbox notification intent in the same tenant
 transaction, blocks requester self-approval, then mints a short-TTL credential only
 after a distinct approver records approval. CLI parity is `trstctl-cli identities
 approve issue|rotate|revoke`, `trstctl-cli ephemeral issue`, and `trstctl-cli
 ephemeral approve`; PAM sessions use `trstctl-cli access sessions request`, `trstctl-cli access sessions request-status <approval_request_id>`, `trstctl-cli access sessions open`, `trstctl-cli
-access sessions list`, and `trstctl-cli access sessions get`.
+access sessions list`, `trstctl-cli access sessions get`, and
+`trstctl-cli access sessions revoke <id> --body-file revoke.json` where the JSON
+body contains `{"reason":"incident containment"}`.
 
 ### Break-glass procedures (F34)
 

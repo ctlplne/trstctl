@@ -11,31 +11,38 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const PAMSessionStatusExpired = "expired"
+const (
+	PAMSessionStatusExpired  = "expired"
+	PAMSessionStatusRevoking = "revoking"
+	PAMSessionStatusRevoked  = "revoked"
+)
 
 // PAMSession is the event-sourced read-model row for one just-in-time privileged
 // access session. It stores metadata and backend revoke handles only; response
 // credentials are intentionally absent.
 type PAMSession struct {
-	TenantID       string
-	ID             string
-	TargetType     string
-	TargetID       string
-	Role           string
-	Status         string
-	Subject        string
-	RequestedBy    string
-	Reason         string
-	AttestationID  string
-	Attestation    json.RawMessage
-	BackendRef     string
-	SSHKeyID       string
-	SSHSerial      uint64
-	IdempotencyKey string
-	Audit          json.RawMessage
-	StartedAt      time.Time
-	ExpiresAt      time.Time
-	EndedAt        *time.Time
+	TenantID              string
+	ID                    string
+	TargetType            string
+	TargetID              string
+	Role                  string
+	Status                string
+	Subject               string
+	RequestedBy           string
+	Reason                string
+	AttestationID         string
+	Attestation           json.RawMessage
+	BackendRef            string
+	SSHKeyID              string
+	SSHSerial             uint64
+	IdempotencyKey        string
+	Audit                 json.RawMessage
+	StartedAt             time.Time
+	ExpiresAt             time.Time
+	EndedAt               *time.Time
+	RevocationRequestedBy string
+	RevocationReason      string
+	RevocationRequestedAt *time.Time
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
@@ -83,8 +90,27 @@ func (s *Store) ApplyPAMSessionExpiredTx(ctx context.Context, tx pgx.Tx, tenantI
 		`UPDATE pam_sessions
 		    SET status = $3,
 		        ended_at = coalesce(ended_at, $4)
-		  WHERE tenant_id = $1 AND id = $2`,
+		  WHERE tenant_id = $1 AND id = $2 AND status = 'active'`,
 		tenantID, id, PAMSessionStatusExpired, endedAt)
+	return err
+}
+
+// These transitions project immutable events. A terminal state cannot be
+// overwritten by a delayed worker or a replayed request.
+func (s *Store) ApplyPAMSessionRevocationRequestedTx(ctx context.Context, tx pgx.Tx, tenantID, id, actor, reason string, at time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_sessions
+	    SET status = $3, revocation_requested_by = $4,
+	        revocation_reason = $5, revocation_requested_at = $6
+	  WHERE tenant_id = $1 AND id = $2 AND status = 'active'`,
+		tenantID, id, PAMSessionStatusRevoking, actor, reason, at)
+	return err
+}
+
+func (s *Store) ApplyPAMSessionRevokedTx(ctx context.Context, tx pgx.Tx, tenantID, id string, endedAt time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_sessions
+	    SET status = $3, ended_at = coalesce(ended_at, $4)
+	  WHERE tenant_id = $1 AND id = $2 AND status = 'revoking'`,
+		tenantID, id, PAMSessionStatusRevoked, endedAt)
 	return err
 }
 
@@ -95,7 +121,8 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 		row := tx.QueryRow(ctx,
 			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at
+			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
+			        revocation_requested_by, revocation_reason, revocation_requested_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -114,7 +141,8 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 		rows, err := tx.Query(ctx,
 			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at
+			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
+			        revocation_requested_by, revocation_reason, revocation_requested_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -145,12 +173,42 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		//trstctl:system-query — cross-tenant system expiry worker scans every tenant for active PAM sessions due to be closed; it returns no credential material, and each follow-up mutation appends a tenant_id-scoped pam.session.expired event.
 		`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at
+		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
+		        revocation_requested_by, revocation_reason, revocation_requested_at
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
 		  LIMIT $3`,
 		"active", now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PAMSession
+	for rows.Next() {
+		var p PAMSession
+		if err := scanPAMSession(rows, &p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// The system worker scans only revoking sessions. It never treats a queued
+// external call as target completion.
+func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSession, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant PAM revocation worker scans only revoking metadata; follow-up calls and events use each row's tenant_id.
+		`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
+		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
+		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
+		        revocation_requested_by, revocation_reason, revocation_requested_at
+		   FROM pam_sessions WHERE status = 'revoking'
+		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -176,6 +234,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		&out.TenantID, &out.ID, &out.TargetType, &out.TargetID, &out.Role, &out.Status,
 		&out.Subject, &out.RequestedBy, &out.Reason, &out.AttestationID, &out.BackendRef, &out.SSHKeyID,
 		&serial, &out.IdempotencyKey, &out.Audit, &out.Attestation, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
+		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows

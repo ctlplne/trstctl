@@ -589,6 +589,7 @@ public final class OpenApiSchemas {
       "PAMSessionActivationRequest",
       "PAMSessionList",
       "PAMSessionRequest",
+      "PAMSessionRevocationRequest",
       "PKISecret",
       "PKISecretPrerequisite",
       "PKISecretPreview",

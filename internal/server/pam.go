@@ -87,6 +87,7 @@ type pamService struct {
 	tenantCrypto      tenantseal.Access
 	sshTargets        map[pamTargetID]PAMSSHTarget
 	sshCA             *sshca.CA
+	sshProtocol       *sshProtocol
 	defaultTTL        time.Duration
 	maxTTL            time.Duration
 	expiryInterval    time.Duration
@@ -114,6 +115,7 @@ type pamDeps struct {
 	Store        *store.Store
 	Log          *events.Log
 	SSHCA        *sshca.CA
+	SSHProtocol  *sshProtocol
 	Audit        auditsink.Auditor
 	Clock        func() time.Time
 	Providers    DynamicSecretProviderRegistry
@@ -262,13 +264,16 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		if d.SSHCA == nil {
 			return nil, errors.New("server: PAM SSH targets require the served SSH CA")
 		}
+		if d.SSHProtocol == nil || target.TenantID != d.SSHProtocol.tenantID {
+			return nil, fmt.Errorf("server: PAM SSH target %q requires its tenant-bound served KRL", target.ID)
+		}
 		sshTargets[key] = target
 	}
 	return &pamService{
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, postgres: postgresTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
-		sshTargets: sshTargets, sshCA: d.SSHCA, defaultTTL: defaultTTL,
+		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
 	}, nil
@@ -483,6 +488,47 @@ func (s *Server) RunPAMSessionExpiry(ctx context.Context) {
 	s.pam.RunExpiry(ctx)
 }
 
+func (s *Server) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason string) (api.PAMSession, error) {
+	if s.pam == nil {
+		return api.PAMSession{}, api.ErrPAMUnavailable
+	}
+	return s.pam.RevokePAMSession(ctx, tenantID, id, requester, reason)
+}
+
+func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason string) (api.PAMSession, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return api.PAMSession{}, pgx.ErrNoRows
+	}
+	rec, err := s.store.GetPAMSession(ctx, tenantID, id)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	if rec.Status != api.PAMSessionStatusActive {
+		return api.PAMSession{}, api.ErrPAMTerminal
+	}
+	if requester == "" || strings.TrimSpace(reason) == "" {
+		return api.PAMSession{}, api.ErrPAMInvalid
+	}
+	if rec.TargetType == pamTargetSSH && (s.sshProtocol == nil || s.sshProtocol.tenantID != tenantID) {
+		return api.PAMSession{}, fmt.Errorf("%w: tenant SSH revocation list is unavailable", api.ErrPAMRejected)
+	}
+	at := s.clock().UTC()
+	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionRevocationRequested, projections.PAMSessionRevocationRequested{
+		ID: id, RequestedBy: requester, Reason: reason, RequestedAt: at,
+		SSHSerial: rec.SSHSerial, SSHKeyID: rec.SSHKeyID,
+	}); err != nil {
+		return api.PAMSession{}, err
+	}
+	current, err := s.GetPAMSession(ctx, tenantID, id)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	if (current.Status != store.PAMSessionStatusRevoking && current.Status != store.PAMSessionStatusRevoked) || current.RevocationRequestedBy != requester || current.RevocationReason != reason {
+		return api.PAMSession{}, api.ErrPAMTerminal
+	}
+	return current, nil
+}
+
 func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSession, error) {
 	if err := s.validate(tenantID, idempotencyKey, requester, req); err != nil {
 		return api.PAMSession{}, err
@@ -667,17 +713,62 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 }
 
 func (s *pamService) expireOnce(ctx context.Context) error {
-	due, err := s.store.ListDuePAMSessions(ctx, s.clock().UTC(), 100)
+	revoking, err := s.store.ListRevokingPAMSessions(ctx, 100)
 	if err != nil {
 		return err
 	}
 	var first error
+	for _, rec := range revoking {
+		if err := s.revokeSession(ctx, rec); err != nil && first == nil {
+			first = err
+		}
+	}
+	due, err := s.store.ListDuePAMSessions(ctx, s.clock().UTC(), 100)
+	if err != nil {
+		return err
+	}
 	for _, rec := range due {
 		if err := s.expireSession(ctx, rec); err != nil && first == nil {
 			first = err
 		}
 	}
 	return first
+}
+
+func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) error {
+	switch rec.TargetType {
+	case pamTargetPostgres:
+		if s.postgres[pamTargetID{rec.TenantID, rec.TargetID}] == nil {
+			return fmt.Errorf("server: PAM postgres target %q not configured for revocation", rec.TargetID)
+		}
+		lifecycle, err := s.postgresLifecycle(rec.TenantID)
+		if err != nil {
+			return err
+		}
+		if err := lifecycle.Revoke(ctx, rec.BackendRef); err != nil {
+			return err
+		}
+		lease, err := lifecycle.GetLeaseContext(ctx, rec.BackendRef)
+		if err != nil {
+			return err
+		}
+		if lease.RevocationCompletedAt == nil {
+			return nil
+		}
+	case pamTargetSSH:
+		if s.sshProtocol == nil || s.sshProtocol.tenantID != rec.TenantID {
+			return fmt.Errorf("server: PAM SSH KRL for tenant %s is unavailable", rec.TenantID)
+		}
+		if err := s.sshProtocol.syncRevocations(ctx, true); err != nil {
+			return err
+		}
+		if !s.sshProtocol.krl.IsRevoked(rec.SSHSerial, rec.SSHKeyID) {
+			return fmt.Errorf("server: PAM SSH revocation absent from served KRL")
+		}
+	default:
+		return fmt.Errorf("server: unknown PAM target type %q", rec.TargetType)
+	}
+	return s.appendProject(ctx, rec.TenantID, projections.EventPAMSessionRevoked, projections.PAMSessionRevoked{ID: rec.ID, EndedAt: s.clock().UTC()})
 }
 
 func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
@@ -922,8 +1013,10 @@ func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
 		ID: rec.ID, TargetID: rec.TargetID, TargetType: rec.TargetType, Role: rec.Role,
 		Status: rec.Status, Subject: rec.Subject, RequestedBy: rec.RequestedBy, Reason: rec.Reason,
 		StartedAt: rec.StartedAt, ExpiresAt: rec.ExpiresAt, EndedAt: rec.EndedAt,
-		Attestation: verified,
-		Audit:       jsonMap(rec.Audit),
+		RevocationRequestedBy: rec.RevocationRequestedBy, RevocationReason: rec.RevocationReason,
+		RevocationRequestedAt: rec.RevocationRequestedAt,
+		Attestation:           verified,
+		Audit:                 jsonMap(rec.Audit),
 	}
 }
 

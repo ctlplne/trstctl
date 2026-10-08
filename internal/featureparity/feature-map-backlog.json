@@ -14061,7 +14061,8 @@
                 "getPAMRequestProgress",
                 "openPAMSession",
                 "listPAMSessions",
-                "getPAMSession"
+                "getPAMSession",
+                "revokePAMSession"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14092,7 +14093,8 @@
                 "access sessions request-status",
                 "access sessions open",
                 "access sessions list",
-                "access sessions get"
+                "access sessions get",
+                "access sessions revoke"
             ],
             "cli_na": "",
             "facet_evidence": {
