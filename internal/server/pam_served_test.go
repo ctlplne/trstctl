@@ -52,6 +52,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 					Database:       "postgres",
 					Schema:         "public",
 					UsernamePrefix: "trstctl_pam",
+					AllowedRoles:   []string{"readonly"},
 				}},
 				SSHTargets: []PAMSSHTarget{{
 					TenantID:   servedTestTenant,
@@ -64,6 +65,27 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		},
 	)
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "pam-requester", "access:read", "access:write")
+	for _, tc := range []struct{ targetType, targetID, role string }{
+		{"postgres", "pg-main", "writer"},
+		{"ssh", "ssh-edge", "admin"},
+	} {
+		req := api.PAMSessionRequest{
+			TargetType: tc.targetType, TargetID: tc.targetID, Role: tc.role,
+			Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte("test-public-key"),
+		}
+		if err := h.srv.pam.validate(h.tenant, "unlisted-role-check", "pam-requester", req); err == nil {
+			t.Fatalf("PAM %s target accepted unlisted role %q", tc.targetType, tc.role)
+		}
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", admin,
+			"unlisted-role-"+tc.targetType, map[string]any{
+				"target_type": tc.targetType, "target_id": tc.targetID, "role": tc.role,
+				"method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
+				"ssh_public_key": "test-public-key",
+			})
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("PAM %s unlisted role status=%d, want 422; body=%s", tc.targetType, status, body)
+		}
+	}
 	otherTenant := "22222222-2222-2222-2222-222222222222"
 	for _, targetType := range []string{"postgres", "ssh"} {
 		req := api.PAMSessionRequest{
@@ -215,7 +237,7 @@ func TestServedPAMUsesTenantManagedAttesterTrust(t *testing.T) {
 	fixture := servedDynamicK8sTrustFixture(t, "pam-tenant-trust")
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.PAM = PAMConfig{Enabled: true, MaxTTL: time.Minute, PostgresTargets: []PAMPostgresTarget{{
-			TenantID: servedTestTenant, ID: "tenant-pg", DSN: []byte(pgDSN), Database: "postgres", Schema: "public",
+			TenantID: servedTestTenant, ID: "tenant-pg", DSN: []byte(pgDSN), Database: "postgres", Schema: "public", AllowedRoles: []string{"readonly"},
 		}}}
 	})
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-workload-requester", "access:write")

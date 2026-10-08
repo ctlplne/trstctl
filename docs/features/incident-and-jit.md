@@ -205,8 +205,11 @@ targets. The broker resolves attestors from the existing tenant-managed workload
 trust-source API at request time and refuses a method with no enabled tenant
 trust. Production configuration does not yet provide a protected
 target-registration path, so enabling `pam` alone cannot start the broker. The
-injected target model binds each target to one tenant and requires an
-explicit SSH host, port, and principal list; an empty principal list grants nobody.
+injected target model binds each target to one tenant. PostgreSQL targets require
+an explicit role allowlist using `readonly` or `writer`; an unlisted role is
+rejected before a credential is created. SSH targets require a host, port, and
+principal list; only the `user` role is valid, and an empty principal list grants
+nobody.
 The PAM path does not yet have a distinct-approver step or early revocation, and
 must not be treated as an enterprise-ready JIT approval workflow. The ephemeral
 path verifies the attestation first,

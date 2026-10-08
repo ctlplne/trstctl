@@ -2683,7 +2683,8 @@ than sending an operator looking for a credential that was never there.
   cannot be enabled by an ordinary operator: production config has no protected
   target registration, and the broker refuses to start without targets. PAM now
   resolves attestors from enabled tenant-managed workload trust at request time.
-  The injection-only target model is tenant-bound and rejects an SSH target
+  The injection-only target model is tenant-bound, requires an explicit
+  PostgreSQL `readonly`/`writer` role allowlist, and rejects an SSH target
   without an explicit host, port, and principal allowlist. A Postgres DSN must be
   loaded by reference from a protected file or tenant secret; placing it in the
   main config would copy an administrator credential into every config backup.

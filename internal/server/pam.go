@@ -54,6 +54,7 @@ type PAMPostgresTarget struct {
 	Database       string
 	Schema         string
 	UsernamePrefix string
+	AllowedRoles   []string
 }
 
 type PAMSSHTarget struct {
@@ -82,6 +83,7 @@ type pamService struct {
 type pamPostgresTarget struct {
 	cfg     PAMPostgresTarget
 	backend *dynsecret.PostgresBackend
+	roles   map[string]struct{}
 }
 
 // Target names are tenant-local. In particular, a matching ID in a different
@@ -152,13 +154,26 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		if _, exists := postgresTargets[key]; exists {
 			return nil, fmt.Errorf("server: duplicate PAM postgres target %q in tenant %q", target.ID, target.TenantID)
 		}
+		if len(target.AllowedRoles) == 0 {
+			return nil, fmt.Errorf("server: PAM postgres target %q requires allowed roles", target.ID)
+		}
+		roles := make(map[string]struct{}, len(target.AllowedRoles))
+		for _, role := range target.AllowedRoles {
+			if role != "readonly" && role != "writer" {
+				return nil, fmt.Errorf("server: PAM postgres target %q has unsupported role %q", target.ID, role)
+			}
+			if _, exists := roles[role]; exists {
+				return nil, fmt.Errorf("server: PAM postgres target %q repeats role %q", target.ID, role)
+			}
+			roles[role] = struct{}{}
+		}
 		backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
 			DSN: target.DSN, Database: target.Database, Schema: target.Schema, UsernamePrefix: target.UsernamePrefix,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("server: PAM postgres target %q: %w", target.ID, err)
 		}
-		postgresTargets[key] = &pamPostgresTarget{cfg: target, backend: backend}
+		postgresTargets[key] = &pamPostgresTarget{cfg: target, backend: backend, roles: roles}
 	}
 	sshTargets := make(map[pamTargetID]PAMSSHTarget, len(cfg.SSHTargets))
 	for _, target := range cfg.SSHTargets {
@@ -465,8 +480,12 @@ func (s *pamService) validate(tenantID, idempotencyKey, requester string, req ap
 	}
 	switch req.TargetType {
 	case pamTargetPostgres:
-		if s.postgres[pamTargetID{tenantID, req.TargetID}] == nil {
+		target := s.postgres[pamTargetID{tenantID, req.TargetID}]
+		if target == nil {
 			return fmt.Errorf("%w: unknown postgres target %q", api.ErrPAMInvalid, req.TargetID)
+		}
+		if _, allowed := target.roles[req.Role]; !allowed {
+			return fmt.Errorf("%w: role %q is not allowed on postgres target %q", api.ErrPAMInvalid, req.Role, req.TargetID)
 		}
 	case pamTargetSSH:
 		if _, ok := s.sshTargets[pamTargetID{tenantID, req.TargetID}]; !ok {
@@ -474,6 +493,9 @@ func (s *pamService) validate(tenantID, idempotencyKey, requester string, req ap
 		}
 		if len(req.SSHPublicKey) == 0 {
 			return fmt.Errorf("%w: ssh_public_key is required for ssh targets", api.ErrPAMInvalid)
+		}
+		if req.Role != "user" {
+			return fmt.Errorf("%w: SSH target role must be user", api.ErrPAMInvalid)
 		}
 	}
 	return nil
