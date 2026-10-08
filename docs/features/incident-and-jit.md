@@ -218,6 +218,16 @@ every host downloaded the KRL: sshd must use `RevokedKeys` with the current
 `pam.session.revoked` records completion. Native expiry remains an independent
 deadline; a stopped worker cannot extend a PostgreSQL role beyond `rolvaliduntil`
 or an SSH certificate beyond `valid_before`.
+If PostgreSQL provider removal exhausts delivery retries, the session becomes
+`revocation_failed` with a closed, non-secret error class and failure time. This
+does not certify target removal. Repair the target, then submit the same
+`POST /api/v1/access/sessions/{id}/revoke` operation with a fresh
+`Idempotency-Key` and a new reason, or use **Retry target removal** in the
+console. The retry records another `pam.session.revocation_requested` event and
+queues a new provider command. Its result returns to `revoking` until native
+role removal is confirmed. Exact-key replays return the original attempt;
+they do not create another removal. `pam.session.revocation_failed` records
+each terminal attempt without retaining provider response text.
 For new sessions, the start event also records the verified attestation method,
 subject, selectors, claims, and verification time. GET and list responses project
 those facts after a restart without returning the one-time credential. Sessions

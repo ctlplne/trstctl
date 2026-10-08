@@ -1030,18 +1030,26 @@ function PAMDetailDialog({
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [mutated, setMutated] = useState<PAMSession | null>(null);
+  const retryKeyRef = useRef<string | null>(null);
   const live = useApiQuery(["pam-session", session.id], () => api.pamSession(session.id), { retry: false, live: { intervalMs: 5_000 } });
-  const current = mutated && live.data?.status === "active" ? mutated : (live.data ?? mutated ?? session);
+  const waitingForMutationReadback = Boolean(
+    mutated &&
+    (!live.data || live.data.status === "active" || (mutated.revocation_requested_at && live.data.revocation_requested_at !== mutated.revocation_requested_at)),
+  );
+  const current = waitingForMutationReadback ? mutated! : (live.data ?? mutated ?? session);
   useEffect(() => {
-    if (live.data && !(mutated && live.data.status === "active")) onUpdate(live.data);
-  }, [live.data, mutated, onUpdate]);
+    if (live.data && !waitingForMutationReadback) onUpdate(live.data);
+  }, [live.data, waitingForMutationReadback, onUpdate]);
   async function revoke() {
     const reason = revokeReason.trim();
     if (!reason || reason.length > 1000 || revokeBusy) return;
     setRevokeBusy(true);
     setRevokeError(null);
     try {
-      const next = await api.revokePAMSession(current.id, reason, `pam-revoke:${current.id}`);
+      const key =
+        current.status === "revocation_failed" ? (retryKeyRef.current ??= `pam-revoke:${current.id}:${crypto.randomUUID()}`) : `pam-revoke:${current.id}`;
+      const next = await api.revokePAMSession(current.id, reason, key);
+      retryKeyRef.current = null;
       setMutated(next);
       onUpdate(next);
       live.refetch();
@@ -1088,6 +1096,10 @@ function PAMDetailDialog({
         <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(current.expires_at, formatPolicy)}</DetailRow>
         {current.revocation_requested_by ? <DetailRow term={t("admin.access.revokeRequestedBy")}>{current.revocation_requested_by}</DetailRow> : null}
         {current.revocation_reason ? <DetailRow term={t("admin.access.revokeReason")}>{current.revocation_reason}</DetailRow> : null}
+        {current.revocation_failure ? <DetailRow term={t("admin.access.revocationFailure")}>{current.revocation_failure}</DetailRow> : null}
+        {current.revocation_failed_at ? (
+          <DetailRow term={t("admin.access.revocationFailedAt")}>{formatOptionalDate(current.revocation_failed_at, formatPolicy)}</DetailRow>
+        ) : null}
         {current.ended_at ? <DetailRow term={t("admin.access.ended")}>{formatOptionalDate(current.ended_at, formatPolicy)}</DetailRow> : null}
         <DetailRow term={t("admin.access.attestation")}>
           {current.attestation ? <JSONBlock value={current.attestation} /> : t("admin.access.attestationUnavailable")}
@@ -1108,20 +1120,27 @@ function PAMDetailDialog({
           {t("admin.access.revokedConfirmed")}
         </p>
       ) : null}
-      {canRevoke && current.status === "active" ? (
+      {current.status === "revocation_failed" ? (
+        <p className="px-5 pb-3 text-sm" role="alert">
+          {t("admin.access.revocationFailedHelp")}
+        </p>
+      ) : null}
+      {canRevoke && (current.status === "active" || current.status === "revocation_failed") ? (
         <div className="grid gap-2 border-t border-border px-5 py-4">
           <label htmlFor="pam-revoke-reason" className="text-sm font-medium">
             {t("admin.access.revokeReason")}
           </label>
           <Textarea id="pam-revoke-reason" value={revokeReason} maxLength={1000} onChange={(event) => setRevokeReason(event.target.value)} />
-          <p className="text-xs text-muted-foreground">{t("admin.access.revokeExplanation")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t(current.status === "revocation_failed" ? "admin.access.retryRevokeExplanation" : "admin.access.revokeExplanation")}
+          </p>
           {revokeError ? (
             <ErrorState title={t("admin.access.revokeFailed")}>
               <ProblemDetail message={revokeError} fallback={t("admin.access.revokeFailed")} />
             </ErrorState>
           ) : null}
           <Button type="button" variant="destructive" disabled={!revokeReason.trim() || revokeBusy} onClick={() => void revoke()}>
-            {revokeBusy ? t("admin.access.revoking") : t("admin.access.revokeSession")}
+            {revokeBusy ? t("admin.access.revoking") : t(current.status === "revocation_failed" ? "admin.access.retryRevoke" : "admin.access.revokeSession")}
           </Button>
         </div>
       ) : null}
@@ -1425,6 +1444,6 @@ function formatOptionalDate(value: string | undefined, policy: FormatPolicy): st
 function pamStatusTone(status: string): StatusTone {
   if (status === "open" || status === "active") return "success";
   if (status === "expired" || status === "pending") return "warning";
-  if (status === "revoked" || status === "failed") return "critical";
+  if (status === "revoked" || status === "failed" || status === "revocation_failed") return "critical";
   return "neutral";
 }

@@ -13564,6 +13564,9 @@ export interface components {
             postgres?: components["schemas"]["PAMPostgresCredential"];
             reason?: string;
             requested_by: string;
+            /** Format: date-time */
+            revocation_failed_at?: string;
+            revocation_failure?: string;
             revocation_reason?: string;
             /** Format: date-time */
             revocation_requested_at?: string;

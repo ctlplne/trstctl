@@ -488,14 +488,14 @@ func (s *Server) RunPAMSessionExpiry(ctx context.Context) {
 	s.pam.RunExpiry(ctx)
 }
 
-func (s *Server) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason string) (api.PAMSession, error) {
+func (s *Server) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (api.PAMSession, error) {
 	if s.pam == nil {
 		return api.PAMSession{}, api.ErrPAMUnavailable
 	}
-	return s.pam.RevokePAMSession(ctx, tenantID, id, requester, reason)
+	return s.pam.RevokePAMSession(ctx, tenantID, id, requester, reason, idempotencyKey)
 }
 
-func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason string) (api.PAMSession, error) {
+func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (api.PAMSession, error) {
 	if _, err := uuid.Parse(id); err != nil {
 		return api.PAMSession{}, pgx.ErrNoRows
 	}
@@ -503,10 +503,11 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 	if err != nil {
 		return api.PAMSession{}, err
 	}
-	if rec.Status != api.PAMSessionStatusActive {
+	if rec.Status != api.PAMSessionStatusActive && rec.Status != store.PAMSessionStatusRevocationFailed {
 		return api.PAMSession{}, api.ErrPAMTerminal
 	}
-	if requester == "" || strings.TrimSpace(reason) == "" {
+	if requester == "" || strings.TrimSpace(reason) == "" || idempotencyKey == "" ||
+		(rec.Status == store.PAMSessionStatusRevocationFailed && idempotencyKey == rec.RevocationIdempotencyKey) {
 		return api.PAMSession{}, api.ErrPAMInvalid
 	}
 	if rec.TargetType == pamTargetSSH && (s.sshProtocol == nil || s.sshProtocol.tenantID != tenantID) {
@@ -515,7 +516,8 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 	at := s.clock().UTC()
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionRevocationRequested, projections.PAMSessionRevocationRequested{
 		ID: id, RequestedBy: requester, Reason: reason, RequestedAt: at,
-		SSHSerial: rec.SSHSerial, SSHKeyID: rec.SSHKeyID,
+		IdempotencyKey: idempotencyKey,
+		SSHSerial:      rec.SSHSerial, SSHKeyID: rec.SSHKeyID,
 	}); err != nil {
 		return api.PAMSession{}, err
 	}
@@ -523,7 +525,8 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 	if err != nil {
 		return api.PAMSession{}, err
 	}
-	if (current.Status != store.PAMSessionStatusRevoking && current.Status != store.PAMSessionStatusRevoked) || current.RevocationRequestedBy != requester || current.RevocationReason != reason {
+	if (current.Status != store.PAMSessionStatusRevoking && current.Status != store.PAMSessionStatusRevoked) ||
+		current.RevocationRequestedBy != requester || current.RevocationReason != reason {
 		return api.PAMSession{}, api.ErrPAMTerminal
 	}
 	return current, nil
@@ -745,14 +748,36 @@ func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) er
 		if err != nil {
 			return err
 		}
-		if err := lifecycle.Revoke(ctx, rec.BackendRef); err != nil {
-			return err
-		}
 		lease, err := lifecycle.GetLeaseContext(ctx, rec.BackendRef)
 		if err != nil {
 			return err
 		}
 		if lease.RevocationCompletedAt == nil {
+			if lease.RevocationStatus == "failed" {
+				// A completed bound command means its provider attempt was
+				// queued and subsequently failed. A fresh retry key has no
+				// completed command yet, so it must be allowed to requeue.
+				if rec.RevocationIdempotencyKey == "" {
+					return s.pamRevocationFailed(ctx, rec)
+				}
+				op, lookupErr := s.store.GetDynamicSecretOperationByIdempotencyKey(ctx, rec.TenantID, "pam-revoke:"+rec.RevocationIdempotencyKey)
+				if lookupErr != nil && !store.IsNotFound(lookupErr) {
+					return lookupErr
+				}
+				if lookupErr == nil && op.Status == store.DynamicSecretOperationCompleted {
+					return s.pamRevocationFailed(ctx, rec)
+				}
+			}
+			if rec.RevocationIdempotencyKey != "" {
+				binding := crypto.SHA256Hex([]byte("pam-revoke:v1:" + rec.TenantID + ":" + rec.ID + ":" + rec.RevocationRequestedBy + ":" + rec.RevocationReason))
+				_, err = lifecycle.RevokeBound(ctx, rec.BackendRef, "pam-revoke:"+rec.RevocationIdempotencyKey, binding)
+			} else {
+				// Sessions requested by an older event had no attempt key.
+				err = lifecycle.Revoke(ctx, rec.BackendRef)
+			}
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 	case pamTargetSSH:
@@ -769,6 +794,12 @@ func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) er
 		return fmt.Errorf("server: unknown PAM target type %q", rec.TargetType)
 	}
 	return s.appendProject(ctx, rec.TenantID, projections.EventPAMSessionRevoked, projections.PAMSessionRevoked{ID: rec.ID, EndedAt: s.clock().UTC()})
+}
+
+func (s *pamService) pamRevocationFailed(ctx context.Context, rec store.PAMSession) error {
+	return s.appendProject(ctx, rec.TenantID, projections.EventPAMSessionRevocationFailed,
+		projections.PAMSessionRevocationFailed{ID: rec.ID, IdempotencyKey: rec.RevocationIdempotencyKey,
+			Failure: "PostgreSQL provider removal failed; repair the target and retry revocation", FailedAt: s.clock().UTC()})
 }
 
 func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
@@ -1015,8 +1046,9 @@ func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
 		StartedAt: rec.StartedAt, ExpiresAt: rec.ExpiresAt, EndedAt: rec.EndedAt,
 		RevocationRequestedBy: rec.RevocationRequestedBy, RevocationReason: rec.RevocationReason,
 		RevocationRequestedAt: rec.RevocationRequestedAt,
-		Attestation:           verified,
-		Audit:                 jsonMap(rec.Audit),
+		RevocationFailure:     rec.RevocationFailure, RevocationFailedAt: rec.RevocationFailedAt,
+		Attestation: verified,
+		Audit:       jsonMap(rec.Audit),
 	}
 }
 

@@ -8389,6 +8389,8 @@ PAMSession = TypedDict(
         'postgres': dict[str, Any],
         'reason': str,
         'requested_by': str,
+        'revocation_failed_at': str,
+        'revocation_failure': str,
         'revocation_reason': str,
         'revocation_requested_at': str,
         'revocation_requested_by': str,

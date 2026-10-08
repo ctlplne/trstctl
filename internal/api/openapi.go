@@ -4580,6 +4580,7 @@ func componentSchemas() map[string]*Schema {
 		"status": str(), "subject": str(), "requested_by": str(), "reason": str(),
 		"started_at": timestamp(), "expires_at": timestamp(), "ended_at": timestamp(),
 		"revocation_requested_by": str(), "revocation_reason": str(), "revocation_requested_at": timestamp(),
+		"revocation_failure": str(), "revocation_failed_at": timestamp(),
 		"attestation": ref("Attestation"), "postgres": ref("PAMPostgresCredential"),
 		"ssh": ref("PAMSSHCredential"), "audit": {Type: "object"},
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")

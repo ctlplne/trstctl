@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -111,6 +114,119 @@ func TestServedPAMEarlyRevokePostgres(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatalf("PAM session %s did not revoke the native role and settle before its TTL", issued.ID)
+}
+
+func TestServedPAMProviderRemovalFailureAndRetry(t *testing.T) {
+	pgDSN, stopPG := startPAMPostgres(t)
+	defer stopPG()
+	seedPAMPostgresTable(t, pgDSN)
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		wirePAMPostgresProvider(d, pamPostgresAdminFileRef(t, pgDSN), 5*time.Minute)
+		d.PAM = PAMConfig{
+			Enabled: true, DefaultTTL: 3 * time.Minute, MaxTTL: 5 * time.Minute,
+			Attestors:       []attest.Attestor{servedPAMAttestor{}},
+			PostgresTargets: []PAMPostgresTarget{{TenantID: servedTestTenant, ID: "pg-main", ProviderID: "pam-pg-provider", AllowedRoles: []string{"readonly"}}},
+		}
+	})
+	// Serve issuance, then pause only this harness's dispatcher so the first
+	// revoke outbox row can be driven to a real terminal provider outcome.
+	dispatchCtx, cancelDispatch := context.WithCancel(context.Background())
+	dispatchDone := make(chan struct{})
+	go func() { defer close(dispatchDone); h.srv.RunDispatcher(dispatchCtx) }()
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "pam-requester", "access:read", "access:write")
+	reviewerOne := seedScopedTokenSubject(t, h.store, h.tenant, "pam-reviewer-one", "access:approve")
+	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-reviewer-two", "access:approve")
+	issued := servedPAMReviewedOpen(t, h, requester, reviewerOne, reviewerTwo, "pam-revoke-retry", map[string]any{
+		"target_type": "postgres", "target_id": "pg-main", "role": "readonly",
+		"reason": "approved use", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")), "ttl_seconds": 180,
+	})
+	cancelDispatch()
+	<-dispatchDone
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	path := "/api/v1/access/sessions/" + issued.ID + "/revoke"
+	if code, body := secretsReqKey(t, h, http.MethodPost, path, requester, "revoke-first", map[string]any{"reason": "incident"}); code != http.StatusAccepted {
+		t.Fatalf("first revoke status %d: %s", code, body)
+	}
+	if err := h.srv.pam.expireOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := h.store.GetPAMSession(context.Background(), h.tenant, issued.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := h.store.GetDynamicSecretLease(context.Background(), h.tenant, rec.BackendRef)
+	if err != nil || lease.RevokeOutboxID == nil {
+		t.Fatalf("first provider removal not queued: %+v, %v", lease, err)
+	}
+	first, err := h.srv.outbox.Get(context.Background(), h.tenant, *lease.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := orchestrator.Message{ID: first.ID, TenantID: h.tenant, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: first.Payload, Attempts: 10}
+	dispatcher := h.srv.obHandler.(*issuanceDispatcher).secretIntegrations
+	if handled, err := dispatcher.DeliverTerminalFailure(context.Background(), message, errors.New("provider unavailable")); !handled || err != nil {
+		t.Fatalf("terminal provider failure: handled=%t err=%v", handled, err)
+	}
+	if err := h.srv.pam.expireOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	code, body := secretsReq(t, h, http.MethodGet, "/api/v1/access/sessions/"+issued.ID, requester, nil)
+	var failed struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &failed); err != nil || code != http.StatusOK || failed.Status != "revocation_failed" {
+		t.Fatalf("PAM did not expose provider failure: code=%d body=%s err=%v", code, body, err)
+	}
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, true)
+	if err := projections.New(h.store).Rebuild(context.Background(), h.log); err != nil {
+		t.Fatalf("cold replay terminal PAM failure: %v", err)
+	}
+	if replayed, err := h.store.GetPAMSession(context.Background(), h.tenant, issued.ID); err != nil || replayed.Status != store.PAMSessionStatusRevocationFailed {
+		t.Fatalf("cold replay lost PAM failure: %+v, %v", replayed, err)
+	}
+	retryBody := map[string]any{"reason": "repair complete, retry removal"}
+	retryCode, retryResponse := secretsReqKey(t, h, http.MethodPost, path, requester, "revoke-retry-after-repair", retryBody)
+	if retryCode != http.StatusAccepted {
+		t.Fatalf("retry revoke status %d: %s", retryCode, retryResponse)
+	}
+	if code, body := secretsReqKey(t, h, http.MethodPost, path, requester, "revoke-retry-after-repair", retryBody); code != retryCode || string(body) != string(retryResponse) {
+		t.Fatalf("exact retry replay changed result: code=%d body=%s", code, body)
+	}
+	if code, _ := secretsReqKey(t, h, http.MethodPost, path, requester, "parallel-retry", retryBody); code != http.StatusConflict {
+		t.Fatalf("new command while retry is pending returned %d, want conflict", code)
+	}
+	if err := h.srv.pam.expireOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	retried, err := h.store.GetDynamicSecretLease(context.Background(), h.tenant, rec.BackendRef)
+	if err != nil || retried.RevokeOutboxID == nil || *retried.RevokeOutboxID == first.ID {
+		t.Fatalf("retry did not queue a new exact provider command: %+v, %v", retried, err)
+	}
+	second, err := h.srv.outbox.Get(context.Background(), h.tenant, *retried.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondMessage := orchestrator.Message{ID: second.ID, TenantID: h.tenant, Destination: second.Destination, IdempotencyKey: second.IdempotencyKey, Payload: second.Payload, Attempts: 1}
+	if handled, err := dispatcher.Deliver(context.Background(), secondMessage); !handled || err != nil {
+		t.Fatalf("dispatch repaired provider removal: handled=%t err=%v", handled, err)
+	}
+	if err := h.srv.pam.expireOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	code, body = secretsReq(t, h, http.MethodGet, "/api/v1/access/sessions/"+issued.ID, requester, nil)
+	var done struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &done); err != nil || code != http.StatusOK || done.Status != "revoked" {
+		t.Fatalf("PAM did not confirm repaired removal: code=%d body=%s err=%v", code, body, err)
+	}
+	assertPAMPostgresAccess(t, issued.Postgres.DSN, false)
+	if err := projections.New(h.store).Rebuild(context.Background(), h.log); err != nil {
+		t.Fatalf("cold replay completed PAM retry: %v", err)
+	}
+	if replayed, err := h.store.GetPAMSession(context.Background(), h.tenant, issued.ID); err != nil || replayed.Status != store.PAMSessionStatusRevoked {
+		t.Fatalf("cold replay lost repaired PAM removal: %+v, %v", replayed, err)
+	}
 }
 
 func TestServedPAMEarlyRevokeSSHThroughKRL(t *testing.T) {

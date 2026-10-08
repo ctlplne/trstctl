@@ -2700,11 +2700,11 @@ than sending an operator looking for a credential that was never there.
   API and console; PostgreSQL completion waits for native role removal, while
   SSH completion means the served KRL contains the serial and key ID. Hosts
   must load the refreshed KRL to enforce rejection. The full live operator
-  replay and cold restart for early revocation remain open. A terminal
-  PostgreSQL provider-removal failure still leaves the PAM session labelled
-  `revoking`; the underlying lease records `failed` and can be retried by its
-  native API, but the PAM console does not yet expose that failure and recovery.
-  That operator gap must close before the U6 journey is marked complete.
+  replay and cold restart for early revocation remain open. The provider
+  terminal-failure path now projects `revocation_failed` with a closed error
+  class and exposes a fresh-key retry in the API, CLI, and console. Live
+  failure/repair/retry evidence is still required before the U6 journey is
+  marked complete.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The

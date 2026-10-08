@@ -34,7 +34,7 @@ type PAMService interface {
 	OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req PAMSessionRequest) (PAMSession, error)
 	GetPAMSession(ctx context.Context, tenantID, id string) (PAMSession, error)
 	ListPAMSessions(ctx context.Context, tenantID string, limit int, cursor string) ([]PAMSession, string, error)
-	RevokePAMSession(ctx context.Context, tenantID, id, requester, reason string) (PAMSession, error)
+	RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (PAMSession, error)
 }
 
 // WithPAM wires the served PAM broker. When unset, routes fail closed with 503.
@@ -115,6 +115,8 @@ type PAMSession struct {
 	RevocationRequestedBy string     `json:"revocation_requested_by,omitempty"`
 	RevocationReason      string     `json:"revocation_reason,omitempty"`
 	RevocationRequestedAt *time.Time `json:"revocation_requested_at,omitempty"`
+	RevocationFailure     string     `json:"revocation_failure,omitempty"`
+	RevocationFailedAt    *time.Time `json:"revocation_failed_at,omitempty"`
 	// Older sessions did not retain verified facts. Omit their attestation
 	// instead of presenting a zero verification time as evidence.
 	Attestation *attest.Attestation    `json:"attestation,omitempty"`
@@ -330,7 +332,7 @@ func (a *API) revokePAMSession(w http.ResponseWriter, r *http.Request) {
 		if principal.Subject == "" {
 			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated revoker is required")
 		}
-		session, err := a.pam.RevokePAMSession(ctx, tenantID, strings.TrimSpace(r.PathValue("id")), principal.Subject, body.Reason)
+		session, err := a.pam.RevokePAMSession(ctx, tenantID, strings.TrimSpace(r.PathValue("id")), principal.Subject, body.Reason, r.Header.Get("Idempotency-Key"))
 		if err != nil {
 			return 0, nil, err
 		}

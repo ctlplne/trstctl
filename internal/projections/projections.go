@@ -262,6 +262,7 @@ const (
 	EventPAMSessionActivationRequested            = "pam.session.activation_requested"
 	EventPAMSessionExpired                        = "pam.session.expired"
 	EventPAMSessionRevocationRequested            = "pam.session.revocation_requested"
+	EventPAMSessionRevocationFailed               = "pam.session.revocation_failed"
 	EventPAMSessionRevoked                        = "pam.session.revoked"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
@@ -3224,12 +3225,20 @@ type PAMSessionExpired struct {
 }
 
 type PAMSessionRevocationRequested struct {
-	ID          string    `json:"id"`
-	RequestedBy string    `json:"requested_by"`
-	Reason      string    `json:"reason"`
-	RequestedAt time.Time `json:"requested_at"`
-	SSHSerial   uint64    `json:"ssh_serial,omitempty"`
-	SSHKeyID    string    `json:"ssh_key_id,omitempty"`
+	ID             string    `json:"id"`
+	RequestedBy    string    `json:"requested_by"`
+	Reason         string    `json:"reason"`
+	RequestedAt    time.Time `json:"requested_at"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	SSHSerial      uint64    `json:"ssh_serial,omitempty"`
+	SSHKeyID       string    `json:"ssh_key_id,omitempty"`
+}
+
+type PAMSessionRevocationFailed struct {
+	ID             string    `json:"id"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	Failure        string    `json:"failure"`
+	FailedAt       time.Time `json:"failed_at"`
 }
 
 type PAMSessionRevoked struct {
@@ -3711,6 +3720,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventMachineAuthMethodEnabled:                 {1: true},
 	EventPAMSessionExpired:                        {1: true},
 	EventPAMSessionRevocationRequested:            {1: true},
+	EventPAMSessionRevocationFailed:               {1: true},
 	EventPAMSessionRevoked:                        {1: true},
 	EventNHIAccessReviewCampaignStarted:           {1: true},
 	EventNHIAccessReviewItemDecided:               {1: true},
@@ -6317,7 +6327,20 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if at.IsZero() {
 			at = e.Time
 		}
-		return p.store.ApplyPAMSessionRevocationRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.RequestedBy, pl.Reason, at)
+		return p.store.ApplyPAMSessionRevocationRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.RequestedBy, pl.Reason, pl.IdempotencyKey, at)
+	case EventPAMSessionRevocationFailed:
+		var pl PAMSessionRevocationFailed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Failure == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		at := pl.FailedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		return p.store.ApplyPAMSessionRevocationFailedTx(ctx, tx, e.TenantID, pl.ID, pl.IdempotencyKey, pl.Failure, at)
 	case EventPAMSessionRevoked:
 		var pl PAMSessionRevoked
 		if err := decode(e, &pl); err != nil {

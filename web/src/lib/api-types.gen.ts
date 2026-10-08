@@ -6097,6 +6097,8 @@ export interface PAMSession {
   postgres?: PAMPostgresCredential;
   reason?: string;
   requested_by: string;
+  revocation_failed_at?: string;
+  revocation_failure?: string;
   revocation_reason?: string;
   revocation_requested_at?: string;
   revocation_requested_by?: string;

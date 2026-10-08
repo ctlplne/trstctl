@@ -41,6 +41,27 @@ func TestEveryProjectorKnownSchemaHasClosedPrivacyPolicy(t *testing.T) {
 	}
 }
 
+func TestPAMRevocationOutcomeEventsHaveNoPersonalDataToRewrite(t *testing.T) {
+	for _, test := range []struct {
+		name, eventType, data string
+		decode                func([]byte) error
+	}{
+		{"revoked", EventPAMSessionRevoked, `{"id":"session-a","ended_at":"2026-10-08T15:00:00Z"}`, decodePrivacyFixture[PAMSessionRevoked]},
+		{"failed", EventPAMSessionRevocationFailed, `{"id":"session-a","idempotency_key":"retry-key","failure":"provider removal failed","failed_at":"2026-10-08T15:00:00Z"}`, decodePrivacyFixture[PAMSessionRevocationFailed]},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rewritten, changed, err := events.PseudonymizeEventDataForSubject(
+				[]byte(test.data), "tenant-a", "privacy-policy-subject", test.eventType, 1)
+			if err != nil || changed || !bytes.Equal(rewritten, []byte(test.data)) {
+				t.Fatalf("outcome event changed=%t err=%v data=%s", changed, err, rewritten)
+			}
+			if err := test.decode(rewritten); err != nil {
+				t.Fatalf("outcome payload no longer decodes: %v", err)
+			}
+		})
+	}
+}
+
 func TestExactProjectorPrivacyPoliciesHaveVersionSpecificPayloadShapes(t *testing.T) {
 	policies := exactProjectorPrivacyPolicies()
 	shapes := exactProjectorPrivacyPayloadShapes()
@@ -419,9 +440,6 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 			data:   completePrivacyFixture[PAMSessionRevocationRequested](t, `{"requested_by":"privacy-policy-subject","reason":"incident privacy-policy-subject"}`),
 			decode: decodePrivacyFixture[PAMSessionRevocationRequested], wantPlaceholder: true,
 			want: []string{`"reason":""`}},
-		{name: "pam revoked", eventType: EventPAMSessionRevoked, version: 1,
-			data:   completePrivacyFixture[PAMSessionRevoked](t, `{}`),
-			decode: decodePrivacyFixture[PAMSessionRevoked]},
 		{name: "discovery source config", eventType: EventDiscoverySourceUpserted, version: 1,
 			data:   completePrivacyFixture[DiscoverySourceUpserted](t, `{"name":"active-source","config":{"principal":"privacy-policy-subject","nested":[{"owner":"privacy-policy-subject"}]}}`),
 			decode: decodePrivacyFixture[DiscoverySourceUpserted], wantPlaceholder: true},

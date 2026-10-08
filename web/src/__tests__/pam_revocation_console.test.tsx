@@ -85,3 +85,51 @@ it("requests a reasoned PAM revocation and distinguishes pending from confirmed 
   await user.click(within(dialog).getByRole("button", { name: "Refresh session status" }));
   expect(await within(dialog).findByText(/Target removal confirmed/)).toBeInTheDocument();
 });
+
+it("shows a failed provider removal and submits a new audited retry", async () => {
+  const user = userEvent.setup();
+  const failed = {
+    ...session,
+    status: "revocation_failed",
+    revocation_requested_at: "2026-10-08T10:01:00Z",
+    revocation_reason: "incident",
+    revocation_failure: "PostgreSQL provider removal failed; repair the target and retry revocation",
+    revocation_failed_at: "2026-10-08T10:02:00Z",
+  };
+  apiMock.pamSessions.mockResolvedValue({ items: [failed] });
+  apiMock.pamSession.mockResolvedValue(failed);
+  apiMock.revokePAMSession.mockResolvedValue({
+    ...failed,
+    status: "revoking",
+    revocation_requested_at: "2026-10-08T10:03:00Z",
+    revocation_reason: "provider repaired",
+    revocation_failure: undefined,
+    revocation_failed_at: undefined,
+  });
+  render(
+    <AppQueryProvider>
+      <ThemeProvider>
+        <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+          <MemoryRouter>
+            <AdminAccess />
+          </MemoryRouter>
+        </IntlProvider>
+      </ThemeProvider>
+    </AppQueryProvider>,
+  );
+  await screen.findByRole("heading", { level: 1, name: "People and roles" });
+  await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+  await user.click(await screen.findByRole("button", { name: "Details" }));
+  const dialog = screen.getByRole("dialog", { name: /Privileged session/ });
+  expect(within(dialog).getByText(/Access may remain usable until its native deadline/)).toBeInTheDocument();
+  const button = within(dialog).getByRole("button", { name: "Retry target removal" });
+  expect(button).toBeDisabled();
+  await user.type(within(dialog).getByRole("textbox", { name: "Revocation reason" }), "provider repaired");
+  await user.click(button);
+  await waitFor(() => expect(apiMock.revokePAMSession).toHaveBeenCalledOnce());
+  const [id, reason, key] = apiMock.revokePAMSession.mock.calls[0];
+  expect(id).toBe(session.id);
+  expect(reason).toBe("provider repaired");
+  expect(key).toMatch(new RegExp(`^pam-revoke:${session.id}:[a-f0-9-]{36}$`));
+  expect(await within(dialog).findByText(/Waiting for target confirmation/)).toBeInTheDocument();
+});

@@ -12,37 +12,41 @@ import (
 )
 
 const (
-	PAMSessionStatusExpired  = "expired"
-	PAMSessionStatusRevoking = "revoking"
-	PAMSessionStatusRevoked  = "revoked"
+	PAMSessionStatusExpired          = "expired"
+	PAMSessionStatusRevoking         = "revoking"
+	PAMSessionStatusRevoked          = "revoked"
+	PAMSessionStatusRevocationFailed = "revocation_failed"
 )
 
 // PAMSession is the event-sourced read-model row for one just-in-time privileged
 // access session. It stores metadata and backend revoke handles only; response
 // credentials are intentionally absent.
 type PAMSession struct {
-	TenantID              string
-	ID                    string
-	TargetType            string
-	TargetID              string
-	Role                  string
-	Status                string
-	Subject               string
-	RequestedBy           string
-	Reason                string
-	AttestationID         string
-	Attestation           json.RawMessage
-	BackendRef            string
-	SSHKeyID              string
-	SSHSerial             uint64
-	IdempotencyKey        string
-	Audit                 json.RawMessage
-	StartedAt             time.Time
-	ExpiresAt             time.Time
-	EndedAt               *time.Time
-	RevocationRequestedBy string
-	RevocationReason      string
-	RevocationRequestedAt *time.Time
+	TenantID                 string
+	ID                       string
+	TargetType               string
+	TargetID                 string
+	Role                     string
+	Status                   string
+	Subject                  string
+	RequestedBy              string
+	Reason                   string
+	AttestationID            string
+	Attestation              json.RawMessage
+	BackendRef               string
+	SSHKeyID                 string
+	SSHSerial                uint64
+	IdempotencyKey           string
+	Audit                    json.RawMessage
+	StartedAt                time.Time
+	ExpiresAt                time.Time
+	EndedAt                  *time.Time
+	RevocationRequestedBy    string
+	RevocationReason         string
+	RevocationRequestedAt    *time.Time
+	RevocationIdempotencyKey string
+	RevocationFailure        string
+	RevocationFailedAt       *time.Time
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
@@ -97,12 +101,21 @@ func (s *Store) ApplyPAMSessionExpiredTx(ctx context.Context, tx pgx.Tx, tenantI
 
 // These transitions project immutable events. A terminal state cannot be
 // overwritten by a delayed worker or a replayed request.
-func (s *Store) ApplyPAMSessionRevocationRequestedTx(ctx context.Context, tx pgx.Tx, tenantID, id, actor, reason string, at time.Time) error {
+func (s *Store) ApplyPAMSessionRevocationRequestedTx(ctx context.Context, tx pgx.Tx, tenantID, id, actor, reason, key string, at time.Time) error {
 	_, err := tx.Exec(ctx, `UPDATE pam_sessions
 	    SET status = $3, revocation_requested_by = $4,
-	        revocation_reason = $5, revocation_requested_at = $6
-	  WHERE tenant_id = $1 AND id = $2 AND status = 'active'`,
-		tenantID, id, PAMSessionStatusRevoking, actor, reason, at)
+	        revocation_reason = $5, revocation_requested_at = $6,
+	        revocation_idempotency_key = $7, revocation_failure = '', revocation_failed_at = NULL
+	  WHERE tenant_id = $1 AND id = $2 AND status IN ('active', 'revocation_failed')`,
+		tenantID, id, PAMSessionStatusRevoking, actor, reason, at, key)
+	return err
+}
+
+func (s *Store) ApplyPAMSessionRevocationFailedTx(ctx context.Context, tx pgx.Tx, tenantID, id, key, failure string, at time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_sessions
+	    SET status = $4, revocation_failure = $5, revocation_failed_at = $6
+	  WHERE tenant_id = $1 AND id = $2 AND revocation_idempotency_key = $3 AND status = 'revoking'`,
+		tenantID, id, key, PAMSessionStatusRevocationFailed, failure, at)
 	return err
 }
 
@@ -122,7 +135,8 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-			        revocation_requested_by, revocation_reason, revocation_requested_at
+			        revocation_requested_by, revocation_reason, revocation_requested_at,
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -142,7 +156,8 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-			        revocation_requested_by, revocation_reason, revocation_requested_at
+			        revocation_requested_by, revocation_reason, revocation_requested_at,
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -174,7 +189,8 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-		        revocation_requested_by, revocation_reason, revocation_requested_at
+		        revocation_requested_by, revocation_reason, revocation_requested_at,
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -206,7 +222,8 @@ func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSe
 		`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
 		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-		        revocation_requested_by, revocation_reason, revocation_requested_at
+		        revocation_requested_by, revocation_reason, revocation_requested_at,
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at
 		   FROM pam_sessions WHERE status = 'revoking'
 		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
@@ -235,6 +252,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		&out.Subject, &out.RequestedBy, &out.Reason, &out.AttestationID, &out.BackendRef, &out.SSHKeyID,
 		&serial, &out.IdempotencyKey, &out.Audit, &out.Attestation, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
 		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
+		&out.RevocationIdempotencyKey, &out.RevocationFailure, &out.RevocationFailedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows

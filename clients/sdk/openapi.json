@@ -25022,6 +25022,13 @@
           "requested_by": {
             "type": "string"
           },
+          "revocation_failed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revocation_failure": {
+            "type": "string"
+          },
           "revocation_reason": {
             "type": "string"
           },

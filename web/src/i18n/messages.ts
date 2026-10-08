@@ -4140,6 +4140,18 @@ export const messages = {
     description: "Qualified PAM revocation completion state.",
   },
   "admin.access.revokeFailed": { defaultMessage: "Could not request revocation", description: "PAM revoke mutation failure title." },
+  "admin.access.revocationFailure": { defaultMessage: "Target removal failure", description: "PAM provider removal failure classification." },
+  "admin.access.revocationFailedAt": { defaultMessage: "Removal failed at", description: "PAM provider removal failure timestamp." },
+  "admin.access.revocationFailedHelp": {
+    defaultMessage:
+      "The target did not confirm removal. Access may remain usable until its native deadline. Repair the target, then retry removal with a new reason.",
+    description: "Actionable PAM terminal provider failure without claiming access ended.",
+  },
+  "admin.access.retryRevoke": { defaultMessage: "Retry target removal", description: "Explicit PAM provider removal retry." },
+  "admin.access.retryRevokeExplanation": {
+    defaultMessage: "This creates a new audited provider removal attempt. Check the target again before treating this session as revoked.",
+    description: "PAM retry effect and verification boundary.",
+  },
   "admin.access.ended": { defaultMessage: "Ended", description: "PAM session terminal time." },
   "admin.access.refreshSession": { defaultMessage: "Refresh session status", description: "Manual readback of PAM external-effect status." },
   "admin.access.accessKeys": { defaultMessage: "Access keys", description: "API-token metadata section heading using ELI5 language." },
