@@ -2694,9 +2694,10 @@ than sending an operator looking for a credential that was never there.
   proposes an exact session with `POST /api/v1/access/session-requests`; a
   configurable quorum of distinct `access:approve` reviewers must approve its
   immutable digest before `POST /api/v1/access/sessions` consumes that authority.
-  An altered command or target binding cannot reuse the approval. PAM still
-  lacks an operator early-revocation path; the browser workflow and independent
-  cold-start proof remain open U6 work.
+  An altered command or target binding cannot reuse the approval. The local
+  browser activation, stock PostgreSQL use and expiry, and paired cold restart
+  have been exercised. PAM still lacks an operator early-revocation path, so
+  the complete U6 journey remains open.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The
