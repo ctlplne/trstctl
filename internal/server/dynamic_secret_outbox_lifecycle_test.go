@@ -978,6 +978,34 @@ func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	issued, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issueOutbox, err := outbox.Get(ctx, tenant, issued.IssueOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issueMessage := orchestrator.Message{ID: issueOutbox.ID, TenantID: tenant,
+		Destination: issueOutbox.Destination, IdempotencyKey: issueOutbox.IdempotencyKey,
+		Payload: issueOutbox.Payload, Attempts: issueOutbox.Attempts + 1}
+	if handled, err := dispatcher.Deliver(ctx, issueMessage); err != nil || !handled || len(provider.Requests()) != 1 {
+		t.Fatalf("renewed lease must settle its original issue outbox without another provider call: handled=%t err=%v calls=%d", handled, err, len(provider.Requests()))
+	}
+	var changed projections.DynamicSecretIssueCommand
+	if err := json.Unmarshal(issueMessage.Payload, &changed); err != nil {
+		t.Fatal(err)
+	}
+	changed.ExpiresAt = changed.ExpiresAt.Add(time.Minute)
+	alteredPayload, err := json.Marshal(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alteredMessage := issueMessage
+	alteredMessage.Payload = alteredPayload
+	if handled, err := dispatcher.Deliver(ctx, alteredMessage); !handled || err == nil || len(provider.Requests()) != 1 {
+		t.Fatalf("terminal lease accepted changed original issue deadline: handled=%t err=%v calls=%d", handled, err, len(provider.Requests()))
+	}
 
 	restarted, err := newDurableDynamicSecretLifecycle(tenant, []dynsecret.Provider{provider}, st, log, kek, outbox, srv.wakeOutbox)
 	if err != nil {
@@ -997,6 +1025,9 @@ func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) 
 	revoked, err := restarted.RevokeBound(ctx, lease.ID, "lifecycle-revoke", "sha256:caller-a-revoke")
 	if err != nil || revoked.State != dynsecret.LeaseRevoked {
 		t.Fatalf("revoke result=%+v err=%v", revoked, err)
+	}
+	if handled, err := dispatcher.Deliver(ctx, issueMessage); err != nil || !handled || len(provider.Requests()) != 1 {
+		t.Fatalf("revoked lease must settle its original issue outbox without another provider call: handled=%t err=%v calls=%d", handled, err, len(provider.Requests()))
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	var record store.DynamicSecretLease

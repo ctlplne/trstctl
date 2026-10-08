@@ -357,9 +357,44 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 	}
 	if record.TenantEpoch != command.TenantEpoch || record.IdempotencyKey != command.IdempotencyKey ||
 		record.RequestBinding != command.RequestBinding || record.Provider != command.Provider ||
-		record.Role != command.Role || !dynamicSecretPersistedTimeEqual(record.ExpiresAt, command.ExpiresAt) ||
+		record.Role != command.Role ||
 		!dynamicSecretPersistedTimeEqual(record.HardExpiresAt, command.HardExpiresAt) {
+		return errors.New("server: dynamic-secret issuance command does not match its lease")
+	}
+	// The issue outbox retains the original requested expiry. Renewal and
+	// revocation legitimately change the lease's current expiry after issuance;
+	// comparing that mutable field on a terminal lease traps its old issue row
+	// ahead of every newer command in the provider's FIFO lane. Pending leases
+	// still need the exact original deadline before any provider call.
+	if record.State == store.DynamicSecretLeasePending &&
+		!dynamicSecretPersistedTimeEqual(record.ExpiresAt, command.ExpiresAt) {
 		return errors.New("server: dynamic-secret issuance command does not match its pending lease")
+	}
+	if record.State != store.DynamicSecretLeasePending {
+		// The current expiry is no longer the issue command's expiry. Verify the
+		// latter against the immutable event before settling an old outbox row.
+		canonical, found, err := d.log.EventByID(ctx,
+			dynamicSecretEventID(m.TenantID, command.TenantEpoch, "issue-requested", command.ID))
+		if err != nil {
+			return fmt.Errorf("server: read canonical dynamic-secret issue command: %w", err)
+		}
+		if !found || canonical.Type != projections.EventDynamicSecretLeasePending || canonical.TenantID != m.TenantID {
+			return errors.New("server: canonical dynamic-secret issue command is missing")
+		}
+		var original projections.DynamicSecretLeasePending
+		if err := json.Unmarshal(canonical.Data, &original); err != nil {
+			return errors.New("server: canonical dynamic-secret issue command is invalid")
+		}
+		if original.TenantEpoch != command.TenantEpoch || original.ID != command.ID ||
+			original.IdempotencyKey != command.IdempotencyKey || original.RequestBinding != command.RequestBinding ||
+			original.Provider != command.Provider || original.Role != command.Role ||
+			!dynamicSecretPersistedTimeEqual(original.ExpiresAt, command.ExpiresAt) ||
+			!dynamicSecretPersistedTimeEqual(original.HardExpiresAt, command.HardExpiresAt) {
+			return errors.New("server: dynamic-secret issue outbox differs from its canonical event")
+		}
+	}
+	if m.ID != 0 && record.IssueOutboxID != m.ID {
+		return errors.New("server: dynamic-secret issuance outbox does not own its lease")
 	}
 	switch record.State {
 	case store.DynamicSecretLeaseActive:
