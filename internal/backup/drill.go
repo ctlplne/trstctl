@@ -205,8 +205,9 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 	case err != nil:
 		att.Outcome = DrillFailed
 		// The restore error can carry paths and internal detail. The attestation
-		// is signed evidence that may travel, so it carries a closed sentence
-		// and the operator reads the drill's own logs for the rest.
+		// is signed evidence that may travel, so it carries a closed sentence.
+		// Return the original error separately so the scheduler can log the
+		// actionable failure after the signed attestation is recorded.
 		att.Detail = "The backup verified and the restore did not complete. The artifacts are " +
 			"intact and something about restoring them into a fresh deployment fails — which is " +
 			"exactly the failure a drill exists to find before an incident does."
@@ -234,7 +235,7 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 			"the signer, and the recovered server all passed health checks. The state it holds is %s old.",
 			result.EventsRestored, result.PostgresRecordsRestored, humaniseAge(att.RPOSeconds))
 	}
-	return att, nil
+	return att, err
 }
 
 // humaniseAge renders an RPO in words an operator reads rather than seconds.

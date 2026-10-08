@@ -86,8 +86,8 @@ func TestAFailedDrillStillProducesAnAttestation(t *testing.T) {
 		func(context.Context) (backup.RestoreResult, error) {
 			return backup.RestoreResult{}, errors.New("relation does not exist")
 		}, nil)
-	if err != nil {
-		t.Fatalf("a failed drill returned an error instead of attesting the failure: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "relation does not exist") {
+		t.Fatalf("a failed drill did not return the restore diagnostic to its caller: %v", err)
 	}
 	if att.Outcome != backup.DrillFailed {
 		t.Fatalf("outcome = %q, want failed", att.Outcome)
