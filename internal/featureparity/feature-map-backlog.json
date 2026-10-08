@@ -14059,6 +14059,7 @@
                 "issuance-requests issuers",
                 "issuance-requests open",
                 "issuance-requests list",
+                "issuance-requests show",
                 "issuance-requests approve",
                 "issuance-requests deny",
                 "issuance-requests cancel",
