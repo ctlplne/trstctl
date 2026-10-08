@@ -7658,6 +7658,10 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 			}
 		}
 		return p.store.RebuildReadModelTx(readCtx, func(tx pgx.Tx) error {
+			crlReplay, err := newCRLPublicationReplay(readCtx, tx)
+			if err != nil {
+				return err
+			}
 			if err := p.resetEventProjectionsTx(readCtx, tx); err != nil {
 				return err
 			}
@@ -7678,14 +7682,22 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 					if err := ValidateSchemaVersion(e); err != nil {
 						return err
 					}
-				} else if err := p.applyForRebuild(readCtx, tx, e); err != nil {
-					return fmt.Errorf(
-						"projections: rebuild apply %s event %s at sequence %d: %w",
-						e.Type, e.ID, e.Sequence, err,
-					)
+				} else {
+					if err := p.applyForRebuild(readCtx, tx, e); err != nil {
+						return fmt.Errorf(
+							"projections: rebuild apply %s event %s at sequence %d: %w",
+							e.Type, e.ID, e.Sequence, err,
+						)
+					}
+					if err := crlReplay.observe(e); err != nil {
+						return err
+					}
 				}
 				return p.applyEventProjectionsTx(readCtx, tx, e)
 			}); err != nil {
+				return err
+			}
+			if err := crlReplay.discardProvenCompleted(readCtx, p.store, tx); err != nil {
 				return err
 			}
 			if err := p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead); err != nil {
@@ -7804,6 +7816,10 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 				)
 			}
 			return p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error {
+				crlReplay, err := newCRLPublicationReplay(readCtx, tx)
+				if err != nil {
+					return err
+				}
 				if _, rerr := p.store.RestoreSnapshotsTx(readCtx, tx); rerr != nil {
 					return rerr
 				}
@@ -7816,9 +7832,15 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 					if skipSecretSync || skipDynamicSecret {
 						return ValidateSchemaVersion(e)
 					}
-					return p.applyForRebuild(readCtx, tx, e)
+					if err := p.applyForRebuild(readCtx, tx, e); err != nil {
+						return err
+					}
+					return crlReplay.observe(e)
 				}); rerr != nil {
 					return rerr
+				}
+				if err := crlReplay.discardProvenCompleted(readCtx, p.store, tx); err != nil {
+					return err
 				}
 				// Advance across every position in the pinned tail, including a
 				// trailing or all-gap range that produced no live callbacks.
