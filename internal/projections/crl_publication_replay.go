@@ -47,7 +47,7 @@ func newCRLPublicationReplay(ctx context.Context, tx pgx.Tx) (*crlPublicationRep
 		published: make(map[string][]crlPublicationProof),
 	}
 	if err := tx.QueryRow(ctx,
-		//trstctl:system-query — an owner-role rebuild captures the global outbox high-water mark before replaying all tenants; later cleanup still filters by tenant_id.
+		//trstctl:system-query — this cross-tenant system rebuild captures the global outbox high-water mark before replay; later cleanup filters by tenant_id.
 		`SELECT COALESCE(MAX(id), 0) FROM outbox`).Scan(&r.baselineID); err != nil {
 		return nil, fmt.Errorf("projections: capture outbox replay boundary: %w", err)
 	}
@@ -116,7 +116,7 @@ type rebuiltCRLCommand struct {
 
 func (r *crlPublicationReplay) discardProvenCompleted(ctx context.Context, st *store.Store, tx pgx.Tx) error {
 	rows, err := tx.Query(ctx,
-		//trstctl:system-query — only this transaction's freshly rebuilt pending CRL commands are examined across tenants; each deletion below is tenant-scoped.
+		//trstctl:system-query — this cross-tenant system rebuild examines only its freshly created pending CRL commands; each deletion below filters by tenant_id.
 		`SELECT id, tenant_id::text, idempotency_key, payload FROM outbox
 		 WHERE id > $1 AND destination = $2 AND status = 'pending' AND attempts = 0
 		 ORDER BY id`, r.baselineID, store.CertificateCRLPublicationDestination)

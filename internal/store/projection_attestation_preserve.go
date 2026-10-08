@@ -17,7 +17,7 @@ import (
 // replay; it is never a second durable authority.
 func preserveIndependentAttestationsTx(ctx context.Context, tx pgx.Tx) error {
 	_, err := tx.Exec(ctx,
-		//trstctl:system-query — a read-model rebuild spans every tenant under the owner role; the temporary copy retains each row's tenant_id and is never served (AN-1 exemption).
+		//trstctl:system-query — this cross-tenant system rebuild temporarily preserves independent evidence under the owner role; every row retains tenant_id and the copy is never served.
 		`CREATE TEMP TABLE trstctl_rebuild_attestations ON COMMIT DROP AS
 		 SELECT * FROM attestations`)
 	if err != nil {
@@ -29,7 +29,7 @@ func preserveIndependentAttestationsTx(ctx context.Context, tx pgx.Tx) error {
 func restoreIndependentAttestationsTx(ctx context.Context, tx pgx.Tx) error {
 	var conflicts int
 	if err := tx.QueryRow(ctx,
-		//trstctl:system-query — compare every tenant's saved independent row to its rebuilt copy; both sides retain tenant_id (AN-1 exemption).
+		//trstctl:system-query — this cross-tenant system rebuild compares saved independent rows to rebuilt rows; both sides retain tenant_id so conflicting evidence fails.
 		`SELECT count(*) FROM pg_temp.trstctl_rebuild_attestations AS saved
 		 JOIN attestations AS current ON current.id = saved.id
 		 WHERE to_jsonb(current) IS DISTINCT FROM to_jsonb(saved)`).Scan(&conflicts); err != nil {
@@ -39,7 +39,7 @@ func restoreIndependentAttestationsTx(ctx context.Context, tx pgx.Tx) error {
 		return fmt.Errorf("store: %d rebuilt attestations differ from independent preserved evidence", conflicts)
 	}
 	if _, err := tx.Exec(ctx,
-		//trstctl:system-query — restore all tenants' exact independent evidence after the referenced identities have been rebuilt; tenant_id is copied unchanged (AN-1 exemption).
+		//trstctl:system-query — this cross-tenant system rebuild restores exact independent evidence after referenced identities; tenant_id is copied unchanged.
 		`INSERT INTO attestations
 		 SELECT saved.* FROM pg_temp.trstctl_rebuild_attestations AS saved
 		 WHERE NOT EXISTS (SELECT 1 FROM attestations AS current WHERE current.id = saved.id)`); err != nil {
@@ -47,7 +47,7 @@ func restoreIndependentAttestationsTx(ctx context.Context, tx pgx.Tx) error {
 	}
 	var missing int
 	if err := tx.QueryRow(ctx,
-		//trstctl:system-query — prove every tenant's preserved independent row survived; tenant_id is part of the exact comparison (AN-1 exemption).
+		//trstctl:system-query — this cross-tenant system rebuild proves every preserved row survived; tenant_id is part of the exact comparison.
 		`SELECT count(*) FROM pg_temp.trstctl_rebuild_attestations AS saved
 		 LEFT JOIN attestations AS current ON current.id = saved.id AND current.tenant_id = saved.tenant_id
 		 WHERE current.id IS NULL`).Scan(&missing); err != nil {
