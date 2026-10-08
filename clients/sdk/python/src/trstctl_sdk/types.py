@@ -6767,6 +6767,21 @@ ManagedKeyGenerationPreviewRequest = TypedDict(
     total=False,
 )
 
+ManagedKeyOperation = TypedDict(
+    'ManagedKeyOperation',
+    {
+        'action': str,
+        'key_id': str,
+        'operation_id': str,
+        'provider': str,
+        'result_key_id': str,
+        'status': str,
+        'status_url': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
 ManagedKeyRecord = TypedDict(
     'ManagedKeyRecord',
     {

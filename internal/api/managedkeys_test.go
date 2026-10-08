@@ -77,7 +77,39 @@ func (s *stubManagedKeys) VerifyCustody(_ context.Context, _, keyID, requester, 
 	s.verifyCalls++
 	s.lastKeyID, s.lastRequester, s.lastIdem = keyID, requester, idempotencyKey
 	s.lastBinding = requestBinding
+	if s.err != nil {
+		return api.ManagedKey{}, s.err
+	}
 	return api.ManagedKey{KeyID: keyID, Algorithm: crypto.ECDSAP256, Version: 1, State: "active", CustodyStatus: "verified"}, nil
+}
+
+func TestManagedKeyPendingReceiptIsAcceptedAndIdempotent(t *testing.T) {
+	for _, tc := range []struct{ name, path, body string }{
+		{"generate", "/api/v1/managed-keys", `{"provider":"aws","algorithm":"ECDSA-P256"}`},
+		{"verify", "/api/v1/managed-keys/verify-custody", `{"key_id":"fake-kms-key-0001"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id := "managedkey:" + strings.Repeat("a", 64)
+			service := &stubManagedKeys{err: &api.ManagedKeyOperationPendingError{OperationID: id}}
+			handler := managedKeyHarness(service, orchestrator.NewMemoryIdempotency())
+			first := managedKeyRequest(t, handler, tc.path, "pending-"+tc.name, "operator-a", tc.body)
+			replay := managedKeyRequest(t, handler, tc.path, "pending-"+tc.name, "operator-a", tc.body)
+			if first.Code != http.StatusAccepted || replay.Code != http.StatusAccepted || !bytes.Equal(first.Body.Bytes(), replay.Body.Bytes()) {
+				t.Fatalf("receipt/replay status=(%d,%d), bodies=%s / %s", first.Code, replay.Code, first.Body.String(), replay.Body.String())
+			}
+			var receipt struct {
+				OperationID string `json:"operation_id"`
+				Status      string `json:"status"`
+				StatusURL   string `json:"status_url"`
+			}
+			if err := json.Unmarshal(first.Body.Bytes(), &receipt); err != nil || receipt.OperationID != id || receipt.Status != "queued" || receipt.StatusURL != "/api/v1/managed-keys/operations/"+id {
+				t.Fatalf("invalid pending receipt: %s (%v)", first.Body.String(), err)
+			}
+			if managedKeyServiceCalls(service) != 1 {
+				t.Fatal("idempotent receipt replay invoked the service twice")
+			}
+		})
+	}
 }
 
 const managedKeyTestTenant = "11111111-1111-1111-1111-111111111111"

@@ -4309,8 +4309,12 @@ and lifecycle state. Verification uses a fresh signer-generated challenge signat
 and records its last result and time independently of the lifecycle. This is a
 point-in-time proof, not a promise the provider will retain the key afterward.
 The default outbox retry budget can leave custody `pending` after the API's
-synchronous wait returns 503; refresh the exact key or the console until the
-durable outcome becomes `verified` or `unavailable`. New terminal failure audit
+short synchronous wait returns `202 Accepted` with an operation ID and status
+URL. Poll `GET /api/v1/managed-keys/operations/{operation_id}` or watch the
+console's operation panel until the durable outcome is `completed` or `failed`;
+refresh the exact key to read `verified` or `unavailable`. A caller whose own
+deadline expires before an accepted receipt arrives should read inventory and
+audit before retrying with the same idempotency key. New terminal failure audit
 events carry the key ID when one existed before the action; failed generation
 has no minted key ID. Historical v1 failures carry only the operation ID.
 Every mutation requires `Idempotency-Key`; immutable events

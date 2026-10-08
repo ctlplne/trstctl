@@ -1177,6 +1177,18 @@ export const messages = {
     description: "Fallback error for a managed-key lifecycle action.",
   },
   "caHierarchy.custody.actionFailedTitle": { defaultMessage: "Managed key action failed", description: "Heading for a managed-key lifecycle action error." },
+  "caHierarchy.custody.operation.queued": {
+    defaultMessage: "Accepted; checking the provider automatically.",
+    description: "A provider operation remains queued after its request returns.",
+  },
+  "caHierarchy.custody.operation.completed": {
+    defaultMessage: "Completed. The key record refreshed.",
+    description: "A provider operation completed and inventory will refresh.",
+  },
+  "caHierarchy.custody.operation.failed": {
+    defaultMessage: "Provider failed. Check audit, restore it, then retry with a new request key.",
+    description: "A provider operation exhausted its retries.",
+  },
   "caHierarchy.custody.approvalPendingTitle": {
     defaultMessage: "Managed key action awaits approval",
     description: "Heading for an exact pending managed-key dual-control request.",

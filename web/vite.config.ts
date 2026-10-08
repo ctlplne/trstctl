@@ -63,6 +63,7 @@ export default defineConfig({
               test: (id) =>
                 [
                   "/src/components/IdentityPicker.tsx",
+                  "/src/components/ShortcutsHelp.tsx",
                   "/src/components/CredentialChip.tsx",
                   "/src/components/DetailDrawer.tsx",
                   "/src/components/EmptyState.tsx",
@@ -76,6 +77,7 @@ export default defineConfig({
                   "/src/components/ui/input.tsx",
                   "/src/components/ui/select.tsx",
                   "/src/components/ui/textarea.tsx",
+                  "/src/pages/login/LDAPLoginForm.tsx",
                   "/src/lib/agentInstall.ts",
                   "/src/lib/apiProblem.ts",
                   "/src/lib/approvalQueue.ts",

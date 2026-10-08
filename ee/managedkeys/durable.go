@@ -41,6 +41,7 @@ type durableService struct {
 	approvals     api.ExactApprovalChecker
 	loadOperation func(context.Context, string, string) (store.ManagedKeyOperation, error)
 	loadKey       func(context.Context, string, string, string) (store.ManagedKey, error)
+	waitDuration  time.Duration
 }
 
 func (s *durableService) operation(ctx context.Context, tenantID, operationID string) (store.ManagedKeyOperation, error) {
@@ -318,17 +319,23 @@ func managedKeyCommandMatches(existing store.ManagedKeyOperation, requested proj
 }
 
 func (s *durableService) wait(ctx context.Context, tenantID, operationID string) (Result, error) {
-	waitCtx := ctx
-	var cancel context.CancelFunc = func() {}
-	if _, ok := ctx.Deadline(); !ok {
-		waitCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	// Provider retries belong to the durable outbox, not the HTTP request. Keep
+	// the synchronous fast path short enough to return a pollable receipt before
+	// an upstream gateway can close the request.
+	duration := s.waitDuration
+	if duration <= 0 {
+		duration = 2 * time.Second
 	}
+	waitCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		op, err := s.operation(waitCtx, tenantID, operationID)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+				return Result{}, &api.ManagedKeyOperationPendingError{OperationID: operationID}
+			}
 			return Result{}, err
 		}
 		switch op.Status {
@@ -344,6 +351,9 @@ func (s *durableService) wait(ctx context.Context, tenantID, operationID string)
 		}
 		select {
 		case <-waitCtx.Done():
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+				return Result{}, &api.ManagedKeyOperationPendingError{OperationID: operationID}
+			}
 			return Result{}, fmt.Errorf("managedkeys: wait for durable outbox result: %w", waitCtx.Err())
 		case <-ticker.C:
 		}

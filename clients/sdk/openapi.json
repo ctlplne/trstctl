@@ -20245,6 +20245,46 @@
         ],
         "type": "object"
       },
+      "ManagedKeyOperation": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "result_key_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "completed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "status_url": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "status",
+          "status_url"
+        ],
+        "type": "object"
+      },
       "ManagedKeyRecord": {
         "properties": {
           "algorithm": {
@@ -49583,6 +49623,16 @@
             },
             "description": "success"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyOperation"
+                }
+              }
+            },
+            "description": "The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt."
+          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -49731,6 +49781,64 @@
         "x-trstctl-permission": "keys:read"
       }
     },
+    "/api/v1/managed-keys/operations/{operation_id}": {
+      "get": {
+        "operationId": "getManagedKeyOperation",
+        "parameters": [
+          {
+            "description": "Opaque operation_id from an accepted managed-key action",
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyOperation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the tenant-scoped durable result of a queued managed-key action",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
     "/api/v1/managed-keys/preview": {
       "post": {
         "operationId": "previewManagedKeyGeneration",
@@ -49823,6 +49931,16 @@
             },
             "description": "success"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyOperation"
+                }
+              }
+            },
+            "description": "The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt."
+          },
           "403": {
             "content": {
               "application/problem+json": {
@@ -49900,6 +50018,16 @@
               }
             },
             "description": "success"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyOperation"
+                }
+              }
+            },
+            "description": "The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt."
           },
           "403": {
             "content": {
@@ -49979,6 +50107,16 @@
             },
             "description": "success"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyOperation"
+                }
+              }
+            },
+            "description": "The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt."
+          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -50046,6 +50184,16 @@
               }
             },
             "description": "success"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyOperation"
+                }
+              }
+            },
+            "description": "The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt."
           },
           "403": {
             "content": {

@@ -159,6 +159,13 @@ func managedKeyApprovalRefusalResponse() Response {
 	}
 }
 
+func managedKeyAcceptedResponse() Response {
+	return Response{
+		Description: "The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt.",
+		Content:     map[string]MediaType{"application/json": {Schema: ref("ManagedKeyOperation")}},
+	}
+}
+
 // buildSpec generates the OpenAPI document from the route registry. The spec
 // endpoint itself is omitted from the documented paths.
 func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
@@ -6138,6 +6145,11 @@ func componentSchemas() map[string]*Schema {
 	managedKeyRecordList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ManagedKeyRecord")}, "next_cursor": str(),
 	}, "items", "next_cursor")
+	managedKeyOperation := object(map[string]*Schema{
+		"operation_id": str(), "status": {Type: "string", Enum: []string{"queued", "completed", "failed"}},
+		"status_url": str(), "provider": str(), "action": str(), "key_id": str(),
+		"result_key_id": str(), "updated_at": timestamp(),
+	}, "operation_id", "status", "status_url")
 	secretValue := object(map[string]*Schema{
 		"name": str(), "value": str(), "version": {Type: "integer"},
 	}, "name", "value")
@@ -7096,6 +7108,7 @@ func componentSchemas() map[string]*Schema {
 		"ManagedKey":                         managedKey,
 		"ManagedKeyRecord":                   managedKeyRecord,
 		"ManagedKeyRecordList":               managedKeyRecordList,
+		"ManagedKeyOperation":                managedKeyOperation,
 		"ShareRequest":                       shareReq,
 		"SharePreviewRequest":                sharePreviewReq,
 		"SharePreview":                       sharePreview,

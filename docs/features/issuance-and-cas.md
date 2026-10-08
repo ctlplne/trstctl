@@ -655,6 +655,10 @@ exposes:
   configuration change;
 - `GET /api/v1/managed-keys/{provider}/{key_id}` — read the current state and public
   material of one exact provider/handle pair after a lost response or restart;
+- `GET /api/v1/managed-keys/operations/{operation_id}` — read a tenant-scoped
+  provider command's durable `queued`, `completed`, or `failed` state. A mutation
+  still running after its short synchronous wait returns `202` with this opaque
+  ID and status URL; replaying the same idempotency key returns the same receipt;
 - `POST /api/v1/managed-keys/verify-custody` — ask the isolated signer to sign a
   fresh random challenge with the exact owned key, then verify the signature
   against the saved public key. The response and inventory show the last proof
@@ -682,9 +686,14 @@ locked. The inventory remains visible after a browser refresh; selecting a key
 performs a fresh tenant-scoped read. Keys from a provider no longer attached to
 this deployment remain visible for audit, with actions disabled until that
 provider is restored.
+For a `202` receipt, the console keeps the selected key visible and shows the
+operation ID. It checks for a terminal result while the tab is visible and
+refreshes on return; **Refresh status** checks immediately. Copy the ID to
+continue with the CLI after leaving the page.
 
 The CLI mirrors those verbs under `trstctl managed-keys`, including `list`,
 `get <provider> <key_id>`, and `approve`.
+`operation <operation_id>` reads a pending command without issuing it again.
 Approval requires `keys:approve`; lifecycle mutation requires `keys:write`; the
 requester never counts as an approver; and every request is tenant-scoped, idempotent,
 and recorded as a key-material-free event before its PostgreSQL outbox command reaches

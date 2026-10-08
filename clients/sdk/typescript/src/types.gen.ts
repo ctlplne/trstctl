@@ -3671,6 +3671,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/managed-keys/operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the tenant-scoped durable result of a queued managed-key action */
+        get: operations["getManagedKeyOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/managed-keys/preview": {
         parameters: {
             query?: never;
@@ -12210,6 +12227,18 @@ export interface components {
             algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
             /** @enum {string} */
             provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+        };
+        ManagedKeyOperation: {
+            action?: string;
+            key_id?: string;
+            operation_id: string;
+            provider?: string;
+            result_key_id?: string;
+            /** @enum {string} */
+            status: "queued" | "completed" | "failed";
+            status_url: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         ManagedKeyRecord: {
             algorithm: string;
@@ -26238,6 +26267,15 @@ export interface operations {
                     "application/json": components["schemas"]["ManagedKey"];
                 };
             };
+            /** @description The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyOperation"];
+                };
+            };
             /** @description client error */
             "4XX": {
                 headers: {
@@ -26341,6 +26379,47 @@ export interface operations {
             };
         };
     };
+    getManagedKeyOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Opaque operation_id from an accepted managed-key action */
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyOperation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     previewManagedKeyGeneration: {
         parameters: {
             query?: never;
@@ -26408,6 +26487,15 @@ export interface operations {
                     "application/json": components["schemas"]["ManagedKey"];
                 };
             };
+            /** @description The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyOperation"];
+                };
+            };
             /** @description Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request. */
             403: {
                 headers: {
@@ -26460,6 +26548,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKey"];
+                };
+            };
+            /** @description The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyOperation"];
                 };
             };
             /** @description Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request. */
@@ -26516,6 +26613,15 @@ export interface operations {
                     "application/json": components["schemas"]["ManagedKey"];
                 };
             };
+            /** @description The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyOperation"];
+                };
+            };
             /** @description client error */
             "4XX": {
                 headers: {
@@ -26559,6 +26665,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKey"];
+                };
+            };
+            /** @description The command and provider outbox intent are durable; read status_url until the operation completes or fails. Replaying the same Idempotency-Key returns this receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyOperation"];
                 };
             };
             /** @description Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request. */

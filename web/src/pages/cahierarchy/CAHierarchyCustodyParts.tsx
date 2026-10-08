@@ -13,6 +13,7 @@ import {
   api,
   ApiError,
   type ManagedKey,
+  type ManagedKeyOperation,
   type ManagedKeyRecord,
   type ManagedKeyCustodyPlan,
   type ManagedKeyGenerateRequest,
@@ -20,10 +21,15 @@ import {
   type ManagedKeyGenerationPreviewRequest,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { useApiQuery } from "@/lib/query";
 
 const algorithms: ManagedKeyGenerateRequest["algorithm"][] = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "RSA-2048", "RSA-3072", "RSA-4096"];
 
 type PendingManagedKeyApproval = { requestId: string; intentDigest: string };
+
+function isManagedKeyOperation(value: ManagedKey | ManagedKeyOperation): value is ManagedKeyOperation {
+  return "operation_id" in value;
+}
 
 function pendingManagedKeyApproval(error: unknown): PendingManagedKeyApproval | null {
   if (!(error instanceof ApiError) || error.status !== 403) return null;
@@ -63,10 +69,16 @@ export function ManagedKeyCustodyWorkspace() {
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<PendingManagedKeyApproval | null>(null);
+  const [operation, setOperation] = useState<ManagedKeyOperation | null>(null);
   const [inventory, setInventory] = useState<ManagedKeyRecord[]>([]);
   const [inventoryCursor, setInventoryCursor] = useState("");
   const [inventoryBusy, setInventoryBusy] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const operationRead = useApiQuery(["managed-key-operation", operation?.operation_id], () => api.getManagedKeyOperation(operation!.operation_id), {
+    enabled: operation?.status === "queued",
+    retry: false,
+    live: { intervalMs: 2000 },
+  });
 
   const loadInventory = useCallback(async (cursor = "") => {
     setInventoryBusy(true);
@@ -119,10 +131,27 @@ export function ManagedKeyCustodyWorkspace() {
     if (plan?.lifecycle_attached) void loadInventory();
   }, [loadInventory, plan?.lifecycle_attached]);
 
+  useEffect(() => {
+    const next = operationRead.data;
+    if (!next || !operation || next.operation_id !== operation.operation_id || next.status === "queued" || next.status === operation.status) return;
+    setOperation(next);
+    void loadInventory();
+    if (next.provider && (next.result_key_id || next.key_id)) {
+      void api
+        .getManagedKey(next.provider, next.result_key_id || next.key_id!)
+        .then((key) => {
+          setManagedKey(key);
+          setManagedKeyProvider(next.provider!);
+        })
+        .catch((error) => setKeyError(apiProblemMessage(error, translateNow("caHierarchy.custody.inventoryLoadFailed"))));
+    }
+  }, [operationRead.data, operation, loadInventory]);
+
   async function selectManagedKey(key: ManagedKeyRecord) {
     setKeyBusy(true);
     setKeyError(null);
     setPendingApproval(null);
+    setOperation(null);
     try {
       const current = await api.getManagedKey(key.provider, key.key_id);
       setManagedKey(current);
@@ -199,8 +228,14 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyBusy(true);
     setKeyError(null);
     setPendingApproval(null);
+    setOperation(null);
     try {
       const generated = await api.generateManagedKey({ provider: preview.provider, algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] });
+      if (isManagedKeyOperation(generated)) {
+        setOperation(generated);
+        await loadInventory();
+        return;
+      }
       const generatedProvider = plan?.configured_provider === "aws" ? "aws-kms" : (plan?.configured_provider ?? "");
       setManagedKey(generated);
       setManagedKeyProvider(generatedProvider);
@@ -216,21 +251,24 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyBusy(true);
     setKeyError(null);
     setPendingApproval(null);
+    setOperation(null);
     try {
-      const next =
-        action === "rotate"
-          ? await api.rotateManagedKey(keyId)
-          : action === "revoke"
-            ? await api.revokeManagedKey(keyId)
-            : action === "zeroize"
-              ? await api.zeroizeManagedKey(keyId)
-              : await api.verifyManagedKeyCustody(keyId);
+      const actionMethods = {
+        rotate: api.rotateManagedKey,
+        revoke: api.revokeManagedKey,
+        zeroize: api.zeroizeManagedKey,
+        verify_custody: api.verifyManagedKeyCustody,
+      };
+      const next = await actionMethods[action](keyId);
+      if (isManagedKeyOperation(next)) {
+        setOperation(next);
+        return;
+      }
       setManagedKey(next);
     } catch (error) {
       const pending = pendingManagedKeyApproval(error);
       if (pending) setPendingApproval(pending);
       else setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action: action === "verify_custody" ? "verify" : action })));
-      if (action === "verify_custody") setManagedKey(null);
     } finally {
       await loadInventory();
       setKeyBusy(false);
@@ -291,10 +329,11 @@ export function ManagedKeyCustodyWorkspace() {
           ) : null}
           {keyError && currentIndex !== 2 ? <ErrorState title={t("caHierarchy.custody.actionFailedTitle")}>{keyError}</ErrorState> : null}
           {pendingApproval && currentIndex !== 2 ? <ManagedKeyPendingApproval approval={pendingApproval} /> : null}
+          {operation ? <ManagedKeyOperationPanel operation={operation} error={operationRead.error} onRefresh={operationRead.refetch} /> : null}
           {managedKey && currentIndex !== 2 ? (
             <ManagedKeyPanel
               managedKey={managedKey}
-              busy={keyBusy}
+              busy={keyBusy || operation?.status === "queued"}
               onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
               actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_provider)}
             />
@@ -328,7 +367,7 @@ export function ManagedKeyCustodyWorkspace() {
             {currentIndex === 1 ? <CustodyPreview preview={preview} error={previewError} /> : null}
             {currentIndex === 2 && preview ? (
               <CustodyGeneration
-                busy={keyBusy}
+                busy={keyBusy || operation?.status === "queued"}
                 error={keyError}
                 pendingApproval={pendingApproval}
                 managedKey={managedKey}
@@ -511,6 +550,22 @@ function CustodyPreview({ preview, error }: { preview: ManagedKeyGenerationPrevi
         <ReviewList title={t("caHierarchy.custody.outsideEffects")} items={preview.execution_external_effects} />
         <ReviewList title={t("caHierarchy.custody.proof")} items={preview.proof} />
       </div>
+    </div>
+  );
+}
+
+function ManagedKeyOperationPanel({ operation, error, onRefresh }: { operation: ManagedKeyOperation; error: string | null; onRefresh: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div role="status" aria-live="polite" className="grid gap-2 rounded-control border border-border p-4 text-sm">
+      <p>{t(`caHierarchy.custody.operation.${operation.status}`)}</p>
+      <CredentialChip value={operation.operation_id} label={t("apiExplorer.operationId")} />
+      {error ? <p>{error}</p> : null}
+      {operation.status === "queued" ? (
+        <Button type="button" size="sm" variant="outline" onClick={onRefresh}>
+          {t("caHierarchy.workspace.refresh")}
+        </Button>
+      ) : null}
     </div>
   );
 }

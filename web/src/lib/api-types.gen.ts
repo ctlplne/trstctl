@@ -4905,6 +4905,17 @@ export interface ManagedKeyGenerationPreviewRequest {
   provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
 }
 
+export interface ManagedKeyOperation {
+  action?: string;
+  key_id?: string;
+  operation_id: string;
+  provider?: string;
+  result_key_id?: string;
+  status: "queued" | "completed" | "failed";
+  status_url: string;
+  updated_at?: string;
+}
+
 export interface ManagedKeyRecord {
   algorithm: string;
   created_at: string;

@@ -478,6 +478,7 @@ public final class OpenApiSchemas {
       "ManagedKeyGenerateRequest",
       "ManagedKeyGenerationPreview",
       "ManagedKeyGenerationPreviewRequest",
+      "ManagedKeyOperation",
       "ManagedKeyRecord",
       "ManagedKeyRecordList",
       "ManagedOfferingStatus",

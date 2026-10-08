@@ -129,6 +129,16 @@ func TestManagedKeyInventoryCLIUsesReadOnlyProviderScopedRoutes(t *testing.T) {
 	if read.Method != http.MethodGet || read.Path != "/api/v1/managed-keys/aws-kms/key-1" || read.Header.Get("Idempotency-Key") != "" {
 		t.Fatalf("managed-key read request = %s %s key=%q", read.Method, read.Path, read.Header.Get("Idempotency-Key"))
 	}
+	var operation capture
+	operationServer := mockServer(t, http.StatusOK, `{"operation_id":"managedkey:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"queued"}`, &operation)
+	env = cli.Env{Server: operationServer.URL, Token: "keys-token", Tenant: "tenant-a", HTTPClient: operationServer.Client()}
+	code, stdout, stderr = run(t, []string{"managed-keys", "operation", "managedkey:" + strings.Repeat("a", 64)}, env, "")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"status": "queued"`) {
+		t.Fatalf("managed-key operation = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if operation.Method != http.MethodGet || operation.Path != "/api/v1/managed-keys/operations/managedkey:"+strings.Repeat("a", 64) || operation.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("operation read request = %s %s key=%q", operation.Method, operation.Path, operation.Header.Get("Idempotency-Key"))
+	}
 }
 
 func TestDynamicSecretProviderCatalogAndPreviewUseEffectFreeReadSurfaces(t *testing.T) {

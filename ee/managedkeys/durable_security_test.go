@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,6 +25,27 @@ import (
 type managedKeyCustodySpy struct {
 	calls  int
 	result signing.ManagedKeyResult
+}
+
+func TestDurableWaitReturnsPollablePendingOnlyForItsOwnDeadline(t *testing.T) {
+	const operationID = "managedkey:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	svc := &durableService{
+		waitDuration: 20 * time.Millisecond,
+		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
+			return store.ManagedKeyOperation{Status: "queued"}, nil
+		},
+	}
+	_, err := svc.wait(context.Background(), "11111111-1111-1111-1111-111111111111", operationID)
+	var pending *api.ManagedKeyOperationPendingError
+	if !errors.As(err, &pending) || pending.OperationID != operationID {
+		t.Fatalf("own wait deadline = %v; want pending receipt for %s", err, operationID)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = svc.wait(ctx, "11111111-1111-1111-1111-111111111111", operationID)
+	if errors.As(err, &pending) {
+		t.Fatalf("caller cancellation must not claim an accepted receipt: %v", err)
+	}
 }
 
 type managedKeyApprovalSpy struct{ calls int }

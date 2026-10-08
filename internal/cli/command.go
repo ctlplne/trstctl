@@ -617,6 +617,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"managed-keys", "custody"}, Method: "GET", Path: "/api/v1/managed-keys/custody", Summary: "Show secret-free HSM/KMS provider requirements and current signer readiness"},
 	{Name: []string{"managed-keys", "list"}, Method: "GET", Path: "/api/v1/managed-keys", Query: []string{"limit", "cursor"}, Summary: "List tenant managed keys from the durable projection after a restart"},
 	{Name: []string{"managed-keys", "get"}, Method: "GET", Path: "/api/v1/managed-keys/{provider}/{key_id}", Summary: "Read one managed key using its provider and key handle"},
+	{Name: []string{"managed-keys", "operation"}, Method: "GET", Path: "/api/v1/managed-keys/operations/{operation_id}", Summary: "Read the durable status of an accepted managed-key command"},
 	{Name: []string{"managed-keys", "preview"}, Method: "POST", Path: "/api/v1/managed-keys/preview", Body: bodyFile, ReadOnly: true, Summary: "Review managed-key generation without writing state or contacting the provider"},
 	{Name: []string{"managed-keys", "generate"}, Method: "POST", Path: "/api/v1/managed-keys", Body: bodyFile, Summary: "Generate a BYOK/HSM-resident managed key"},
 	{Name: []string{"managed-keys", "approve"}, Method: "POST", Path: "/api/v1/managed-keys/approvals", Body: bodyApprovalFile, Summary: "Approve an exact immutable managed-key request"},

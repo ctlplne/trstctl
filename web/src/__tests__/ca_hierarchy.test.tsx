@@ -7,6 +7,7 @@ import type { CapabilityView } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 import { ToastProvider } from "@/components/ToastProvider";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -30,6 +31,7 @@ const { apiMock } = vi.hoisted(() => ({
     managedKeyCustody: vi.fn(),
     listManagedKeys: vi.fn(),
     getManagedKey: vi.fn(),
+    getManagedKeyOperation: vi.fn(),
     verifyManagedKeyCustody: vi.fn(),
     previewManagedKeyGeneration: vi.fn(),
     generateManagedKey: vi.fn(),
@@ -55,9 +57,11 @@ vi.mock("@/lib/api", async (orig) => {
 function renderCAHierarchy(initialEntry = "/ca-hierarchy", runtime?: CapabilityView) {
   const page = (
     <MemoryRouter initialEntries={[initialEntry]}>
-      <ToastProvider>
-        <CAHierarchy />
-      </ToastProvider>
+      <AppQueryProvider>
+        <ToastProvider>
+          <CAHierarchy />
+        </ToastProvider>
+      </AppQueryProvider>
     </MemoryRouter>
   );
   return render(runtime ? <CapabilityFixtureProvider view={runtime}>{page}</CapabilityFixtureProvider> : page);
@@ -1093,7 +1097,7 @@ describe("CA hierarchy and custody surface", () => {
     apiMock.getManagedKey.mockResolvedValueOnce(pending).mockResolvedValue(unavailable);
     renderCAHierarchy("/ca-hierarchy?tab=custody");
     await user.click(await screen.findByRole("button", { name: "Inspect key" }));
-    const detail = screen.getByRole("heading", { name: "Managed key", exact: true }).closest("section");
+    const detail = screen.getByRole("heading", { name: /^Managed key$/ }).closest("section");
     expect(detail).not.toBeNull();
     expect(within(detail!).getByText("Checking provider")).toBeInTheDocument();
 
@@ -1102,6 +1106,30 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(within(custody!).getByRole("button", { name: "Refresh status" }));
     await waitFor(() => expect(within(detail!).getByText(/Could not verify/)).toBeInTheDocument());
     expect(apiMock.getManagedKey).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the selected key visible while an accepted provider proof later fails", async () => {
+    const user = userEvent.setup();
+    const id = "managedkey:" + "a".repeat(64);
+    const receipt = { operation_id: id, status: "queued", status_url: `/api/v1/managed-keys/operations/${id}` };
+    apiMock.verifyManagedKeyCustody.mockResolvedValueOnce(receipt);
+    apiMock.getManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active", custody_status: "unavailable" });
+    apiMock.getManagedKeyOperation
+      .mockResolvedValueOnce(receipt)
+      .mockResolvedValue({ ...receipt, status: "failed", provider: "gcp-kms", action: "verify_custody", key_id: "kms/root-1" });
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to generation" }));
+    await user.click(screen.getByRole("button", { name: "Generate managed key" }));
+    await user.click(await screen.findByRole("button", { name: "Verify provider key" }));
+    expect(await screen.findByText("Accepted; checking the provider automatically.")).toBeInTheDocument();
+    expect(screen.getByText("Version 1")).toBeInTheDocument();
+    expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
+    await waitFor(() => expect(apiMock.getManagedKeyOperation).toHaveBeenCalledWith(id));
+    const operationPanel = screen.getByText("Accepted; checking the provider automatically.").closest<HTMLElement>('[role="status"]');
+    await user.click(within(operationPanel!).getByRole("button", { name: "Refresh status" }));
+    expect(await screen.findByText(/Provider failed. Check audit/)).toBeInTheDocument();
+    expect(screen.getByText("Version 1")).toBeInTheDocument();
   });
 
   it("shows a genuine pending managed-key approval as a waiting state with the exact request", async () => {

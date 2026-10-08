@@ -16,6 +16,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -48,6 +49,47 @@ type ManagedKey struct {
 // fresh proof is a provider signature over a signer-generated challenge.
 type ManagedKeyCustodyVerifier interface {
 	VerifyCustody(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+}
+
+// ManagedKeyOperationPendingError means the requested event and its outbox
+// effect were committed, while the provider worker has not reached a terminal
+// result within the synchronous wait. Retrying the mutation is unnecessary;
+// callers can read the tenant-scoped operation instead.
+type ManagedKeyOperationPendingError struct{ OperationID string }
+
+func (e *ManagedKeyOperationPendingError) Error() string {
+	return "managedkeys: durable operation is pending"
+}
+
+type managedKeyOperationResponse struct {
+	OperationID string     `json:"operation_id"`
+	Status      string     `json:"status"`
+	StatusURL   string     `json:"status_url"`
+	Provider    string     `json:"provider,omitempty"`
+	Action      string     `json:"action,omitempty"`
+	KeyID       string     `json:"key_id,omitempty"`
+	ResultKeyID string     `json:"result_key_id,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+}
+
+func validManagedKeyOperationID(id string) bool {
+	const prefix = "managedkey:"
+	if !strings.HasPrefix(id, prefix) || len(id) != len(prefix)+64 {
+		return false
+	}
+	_, err := hex.DecodeString(id[len(prefix):])
+	return err == nil
+}
+
+func managedKeyPendingResponse(err error) (managedKeyOperationResponse, bool) {
+	var pending *ManagedKeyOperationPendingError
+	if !errors.As(err, &pending) || !validManagedKeyOperationID(pending.OperationID) {
+		return managedKeyOperationResponse{}, false
+	}
+	return managedKeyOperationResponse{
+		OperationID: pending.OperationID, Status: "queued",
+		StatusURL: "/api/v1/managed-keys/operations/" + pending.OperationID,
+	}, true
 }
 
 var (
@@ -500,6 +542,42 @@ func (a *API) getManagedKey(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, toManagedKeyRecordResponse(key))
 }
 
+func (a *API) getManagedKeyOperation(w http.ResponseWriter, r *http.Request) {
+	if a.managedKeys == nil || a.store == nil {
+		a.writeError(w, managedKeysDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	id := r.PathValue("operation_id")
+	if !validManagedKeyOperationID(id) {
+		a.writeError(w, errStatus(http.StatusNotFound, "no such managed-key operation for this tenant"))
+		return
+	}
+	op, err := a.store.GetManagedKeyOperation(r.Context(), tenantID, id)
+	if store.IsNotFound(err) {
+		a.writeError(w, errStatus(http.StatusNotFound, "no such managed-key operation for this tenant"))
+		return
+	}
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if op.Status != "queued" && op.Status != "completed" && op.Status != "failed" {
+		a.writeError(w, errStatus(http.StatusInternalServerError, "managed-key operation has an unknown status"))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, managedKeyOperationResponse{
+		OperationID: id, Status: op.Status,
+		StatusURL: "/api/v1/managed-keys/operations/" + id,
+		Provider:  op.Provider, Action: op.Action, KeyID: op.KeyID,
+		ResultKeyID: op.ResultKeyID, UpdatedAt: &op.UpdatedAt,
+	})
+}
+
 // requesterFor returns the authenticated principal's subject, which the dual-control
 // gate treats as the requester (and therefore never counts as its own approver).
 func requesterFor(ctx context.Context) (string, error) {
@@ -586,6 +664,9 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		res, err := a.managedKeys.Generate(ctx, tenantID, alg, idempotencyKey, binding)
 		if err != nil {
+			if pending, ok := managedKeyPendingResponse(err); ok {
+				return http.StatusAccepted, pending, nil
+			}
 			return 0, nil, mapManagedKeyError(err)
 		}
 		return http.StatusCreated, toManagedKeyResponse(res), nil
@@ -761,6 +842,9 @@ func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempoten
 	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		res, err := op(ctx, tenantID, req.KeyID, requester, idempotencyKey, binding)
 		if err != nil {
+			if pending, ok := managedKeyPendingResponse(err); ok {
+				return http.StatusAccepted, pending, nil
+			}
 			return 0, nil, mapManagedKeyError(err)
 		}
 		return http.StatusOK, toManagedKeyResponse(res), nil
