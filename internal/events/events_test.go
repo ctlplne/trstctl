@@ -47,6 +47,39 @@ func collect(t *testing.T, log *events.Log, from uint64) []events.Event {
 	return got
 }
 
+func TestStreamSnapshotChangesOnAppendAndExactDeletion(t *testing.T) {
+	log := openEmbedded(t)
+	ctx := t.Context()
+	before, err := log.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Generation == "" || before.Name == "" {
+		t.Fatalf("snapshot has no durable generation identity: %+v", before)
+	}
+	event, err := log.Append(ctx, events.Event{Type: "test.snapshot", TenantID: "tenant-a", Data: []byte(`{"test":true}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterAppend, err := log.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterAppend == before || afterAppend.LastSequence != event.Sequence || afterAppend.Messages <= before.Messages {
+		t.Fatalf("snapshot missed append: before=%+v after=%+v", before, afterAppend)
+	}
+	if err := log.Delete(ctx, event.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	afterDelete, err := log.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterDelete == afterAppend || afterDelete.Messages >= afterAppend.Messages {
+		t.Fatalf("snapshot missed exact deletion: appended=%+v deleted=%+v", afterAppend, afterDelete)
+	}
+}
+
 type aud127HistoryCoordinator struct {
 	operation sync.Mutex
 	barrier   sync.RWMutex

@@ -952,6 +952,55 @@ type StreamStats struct {
 	LastSequence uint64
 }
 
+// StreamSnapshot identifies the exact active history state observed under the
+// generation read barrier. A caller may reuse a projection only while every
+// field is unchanged: an append moves LastSequence, a deletion changes the
+// retained counters, and a restore changes the generation or stream name.
+type StreamSnapshot struct {
+	Name          string
+	Generation    string
+	FirstSequence uint64
+	LastSequence  uint64
+	Messages      uint64
+	Bytes         uint64
+	NumDeleted    int
+}
+
+// Snapshot returns metadata for the active event generation without replaying
+// its payloads. It does not establish that the payloads are safe to read; a
+// caller must first finish a full Replay and cache only that verified snapshot.
+func (l *Log) Snapshot(ctx context.Context) (StreamSnapshot, error) {
+	var snapshot StreamSnapshot
+	err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		name, stream, err := l.resolveActiveStream(readCtx)
+		if err != nil {
+			return err
+		}
+		info, err := cachedInfoForResolvedStream(stream)
+		if err != nil {
+			return err
+		}
+		if backupRestoreMetadataPending(info.Config.Metadata) {
+			return ErrBackupRestoreIncomplete
+		}
+		generation := streamGeneration(info)
+		if generation == "" {
+			return errors.New("events: active stream has no generation identity")
+		}
+		snapshot = StreamSnapshot{
+			Name: name, Generation: generation,
+			FirstSequence: info.State.FirstSeq, LastSequence: info.State.LastSeq,
+			Messages: info.State.Msgs, Bytes: info.State.Bytes,
+			NumDeleted: info.State.NumDeleted,
+		}
+		return nil
+	})
+	if err != nil {
+		return StreamSnapshot{}, fmt.Errorf("events: active stream snapshot: %w", err)
+	}
+	return snapshot, nil
+}
+
 // StreamStats returns the source-of-truth JetStream stream's live size counters.
 // Perf/endurance capture uses this instead of reaching through the Log internals.
 func (l *Log) StreamStats(ctx context.Context) (StreamStats, error) {

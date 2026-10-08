@@ -67,6 +67,11 @@ type sshProtocol struct {
 	syncMu     sync.Mutex
 	applied    uint64
 	syncedFrom time.Time
+	// verifiedSnapshot is the exact stream state whose payloads passed Replay.
+	// Equal metadata means there is no new payload to inspect. Generation,
+	// deletion and retained-size changes force another full safety preflight.
+	verifiedSnapshot events.StreamSnapshot
+	replayCount      uint64 // guarded by syncMu; exposes repeated full scans to tests
 }
 
 // sshMutationGuard wraps a raw SSH mutation in the API mutation guard for perm.
@@ -83,9 +88,10 @@ type sshRawWorkflow interface {
 const sshKRLSyncTimeout = 5 * time.Second
 
 // sshKRLSyncInterval bounds how often an unauthenticated KRL read may trigger a
-// catch-up. A replay currently re-reads history before it starts (RV-12.2), so
-// public reads cost at most one catch-up per interval per process; a revocation
-// recorded on another replica is listed within about this long.
+// catch-up. A replay re-reads history for the scheduler sanitation floor, so
+// public reads inspect the active stream metadata first and replay only when it
+// changed. A revocation recorded on another replica is listed within about
+// this long.
 const sshKRLSyncInterval = 2 * time.Second
 
 // newSSHProtocol wires the served SSH CA surface over a built ssh.CA. A fresh KRL is
@@ -251,11 +257,10 @@ func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) e
 
 // syncRevocations applies every tenant ssh.cert.revoked event appended since the
 // last one this process read, whichever replica appended it. Catch-ups are
-// serialized and coalesced: a caller that arrives while another catch-up is
-// running waits for it, and skips its own when a catch-up that started after it
-// arrived already succeeded, so at most one replay runs at a time. Unless force
-// is set (startup, or right after this process recorded a revocation), a caller
-// also skips when the last catch-up started less than sshKRLSyncInterval ago.
+// serialized and coalesced. Unless force is set (startup or after a local
+// revocation), a caller skips within sshKRLSyncInterval. Outside that window,
+// an unchanged generation/head/retained-state snapshot skips the expensive
+// replay. Every changed snapshot still passes the full event-history floor.
 func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
 	arrived := time.Now()
 	p.syncMu.Lock()
@@ -268,10 +273,54 @@ func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
 			return nil
 		}
 	}
+	before, err := p.log.Snapshot(ctx)
+	if err != nil {
+		return fmt.Errorf("server: inspect SSH revocation generation: %w", err)
+	}
+	if p.verifiedSnapshot.Generation != "" &&
+		(before.Name != p.verifiedSnapshot.Name || before.Generation != p.verifiedSnapshot.Generation) {
+		return errors.New("server: SSH revocation generation changed; reconcile the host KRL lineage before restarting this issuer")
+	}
 	started := time.Now()
-	if err := p.log.Replay(ctx, p.applied+1, p.applyRevocationEvent); err != nil {
+	if !force && before == p.verifiedSnapshot {
+		p.syncedFrom = started
+		return nil
+	}
+	// Pin the cut explicitly. An append during replay belongs to the next
+	// bounded catch-up; a rewrite or deletion of the verified prefix fails
+	// closed rather than publishing an incomplete KRL.
+	// Stage into a private copy. A decode error, timeout, or rewrite cannot
+	// advance the live cursor or publish a partial revocation list.
+	candidate := &sshProtocol{krl: ssh.NewKRL(), tenantID: p.tenantID, applied: p.applied}
+	current := p.krl.Distribute()
+	for _, serial := range current.Serials {
+		candidate.krl.RevokeSerial(serial)
+	}
+	for _, keyID := range current.KeyIDs {
+		candidate.krl.RevokeKeyID(keyID)
+	}
+	candidate.krlVersion.Store(p.krlVersion.Load())
+	p.replayCount++
+	if err := p.log.ReplayThrough(ctx, p.applied+1, before.LastSequence, candidate.applyRevocationEvent); err != nil {
 		return fmt.Errorf("server: replay SSH revocations: %w", err)
 	}
+	after, err := p.log.Snapshot(ctx)
+	if err != nil {
+		return fmt.Errorf("server: verify SSH revocation generation: %w", err)
+	}
+	if after.Name != before.Name || after.Generation != before.Generation ||
+		after.FirstSequence != before.FirstSequence || after.NumDeleted != before.NumDeleted ||
+		after.LastSequence < before.LastSequence || after.Messages < before.Messages || after.Bytes < before.Bytes ||
+		after.Messages-before.Messages != after.LastSequence-before.LastSequence {
+		return errors.New("server: SSH revocation generation changed during replay")
+	}
+	if before.LastSequence > candidate.applied {
+		candidate.applied = before.LastSequence // a retained trailing gap is still covered
+	}
+	p.krl = candidate.krl
+	p.krlVersion.Store(candidate.krlVersion.Load())
+	p.applied = candidate.applied
+	p.verifiedSnapshot = before
 	p.syncedFrom = started
 	return nil
 }
@@ -312,6 +361,8 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 func (p *sshProtocol) KRLVersion() uint64 { return p.krlVersion.Load() }
 
 func (p *sshProtocol) RevokedCount() int {
+	p.syncMu.Lock()
+	defer p.syncMu.Unlock()
 	snap := p.krl.Distribute()
 	return len(snap.Serials) + len(snap.KeyIDs)
 }
@@ -332,7 +383,7 @@ func (p *sshProtocol) serveKRL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ssh: the revocation list cannot be brought up to date; keep the last KRL and retry", http.StatusServiceUnavailable)
 		return
 	}
-	der := p.krl.DistributeKRL(p.krlVersion.Load())
+	der := p.KRLBytes()
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="trstctl.krl"`)
 	_, _ = w.Write(der)
@@ -346,7 +397,11 @@ func (p *sshProtocol) AuthorityKey() ([]byte, error) { return p.ca.AuthorityKey(
 func (p *sshProtocol) CA() *ssh.CA { return p.ca }
 
 // KRLBytes returns the current binary KRL (for the acceptance test / ssh-keygen -Qf).
-func (p *sshProtocol) KRLBytes() []byte { return p.krl.DistributeKRL(p.krlVersion.Load()) }
+func (p *sshProtocol) KRLBytes() []byte {
+	p.syncMu.Lock()
+	defer p.syncMu.Unlock()
+	return p.krl.DistributeKRL(p.krlVersion.Load())
+}
 
 // spiffeProtocol holds the assembled SPIFFE Workload API gRPC server and its UDS
 // path. It is served over the socket by Server.RunSPIFFE (a gRPC service, not on the

@@ -273,7 +273,11 @@ Use a separate approval workflow if your policy requires two people.
   restores the old file. The watcher skips reload on an unchanged list. Configure it on
   every relying host. The control plane does not yet enqueue a fleet push or
   collect central per-host delivery receipts. Existing SSH sessions are not
-  terminated by a KRL update.
+  terminated by a KRL update. A host keeps its installed KRL if the control
+  plane is unavailable or cannot finish a verified event catch-up; it retries
+  the download. A new control-plane deployment has its own KRL version lineage.
+  Preserve existing host revocations until that lineage is reconciled; the
+  agent refuses to replace a newer installed KRL with an older one.
 
 ## Reference
 

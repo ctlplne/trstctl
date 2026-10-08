@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/policy"
+	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 )
 
 // Batch D (the SSH journey): the raw /ssh/ mutating routes must behave exactly
@@ -158,6 +159,80 @@ func TestServedSSHRevocationReachesEveryReplica(t *testing.T) {
 			t.Fatal("second replica still serves a KRL without a revocation recorded on the first after 10s")
 		}
 		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// A KRL poll must inspect newly appended history but cannot replay a large,
+// unchanged stream for every host poll. Use real embedded JetStream with the
+// production scheduler-history floor and no unrelated background event writers.
+func TestServedSSHUnchangedHistorySkipsReplayAndNewRevocationCatchesUp(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	log.EnforceLegacySchedulerWriteFloor()
+	p := &sshProtocol{krl: sshca.NewKRL(), log: log, tenantID: servedTestTenant}
+	if err := p.syncRevocations(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	if p.verifiedSnapshot.Generation == "" {
+		t.Fatal("SSH startup did not verify the active event generation")
+	}
+	p.syncMu.Lock()
+	initial := p.replayCount
+	p.syncedFrom = time.Now().Add(-2 * sshKRLSyncInterval)
+	p.syncMu.Unlock()
+	if err := p.syncRevocations(t.Context(), false); err != nil {
+		t.Fatalf("unchanged SSH KRL poll: %v", err)
+	}
+	p.syncMu.Lock()
+	unchanged := p.replayCount
+	p.syncMu.Unlock()
+	if unchanged != initial {
+		t.Fatalf("unchanged stream caused %d extra full replays", unchanged-initial)
+	}
+	if _, err := log.Append(t.Context(), events.Event{Type: eventSSHCertRevoked, TenantID: servedTestTenant,
+		Data: []byte(`{"serial":6789,"key_id":"snapshot-catchup"}`)}); err != nil {
+		t.Fatalf("append remote-style revocation: %v", err)
+	}
+	p.syncMu.Lock()
+	p.syncedFrom = time.Now().Add(-2 * sshKRLSyncInterval)
+	p.syncMu.Unlock()
+	if err := p.syncRevocations(t.Context(), false); err != nil {
+		t.Fatalf("changed SSH KRL poll: %v", err)
+	}
+	p.syncMu.Lock()
+	changed := p.replayCount
+	p.syncMu.Unlock()
+	if changed != initial+1 || !bytes.Contains(p.KRLBytes(), []byte("snapshot-catchup")) {
+		t.Fatalf("changed stream did not replay and publish its exact revocation: replays=%d", changed-initial)
+	}
+}
+
+func TestSSHReplayFailureDoesNotPublishPartialKRL(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	p := &sshProtocol{krl: sshca.NewKRL(), log: log, tenantID: servedTestTenant}
+	if err := p.syncRevocations(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	beforeKRL := p.KRLBytes()
+	beforeApplied := p.applied
+	for _, data := range []string{`{"serial":7001,"key_id":"staged-only"}`, `{`} {
+		if _, err := log.Append(t.Context(), events.Event{Type: eventSSHCertRevoked,
+			TenantID: servedTestTenant, Data: []byte(data)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := p.syncRevocations(t.Context(), true); err == nil {
+		t.Fatal("malformed later revocation did not fail closed")
+	}
+	if p.applied != beforeApplied || p.KRLVersion() != 0 || !bytes.Equal(p.KRLBytes(), beforeKRL) {
+		t.Fatal("failed replay published a partial KRL or advanced its durable cursor")
 	}
 }
 

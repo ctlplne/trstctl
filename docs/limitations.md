@@ -2699,12 +2699,20 @@ than sending an operator looking for a credential that was never there.
   have been exercised. Early revocation is now requested through the tenant
   API and console; PostgreSQL completion waits for native role removal, while
   SSH completion means the served KRL contains the serial and key ID. Hosts
-  must load the refreshed KRL to enforce rejection. The full live operator
-  replay and cold restart for early revocation remain open. The provider
+  must load the refreshed KRL to enforce rejection. A local J4 host with the
+  current CA rejected a freshly revoked PAM certificate before its expiry and
+  retained that rejection through host and control-plane restarts; this proves
+  one watched host, not central fleet delivery. The provider
   terminal-failure path now projects `revocation_failed` with a closed error
-  class and exposes a fresh-key retry in the API, CLI, and console. Live
-  failure/repair/retry evidence is still required before the U6 journey is
-  marked complete.
+  class and exposes a fresh-key retry in the API, CLI, and console. A live
+  PostgreSQL cross-database dependency exhausted the native removal attempts;
+  its console retry removed the exact role and survived a cold restart. The
+  KRL endpoint returns 503 during a catch-up it cannot finish within its read
+  deadline, and an opted-in host retains its installed list and retries.
+  Control-plane health alone does not prove KRL or audit-read readiness during
+  startup. Fleet receipts and migration between independently versioned KRL
+  lineages remain unverified; an older host KRL must not be overwritten with a
+  lower-version list from a replacement deployment.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The
