@@ -356,6 +356,12 @@ supplied locally:
 make pqc-operator-lab
 ```
 
+For repeated runs under amd64 emulation, `TRSTCTL_PQC_LAB_GOCACHE` may name
+an absolute `gocache` directory inside a dedicated mode-0700 parent. The lab
+reuses compiled Go packages there across attempts; its signer, tokens, and
+database workspace remain disposable. The runtime runner refuses a cache
+parent containing any other file or directory.
+
 The command runs the three exact shipped-binary definition-of-done proofs: pure
 ML-DSA EST enrollment with stock OpenSSL, the classical/PQ SPIFFE SVID pair, and
 CBOM migration plus rollback. It sets the Go module resolver offline and the

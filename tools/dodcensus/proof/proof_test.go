@@ -171,6 +171,29 @@ func TestReviewedBinfmtInterpreterIsClosedToExactImmutableRosetta(t *testing.T) 
 	}
 }
 
+func TestBinfmtGuestArgvAcceptsOnlyReviewedQEMUDuplicate(t *testing.T) {
+	const guest = "/private/gate-built/trstctl"
+	for name, test := range map[string]struct {
+		args  []string
+		qemu  bool
+		allow bool
+	}{
+		"native exact":         {args: []string{guest}, allow: true},
+		"QEMU exact duplicate": {args: []string{guest, guest}, qemu: true, allow: true},
+		"Rosetta duplicate":    {args: []string{guest, guest}},
+		"foreign second":       {args: []string{guest, "/tmp/other"}, qemu: true},
+		"added flag":           {args: []string{guest, guest, "--unsafe"}, qemu: true},
+		"foreign first":        {args: []string{"/tmp/other", guest}, qemu: true},
+		"empty":                {qemu: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := validateBinfmtGuestArgv(test.args, guest, true, test.qemu); got != test.allow {
+				t.Fatalf("exact guest argv accepted = %t, want %t", got, test.allow)
+			}
+		})
+	}
+}
+
 func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
 	t.Run("exact target maps", func(t *testing.T) {
 		procDir, targetPath, target, _ := guestProcessFixture(t)

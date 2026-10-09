@@ -243,9 +243,9 @@ func runLicensed(ctx context.Context, repo string, entries map[string]dodEntry) 
 
 	files := map[string][]byte{}
 	receipts := make([]stageReceipt, 0, len(licensedStages))
-	cacheDir := filepath.Join(work, "gocache")
-	if err := os.Mkdir(cacheDir, 0o700); err != nil {
-		return nil, nil, fmt.Errorf("create private DoD cache: %w", err)
+	cacheDir, err := rehearsalCacheDir(work, os.Getenv("TRSTCTL_PQC_LAB_GOCACHE"))
+	if err != nil {
+		return nil, nil, err
 	}
 	for _, stage := range licensedStages {
 		fmt.Printf(">> PQC rehearsal: %s\n", stage.Expectation)
@@ -372,6 +372,47 @@ func privateWorkspace(parent, prefix string) (string, func(), error) {
 	return root, func() {
 		once.Do(func() { _ = os.RemoveAll(root) })
 	}, nil
+}
+
+// A configured cache can survive one lab attempt without retaining the
+// temporary signer, token, or database state. Docker Desktop mounts the cache's
+// dedicated private parent, so no unrelated files may share that directory.
+func rehearsalCacheDir(work, configured string) (string, error) {
+	cache := filepath.Join(work, "gocache")
+	if configured != "" {
+		if !filepath.IsAbs(configured) || filepath.Clean(configured) != configured {
+			return "", errors.New("persistent PQC lab cache path must be clean and absolute")
+		}
+		parent := filepath.Dir(configured)
+		info, err := os.Lstat(parent) // #nosec G703 -- operator-selected clean absolute local cache parent, not a remote path (CWE-22)
+		if err != nil {
+			return "", fmt.Errorf("inspect persistent PQC lab cache parent: %w", err)
+		}
+		if !info.IsDir() || info.Mode().Perm() != 0o700 {
+			return "", errors.New("persistent PQC lab cache parent must be an existing private directory")
+		}
+		cache = configured
+	}
+	if err := os.Mkdir(cache, 0o700); err != nil && !os.IsExist(err) { // #nosec G703 -- operator-selected clean absolute local cache path (CWE-22)
+		return "", fmt.Errorf("create private PQC lab cache: %w", err)
+	}
+	info, err := os.Lstat(cache) // #nosec G703 -- inspect only the operator-selected private local cache (CWE-22)
+	if err != nil {
+		return "", fmt.Errorf("inspect PQC lab cache: %w", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != 0o700 {
+		return "", errors.New("PQC lab cache must be a private directory")
+	}
+	if configured != "" {
+		entries, err := os.ReadDir(filepath.Dir(cache))
+		if err != nil {
+			return "", fmt.Errorf("read persistent PQC lab cache parent: %w", err)
+		}
+		if len(entries) != 1 || entries[0].Name() != filepath.Base(cache) {
+			return "", errors.New("persistent PQC lab cache parent must contain only the cache")
+		}
+	}
+	return cache, nil
 }
 
 func offlineGoEnv(base []string) []string {

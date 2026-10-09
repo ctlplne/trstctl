@@ -1884,12 +1884,13 @@ func inspectLiveProcess(pid int, built shippedBuild, expected expectation) (proc
 	// binding. Ordinary binfmt, where /proc/self/exe is the interpreter, still
 	// requires the guest argv/maps/descriptor witness.
 	rosettaProcess := interpreterTarget == rosettaInterpreterPath
+	qemuProcess := interpreterTarget == qemuX8664InterpreterPath
 	if selfInterpreter != runnerIdentity {
-		if _, err := validateBinfmtGuestBinding(os.Getpid(), runnerArgs[0], runnerIdentity, false, rosettaProcess, built.dropper, procIdentity); err != nil {
+		if _, err := validateBinfmtGuestBinding(os.Getpid(), runnerArgs[0], runnerIdentity, false, qemuProcess, rosettaProcess, built.dropper, procIdentity); err != nil {
 			return processExecutableWitness{}, fmt.Errorf("bind emulated gate test runner: %w", err)
 		}
 	}
-	mapDevice, err := validateBinfmtGuestBinding(pid, built.binary, target, true, rosettaProcess, built.dropper, procIdentity)
+	mapDevice, err := validateBinfmtGuestBinding(pid, built.binary, target, true, qemuProcess, rosettaProcess, built.dropper, procIdentity)
 	if err != nil {
 		return processExecutableWitness{}, fmt.Errorf("bind emulated shipped binary: %w", err)
 	}
@@ -2023,9 +2024,9 @@ func processCommandLine(pid int) ([]string, error) {
 	return out, nil
 }
 
-func validateBinfmtGuestBinding(pid int, path string, identity executableIdentity, exactArgv, allowRosettaBindAlias bool, dropper executableIdentity, reviewedInterpreters ...executableIdentity) (string, error) {
+func validateBinfmtGuestBinding(pid int, path string, identity executableIdentity, exactArgv, allowQEMUDuplicateArgv, allowRosettaBindAlias bool, dropper executableIdentity, reviewedInterpreters ...executableIdentity) (string, error) {
 	args, err := processCommandLine(pid)
-	if err != nil || len(args) == 0 || args[0] != path || (exactArgv && len(args) != 1) {
+	if err != nil || !validateBinfmtGuestArgv(args, path, exactArgv, allowQEMUDuplicateArgv) {
 		return "", fmt.Errorf("guest argv does not name only the exact private binary: %w", err)
 	}
 	mapDevice, err := validateGuestExecutableMaps(pid, path, identity, allowRosettaBindAlias, reviewedInterpreters...)
@@ -2036,6 +2037,20 @@ func validateBinfmtGuestBinding(pid int, path string, identity executableIdentit
 		return "", err
 	}
 	return mapDevice, nil
+}
+
+// QEMU binfmt presents the exact guest executable twice in /proc/PID/cmdline:
+// once as its injected operand and once as guest argv[0]. Accept only that
+// duplicate, after the caller has verified the root-owned QEMU interpreter.
+// An added flag or a different second pathname is never an exact launch.
+func validateBinfmtGuestArgv(args []string, path string, exact, allowQEMUDuplicate bool) bool {
+	if len(args) == 0 || args[0] != path {
+		return false
+	}
+	if !exact {
+		return true
+	}
+	return len(args) == 1 || (allowQEMUDuplicate && len(args) == 2 && args[1] == path)
 }
 
 func validateGuestExecutableMaps(pid int, path string, identity executableIdentity, allowRosettaBindAlias bool, reviewedInterpreters ...executableIdentity) (string, error) {
