@@ -1290,7 +1290,7 @@ to a test registry.
 
 The `pam` block enables the broker and can seed operator-owned targets. A tenant
 registrar with `access:targets.write` can add targets through the console,
-`POST /api/v1/access/targets`, or `trstctl-cli access targets register --body-file target.json`.
+`POST /api/v1/access/targets`, or `trstctl-cli access targets register -f target.json`.
 The matching list/get/disable API and CLI commands provide readback and retirement.
 `access:write` alone can request a session but cannot register a destination.
 Registered destinations are immutable; disable one with a reason and register a

@@ -279,11 +279,11 @@ after a distinct approver records approval. CLI parity is `trstctl-cli identitie
 approve issue|rotate|revoke`, `trstctl-cli ephemeral issue`, and `trstctl-cli
 ephemeral approve`; PAM sessions use `trstctl-cli access sessions request`, `trstctl-cli access sessions request-status <approval_request_id>`, `trstctl-cli access sessions open`, `trstctl-cli
 access sessions list`, `trstctl-cli access sessions get`, and
-`trstctl-cli access sessions revoke <id> --body-file revoke.json` where the JSON
+`trstctl-cli access sessions revoke <id> -f revoke.json` where the JSON
 body contains `{"reason":"incident containment"}`.
 Target commands are `trstctl-cli access targets list`,
-`get <target_type> <id>`, `register --body-file target.json`, and
-`disable <target_type> <id> --body-file reason.json`.
+`get <target_type> <id>`, `register -f target.json`, and
+`disable <target_type> <id> -f reason.json`.
 
 ### Break-glass procedures (F34)
 
