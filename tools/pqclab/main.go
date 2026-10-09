@@ -246,9 +246,9 @@ func runLicensed(ctx context.Context, repo string, entries map[string]dodEntry) 
 
 	files := map[string][]byte{}
 	receipts := make([]stageReceipt, 0, len(licensedStages))
-	cacheDir := filepath.Join(work, "gocache")
-	if err := os.Mkdir(cacheDir, 0o700); err != nil {
-		return nil, nil, fmt.Errorf("create private DoD cache: %w", err)
+	cacheDir, err := createPrivateCacheDir(work)
+	if err != nil {
+		return nil, nil, err
 	}
 	for _, stage := range licensedStages {
 		fmt.Printf(">> PQC rehearsal: %s\n", stage.Expectation)
@@ -289,6 +289,20 @@ func runLicensed(ctx context.Context, repo string, entries map[string]dodEntry) 
 		fmt.Printf("<< PQC rehearsal: %s SERVED\n", stage.ID)
 	}
 	return files, receipts, nil
+}
+
+func createPrivateCacheDir(work string) (string, error) {
+	// On Docker Desktop the runner mounts the parent of the cache directory.
+	// Keep receipts outside that writable mount, including after stage one.
+	parent := filepath.Join(work, "runtime-cache")
+	if err := os.Mkdir(parent, 0o700); err != nil {
+		return "", fmt.Errorf("create private DoD cache parent: %w", err)
+	}
+	cacheDir := filepath.Join(parent, "gocache")
+	if err := os.Mkdir(cacheDir, 0o700); err != nil {
+		return "", fmt.Errorf("create private DoD cache: %w", err)
+	}
+	return cacheDir, nil
 }
 
 func requireServedReport(raw []byte, id string) error {

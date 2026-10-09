@@ -201,6 +201,33 @@ func TestPersistentCacheOverrideIsRefusedBeforeLab(t *testing.T) {
 	}
 }
 
+func TestPrivateCacheParentStaysDedicatedAcrossStageReceipts(t *testing.T) {
+	work := t.TempDir()
+	cacheDir, err := createPrivateCacheDir(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "pure-ml-dsa-est.json"), []byte("receipt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(cacheDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "gocache" || !entries[0].IsDir() {
+		t.Fatalf("cache parent includes stage receipts: %v", entries)
+	}
+	for _, dir := range []string{filepath.Dir(cacheDir), cacheDir} {
+		info, err := os.Lstat(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o700 || !info.IsDir() {
+			t.Fatalf("cache boundary %s has mode %v", dir, info.Mode())
+		}
+	}
+}
+
 func TestValidatedCommandBoundaryAllowsOnlyReviewedArgv(t *testing.T) {
 	root := t.TempDir()
 	repo := t.TempDir()
