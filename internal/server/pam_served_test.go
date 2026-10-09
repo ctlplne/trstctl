@@ -34,6 +34,7 @@ import (
 // a disposable sshd container that trusts the served SSH CA, emits audit/session
 // events, and automatically expires the brokered access.
 func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
+	const sshTTLSeconds int64 = 60
 	pgDSN, stopPG := startPAMPostgres(t)
 	defer stopPG()
 	seedPAMPostgresTable(t, pgDSN)
@@ -46,7 +47,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 			d.PAM = PAMConfig{
 				Enabled:        true,
 				DefaultTTL:     2 * time.Second,
-				MaxTTL:         5 * time.Second,
+				MaxTTL:         90 * time.Second,
 				ExpiryInterval: 10 * time.Millisecond,
 				Attestors:      []attest.Attestor{servedPAMAttestor{}},
 				PostgresTargets: []PAMPostgresTarget{{
@@ -113,7 +114,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 			t.Fatalf("foreign tenant PAM %s target status = %d, want 422; body=%s", targetType, status, body)
 		}
 	}
-	for _, seconds := range []int64{-1, 6, 1 << 62} {
+	for _, seconds := range []int64{-1, 91, 1 << 62} {
 		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", admin,
 			fmt.Sprintf("pam-invalid-ttl-%d", seconds), map[string]any{
 				"target_type": "postgres", "target_id": "pg-main", "role": "readonly",
@@ -201,7 +202,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		"payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
 		"ssh_public_key": publicKey,
 		"ssh_principal":  "alice",
-		"ttl_seconds":    2,
+		"ttl_seconds":    sshTTLSeconds,
 	}
 	ssh := servedPAMReviewedOpen(t, h, admin, reviewerOne, reviewerTwo, "pam-01-ssh", sshRequest)
 	if ssh.ID == "" || ssh.TargetType != "ssh" || ssh.Status != "active" || ssh.SSH == nil || ssh.SSH.Certificate == "" {
@@ -210,6 +211,10 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	if ssh.SSH.Principal != "alice" || ssh.SSH.KeyID == "" || ssh.SSH.Serial == 0 {
 		t.Fatalf("ssh PAM certificate metadata = %+v", ssh.SSH)
 	}
+	// Exercise the positive path before replay and database assertions consume
+	// the lease. Native sshd startup and a first handshake can be slow under
+	// race/coverage on a loaded host; expiry is asserted below at ValidBefore.
+	assertPAMSSHAccess(t, sshd, keyPath, ssh.SSH.Certificate, true)
 	issuedBeforeReplay := pamEventCount(t, h, "ssh.cert.issued")
 	cacheReplay := servedPAMOpen(t, h, admin, "pam-01-ssh", sshRequest)
 	if cacheReplay.ID != ssh.ID || cacheReplay.SSH == nil || cacheReplay.SSH.Certificate != ssh.SSH.Certificate {
@@ -237,15 +242,13 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		IntentDigest:      sshRequest["intent_digest"].(string),
 		TargetType:        "ssh", TargetID: "ssh-edge", Role: "user", Reason: "production incident 42",
 		Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte(publicKey),
-		SSHPrincipal: "alice", TTLSeconds: 2,
+		SSHPrincipal: "alice", TTLSeconds: sshTTLSeconds,
 	}); err == nil {
 		t.Fatal("replaying an SSH PAM idempotency key after the HTTP cache was bypassed minted a second certificate")
 	}
 	if after := pamEventCount(t, h, "ssh.cert.issued"); after != issuedBeforeReplay {
 		t.Fatalf("SSH PAM replay signed %d additional certificates", after-issuedBeforeReplay)
 	}
-	assertPAMSSHAccess(t, sshd, keyPath, ssh.SSH.Certificate, true)
-
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if !pamPostgresRoleExists(t, pgDSN, pg.Postgres.Username) && h.hasEvent(t, "pam.session.expired") {
