@@ -84,12 +84,13 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 		OutsideCalls: outsideCalls, HostReads: hostReads,
 		DurableWrites: []string{
 			fmt.Sprintf("Append and project at most %d tenant-scoped cbom.asset.observed records; unreachable, unreadable, oversized, or capped inputs remain visible in the failed count.", findingWriteLimit),
+			"After every source completes without failure, append cbom.source.reconciled records for its exact observed files and endpoints; retire facts absent from the latest complete observation while retaining immutable audit history.",
 		},
 		SignerCalls: 0, OutboxCalls: 0, Blockers: blockers,
 		RecoverySteps: []string{
 			"If a target is unreachable, correct its host or port, confirm this control plane can reach it, then preview and retry only that target.",
 			"If a host path is unreadable or too broad, narrow the absolute path or glob and grant read-only access; never grant write access for CBOM discovery.",
-			"A partial scan keeps every successfully observed asset. Review the failed count, repair the inputs, and rerun; stable asset identities safely converge instead of multiplying rows.",
+			"A partial scan keeps prior facts active to avoid falsely clearing risk. Review the failed count, repair the inputs, and rerun the complete source to reconcile its current facts.",
 		},
 		SafetyNotes: []string{
 			"Preview performs no network connection, file read, event append, projection write, signer call, or outbox delivery.",
@@ -108,6 +109,7 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 		return api.CBOMScanResponse{}, errors.New("server: CBOM scan dependencies are not ready")
 	}
 	sources := make([]cbom.Source, 0, 2)
+	var host *hostsource.Source
 	if len(plan.NormalizedRequest.TLSEndpoints) > 0 {
 		var options []tlssource.Option
 		if s.nativeTLSExecutable != "" {
@@ -118,7 +120,8 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints, options...))
 	}
 	if len(plan.NormalizedRequest.HostConfigs) > 0 {
-		sources = append(sources, hostsource.New(plan.NormalizedRequest.HostConfigs...))
+		host = hostsource.New(plan.NormalizedRequest.HostConfigs...)
+		sources = append(sources, host)
 	}
 	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID}
 	scanner := cbom.NewScanner(sink,
@@ -126,6 +129,22 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 		cbom.WithMaxFindingsPerSource(cbom.DefaultMaxFindingsPerSource))
 	defer scanner.Close()
 	rep := scanner.Scan(ctx, sources)
+	// Retire stale facts only after every requested input and event write in this
+	// scan succeeded. On partial failure we cannot tell absence from omission.
+	if rep.Failed == 0 {
+		for _, location := range plan.NormalizedRequest.TLSEndpoints {
+			if err := sink.Reconcile(ctx, "tls-endpoints", location); err != nil {
+				rep.Failed++
+			}
+		}
+		if host != nil {
+			for _, location := range host.ResolvedPaths() {
+				if err := sink.Reconcile(ctx, "host-config", location); err != nil {
+					rep.Failed++
+				}
+			}
+		}
+	}
 	inv, err := s.Inventory(ctx, tenantID)
 	if err != nil {
 		return api.CBOMScanResponse{}, err
@@ -154,7 +173,7 @@ type eventedCBOMSink struct {
 	log      *events.Log
 	tenantID string
 	mu       sync.Mutex
-	observed map[string]struct{}
+	observed map[string]store.CryptoAsset
 }
 
 func (s *eventedCBOMSink) observedAssetIDs() []string {
@@ -166,6 +185,43 @@ func (s *eventedCBOMSink) observedAssetIDs() []string {
 	}
 	sort.Strings(ids)
 	return ids
+}
+
+func (s *eventedCBOMSink) observedSourceIDs(sourceKind, location string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var ids []string
+	for id, a := range s.observed {
+		if a.Location != location {
+			continue
+		}
+		if sourceKind == "host-config" && a.Kind != "host-config" {
+			continue
+		}
+		if sourceKind == "tls-endpoints" && a.Kind != "tls-endpoint" && a.Kind != "certificate-key" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func (s *eventedCBOMSink) Reconcile(ctx context.Context, sourceKind, location string) error {
+	if s.log == nil || s.store == nil {
+		return errors.New("server: CBOM sink requires store and event log")
+	}
+	data, err := json.Marshal(projections.CBOMSourceReconciled{
+		SourceKind: sourceKind, Location: location,
+		ObservedAssetIDs: s.observedSourceIDs(sourceKind, location),
+	})
+	if err != nil {
+		return fmt.Errorf("server: encode CBOM source reconciliation: %w", err)
+	}
+	return s.appendAndProject(ctx, events.Event{
+		ID: events.NewID(), Type: projections.EventCBOMSourceReconciled,
+		TenantID: s.tenantID, Data: data,
+	})
 }
 
 const (
@@ -215,29 +271,37 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	if err != nil {
 		return fmt.Errorf("server: encode CBOM asset event: %w", err)
 	}
-	// Pin one event ID across retries. If JetStream committed the first publish but
-	// its acknowledgment was lost, the retry is duplicate-suppressed and returns
-	// the canonical immutable event instead of adding a second observation.
-	event := events.Event{ID: events.NewID(), Type: projections.EventCBOMAssetObserved, TenantID: s.tenantID, Data: data}
+	if err := s.appendAndProject(ctx, events.Event{
+		ID: events.NewID(), Type: projections.EventCBOMAssetObserved,
+		TenantID: s.tenantID, Data: data,
+	}); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.observed == nil {
+		s.observed = make(map[string]store.CryptoAsset)
+	}
+	s.observed[asset.ID] = asset
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *eventedCBOMSink) appendAndProject(ctx context.Context, event events.Event) error {
+	// Pin one event ID across retries. A lost JetStream acknowledgment must not
+	// create a second observation or reconciliation event.
 	var stored events.Event
 	if err := retryCBOMWrite(ctx, func() error {
 		var appendErr error
 		stored, appendErr = s.log.Append(ctx, event)
 		return appendErr
 	}); err != nil {
-		return fmt.Errorf("server: append CBOM asset event: %w", err)
+		return fmt.Errorf("server: append CBOM %s event: %w", event.Type, err)
 	}
 	// Project the exact canonical event for read-your-write API responses. The tail
 	// worker can apply it concurrently or later; the projection is idempotent by the
 	// tenant-scoped asset signature. Retrying this step never appends another event.
 	if err := retryCBOMWrite(ctx, func() error { return projections.New(s.store).Apply(ctx, stored) }); err != nil {
-		return fmt.Errorf("server: project CBOM asset event: %w", err)
+		return fmt.Errorf("server: project CBOM %s event: %w", event.Type, err)
 	}
-	s.mu.Lock()
-	if s.observed == nil {
-		s.observed = make(map[string]struct{})
-	}
-	s.observed[asset.ID] = struct{}{}
-	s.mu.Unlock()
 	return nil
 }

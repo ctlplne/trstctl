@@ -43,6 +43,95 @@ func TestRetryCBOMWriteStopsOnCanceledContext(t *testing.T) {
 	}
 }
 
+func TestServedCBOMRescanRetiresReplacedHostFacts(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
+	path := filepath.Join(t.TempDir(), "tls.conf")
+	scan := func(key string, wantFailed int, paths ...string) {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans", token, map[string]any{
+			"host_configs": paths,
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("%s scan: status %d body %s", key, status, body)
+		}
+		var result struct {
+			Report struct {
+				Failed int `json:"failed"`
+			} `json:"report"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil || result.Report.Failed != wantFailed {
+			t.Fatalf("%s scan report = %+v, decode = %v", key, result, err)
+		}
+	}
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("ssl_protocols TLSv1;\nssl_ciphers TLS_RSA_WITH_3DES_EDE_CBC_SHA;\n")
+	scan("weak", 0, path)
+	write("ssl_protocols TLSv1.3;\nssl_ciphers TLS_AES_256_GCM_SHA384;\n")
+	// One unreadable selector makes the request incomplete. Its new strong facts
+	// are useful, but prior weak facts remain active until a complete rescan.
+	scan("partial", 1, path, filepath.Join(t.TempDir(), "missing.conf"))
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/cbom/assets", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("partial inventory: status %d body %s", status, body)
+	}
+	if !json.Valid(body) || !containsCBOMWeakFact(body, path) {
+		t.Fatalf("partial scan falsely cleared old risk: %s", body)
+	}
+	scan("strong", 0, path)
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/cbom/assets", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("inventory: status %d body %s", status, body)
+	}
+	var inventory struct {
+		Items []struct {
+			Location    string `json:"location"`
+			Protocol    string `json:"protocol"`
+			Cipher      string `json:"cipher"`
+			OutOfPolicy bool   `json:"out_of_policy"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &inventory); err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, item := range inventory.Items {
+		if item.Location != path {
+			continue
+		}
+		seen++
+		if item.OutOfPolicy || item.Protocol == "TLSv1.0" || item.Cipher == "TLS_RSA_WITH_3DES_EDE_CBC_SHA" {
+			t.Errorf("retired weak fact still active after clean rescan: %+v", item)
+		}
+	}
+	if seen != 2 {
+		t.Errorf("active facts at source = %d, want exact strong protocol and cipher", seen)
+	}
+}
+
+func containsCBOMWeakFact(body []byte, path string) bool {
+	var inventory struct {
+		Items []struct {
+			Location string `json:"location"`
+			Protocol string `json:"protocol"`
+		} `json:"items"`
+	}
+	if json.Unmarshal(body, &inventory) != nil {
+		return false
+	}
+	for _, item := range inventory.Items {
+		if item.Location == path && item.Protocol == "TLSv1.0" {
+			return true
+		}
+	}
+	return false
+}
+
 // TestServedCBOMScanPopulatesMigrationInventory verifies that the
 // assembled control plane drives a real served CBOM scan over a fixture TLS estate
 // and host config, records observations through the AN-2 event log, projects them

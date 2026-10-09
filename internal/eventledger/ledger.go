@@ -82,6 +82,7 @@ const (
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
+	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
 	EventPQCMigrationCampaignStarted              = "pqc.migration_campaign.started"
 	EventPQCMigrationCampaignUpdated              = "pqc.migration_campaign.updated"
 	EventPQCMigrationCampaignFindingDispositioned = "pqc.migration_campaign.finding_dispositioned"
@@ -202,7 +203,7 @@ var ledger = []FeatureEvent{
 	{"H2", "CA migration waves", "record_run", "startMigrationRun", []string{EventMigrationRunRecorded}},
 	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
-	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved}},
+	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved, EventCBOMSourceReconciled}},
 	{"F52", "Cryptographic Bill of Materials", "start_campaign", "startPQCMigrationCampaign", []string{EventPQCMigrationCampaignStarted}},
 	{"F52", "Cryptographic Bill of Materials", "update_campaign", "updatePQCMigrationCampaign", []string{EventPQCMigrationCampaignUpdated}},
 	{"F52", "Cryptographic Bill of Materials", "record_readiness", "setPQCMigrationCampaignReadiness", []string{EventPQCMigrationCampaignUpdated}},

@@ -226,6 +226,7 @@ const (
 	EventNotificationTestQueued                   = "notification.test.queued"
 	EventNotificationDeliveryRecorded             = "notification.delivery.recorded"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
+	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
 	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
 	EventLicensedCryptoMigrationAssetCompleted    = "licensed_crypto.migration.asset_completed"
 	EventLicensedCryptoMigrationRollbackCompleted = "licensed_crypto.migration.rollback_completed"
@@ -2476,6 +2477,15 @@ type CBOMAssetObserved struct {
 	Reasons                []string `json:"reasons,omitempty"`
 }
 
+// CBOMSourceReconciled records one fully observed source snapshot. Older facts
+// from this exact location are inactive after the listed observations, while
+// their rows and immutable events remain available for audit and replay.
+type CBOMSourceReconciled struct {
+	SourceKind       string   `json:"source_kind"`
+	Location         string   `json:"location"`
+	ObservedAssetIDs []string `json:"observed_asset_ids"`
+}
+
 // LicensedCryptoMigrationStarted records the tenant-scoped operator intent to
 // re-issue CBOM assets toward a proprietary crypto target. The side effect
 // itself is still an outbox row; this event is the immutable request fact.
@@ -3724,6 +3734,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventNotificationTestQueued:                   {1: true},
 	EventNotificationDeliveryRecorded:             {1: true, NotificationDeliveryRoutingSchemaVersion: true},
 	EventCBOMAssetObserved:                        {1: true},
+	EventCBOMSourceReconciled:                     {1: true},
 	EventDeploymentTargetUpserted:                 {1: true},
 	EventDeploymentTargetDeleted:                  {1: true},
 	EventIdentityConnectorTargetBound:             {1: true, 2: true},
@@ -5764,6 +5775,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
 			Reasons: pl.Reasons,
 		}, e.Sequence, e.Time)
+	case EventCBOMSourceReconciled:
+		var pl CBOMSourceReconciled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyCryptoSourceReconciledTx(ctx, tx, e.TenantID, pl.SourceKind, pl.Location, pl.ObservedAssetIDs, e.Sequence)
 	case EventLicensedCryptoMigrationStarted:
 		var pl LicensedCryptoMigrationStarted
 		if err := decode(e, &pl); err != nil {

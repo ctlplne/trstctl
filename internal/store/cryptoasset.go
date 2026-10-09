@@ -158,6 +158,61 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 	return err
 }
 
+// ApplyCryptoSourceReconciledTx retires facts absent from one complete source
+// observation. It runs only as a projection of cbom.source.reconciled; the old
+// rows remain as sequence-fenced tombstones for audit and deterministic replay.
+func (s *Store) ApplyCryptoSourceReconciledTx(ctx context.Context, tx pgx.Tx, tenantID, sourceKind, location string, observedIDs []string, eventSequence uint64) error {
+	if location == "" {
+		return errors.New("store: CBOM reconciliation requires a source location")
+	}
+	var kinds []string
+	switch sourceKind {
+	case "host-config":
+		kinds = []string{"host-config"}
+	case "tls-endpoints":
+		kinds = []string{"tls-endpoint", "certificate-key"}
+	default:
+		return fmt.Errorf("store: unsupported CBOM reconciliation source %q", sourceKind)
+	}
+	if len(observedIDs) > 1024 {
+		return errors.New("store: CBOM reconciliation exceeds the finding limit")
+	}
+	seen := make(map[string]struct{}, len(observedIDs))
+	for _, id := range observedIDs {
+		parsed, err := uuid.Parse(id)
+		if err != nil || parsed.String() != id {
+			return fmt.Errorf("store: CBOM reconciliation has invalid asset id %q", id)
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return fmt.Errorf("store: CBOM reconciliation repeats asset id %q", id)
+		}
+		seen[id] = struct{}{}
+	}
+	sequence, err := cryptoAssetEventSequence(eventSequence)
+	if err != nil {
+		return err
+	}
+	// A forged or mismatched observed list must never retire another tenant's or
+	// another source's assets. A later event may already have tombstoned a valid
+	// reference, so existence and provenance are checked without is_active.
+	var matched int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM crypto_assets
+		  WHERE tenant_id = $1 AND location = $2 AND kind = ANY($3::text[]) AND id::text = ANY($4::text[])`,
+		tenantID, location, kinds, observedIDs).Scan(&matched); err != nil {
+		return err
+	}
+	if matched != len(observedIDs) {
+		return errors.New("store: CBOM reconciliation references assets outside its tenant or source")
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE crypto_assets SET is_active = false, event_sequence = $5
+		  WHERE tenant_id = $1 AND location = $2 AND kind = ANY($3::text[])
+		    AND NOT (id::text = ANY($4::text[])) AND is_active AND event_sequence < $5`,
+		tenantID, location, kinds, observedIDs, sequence)
+	return err
+}
+
 // ApplyCryptoAssetMigratedTx projects a licensed crypto migration completion
 // onto the existing CBOM row. The identity of the observed asset stays stable
 // (same id); only the public crypto fact changes from the original algorithm to

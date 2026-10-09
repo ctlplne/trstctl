@@ -493,7 +493,7 @@ not this file.
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:467` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5046` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5057` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1189,7 +1189,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca.go:104` | operator-configured shell-CA output path; the shell CA is an explicit operator integration (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/cbom/hostsource/hostsource.go:64` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
+| `internal/cbom/hostsource/hostsource.go:79` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
 | `internal/cli/audit_verify.go:173` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/cli.go:189` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `internal/cli/cli.go:542` | operator-passed local file argument on their own command line (CWE-22) |
@@ -1493,7 +1493,7 @@ not this file.
 | `internal/secretscan/gitleaks_options_test.go:72` | executable is an isolated test fixture |
 | `internal/secretscan/gitleaks_options_test.go:178` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/cbom_served_test.go:62` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:370` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:592` | public CA fixture (CWE-276) |

@@ -15,13 +15,16 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"trstctl.com/trstctl/internal/cbom"
 )
 
 // Source scans a set of config files or globs.
 type Source struct {
-	paths []string
+	paths    []string
+	mu       sync.Mutex
+	resolved []string
 }
 
 const (
@@ -38,6 +41,15 @@ func New(paths ...string) *Source { return &Source{paths: paths} }
 // Name identifies the source.
 func (s *Source) Name() string { return "host-config" }
 
+// ResolvedPaths returns the concrete files selected by the last scan. A caller
+// must use these exact paths when reconciling current CBOM facts after a complete
+// scan; a glob selector is not itself an asset location.
+func (s *Source) ResolvedPaths() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.resolved...)
+}
+
 var protocolDirectives = map[string]bool{"ssl_protocols": true, "sslprotocol": true, "protocols": true}
 var cipherDirectives = map[string]bool{"ssl_ciphers": true, "sslciphersuite": true, "ciphers": true}
 
@@ -46,6 +58,9 @@ var cipherDirectives = map[string]bool{"ssl_ciphers": true, "sslciphersuite": tr
 func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 	var out []cbom.Finding
 	paths, failures := expandGlobs(s.paths, DefaultMaxFiles)
+	s.mu.Lock()
+	s.resolved = append([]string(nil), paths...)
+	s.mu.Unlock()
 	for _, path := range paths {
 		data, err := readBounded(path, DefaultMaxFileBytes)
 		if err != nil {

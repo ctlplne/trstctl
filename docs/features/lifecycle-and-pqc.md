@@ -458,9 +458,10 @@ every build through `internal/pqcmigration`.
   `pqc.migration_campaign.finding_dispositioned`, `pqc.migration_campaign.closed`;
   `licensed_crypto.migration.started`, `licensed_crypto.migration.asset_completed`,
   `licensed_crypto.migration.rollback_completed`, `protocol.issued`.
-- **CBOM migration feed:** `POST /api/v1/cbom/scans` records `cbom.asset.observed`; `GET
-  /api/v1/cbom/assets` returns crypto posture, available migration targets, and
-  `migration_progress`.
+- **CBOM migration feed:** `POST /api/v1/cbom/scans` records
+  `cbom.asset.observed` and, after a complete observation,
+  `cbom.source.reconciled`; `GET /api/v1/cbom/assets` returns current crypto
+  posture, available migration targets, and `migration_progress`.
 - **PQC migration API:** Core attaches `POST /api/v1/pqc/migrations` (CBOM
   certificate-key assets) and `POST /api/v1/pqc/migrations/{run_id}/rollback`.
 - **Core PQC campaign API:** `/api/v1/pqc/campaigns` plus detail, update, readiness,

@@ -214,11 +214,15 @@ targets and 64 absolute file/glob selectors. TLS discovery normally performs one
 target with a ten-second timeout and sends no application data. Host discovery reads
 at most 256 matching files and 1 MiB per file, returns no file contents, and the scan
 can append/project no more than 1,024 findings per source. Every successful observation
-is first recorded as an immutable `cbom.asset.observed` event. Partial input failures
-remain visible in `report.failed` without discarding successful observations. `GET
-/api/v1/cbom/assets` (`risk:read`) returns the durable tenant-scoped inventory and
-migration progress. The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from
-starving API or enrollment work.
+is first recorded as an immutable `cbom.asset.observed` event. After a complete
+scan, a `cbom.source.reconciled` event for each observed file and TLS endpoint
+retires older facts no longer present at that exact location. Retired rows remain
+in the projection for audit and replay but disappear from current inventory.
+Partial input or write failures remain visible in `report.failed`; they retain
+prior facts so a failed probe cannot falsely clear a risk. `GET /api/v1/cbom/assets`
+(`risk:read`) returns the current tenant-scoped inventory and migration progress.
+The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from starving API or
+enrollment work.
 
 The scan response includes `observed_asset_ids`: stable IDs for findings that this
 run appended and projected. Read those exact IDs back through `GET
@@ -433,8 +437,9 @@ point it at (TLS endpoints + config files). See
   `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key` required), and
   `GET /api/v1/cbom/assets` (`risk:read`).
 - **CBOM policy floor:** RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5.
-- **CBOM event/read model:** `cbom.asset.observed` projects into `crypto_assets`;
-  rebuilds/snapshots replay the same inventory.
+- **CBOM event/read model:** `cbom.asset.observed` and
+  `cbom.source.reconciled` project into `crypto_assets`; rebuilds/snapshots
+  replay the same active inventory and retained tombstones.
 
 ## See also
 
