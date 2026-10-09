@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -93,10 +94,21 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		return w.persistEnvelopeDecodeFailure(ctx, err)
 	}
 	runCtx, cancelRun := context.WithCancel(ctx)
-	defer cancelRun()
+	var sampler sync.WaitGroup
 	if w.sampler != nil {
-		go w.sampleLagLoop(runCtx)
+		sampler.Add(1)
+		go func() {
+			defer sampler.Done()
+			w.sampleLagLoop(runCtx)
+		}()
 	}
+	// Run must not return while its sampler can still report lag from this
+	// invocation. A caller may retry immediately with a new worker after an
+	// apply error, so cancel and join before handing control back.
+	defer func() {
+		cancelRun()
+		sampler.Wait()
+	}()
 	tailErr := w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
 		skip, err := secretAuthority.skip(e)
 		if err != nil {
