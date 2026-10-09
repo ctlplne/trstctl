@@ -1177,18 +1177,49 @@ func TestDynamicSecretRequestCannotDriveGlobalOutbox(t *testing.T) {
 		st, log, kek, outbox, provider, _ := newDynamicSecretOutboxTestStack(t, tenant)
 		preparedProvider := &preparedIssueOutboxProvider{issueOutboxProvider: provider}
 		unrelatedID := enqueueDynamicSecretOutboxTest(t, ctx, st, outbox, tenant, "connector.unrelated", "unrelated-no-worker")
-		srv := &Server{outboxWake: make(chan struct{}, 1)}
-		lifecycle, err := newDurableDynamicSecretLifecycle(tenant, []dynsecret.Provider{preparedProvider}, st, log, kek, outbox, srv.wakeOutbox)
+		wakeObserved := make(chan struct{}, 1)
+		lifecycle, err := newDurableDynamicSecretLifecycle(tenant, []dynsecret.Provider{preparedProvider}, st, log, kek, outbox, func() {
+			select {
+			case wakeObserved <- struct{}{}:
+			default:
+			}
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		requestCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+		requestCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		_, credential, issueErr := lifecycle.Issue(requestCtx, provider.name, "reader", 30*time.Minute, "no-inline-global-dispatch")
-		secret.Wipe(credential)
-		if !errors.Is(issueErr, context.DeadlineExceeded) {
-			t.Fatalf("issue without dispatcher error=%v, want context deadline while own projection remains pending", issueErr)
+		issueResult := make(chan error, 1)
+		go func() {
+			_, credential, issueErr := lifecycle.Issue(requestCtx, provider.name, "reader", 30*time.Minute, "no-inline-global-dispatch")
+			secret.Wipe(credential)
+			issueResult <- issueErr
+		}()
+		// The wake follows the durable issue event and outbox projection. Waiting
+		// for it makes the no-worker assertion independent of database latency.
+		watchdog := time.NewTimer(30 * time.Second)
+		defer watchdog.Stop()
+		select {
+		case <-wakeObserved:
+		case issueErr := <-issueResult:
+			t.Fatalf("issue returned before the durable outbox wake: %v", issueErr)
+		case <-watchdog.C:
+			t.Fatal("issue did not persist its own outbox intent within 30 seconds")
+		}
+		select {
+		case issueErr := <-issueResult:
+			t.Fatalf("issue completed without a dispatcher: %v", issueErr)
+		case <-time.After(150 * time.Millisecond):
+		}
+		cancel()
+		select {
+		case issueErr := <-issueResult:
+			if !errors.Is(issueErr, context.Canceled) {
+				t.Fatalf("issue without dispatcher error=%v, want cancellation while own projection remains pending", issueErr)
+			}
+		case <-watchdog.C:
+			t.Fatal("issue did not stop after request cancellation")
 		}
 		if calls := len(provider.Requests()); calls != 0 {
 			t.Fatalf("request goroutine called provider %d times without a dispatcher", calls)
