@@ -54,7 +54,7 @@ GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
 # The first lane runs hundreds of functional tests under race and whole-tree
 # atomic coverage. Its package clock must allow loaded-host instrumentation to
 # finish; the separate uninstrumented live wall retains every performance SLO.
-PACKAGE_TEST_TIMEOUT := 20m
+PACKAGE_TEST_TIMEOUT := 60m
 # These packages boot real embedded PostgreSQL/JetStream spines. Run them in a
 # serial lane so the all-package race/coverage gate does not make independent
 # database bootstraps contend for the same host resources. The live mutation

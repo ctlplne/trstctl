@@ -219,7 +219,7 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"LIVE_PERF_PACKAGES := ./internal/perf ",
 		"LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/",
 		"LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$",
-		"PACKAGE_TEST_TIMEOUT := 20m",
+		"PACKAGE_TEST_TIMEOUT := 60m",
 		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
 		"$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
 		"$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",

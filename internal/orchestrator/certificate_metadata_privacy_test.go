@@ -30,7 +30,10 @@ func TestCertificateMetadataPrivacyRebindRejectsOrdinaryContext(t *testing.T) {
 }
 
 func TestCertificateMetadataReceiptsFollowVerifiedPrivacyGeneration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
+	// This is a 129-record functional replay under race and whole-tree coverage,
+	// not a latency budget. Leave room for an instrumented PostgreSQL/NATS spine
+	// on a loaded host while the package-level test wall bounds a true hang.
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 	s := newStore(t)
 	key, err := jose.GenerateRSASigningKey("metadata-privacy-regression")
