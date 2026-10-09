@@ -335,7 +335,7 @@ describe("journeys hub", () => {
     await user.click(screen.getByRole("button", { name: "Previous" }));
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("heading", { name: "Request the credential" })).toBeInTheDocument();
-    expect(screen.getByText("Checked against this request's served evidence for this step.")).toBeInTheDocument();
+    expect(screen.getByText("Checked against this request's recorded evidence for this step.")).toBeInTheDocument();
     expect(apiMock.identityIssuanceResult).not.toHaveBeenCalled();
     expect(apiMock.getCertificate).not.toHaveBeenCalled();
   });

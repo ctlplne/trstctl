@@ -144,6 +144,6 @@ describe("U7-4 ceremony + KMS custody console", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Inspect key" }));
     expect(await screen.findByRole("button", { name: "Rotate key old-key" })).toBeDisabled();
-    expect(screen.getByText("Restore this provider before changing the key.")).toBeInTheDocument();
+    expect(screen.getByText("Restore provider to change key.")).toBeInTheDocument();
   });
 });

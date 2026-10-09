@@ -42,8 +42,8 @@ const (
 
 // PAMConfig enables the served just-in-time privileged-access broker (PAM-01/F33).
 // Postgres targets use real scoped login roles; SSH targets use the signer-backed
-// SSH CA. Every injected target is tenant-bound. An enabled broker without
-// targets refuses to start; tenant-managed trust is resolved for each request.
+// SSH CA. Every injected target is tenant-bound. An enabled broker may start
+// without targets so a tenant registrar can add one through the API.
 type PAMConfig struct {
 	Enabled           bool
 	DefaultTTL        time.Duration
@@ -95,6 +95,7 @@ type pamService struct {
 	orch              *orchestrator.Orchestrator
 	approvalTTL       time.Duration
 	requiredApprovals int
+	targetDeps        pamDeps
 }
 
 type pamPostgresTarget struct {
@@ -133,9 +134,6 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	}
 	if d.Store == nil || d.Log == nil || d.Orch == nil {
 		return nil, errors.New("server: PAM requires store, event log, and approval orchestrator")
-	}
-	if len(cfg.PostgresTargets) == 0 && len(cfg.SSHTargets) == 0 {
-		return nil, errors.New("server: PAM requires at least one target")
 	}
 	defaultTTL := cfg.DefaultTTL
 	if defaultTTL <= 0 {
@@ -188,6 +186,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
+		targetDeps: d,
 	}, nil
 }
 
@@ -347,21 +346,21 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 	if _, err := uuid.Parse(req.RequestID); err != nil {
 		return api.PAMApprovalRequest{}, fmt.Errorf("%w: request_id must be a UUID", api.ErrPAMInvalid)
 	}
-	if err := s.validate(tenantID, req.RequestID, requester, req); err != nil {
+	if err := s.validate(ctx, tenantID, req.RequestID, requester, req); err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
 	_, att, err := s.verifyAttestation(ctx, tenantID, req)
 	if err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
-	if err := s.validateAttestedTarget(tenantID, req, att); err != nil {
+	if err := s.validateAttestedTarget(ctx, tenantID, req, att); err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
-	commandDigest, err := s.approvalCommandDigest(tenantID, requester, req, att)
+	commandDigest, err := s.approvalCommandDigest(ctx, tenantID, requester, req, att)
 	if err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
-	targetEvidence, err := s.targetReviewEvidence(tenantID, req, att)
+	targetEvidence, err := s.targetReviewEvidence(ctx, tenantID, req, att)
 	if err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
@@ -394,13 +393,20 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 
 // Reviewers see the operator-configured destination as well as the hash that
 // binds it. The administrator DSN remains private in its provider reference.
-func (s *pamService) targetReviewEvidence(tenantID string, req api.PAMSessionRequest, att attest.Attestation) ([]string, error) {
+func (s *pamService) targetReviewEvidence(ctx context.Context, tenantID string, req api.PAMSessionRequest, att attest.Attestation) ([]string, error) {
 	switch req.TargetType {
 	case pamTargetPostgres:
-		cfg := s.postgres[pamTargetID{tenantID, req.TargetID}].cfg
+		target, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
+			return nil, err
+		}
+		cfg := target.cfg
 		return []string{"pam-postgres-provider:" + cfg.ProviderID}, nil
 	case pamTargetSSH:
-		cfg := s.sshTargets[pamTargetID{tenantID, req.TargetID}]
+		cfg, err := s.sshTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
+			return nil, err
+		}
 		principal := req.SSHPrincipal
 		if principal == "" {
 			principal = att.Subject
@@ -414,8 +420,8 @@ func (s *pamService) targetReviewEvidence(tenantID string, req api.PAMSessionReq
 	}
 }
 
-func (s *pamService) approvalCommandDigest(tenantID, requester string, req api.PAMSessionRequest, att attest.Attestation) (string, error) {
-	targetDigest, err := s.targetDigest(tenantID, req)
+func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, requester string, req api.PAMSessionRequest, att attest.Attestation) (string, error) {
+	targetDigest, err := s.targetDigest(ctx, tenantID, req)
 	if err != nil {
 		return "", err
 	}
@@ -441,11 +447,14 @@ func (s *pamService) approvalCommandDigest(tenantID, requester string, req api.P
 	return crypto.SHA256Hex(append([]byte("trstctl:pam-session-request:v1\x00"), raw...)), nil
 }
 
-func (s *pamService) validateAttestedTarget(tenantID string, req api.PAMSessionRequest, att attest.Attestation) error {
+func (s *pamService) validateAttestedTarget(ctx context.Context, tenantID string, req api.PAMSessionRequest, att attest.Attestation) error {
 	if req.TargetType != pamTargetSSH {
 		return nil
 	}
-	target := s.sshTargets[pamTargetID{tenantID, req.TargetID}]
+	target, err := s.sshTarget(ctx, tenantID, req.TargetID)
+	if err != nil {
+		return err
+	}
 	principal := req.SSHPrincipal
 	if principal == "" {
 		principal = att.Subject
@@ -456,11 +465,14 @@ func (s *pamService) validateAttestedTarget(tenantID string, req api.PAMSessionR
 	return nil
 }
 
-func (s *pamService) targetDigest(tenantID string, req api.PAMSessionRequest) (string, error) {
+func (s *pamService) targetDigest(ctx context.Context, tenantID string, req api.PAMSessionRequest) (string, error) {
 	var target any
 	switch req.TargetType {
 	case pamTargetPostgres:
-		configured := s.postgres[pamTargetID{tenantID, req.TargetID}]
+		configured, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
+			return "", err
+		}
 		cfg := configured.cfg
 		cfg.AllowedRoles = append([]string(nil), cfg.AllowedRoles...)
 		sort.Strings(cfg.AllowedRoles)
@@ -469,7 +481,10 @@ func (s *pamService) targetDigest(tenantID string, req api.PAMSessionRequest) (s
 			ProviderRevision string
 		}{Config: cfg, ProviderRevision: configured.providerRevision}
 	case pamTargetSSH:
-		cfg := s.sshTargets[pamTargetID{tenantID, req.TargetID}]
+		cfg, err := s.sshTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
+			return "", err
+		}
 		cfg.Principals = append([]string(nil), cfg.Principals...)
 		sort.Strings(cfg.Principals)
 		target = cfg
@@ -551,7 +566,7 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 }
 
 func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSession, error) {
-	if err := s.validate(tenantID, idempotencyKey, requester, req); err != nil {
+	if err := s.validate(ctx, tenantID, idempotencyKey, requester, req); err != nil {
 		return api.PAMSession{}, err
 	}
 	if _, err := uuid.Parse(req.RequestID); err != nil {
@@ -573,7 +588,7 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 	if err != nil {
 		return api.PAMSession{}, err
 	}
-	if err := s.validateAttestedTarget(tenantID, req, att); err != nil {
+	if err := s.validateAttestedTarget(ctx, tenantID, req, att); err != nil {
 		return api.PAMSession{}, err
 	}
 	now, err := s.authorizeActivation(ctx, tenantID, idempotencyKey, requester, id, req, att)
@@ -612,7 +627,7 @@ func (s *pamService) authorizeActivation(ctx context.Context, tenantID, idempote
 		approval.IntentDigest != req.IntentDigest {
 		return time.Time{}, fmt.Errorf("%w: PAM approval does not belong to this requester and session request", api.ErrPAMRejected)
 	}
-	digest, err := s.approvalCommandDigest(tenantID, requester, req, att)
+	digest, err := s.approvalCommandDigest(ctx, tenantID, requester, req, att)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -759,9 +774,6 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) error {
 	switch rec.TargetType {
 	case pamTargetPostgres:
-		if s.postgres[pamTargetID{rec.TenantID, rec.TargetID}] == nil {
-			return fmt.Errorf("server: PAM postgres target %q not configured for revocation", rec.TargetID)
-		}
 		lifecycle, err := s.postgresLifecycle(rec.TenantID)
 		if err != nil {
 			return err
@@ -821,7 +833,10 @@ func (s *pamService) pamRevocationFailed(ctx context.Context, rec store.PAMSessi
 }
 
 func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
-	target := s.postgres[pamTargetID{tenantID, req.TargetID}]
+	target, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
 	return s.openPostgresProvider(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, target)
 }
 
@@ -861,7 +876,10 @@ func (s *pamService) openPostgresProvider(ctx context.Context, tenantID, idempot
 }
 
 func (s *pamService) openSSH(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
-	target := s.sshTargets[pamTargetID{tenantID, req.TargetID}]
+	target, err := s.sshTarget(ctx, tenantID, req.TargetID)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
 	principal := req.SSHPrincipal
 	if principal == "" {
 		principal = att.Subject
@@ -928,10 +946,6 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 func (s *pamService) expireSession(ctx context.Context, rec store.PAMSession) error {
 	switch rec.TargetType {
 	case pamTargetPostgres:
-		target := s.postgres[pamTargetID{rec.TenantID, rec.TargetID}]
-		if target == nil {
-			return fmt.Errorf("server: PAM postgres target %q not configured for expiry", rec.TargetID)
-		}
 		lifecycle, err := s.postgresLifecycle(rec.TenantID)
 		if err != nil {
 			return err
@@ -971,7 +985,7 @@ func (s *pamService) appendProject(ctx context.Context, tenantID, eventType stri
 	return s.projector.Apply(ctx, e)
 }
 
-func (s *pamService) validate(tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) error {
+func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) error {
 	if tenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", api.ErrPAMInvalid)
 	}
@@ -1001,16 +1015,16 @@ func (s *pamService) validate(tenantID, idempotencyKey, requester string, req ap
 	}
 	switch req.TargetType {
 	case pamTargetPostgres:
-		target := s.postgres[pamTargetID{tenantID, req.TargetID}]
-		if target == nil {
-			return fmt.Errorf("%w: unknown postgres target %q", api.ErrPAMInvalid, req.TargetID)
+		target, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
+			return err
 		}
 		if _, allowed := target.roles[req.Role]; !allowed {
 			return fmt.Errorf("%w: role %q is not allowed on postgres target %q", api.ErrPAMInvalid, req.Role, req.TargetID)
 		}
 	case pamTargetSSH:
-		if _, ok := s.sshTargets[pamTargetID{tenantID, req.TargetID}]; !ok {
-			return fmt.Errorf("%w: unknown ssh target %q", api.ErrPAMInvalid, req.TargetID)
+		if _, err := s.sshTarget(ctx, tenantID, req.TargetID); err != nil {
+			return err
 		}
 		if len(req.SSHPublicKey) == 0 {
 			return fmt.Errorf("%w: ssh_public_key is required for ssh targets", api.ErrPAMInvalid)

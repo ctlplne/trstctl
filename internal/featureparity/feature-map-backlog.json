@@ -14025,6 +14025,9 @@
                 "/api/v1/ephemeral",
                 "/api/v1/ephemeral/{id}/approvals",
                 "/api/v1/access/sessions",
+                "/api/v1/access/targets",
+                "/api/v1/access/targets/{target_type}/{id}",
+                "/api/v1/access/targets/{target_type}/{id}/disable",
                 "internal/approval",
                 "internal/server/ephemeral.go",
                 "internal/server/pam.go"
@@ -14032,7 +14035,8 @@
             "source_frontend": [
                 "web/src/pages/RequestCredential.tsx",
                 "web/src/pages/Approvals.tsx",
-                "web/src/pages/Identities.tsx"
+                "web/src/pages/Identities.tsx",
+                "web/src/pages/PAMTargetsPanel.tsx"
             ],
             "status": "closed",
             "notes": "Qualified as a complete F33 vertical slice on implementation candidate 6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8. The requester gets an effect-free exact preview and cannot approve or mint their own request. A distinct approver reviews the bound owner, profile, purpose, decision window, immutable request ID, and audit link in one dialog; approval itself mints nothing and reveals the separate deterministic prepare/issue/complete path. A failed issue remains approved and retries under the same identity and idempotency key. The attested ephemeral path separately proves m-of-n approval, transactional notification intent, bounded TTL, and one-time short-lived issuance.",
@@ -14062,7 +14066,11 @@
                 "openPAMSession",
                 "listPAMSessions",
                 "getPAMSession",
-                "revokePAMSession"
+                "revokePAMSession",
+                "listPAMTargets",
+                "registerPAMTarget",
+                "getPAMTarget",
+                "disablePAMTarget"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14094,7 +14102,11 @@
                 "access sessions open",
                 "access sessions list",
                 "access sessions get",
-                "access sessions revoke"
+                "access sessions revoke",
+                "access targets list",
+                "access targets register",
+                "access targets get",
+                "access targets disable"
             ],
             "cli_na": "",
             "facet_evidence": {

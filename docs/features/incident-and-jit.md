@@ -258,10 +258,14 @@ through `POST /api/v1/access/session-requests`, `GET /api/v1/access/session-requ
 `POST /api/v1/access/sessions`,
 `GET /api/v1/access/sessions`, `GET /api/v1/access/sessions/{id}`, and
 `POST /api/v1/access/sessions/{id}/revoke` when
-`pam.enabled` names at least one operator target. The broker resolves attestors from
+`pam.enabled` is true. A registrar adds targets through the console or
+`POST /api/v1/access/targets`, reads them with `GET /api/v1/access/targets`,
+and disables tenant targets with `POST /api/v1/access/targets/{target_type}/{id}/disable`.
+These mutations require `access:targets.write`; `access:write` does not grant it.
+The broker resolves attestors from
 the existing tenant-managed workload trust-source API at request time and refuses a
-method with no enabled tenant trust. Operator target configuration binds each target
-to one tenant. PostgreSQL targets require
+method with no enabled tenant trust. Operator target configuration and tenant
+registration bind each target to one tenant. PostgreSQL targets require
 an existing tenant PostgreSQL dynamic-secret provider and an explicit role
 allowlist using `readonly` or `writer`; an unlisted role is
 rejected before a credential is created. SSH targets require a host, port, and
@@ -277,6 +281,9 @@ ephemeral approve`; PAM sessions use `trstctl-cli access sessions request`, `trs
 access sessions list`, `trstctl-cli access sessions get`, and
 `trstctl-cli access sessions revoke <id> --body-file revoke.json` where the JSON
 body contains `{"reason":"incident containment"}`.
+Target commands are `trstctl-cli access targets list`,
+`get <target_type> <id>`, `register --body-file target.json`, and
+`disable <target_type> <id> --body-file reason.json`.
 
 ### Break-glass procedures (F34)
 

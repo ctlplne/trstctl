@@ -314,6 +314,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant and operator privileged access targets */
+        get: operations["listPAMTargets"];
+        put?: never;
+        /** Register an immutable tenant privileged access target */
+        post: operations["registerPAMTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/targets/{target_type}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one privileged access target */
+        get: operations["getPAMTarget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/targets/{target_type}/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a tenant privileged access target for new sessions */
+        post: operations["disablePAMTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/ari/posture": {
         parameters: {
             query?: never;
@@ -13618,6 +13670,43 @@ export interface components {
         PAMSessionRevocationRequest: {
             reason: string;
         };
+        PAMTarget: {
+            allowed_roles?: string[];
+            /** Format: date-time */
+            disabled_at?: string;
+            disabled_by?: string;
+            disabled_reason?: string;
+            enabled: boolean;
+            host?: string;
+            id: string;
+            port?: number;
+            principals?: string[];
+            provider_id?: string;
+            /** Format: date-time */
+            registered_at?: string;
+            registered_by?: string;
+            /** @enum {string} */
+            source: "operator" | "tenant";
+            /** @enum {string} */
+            target_type: "postgres" | "ssh";
+        };
+        PAMTargetDisableRequest: {
+            reason: string;
+        };
+        PAMTargetList: {
+            items: components["schemas"]["PAMTarget"][];
+            next_cursor?: string;
+        };
+        PAMTargetRequest: {
+            allowed_roles?: string[];
+            host?: string;
+            id: string;
+            port?: number;
+            principals?: string[];
+            provider_id?: string;
+            /** @enum {string} */
+            target_type: "postgres" | "ssh";
+        };
         PKISecret: {
             certificate: string;
             common_name: string;
@@ -16963,6 +17052,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMTargetList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    registerPAMTarget: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description postgres or ssh */
+                target_type: string;
+                /** @description target id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    disablePAMTarget: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description postgres or ssh */
+                target_type: string;
+                /** @description target id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMTargetDisableRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMTarget"];
                 };
             };
             /** @description client error */

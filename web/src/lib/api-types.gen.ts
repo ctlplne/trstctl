@@ -6148,6 +6148,42 @@ export interface PAMSessionRevocationRequest {
   reason: string;
 }
 
+export interface PAMTarget {
+  allowed_roles?: string[];
+  disabled_at?: string;
+  disabled_by?: string;
+  disabled_reason?: string;
+  enabled: boolean;
+  host?: string;
+  id: string;
+  port?: number;
+  principals?: string[];
+  provider_id?: string;
+  registered_at?: string;
+  registered_by?: string;
+  source: "operator" | "tenant";
+  target_type: "postgres" | "ssh";
+}
+
+export interface PAMTargetDisableRequest {
+  reason: string;
+}
+
+export interface PAMTargetList {
+  items: PAMTarget[];
+  next_cursor?: string;
+}
+
+export interface PAMTargetRequest {
+  allowed_roles?: string[];
+  host?: string;
+  id: string;
+  port?: number;
+  principals?: string[];
+  provider_id?: string;
+  target_type: "postgres" | "ssh";
+}
+
 export interface PKISecret {
   certificate: string;
   common_name: string;

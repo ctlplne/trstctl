@@ -8458,6 +8458,58 @@ PAMSessionRevocationRequest = TypedDict(
     total=False,
 )
 
+PAMTarget = TypedDict(
+    'PAMTarget',
+    {
+        'allowed_roles': list[str],
+        'disabled_at': str,
+        'disabled_by': str,
+        'disabled_reason': str,
+        'enabled': bool,
+        'host': str,
+        'id': str,
+        'port': int,
+        'principals': list[str],
+        'provider_id': str,
+        'registered_at': str,
+        'registered_by': str,
+        'source': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+PAMTargetDisableRequest = TypedDict(
+    'PAMTargetDisableRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+PAMTargetList = TypedDict(
+    'PAMTargetList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PAMTargetRequest = TypedDict(
+    'PAMTargetRequest',
+    {
+        'allowed_roles': list[str],
+        'host': str,
+        'id': str,
+        'port': int,
+        'principals': list[str],
+        'provider_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
 PKISecret = TypedDict(
     'PKISecret',
     {

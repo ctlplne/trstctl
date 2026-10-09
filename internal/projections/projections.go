@@ -259,6 +259,8 @@ const (
 	EventAWSHoneyScanPage                         = "honeytoken.aws.scan_page"
 	EventAWSHoneyTokenRearmed                     = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                        = "pam.session.started"
+	EventPAMTargetRegistered                      = "pam.target.registered"
+	EventPAMTargetDisabled                        = "pam.target.disabled"
 	EventPAMSessionActivationRequested            = "pam.session.activation_requested"
 	EventPAMSessionExpired                        = "pam.session.expired"
 	EventPAMSessionRevocationRequested            = "pam.session.revocation_requested"
@@ -3217,6 +3219,26 @@ type PAMSessionActivationRequested struct {
 	Approval       store.OperationApprovalUse `json:"approval"`
 }
 
+// PAM targets contain only references and public routing metadata. Their
+// immutable registration event prevents an approved target digest changing.
+type PAMTargetRegistered struct {
+	TargetType   string   `json:"target_type"`
+	ID           string   `json:"id"`
+	ProviderID   string   `json:"provider_id,omitempty"`
+	AllowedRoles []string `json:"allowed_roles,omitempty"`
+	Host         string   `json:"host,omitempty"`
+	Port         int      `json:"port,omitempty"`
+	Principals   []string `json:"principals,omitempty"`
+	RegisteredBy string   `json:"registered_by"`
+}
+
+type PAMTargetDisabled struct {
+	TargetType string `json:"target_type"`
+	ID         string `json:"id"`
+	DisabledBy string `json:"disabled_by"`
+	Reason     string `json:"reason"`
+}
+
 // PAMSessionExpired is the payload of pam.session.expired.
 type PAMSessionExpired struct {
 	ID      string    `json:"id"`
@@ -3713,6 +3735,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAWSHoneyScanPage:                         {1: true},
 	EventAWSHoneyTokenRearmed:                     {1: true},
 	EventPAMSessionStarted:                        {1: true},
+	EventPAMTargetRegistered:                      {1: true},
+	EventPAMTargetDisabled:                        {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventMachineSessionStarted:                    {1: true},
 	EventMachineSessionRevoked:                    {1: true},
@@ -6267,6 +6291,29 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time)
+	case EventPAMTargetRegistered:
+		var pl PAMTargetRegistered
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.RegisteredBy == "" || (pl.TargetType != "postgres" && pl.TargetType != "ssh") {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMTargetRegisteredTx(ctx, tx, store.PAMTarget{
+			TenantID: e.TenantID, TargetType: pl.TargetType, ID: pl.ID,
+			ProviderID: pl.ProviderID, AllowedRoles: pl.AllowedRoles, Host: pl.Host,
+			Port: pl.Port, Principals: pl.Principals, RegisteredBy: pl.RegisteredBy,
+			RegisteredAt: e.Time,
+		})
+	case EventPAMTargetDisabled:
+		var pl PAMTargetDisabled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (pl.TargetType != "postgres" && pl.TargetType != "ssh") {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMTargetDisabledTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.DisabledBy, pl.Reason, e.Time)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
 		if err := decode(e, &pl); err != nil {

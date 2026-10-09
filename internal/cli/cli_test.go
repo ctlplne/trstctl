@@ -1278,6 +1278,35 @@ func TestAccessSessionCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) 
 	}
 }
 
+func TestAccessTargetCommandsPreserveBodyAndIdempotency(t *testing.T) {
+	var registerCap capture
+	registerSrv := mockServer(t, 201, `{"id":"incident-db","target_type":"postgres","enabled":true}`, &registerCap)
+	registerBody := `{"id":"incident-db","target_type":"postgres","provider_id":"tenant-pg","allowed_roles":["readonly"]}`
+	code, _, _ := run(t, []string{"access", "targets", "register", "-f", "-"}, cli.Env{Server: registerSrv.URL, HTTPClient: registerSrv.Client()}, registerBody)
+	if code != 0 || registerCap.Method != "POST" || registerCap.Path != "/api/v1/access/targets" || string(registerCap.Body) != registerBody || registerCap.Header.Get("Idempotency-Key") == "" {
+		t.Fatalf("register target: exit=%d method=%s path=%s body=%s key=%q", code, registerCap.Method, registerCap.Path, registerCap.Body, registerCap.Header.Get("Idempotency-Key"))
+	}
+	var listCap capture
+	listSrv := mockServer(t, 200, `{"items":[]}`, &listCap)
+	code, _, _ = run(t, []string{"access", "targets", "list"}, cli.Env{Server: listSrv.URL, HTTPClient: listSrv.Client()}, "")
+	if code != 0 || listCap.Method != "GET" || listCap.Path != "/api/v1/access/targets" || listCap.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("list target: exit=%d %s %s", code, listCap.Method, listCap.Path)
+	}
+	var getCap capture
+	getSrv := mockServer(t, 200, `{"id":"incident-db"}`, &getCap)
+	code, _, _ = run(t, []string{"access", "targets", "get", "postgres", "incident-db"}, cli.Env{Server: getSrv.URL, HTTPClient: getSrv.Client()}, "")
+	if code != 0 || getCap.Method != "GET" || getCap.Path != "/api/v1/access/targets/postgres/incident-db" {
+		t.Fatalf("get target: exit=%d %s %s", code, getCap.Method, getCap.Path)
+	}
+	var disableCap capture
+	disableSrv := mockServer(t, 200, `{"id":"incident-db","enabled":false}`, &disableCap)
+	disableBody := `{"reason":"retired"}`
+	code, _, _ = run(t, []string{"access", "targets", "disable", "postgres", "incident-db", "-f", "-"}, cli.Env{Server: disableSrv.URL, HTTPClient: disableSrv.Client()}, disableBody)
+	if code != 0 || disableCap.Method != "POST" || disableCap.Path != "/api/v1/access/targets/postgres/incident-db/disable" || string(disableCap.Body) != disableBody || disableCap.Header.Get("Idempotency-Key") == "" {
+		t.Fatalf("disable target: exit=%d method=%s path=%s body=%s key=%q", code, disableCap.Method, disableCap.Path, disableCap.Body, disableCap.Header.Get("Idempotency-Key"))
+	}
+}
+
 func TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"reconciled":1}`, &cap)

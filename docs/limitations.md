@@ -2680,9 +2680,11 @@ than sending an operator looking for a credential that was never there.
   were wired after their dead `Deps` fields were found: `agent_broker` can turn
   on `POST /api/v1/broker/agent-identities`, while `pam` reaches the broker
   constructor for `POST /api/v1/access/sessions` and its companion routes. The
-  operator now registers tenant-bound PostgreSQL provider references and SSH
-  host/principal allowlists in the validated `pam` config block; the broker
-  refuses to start without targets. PAM resolves attestors from enabled
+  operator can seed tenant-bound PostgreSQL provider references and SSH
+  host/principal allowlists in the validated `pam` config block; tenant registrars
+  can add and disable targets through the served console, API, and CLI. An enabled
+  broker can start without targets so the first registration is possible.
+  PAM resolves attestors from enabled
   tenant-managed workload trust at request time. The target model requires an explicit
   PostgreSQL `readonly`/`writer` role allowlist, and rejects an SSH target
   without an explicit host, port, and principal allowlist. A Postgres DSN must be

@@ -75,7 +75,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 			TargetType: tc.targetType, TargetID: tc.targetID, Role: tc.role,
 			Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte("test-public-key"),
 		}
-		if err := h.srv.pam.validate(h.tenant, "unlisted-role-check", "pam-requester", req); err == nil {
+		if err := h.srv.pam.validate(context.Background(), h.tenant, "unlisted-role-check", "pam-requester", req); err == nil {
 			t.Fatalf("PAM %s target accepted unlisted role %q", tc.targetType, tc.role)
 		}
 		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", admin,
@@ -94,7 +94,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 			TargetType: targetType, TargetID: map[string]string{"postgres": "pg-main", "ssh": "ssh-edge"}[targetType],
 			Role: "readonly", Method: "stub_pam", Payload: []byte("genuine"), SSHPublicKey: []byte("test-public-key"),
 		}
-		if err := h.srv.pam.validate(otherTenant, "foreign-tenant-check", "foreign-requester", req); err == nil {
+		if err := h.srv.pam.validate(context.Background(), otherTenant, "foreign-tenant-check", "foreign-requester", req); err == nil {
 			t.Fatalf("foreign tenant accepted PAM %s target %q", targetType, req.TargetID)
 		}
 	}

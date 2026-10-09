@@ -4548,6 +4548,20 @@ func componentSchemas() map[string]*Schema {
 		"ssh_public_key": str(),
 		"ssh_principal":  str(),
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
+	pamTargetReq := object(map[string]*Schema{
+		"id": str(), "target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
+		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
+		"host": str(), "port": {Type: "integer"},
+		"principals": {Type: "array", Items: str()},
+	}, "id", "target_type")
+	pamTarget := object(map[string]*Schema{
+		"id": str(), "target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
+		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
+		"host": str(), "port": {Type: "integer"}, "principals": {Type: "array", Items: str()},
+		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
+		"registered_by": str(), "registered_at": timestamp(), "disabled_by": str(),
+		"disabled_reason": str(), "disabled_at": timestamp(),
+	}, "id", "target_type", "enabled", "source")
 	pamActivationReq := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
 		"target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
@@ -6791,6 +6805,10 @@ func componentSchemas() map[string]*Schema {
 		"EphemeralApprovalRequest":                 ephemeralApprovalReq,
 		"EphemeralApproval":                        ephemeralApproval,
 		"PAMSessionRequest":                        pamSessionReq,
+		"PAMTargetRequest":                         pamTargetReq,
+		"PAMTarget":                                pamTarget,
+		"PAMTargetList":                            list("PAMTarget"),
+		"PAMTargetDisableRequest":                  object(map[string]*Schema{"reason": str()}, "reason"),
 		"PAMSessionActivationRequest":              pamActivationReq,
 		"PAMApprovalRequest":                       pamApprovalRequest,
 		"PAMRequestProgress":                       pamRequestProgress,

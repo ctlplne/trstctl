@@ -4127,7 +4127,7 @@ export const messages = {
   "admin.access.revokeRequestedBy": { defaultMessage: "Revocation requested by", description: "Authenticated operator who requested early PAM revocation." },
   "admin.access.revokeExplanation": {
     defaultMessage:
-      "The session stays pending until the target removes the PostgreSQL role or the SSH revocation appears in the served KRL. Hosts must load the new KRL to reject the SSH certificate.",
+      "The session stays pending until the database removes the role or the SSH revocation list includes the certificate. Each host must load the updated list to reject the certificate.",
     description: "Explain the external effect and SSH host responsibility without claiming premature completion.",
   },
   "admin.access.revoking": { defaultMessage: "Requesting revocation…", description: "PAM revoke mutation pending label." },
@@ -4136,7 +4136,7 @@ export const messages = {
     description: "PAM revoking state explanation.",
   },
   "admin.access.revokedConfirmed": {
-    defaultMessage: "Target removal confirmed. For SSH, the served KRL contains the certificate; check that each host loaded it.",
+    defaultMessage: "Target removal confirmed. For SSH, trstctl's revocation list includes the certificate; check each host has loaded the update.",
     description: "Qualified PAM revocation completion state.",
   },
   "admin.access.revokeFailed": { defaultMessage: "Could not request revocation", description: "PAM revoke mutation failure title." },
@@ -4226,6 +4226,56 @@ export const messages = {
   },
   "admin.access.targetType": { defaultMessage: "Target type", description: "Privileged-session target-kind field label." },
   "admin.access.targetId": { defaultMessage: "Target ID", description: "Privileged-session target identifier field label." },
+  "admin.access.targetsHeading": { defaultMessage: "Privileged access targets", description: "Tenant PAM target inventory heading." },
+  "admin.access.targetsHelp": {
+    defaultMessage:
+      "A target names the allowed database provider or SSH host. It never stores an administrator password here. Only a target registrar can add or disable one.",
+    description: "Explains tenant target authority.",
+  },
+  "admin.access.registerTarget": { defaultMessage: "Register target", description: "Open and submit PAM target registration." },
+  "admin.access.targetImmutableHelp": {
+    defaultMessage:
+      "Choose the exact destination and allowed roles. This registration cannot be edited after creation; disable it and add a new ID to change it.",
+    description: "Explains immutable PAM target policy.",
+  },
+  "admin.access.targetsLoadFailed": { defaultMessage: "Targets could not be loaded", description: "PAM target list failure." },
+  "admin.access.noTargets": { defaultMessage: "No privileged access targets are registered.", description: "Empty PAM target inventory." },
+  "admin.access.destination": { defaultMessage: "Destination", description: "PAM target destination column." },
+  "admin.access.allowedRoles": { defaultMessage: "Allowed roles or principals", description: "PAM target role and SSH principal allowlist." },
+  "admin.access.targetSource": { defaultMessage: "Managed by", description: "PAM target source column." },
+  "admin.access.sourceTenant": { defaultMessage: "Tenant registrar", description: "Tenant-owned PAM target source." },
+  "admin.access.sourceOperator": { defaultMessage: "Deployment operator", description: "Operator-configured PAM target source." },
+  "admin.access.targetStatus": { defaultMessage: "Status", description: "PAM target status column." },
+  "admin.access.targetAction": { defaultMessage: "Action", description: "PAM target action column." },
+  "admin.access.targetEnabled": { defaultMessage: "Enabled", description: "PAM target active status." },
+  "admin.access.targetDisabledStatus": { defaultMessage: "Disabled", description: "PAM target disabled status." },
+  "admin.access.providerId": { defaultMessage: "PostgreSQL provider ID", description: "Tenant-bound dynamic-secret provider reference." },
+  "admin.access.providerRequired": { defaultMessage: "Choose an existing PostgreSQL provider.", description: "PAM provider validation." },
+  "admin.access.rolesHelp": { defaultMessage: "Enter readonly, writer, or both separated by a comma.", description: "PAM PostgreSQL role allowlist help." },
+  "admin.access.sshHost": { defaultMessage: "SSH host", description: "PAM SSH target host." },
+  "admin.access.sshPort": { defaultMessage: "SSH port", description: "PAM SSH target TCP port." },
+  "admin.access.hostPort": { defaultMessage: "{host}:{port}", description: "PAM SSH target host and port readback." },
+  "admin.access.sshPrincipals": { defaultMessage: "SSH principals", description: "PAM SSH target principal allowlist." },
+  "admin.access.hostRequired": { defaultMessage: "Enter a hostname or IP address.", description: "PAM SSH host validation." },
+  "admin.access.portHelp": { defaultMessage: "Enter a TCP port from 1 to 65535.", description: "PAM SSH port validation." },
+  "admin.access.principalsRequired": { defaultMessage: "Enter at least one principal, separated by commas.", description: "PAM SSH principal validation." },
+  "admin.access.targetIdHelp": { defaultMessage: "Use 1–64 lowercase letters, numbers, hyphens, or underscores.", description: "PAM target ID validation." },
+  "admin.access.targetRetryHelp": {
+    defaultMessage: "If the result is uncertain, retry this exact form. The same request key prevents a second registration.",
+    description: "PAM registration recovery instruction.",
+  },
+  "admin.access.targetSaveFailed": { defaultMessage: "Target change was not confirmed", description: "PAM registration or disable failure." },
+  "admin.access.targetRegistered": {
+    defaultMessage: "Target {id} registered and available for reviewed requests.",
+    description: "PAM target registration success.",
+  },
+  "admin.access.disableTarget": { defaultMessage: "Disable target", description: "PAM target disable action." },
+  "admin.access.disableTargetHelp": {
+    defaultMessage: "New requests for {id} will be refused. Existing sessions remain visible and can still expire or be revoked.",
+    description: "PAM disable confirmation.",
+  },
+  "admin.access.disableReason": { defaultMessage: "Reason for disabling", description: "PAM target disable audit reason." },
+  "admin.access.targetDisabled": { defaultMessage: "Target {id} disabled for new requests.", description: "PAM target disable success." },
   "admin.access.postgresql": { defaultMessage: "PostgreSQL", description: "PostgreSQL target type; product noun stays literal." },
   "admin.access.ssh": { defaultMessage: "SSH", description: "SSH target type; protocol acronym stays literal." },
   "admin.access.sshPrincipal": { defaultMessage: "SSH principal", description: "SSH privileged-session principal field label." },
@@ -6045,7 +6095,7 @@ export const messages = {
     description: "Badge for a journey step whose runnable server evidence check failed unexpectedly.",
   },
   "journeys.evidence.exact": {
-    defaultMessage: "Checked against this request's served evidence for this step.",
+    defaultMessage: "Checked against this request's recorded evidence for this step.",
     description: "Proof source for each exact first-certificate lifecycle step without claiming a later stage is complete.",
   },
   "journeys.evidence.tenantSignal": {

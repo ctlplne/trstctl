@@ -33,6 +33,7 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
+import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
 import type { StatusTone } from "@/lib/statusVocab";
 
 const pamFormSchema = z
@@ -720,6 +721,9 @@ export function AdminAccess() {
                   </UnavailableState>
                 ) : null}
               </section>
+              {pamRows ? (
+                <PAMTargetsPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
+              ) : null}
             </div>
           ) : null}
         </AccessDisclosure>

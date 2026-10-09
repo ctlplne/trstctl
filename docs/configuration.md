@@ -1288,8 +1288,18 @@ to a test registry.
 
 ### Privileged access broker targets
 
-The `pam` block registers the targets a tenant may request for short-lived access.
-It carries target references and allowlists, not administrator credentials. Create
+The `pam` block enables the broker and can seed operator-owned targets. A tenant
+registrar with `access:targets.write` can add targets through the console,
+`POST /api/v1/access/targets`, or `trstctl-cli access targets register --body-file target.json`.
+The matching list/get/disable API and CLI commands provide readback and retirement.
+`access:write` alone can request a session but cannot register a destination.
+Registered destinations are immutable; disable one with a reason and register a
+new ID to change its provider, host, roles, or principals. Disabled targets reject
+new requests; active sessions retain their native expiry and revocation handles.
+`GET /api/v1/access/targets` includes tenant and operator targets with their source.
+Operator targets remain managed by deployment configuration.
+
+Targets carry references and allowlists, not administrator credentials. Create
 the PostgreSQL dynamic-secret provider first; that provider loads its administrator
 DSN from a mode-`0600` `file:` or tenant `secret://` reference. Enable the
 tenant's attester trust source before requesting a session.
@@ -1319,8 +1329,10 @@ tenant's attester trust source before requesting a session.
 }
 ```
 
-Startup rejects an enabled broker with no target, an unknown PostgreSQL provider
-or role, an invalid SSH host/port/principal allowlist, and malformed lifetimes.
+An enabled broker with no target starts so a tenant can register its first one.
+Startup rejects an unknown PostgreSQL provider or role in an operator target,
+an invalid SSH host/port/principal allowlist, and malformed lifetimes. The tenant
+registration endpoint applies the same checks before appending an event.
 The defaults are 15 minutes for session TTL and approval TTL, one hour for the
 session cap, and two distinct reviewers. `required_approvals` sets the quorum;
 zero uses two. An operator must separately configure the SSH server to trust the

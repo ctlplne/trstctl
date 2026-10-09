@@ -2635,6 +2635,16 @@ describe("CLI-parity client methods (S3.3)", () => {
 
   const cases: ParityCase[] = [
     { name: "pamSessions", call: () => api.pamSessions({ limit: 5 }), method: "GET", path: "/api/v1/access/sessions?limit=5" },
+    { name: "pamTargets", call: () => api.pamTargets(), method: "GET", path: "/api/v1/access/targets" },
+    { name: "pamTarget", call: () => api.pamTarget("ssh", "edge/1"), method: "GET", path: "/api/v1/access/targets/ssh/edge%2F1" },
+    {
+      name: "registerPAMTarget",
+      call: () => api.registerPAMTarget({ id: "edge", target_type: "ssh", host: "localhost", port: 22, principals: ["admin"] }),
+      method: "POST",
+      path: "/api/v1/access/targets",
+      status: 201,
+    },
+    { name: "disablePAMTarget", call: () => api.disablePAMTarget("ssh", "edge", "retired"), method: "POST", path: "/api/v1/access/targets/ssh/edge/disable" },
     { name: "pamSession", call: () => api.pamSession("s/1"), method: "GET", path: "/api/v1/access/sessions/s%2F1" },
     { name: "pamRequestProgress", call: () => api.pamRequestProgress("review/1"), method: "GET", path: "/api/v1/access/session-requests/review%2F1" },
     {

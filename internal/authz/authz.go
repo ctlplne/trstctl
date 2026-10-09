@@ -64,8 +64,11 @@ const (
 	AccessWrite      Permission = "access:write"
 	// AccessApprove lets a distinct custodian review PAM access without the
 	// authority to request or activate a privileged session.
-	AccessApprove    Permission = "access:approve"
-	AccessRoleAssign Permission = "access:role.assign"
+	AccessApprove Permission = "access:approve"
+	// AccessTargetsWrite changes where future privileged sessions may be issued.
+	// A session requester must not acquire this authority via AccessWrite.
+	AccessTargetsWrite Permission = "access:targets.write"
+	AccessRoleAssign   Permission = "access:role.assign"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -130,7 +133,7 @@ func allResourcePermissions() []Permission {
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead,
-		AccessRead, AccessWrite, AccessApprove, AccessRoleAssign,
+		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 		KeysRead, KeysWrite, KeysApprove,
@@ -168,7 +171,7 @@ func BuiltinRoles() map[string]Role {
 	// agent that will hold appliance credentials, and that is a decision an
 	// operator should make deliberately in the console rather than one a CLI token
 	// carries by default. Enrolling host agents is still in.
-	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AgentsGrantRelay), AuditRead)
+	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},

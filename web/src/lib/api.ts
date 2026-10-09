@@ -383,6 +383,9 @@ import type {
   PAMSessionActivationRequest,
   PAMSessionList,
   PAMSessionRequest,
+  PAMTarget,
+  PAMTargetList,
+  PAMTargetRequest,
   PKISecret,
   PKISecretPreview,
   PKISecretRequest,
@@ -1064,6 +1067,9 @@ export type {
   PAMSessionActivationRequest,
   PAMSessionList,
   PAMSessionRequest,
+  PAMTarget,
+  PAMTargetList,
+  PAMTargetRequest,
   PKISecret,
   PKISecretPreview,
   PKISecretRequest,
@@ -1826,6 +1832,10 @@ export interface Api {
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions(options?: { limit?: number; cursor?: string }): Promise<PAMSessionList>;
+  pamTargets(): Promise<PAMTargetList>;
+  pamTarget(targetType: string, id: string): Promise<PAMTarget>;
+  registerPAMTarget(input: PAMTargetRequest, idempotencyKey?: string): Promise<PAMTarget>;
+  disablePAMTarget(targetType: string, id: string, reason: string, idempotencyKey?: string): Promise<PAMTarget>;
   pamSession(id: string): Promise<PAMSession>;
   requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
@@ -2463,6 +2473,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),
+  pamTargets: () => req<PAMTargetList>("/api/v1/access/targets"),
+  pamTarget: (targetType, id) => req<PAMTarget>(`/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}`),
+  registerPAMTarget: (input, idempotencyKey) => mutate<PAMTarget>("POST", "/api/v1/access/targets", input, idempotencyKey),
+  disablePAMTarget: (targetType, id, reason, idempotencyKey) =>
+    mutate<PAMTarget>("POST", `/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/disable`, { reason }, idempotencyKey),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
   requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
   pamRequestProgress: (approvalId) => req<PAMRequestProgress>(`/api/v1/access/session-requests/${encodeURIComponent(approvalId)}`),

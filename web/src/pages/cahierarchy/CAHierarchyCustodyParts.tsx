@@ -10,6 +10,7 @@ import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
+import { formatDateTime } from "@/i18n/format";
 import {
   api,
   ApiError,
@@ -22,7 +23,7 @@ import {
   type ManagedKeyGenerationPreviewRequest,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
-import { clearManagedKeyActionIntent, getOrCreateManagedKeyActionIntent } from "@/lib/managedKeyActionIntent";
+import { managedKeyActionIntent } from "@/lib/managedKeyActionIntent";
 import { useApiQuery } from "@/lib/query";
 
 const algorithms: ManagedKeyGenerateRequest["algorithm"][] = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "RSA-2048", "RSA-3072", "RSA-4096"];
@@ -73,7 +74,6 @@ export function ManagedKeyCustodyWorkspace() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<PendingManagedKeyApproval | null>(null);
   const [operation, setOperation] = useState<ManagedKeyOperation | null>(null);
-  const [operationAction, setOperationAction] = useState<{ action: "rotate" | "revoke" | "zeroize"; keyId: string } | null>(null);
   const [inventory, setInventory] = useState<ManagedKeyRecord[]>([]);
   const [inventoryCursor, setInventoryCursor] = useState("");
   const [inventoryBusy, setInventoryBusy] = useState(false);
@@ -138,10 +138,6 @@ export function ManagedKeyCustodyWorkspace() {
   useEffect(() => {
     const next = operationRead.data;
     if (!next || !operation || next.operation_id !== operation.operation_id || next.status === "queued" || next.status === operation.status) return;
-    if (operationAction && user) {
-      clearManagedKeyActionIntent(user, operationAction.action, operationAction.keyId);
-      setOperationAction(null);
-    }
     setOperation(next);
     void loadInventory();
     if (next.provider && (next.result_key_id || next.key_id)) {
@@ -153,7 +149,7 @@ export function ManagedKeyCustodyWorkspace() {
         })
         .catch((error) => setKeyError(apiProblemMessage(error, translateNow("caHierarchy.custody.inventoryLoadFailed"))));
     }
-  }, [operationRead.data, operation, operationAction, user, loadInventory]);
+  }, [operationRead.data, operation, loadInventory]);
 
   async function selectManagedKey(key: ManagedKeyRecord) {
     setKeyBusy(true);
@@ -260,9 +256,13 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyError(null);
     setPendingApproval(null);
     setOperation(null);
-    setOperationAction(null);
     try {
-      const requestKey = action === "verify_custody" ? undefined : user ? getOrCreateManagedKeyActionIntent(user, action, keyId) : null;
+      const requestKey =
+        action === "verify_custody"
+          ? undefined
+          : user && managedKey
+            ? await managedKeyActionIntent(user, action, managedKeyProvider, keyId, managedKey.version)
+            : null;
       if (requestKey === null) {
         setKeyError(t("caHierarchy.custody.intent.unavailable"));
         return;
@@ -274,11 +274,8 @@ export function ManagedKeyCustodyWorkspace() {
         verify_custody: api.verifyManagedKeyCustody,
       };
       const next = await actionMethods[action](keyId, requestKey);
-      const queued = isManagedKeyOperation(next) && next.status === "queued";
-      if (action !== "verify_custody") {
-        if (queued) setOperationAction({ action, keyId });
-        else clearManagedKeyActionIntent(user!, action, keyId);
-      }
+      // A queued action retains this version's stable retry key until native
+      // completion. A later rotation on the next version gets a new key.
       if (isManagedKeyOperation(next)) {
         setOperation(next);
         accepted = true;
@@ -665,7 +662,7 @@ function ManagedKeyPanel({
   onAction: (action: "rotate" | "revoke" | "zeroize" | "verify_custody", keyId: string) => void;
   actionsDisabled: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, locale, timeZone } = useTranslation();
   const deletionPending = managedKey.state === "deletion_pending";
   return (
     <section aria-labelledby="managed-key-heading" className="ui-panel p-comfortable text-sm">
@@ -713,7 +710,7 @@ function ManagedKeyPanel({
         <Fact label={t("caHierarchy.custody.state")} value={deletionPending ? t("caHierarchy.custody.deletionPending") : managedKey.state} />
         <Fact
           label={t("caHierarchy.custody.custodyStatus")}
-          value={`${t(`caHierarchy.custody.status.${managedKey.custody_status ?? "not_checked"}`)}${managedKey.custody_status !== "pending" && managedKey.custody_checked_at ? ` · ${new Date(managedKey.custody_checked_at).toLocaleString()}` : ""}`}
+          value={`${t(`caHierarchy.custody.status.${managedKey.custody_status ?? "not_checked"}`)}${managedKey.custody_status !== "pending" && managedKey.custody_checked_at ? ` · ${formatDateTime(managedKey.custody_checked_at, { locale, timeZone })}` : ""}`}
         />
         <Fact label={t("caHierarchy.custody.extractable")} value={managedKey.extractable ? t("platform.idempotency.yes") : t("platform.idempotency.no")} />
       </dl>

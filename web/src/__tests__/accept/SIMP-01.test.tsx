@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -26,6 +27,7 @@ const { apiMock } = vi.hoisted(() => ({
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
     pamSessions: vi.fn(),
+    pamTargets: vi.fn(),
     createAPIToken: vi.fn(),
     logout: vi.fn(),
   },
@@ -44,9 +46,11 @@ vi.mock("@/lib/api", async (orig) => {
 function renderAdminPage(page: "access" | "system" | "editions") {
   const element = page === "access" ? <AdminAccess /> : page === "system" ? <AdminSystem /> : <AdminEditions />;
   return render(
-    <AuthProvider>
-      <MemoryRouter>{element}</MemoryRouter>
-    </AuthProvider>,
+    <AppQueryProvider>
+      <AuthProvider>
+        <MemoryRouter>{element}</MemoryRouter>
+      </AuthProvider>
+    </AppQueryProvider>,
   );
 }
 
@@ -55,6 +59,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
+    apiMock.pamTargets.mockResolvedValue({ items: [] });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "access-admin", tenant_id: "tenant-admin", email: "access-admin@example.test" });
     apiMock.accessRoles.mockResolvedValue({
       items: [{ name: "access-admin", permissions: ["access:read", "access:write"] }],

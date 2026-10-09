@@ -19,22 +19,46 @@ import (
 const PAMSessionStatusActive = "active"
 
 var (
-	ErrPAMUnavailable = errors.New("api: PAM broker is not enabled")
-	ErrPAMInvalid     = errors.New("api: invalid PAM session request")
-	ErrPAMRejected    = errors.New("api: PAM session rejected")
-	ErrPAMTerminal    = errors.New("api: PAM session already ending or ended")
+	ErrPAMUnavailable    = errors.New("api: PAM broker is not enabled")
+	ErrPAMInvalid        = errors.New("api: invalid PAM session request")
+	ErrPAMRejected       = errors.New("api: PAM session rejected")
+	ErrPAMTerminal       = errors.New("api: PAM session already ending or ended")
+	ErrPAMTargetConflict = errors.New("api: PAM target conflicts with existing registration")
 )
 
 // PAMService is the served privileged-access broker. The API owns the
 // tenant-scoped HTTP contract; the server implementation owns the attestation
 // verifier, target adapters, SSH CA, event append, projection, and expiry worker.
 type PAMService interface {
+	RegisterPAMTarget(ctx context.Context, tenantID, actor string, target PAMTarget) (PAMTarget, error)
+	ListPAMTargets(ctx context.Context, tenantID string) ([]PAMTarget, error)
+	GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (PAMTarget, error)
+	DisablePAMTarget(ctx context.Context, tenantID, targetType, id, actor, reason string) (PAMTarget, error)
 	RequestPAMSession(ctx context.Context, tenantID, requester string, req PAMSessionRequest) (PAMApprovalRequest, error)
 	GetPAMRequestProgress(ctx context.Context, tenantID, requester, approvalID string) (PAMRequestProgress, error)
 	OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req PAMSessionRequest) (PAMSession, error)
 	GetPAMSession(ctx context.Context, tenantID, id string) (PAMSession, error)
 	ListPAMSessions(ctx context.Context, tenantID string, limit int, cursor string) ([]PAMSession, string, error)
 	RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (PAMSession, error)
+}
+
+// PAMTarget is routing policy, never a credential. PostgreSQL administrator
+// material stays in the tenant-bound dynamic-secret provider's protected ref.
+type PAMTarget struct {
+	ID             string     `json:"id"`
+	TargetType     string     `json:"target_type"`
+	ProviderID     string     `json:"provider_id,omitempty"`
+	AllowedRoles   []string   `json:"allowed_roles,omitempty"`
+	Host           string     `json:"host,omitempty"`
+	Port           int        `json:"port,omitempty"`
+	Principals     []string   `json:"principals,omitempty"`
+	Enabled        bool       `json:"enabled"`
+	Source         string     `json:"source"`
+	RegisteredBy   string     `json:"registered_by,omitempty"`
+	RegisteredAt   *time.Time `json:"registered_at,omitempty"`
+	DisabledBy     string     `json:"disabled_by,omitempty"`
+	DisabledReason string     `json:"disabled_reason,omitempty"`
+	DisabledAt     *time.Time `json:"disabled_at,omitempty"`
 }
 
 // WithPAM wires the served PAM broker. When unset, routes fail closed with 503.
@@ -350,6 +374,8 @@ func (a *API) writePAMError(w http.ResponseWriter, err error) bool {
 		a.writeProblem(w, problem.New(http.StatusForbidden, strings.TrimPrefix(err.Error(), ErrPAMRejected.Error()+": ")))
 	case errors.Is(err, ErrPAMTerminal):
 		a.writeProblem(w, problem.New(http.StatusConflict, "PAM session is already ending or ended"))
+	case errors.Is(err, ErrPAMTargetConflict):
+		a.writeProblem(w, problem.New(http.StatusConflict, strings.TrimPrefix(err.Error(), ErrPAMTargetConflict.Error()+": ")))
 	case errors.Is(err, store.ErrApprovalNotReady):
 		a.writeProblem(w, problem.New(http.StatusConflict, "PAM session is awaiting distinct approval"))
 	case errors.Is(err, store.ErrApprovalExpired):
@@ -358,6 +384,8 @@ func (a *API) writePAMError(w http.ResponseWriter, err error) bool {
 		a.writeProblem(w, problem.New(http.StatusConflict, "PAM approval can no longer activate this session"))
 	case errors.Is(err, store.ErrApprovalDrifted), errors.Is(err, store.ErrApprovalDigestMismatch):
 		a.writeProblem(w, problem.New(http.StatusForbidden, "PAM command differs from the approved intent"))
+	case errors.Is(err, store.ErrPAMTargetNotFound):
+		a.writeProblem(w, problem.New(http.StatusNotFound, "PAM target not found"))
 	default:
 		return false
 	}

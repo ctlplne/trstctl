@@ -25208,6 +25208,143 @@
         ],
         "type": "object"
       },
+      "PAMTarget": {
+        "properties": {
+          "allowed_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "disabled_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "disabled_by": {
+            "type": "string"
+          },
+          "disabled_reason": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "registered_by": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "operator",
+              "tenant"
+            ],
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "postgres",
+              "ssh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_type",
+          "enabled",
+          "source"
+        ],
+        "type": "object"
+      },
+      "PAMTargetDisableRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PAMTargetList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMTarget"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMTargetRequest": {
+        "properties": {
+          "allowed_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "postgres",
+              "ssh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_type"
+        ],
+        "type": "object"
+      },
       "PKISecret": {
         "properties": {
           "certificate": {
@@ -35932,6 +36069,272 @@
         "summary": "Request early revocation of a privileged access session",
         "x-trstctl-permission": "access:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/targets": {
+      "get": {
+        "operationId": "listPAMTargets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMTargetList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List tenant and operator privileged access targets",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "registerPAMTarget",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMTargetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMTarget"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Register an immutable tenant privileged access target",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/targets/{target_type}/{id}": {
+      "get": {
+        "operationId": "getPAMTarget",
+        "parameters": [
+          {
+            "description": "postgres or ssh",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "target id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMTarget"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one privileged access target",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/targets/{target_type}/{id}/disable": {
+      "post": {
+        "operationId": "disablePAMTarget",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "postgres or ssh",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "target id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMTargetDisableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMTarget"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Disable a tenant privileged access target for new sessions",
+        "x-trstctl-permission": "access:targets.write"
       }
     },
     "/api/v1/acme/ari/posture": {

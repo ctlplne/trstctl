@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
 import { ApiError } from "@/lib/api";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -27,6 +28,7 @@ const { apiMock } = vi.hoisted(() => ({
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
     pamSessions: vi.fn(),
+    pamTargets: vi.fn(),
     createAPIToken: vi.fn(),
     logout: vi.fn(),
   },
@@ -45,9 +47,11 @@ vi.mock("@/lib/api", async (orig) => {
 function renderAdminPage(page: "access" | "system" | "editions") {
   const element = page === "access" ? <AdminAccess /> : page === "system" ? <AdminSystem /> : <AdminEditions />;
   return render(
-    <AuthProvider>
-      <MemoryRouter>{element}</MemoryRouter>
-    </AuthProvider>,
+    <AppQueryProvider>
+      <AuthProvider>
+        <MemoryRouter>{element}</MemoryRouter>
+      </AuthProvider>
+    </AppQueryProvider>,
   );
 }
 
@@ -56,6 +60,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
+    apiMock.pamTargets.mockResolvedValue({ items: [] });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "platform-admin", tenant_id: "tenant-platform", email: "admin@example.test" });
     apiMock.accessRoles.mockResolvedValue({
       items: [{ name: "platform-owner", permissions: ["access:read", "access:write"] }],
