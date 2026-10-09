@@ -76,6 +76,9 @@ type Orchestrator struct {
 	// empty set must fail closed instead of admitting work nobody can claim.
 	claimableAgentJobKinds           map[string]struct{}
 	claimableAgentJobKindsConfigured bool
+	// agentHeartbeatInterval is the served channel's next-beat hint. Discovery
+	// admission uses the same two-beat freshness window as Agents presence.
+	agentHeartbeatInterval time.Duration
 }
 
 // OrchestratorOption configures served command-side behavior while keeping the
@@ -147,6 +150,16 @@ func WithClaimableAgentJobKinds(kinds []string) OrchestratorOption {
 			if kind != "" {
 				orchestrator.claimableAgentJobKinds[kind] = struct{}{}
 			}
+		}
+	}
+}
+
+// WithAgentHeartbeatInterval keeps discovery queue admission aligned with the
+// channel's authenticated heartbeat cadence.
+func WithAgentHeartbeatInterval(interval time.Duration) OrchestratorOption {
+	return func(orchestrator *Orchestrator) {
+		if interval > 0 {
+			orchestrator.agentHeartbeatInterval = interval
 		}
 	}
 }

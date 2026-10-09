@@ -1211,6 +1211,7 @@ func (s *Server) configureMutationSpine(
 	orchOptions = append(orchOptions, orchestrator.WithTenantCommandService(d.Store.BeginTenantService, d.TenantServiceCheck))
 	if d.EnableAgentChannel {
 		orchOptions = append(orchOptions, orchestrator.WithClaimableAgentJobKinds(d.AgentClaimableJobKinds))
+		orchOptions = append(orchOptions, orchestrator.WithAgentHeartbeatInterval(d.AgentHeartbeatInterval))
 	}
 	if d.OwnershipAttestationCadence > 0 {
 		orchOptions = append(orchOptions, orchestrator.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))

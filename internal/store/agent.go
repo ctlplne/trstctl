@@ -667,3 +667,26 @@ func (s *Store) TenantHasNetworkRelay(ctx context.Context, tenantID string) (boo
 	}
 	return present, nil
 }
+
+// TenantHasFreshNetworkRelay answers whether any enrolled network-role agent
+// has authenticated with a heartbeat inside the server's freshness window.
+// This is a point-in-time admission check, not a promise that a relay stays
+// connected after a run is queued.
+func (s *Store) TenantHasFreshNetworkRelay(ctx context.Context, tenantID string, staleBefore, futureLimit time.Time) (bool, error) {
+	var present bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			     SELECT 1 FROM agents
+			      WHERE tenant_id = $1
+			        AND offboarded_at IS NULL
+			        AND $2 = ANY(roles)
+			        AND last_seen_at >= $3
+			        AND last_seen_at <= $4
+			 )`, tenantID, mtls.AgentRoleNetwork, staleBefore, futureLimit).Scan(&present)
+	})
+	if err != nil {
+		return false, fmt.Errorf("store: check fresh tenant network relay: %w", err)
+	}
+	return present, nil
+}

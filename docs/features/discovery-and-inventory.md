@@ -110,9 +110,12 @@ Operators can safely save a `network`, `ssh`, or `adcs` source before its relay 
 enrolled. Saving records configuration; it does not scan. Plan preview and
 `GET /api/v1/discovery/sources/{id}/preflight` return `ready`, the exact connection
 origin, and `blocked_reasons` from the same server-owned readiness rule. If no
-non-offboarded network-role relay exists, manual and scheduled run admission both
-refuse the run before a run event or outbox row is created. The console explains the
-shortest fix instead of leaving an impossible run silently queued.
+non-offboarded network-role relay has sent an authenticated heartbeat within two
+configured heartbeat intervals, manual and scheduled run admission both refuse
+the run before a run event or outbox row is created. A stale relay may have an
+expired channel certificate; re-enroll that exact agent and wait for a fresh
+heartbeat. The console explains the fix instead of leaving an impossible run
+silently queued.
 
 Readiness also checks the server's agent dispatch allowlist. A healthy relay is not
 enough when `discovery.run` (or `adcs.inventory` for AD CS) is absent from
@@ -121,7 +124,7 @@ exact configuration gap, and run admission returns a conflict before creating an
 event or outbox row. The console therefore cannot report “ready” for work the
 server is configured never to hand out.
 
-Once at least one eligible relay is enrolled, the run executes from the outbox worker.
+Once at least one eligible relay is online, the run executes from the outbox worker.
 External probes are journaled first and delivered at-least-once, so a temporary relay
 disconnect after admission is durable and retryable instead of being done inline by
 the request handler. Readiness proves that an eligible relay exists; it does not claim

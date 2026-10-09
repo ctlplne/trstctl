@@ -354,6 +354,13 @@ func (o *Orchestrator) DiscoveryNetworkRelayReadinessForJob(ctx context.Context,
 			}, nil
 		}
 	}
+	interval := o.agentHeartbeatInterval
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	now := time.Now().UTC()
+	staleBefore := now.Add(-2 * interval)
+	futureLimit := now.Add(interval)
 	agentID = strings.TrimSpace(agentID)
 	if agentID != "" {
 		agent, err := o.store.GetAgent(ctx, tenantID, agentID)
@@ -372,18 +379,24 @@ func (o *Orchestrator) DiscoveryNetworkRelayReadinessForJob(ctx context.Context,
 				BlockedReason:    "Select a non-offboarded agent with the network role before starting this source.",
 			}, nil
 		}
+		if agent.LastSeenAt == nil || agent.LastSeenAt.Before(staleBefore) || agent.LastSeenAt.After(futureLimit) {
+			return DiscoveryRelayReadiness{
+				ConnectionOrigin: "Selected network relay has no fresh authenticated heartbeat",
+				BlockedReason:    "Restore the selected network relay's authenticated heartbeat or re-enroll its expired certificate before starting this source.",
+			}, nil
+		}
 		return DiscoveryRelayReadiness{
 			Ready: true, ConnectionOrigin: "Network relay " + agent.ID,
 		}, nil
 	}
-	present, err := o.store.TenantHasNetworkRelay(ctx, tenantID)
+	present, err := o.store.TenantHasFreshNetworkRelay(ctx, tenantID, staleBefore, futureLimit)
 	if err != nil {
 		return DiscoveryRelayReadiness{}, err
 	}
 	if !present {
 		return DiscoveryRelayReadiness{
-			ConnectionOrigin: "No network relay is enrolled",
-			BlockedReason:    "Enroll an agent with the network role before starting this source.",
+			ConnectionOrigin: "No network relay has a fresh authenticated heartbeat",
+			BlockedReason:    "Enroll an agent with the network role, or restore its authenticated heartbeat and re-enroll an expired certificate before starting this source.",
 		}, nil
 	}
 	return DiscoveryRelayReadiness{

@@ -48,6 +48,51 @@ func newDiscoveryRelayHarnessWithDeps(t *testing.T, segmentName string, options 
 	return h
 }
 
+func TestServedDiscoveryPreflightRejectsStaleRelayAndRecoversAfterHeartbeat(t *testing.T) {
+	h := newDiscoveryRelayHarness(t, "stale-relay-segment")
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", token,
+		"stale-relay-source", map[string]any{
+			"name": "stale-relay-source", "kind": "network",
+			"config": map[string]any{"targets": []string{"10.42.0.10:443"}, "segment": "stale-relay-segment", "allow_rfc1918": true},
+		})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("create source: %d %s", statusCode, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.store.SystemPool().Exec(t.Context(),
+		`UPDATE agents SET last_seen_at = $3 WHERE tenant_id = $1 AND id = $2`,
+		h.tenant, agentRowID(h.tenant, h.agent), time.Now().Add(-10*time.Minute)); err != nil {
+		t.Fatalf("age task relay heartbeat: %v", err)
+	}
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/discovery/sources/"+source.ID+"/preflight", token, nil)
+	if statusCode != http.StatusOK || !strings.Contains(string(body), `"ready":false`) ||
+		!strings.Contains(string(body), "heartbeat") {
+		t.Fatalf("stale relay preflight = %d %s, want actionable block", statusCode, body)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", token,
+		"stale-relay-run", map[string]any{"source_id": source.ID})
+	if statusCode != http.StatusConflict || !strings.Contains(string(body), "heartbeat") {
+		t.Fatalf("stale relay run = %d %s, want no queued job", statusCode, body)
+	}
+	if _, err := h.client.Heartbeat(t.Context(), &transport.HeartbeatRequest{
+		AgentID: h.agent, Version: "discovery-test", Status: "active",
+	}); err != nil {
+		t.Fatalf("restore task relay heartbeat: %v", err)
+	}
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/discovery/sources/"+source.ID+"/preflight", token, nil)
+	if statusCode != http.StatusOK || !strings.Contains(string(body), `"ready":true`) {
+		t.Fatalf("recovered relay preflight = %d %s, want ready", statusCode, body)
+	}
+}
+
 func executeNextDiscoveryRelayJob(t *testing.T, h *roleHarness) relay.DiscoveryReport {
 	t.Helper()
 	claimed, err := h.client.ClaimJobs(t.Context(), &transport.ClaimJobsRequest{
@@ -611,7 +656,7 @@ func TestServedNetworkDiscoveryPreflightBlocksGhostQueueWithoutRelay(t *testing.
 	}
 	statusCode, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/monitoring", tok, nil)
 	if statusCode != http.StatusOK || !strings.Contains(string(body), `"execution_ready":false`) ||
-		!strings.Contains(string(body), `"blocked_reasons":["Enroll an agent with the network role before starting this source."]`) {
+		!strings.Contains(string(body), "restore its authenticated heartbeat") {
 		t.Fatalf("monitoring hid source execution blocker: %d %s", statusCode, body)
 	}
 
