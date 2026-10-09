@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	"trstctl.com/trstctl/internal/config"
@@ -281,7 +283,10 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	if _, err := st.svc.RecordAck(st.ctx, st.tenantID, succapi.AckRequest{IdentityID: id, Epoch: 0, RelyingParty: "rp1", Signature: ackSig}); err != nil {
 		t.Fatalf("record RP ack: %v", err)
 	}
-	st.runWorkersOnce(t, config.PCAS{Retirement: config.PCASRetirement{Enabled: true, Interval: "1h", ValidityWindow: "1h"}})
+	st.runWorkersUntil(t, config.PCAS{Retirement: config.PCASRetirement{Enabled: true, Interval: "1h", ValidityWindow: "1h"}}, func() (bool, error) {
+		retired, found, err := st.svc.RetirementStatus(st.ctx, st.tenantID, id, 0)
+		return found && retired.Status == "retired", err
+	})
 	retired, found, err := st.svc.RetirementStatus(st.ctx, st.tenantID, id, 0)
 	if err != nil || !found || retired.Status != "retired" {
 		t.Fatalf("retirement status = %+v found=%v err=%v, want retired", retired, found, err)
@@ -323,9 +328,30 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 		t.Fatalf("RP rejected fresh issuer tuple: %v", err)
 	}
 
-	st.runWorkersOnce(t, config.PCAS{Checkpoints: config.PCASCheckpoints{
+	records, err := st.repo.ListRecords(st.ctx, st.tenantID)
+	if err != nil {
+		t.Fatalf("list checkpoint inputs: %v", err)
+	}
+	wanted := make(map[string]uint64)
+	for _, record := range records {
+		if record.Epoch > wanted[record.IdentityID] {
+			wanted[record.IdentityID] = record.Epoch
+		}
+	}
+	if len(wanted) == 0 {
+		t.Fatal("checkpoint worker has no recorded identities")
+	}
+	st.runWorkersUntil(t, config.PCAS{Checkpoints: config.PCASCheckpoints{
 		Enabled: true, Interval: "1h", SigningKeyHandle: "int20-checkpoint", SigningAlgorithm: string(crypto.ECDSAP256),
-	}})
+	}}, func() (bool, error) {
+		for identity, epoch := range wanted {
+			checkpoint, found, err := st.svc.LatestCheckpoint(st.ctx, st.tenantID, identity)
+			if err != nil || !found || checkpoint.Epoch < epoch {
+				return false, err
+			}
+		}
+		return true, nil
+	})
 	stapled, err := st.svc.IssueStapledLeaf(st.ctx, st.tenantID, succapi.IssueStapledLeafRequest{
 		IssuerID: "int20-ca", CSRDER: leafCSR(t), CheckpointIdentityID: checkpointIdentity, TTLSeconds: 3600,
 	})
@@ -527,37 +553,50 @@ func (st *int20Stack) dispatchAll(t *testing.T) {
 	t.Fatal("outbox did not drain")
 }
 
-func (st *int20Stack) runWorkersOnce(t *testing.T, pcas config.PCAS) {
+func (st *int20Stack) runWorkersUntil(t *testing.T, pcas config.PCAS, durableResult func() (bool, error)) {
 	t.Helper()
 	workers := background.NewWorkers(background.Options{
 		Store: st.store, Log: st.log, Signer: staticSignerProvider{c: st.signer}, PCAS: pcas,
 	})
-	if len(workers) == 0 {
-		t.Fatal("no background workers configured")
+	if len(workers) != 1 {
+		t.Fatalf("one background worker expected, got %d", len(workers))
 	}
-	for _, w := range workers {
-		runWorkerUntilIdle(t, w)
-	}
+	runWorkerUntilDurableResult(t, workers[0], durableResult)
 }
 
-func runWorkerUntilIdle(t *testing.T, w server.BackgroundWorker) {
+func runWorkerUntilDurableResult(t *testing.T, w server.BackgroundWorker, durableResult func() (bool, error)) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	errc := make(chan error, 1)
 	go func() { errc <- w.Run(ctx) }()
-	timer := time.NewTimer(250 * time.Millisecond)
-	defer timer.Stop()
-	select {
-	case err := <-errc:
-		if err != nil && !errors.Is(err, context.Canceled) {
-			t.Fatalf("%s run: %v", w.Name(), err)
-		}
-	case <-timer.C:
-		cancel()
-		err := <-errc
-		if err != nil && !errors.Is(err, context.Canceled) {
-			t.Fatalf("%s stop: %v", w.Name(), err)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.NewTimer(2 * time.Minute)
+	defer deadline.Stop()
+	for {
+		select {
+		case err := <-errc:
+			t.Fatalf("%s stopped before its durable result: %v", w.Name(), err)
+		case <-ticker.C:
+			ready, err := durableResult()
+			if err != nil {
+				cancel()
+				<-errc
+				t.Fatalf("%s durable readback: %v", w.Name(), err)
+			}
+			if ready {
+				cancel()
+				err := <-errc
+				if err != nil && !errors.Is(err, context.Canceled) && status.Code(err) != codes.Canceled {
+					t.Fatalf("%s stop after durable result: %v", w.Name(), err)
+				}
+				return
+			}
+		case <-deadline.C:
+			cancel()
+			<-errc
+			t.Fatalf("%s did not produce its durable result within two minutes", w.Name())
 		}
 	}
 }

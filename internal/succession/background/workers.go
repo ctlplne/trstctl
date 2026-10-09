@@ -13,6 +13,9 @@ import (
 	"math"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -182,6 +185,9 @@ func (w *checkpointWorker) checkpointSigner(ctx context.Context) (*signing.Remot
 	rs, err := client.SignerForHandleWithPurpose(ctx, w.handle, signing.PurposeGeneric)
 	if err == nil {
 		return rs, nil
+	}
+	if status.Code(err) != codes.NotFound {
+		return nil, fmt.Errorf("pcas checkpoint worker: inspect signer-held checkpoint key: %w", err)
 	}
 	rs, err = client.GenerateKeyHandle(ctx, w.alg, w.handle)
 	if err != nil {

@@ -115,7 +115,7 @@ func (s *Store) ListPendingPAMSSHActivations(ctx context.Context, limit int) ([]
 		limit = 100
 	}
 	rows, err := s.pool.Query(ctx,
-		//trstctl:system-query — crash recovery scans pending SSH metadata across tenants; each follow-up read and event is tenant-scoped.
+		//trstctl:system-query — the cross-tenant system worker scans only pending tenant_id/session_id/key_id metadata; it fences and re-reads each row under the owning tenant's RLS context before a tenant-scoped event.
 		`SELECT tenant_id::text, session_id::text, request_id::text, key_id, status, requested_at
 		 FROM pam_ssh_activations WHERE status IN ('pending','revoking')
 		 ORDER BY requested_at, tenant_id, session_id LIMIT $1`, limit)
