@@ -178,13 +178,19 @@ func TestBinfmtGuestArgvAcceptsOnlyReviewedQEMUDuplicate(t *testing.T) {
 		qemu  bool
 		allow bool
 	}{
-		"native exact":         {args: []string{guest}, allow: true},
-		"QEMU exact duplicate": {args: []string{guest, guest}, qemu: true, allow: true},
-		"Rosetta duplicate":    {args: []string{guest, guest}},
-		"foreign second":       {args: []string{guest, "/tmp/other"}, qemu: true},
-		"added flag":           {args: []string{guest, guest, "--unsafe"}, qemu: true},
-		"foreign first":        {args: []string{"/tmp/other", guest}, qemu: true},
-		"empty":                {qemu: true},
+		"native exact":               {args: []string{guest}, allow: true},
+		"QEMU exact duplicate":       {args: []string{guest, guest}, qemu: true, allow: true},
+		"QEMU parent view":           {args: []string{qemuX8664InterpreterPath, guest, guest}, qemu: true, allow: true},
+		"QEMU prefix without review": {args: []string{qemuX8664InterpreterPath, guest, guest}},
+		"QEMU foreign prefix":        {args: []string{"/tmp/qemu-x86_64", guest, guest}, qemu: true},
+		"QEMU parent flag":           {args: []string{qemuX8664InterpreterPath, guest, "--unsafe"}, qemu: true},
+		"QEMU parent extra":          {args: []string{qemuX8664InterpreterPath, guest, guest, "--unsafe"}, qemu: true},
+		"QEMU parent wrong guest":    {args: []string{qemuX8664InterpreterPath, "/tmp/other", guest}, qemu: true},
+		"Rosetta duplicate":          {args: []string{guest, guest}},
+		"foreign second":             {args: []string{guest, "/tmp/other"}, qemu: true},
+		"added flag":                 {args: []string{guest, guest, "--unsafe"}, qemu: true},
+		"foreign first":              {args: []string{"/tmp/other", guest}, qemu: true},
+		"empty":                      {qemu: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := validateBinfmtGuestArgv(test.args, guest, true, test.qemu); got != test.allow {

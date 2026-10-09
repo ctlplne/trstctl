@@ -2026,8 +2026,11 @@ func processCommandLine(pid int) ([]string, error) {
 
 func validateBinfmtGuestBinding(pid int, path string, identity executableIdentity, exactArgv, allowQEMUDuplicateArgv, allowRosettaBindAlias bool, dropper executableIdentity, reviewedInterpreters ...executableIdentity) (string, error) {
 	args, err := processCommandLine(pid)
-	if err != nil || !validateBinfmtGuestArgv(args, path, exactArgv, allowQEMUDuplicateArgv) {
-		return "", fmt.Errorf("guest argv does not name only the exact private binary: %w", err)
+	if err != nil {
+		return "", fmt.Errorf("read exact guest argv: %w", err)
+	}
+	if !validateBinfmtGuestArgv(args, path, exactArgv, allowQEMUDuplicateArgv) {
+		return "", fmt.Errorf("guest argv does not name only the exact private binary")
 	}
 	mapDevice, err := validateGuestExecutableMaps(pid, path, identity, allowRosettaBindAlias, reviewedInterpreters...)
 	if err != nil {
@@ -2039,18 +2042,22 @@ func validateBinfmtGuestBinding(pid int, path string, identity executableIdentit
 	return mapDevice, nil
 }
 
-// QEMU binfmt presents the exact guest executable twice in /proc/PID/cmdline:
-// once as its injected operand and once as guest argv[0]. Accept only that
-// duplicate, after the caller has verified the root-owned QEMU interpreter.
-// An added flag or a different second pathname is never an exact launch.
+// A Go parent inspecting a QEMU child on Docker Desktop sees the verified
+// interpreter prepended to a pair of identical guest paths. Other proc views
+// may expose only the guest path or its pair. Accept only these shapes after the
+// caller has bound the root-owned QEMU interpreter identity. Extra flags or a
+// different guest pathname are never an exact launch.
 func validateBinfmtGuestArgv(args []string, path string, exact, allowQEMUDuplicate bool) bool {
-	if len(args) == 0 || args[0] != path {
+	if len(args) == 0 {
 		return false
 	}
 	if !exact {
-		return true
+		return args[0] == path
 	}
-	return len(args) == 1 || (allowQEMUDuplicate && len(args) == 2 && args[1] == path)
+	if args[0] == path {
+		return len(args) == 1 || (allowQEMUDuplicate && len(args) == 2 && args[1] == path)
+	}
+	return allowQEMUDuplicate && len(args) == 3 && args[0] == qemuX8664InterpreterPath && args[1] == path && args[2] == path
 }
 
 func validateGuestExecutableMaps(pid int, path string, identity executableIdentity, allowRosettaBindAlias bool, reviewedInterpreters ...executableIdentity) (string, error) {
