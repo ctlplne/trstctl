@@ -465,7 +465,9 @@ every build through `internal/pqcmigration`.
 - **PQC migration API:** Core attaches `POST /api/v1/pqc/migrations` (CBOM
   certificate-key assets) and `POST /api/v1/pqc/migrations/{run_id}/rollback`.
 - **Core PQC campaign API:** `/api/v1/pqc/campaigns` plus detail, update, readiness,
-  finding disposition, close, and signed-evidence export routes.
+  finding disposition, close, and signed-evidence export routes. The close body
+  is optional; with no `closed_by` field, the server records the authenticated
+  operator as the closure actor in the signed evidence.
 - **PQC algorithms:** Core includes ML-DSA (FIPS 204), ML-KEM (FIPS 203),
   SLH-DSA (FIPS 205), and hybrid algorithms. See the post-quantum section of
   [Current limitations](../limitations.md).

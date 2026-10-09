@@ -231,7 +231,7 @@ func (a *API) closePQCMigrationCampaign(w http.ResponseWriter, r *http.Request) 
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "PQC campaign closure signing is not configured")
 		}
 		var req pqcCampaignCloseRequest
-		if err := decodePQCCampaignRequest(r, &req); err != nil {
+		if err := decodeOptionalPQCCampaignRequest(r, &req); err != nil {
 			return 0, nil, err
 		}
 		closedBy := strings.TrimSpace(req.ClosedBy)
@@ -299,9 +299,26 @@ func (a *API) getPQCMigrationCampaignEvidence(w http.ResponseWriter, r *http.Req
 }
 
 func decodePQCCampaignRequest(r *http.Request, dst any) error {
+	return decodePQCCampaignRequestWithOptionalBody(r, dst, false)
+}
+
+func decodeOptionalPQCCampaignRequest(r *http.Request, dst any) error {
+	return decodePQCCampaignRequestWithOptionalBody(r, dst, true)
+}
+
+func decodePQCCampaignRequestWithOptionalBody(r *http.Request, dst any, optional bool) error {
 	var raw json.RawMessage
-	if err := decodeJSON(r, &raw); err != nil {
+	var err error
+	if optional {
+		err = decodeOptionalJSON(r, &raw)
+	} else {
+		err = decodeJSON(r, &raw)
+	}
+	if err != nil {
 		return errWithStatus(http.StatusBadRequest, err)
+	}
+	if optional && len(raw) == 0 {
+		return nil
 	}
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {

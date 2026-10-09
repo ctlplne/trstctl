@@ -184,7 +184,7 @@ func TestPQCMigrationCampaignServedManualClosureSignedEvidence(t *testing.T) {
 	}
 
 	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/pqc/campaigns/"+campaignID+"/close", tok,
-		"pqc-campaign-close", map[string]any{"closed_by": "crypto-owner"})
+		"pqc-campaign-close", nil) // OpenAPI marks the body optional; the actor signs as themselves.
 	if status != http.StatusOK {
 		t.Fatalf("close campaign = %d body %s", status, body)
 	}
@@ -218,6 +218,7 @@ func TestPQCMigrationCampaignServedManualClosureSignedEvidence(t *testing.T) {
 		Format     string `json:"format"`
 		CampaignID string `json:"campaign_id"`
 		TenantID   string `json:"tenant_id"`
+		ClosedBy   string `json:"closed_by"`
 		Findings   []struct {
 			FindingID      string   `json:"finding_id"`
 			FindingDigest  string   `json:"finding_digest"`
@@ -229,7 +230,7 @@ func TestPQCMigrationCampaignServedManualClosureSignedEvidence(t *testing.T) {
 		t.Fatalf("decode signed closure: %v", err)
 	}
 	if proof.Format != closed.Closure.Format || proof.CampaignID != campaignID ||
-		proof.TenantID != h.tenant || len(proof.Findings) != 1 ||
+		proof.TenantID != h.tenant || proof.ClosedBy != "crypto-owner" || len(proof.Findings) != 1 ||
 		proof.Findings[0].FindingID != finding.ID ||
 		proof.Findings[0].FindingDigest == "" ||
 		proof.Findings[0].Disposition != "remediated" ||
@@ -241,6 +242,21 @@ func TestPQCMigrationCampaignServedManualClosureSignedEvidence(t *testing.T) {
 	status, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/pqc/campaigns/"+campaignID+"/evidence", tok, "", nil)
 	if status != http.StatusOK {
 		t.Fatalf("export closure evidence = %d body %s", status, body)
+	}
+	// Optional means absent bytes, not a license to accept JSON null or inline
+	// credential material. Both must still fail before touching campaign state.
+	for _, attempt := range []struct {
+		name string
+		body any
+	}{
+		{"null", json.RawMessage("null")},
+		{"inline-secret", map[string]any{"token": "sentinel"}},
+	} {
+		status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/pqc/campaigns/"+campaignID+"/close", tok,
+			"pqc-campaign-close-reject-"+attempt.name, attempt.body)
+		if status != http.StatusBadRequest {
+			t.Fatalf("%s optional close body = %d body %s, want 400", attempt.name, status, body)
+		}
 	}
 }
 

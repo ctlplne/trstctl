@@ -22,7 +22,20 @@ func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {
 }
 
 func decodeJSONWithLimitOptions(r *http.Request, v any, limit int64, strict bool) error {
+	return decodeJSONWithLimitOptionsEmpty(r, v, limit, strict, false)
+}
+
+// decodeOptionalJSON keeps the same size limit and malformed-body checks as
+// decodeJSON, but accepts a truly empty wire body for optional request bodies.
+func decodeOptionalJSON(r *http.Request, v any) error {
+	return decodeJSONWithLimitOptionsEmpty(r, v, defaultRESTJSONBodyLimit, false, true)
+}
+
+func decodeJSONWithLimitOptionsEmpty(r *http.Request, v any, limit int64, strict, allowEmpty bool) error {
 	if r.Body == nil {
+		if allowEmpty {
+			return nil
+		}
 		return errStatus(http.StatusBadRequest, "request body is required")
 	}
 	if limit <= 0 {
@@ -35,6 +48,9 @@ func decodeJSONWithLimitOptions(r *http.Request, v any, limit int64, strict bool
 	defer secret.Wipe(body)
 	if int64(len(body)) > limit {
 		return errStatus(http.StatusRequestEntityTooLarge, fmt.Sprintf("JSON request body too large; maximum is %d bytes", limit))
+	}
+	if allowEmpty && len(body) == 0 {
+		return nil
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	if strict {
