@@ -193,34 +193,11 @@ func TestOfflineEnvironmentAndPrivateCleanup(t *testing.T) {
 	}
 }
 
-func TestRehearsalCacheKeepsOnlyExplicitPrivateCache(t *testing.T) {
-	work := t.TempDir()
-	defaultCache, err := rehearsalCacheDir(work, "")
-	if err != nil || defaultCache != filepath.Join(work, "gocache") {
-		t.Fatalf("default private cache = %q, %v", defaultCache, err)
-	}
-	parent := filepath.Join(t.TempDir(), "dedicated")
-	if err := os.Mkdir(parent, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	persistent := filepath.Join(parent, "gocache")
-	for range 2 {
-		got, err := rehearsalCacheDir(work, persistent)
-		if err != nil || got != persistent {
-			t.Fatalf("persistent cache = %q, %v", got, err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(parent, "unrelated"), []byte("keep"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for name, path := range map[string]string{
-		"relative": "relative-cache", "unclean": persistent + "/../gocache", "shared parent": persistent,
-	} {
-		t.Run(name, func(t *testing.T) {
-			if _, err := rehearsalCacheDir(work, path); err == nil {
-				t.Fatal("unsafe persistent cache accepted")
-			}
-		})
+func TestPersistentCacheOverrideIsRefusedBeforeLab(t *testing.T) {
+	t.Setenv("TRSTCTL_PQC_LAB_GOCACHE", filepath.Join(t.TempDir(), "gocache"))
+	err := run(context.Background(), []string{"--repo", t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("persistent cache override was not refused before lab setup: %v", err)
 	}
 }
 

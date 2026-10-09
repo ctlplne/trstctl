@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1494 annotated sites across 26 rules. Each row is
+1491 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -920,7 +920,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/pqclab/main.go:344` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/pqclab/main.go:347` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -975,7 +975,7 @@ not this file.
 | `scripts/perf/cmd/soakgate/main.go:120` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:170` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/dodcensus/main.go:1285` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
-| `tools/pqclab/main.go:479` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
+| `tools/pqclab/main.go:441` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:198` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
@@ -1424,8 +1424,8 @@ not this file.
 | `tools/dodcensus/secret_integrations_manifest_test.go:124` | test reads the exact committed substrate source (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:156` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
-| `tools/pqclab/main.go:201` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/pqclab/main.go:266` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/pqclab/main.go:204` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/pqclab/main.go:269` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/pqclab/main_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1625,7 +1625,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (77 sites)
+### G703 — CWE-22 Path traversal (taint) (74 sites)
 
 | Location | Reason |
 |---|---|
@@ -1701,9 +1701,6 @@ not this file.
 | `tools/dodcensus/runtime_runner.go:883` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:346` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:482` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/pqclab/main.go:387` | operator-selected clean absolute local cache parent, not a remote path (CWE-22) |
-| `tools/pqclab/main.go:396` | operator-selected clean absolute local cache path (CWE-22) |
-| `tools/pqclab/main.go:399` | inspect only the operator-selected private local cache (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
