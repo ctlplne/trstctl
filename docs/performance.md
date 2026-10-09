@@ -50,9 +50,12 @@ packages keep race detection and whole-repository atomic coverage for correctnes
 both the live-load and soak-capture stack startups use the explicit four-minute
 instrumented harness allowance. The exact
 live mutation SLO test then runs once without race or coverage instrumentation,
-with its original 90-second deadline and unchanged latency, throughput, error,
-queue, and lag assertions. Instrumented timings are never release performance
-evidence. Run the uncached `make perf-live-wall` release gate alone on a quiet
+with its original 90-second startup deadline and unchanged latency, throughput,
+error, queue, and lag limits. `make test` prints every measurement and reports
+SLO misses without failing the functional target; operation errors and stack
+failures still fail it. Direct execution of the test still enforces the SLO.
+Instrumented timings are never release performance evidence. Run the uncached
+`make perf-live-wall` release gate alone on a quiet
 machine against a stored baseline from that same machine and configuration:
 
 ```sh

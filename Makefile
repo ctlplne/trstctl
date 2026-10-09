@@ -217,8 +217,8 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 		SERVER_LIFECYCLE_FUNCS='$(SERVER_LIFECYCLE_FUNCS)' SERVER_FUNC_COVERAGE_MIN=$(SERVER_FUNC_COVERAGE_MIN) \
 		bash scripts/ci/coverage-server-lifecycle.sh
 	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) CRITICAL_COVERAGE_MIN_TIER2=$(CRITICAL_COVERAGE_MIN_TIER2) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
-	@echo ">> go test live mutation SLO (uninstrumented measurement lane; functional coverage already checked)"
-	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
+	@echo ">> report live mutation SLO (uninstrumented; speed is enforced by perf-live-wall)"
+	@TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
 
 .PHONY: perf-live-wall
 perf-live-wall: ## Run the serialized live-performance SLO wall for iteration tips, batch tips, and release candidates

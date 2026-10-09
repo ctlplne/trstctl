@@ -225,7 +225,7 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
 		"$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer",
 		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race",
-		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
+		"TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)",
 		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
@@ -252,7 +252,7 @@ func TestMakeTestMeasuresLiveSLOWithoutInstrumentation(t *testing.T) {
 	testBlock := mk[testStart:wallStart]
 	for _, want := range []string{
 		"-race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
-		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
+		"TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 	} {
 		if !strings.Contains(testBlock, want) {
 			t.Errorf("uninstrumented live SLO contract missing %q", want)
@@ -262,12 +262,15 @@ func TestMakeTestMeasuresLiveSLOWithoutInstrumentation(t *testing.T) {
 		strings.Contains(testBlock, "-covermode=atomic -run '$(LIVE_PERF_SLO_TEST)'") {
 		t.Fatal("live SLO measurement gained race or coverage instrumentation")
 	}
+	if strings.Contains(testBlock, "|| true") {
+		t.Fatal("make test can hide a functional measurement failure")
+	}
 	if got := strings.Count(testBlock, "-run '$(LIVE_PERF_SLO_TEST)'"); got != 1 {
 		t.Fatalf("live SLO exact measurement lanes = %d, want one uninstrumented run", got)
 	}
 	// A noisy host must not prevent the functional coverage floors from running.
 	// The unchanged throughput budget is still measured, after those floors.
-	slo := strings.Index(testBlock, "TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf")
+	slo := strings.Index(testBlock, "TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf")
 	functionalFloor := strings.Index(testBlock, "bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen")
 	if slo < 0 || functionalFloor < 0 || slo < functionalFloor {
 		t.Fatal("live throughput SLO must run after the functional coverage floors")
@@ -335,6 +338,9 @@ func TestLivePerformanceSLOWallIsDedicatedAndSerialized(t *testing.T) {
 	wallBlock := mk[wallStart : wallStart+coverageStart]
 	if strings.Contains(testBlock, "TestPerfGateRunsLiveProfile") {
 		t.Error("ordinary make test still owns the cadence-pinned live SLO wall")
+	}
+	if strings.Contains(wallBlock, "TRSTCTL_PERF_REPORT_ONLY") {
+		t.Error("the dedicated release performance wall must enforce the unchanged SLO")
 	}
 	for _, want := range []string{
 		"perf-live-wall:",
