@@ -143,7 +143,8 @@ post-quantum target.
    `migration_progress`. The outbox worker mints a `Hybrid-ML-DSA-44-ECDSA-P256`
    transition certificate through the served ACME/protocol issuer, records
    `protocol.issued` and `licensed_crypto.migration.asset_completed`, and updates
-   CBOM progress. The `trstctl-cli migration` commands drive it; PQC ships in the core
+   the run's issuance counters. It does not update observed CBOM posture without
+   a verified deployment or a new observation. The `trstctl-cli migration` commands drive it; PQC ships in the core
    since 2026-09-20.
    Preview and start refuse names denied by the active served profile before a
    run is queued. For certificate-key assets, the current worker does not retain

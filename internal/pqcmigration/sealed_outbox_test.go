@@ -709,6 +709,21 @@ func TestTLSRolloutTargetPreflightRejectsUnsupportedAndIncompleteTargets(t *test
 	}
 }
 
+func TestTLSRolloutTargetPreflightRefusesHostWorkInControlPlane(t *testing.T) {
+	target := store.DeploymentTarget{
+		ID: "target-a", Name: "edge-listener", Type: "envoy", RevisionID: "revision-a", Enabled: true,
+	}
+	if err := validateTLSRolloutTarget(target, connector.NewRegistry()); !errors.Is(err, errPostureRequiresAgent) || !strings.Contains(err.Error(), "requires host_agent") {
+		t.Fatalf("host target through in-process registry error = %v, want host-agent refusal", err)
+	}
+	if err := requirePostureExecutionVantage(target.ID, target.Type, connector.NewRegistry()); !errors.Is(err, errPostureRequiresAgent) || !strings.Contains(err.Error(), "requires host_agent") {
+		t.Fatalf("old queued host intent through in-process registry error = %v, want host-agent refusal", err)
+	}
+	if err := requirePostureExecutionVantage(target.ID, "aws-acm", connector.NewRegistry()); err != nil {
+		t.Fatalf("control-plane target rejected by vantage check: %v", err)
+	}
+}
+
 func TestTLSRollbackRejectsTargetWithQueuedForwardFinding(t *testing.T) {
 	started := map[string]projections.LicensedCryptoMigrationTLSPosture{
 		"protocol-a": {RunID: sealedTestRun, AssetID: "protocol-a", TargetID: "target-a"},

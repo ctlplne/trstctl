@@ -342,7 +342,11 @@ its evidence in a PQC campaign. See [Current limitations](../limitations.md).
 certificate-key assets through ACME hybrid transition issuance and an inventory-only
 rollback. Neither operation deploys or verifies a replacement leaf. The core
 also exposes CBOM posture, profile selection, migration campaign tracking and
-proof, PQC algorithms, issuance, and the automated execution described here.
+proof, PQC algorithms, and issuance. Host-target TLS posture migration is currently
+refused at start: the available in-process connector registry cannot execute an
+Envoy target on its enrolled host agent. Agent-owned posture jobs, signed results,
+and recovery are required before that rollout is usable. See
+[Current limitations](../limitations.md).
 An expired commercial license does not disable Core migration or rollback;
 tenant authorization and idempotency requirements still apply.
 

@@ -4498,6 +4498,15 @@ target-held key custody, inspect the served leaf independently, and record the
 evidence in a PQC campaign. The automatic certificate-key path needs a
 target-bound key/CSR handoff and verified deployment before it can claim
 end-to-end migration. TLS posture rollout is a separate bound-target action.
+The shipped Envoy target is host-agent work. Its prior PQC posture worker used
+the control plane's in-process connector registry, which could mutate a reachable
+Envoy endpoint without the assigned host executing the job. Start now refuses
+that host target before queueing any work. Agent-owned posture execution, a
+durable signed readback and exact rollback receipt remain to be implemented;
+the automated TLS finding journey is not complete. Previously queued forward
+and rollback intents also refuse in-process execution. A posture applied by an
+older build must be recovered on the assigned host until agent-owned rollback
+is available.
 
 The core CBOM posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+
 (and hybrid labels) when it finds them in your estate. Algorithm recognition
@@ -4513,17 +4522,13 @@ estate is already post-quantum-ready — pure post-quantum assets count as
 future-ready, while hybrids stay migration-required until they shed their
 classical component.
 
-The core attach serves three former end-to-end residuals in every build: a stock OpenSSL 3.5 client creates an RFC 9881
+The core attach serves two of the former end-to-end residuals in every build: a stock OpenSSL 3.5 client creates an RFC 9881
 ML-DSA-65 CSR, enrolls it through EST, and verifies the returned pure
 ML-DSA-65 subject leaf; the stock SPIFFE Workload API returns a two-entry
 response for one SPIFFE ID (the normal classical SVID and an ML-DSA-65
-SVID with its matching private key); and CBOM TLS protocol/cipher findings
-can be bound to a posture-capable connector target, where the migration
-worker seals the forward intent in the outbox, applies TLS 1.3 plus
-`X25519MLKEM768`, reads receiver evidence, projects per-finding progress,
-and performs exact rollback. The shipped-binary proof drives that TLS
-finding rollout against Envoy rather than constructing the migration
-runtime in a test.
+SVID with its matching private key). The shipped-binary CBOM TLS finding
+rollout against Envoy remains open until the host-agent execution path above
+is implemented and replayed.
 
 Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure

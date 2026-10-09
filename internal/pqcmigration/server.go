@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ const (
 	licensedCryptoMigrationTLSRollbackDestination = "connector.licensed_crypto.migration.tls_posture.rollback"
 	eventTLSRollbackRequested                     = "licensed_crypto.migration.tls_posture.rollback_requested"
 )
+
+var errPostureRequiresAgent = errors.New("PQC TLS posture requires agent execution")
 
 type pqcMigrationService struct {
 	store          *store.Store
@@ -335,6 +338,9 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			return Response{}, err
 		}
 		if err := validateTLSRolloutTarget(target, s.deployer); err != nil {
+			if errors.Is(err, errPostureRequiresAgent) {
+				return Response{}, api.ErrWithStatus(http.StatusConflict, err)
+			}
 			return Response{}, err
 		}
 		if prior, exists := targetPostures[target.ID]; exists && !connector.EqualTLSPosture(prior, rollout.Desired) {
@@ -439,8 +445,23 @@ func validateTLSRolloutTarget(target store.DeploymentTarget, deployer connector.
 	if !target.Enabled || target.ID == "" || target.RevisionID == "" || target.Type == "" || target.Name == "" {
 		return fmt.Errorf("pqcmigration: deployment target %s is disabled or incomplete", target.ID)
 	}
+	if err := requirePostureExecutionVantage(target.ID, target.Type, deployer); err != nil {
+		return err
+	}
 	if !deployer.SupportsTLSPosture(target.Type) {
 		return fmt.Errorf("pqcmigration: deployment target %s connector %s does not support TLS posture mutation", target.ID, target.Type)
+	}
+	return nil
+}
+
+// Check both admission and outbox consumption. A queued intent created by an
+// older build must not execute in the control plane after the host boundary is
+// enforced for new requests.
+func requirePostureExecutionVantage(targetID, name string, deployer connector.TLSPostureDeployer) error {
+	if vantage, known := connector.ShippedTargetVantage(name); known && vantage != connector.VantageControlPlane {
+		if _, direct := deployer.(*connector.Registry); direct {
+			return fmt.Errorf("%w: deployment target %s requires %s; the in-process connector registry cannot perform TLS posture work for that target", errPostureRequiresAgent, targetID, vantage)
+		}
 	}
 	return nil
 }
@@ -650,6 +671,12 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			return RollbackResponse{}, fmt.Errorf("pqcmigration: rollback must include every applied finding bound to target %s", targetID)
 		}
 		first := group.first
+		if err := requirePostureExecutionVantage(targetID, first.Intent.Connector, s.deployer); err != nil {
+			if errors.Is(err, errPostureRequiresAgent) {
+				return RollbackResponse{}, api.ErrWithStatus(http.StatusConflict, err)
+			}
+			return RollbackResponse{}, err
+		}
 		prepared, ok := tlsPrepared[first.Intent.AssetID]
 		if !ok || prepared.TargetID != first.Intent.TargetID || prepared.TargetRevision != first.Intent.TargetRevision ||
 			!connector.EqualTLSPosture(prepared.Previous, first.Receipt.Previous) {
@@ -905,6 +932,9 @@ func (h *outboxHandler) handleTLSPosture(ctx context.Context, m orchestrator.Mes
 	if payload.RunID != wrapped.RunID || payload.AssetID != wrapped.AssetID || payload.TargetRevision != wrapped.TargetRevision {
 		return errors.New("pqcmigration: sealed TLS posture metadata does not match intent")
 	}
+	if err := requirePostureExecutionVantage(payload.TargetID, payload.Connector, h.deployer); err != nil {
+		return err
+	}
 	payload.SealedOutboxPayload = nil
 	_, err = h.doIdempotent(ctx, m.TenantID, "licensed-crypto-migration-tls:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
 		recovered, found, err := h.completedTLSFinding(ctx, m.TenantID, payload, m.Payload)
@@ -1059,6 +1089,9 @@ func (h *outboxHandler) handleTLSPostureRollback(ctx context.Context, m orchestr
 	if len(payload.Restores) == 0 || payload.RunID != wrapped.RunID ||
 		payload.Restores[0].AssetID != wrapped.AssetID || payload.Mutation.TargetRevision != wrapped.TargetRevision {
 		return errors.New("pqcmigration: sealed TLS rollback metadata does not match intent")
+	}
+	if err := requirePostureExecutionVantage(payload.Mutation.TargetID, payload.Mutation.Connector, h.deployer); err != nil {
+		return err
 	}
 	_, err = h.doIdempotent(ctx, m.TenantID, "licensed-crypto-migration-tls-rollback:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
 		mutation := payload.Mutation
