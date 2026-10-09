@@ -31,6 +31,7 @@ type KMIPFactory func(KMIPFactoryDeps) (KMIPRuntime, error)
 // KMIPFactoryDeps are the core spine dependencies the licensed KMIP runtime
 // consumes without importing server internals.
 type KMIPFactoryDeps struct {
+	StartupContext     context.Context
 	TenantServiceCheck tenancy.ServiceCheck
 	Protocols          config.Protocols
 	ProtocolTenant     string
@@ -45,12 +46,13 @@ type KMIPFactoryDeps struct {
 	TenantCrypto tenantseal.Access
 }
 
-func (s *Server) configureKMIPSurface(d Deps) error {
+func (s *Server) configureKMIPSurface(ctx context.Context, d Deps) error {
 	if d.KMIPFactory == nil {
 		s.kmip = nil
 		return nil
 	}
 	runtime, err := d.KMIPFactory(KMIPFactoryDeps{
+		StartupContext:     ctx,
 		TenantServiceCheck: d.TenantServiceCheck,
 		Protocols:          d.Protocols,
 		ProtocolTenant:     d.ProtocolTenant,

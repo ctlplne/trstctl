@@ -1047,7 +1047,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := reconcileCrashFences(ctx, d, a, orch); err != nil {
 		return nil, err
 	}
-	if err := s.configureKMIPSurface(d); err != nil {
+	if err := s.configureKMIPSurface(ctx, d); err != nil {
 		return nil, err
 	}
 	if err := s.configureIssuanceSurfaces(ctx, d, orch, idem); err != nil {

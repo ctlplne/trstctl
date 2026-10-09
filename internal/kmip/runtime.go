@@ -66,10 +66,14 @@ func NewFactory() server.KMIPFactory {
 		if d.KeyWrapper == nil {
 			return nil, errors.New("KMIP requires a stable envelope key wrapper")
 		}
-		replayCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		// Recovery reads the complete immutable KMIP history. A fixed ten-second
+		// deadline made a healthy large deployment fail every cold start; use the
+		// caller's startup lifetime so shutdown still cancels a pending replay.
+		if d.StartupContext == nil {
+			return nil, errors.New("KMIP requires a startup context for durable recovery")
+		}
 		service, err := NewDurable(
-			replayCtx,
+			d.StartupContext,
 			firstNonEmpty(cfg.TenantID, d.ProtocolTenant),
 			VerifiedClientCertAuthenticator{},
 			audit.NewAuditor(d.EventLog),

@@ -4,6 +4,7 @@ package kmip
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ func TestKMIPFactoryFailsClosedWithoutDurabilityAndRestoresWithIt(t *testing.T) 
 	pools := bulkhead.Default()
 	t.Cleanup(pools.Close)
 	deps := server.KMIPFactoryDeps{
+		StartupContext: context.Background(),
 		Protocols: config.Protocols{KMIP: config.KMIPProtocol{
 			Enabled: true, TenantID: tenantID, Addr: "127.0.0.1:5696",
 			CertFile: "server.crt", KeyFile: "server.key", ClientCAFile: "clients.pem",
@@ -61,4 +63,10 @@ func TestKMIPFactoryFailsClosedWithoutDurabilityAndRestoresWithIt(t *testing.T) 
 		t.Fatal("factory returned nil runtime")
 	}
 	runtime.Close()
+	canceled, stop := context.WithCancel(context.Background())
+	stop()
+	deps.StartupContext = canceled
+	if _, err := factory(deps); !errors.Is(err, context.Canceled) {
+		t.Fatalf("KMIP replay ignored canceled startup context: %v", err)
+	}
 }

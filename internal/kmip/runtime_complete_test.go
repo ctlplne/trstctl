@@ -55,6 +55,7 @@ func TestKMIPOASIS14QueryOverMTLSListener(t *testing.T) {
 	}
 	t.Cleanup(wrapper.Destroy)
 	deps := server.KMIPFactoryDeps{
+		StartupContext: context.Background(),
 		Protocols: config.Protocols{KMIP: config.KMIPProtocol{
 			Enabled: true, TenantID: "tenant-listener", Addr: "127.0.0.1:5696",
 			CertFile: material.Signer.CertFile, KeyFile: material.Signer.KeyFile,
