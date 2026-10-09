@@ -2891,7 +2891,12 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		// checks above bind the child role, while the cached sibling path bytes
 		// below remain immutable and profile-validated.
 		hardenedRosetta := args[0] == rosettaInterpreterPath
-		if status.name == name && (pathMatches || hardenedRosetta) {
+		// QEMU instead exposes its own path followed by two exact copies of the
+		// signer guest path. Bind that path to the gate-built sibling inode before
+		// accepting an unreadable PR_SET_DUMPABLE=0 companion.
+		qemuGuest, qemuShape := qemuCompanionGuestPath(args)
+		hardenedQEMU := qemuShape && samePrivateReceiptObject(filepath.Dir(expected.EvidenceFile), expectedPath, qemuGuest) == nil
+		if status.name == name && (pathMatches || hardenedRosetta || hardenedQEMU) {
 			matchedPackage = packagePath
 			matchedPath = expectedPath
 			break
@@ -2916,6 +2921,14 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		return fmt.Errorf("inspect companion process executable: %w", liveErr)
 	}
 	return nil
+}
+
+func qemuCompanionGuestPath(args []string) (string, bool) {
+	if len(args) < 3 || args[0] != qemuX8664InterpreterPath || args[1] != args[2] ||
+		!filepath.IsAbs(args[1]) || filepath.Clean(args[1]) != args[1] {
+		return "", false
+	}
+	return args[1], true
 }
 
 func validateUnreadableCompanionStatus(parentPID int, status reviewedCompanionStatus) error {

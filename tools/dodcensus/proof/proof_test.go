@@ -516,6 +516,29 @@ func TestReviewedCompanionStatusRequiresDirectHardenedSignerShape(t *testing.T) 
 	}
 }
 
+func TestQEMUUnreadableCompanionHasExactDuplicatedGuestPath(t *testing.T) {
+	const signer = "/dod-exec/shipped-process/trstctl-signer"
+	for name, test := range map[string]struct {
+		args []string
+		want bool
+	}{
+		"exact signer and options": {args: []string{qemuX8664InterpreterPath, signer, signer, "--keystore", "/private/keys"}, want: true},
+		"foreign interpreter":      {args: []string{"/tmp/qemu-x86_64", signer, signer}},
+		"different guest":          {args: []string{qemuX8664InterpreterPath, signer, "/tmp/other"}},
+		"option before guest":      {args: []string{qemuX8664InterpreterPath, "--unsafe", signer, signer}},
+		"relative guest":           {args: []string{qemuX8664InterpreterPath, "signer", "signer"}},
+		"unclean guest":            {args: []string{qemuX8664InterpreterPath, signer + "/../trstctl-signer", signer + "/../trstctl-signer"}},
+		"missing duplicate":        {args: []string{qemuX8664InterpreterPath, signer}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := qemuCompanionGuestPath(test.args)
+			if ok != test.want || (ok && got != signer) {
+				t.Fatalf("QEMU companion guest path = %q, accepted=%t, want accepted=%t", got, ok, test.want)
+			}
+		})
+	}
+}
+
 func TestProcessStatusZombieClassificationIsExact(t *testing.T) {
 	if !processStatusIsZombie([]byte("Name:\tpostgres\nState:\tZ (zombie)\nPPid:\t1\n")) {
 		t.Fatal("Linux zombie process status was not recognized")
