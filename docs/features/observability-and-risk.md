@@ -248,9 +248,9 @@ Core PQC campaigns turn those observations into owned work without requiring a
 license. From `/posture`, `/api/v1/pqc/campaigns`, or `trstctl-cli pqc campaigns`, an
 operator can assign owner/deadline/wave/readiness, record a manual or third-party
 remediation for each finding, and close only after every finding has evidence. Closure
-produces an offline-verifiable signed artifact. Automated fleet execution remains an
-optional Enterprise executor and is stated as unavailable by edition; campaign
-tracking itself does not degrade into an upsell-only shell.
+produces an offline-verifiable signed artifact. The reviewed migration executor is
+also in core; it can issue a replacement, while deployment and endpoint readback
+remain separate evidence. Campaign tracking does not start the executor implicitly.
 
 The migration surface is one canonical tenant dataset, not separate Risk and CBOM
 interpretations. `GET /api/v1/graph/crypto-readiness` returns graph-built ordered rows,

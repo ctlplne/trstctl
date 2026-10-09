@@ -265,11 +265,14 @@ then record work performed manually or by any external tool. No license is requi
 readiness, finding-disposition, close, and evidence routes serve the complete workflow.
 The same operations are available under `trstctl-cli pqc campaigns` and on `/posture`.
 
-The preferred UI/API entry point is the graph-bound action route,
+The default UI/API entry point is the graph-bound action route,
 `POST /api/v1/graph/crypto-readiness/actions`. It refuses a missing, foreign,
 unlocated, or unattributed row, and stores the exact current readiness-row digest in
 the immutable campaign-start event. Existing `/api/v1/pqc/campaigns` remains the
 manual campaign API; those legacy/manual campaigns do not claim a graph binding.
+The console offers an explicit **Track manually** choice for findings whose graph
+row has no attributed owner. It uses that manual API and explains that the
+campaign does not establish dependency coverage or detect topology changes.
 Graph-bound campaigns refuse further mutation with `409 Conflict` when a dependent
 edge or attributed owner changes. This prevents old coordination evidence from being
 applied to a newly different blast radius.

@@ -25295,6 +25295,27 @@ export const messages = {
     description: "Separates campaign tracking from execution of a reviewed migration.",
   },
   "posture.pqcCampaign.createHeading": { defaultMessage: "Create a campaign", description: "PQC campaign creation form heading." },
+  "posture.pqcCampaign.bindingHeading": { defaultMessage: "Evidence binding", description: "How a PQC campaign binds to the observed dependency graph." },
+  "posture.pqcCampaign.graphBound": { defaultMessage: "Bind to current graph", description: "Graph-bound PQC campaign option." },
+  "posture.pqcCampaign.graphBoundHelp": {
+    defaultMessage:
+      "Requires the selected findings to show this owner in crypto-agility readiness. The campaign stops accepting evidence if that owner or a dependency changes.",
+    description: "Graph-bound PQC campaign prerequisites and stale-graph behavior.",
+  },
+  "posture.pqcCampaign.manual": { defaultMessage: "Track manually", description: "Manual PQC campaign option." },
+  "posture.pqcCampaign.manualHelp": {
+    defaultMessage:
+      "Use when the graph has no attributed owner. This campaign records your owner and evidence but does not prove dependency coverage or bind to graph changes. Verify affected systems independently before closure.",
+    description: "Manual PQC campaign evidence limit and operator action.",
+  },
+  "posture.pqcCampaign.graphBoundDetail": {
+    defaultMessage: "Graph-bound: each finding is tied to its observed owner and dependency snapshot. A changed graph requires a new campaign.",
+    description: "Graph-bound PQC campaign detail evidence limit.",
+  },
+  "posture.pqcCampaign.manualDetail": {
+    defaultMessage: "Manual tracking: owner and evidence are recorded, but dependency coverage is not proven by this campaign.",
+    description: "Manual PQC campaign detail evidence limit.",
+  },
   "posture.pqcCampaign.name": { defaultMessage: "Campaign name", description: "PQC campaign name field." },
   "posture.pqcCampaign.owner": { defaultMessage: "Owner", description: "PQC campaign owner field." },
   "posture.pqcCampaign.deadline": { defaultMessage: "Deadline", description: "PQC campaign deadline field." },

@@ -321,7 +321,11 @@ The complete expert machinery remains on this page under three named disclosures
   separate server read, so older records cannot mask a failed scan. The section also contains the policy
   floor, algorithm rollup, exact asset rows, and recommendations.
 - **Compatibility, PQC policy, and upgrade planning** contains graph-bound readiness,
-  attributed owners, dependency paths, core PQC campaigns, and licensed migration.
+  attributed owners, dependency paths, core PQC campaigns, and the core migration workflow.
+  Campaign creation defaults to graph binding, which requires the selected finding's
+  owner to appear in crypto-agility readiness. Choose **Track manually** when the
+  graph has no attributed owner. Manual tracking records an owner and evidence but
+  does not prove dependency coverage or bind the campaign to graph changes.
 - **Certificate, AD CS, authority, and drift evidence** contains CT monitoring,
   AD CS template/database checks, authority agreement, discovery findings, and the
   drift-remediation decision workflow.
@@ -940,10 +944,10 @@ trstctl-cli privacy retention run
 
 - **The console is a view, not a second backend** — it adds no capability the API
   lacks. If a surface looks read-only for you, that is RBAC, not a missing screen.
-- **A few adjacent capabilities are API-only or licensed-only today** — PQC
-  migration queue/rollback (`/api/v1/pqc/migrations`, licensed), scheduled digest
-  delivery, and email/webhook report dispatch are not served as console workflows
-  and are not faked.
+- **A few adjacent capabilities are API-only today** — scheduled digest delivery
+  and email/webhook report dispatch are not served as console workflows.
+  PQC migration preview, start, progress and rollback are available in the
+  console's upgrade-planning section as well as the core API and CLI.
 - **Auth lives in an HttpOnly cookie**, never in web storage; only the theme
   preference (and non-sensitive saved-view metadata) is persisted client-side.
 

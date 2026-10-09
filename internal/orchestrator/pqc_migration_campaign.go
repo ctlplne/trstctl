@@ -26,8 +26,8 @@ const MaxPQCMigrationCampaignFindings = 100
 var sha256DigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // PQCMigrationCampaignStartRequest starts a core tracking campaign over existing
-// CBOM findings. It contains no execution settings because fleet execution is a
-// separate, optional Enterprise capability.
+// CBOM findings. It contains no execution settings because migration execution
+// is a separate reviewed core workflow.
 type PQCMigrationCampaignStartRequest struct {
 	ID                string    `json:"id,omitempty"`
 	Name              string    `json:"name"`

@@ -142,6 +142,27 @@ describe("core PQC migration campaigns", () => {
     );
   });
 
+  it("offers an explicit manual campaign when graph ownership is not attributed", async () => {
+    const user = userEvent.setup();
+    renderCampaigns();
+    await screen.findByText("Payments PQC migration");
+    expect(screen.getByRole("radio", { name: /Bind to current graph/ })).toBeChecked();
+    expect(screen.getByText(/does not prove dependency coverage or bind to graph changes/)).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Track manually/ }));
+    await user.type(screen.getByLabelText("Campaign name"), "Gateway manual tracking");
+    await user.type(screen.getByLabelText("Owner"), "team:edge");
+    await user.type(screen.getByLabelText("Deadline"), "2026-12-01T10:00");
+    await user.type(screen.getByLabelText("Readiness criteria"), "endpoint readback");
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Create campaign" }));
+    await waitFor(() =>
+      expect(apiMock.createPQCCampaign).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Gateway manual tracking", owner: "team:edge", finding_ids: [asset.id] }),
+      ),
+    );
+    expect(apiMock.createCryptoReadinessAction).not.toHaveBeenCalled();
+  });
+
   it("wires readiness and finding evidence mutations", async () => {
     const user = userEvent.setup();
     renderCampaigns();

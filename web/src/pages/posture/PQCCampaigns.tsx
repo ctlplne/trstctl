@@ -54,6 +54,7 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
   const [operationError, setOperationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [closure, setClosure] = useState<PQCMigrationCampaignClosure | null>(null);
+  const [bindToGraph, setBindToGraph] = useState(true);
   const vulnerableAssets = useMemo(() => assets.filter((asset) => asset.quantum_vulnerable || asset.out_of_policy), [assets]);
 
   const createForm = useForm<CreateValues>({
@@ -76,7 +77,8 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
     setOperationError(null);
     setNotice(null);
     try {
-      const campaign = await api.createCryptoReadinessAction({
+      const create = bindToGraph ? api.createCryptoReadinessAction : api.createPQCCampaign;
+      const campaign = await create({
         name: values.name,
         owner: values.owner,
         deadline: new Date(values.deadline).toISOString(),
@@ -85,6 +87,7 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
         finding_ids: values.findingIds,
       });
       createForm.reset();
+      setBindToGraph(true);
       setSelectedID(campaign.id);
       setNotice(t("posture.pqcCampaign.created", { name: campaign.name }));
       await refresh(campaign.id);
@@ -185,6 +188,47 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
 
       <form className="grid gap-3 rounded-control border border-border p-3" onSubmit={createCampaign}>
         <h4 className="font-medium">{t("posture.pqcCampaign.createHeading")}</h4>
+        <fieldset className="grid gap-2">
+          <legend className="text-sm font-medium">{t("posture.pqcCampaign.bindingHeading")}</legend>
+          <div className="flex items-start gap-2 rounded-control border border-border p-2 text-sm">
+            <input
+              id="pqc-campaign-graph-bound"
+              type="radio"
+              name="pqc-campaign-binding"
+              checked={bindToGraph}
+              onChange={() => setBindToGraph(true)}
+              aria-describedby="pqc-campaign-graph-bound-help"
+              className="mt-1"
+            />
+            <div>
+              <label htmlFor="pqc-campaign-graph-bound" className="font-medium">
+                {t("posture.pqcCampaign.graphBound")}
+              </label>
+              <p id="pqc-campaign-graph-bound-help" className="text-muted-foreground">
+                {t("posture.pqcCampaign.graphBoundHelp")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 rounded-control border border-border p-2 text-sm">
+            <input
+              id="pqc-campaign-manual"
+              type="radio"
+              name="pqc-campaign-binding"
+              checked={!bindToGraph}
+              onChange={() => setBindToGraph(false)}
+              aria-describedby="pqc-campaign-manual-help"
+              className="mt-1"
+            />
+            <div>
+              <label htmlFor="pqc-campaign-manual" className="font-medium">
+                {t("posture.pqcCampaign.manual")}
+              </label>
+              <p id="pqc-campaign-manual-help" className="text-muted-foreground">
+                {t("posture.pqcCampaign.manualHelp")}
+              </p>
+            </div>
+          </div>
+        </fieldset>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label={t("posture.pqcCampaign.name")} error={createForm.formState.errors.name?.message} required>
             {(control) => <Input {...control} {...createForm.register("name")} />}
@@ -278,6 +322,11 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
           {selected.error ? <ErrorState title={t("posture.pqcCampaign.error")}>{selected.error}</ErrorState> : null}
           {selected.data ? (
             <>
+              <p className="text-sm text-muted-foreground">
+                {selected.data.findings?.every((finding) => finding.readiness_digest)
+                  ? t("posture.pqcCampaign.graphBoundDetail")
+                  : t("posture.pqcCampaign.manualDetail")}
+              </p>
               <dl className="grid gap-2 text-sm sm:grid-cols-4">
                 <Metric label={t("posture.pqcCampaign.owner")} value={selected.data.owner} />
                 <Metric label={t("posture.pqcCampaign.wave")} value={selected.data.wave} />
