@@ -446,6 +446,34 @@ func TestListSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestPQCMigrationRollbackRequiresExplicitAssetSelection(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/pqc/migrations/run-1/rollback" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil || !sameJSON(body, []byte(`{"asset_ids":["asset-1"],"reason":"operator recovery"}`)) {
+			t.Errorf("rollback body = %s, error = %v", body, err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"run_id":"run-1","queued":1}`)
+	}))
+	t.Cleanup(srv.Close)
+	env := cli.Env{Server: srv.URL, Token: "qa-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, _, stderr := run(t, []string{"migration", "rollback", "run-1"}, env, "")
+	if code != 2 || !strings.Contains(stderr, "needs a request body") || requests != 0 {
+		t.Fatalf("bodyless rollback: exit=%d stderr=%q requests=%d; want local refusal", code, stderr, requests)
+	}
+	code, stdout, stderr := run(t, []string{"migration", "rollback", "run-1", "-f", "-"}, env,
+		`{"asset_ids":["asset-1"],"reason":"operator recovery"}`)
+	if code != 0 || requests != 1 || !strings.Contains(stdout, `"queued": 1`) {
+		t.Fatalf("selected rollback: exit=%d stdout=%q stderr=%q requests=%d", code, stdout, stderr, requests)
+	}
+}
+
 func TestOutboxReconciliationConflictsListIsReadOnlyAndTenantAuthenticated(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, http.StatusOK, `{"items":[],"guidance":"keep the historical command"}`, &cap)

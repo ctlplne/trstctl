@@ -307,7 +307,7 @@ estate is safe.
 **Plan upgrade** is the only primary action. It opens compatibility, PQC policy,
 campaign tracking, and the guarded migration workflow. The Community edition keeps
 CBOM discovery, readiness, campaign ownership, evidence, and signed campaign closure
-usable. Licensed migration execution separately requires an exact preview, selected
+usable. Core migration execution requires an exact preview, selected
 assets, explicit confirmation, progress evidence, and a second confirmation before
 rollback.
 
@@ -326,6 +326,10 @@ The complete expert machinery remains on this page under three named disclosures
   owner to appear in crypto-agility readiness. Choose **Track manually** when the
   graph has no attributed owner. Manual tracking records an owner and evidence but
   does not prove dependency coverage or bind the campaign to graph changes.
+  A certificate-key migration run can report `issued` without a usable subject key
+  or installed replacement. The panel states this before approval; verify the
+  served endpoint through the normal certificate lifecycle before recording
+  campaign remediation.
 - **Certificate, AD CS, authority, and drift evidence** contains CT monitoring,
   AD CS template/database checks, authority agreement, discovery findings, and the
   drift-remediation decision workflow.

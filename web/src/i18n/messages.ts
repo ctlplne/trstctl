@@ -25138,7 +25138,8 @@ export const messages = {
     description: "Heading for the core CBOM-to-migration workflow.",
   },
   "posture.pqcMigration.description": {
-    defaultMessage: "Select vulnerable CBOM assets, preview the exact plan, then explicitly authorize a rollback-safe migration.",
+    defaultMessage:
+      "Select vulnerable CBOM assets and preview the exact plan. Certificate-key reissue only proves issuance; it does not deploy or retain the subject key.",
     description: "Explains the guarded PQC migration workflow.",
   },
   "posture.pqcMigration.noAssets": {
@@ -25170,7 +25171,7 @@ export const messages = {
     description: "Heading for the served PQC plan preview.",
   },
   "posture.pqcMigration.reissues": {
-    defaultMessage: "Certificate reissues",
+    defaultMessage: "Certificate issuances (not deployed)",
     description: "Plan metric counting certificate reissues.",
   },
   "posture.pqcMigration.tlsRollouts": {
@@ -25182,7 +25183,7 @@ export const messages = {
     description: "Plan metric counting assets that cannot migrate.",
   },
   "posture.pqcMigration.startConfirmation": {
-    defaultMessage: "I reviewed this exact plan and authorize its rollback-safe external effects.",
+    defaultMessage: "I reviewed the exact queued effects. Certificate issuance does not prove deployment or recovery.",
     description: "Explicit confirmation required before starting migration.",
   },
   "posture.pqcMigration.start": {

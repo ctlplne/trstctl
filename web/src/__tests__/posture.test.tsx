@@ -792,13 +792,14 @@ describe("posture collector disclosures", () => {
     await renderPosture();
     await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
     expect(screen.getByRole("heading", { name: "PQC migration workflow" })).toBeInTheDocument();
+    expect(screen.getByText(/Certificate-key reissue only proves issuance; it does not deploy or retain the subject key/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview migration plan" })).toBeDisabled();
     expect(apiMock.editions).not.toHaveBeenCalled();
     expect(apiMock.planPQCMigration).not.toHaveBeenCalled();
     expect(apiMock.startPQCMigration).not.toHaveBeenCalled();
   });
 
-  it("previews, explicitly starts, monitors, and rolls back a core migration", async () => {
+  it("previews, starts, monitors issuance, and queues a core rollback", async () => {
     apiMock.planPQCMigration.mockResolvedValue({
       reissues: [
         {
@@ -838,9 +839,11 @@ describe("posture collector disclosures", () => {
       run_id: "run-pqc-1",
       total: 1,
       queued: 0,
-      applied: 1,
+      issued: 1,
+      applied: 0,
       failed: 0,
       rolled_back: 0,
+      rollback_unverified: 0,
       findings: [],
     });
     apiMock.rollbackPQCMigration.mockResolvedValue({
@@ -873,7 +876,8 @@ describe("posture collector disclosures", () => {
 
     const startButton = await screen.findByRole("button", { name: "Start migration" });
     expect(startButton).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /I reviewed this exact plan/ }));
+    expect(screen.getByText("Certificate issuances (not deployed)")).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
     await user.click(startButton);
     expect(await screen.findByText("Migration run run-pqc-1 queued")).toBeInTheDocument();
     expect(apiMock.startPQCMigration).toHaveBeenCalledWith({
@@ -884,7 +888,8 @@ describe("posture collector disclosures", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Refresh progress" }));
-    expect(await screen.findByText("1 applied · 0 queued · 0 failed · 0 rolled back")).toBeInTheDocument();
+    expect(await screen.findByText("0 applied · 0 queued · 0 failed · 0 rolled back")).toBeInTheDocument();
+    expect(screen.getByText("1 issued; endpoint verification pending.")).toBeInTheDocument();
     expect(apiMock.getPQCMigrationProgress).toHaveBeenCalledWith("run-pqc-1");
 
     await user.click(screen.getByRole("checkbox", { name: /I reviewed the current run evidence/ }));

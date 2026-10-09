@@ -308,7 +308,7 @@ exhaustive subcommand list:
 | `managed-offering`                | Managed-offering/provider-plane posture and hosted-tenant provisioning (`status` · `tenants provision`)                                                                                                                                                                                                             |
 | `mcp`                             | List and invoke the MCP tools the server exposes (`tools` · `call`), or serve them to a standard MCP client over stdio (`serve`)                                                                                                                                                                                                                                                 |
 | `mdm`                             | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                                                                                                                                                                                 |
-| `migration`                       | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`plan` · `start` · `status` · `rollback`)                                                                                                                                                                                                  |
+| `migration`                       | Core PQC migration plans, issuance status, and selected-asset rollback (`plan` · `start` · `status` · `rollback`)                                                                                                                                                                                                  |
 | `nhi`                             | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`)                                                                                                                 |
 | `notifications`                   | Notification channels, exact effect-free routing-policy review, saved routing rules, inbox/dead-letter recovery (`channels` · `routing-policies preview/create/list/get/update/delete` · `routing-preview` · `list` · `get` · `read` · `requeue`)                                                                      |
 | `operations`                      | Operational telemetry for the bounded worker pools that carry backpressure (`bulkheads`)                                                                                                                                                                                                                            |
@@ -867,7 +867,7 @@ trstctl-cli cbom preview -f cbom-scan.json
 trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
 
-# Track migration work in Community without attaching the licensed fleet engine.
+# Track migration work and evidence in Core, independent of execution.
 # Operators may remediate manually or with any external tool, then record evidence.
 cat > pqc-campaign.json <<'JSON'
 {"name":"Payments PQC migration","owner":"team:payments","deadline":"2026-12-01T00:00:00Z","wave":"wave-1","readiness_criteria":["owner approved","rollback documented"],"finding_ids":["<cbom-finding-id>"]}
@@ -878,16 +878,21 @@ printf '{"disposition":"remediated","method":"manual","reason":"replaced through
 trstctl-cli --idempotency-key pqc-payments-close pqc campaigns close <campaign-id> --force
 trstctl-cli pqc campaigns evidence <campaign-id>
 
-# Migrate what the CBOM found (Enterprise PQC license required; an unlicensed
-# server answers 404 because it does not serve these routes). Start returns a
-# run id, status reports per-finding progress, and rollback reverses an applied
-# run.
+# Core PQC migration: review the exact CBOM asset IDs before starting.
+# Preview and start refuse an observed certificate name denied by the active
+# served profile. An issued certificate is not proof of key custody or deployment.
 cat > migration-start.json <<'JSON'
-{"finding_ids":["<cbom-finding-id>"],"rollback_on_failure":true}
+{"asset_ids":["<cbom-asset-id>"],"target_algorithm":"ML-DSA-65","protocol":"acme","rollback_on_failure":true}
 JSON
+trstctl-cli migration plan -f migration-start.json
 trstctl-cli --idempotency-key migrate-payments-1 migration start -f migration-start.json
 trstctl-cli migration status <run-id>
-trstctl-cli --idempotency-key migrate-payments-1-rollback migration rollback <run-id>
+# Rollback requires the exact assets; certificate-key rollback is not a served
+# endpoint recovery receipt. Verify the target independently afterward.
+cat > migration-rollback.json <<'JSON'
+{"asset_ids":["<cbom-asset-id>"],"reason":"operator recovery after reviewed run"}
+JSON
+trstctl-cli --idempotency-key migrate-payments-1-rollback migration rollback <run-id> -f migration-rollback.json
 
 # Mint a one-time agent bootstrap token. Pass allowed_identity when the token
 # should redeem only for one node or host identity.

@@ -61,7 +61,7 @@ describe("Core PQC runtime authority", () => {
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
     const start = await screen.findByRole("button", { name: "Start migration" });
     expect(start).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /I reviewed this exact plan/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
     await user.click(start);
     await user.click(await screen.findByRole("button", { name: "Refresh progress" }));
     expect(await screen.findByText("1 applied · 0 queued · 0 failed · 0 rolled back")).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("Core PQC runtime authority", () => {
     const result = render(workflow(view()));
     await user.click(await screen.findByRole("checkbox", { name: "Select localhost:8443 for PQC migration" }));
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
-    await user.click(await screen.findByRole("checkbox", { name: /I reviewed this exact plan/ }));
+    await user.click(await screen.findByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
     result.rerender(workflow(view("community", [{ operation_id: "startPQCMigration", state: "denied" }])));
     const start = screen.getByRole("button", { name: "Start migration" });
     expect(start).toBeDisabled();
@@ -113,7 +113,7 @@ describe("Core PQC runtime authority", () => {
     const result = render(workflow(view()));
     await user.click(await screen.findByRole("checkbox", { name: "Select localhost:8443 for PQC migration" }));
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
-    await user.click(await screen.findByRole("checkbox", { name: /I reviewed this exact plan/ }));
+    await user.click(await screen.findByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
     await user.click(screen.getByRole("button", { name: "Start migration" }));
     await screen.findByRole("button", { name: "Refresh progress" });
     result.rerender(

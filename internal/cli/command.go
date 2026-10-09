@@ -77,8 +77,8 @@ func (c Command) Destructive() bool {
 
 // commandTable is the dispatchable command set. It is
 // one command per core API operation (S3.3 surface), plus the thin-client
-// entries for routes only a licensed server serves.
-// The licensed entries live in their own file so that
+// entries for routes attached outside the static API table.
+// Those attach-seam entries live in their own file so that
 // PACKAGING-007's proprietary-algorithm placement rule keeps covering every
 // line of this one.
 var commandTable = buildCommandTable()
