@@ -100,6 +100,15 @@ func TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01(t *testing.
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
+	// Findings are projected before the worker appends run completion. Keep the
+	// same 30-second findings deadline while waiting for that terminal event.
+	for !h.hasEvent(t, "discovery.run.completed") {
+		select {
+		case <-deadline:
+			t.Fatal("repository scan did not record its completion event")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event for CAP-SCAN-01 repository scan", eventType)
