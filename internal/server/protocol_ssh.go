@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
@@ -351,6 +352,16 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 		if req.Serial != 0 && req.KeyID == "pam:"+req.ID {
 			p.Revoke(req.Serial, req.KeyID)
 		}
+	}
+	if event.Type == projections.EventPAMSSHSigningRecoveryRequested && event.TenantID == p.tenantID {
+		var req projections.PAMSSHSigningRecoveryRequested
+		if err := json.Unmarshal(event.Data, &req); err != nil {
+			return fmt.Errorf("decode PAM SSH signing recovery event %d: %w", event.Sequence, err)
+		}
+		if req.ID == "" || req.KeyID != "pam:"+req.ID {
+			return fmt.Errorf("decode PAM SSH signing recovery event %d: invalid key ID", event.Sequence)
+		}
+		p.Revoke(0, req.KeyID)
 	}
 	if event.Sequence > p.applied {
 		p.applied = event.Sequence

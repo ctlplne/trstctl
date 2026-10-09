@@ -4,6 +4,18 @@ package store
 
 import "testing"
 
+func TestPAMSSHSigningIntentUsesEventRecoveryAndSnapshots(t *testing.T) {
+	const table = "pam_ssh_activations"
+	for _, table := range []string{"pam_targets", table} {
+		if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+			t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+		}
+	}
+	if SnapshotFormatVersion < 52 {
+		t.Fatalf("snapshot format %d could restore a payload without signing intents", SnapshotFormatVersion)
+	}
+}
+
 func TestDeploymentTargetsAreExcludedFromEventRebuildAndSnapshots(t *testing.T) {
 	for _, table := range []string{"deployment_target_revisions", "deployment_targets"} {
 		if containsRecoveryTable(ReadModelTables, table) {

@@ -262,6 +262,8 @@ const (
 	EventPAMTargetRegistered                      = "pam.target.registered"
 	EventPAMTargetDisabled                        = "pam.target.disabled"
 	EventPAMSessionActivationRequested            = "pam.session.activation_requested"
+	EventPAMSSHSigningRecoveryRequested           = "pam.session.ssh_signing_recovery_requested"
+	EventPAMSSHSigningRecovered                   = "pam.session.ssh_signing_recovered"
 	EventPAMSessionExpired                        = "pam.session.expired"
 	EventPAMSessionRevocationRequested            = "pam.session.revocation_requested"
 	EventPAMSessionRevocationFailed               = "pam.session.revocation_failed"
@@ -3213,10 +3215,28 @@ type PAMSessionStarted struct {
 type PAMSessionActivationRequested struct {
 	ID             string                     `json:"id"`
 	RequestID      string                     `json:"request_id"`
+	TargetType     string                     `json:"target_type,omitempty"`
 	CommandDigest  string                     `json:"command_digest"`
 	IdempotencyKey string                     `json:"idempotency_key"`
 	TTLSeconds     int64                      `json:"ttl_seconds"`
 	Approval       store.OperationApprovalUse `json:"approval"`
+}
+
+// PAMSSHSigningRecovered closes an approved signing attempt for which no
+// session was recorded. The deterministic key ID revokes every possible cert
+// signed under that attempt, including a signature lost in a process crash.
+type PAMSSHSigningRecovered struct {
+	ID     string `json:"id"`
+	KeyID  string `json:"key_id"`
+	Reason string `json:"reason"`
+}
+
+// PAMSSHSigningRecoveryRequested is the durable KRL command. The completion
+// event is separate so readback never calls an unavailable KRL "recovered".
+type PAMSSHSigningRecoveryRequested struct {
+	ID     string `json:"id"`
+	KeyID  string `json:"key_id"`
+	Reason string `json:"reason"`
 }
 
 // PAM targets contain only references and public routing metadata. Their
@@ -3738,6 +3758,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMTargetRegistered:                      {1: true},
 	EventPAMTargetDisabled:                        {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
+	EventPAMSSHSigningRecoveryRequested:           {1: true},
+	EventPAMSSHSigningRecovered:                   {1: true},
 	EventMachineSessionStarted:                    {1: true},
 	EventMachineSessionRevoked:                    {1: true},
 	EventMachineAuthMethodDisabled:                {1: true},
@@ -6290,7 +6312,34 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			pl.Approval.ResourceID != "pam:"+pl.RequestID || pl.Approval.Action != "activate" {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
-		return p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time)
+		if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time); err != nil {
+			return err
+		}
+		if pl.TargetType == "ssh" {
+			return p.store.ApplyPAMSSHActivationRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.RequestID, e.Time)
+		}
+		if pl.TargetType != "" && pl.TargetType != "postgres" {
+			return fmt.Errorf("projections: invalid PAM activation target type %q", pl.TargetType)
+		}
+		return nil
+	case EventPAMSSHSigningRecoveryRequested:
+		var pl PAMSSHSigningRecoveryRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.KeyID != "pam:"+pl.ID || pl.Reason == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMSSHActivationRecoveryRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.KeyID, e.Time)
+	case EventPAMSSHSigningRecovered:
+		var pl PAMSSHSigningRecovered
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.KeyID != "pam:"+pl.ID || pl.Reason == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMSSHActivationRecoveredTx(ctx, tx, e.TenantID, pl.ID, pl.KeyID, e.Time)
 	case EventPAMTargetRegistered:
 		var pl PAMTargetRegistered
 		if err := decode(e, &pl); err != nil {
@@ -6341,6 +6390,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		startedAt := pl.StartedAt
 		if startedAt.IsZero() {
 			startedAt = e.Time
+		}
+		if pl.TargetType == "ssh" {
+			if err := p.store.ApplyPAMSSHActivationCompletedTx(ctx, tx, e.TenantID, pl.ID, e.Time); err != nil {
+				return err
+			}
 		}
 		return p.store.ApplyPAMSessionStartedTx(ctx, tx, store.PAMSession{
 			TenantID: e.TenantID, ID: pl.ID, TargetType: pl.TargetType, TargetID: pl.TargetID,

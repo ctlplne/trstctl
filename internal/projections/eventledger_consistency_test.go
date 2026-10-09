@@ -110,6 +110,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMTargetRegistered:                      "EventPAMTargetRegistered",
 	projections.EventPAMTargetDisabled:                        "EventPAMTargetDisabled",
 	projections.EventPAMSessionActivationRequested:            "EventPAMSessionActivationRequested",
+	projections.EventPAMSSHSigningRecoveryRequested:           "EventPAMSSHSigningRecoveryRequested",
+	projections.EventPAMSSHSigningRecovered:                   "EventPAMSSHSigningRecovered",
 	projections.EventPAMSessionExpired:                        "EventPAMSessionExpired",
 	projections.EventPAMSessionRevocationRequested:            "EventPAMSessionRevocationRequested",
 	projections.EventPAMSessionRevocationFailed:               "EventPAMSessionRevocationFailed",

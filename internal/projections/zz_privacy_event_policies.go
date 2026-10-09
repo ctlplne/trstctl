@@ -628,6 +628,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	)
 	pamSessionActivationRequested := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/request_id", opaque),
+		privacyRule("/target_type", opaque),
 		privacyRule("/command_digest", opaque), privacyRule("/idempotency_key", opaque),
 		privacyRule("/ttl_seconds", opaque),
 		privacyRule("/approval/request_id", opaque), privacyRule("/approval/intent_digest", opaque),
@@ -917,7 +918,15 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/target_type", opaque), privacyRule("/id", opaque),
 			privacyRule("/disabled_by", exact), privacyRule("/reason", clear),
 		),
-		{EventPAMSessionActivationRequested, 1}:                           pamSessionActivationRequested,
+		{EventPAMSessionActivationRequested, 1}: pamSessionActivationRequested,
+		{EventPAMSSHSigningRecoveryRequested, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/key_id", opaque),
+			privacyRule("/reason", clear),
+		),
+		{EventPAMSSHSigningRecovered, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/key_id", opaque),
+			privacyRule("/reason", clear),
+		),
 		{EventPAMSessionExpired, 1}:                                       pamSessionExpired,
 		{EventPAMSessionRevocationRequested, 1}:                           pamSessionRevocationRequested,
 		{EventPAMSessionRevocationFailed, 1}:                              pamSessionRevocationFailed,
@@ -1631,6 +1640,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMTargetRegistered, 1}:                                     privacyPayloadShape[PAMTargetRegistered](),
 		{EventPAMTargetDisabled, 1}:                                       privacyPayloadShape[PAMTargetDisabled](),
 		{EventPAMSessionActivationRequested, 1}:                           privacyPayloadShape[PAMSessionActivationRequested](),
+		{EventPAMSSHSigningRecoveryRequested, 1}:                          privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
+		{EventPAMSSHSigningRecovered, 1}:                                  privacyPayloadShape[PAMSSHSigningRecovered](),
 		{EventPAMSessionExpired, 1}:                                       privacyPayloadShape[PAMSessionExpired](),
 		{EventPAMSessionRevocationRequested, 1}:                           privacyPayloadShape[PAMSessionRevocationRequested](),
 		{EventPAMSessionRevocationFailed, 1}:                              privacyPayloadShape[PAMSessionRevocationFailed](),

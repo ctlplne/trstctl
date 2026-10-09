@@ -96,6 +96,9 @@ type pamService struct {
 	approvalTTL       time.Duration
 	requiredApprovals int
 	targetDeps        pamDeps
+	// Fault injection for the gap after signing and before the session event.
+	// Production leaves this nil; a served test forces the crash edge.
+	afterSSHSign func([]byte, uint64) error
 }
 
 type pamPostgresTarget struct {
@@ -591,6 +594,30 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 	if err := s.validateAttestedTarget(ctx, tenantID, req, att); err != nil {
 		return api.PAMSession{}, err
 	}
+	if req.TargetType == pamTargetSSH {
+		var session api.PAMSession
+		acquired, err := s.store.WithPAMSSHActivationFence(ctx, tenantID, id, func() error {
+			if _, lookupErr := s.store.GetPAMSSHActivation(ctx, tenantID, id); lookupErr == nil {
+				return fmt.Errorf("%w: SSH signing was already attempted for this idempotency key; inspect recovery audit and start a fresh approved request", orchestrator.ErrIdempotencyConflict)
+			} else if !store.IsNotFound(lookupErr) {
+				return lookupErr
+			}
+			var openErr error
+			session, openErr = s.activatePAMSession(ctx, tenantID, idempotencyKey, requester, id, verifier, att, req)
+			return openErr
+		})
+		if err != nil {
+			return api.PAMSession{}, err
+		}
+		if !acquired {
+			return api.PAMSession{}, fmt.Errorf("%w: SSH activation or recovery is in progress; retry the same HTTP request", api.ErrPAMRejected)
+		}
+		return session, nil
+	}
+	return s.activatePAMSession(ctx, tenantID, idempotencyKey, requester, id, verifier, att, req)
+}
+
+func (s *pamService) activatePAMSession(ctx context.Context, tenantID, idempotencyKey, requester, id string, verifier *attest.Verifier, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
 	now, err := s.authorizeActivation(ctx, tenantID, idempotencyKey, requester, id, req, att)
 	if err != nil {
 		return api.PAMSession{}, err
@@ -640,7 +667,7 @@ func (s *pamService) authorizeActivation(ctx context.Context, tenantID, idempote
 	}
 	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-activation\x00"+tenantID+"\x00"+req.RequestID)).String()
 	payload := projections.PAMSessionActivationRequested{
-		ID: sessionID, RequestID: req.RequestID, CommandDigest: digest,
+		ID: sessionID, RequestID: req.RequestID, TargetType: req.TargetType, CommandDigest: digest,
 		IdempotencyKey: idempotencyKey, TTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second),
 		Approval: use,
 	}
@@ -654,6 +681,9 @@ func (s *pamService) authorizeActivation(ctx context.Context, tenantID, idempote
 	}
 	if found && (canonical.Type != projections.EventPAMSessionActivationRequested || canonical.TenantID != tenantID || !bytes.Equal(canonical.Data, data)) {
 		return time.Time{}, fmt.Errorf("%w: PAM request_id already belongs to a different activation", orchestrator.ErrIdempotencyConflict)
+	}
+	if found && req.TargetType == pamTargetSSH {
+		return time.Time{}, fmt.Errorf("%w: SSH signing was already attempted for this approval; inspect recovery audit and start a fresh approved request", api.ErrPAMRejected)
 	}
 	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if !found {
@@ -749,11 +779,11 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 }
 
 func (s *pamService) expireOnce(ctx context.Context) error {
+	first := s.recoverIncompleteSSHActivations(ctx)
 	revoking, err := s.store.ListRevokingPAMSessions(ctx, 100)
 	if err != nil {
-		return err
+		return errors.Join(first, err)
 	}
-	var first error
 	for _, rec := range revoking {
 		if err := s.revokeSession(ctx, rec); err != nil && first == nil {
 			first = err
@@ -761,7 +791,7 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 	}
 	due, err := s.store.ListDuePAMSessions(ctx, s.clock().UTC(), 100)
 	if err != nil {
-		return err
+		return errors.Join(first, err)
 	}
 	for _, rec := range due {
 		if err := s.expireSession(ctx, rec); err != nil && first == nil {
@@ -769,6 +799,111 @@ func (s *pamService) expireOnce(ctx context.Context) error {
 		}
 	}
 	return first
+}
+
+// recoverIncompleteSSHActivations runs after startup and on every expiry tick.
+// The per-session PostgreSQL lock distinguishes an active signer call on any
+// replica from a process that died after consuming approval. The KRL command is
+// durable before the read model claims recovery; failures stay revoking and are
+// retried on the next tick.
+func (s *pamService) recoverIncompleteSSHActivations(ctx context.Context) error {
+	items, err := s.store.ListPendingPAMSSHActivations(ctx, 100)
+	if err != nil {
+		return err
+	}
+	var first error
+	for _, item := range items {
+		acquired, err := s.store.WithPAMSSHActivationFence(ctx, item.TenantID, item.SessionID, func() error {
+			// A process may die after the event append but before its SQL
+			// projection acknowledgement. Finish that canonical event before
+			// deciding an unrecorded signature must be revoked.
+			started, found, err := s.log.EventByID(ctx, pamSSHStartedEventID(item.TenantID, item.SessionID))
+			if err != nil {
+				return err
+			}
+			if found {
+				if started.Type != projections.EventPAMSessionStarted || started.TenantID != item.TenantID {
+					return orchestrator.ErrIdempotencyConflict
+				}
+				if err := s.projector.Apply(ctx, started); err != nil {
+					return err
+				}
+			}
+			current, err := s.store.GetPAMSSHActivation(ctx, item.TenantID, item.SessionID)
+			if err != nil {
+				return err
+			}
+			if current.Status != "pending" && current.Status != "revoking" {
+				return nil
+			}
+			if s.sshProtocol == nil || s.sshProtocol.tenantID != item.TenantID {
+				return fmt.Errorf("server: PAM SSH KRL for tenant %s is unavailable", item.TenantID)
+			}
+			if current.Status == "pending" {
+				if err := s.appendSSHRecoveryEvent(ctx, current, projections.EventPAMSSHSigningRecoveryRequested); err != nil {
+					return err
+				}
+			}
+			if err := s.sshProtocol.syncRevocations(ctx, true); err != nil {
+				return err
+			}
+			if !s.sshProtocol.krl.IsRevoked(0, current.KeyID) {
+				return errors.New("server: recovered PAM SSH key ID is absent from the served KRL")
+			}
+			return s.appendSSHRecoveryEvent(ctx, current, projections.EventPAMSSHSigningRecovered)
+		})
+		if acquired && err != nil && first == nil {
+			first = err
+		}
+		if !acquired {
+			continue // another replica still owns the signing attempt
+		}
+	}
+	return first
+}
+
+func pamSSHStartedEventID(tenantID, sessionID string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("pam-ssh-session-started\x00"+tenantID+"\x00"+sessionID)).String()
+}
+
+func (s *pamService) appendSSHSessionStarted(ctx context.Context, tenantID, sessionID string, payload projections.PAMSessionStarted) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	e, err := s.log.Append(ctx, events.Event{
+		ID: pamSSHStartedEventID(tenantID, sessionID), Type: projections.EventPAMSessionStarted,
+		TenantID: tenantID, Data: data,
+	})
+	if err != nil {
+		return err
+	}
+	if e.Type != projections.EventPAMSessionStarted || e.TenantID != tenantID || !bytes.Equal(e.Data, data) {
+		return orchestrator.ErrIdempotencyConflict
+	}
+	return s.projector.Apply(ctx, e)
+}
+
+func (s *pamService) appendSSHRecoveryEvent(ctx context.Context, item store.PAMSSHActivation, eventType string) error {
+	payload := projections.PAMSSHSigningRecoveryRequested{
+		ID: item.SessionID, KeyID: item.KeyID,
+		Reason: "approved SSH signing ended without a recorded session; deterministic key ID revoked",
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(eventType+"\x00"+item.TenantID+"\x00"+item.SessionID)).String()
+	e, err := s.log.Append(ctx, events.Event{
+		ID: eventID, Type: eventType, TenantID: item.TenantID, Data: data,
+	})
+	if err != nil {
+		return err
+	}
+	if e.Type != eventType || e.TenantID != item.TenantID || !bytes.Equal(e.Data, data) {
+		return orchestrator.ErrIdempotencyConflict
+	}
+	return s.projector.Apply(ctx, e)
 }
 
 func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) error {
@@ -907,10 +1042,21 @@ func (s *pamService) openSSH(ctx context.Context, tenantID, idempotencyKey, requ
 	if err != nil {
 		return api.PAMSession{}, fmt.Errorf("%w: ssh target %q refused session: %v", api.ErrPAMRejected, req.TargetID, err)
 	}
+	if s.afterSSHSign != nil {
+		if err := s.afterSSHSign(issued.Certificate, issued.Serial); err != nil {
+			secret.Wipe(issued.Certificate)
+			return api.PAMSession{}, err
+		}
+	}
 	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, req.TargetID, keyID, issued.Serial)
-	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload); err != nil {
+	if err := s.appendSSHSessionStarted(ctx, tenantID, id, payload); err != nil {
 		secret.Wipe(issued.Certificate)
 		return api.PAMSession{}, err
+	}
+	activation, err := s.store.GetPAMSSHActivation(ctx, tenantID, id)
+	if err != nil || activation.Status != "completed" {
+		secret.Wipe(issued.Certificate)
+		return api.PAMSession{}, fmt.Errorf("%w: SSH activation was not durably completed", api.ErrPAMRejected)
 	}
 	session.SSH = api.NewPAMSSHCredential(issued.Certificate, principal, keyID, issued.Serial, issued.ValidBefore)
 	return session, nil

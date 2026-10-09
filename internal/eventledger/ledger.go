@@ -137,6 +137,8 @@ const (
 	EventAWSHoneyTokenRearmed               = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                  = "pam.session.started"
 	EventPAMSessionActivationRequested      = "pam.session.activation_requested"
+	EventPAMSSHSigningRecoveryRequested     = "pam.session.ssh_signing_recovery_requested"
+	EventPAMSSHSigningRecovered             = "pam.session.ssh_signing_recovered"
 	EventPAMSessionExpired                  = "pam.session.expired"
 	EventPAMSessionRevocationRequested      = "pam.session.revocation_requested"
 	EventPAMSessionRevocationFailed         = "pam.session.revocation_failed"
@@ -338,6 +340,7 @@ var ledger = []FeatureEvent{
 	// F33 — Just-in-time privileged access sessions.
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
 	{"F33", "Just-in-time issuance with approval flows", "activate_pam_session", "openPAMSession", []string{EventPAMSessionActivationRequested}},
+	{"F33", "Just-in-time issuance with approval flows", "recover_pam_ssh_signing", "openPAMSession", []string{EventPAMSSHSigningRecoveryRequested, EventPAMSSHSigningRecovered}},
 	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
 	{"F33", "Just-in-time issuance with approval flows", "revoke_pam_session", "revokePAMSession", []string{EventPAMSessionRevocationRequested, EventPAMSessionRevocationFailed, EventPAMSessionRevoked}},
 	{"F33", "Just-in-time issuance with approval flows", "request_operation_approval", "transitionIdentity", []string{

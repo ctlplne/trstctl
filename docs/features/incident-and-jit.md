@@ -239,6 +239,17 @@ An exact `Idempotency-Key` retry returns the original credential while its
 protected HTTP result is retained. Once that cache entry has aged out, the
 durable session identity rejects the old key instead of signing another SSH
 certificate; a new access request needs a new key.
+For SSH, the approved activation also records a metadata-only signing intent
+before calling the isolated signer. If the control plane dies after signing but
+before `pam.session.started`, the recovery worker takes a per-session PostgreSQL
+lock across replicas, publishes `pam.session.ssh_signing_recovery_requested`,
+and revokes the deterministic `pam:<session-id>` key ID in the served KRL. It
+records `pam.session.ssh_signing_recovered` only after that KRL contains the key
+ID. An unavailable KRL leaves recovery pending and retries; it is not reported
+as complete. The old approval stays consumed, and a retry cannot sign another
+certificate. The operator should inspect those audit events, ensure each SSH
+host has fetched the current KRL, and submit a fresh request for access. The
+one-time certificate never enters the event log or read model.
 
 **Status:** the core identity approval gate is served through
 `POST /api/v1/identities/{id}/approvals`. The self-service certificate portal is
