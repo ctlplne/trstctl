@@ -2894,8 +2894,7 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		// QEMU instead exposes its own path followed by two exact copies of the
 		// signer guest path. Bind that path to the gate-built sibling inode before
 		// accepting an unreadable PR_SET_DUMPABLE=0 companion.
-		qemuGuest, qemuShape := qemuCompanionGuestPath(args)
-		hardenedQEMU := qemuShape && samePrivateReceiptObject(filepath.Dir(expected.EvidenceFile), expectedPath, qemuGuest) == nil
+		hardenedQEMU := qemuCompanionGuestPath(args, expectedPath)
 		if status.name == name && (pathMatches || hardenedRosetta || hardenedQEMU) {
 			matchedPackage = packagePath
 			matchedPath = expectedPath
@@ -2923,12 +2922,12 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 	return nil
 }
 
-func qemuCompanionGuestPath(args []string) (string, bool) {
+func qemuCompanionGuestPath(args []string, expectedPath string) bool {
 	if len(args) < 3 || args[0] != qemuX8664InterpreterPath || args[1] != args[2] ||
-		!filepath.IsAbs(args[1]) || filepath.Clean(args[1]) != args[1] {
-		return "", false
+		args[1] != expectedPath || !filepath.IsAbs(expectedPath) || filepath.Clean(expectedPath) != expectedPath {
+		return false
 	}
-	return args[1], true
+	return true
 }
 
 func validateUnreadableCompanionStatus(parentPID int, status reviewedCompanionStatus) error {

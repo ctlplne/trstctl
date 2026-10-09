@@ -525,15 +525,15 @@ func TestQEMUUnreadableCompanionHasExactDuplicatedGuestPath(t *testing.T) {
 		"exact signer and options": {args: []string{qemuX8664InterpreterPath, signer, signer, "--keystore", "/private/keys"}, want: true},
 		"foreign interpreter":      {args: []string{"/tmp/qemu-x86_64", signer, signer}},
 		"different guest":          {args: []string{qemuX8664InterpreterPath, signer, "/tmp/other"}},
+		"two foreign guests":       {args: []string{qemuX8664InterpreterPath, "/tmp/other", "/tmp/other"}},
 		"option before guest":      {args: []string{qemuX8664InterpreterPath, "--unsafe", signer, signer}},
 		"relative guest":           {args: []string{qemuX8664InterpreterPath, "signer", "signer"}},
 		"unclean guest":            {args: []string{qemuX8664InterpreterPath, signer + "/../trstctl-signer", signer + "/../trstctl-signer"}},
 		"missing duplicate":        {args: []string{qemuX8664InterpreterPath, signer}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, ok := qemuCompanionGuestPath(test.args)
-			if ok != test.want || (ok && got != signer) {
-				t.Fatalf("QEMU companion guest path = %q, accepted=%t, want accepted=%t", got, ok, test.want)
+			if got := qemuCompanionGuestPath(test.args, signer); got != test.want {
+				t.Fatalf("QEMU companion guest accepted=%t, want=%t", got, test.want)
 			}
 		})
 	}
