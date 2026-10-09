@@ -628,9 +628,9 @@ not this file.
 | `tools/dodcensus/proof/launched.go:1372` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:1832` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:1869` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2064` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2068` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2718` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2069` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2073` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2723` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:147` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:153` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:159` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1397,12 +1397,12 @@ not this file.
 | `tools/dodcensus/proof/launched.go:407` | gate-owned private directory created above (CWE-22) |
 | `tools/dodcensus/proof/launched.go:579` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1311` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2080` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2194` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2289` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2436` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2515` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2769` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2085` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2199` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2294` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2441` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2520` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2774` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:208` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:317` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:993` | test reads its own fixture/tempdir path (CWE-22) |

@@ -2036,8 +2036,13 @@ func validateBinfmtGuestBinding(pid int, path string, identity executableIdentit
 	if err != nil {
 		return "", err
 	}
-	if err := validateRosettaGuestDescriptors(pid, path, identity, reviewedGuestDescriptor{path: runtimePrivilegeDropper, identity: dropper}); err != nil {
-		return "", err
+	// Rosetta retains the guest and privilege-dropper descriptors at fixed
+	// offsets. QEMU closes both after mapping the exact ELF; its argv and the
+	// kernel map_files digest checks above are the causal executable witness.
+	if !allowQEMUDuplicateArgv {
+		if err := validateRosettaGuestDescriptors(pid, path, identity, reviewedGuestDescriptor{path: runtimePrivilegeDropper, identity: dropper}); err != nil {
+			return "", err
+		}
 	}
 	return mapDevice, nil
 }
