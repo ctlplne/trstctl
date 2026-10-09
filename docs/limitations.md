@@ -4486,6 +4486,19 @@ matches its exact inspected CSR algorithm, while a hybrid enrollment
 carries a classical subject key and stays governed by its classical family
 label. The selected profile still controls which algorithms an enrollment may use.
 
+**PQC certificate-key migration limit:** The migration preview and start refuse
+an observed name that the active default certificate profile would deny before
+any run or outbox item is created. The current certificate-key reissue worker
+constructs a hybrid CSR with a temporary subject key and destroys that key after
+constructing the CSR. It does not transfer a usable subject key to a deployment
+target or verify a served replacement. An `issued` run result only proves that
+the issuer returned a certificate; it cannot complete a certificate lifecycle
+migration. Operators must use the normal issuer and connector lifecycle with
+target-held key custody, inspect the served leaf independently, and record the
+evidence in a PQC campaign. The automatic certificate-key path needs a
+target-bound key/CSR handoff and verified deployment before it can claim
+end-to-end migration. TLS posture rollout is a separate bound-target action.
+
 The core CBOM posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+
 (and hybrid labels) when it finds them in your estate. Algorithm recognition
 and posture classification attach in every build without a commercial license. Because all cryptography enters through one isolated

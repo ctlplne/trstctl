@@ -47,6 +47,7 @@ type LicensedAPIOptionsDeps struct {
 	Store              *store.Store
 	Log                *events.Log
 	Outbox             *orchestrator.Outbox
+	DefaultProfile     string
 	TLSPostureDeployer connector.TLSPostureDeployer
 	OutboxIntegrityKey seal.KeyWrapper
 	TenantCrypto       tenantseal.Access

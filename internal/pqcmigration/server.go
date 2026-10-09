@@ -39,13 +39,14 @@ const (
 )
 
 type pqcMigrationService struct {
-	store        *store.Store
-	log          *events.Log
-	outbox       *orchestrator.Outbox
-	deployer     connector.TLSPostureDeployer
-	progress     *ProgressProjection
-	integrityKey seal.KeyWrapper
-	tenantCrypto tenantseal.Access
+	store          *store.Store
+	log            *events.Log
+	outbox         *orchestrator.Outbox
+	defaultProfile string
+	deployer       connector.TLSPostureDeployer
+	progress       *ProgressProjection
+	integrityKey   seal.KeyWrapper
+	tenantCrypto   tenantseal.Access
 }
 
 func NewOutboxFactory(projection *ProgressProjection) editionseam.LicensedOutboxFactory {
@@ -241,6 +242,9 @@ func (s *pqcMigrationService) PlanPreview(ctx context.Context, tenantID string, 
 		}
 		return PlanPreviewResponse{}, err
 	}
+	if err := s.preflightPQCReissues(ctx, tenantID, plan); err != nil {
+		return PlanPreviewResponse{}, err
+	}
 	out := PlanPreviewResponse{
 		Reissues:    make([]PlanPreviewReissue, 0, len(plan.Reissues)),
 		TLSRollouts: make([]PlanPreviewTLSRollout, 0, len(plan.TLSRollouts)),
@@ -301,6 +305,9 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 		if errors.As(err, &missing) {
 			return Response{}, pgx.ErrNoRows
 		}
+		return Response{}, err
+	}
+	if err := s.preflightPQCReissues(ctx, tenantID, plan); err != nil {
 		return Response{}, err
 	}
 	runID := uuid.NewString()

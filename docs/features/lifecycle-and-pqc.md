@@ -297,16 +297,21 @@ an operator starts a migration.
 
 ### PQC migration orchestration (F57)
 
-Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is half the
-battle; the other half is *fixing* it without a manual project. PQC migration is served
+Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is the
+starting point. PQC migration planning and issuance are served
 in every build (`internal/pqcmigration`): the orchestrator
 consumes the CBOM read model, finds quantum-vulnerable certificate-key assets, and queues
 re-issuance through the outbox toward the selected target algorithm.
 
 The migration API attaches `POST /api/v1/pqc/migrations` and
 `POST /api/v1/pqc/migrations/{run_id}/rollback` through the attach seam, so those routes
-are not part of the static OpenAPI golden; `trstctl-cli pqc migrations start|rollback`
+are not part of the static OpenAPI golden; `trstctl-cli migration start|rollback`
 drives them, while the `pqc campaigns` commands record operator work and never call them.
+For certificate reissues, preview and start check the observed name against the
+active served default certificate profile before queueing work. A refused name
+returns a conflict with the profile reason and creates no run or outbox intent.
+The issuer checks the actual CSR again when work executes, so a profile change
+between review and execution cannot bypass the policy.
 Run progress comes from retained events. CBOM posture changes only with an
 independent observation or a verified TLS posture receipt; issuing a certificate
 alone does not change the algorithm the endpoint is recorded as serving.
@@ -327,9 +332,15 @@ changed by these issuance-only or unverified rollback events. Exhausted issuance
 report `failed` and `rollback_failed` with a redacted explanation. A missing target
 or deployment proof remains visible; neither a successful issuance nor an unverified
 rollback establishes working key custody, renewal, or endpoint recovery.
+The current certificate-key reissue worker generates its hybrid CSR from a temporary
+key and does not retain or deploy that key. Its `issued` state is therefore only an
+issuance receipt, not a usable replacement for a served certificate. Use the
+normal certificate lifecycle to place and verify a replacement, then record
+its evidence in a PQC campaign. See [Current limitations](../limitations.md).
 
 **Execution status:** served in every build through `internal/pqcmigration`, for CBOM
-certificate-key assets through ACME hybrid transition re-issuance with rollback. The core
+certificate-key assets through ACME hybrid transition issuance and an inventory-only
+rollback. Neither operation deploys or verifies a replacement leaf. The core
 also exposes CBOM posture, profile selection, migration campaign tracking and
 proof, PQC algorithms, issuance, and the automated execution described here.
 An expired commercial license does not disable Core migration or rollback;

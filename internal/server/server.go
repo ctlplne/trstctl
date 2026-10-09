@@ -1291,7 +1291,8 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	if d.LicensedAPIOptionsFactory != nil {
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
-			KEMCustody: s.kemCustody(), TLSPostureDeployer: d.ConnectorRegistry,
+			DefaultProfile: d.DefaultProfile,
+			KEMCustody:     s.kemCustody(), TLSPostureDeployer: d.ConnectorRegistry,
 			OutboxIntegrityKey: d.KEK,
 			TenantCrypto:       d.TenantCrypto,
 		})

@@ -89,7 +89,8 @@ func NewAPIOptionsFactory(projection *ProgressProjection) editionseam.LicensedAP
 		}
 		svc := &pqcMigrationService{
 			store: d.Store, log: d.Log, outbox: d.Outbox,
-			deployer: d.TLSPostureDeployer, progress: projection,
+			defaultProfile: d.DefaultProfile,
+			deployer:       d.TLSPostureDeployer, progress: projection,
 			integrityKey: d.OutboxIntegrityKey, tenantCrypto: d.TenantCrypto,
 		}
 		return []api.Option{

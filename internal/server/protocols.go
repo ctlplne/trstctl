@@ -378,6 +378,7 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
 		return crypto.LeafProfile{}, 0, fmt.Errorf("server: decode profile %q: %w", p.defaultProfile, err)
 	}
+	prof.Name, prof.Version = rec.Name, rec.Version
 	if maximum := time.Duration(prof.MaxValidity); maximum > 0 && ttl > maximum {
 		ttl = maximum
 	}
