@@ -222,7 +222,7 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"PACKAGE_TEST_TIMEOUT := 60m",
 		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
 		"$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
-		"$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
+		"$(GO) test -race -count=1 -p=1 -timeout=$(PACKAGE_TEST_TIMEOUT) -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
 		"$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer",
 		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race",
 		"TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
@@ -251,7 +251,7 @@ func TestMakeTestMeasuresLiveSLOWithoutInstrumentation(t *testing.T) {
 	}
 	testBlock := mk[testStart:wallStart]
 	for _, want := range []string{
-		"-race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
+		"-race -count=1 -p=1 -timeout=$(PACKAGE_TEST_TIMEOUT) -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
 		"TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 	} {
 		if !strings.Contains(testBlock, want) {

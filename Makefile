@@ -60,7 +60,9 @@ PACKAGE_TEST_TIMEOUT := 60m
 # database bootstraps contend for the same host resources. The live mutation
 # latency/throughput test runs uninstrumented after the signer is built. The
 # remaining live-package correctness tests retain race and atomic coverage with
-# a longer harness deadline for instrumented startup. No production SLO is lowered.
+# a longer harness deadline for instrumented startup and the same functional
+# package clock; Go's implicit 10m clock cut off the last soak test under load.
+# No production SLO is lowered.
 LIVE_PERF_PACKAGES := ./internal/perf ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
 LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst))
 LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$
@@ -203,7 +205,7 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test live perf packages (serial race + coverage correctness lane)"
 	@mkdir -p $(BIN_DIR)
 	@$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer
-	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
+	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race -count=1 -p=1 -timeout=$(PACKAGE_TEST_TIMEOUT) -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
 	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
