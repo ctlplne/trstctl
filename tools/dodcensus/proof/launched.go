@@ -2032,7 +2032,7 @@ func validateBinfmtGuestBinding(pid int, path string, identity executableIdentit
 	if !validateBinfmtGuestArgv(args, path, exactArgv, allowQEMUDuplicateArgv) {
 		return "", fmt.Errorf("guest argv does not name only the exact private binary")
 	}
-	mapDevice, err := validateGuestExecutableMaps(pid, path, identity, allowRosettaBindAlias, reviewedInterpreters...)
+	mapDevice, err := validateGuestExecutableMaps(pid, path, identity, allowRosettaBindAlias, allowQEMUDuplicateArgv, reviewedInterpreters...)
 	if err != nil {
 		return "", err
 	}
@@ -2060,8 +2060,8 @@ func validateBinfmtGuestArgv(args []string, path string, exact, allowQEMUDuplica
 	return allowQEMUDuplicate && len(args) == 3 && args[0] == qemuX8664InterpreterPath && args[1] == path && args[2] == path
 }
 
-func validateGuestExecutableMaps(pid int, path string, identity executableIdentity, allowRosettaBindAlias bool, reviewedInterpreters ...executableIdentity) (string, error) {
-	return validateGuestExecutableMapsAtForUIDWithRosettaAlias(filepath.Join("/proc", strconv.Itoa(pid)), path, identity, uint32(os.Geteuid()), allowRosettaBindAlias, reviewedInterpreters...) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
+func validateGuestExecutableMaps(pid int, path string, identity executableIdentity, allowRosettaBindAlias, allowQEMUReadOnlyText bool, reviewedInterpreters ...executableIdentity) (string, error) {
+	return validateGuestExecutableMapsAtForUIDWithEmulation(filepath.Join("/proc", strconv.Itoa(pid)), path, identity, uint32(os.Geteuid()), allowRosettaBindAlias, allowQEMUReadOnlyText, reviewedInterpreters...) // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
 }
 
 func validateGuestExecutableMapsAt(procDir, path string, identity executableIdentity, reviewedInterpreters ...executableIdentity) (string, error) {
@@ -2073,6 +2073,10 @@ func validateGuestExecutableMapsAtForUID(procDir, path string, identity executab
 }
 
 func validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, path string, identity executableIdentity, runtimeUID uint32, allowRosettaBindAlias bool, reviewedInterpreters ...executableIdentity) (string, error) {
+	return validateGuestExecutableMapsAtForUIDWithEmulation(procDir, path, identity, runtimeUID, allowRosettaBindAlias, false, reviewedInterpreters...)
+}
+
+func validateGuestExecutableMapsAtForUIDWithEmulation(procDir, path string, identity executableIdentity, runtimeUID uint32, allowRosettaBindAlias, allowQEMUReadOnlyText bool, reviewedInterpreters ...executableIdentity) (string, error) {
 	raw, err := os.ReadFile(filepath.Join(procDir, "maps")) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 	if err != nil || len(raw) == 0 || len(raw) > maxEvidenceBody {
 		return "", fmt.Errorf("read bounded guest executable maps: %w", err)
@@ -2170,7 +2174,10 @@ func validateGuestExecutableMapsAtForUIDWithRosettaAlias(procDir, path string, i
 			return "", fmt.Errorf("guest executable maps disagree on device identity")
 		}
 		mappings++
-		if executableMap && fields[2] == "00000000" {
+		// QEMU interprets guest instructions from a read-only ELF mapping.
+		// The caller enables this only after binding the reviewed QEMU process;
+		// the kernel map_files object above still must match the exact digest.
+		if fields[2] == "00000000" && (executableMap || (allowQEMUReadOnlyText && fields[1] == "r--p")) {
 			executable = true
 		}
 	}

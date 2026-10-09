@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1492 annotated sites across 26 rules. Each row is
+1494 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -630,7 +630,7 @@ not this file.
 | `tools/dodcensus/proof/launched.go:1869` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:2064` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:2068` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/proof/launched.go:2711` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/proof/launched.go:2718` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:147` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:153` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:159` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -915,9 +915,9 @@ not this file.
 | `tools/dodcensus/proof/launched.go:1394` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/launched.go:1430` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/proof/proof.go:331` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1051` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1093` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1080` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1122` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1206` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/pqclab/main.go:344` | developer tool running fixed toolchain commands over the repo (CWE-78) |
@@ -1011,10 +1011,10 @@ not this file.
 | `internal/signing/socket_mode_unix_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `tools/dodcensus/proof/artifact_watch_linux_test.go:97` | adversarial mutation fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:747` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:767` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:777` | deliberately unsafe fixture mode (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:810` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:776` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:796` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:806` | deliberately unsafe fixture mode (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:839` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/runtime_runner_test.go:150` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/runtime_runner_test.go:156` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/runtime_runner_test.go:173` | private fixture-directory mode is the behavior under test (CWE-276) |
@@ -1024,7 +1024,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (406 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (407 sites)
 
 | Location | Reason |
 |---|---|
@@ -1397,15 +1397,16 @@ not this file.
 | `tools/dodcensus/proof/launched.go:407` | gate-owned private directory created above (CWE-22) |
 | `tools/dodcensus/proof/launched.go:579` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1311` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2076` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2187` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2282` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2429` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2508` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/launched.go:2762` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:288` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:964` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:1102` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2080` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2194` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2289` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2436` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2515` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/launched.go:2769` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:208` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:317` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:993` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:1131` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime.go:132` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:153` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:224` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -1519,13 +1520,13 @@ not this file.
 | `scripts/perf/cmd/spineburst/main.go:173` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/dodcensus/proof/artifact_watch_linux_test.go:65` | private test fixture (CWE-276) |
 | `tools/dodcensus/proof/artifact_watch_linux_test.go:91` | private test fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:230` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:249` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:279` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:364` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:377` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:398` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/proof/proof_test.go:401` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:259` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:278` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:308` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:393` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:406` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:427` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/proof/proof_test.go:430` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:201` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
@@ -1619,12 +1620,12 @@ not this file.
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1051` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1093` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/proof/proof_test.go:1177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1080` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1122` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/dodcensus/proof/proof_test.go:1206` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (76 sites)
+### G703 — CWE-22 Path traversal (taint) (77 sites)
 
 | Location | Reason |
 |---|---|
@@ -1694,8 +1695,9 @@ not this file.
 | `tools/dodcensus/managed_key_manifest_test.go:603` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/launched.go:1230` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof.go:98` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:293` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/proof/proof_test.go:1207` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:213` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:322` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/proof/proof_test.go:1236` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:883` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:346` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:482` | test path inside its own tempdir/checkout (CWE-22) |

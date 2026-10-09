@@ -201,6 +201,35 @@ func TestBinfmtGuestArgvAcceptsOnlyReviewedQEMUDuplicate(t *testing.T) {
 }
 
 func TestGuestExecutableMapsBindOnlyTheExactCallerExecutable(t *testing.T) {
+	t.Run("QEMU read-only guest text still binds exact map_files bytes", func(t *testing.T) {
+		procDir, targetPath, target, foreignPath := guestProcessFixture(t)
+		writeGuestMaps(t, procDir, targetPath, target, "", executableIdentity{})
+		mapsPath := filepath.Join(procDir, "maps")
+		raw, err := os.ReadFile(mapsPath) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
+		if err != nil {
+			t.Fatal(err)
+		}
+		maps := strings.Replace(string(raw), "r-xp 00000000", "r--p 00000000", 1)
+		if err := os.WriteFile(mapsPath, []byte(maps), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
+			t.Fatal(err)
+		}
+		if _, err := validateGuestExecutableMapsAt(procDir, targetPath, target); err == nil || !strings.Contains(err.Error(), "no complete exact executable mapping") {
+			t.Fatalf("non-QEMU read-only guest text accepted: %v", err)
+		}
+		if _, err := validateGuestExecutableMapsAtForUIDWithEmulation(procDir, targetPath, target, target.UID, false, true); err != nil {
+			t.Fatalf("QEMU exact read-only guest text rejected: %v", err)
+		}
+		if err := os.Remove(filepath.Join(procDir, "map_files", "1000-2000")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(foreignPath, filepath.Join(procDir, "map_files", "1000-2000")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := validateGuestExecutableMapsAtForUIDWithEmulation(procDir, targetPath, target, target.UID, false, true); err == nil {
+			t.Fatal("QEMU target pathname with foreign map_files bytes accepted")
+		}
+	})
+
 	t.Run("exact target maps", func(t *testing.T) {
 		procDir, targetPath, target, _ := guestProcessFixture(t)
 		writeGuestMaps(t, procDir, targetPath, target, "", executableIdentity{})
