@@ -145,12 +145,18 @@ func TestReviewedBinfmtInterpreterIsClosedToExactImmutableRosetta(t *testing.T) 
 	if err := validateReviewedBinfmtInterpreter(rosettaInterpreterPath, rosetta, runner, target); err != nil {
 		t.Fatalf("exact immutable Rosetta interpreter rejected: %v", err)
 	}
+	if err := validateReviewedBinfmtInterpreter(qemuX8664InterpreterPath, rosetta, runner, target); err != nil {
+		t.Fatalf("exact immutable QEMU interpreter rejected: %v", err)
+	}
 	for name, test := range map[string]struct {
 		path     string
 		identity executableIdentity
 	}{
 		"target alias":     {path: rosettaInterpreterPath, identity: target},
 		"near path":        {path: rosettaInterpreterPath + "-fake", identity: rosetta},
+		"QEMU near path":   {path: qemuX8664InterpreterPath + "-fake", identity: rosetta},
+		"QEMU user owned":  {path: qemuX8664InterpreterPath, identity: func() executableIdentity { value := rosetta; value.UID = 501; return value }()},
+		"QEMU writable":    {path: qemuX8664InterpreterPath, identity: func() executableIdentity { value := rosetta; value.Mode = 0o577; return value }()},
 		"user owned":       {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.UID = 501; return value }()},
 		"world writable":   {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.Mode = 0o577; return value }()},
 		"multiple links":   {path: rosettaInterpreterPath, identity: func() executableIdentity { value := rosetta; value.Links = 2; return value }()},

@@ -79,9 +79,10 @@ type processExecutableWitness struct {
 }
 
 const (
-	processModeNative      = "native"
-	processModeBinfmt      = "binfmt"
-	rosettaInterpreterPath = "/run/rosetta/rosetta"
+	processModeNative        = "native"
+	processModeBinfmt        = "binfmt"
+	rosettaInterpreterPath   = "/run/rosetta/rosetta"
+	qemuX8664InterpreterPath = "/usr/bin/qemu-x86_64"
 )
 
 var shippedBuilds = struct {
@@ -1960,12 +1961,11 @@ func firstField(values []string) string {
 
 // validateReviewedBinfmtInterpreter accepts the ordinary binfmt shape where
 // the child and gate runner expose the same interpreter identity. Docker
-// Desktop's Rosetta path is different: a process launched directly by the Go
-// test exposes a kernel-injected, root-owned /run/rosetta/rosetta executable,
-// while the already-running gate test exposes its guest binary in /proc/self.
-// The exact path and immutable executable identity keep that compatibility
-// case closed; validateBinfmtGuestBinding still binds argv, maps, map_files, and
-// Rosetta-held descriptors to the exact gate-built guest bytes.
+// Desktop can instead expose a root-owned Rosetta or QEMU executable for a
+// directly launched child while the gate test exposes its guest binary. The
+// exact interpreter paths and immutable executable identities keep these
+// compatibility cases closed; validateBinfmtGuestBinding still binds argv,
+// maps, map_files, and held descriptors to the exact gate-built guest bytes.
 func validateReviewedBinfmtInterpreter(interpreterTarget string, interpreter, gateRunner, target executableIdentity) error {
 	if interpreter == target {
 		return fmt.Errorf("non-native interpreter aliases the gate-built target")
@@ -1973,12 +1973,12 @@ func validateReviewedBinfmtInterpreter(interpreterTarget string, interpreter, ga
 	if interpreter == gateRunner {
 		return nil
 	}
-	if interpreterTarget != rosettaInterpreterPath {
+	if interpreterTarget != rosettaInterpreterPath && interpreterTarget != qemuX8664InterpreterPath {
 		return fmt.Errorf("non-native process executable %q is not a reviewed gate-runner interpreter", interpreterTarget)
 	}
 	if interpreter.UID != 0 || interpreter.Links != 1 || !interpreter.Mode.IsRegular() || interpreter.Mode.Perm()&0o111 == 0 || interpreter.Mode.Perm()&0o022 != 0 ||
 		interpreter.Size <= 0 || interpreter.Size > maxShippedBinaryBytes || !validSHA256Digest(interpreter.Digest) {
-		return fmt.Errorf("rosetta interpreter is not a bounded root-owned immutable executable")
+		return fmt.Errorf("reviewed binfmt interpreter is not a bounded root-owned immutable executable")
 	}
 	return nil
 }
