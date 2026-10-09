@@ -25,7 +25,8 @@ post-quantum target.
 > **In the console:** the `/posture` screen shows the CBOM cryptographic inventory, a
 > PQC readiness gauge (readiness % with quantum-vulnerable / PQC-ready / out-of-policy
 > counts), and the migration-orchestration panel that queues and can roll back a
-> migration. See [The web console](../web-console.md).
+> migration run. Certificate-key rollback is inventory-only; it does not restore
+> a served certificate. See [The web console](../web-console.md).
 
 ## Before you start
 
@@ -34,11 +35,10 @@ post-quantum target.
 - The lifecycle, crypto-agility, and PQC-migration model is in
   [Lifecycle & PQC](../features/lifecycle-and-pqc.md); how the key-encryption key and
   secret material are protected is in [Secrets](../features/secrets.md).
-- The shipped Core path serves three concrete compatibility anchors: pure
-  ML-DSA-65 leaf enrollment over EST with stock OpenSSL 3.5, a two-entry classical +
-  ML-DSA-65 SPIFFE Workload API response, and automatic CBOM TLS protocol/cipher
-  remediation through a posture-capable connector with exact rollback. See
-  [Current limitations](../limitations.md) for the tested client/connector boundary;
+- The shipped Core path serves two concrete compatibility anchors: pure
+  ML-DSA-65 leaf enrollment over EST with stock OpenSSL 3.5 and a two-entry classical +
+  ML-DSA-65 SPIFFE Workload API response. Host-agent CBOM TLS posture rollout
+  remains unavailable. See [Current limitations](../limitations.md) for the tested client boundary;
   it is not a promise that every legacy client understands ML-DSA.
 
 ## Steps
@@ -152,34 +152,13 @@ post-quantum target.
    receipt only. Use the normal certificate lifecycle to install and independently
    verify a replacement before marking a PQC campaign finding remediated.
 
-   For a CBOM TLS endpoint or host-config finding, bind the finding to the connector
-   target that owns the listener and include the desired TLS posture in the same
-   request. The server rejects an unbound finding instead of pretending it migrated:
+   For CBOM TLS endpoint and host-config findings, use the normal host-agent
+   connector lifecycle, independently read the listener's effective TLS policy,
+   and rescan before recording remediation. The automatic migration API refuses
+   host-agent Envoy targets with HTTP 409 until posture work runs on that agent
+   and returns a durable readback and rollback receipt.
 
-   ```json
-   {
-     "asset_ids": ["<tls-finding-asset-id>"],
-     "target_algorithm": "ML-DSA-65",
-     "protocol": "acme",
-     "rollback_on_failure": true,
-     "tls_bindings": [{
-       "asset_id": "<tls-finding-asset-id>",
-       "target_id": "<connector-target-id>",
-       "desired": {
-         "minimum_version": "TLSv1.3",
-         "cipher_suites": ["TLS_AES_256_GCM_SHA384"],
-         "key_exchange_groups": ["X25519MLKEM768", "X25519"]
-       }
-     }]
-   }
-   ```
-
-   A successful response increments `tls_findings_queued`. Read
-   `GET /api/v1/pqc/migrations/<run-id>` until the finding is `applied`; the progress
-   projection is built from the immutable prepared/completed events and the connector
-   receiver evidence, not an optimistic in-memory flag.
-
-6. Exercise rollback before broad rollout. Keep rollback boring and rehearsed:
+6. Inspect the rollback limit before broad rollout:
 
    ```json
    {
@@ -199,9 +178,10 @@ post-quantum target.
      -d @pqc-rollback.json
    ```
 
-   This queues rollback through the outbox and records
-   `licensed_crypto.migration.rollback_completed`, restoring the original CBOM
-   posture for those assets.
+   For certificate-key assets this records an inventory-only
+   `rollback_unverified` result. It does not restore a deployed leaf or prove
+   that a client accepts the predecessor. Restore through the normal connector
+   lifecycle, verify the served certificate independently, and rescan.
 
 7. Set the renewal window the migration will ride on. Migration re-issues
    credentials, and lifecycle thresholds govern when renewal happens. Configure them:

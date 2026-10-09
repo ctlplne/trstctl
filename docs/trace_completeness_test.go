@@ -550,9 +550,10 @@ func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 		"two-entry response",
 		"tls finding rollout",
 		"envoy",
+		"automated tls finding journey is not complete",
 		"hybrid-to-pure cutover",
 	}) {
-		t.Error("limitations.md must disclose the served PQC proofs and their exact compatibility boundary — TRACE-008")
+		t.Error("limitations.md must disclose the served PQC client proofs and the incomplete Envoy rollout — TRACE-008")
 	}
 
 	lcp := strings.ToLower(read(t, "features/lifecycle-and-pqc.md"))
@@ -562,11 +563,15 @@ func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 		"in every build",
 		"stock openssl 3.5",
 		"two-entry classical + ml-dsa-65 response",
-		"receiver readback and exact rollback",
+		"host-target tls posture migration is currently",
+		"agent-owned posture jobs",
 	} {
 		if !strings.Contains(lcp, want) {
-			t.Errorf("features/lifecycle-and-pqc.md must disclose PQC placement in the core (missing %q) — TRACE-008", want)
+			t.Errorf("features/lifecycle-and-pqc.md must disclose the core client proofs and host-agent limit (missing %q) — TRACE-008", want)
 		}
+	}
+	if strings.Contains(lcp, "receiver readback and exact rollback") {
+		t.Error("features/lifecycle-and-pqc.md still claims completed Envoy rollout evidence — TRACE-008")
 	}
 	if strings.Contains(lcp, "every legacy client") && !strings.Contains(lcp, "not a claim about every legacy client") {
 		t.Error("features/lifecycle-and-pqc.md over-claims universal PQC client compatibility — TRACE-008")

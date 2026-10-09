@@ -436,12 +436,12 @@ every build through `internal/pqcmigration`.
   separate fixed-threshold `lifecycle.Manager.RenewExpiring` library method.
 - **PQC execution** is core scope since 2026-09-20: PQC algorithms, automated fleet
   execution and the standalone `pqc campaigns` API/CLI/UI all attach in every build.
-- **Former PQC end-to-end residuals** are served in every build.
+- **Two PQC client compatibility anchors** are served in every build.
   Stock OpenSSL 3.5 enrolls and verifies a pure ML-DSA-65 subject leaf over EST; the
-  stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response; and CBOM
-  TLS findings roll out TLS 1.3 plus `X25519MLKEM768` through a posture-capable connector
-  with receiver readback and exact rollback (the shipped proof uses Envoy) — a tested
-  client/connector boundary, not a claim about every legacy client. Hybrid-to-pure
+  stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response.
+  CBOM TLS finding rollout on host-agent Envoy remains open until agent-owned
+  execution and rollback are served. These client proofs do not claim that every
+  legacy client understands ML-DSA. Hybrid-to-pure
   replacement of an already deployed leaf stays gated by succession and evidence-based
   retirement; direct pure enrollment is served.
 - **SLH-DSA** signatures are large — the conservative choice for long-lived roots, not
