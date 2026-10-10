@@ -559,10 +559,11 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 	wanted := make(map[string]bool, len(req.AssetIDs))
 	for _, id := range req.AssetIDs {
 		if id == "" || wanted[id] {
-			return RollbackResponse{}, errors.New("pqcmigration: rollback asset ids must be non-empty and unique")
+			return RollbackResponse{}, api.ErrStatus(http.StatusBadRequest, "pqcmigration: rollback asset ids must be non-empty and unique")
 		}
 		wanted[id] = true
 	}
+	var runFound bool
 	certCompleted := make(map[string]projections.LicensedCryptoMigrationAssetCompleted)
 	tlsStarted := make(map[string]projections.LicensedCryptoMigrationTLSPosture)
 	tlsPrepared := make(map[string]TLSFindingPrepared)
@@ -581,6 +582,7 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 				return err
 			}
 			if started.RunID == runID {
+				runFound = true
 				for _, intent := range started.TLSPostures {
 					tlsStarted[intent.AssetID] = intent
 				}
@@ -737,13 +739,11 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 		}
 		tlsPayloads = append(tlsPayloads, payload)
 	}
-	for id := range wanted {
-		if !foundWanted[id] {
-			return RollbackResponse{}, fmt.Errorf("pqcmigration: asset %s has no applied, rollback-eligible result in run %s", id, runID)
-		}
+	if err := validateRollbackOutcome(runFound, wanted, foundWanted, runID); err != nil {
+		return RollbackResponse{}, err
 	}
 	if len(certPayloads) == 0 && len(tlsPayloads) == 0 {
-		return RollbackResponse{}, pgx.ErrNoRows
+		return RollbackResponse{}, api.ErrStatus(http.StatusConflict, "pqcmigration: no rollback-eligible work remains in run "+runID)
 	}
 	sort.Slice(tlsPayloads, func(i, j int) bool {
 		return tlsPayloads[i].Mutation.TargetID < tlsPayloads[j].Mutation.TargetID
@@ -824,6 +824,26 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 		MigrationProgress: api.CBOMInventoryFromAssets(assets).MigrationProgress,
 		QueuedAt:          time.Now().UTC(),
 	}, nil
+}
+
+// A missing run is indistinguishable across tenants. A known run with no
+// applied selected result is a state conflict, not an internal server failure.
+// Validate before appending a rollback event or enqueueing an external effect.
+func validateRollbackOutcome(runFound bool, wanted, eligible map[string]bool, runID string) error {
+	if !runFound {
+		return api.ErrStatus(http.StatusNotFound, "pqcmigration: run not found")
+	}
+	ids := make([]string, 0, len(wanted))
+	for id := range wanted {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		if !eligible[id] {
+			return api.ErrStatus(http.StatusConflict, fmt.Sprintf("pqcmigration: asset %s has no applied, rollback-eligible result in run %s", id, runID))
+		}
+	}
+	return nil
 }
 
 func openCompletedTLSForwardIntent(key seal.KeyWrapper, tenantID string, completed TLSFindingCompleted) (pqcMigrationTLSPosturePayload, error) {

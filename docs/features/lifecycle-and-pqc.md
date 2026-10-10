@@ -332,6 +332,11 @@ changed by these issuance-only or unverified rollback events. Exhausted issuance
 report `failed` and `rollback_failed` with a redacted explanation. A missing target
 or deployment proof remains visible; neither a successful issuance nor an unverified
 rollback establishes working key custody, renewal, or endpoint recovery.
+Rollback accepts only findings with an applied, rollback-eligible result in that run.
+For a known run whose selected finding failed before application, the API returns
+HTTP 409 with the finding ID and queues no recovery work. A run outside the caller's
+tenant, or a nonexistent run, returns HTTP 404; duplicate or empty asset IDs return
+HTTP 400. Correct the selection and retry with a new idempotency key.
 The current certificate-key reissue worker generates its hybrid CSR from a temporary
 key and does not retain or deploy that key. Its `issued` state is therefore only an
 issuance receipt, not a usable replacement for a served certificate. Use the
