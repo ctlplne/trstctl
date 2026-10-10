@@ -976,7 +976,8 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 
 func TestProviderActivityIsEventBackedAndDelegationScoped(t *testing.T) {
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}
+	log, err := events.Open(ctx, cfg)
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -1004,6 +1005,16 @@ func TestProviderActivityIsEventBackedAndDelegationScoped(t *testing.T) {
 	}
 	if _, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: legacyProviderAuditTenant, Data: drillPayload}); err != nil {
 		t.Fatalf("append drill activity: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: "test.unrelated", TenantID: denied, Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	h := NewHandler(Config{

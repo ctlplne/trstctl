@@ -19,8 +19,25 @@ import (
 // by distinct retained subjects, not by the number of events.
 func (l *Log) ReplayTenantTypesThrough(ctx context.Context, tenantID string, from, through uint64,
 	types []string, fn func(Event) error) error {
-	if l == nil || tenantID == "" || fn == nil {
+	if tenantID == "" {
 		return errors.New("events: typed replay requires log, tenant, and callback")
+	}
+	return l.replayTypesThrough(ctx, tenantID, from, through, types, fn)
+}
+
+// ReplayTypesThrough is for authority views that intentionally span tenants.
+// Callers must enforce their own access scope before returning any envelope.
+// It has the same retained subject index, finite cut and generation fence as
+// ReplayTenantTypesThrough, but does not filter by tenant.
+func (l *Log) ReplayTypesThrough(ctx context.Context, from, through uint64,
+	types []string, fn func(Event) error) error {
+	return l.replayTypesThrough(ctx, "", from, through, types, fn)
+}
+
+func (l *Log) replayTypesThrough(ctx context.Context, tenantID string, from, through uint64,
+	types []string, fn func(Event) error) error {
+	if l == nil || fn == nil {
+		return errors.New("events: typed replay requires log and callback")
 	}
 	seen := make(map[string]bool, len(types))
 	for _, eventType := range types {
@@ -83,7 +100,7 @@ func (l *Log) ReplayTenantTypesThrough(ctx context.Context, tenantID string, fro
 				if !typedReplaySubject(cursor.raw.Subject, event.Type) {
 					return fmt.Errorf("events: typed replay subject and retained envelope differ at sequence %d", event.Sequence)
 				}
-				if event.TenantID == tenantID && seen[event.Type] {
+				if (tenantID == "" || event.TenantID == tenantID) && seen[event.Type] {
 					if err := fn(event); err != nil {
 						return err
 					}

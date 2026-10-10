@@ -122,6 +122,44 @@ func TestReplayTenantTypesThroughColdRestartFindsHistoricalLanes(t *testing.T) {
 	}
 }
 
+func TestReplayTypesThroughColdRestartPreservesCrossTenantSourceOrder(t *testing.T) {
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	log, err := events.Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := log.Append(t.Context(), events.Event{Type: "provider.authority", TenantID: "tenant-a", Data: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), events.Event{Type: "test.unrelated", TenantID: "tenant-a", Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := log.Append(t.Context(), events.Event{Type: "provider.authority", TenantID: "tenant-b", Data: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	var got []uint64
+	if err := log.ReplayTypesThrough(t.Context(), 1, second.Sequence,
+		[]string{"provider.authority"}, func(ev events.Event) error {
+			got = append(got, ev.Sequence)
+			return nil
+		}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []uint64{first.Sequence, second.Sequence}) {
+		t.Fatalf("cold cross-tenant authority read = %v, want both tenants in source order", got)
+	}
+}
+
 func TestReplayTenantTypesThroughDoesNotDuplicateOverlappingTypeSuffixes(t *testing.T) {
 	log := openEmbedded(t)
 	for _, eventType := range []string{"test.selected", "selected"} {

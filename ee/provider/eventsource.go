@@ -584,16 +584,30 @@ func nullTime(t time.Time) any {
 	return t.UTC()
 }
 
-func providerAuthorityEvent(typ string) bool {
-	switch typ {
-	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded, AuditTenantErasureRequested, AuditUnregisteredTenantOffboarded, AuditTenantErasureFailed, AuditTenantErasureCompleted,
-		EventOperatorUpserted, EventOperatorOffboarded,
-		EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
-		AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassWithdrawn, AuditBreakGlassAccessed:
-		return true
-	default:
-		return false
+// The same list drives authority validation and the operator activity index.
+// Adding a new authority event therefore cannot silently disappear from the
+// activity view while it remains effective in the serving projection.
+var providerAuthorityEventTypes = []string{
+	AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded,
+	AuditTenantErasureRequested, AuditUnregisteredTenantOffboarded,
+	AuditTenantErasureFailed, AuditTenantErasureCompleted,
+	EventOperatorUpserted, EventOperatorOffboarded,
+	EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
+	AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied,
+	AuditBreakGlassWithdrawn, AuditBreakGlassAccessed,
+}
+
+var providerAuthorityEventSet = func() map[string]struct{} {
+	set := make(map[string]struct{}, len(providerAuthorityEventTypes))
+	for _, eventType := range providerAuthorityEventTypes {
+		set[eventType] = struct{}{}
 	}
+	return set
+}()
+
+func providerAuthorityEvent(typ string) bool {
+	_, ok := providerAuthorityEventSet[typ]
+	return ok
 }
 
 func validateAuthorityEvent(event eventspec.Event, payload AuthorityEvent) error {

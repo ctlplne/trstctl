@@ -65,7 +65,7 @@ func (s eventLogActivitySource) ProviderActivity(ctx context.Context) ([]Provide
 	states := map[string]string{}
 	claimedDomains := map[string]string{}
 	tenantDomains := map[string]string{}
-	err := s.log.Replay(ctx, 0, func(event events.Event) error {
+	apply := func(event events.Event) error {
 		if !providerActivityEvent(event.Type) {
 			return nil
 		}
@@ -137,6 +137,15 @@ func (s eventLogActivitySource) ProviderActivity(ctx context.Context) ([]Provide
 		}
 		out = append(out, item)
 		return nil
+	}
+	err := s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := s.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		types := append(make([]string, 0, len(providerAuthorityEventTypes)+1), providerAuthorityEventTypes...)
+		types = append(types, "provider.isolation.drill")
+		return s.log.ReplayTypesThrough(readCtx, 1, head, types, apply)
 	})
 	for i := range out {
 		if out[i].Type == AuditTenantErasureRequested {
