@@ -2309,6 +2309,10 @@ than sending an operator looking for a credential that was never there.
   a private key: operators produce the successor and both cross-certificates on
   the disconnected root system, then submit only certificates under an exact
   ceremony purpose (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
+  The current offline-root import profile accepts an ECDSA P-256 public key;
+  other offline root algorithms need an explicit supported profile and console
+  selector. For offline-root import, `ttl_seconds` caps remaining certificate
+  validity and is checked before the ceremony starts and again at import.
 - All 14 external CA integrations are served when configured. `buildRunDeps`
   constructs tenant-bound AD CS, AWS PCA, Azure Key Vault, DigiCert, EJBCA,
   Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA,

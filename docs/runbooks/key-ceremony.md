@@ -180,7 +180,13 @@ Use this when the root key lives outside the control plane and only comes online
 for ceremonies.
 
 1. **Create the offline root certificate outside trstctl.** Keep the root private
-   key on the offline system. Export only the public root certificate PEM.
+   key on the offline system. Export only the public root certificate PEM. The
+   current import contract accepts an ECDSA P-256 root public key. Set
+   `signature_algorithm` to `ECDSA-P256`; the server checks the certificate's
+   actual public key against that reviewed choice. For imported certificates,
+   `ttl_seconds` is the **maximum remaining validity at import**, so use a value
+   at least as long as the certificate's remaining life. The preview and import
+   both refuse a certificate that outlives this reviewed horizon.
 2. **Open the offline-root import ceremony** with the public root certificate
    and reviewed `CASpec`:
 
@@ -204,7 +210,8 @@ for ceremonies.
    `POST /api/v1/ca/authorities/offline-roots` (same `ceremony_id`,
    `certificate_pem`, `spec`). The server accepts exactly one certificate PEM,
    rejects private-key blocks, verifies the root is self-signed and CA-capable,
-   and stores the authority with no signer handle.
+   checks the reviewed key algorithm and remaining-validity cap again, and
+   stores the authority with no signer handle.
 5. **Open the offline-intermediate ceremony** with operation
    `create_offline_intermediate`, `parent_id` set to the imported root authority,
    and the intermediate `CASpec`; collect approvals as above.

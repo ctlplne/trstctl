@@ -49,6 +49,56 @@ func TestCASpecRejectsUnrepresentableTTL(t *testing.T) {
 	}
 }
 
+func TestOfflineRootCeremonyPreviewBindsCertificateAlgorithmAndValidity(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	service := &caHierarchyService{}
+	profile := crypto.HierarchyCAProfile{
+		CommonName: "Reviewed offline root", MaxPathLen: 1, TTL: 365 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"offline.example.test"},
+	}
+	spec := api.CASpec{
+		CommonName: profile.CommonName, MaxPathLen: profile.MaxPathLen,
+		PermittedDNSDomains: profile.PermittedDNSDomains,
+		TTLSeconds:          int64(profile.TTL.Seconds()), SignatureAlgorithm: "ECDSA-P256",
+	}
+	preview := func(cert string, reviewed api.CASpec) (api.CACeremonyPlanPreview, error) {
+		return service.PreviewCeremony(context.Background(), tenantID, api.CACeremonyStartRequest{
+			Operation: "import_offline_root", Threshold: 2,
+			CertificatePEM: cert, Spec: reviewed,
+		})
+	}
+	p256Key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(p256Key.Destroy)
+	p256, err := crypto.SelfSignedHierarchyCA(p256Key, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan, err := preview(string(p256.CertificatePEM), spec); err != nil || !plan.Ready {
+		t.Fatalf("matching offline root preview = %+v, %v; want ready", plan, err)
+	}
+
+	rsaKey, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(rsaKey.Destroy)
+	rsa, err := crypto.SelfSignedHierarchyCA(rsaKey, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := preview(string(rsa.CertificatePEM), spec); !errors.Is(err, api.ErrCAHierarchyInvalid) || !strings.Contains(err.Error(), "ECDSA-P256") {
+		t.Fatalf("RSA root reviewed as ECDSA-P256 preview = %v; want algorithm refusal", err)
+	}
+	short := spec
+	short.TTLSeconds = int64((30 * 24 * time.Hour).Seconds())
+	if _, err := preview(string(p256.CertificatePEM), short); !errors.Is(err, api.ErrCAHierarchyInvalid) || !strings.Contains(err.Error(), "ttl_seconds") {
+		t.Fatalf("one-year root reviewed with 30-day horizon preview = %v; want validity refusal", err)
+	}
+}
+
 func TestManagedCARegulatedIssuanceRequiresIssuerStatusOrigin(t *testing.T) {
 	service := &caHierarchyService{requireRevocationPointers: true}
 	profile := crypto.LeafProfile{

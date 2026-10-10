@@ -1492,6 +1492,9 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 		if err != nil {
 			return "", err
 		}
+		if _, err := crypto.VerifyImportedOfflineRoot(certDER, cryptoProfile(req.Spec)); err != nil {
+			return "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
 		return offlineRootPurpose(certDER, req.Spec)
 	case "import_existing_ca":
 		chainDER, _, err := certificateChainPEM(req.CertificatePEM)
@@ -1551,6 +1554,9 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 }
 
 func offlineRootPurpose(certDER []byte, spec api.CASpec) (string, error) {
+	if spec.TTLSeconds <= 0 {
+		return "", fmt.Errorf("%w: positive ttl_seconds is required for an imported offline root", api.ErrCAHierarchyInvalid)
+	}
 	rootPurpose, err := hierarchyPurpose("create_root", "", spec)
 	if err != nil {
 		return "", err
@@ -1747,10 +1753,14 @@ func (h *caHierarchyService) requirePendingCeremonyQuorum(ctx context.Context, t
 }
 
 func cryptoProfile(spec api.CASpec) crypto.HierarchyCAProfile {
+	algorithm := spec.SignatureAlgorithm
+	if algorithm == "" {
+		algorithm = "ecdsa-p256"
+	}
 	return crypto.HierarchyCAProfile{
 		CommonName: spec.CommonName, PermittedDNSDomains: spec.PermittedDNSDomains,
 		MaxPathLen: spec.MaxPathLen, EKUs: spec.ExtendedKeyUsages,
-		TTL: time.Duration(spec.TTLSeconds) * time.Second,
+		TTL: time.Duration(spec.TTLSeconds) * time.Second, SignatureAlgorithm: algorithm,
 	}
 }
 

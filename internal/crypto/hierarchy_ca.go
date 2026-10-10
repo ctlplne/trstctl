@@ -4,6 +4,7 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -29,7 +30,10 @@ const (
 // signing-service RemoteSigner, so the CA private key never enters the control
 // plane.
 type HierarchyCAProfile struct {
-	CommonName          string
+	CommonName string
+	// SignatureAlgorithm names the reviewed CA public-key algorithm for imported
+	// certificates. A signer-created CA still gets its key from the signer.
+	SignatureAlgorithm  string
 	PermittedDNSDomains []string
 	// ExcludedDNSDomains carves holes out of the permitted set, IN the
 	// certificate's name-constraints extension — an excluded subtree the
@@ -684,6 +688,20 @@ func verifyChildPathLen(parent, child *x509.Certificate) error {
 func verifyImportedProfile(cert *x509.Certificate, profile HierarchyCAProfile) error {
 	if profile.CommonName != "" && cert.Subject.CommonName != profile.CommonName {
 		return fmt.Errorf("crypto: imported CA common name %q does not match ceremony profile %q", cert.Subject.CommonName, profile.CommonName)
+	}
+	if profile.SignatureAlgorithm != "" {
+		switch strings.ToLower(strings.TrimSpace(profile.SignatureAlgorithm)) {
+		case "ecdsa-p256":
+			key, ok := cert.PublicKey.(*ecdsa.PublicKey)
+			if !ok || key.Curve.Params().Name != "P-256" {
+				return fmt.Errorf("crypto: imported CA public key does not match reviewed ECDSA-P256 signature_algorithm")
+			}
+		default:
+			return fmt.Errorf("crypto: unsupported reviewed CA signature_algorithm %q", profile.SignatureAlgorithm)
+		}
+	}
+	if profile.TTL > 0 && cert.NotAfter.After(time.Now().Add(profile.TTL)) {
+		return fmt.Errorf("crypto: imported CA expires after reviewed ttl_seconds horizon")
 	}
 	if profile.MaxPathLen >= 0 {
 		hasPathLen := cert.MaxPathLen > 0 || cert.MaxPathLenZero
