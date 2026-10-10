@@ -464,7 +464,8 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 	if err != nil {
 		return Response{}, err
 	}
-	ev, err := s.log.Append(ctx, events.Event{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: tenantID, Data: data})
+	ev, err := s.log.Append(ctx, events.Event{ID: migrationStartEventID(tenantID, runID),
+		Type: projections.EventLicensedCryptoMigrationStarted, TenantID: tenantID, Data: data})
 	if err != nil {
 		return Response{}, err
 	}
@@ -633,24 +634,71 @@ func (s *pqcMigrationService) Progress(ctx context.Context, tenantID, runID stri
 	if s.log == nil || s.progress == nil || tenantID == "" || runID == "" {
 		return RunProgressResponse{}, pgx.ErrNoRows
 	}
-	found := false
-	if err := s.log.Replay(ctx, s.progress.RunStartSequence(tenantID, runID), func(e events.Event) error {
-		if found || e.TenantID != tenantID || e.Type != projections.EventLicensedCryptoMigrationStarted {
-			return nil
-		}
-		var started projections.LicensedCryptoMigrationStarted
-		if err := json.Unmarshal(e.Data, &started); err != nil {
-			return err
-		}
-		found = started.RunID == runID
-		return nil
-	}); err != nil {
+	start, err := s.migrationStartEvent(ctx, tenantID, runID)
+	if err != nil {
 		return RunProgressResponse{}, err
 	}
-	if !found {
-		return RunProgressResponse{}, pgx.ErrNoRows
+	// A start just appended by another replica can precede this process's
+	// projection tail. Fold its exact retained envelope before reporting the
+	// run, so a successful GET never fabricates an empty, unknown run.
+	if s.progress.RunStartSequence(tenantID, runID) == 0 {
+		if err := s.progress.Apply(ctx, start); err != nil {
+			return RunProgressResponse{}, err
+		}
 	}
 	return progressResponse(runID, s.progress.Snapshot(tenantID, runID)), nil
+}
+
+var migrationStartNamespace = uuid.MustParse("c524c886-3e16-51aa-a8cb-8e455ef6e583")
+
+func migrationStartEventID(tenantID, runID string) string {
+	return uuid.NewSHA1(migrationStartNamespace, []byte(tenantID+"\x00"+runID)).String()
+}
+
+// migrationStartEvent proves one run through an exact retained envelope. Older
+// releases used random start-event IDs; their boot-rebuilt projection preserves
+// the source sequence, so they use one indexed sequence read. New starts use a
+// deterministic ID and can be read before this replica's tail catches up.
+func (s *pqcMigrationService) migrationStartEvent(ctx context.Context, tenantID, runID string) (events.Event, error) {
+	var (
+		start events.Event
+		found bool
+		err   error
+	)
+	ref := s.progress.runStartRef(tenantID, runID)
+	expectedID := migrationStartEventID(tenantID, runID)
+	if ref.sequence != 0 && ref.id != expectedID {
+		start, found, err = s.log.EventAtSequence(ctx, ref.sequence)
+	} else {
+		start, found, err = s.log.EventByID(ctx, expectedID)
+	}
+	if err != nil {
+		return events.Event{}, err
+	}
+	if !found {
+		return events.Event{}, pgx.ErrNoRows
+	}
+	if ref.sequence != 0 {
+		digest, err := digestRunStartEvent(start)
+		if err != nil {
+			return events.Event{}, err
+		}
+		if start.Sequence != ref.sequence || start.ID != ref.id || digest != ref.digest {
+			return events.Event{}, errors.New("pqcmigration: run start projection differs from retained event")
+		}
+	}
+	if start.TenantID != tenantID || start.Type != projections.EventLicensedCryptoMigrationStarted ||
+		projections.ValidateSchemaVersion(start) != nil {
+		return events.Event{}, errors.New("pqcmigration: run start index points to another event")
+	}
+	var payload projections.LicensedCryptoMigrationStarted
+	if err := json.Unmarshal(start.Data, &payload); err != nil {
+		return events.Event{}, err
+	}
+	if payload.RunID != runID {
+		return events.Event{}, errors.New("pqcmigration: run start index differs from retained run")
+	}
+	return start, nil
 }
 
 func progressResponse(runID string, findings []FindingProgress) RunProgressResponse {

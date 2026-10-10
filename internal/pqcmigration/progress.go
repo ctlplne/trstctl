@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/projections"
@@ -168,7 +169,7 @@ type ProgressProjection struct {
 	// A run's start sequence bounds later evidence lookups. Replaying the
 	// entire tenant history for each signed host report can outlast the agent's
 	// acknowledgement window on a busy control plane.
-	runStarts map[progressRunKey]uint64
+	runStarts map[progressRunKey]runStartRef
 	// Package-private projection hooks let restart/replay tests exercise the
 	// event fold without starting PostgreSQL. Production leaves them nil and
 	// always projects CBOM rows through Store under tenant RLS.
@@ -179,6 +180,20 @@ type ProgressProjection struct {
 type progressRunKey struct {
 	tenantID string
 	runID    string
+}
+
+type runStartRef struct {
+	sequence uint64
+	id       string
+	digest   string
+}
+
+func digestRunStartEvent(ev eventspec.Event) (string, error) {
+	encoded, err := json.Marshal(ev)
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(encoded), nil
 }
 
 type progressRollbackKey struct {
@@ -195,7 +210,7 @@ func NewProgressProjection(st *store.Store) *ProgressProjection {
 		certificateRenewalEvents:  map[progressKey]eventspec.Event{},
 		certificateRollbackEvents: map[progressKey]eventspec.Event{},
 		certificateStateEvents:    map[progressKey]eventspec.Event{},
-		runStarts:                 map[progressRunKey]uint64{}}
+		runStarts:                 map[progressRunKey]runStartRef{}}
 }
 
 func WithProgressProjection(p *ProgressProjection) projections.Option {
@@ -220,7 +235,7 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	p.certificateRollbackEvents = map[progressKey]eventspec.Event{}
 	p.certificateStateEvents = map[progressKey]eventspec.Event{}
 	p.pendingEvents = map[string]eventspec.Event{}
-	p.runStarts = map[progressRunKey]uint64{}
+	p.runStarts = map[progressRunKey]runStartRef{}
 	p.mu.Unlock()
 	return nil
 }
@@ -261,7 +276,7 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 		if err := json.Unmarshal(ev.Data, &started); err != nil {
 			return err
 		}
-		p.applyStarted(ev, started)
+		return p.applyStarted(ev, started)
 	case EventCertificateFindingFailed:
 		var failed CertificateFindingFailure
 		if err := json.Unmarshal(ev.Data, &failed); err != nil {
@@ -351,13 +366,22 @@ func (p *ProgressProjection) applyPrepared(ev eventspec.Event, prepared TLSFindi
 	p.preparedEvents[key] = cloneReceiptEvent(ev)
 }
 
-func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projections.LicensedCryptoMigrationStarted) {
+func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projections.LicensedCryptoMigrationStarted) error {
+	digest, err := digestRunStartEvent(ev)
+	if err != nil {
+		return err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.runStarts == nil {
-		p.runStarts = map[progressRunKey]uint64{}
+		p.runStarts = map[progressRunKey]runStartRef{}
 	}
-	p.runStarts[progressRunKey{tenantID: ev.TenantID, runID: started.RunID}] = ev.Sequence
+	key := progressRunKey{tenantID: ev.TenantID, runID: started.RunID}
+	if prior := p.runStarts[key]; prior.sequence != 0 &&
+		(prior.sequence != ev.Sequence || prior.id != ev.ID || prior.digest != digest) {
+		return fmt.Errorf("pqcmigration: run %s has conflicting retained start events", started.RunID)
+	}
+	p.runStarts[key] = runStartRef{sequence: ev.Sequence, id: ev.ID, digest: digest}
 	p.applyCertificateStarted(ev, started)
 	for _, intent := range started.TLSPostures {
 		key := progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}
@@ -378,14 +402,24 @@ func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projection
 			Desired: clonePosture(intent.Desired), Status: TLSFindingQueued, UpdatedAt: eventTime(ev),
 		}
 	}
+	return nil
 }
 
-// RunStartSequence is the inclusive replay boundary for one immutable run.
-// Zero means the start event has not reached this projection yet; callers then
-// use a full replay so a lagging projection can never hide durable evidence.
+// RunStartSequence is the immutable run's indexed start position. Zero means
+// this process has not projected it yet; a request then looks up the new
+// producer's deterministic event ID through the durable identity index.
 func (p *ProgressProjection) RunStartSequence(tenantID, runID string) uint64 {
 	if p == nil {
 		return 0
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.runStarts[progressRunKey{tenantID: tenantID, runID: runID}].sequence
+}
+
+func (p *ProgressProjection) runStartRef(tenantID, runID string) runStartRef {
+	if p == nil {
+		return runStartRef{}
 	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
