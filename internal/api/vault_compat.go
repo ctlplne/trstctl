@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -416,6 +417,36 @@ func (a *API) vaultTokenLookupSelf(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusForbidden, "permission denied")
 		return
 	}
+	ttl := 0
+	if token := bearerTokenBytes(r); len(token) > 0 {
+		defer secret.Wipe(token)
+		if a.store == nil || !bytes.HasPrefix(token, []byte(auth.TokenPrefix)) {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
+		hash, err := auth.HashAPIToken(token)
+		if err != nil {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
+		rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
+		if err != nil {
+			writeVaultError(w, http.StatusServiceUnavailable, "token metadata unavailable")
+			return
+		}
+		if rec.TenantID != principal.TenantID || rec.Subject != principal.Subject {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
+		if rec.ExpiresAt != nil {
+			remaining := time.Until(*rec.ExpiresAt)
+			if remaining <= 0 {
+				writeVaultError(w, http.StatusForbidden, "permission denied")
+				return
+			}
+			ttl = int((remaining + time.Second - 1) / time.Second)
+		}
+	}
 	writeVaultJSON(w, http.StatusOK, newVaultEnvelope(map[string]any{
 		"id":           "trstctl-api-token",
 		"accessor":     "",
@@ -427,7 +458,7 @@ func (a *API) vaultTokenLookupSelf(w http.ResponseWriter, r *http.Request) {
 		"path":         "auth/token/create",
 		"policies":     principalRoles(principal),
 		"renewable":    false,
-		"ttl":          0,
+		"ttl":          ttl,
 	}))
 }
 

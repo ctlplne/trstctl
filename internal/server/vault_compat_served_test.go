@@ -3,15 +3,55 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
+	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrettext"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestVaultTokenLookupReportsServedTokenExpiry(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Vault token TTL tenant")
+	raw, hash, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(10 * time.Minute)
+	if _, err := h.store.CreateAPIToken(context.Background(), store.APITokenRecord{
+		TenantID: h.tenant, TokenHash: hash, Subject: "vault-ttl-test",
+		Scopes: []string{"secrets:read"}, ExpiresAt: &expires,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	status, body := doBearer(t, h.ts, http.MethodGet, "/v1/auth/token/lookup-self", token, "", nil)
+	if status != http.StatusOK {
+		t.Fatalf("token lookup status=%d body=%s", status, body)
+	}
+	var result struct {
+		Data struct {
+			TTL int `json:"ttl"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Data.TTL < 590 || result.Data.TTL > 600 {
+		t.Fatalf("Vault token TTL=%d, want remaining token lifetime", result.Data.TTL)
+	}
+}
 
 // TestVaultCLICompatibilityAgainstServedHandler is VAULT-01's stock-client proof:
 // the real HashiCorp Vault CLI drives the served trstctl handler through the common
