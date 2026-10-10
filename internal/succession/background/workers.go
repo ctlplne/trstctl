@@ -473,11 +473,21 @@ func collectEvents(ctx context.Context, log *events.Log) ([]events.Event, error)
 	if log == nil {
 		return out, nil
 	}
-	if err := log.Replay(ctx, 0, func(e events.Event) error {
-		out = append(out, e)
-		return nil
+	// The cutover consumes only signed RP acknowledgments and prior retirement
+	// facts. Pin one generation/head so the type-subject index cannot mix facts
+	// across a history rewrite while the worker evaluates a policy batch.
+	if err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return log.ReplayTypesThrough(readCtx, 1, head,
+			[]string{succession.TypeRPAck, succession.TypeRetirement}, func(e events.Event) error {
+				out = append(out, e)
+				return nil
+			})
 	}); err != nil {
-		return nil, fmt.Errorf("pcas retirement worker: replay ledger: %w", err)
+		return nil, fmt.Errorf("pcas retirement worker: read indexed ledger evidence: %w", err)
 	}
 	return out, nil
 }
