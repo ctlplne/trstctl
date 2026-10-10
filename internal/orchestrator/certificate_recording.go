@@ -229,19 +229,20 @@ func (o *Orchestrator) certificateRecordingLifetimeFloorTx(ctx context.Context, 
 	// retain same-lifetime recovery and locate the last explicit erase instead.
 	// A zero-sequence SQL bootstrap is supported only without retained erasure.
 	var floor uint64
-	err := o.log.ReplayThrough(ctx, 1, through, func(event events.Event) error {
-		if !sameCertificateRecordingTenant(event.TenantID, tenantID) || event.Type != projections.EventTenantOffboarded {
+	err := o.log.ReplayTypesThrough(ctx, 1, through,
+		[]string{projections.EventTenantOffboarded}, func(event events.Event) error {
+			if !sameCertificateRecordingTenant(event.TenantID, tenantID) || event.Type != projections.EventTenantOffboarded {
+				return nil
+			}
+			if err := projections.ValidateSchemaVersion(event); err != nil {
+				return err
+			}
+			if registrationSequence == 0 || event.Sequence >= registrationSequence {
+				return fmt.Errorf("%w: retained offboard has no later live registration", store.ErrCertificateRecordingRebuildRequired)
+			}
+			floor = event.Sequence
 			return nil
-		}
-		if err := projections.ValidateSchemaVersion(event); err != nil {
-			return err
-		}
-		if registrationSequence == 0 || event.Sequence >= registrationSequence {
-			return fmt.Errorf("%w: retained offboard has no later live registration", store.ErrCertificateRecordingRebuildRequired)
-		}
-		floor = event.Sequence
-		return nil
-	})
+		})
 	return floor, err
 }
 

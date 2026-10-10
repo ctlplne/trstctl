@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -74,8 +75,25 @@ func TestCertificateRecordingLegacyRenameKeepsPendingCurrentLifetime(t *testing.
 }
 
 func TestCertificateRecordingLegacyRegistrationCannotRecoverErasedLifetime(t *testing.T) {
-	st, log, projector := recordingSpine(t)
 	ctx := t.Context()
+	st := newStore(t)
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	log, err := events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	projector := projections.New(st)
+	registration, err := log.Append(ctx, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegisteredJSON("recording-recovery"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, registration); err != nil {
+		t.Fatal(err)
+	}
 	orch := orchestrator.NewOrchestrator(log, st, nil)
 	leaf, _ := recordingCertificates(t)
 	old, err := orch.RecordCertificateWithEventID(ctx, tenantA, "legacy-erased-recording", leaf)
@@ -96,6 +114,17 @@ func TestCertificateRecordingLegacyRegistrationCannotRecoverErasedLifetime(t *te
 	if err := projector.Apply(ctx, next); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := log.Append(ctx, events.Event{Type: "test.unrelated", TenantID: tenantA, Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orch = orchestrator.NewOrchestrator(log, st, nil)
 	if _, err := orch.RecordCertificateWithEventID(ctx, tenantA, "legacy-erased-recording", leaf); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("old command accepted/wrong refusal: %v", err)
 	}
