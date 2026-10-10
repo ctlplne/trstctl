@@ -74,7 +74,7 @@ func TestHSM_HighWaterWithinBoundary(t *testing.T) {
 	if _, err := m1.MintSuccessor(ctx, baseReq()); err != nil {
 		t.Fatalf("first hsm mint: %v", err)
 	}
-	if f := hsm.ModuleFloor(baseReq().IdentityID); f != 1 {
+	if f := hsm.ModuleFloor(succession.TenantIdentityKey(baseReq().TenantID, baseReq().IdentityID)); f != 1 {
 		t.Fatalf("module-resident floor = %d, want 1", f)
 	}
 
@@ -98,7 +98,7 @@ func TestHSM_HighWaterWithinBoundary(t *testing.T) {
 	if res.Epoch != 2 {
 		t.Fatalf("epoch = %d, want 2", res.Epoch)
 	}
-	if f := hsm.ModuleFloor(baseReq().IdentityID); f != 2 {
+	if f := hsm.ModuleFloor(succession.TenantIdentityKey(baseReq().TenantID, baseReq().IdentityID)); f != 2 {
 		t.Fatalf("module floor after advance = %d, want 2", f)
 	}
 }

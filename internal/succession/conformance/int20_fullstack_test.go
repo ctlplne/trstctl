@@ -156,7 +156,7 @@ func (st *int20Stack) close() {
 func (st *int20Stack) requestSuccessionChain(t *testing.T) (string, succession.GenesisRecord, *signing.RemoteSigner) {
 	t.Helper()
 	const id = "spiffe://int20.example/workload/core"
-	genesisKey, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(id, 0))
+	genesisKey, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.TenantKeyHandle(st.tenantID, id, 0))
 	if err != nil {
 		t.Fatalf("onboard genesis key: %v", err)
 	}

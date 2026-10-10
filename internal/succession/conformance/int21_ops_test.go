@@ -39,8 +39,10 @@ func TestINT21_PCASOpsSLOBackpressureAndCrash(t *testing.T) {
 	idsByTenant := map[string][]string{}
 	for _, tenantID := range tenants {
 		for i := 0; i < perTenant; i++ {
-			id := fmt.Sprintf("spiffe://int21.example/%s/workload-%d", tenantID[:8], i)
-			if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(id, 0)); err != nil {
+			// The same identity string in two tenants must not share the
+			// signer's key handle or sealed epoch floor.
+			id := fmt.Sprintf("spiffe://int21.example/shared/workload-%d", i)
+			if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantID, id, 0)); err != nil {
 				t.Fatalf("genesis %s: %v", id, err)
 			}
 			if _, err := st.svc.RequestSuccession(st.ctx, tenantID, succapi.RequestSuccessionRequest{
@@ -94,7 +96,7 @@ func TestINT21_PCASOpsSLOBackpressureAndCrash(t *testing.T) {
 func (st *int20Stack) assertDuplicateRedeliveryDoesNotDoubleMint(t *testing.T) {
 	t.Helper()
 	const id = "spiffe://int21.example/crash-redelivery"
-	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(id, 0)); err != nil {
+	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.TenantKeyHandle(st.tenantID, id, 0)); err != nil {
 		t.Fatalf("redelivery genesis: %v", err)
 	}
 	payload, err := json.Marshal(map[string]any{

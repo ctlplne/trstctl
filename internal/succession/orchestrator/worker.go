@@ -87,7 +87,7 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 		IdentityID:               p.IdentityID,
 		TenantID:                 tenantID,
 		DeploymentScope:          p.DeploymentScope,
-		PredecessorHandle:        succession.KeyHandle(p.IdentityID, epoch),
+		PredecessorHandle:        succession.TenantKeyHandle(tenantID, p.IdentityID, epoch),
 		AssertedPredecessorEpoch: epoch,
 		TargetAlgorithm:          crypto.Algorithm(p.TargetAlgorithm),
 		PolicyRef:                p.PolicyRef,

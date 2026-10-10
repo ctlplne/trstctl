@@ -125,6 +125,33 @@ func TestMint_EpochMonotonic_Refused(t *testing.T) {
 	}
 }
 
+// A tenant-scoped database row is insufficient if the isolated signer's sealed
+// floor is keyed only by the identity string. Two customers can legitimately use
+// the same SPIFFE ID; each must start at epoch zero and advance independently.
+func TestMint_SameIdentityInDifferentTenantsHasIndependentFloor(t *testing.T) {
+	m, _, floor := setup(t)
+	first := baseReq()
+	first.TenantID = "tenant-a"
+	second := baseReq()
+	second.TenantID = "tenant-b"
+	for _, req := range []signing.MintRequest{first, second} {
+		result, err := m.MintSuccessor(ctx, req)
+		if err != nil {
+			t.Fatalf("mint tenant %q at epoch zero: %v", req.TenantID, err)
+		}
+		if result.Epoch != 1 {
+			t.Fatalf("tenant %q epoch = %d, want 1", req.TenantID, result.Epoch)
+		}
+	}
+	loaded, err := floor.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("sealed floor has %d identities, want two tenant-scoped identities", len(loaded))
+	}
+}
+
 // TestSigner_NoPrivateKeyCrossesBoundary: the result carries only public material;
 // the record verifies with public data only (PCAS-claims-12/16 / INV-1).
 func TestSigner_NoPrivateKeyCrossesBoundary(t *testing.T) {

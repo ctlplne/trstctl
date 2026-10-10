@@ -15,6 +15,15 @@ predecessor is resolved the same way. The control plane never receives private k
 material; it requests a mint over the transport and receives only public material and
 the opaque record (claims 1/12/49).
 
+The signer namespaces every newly minted succession key and sealed epoch floor by
+the pair `(tenant ID, identity ID)`. Two tenants can use the same workload name and
+still start at epoch zero independently. The legacy `KeyHandle(identity, epoch)`
+helper remains for older direct signer fixtures; the control-plane outbox worker
+uses `TenantKeyHandle(tenant, identity, epoch)` and does not claim an unscoped key
+on behalf of a tenant. A pre-existing unscoped chain requires an explicit custody
+migration before it can be advanced through this worker; the worker must not guess
+which tenant owns a signer handle.
+
 ## Claim 16 — locked, non-dumpable, zeroized buffers (DELIVERED)
 
 The default key factory returns `crypto.GenerateLockedKey`, a `*crypto.LockedSigner`

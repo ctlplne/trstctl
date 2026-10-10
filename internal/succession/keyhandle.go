@@ -2,15 +2,32 @@
 
 package succession
 
-import "fmt"
+import (
+	"fmt"
 
-// KeyHandle returns the deterministic in-signer key handle for an identity's key at
-// a given algorithm-epoch. The signer holds the genesis key under KeyHandle(id, 0)
-// and persists each minted successor under KeyHandle(id, newEpoch); a succession
-// therefore resolves its predecessor as KeyHandle(id, currentEpoch) with no handle
-// needing to cross the wire or be stored separately from the epoch (INT-03). The
-// handle is opaque to relying parties — it is a signer-local key reference, never a
-// credential or an identity claim.
+	"trstctl.com/trstctl/internal/crypto"
+)
+
+// KeyHandle is the legacy unscoped signer handle used by older direct minter
+// fixtures. New production requests must use TenantKeyHandle so two tenants
+// cannot claim the same signer key by choosing the same identity string.
 func KeyHandle(identityID string, epoch uint64) string {
 	return fmt.Sprintf("pcas:%s:%d", identityID, epoch)
+}
+
+// TenantIdentityKey is the isolated signer's stable custody namespace. Hashing
+// the length-delimited pair avoids collisions from user-chosen identity IDs and
+// keeps raw tenant/identity names out of signer filenames and floor keys. Both
+// the epoch floor and key handles use this namespace; PostgreSQL RLS alone
+// cannot isolate state held inside the separate signer process.
+func TenantIdentityKey(tenantID, identityID string) string {
+	bound := fmt.Sprintf("trstctl/pcas/tenant-identity/v2:%d:%s:%d:%s", len(tenantID), tenantID, len(identityID), identityID)
+	return fmt.Sprintf("pcas:v2:%x", crypto.SHA256Sum([]byte(bound)))
+}
+
+// TenantKeyHandle identifies one tenant's in-signer key at an epoch. New
+// operator-registered identities use this handle; KeyHandle remains available
+// for already provisioned legacy test fixtures and their migration path.
+func TenantKeyHandle(tenantID, identityID string, epoch uint64) string {
+	return fmt.Sprintf("%s:%d", TenantIdentityKey(tenantID, identityID), epoch)
 }

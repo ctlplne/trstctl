@@ -47,9 +47,9 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 
 	const id = "spiffe://d/int03"
 
-	// Onboard the genesis key INSIDE the signer under KeyHandle(id, 0). This is the
+	// Onboard the genesis key INSIDE the signer under TenantKeyHandle(tenant,id,0). This is the
 	// identity's epoch-0 key; the worker resolves it as the first predecessor.
-	if _, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.KeyHandle(id, 0)); err != nil {
+	if _, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0)); err != nil {
 		t.Fatalf("onboard genesis key: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 	assertPublished(t, cs, "req-1") // rp-publish outbox row written in the same txn
 
 	// Second succession (epoch 1 -> epoch 2: P-384 -> P-521). The predecessor is
-	// KeyHandle(id, 1), which the signer PERSISTED when it minted epoch 1 — proving
+	// TenantKeyHandle(tenant,id,1), which the signer PERSISTED when it minted epoch 1 — proving
 	// the successor survives and chains.
 	if err := worker.Handle(ctx, tenantA, reqPayload("req-2", id, crypto.ECDSAP521)); err != nil {
 		t.Fatalf("worker handle (epoch 2): %v", err)

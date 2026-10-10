@@ -255,7 +255,7 @@ func (m *Minter) SetPredecessorResolver(r KeyResolver) { m.resolver = r }
 
 // SetSuccessorKeyStore makes the minter generate successor keys through the signer's
 // key custody (INT-03), so each successor persists in the signer keystore under its
-// per-epoch handle (KeyHandle(identity, epoch)) instead of being generated
+// tenant-scoped per-epoch handle instead of being generated
 // ephemerally. The signer-attachment wrapper sets it at attach time. Call before
 // serving; not safe for concurrent use with MintSuccessor.
 func (m *Minter) SetSuccessorKeyStore(s signing.SuccessorKeyStore) { m.succStore = s }
@@ -281,7 +281,8 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// Epoch monotonicity: the asserted predecessor epoch must equal the recorded
 	// floor. Stale, equal-but-already-advanced, or skipped epochs are refused
 	// (PCAS-claim-12 / INV-3).
-	floor := m.floor[req.IdentityID]
+	floorKey := succession.TenantIdentityKey(req.TenantID, req.IdentityID)
+	floor := m.floor[floorKey]
 	if req.AssertedPredecessorEpoch != floor {
 		return signing.MintResult{}, m.refuse(succession.RefusalEpoch, req, ErrEpochNotCurrent)
 	}
@@ -364,7 +365,7 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// (library/test use) it is generated ephemerally by the injected keygen.
 	var succ crypto.Signer
 	if m.succStore != nil {
-		succ, err = m.succStore.GenerateSuccessorKey(succession.KeyHandle(req.IdentityID, epoch), req.TargetAlgorithm)
+		succ, err = m.succStore.GenerateSuccessorKey(succession.TenantKeyHandle(req.TenantID, req.IdentityID, epoch), req.TargetAlgorithm)
 	} else {
 		succ, err = m.keygen.GenerateKey(req.TargetAlgorithm)
 	}
@@ -453,10 +454,10 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 
 	// Record-then-activate: durably advance the sealed floor before returning, so
 	// no succession can exist that the signer's own record does not evidence.
-	if err := m.floors.Advance(req.IdentityID, epoch); err != nil {
+	if err := m.floors.Advance(floorKey, epoch); err != nil {
 		return signing.MintResult{}, fmt.Errorf("%w: %v", ErrFloorPersist, err)
 	}
-	m.floor[req.IdentityID] = epoch
+	m.floor[floorKey] = epoch
 
 	return signing.MintResult{
 		Epoch:              epoch,

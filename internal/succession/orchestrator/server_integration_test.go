@@ -35,7 +35,7 @@ func TestINT04_LicensedOutboxFactory_DrivesMint(t *testing.T) {
 
 	client := serveProductionSigner(t)
 	const id = "spiffe://d/int04"
-	if _, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.KeyHandle(id, 0)); err != nil {
+	if _, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0)); err != nil {
 		t.Fatalf("onboard genesis: %v", err)
 	}
 
