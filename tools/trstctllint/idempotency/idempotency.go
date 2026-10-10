@@ -282,10 +282,11 @@ func approvedIdempotencyHelperProvenance(pass *analysis.Pass, call *ast.CallExpr
 		return false
 	}
 	switch fn.Name() {
-	case "vaultIdempotencyKey", "vaultMutationKey", "scimIdempotencyKey":
-		// Vault and SCIM compatibility routes intentionally preserve the header
-		// through one reviewed helper. Vault mutations fail closed when the
-		// header is absent; SCIM retains its documented compatibility derivation.
+	case "vaultIdempotencyKey", "vaultMutationKey", "vaultStockCLIKey", "scimIdempotencyKey":
+		// These exact API-package helpers preserve explicit keys. The stock
+		// Vault CLI helper derives a token-keyed request digest only for the
+		// reviewed KV/PKI wire commands; other Vault mutations fail closed
+		// without a header. SCIM retains its documented derivation.
 		return true
 	case "secretRotationScheduleTickAuthority":
 		// This helper derives a lifecycle-bound receiver key from the raw header.
