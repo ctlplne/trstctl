@@ -430,33 +430,46 @@ func (r *configuredBreakglassRuntime) consumeAndVerifyCeremony(ctx context.Conte
 	if ceremony.Threshold != r.threshold {
 		return nil, fmt.Errorf("breakglass: ceremony threshold %d does not match configured threshold %d", ceremony.Threshold, r.threshold)
 	}
-	expected := make(map[uint64]store.KeyCeremonyApprovalEvidence, len(evidence))
-	for _, item := range evidence {
-		expected[item.EventSequence] = item
-	}
-	validated := map[string]bool{}
-	if err := r.log.Replay(ctx, 1, func(event events.Event) error {
-		item, ok := expected[event.Sequence]
-		if !ok {
-			return nil
+	return r.verifyApprovalEvidence(ctx, ceremonyID, evidence)
+}
+
+// verifyApprovalEvidence reads the exact event identities projected into the
+// ceremony rows. A later conflicting envelope with the same ID must invalidate
+// quorum, even if an earlier replay pass already saw a valid approval. The
+// generation lease keeps the two reads on one immutable history cut.
+func (r *configuredBreakglassRuntime) verifyApprovalEvidence(ctx context.Context, ceremonyID string, evidence []store.KeyCeremonyApprovalEvidence) ([]string, error) {
+	validated := make(map[string]bool, len(evidence))
+	err := r.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		for _, item := range evidence {
+			if item.EventID == "" || item.EventSequence == 0 || item.Custodian == "" || validated[item.Custodian] {
+				return errors.New("breakglass: immutable approval evidence is incomplete")
+			}
+			event, found, err := r.log.EventByID(readCtx, item.EventID)
+			if err != nil {
+				return err
+			}
+			if !found || event.ID != item.EventID || event.Sequence != item.EventSequence ||
+				event.TenantID != r.tenantID || event.Type != projections.EventCACeremonyApproved || event.Actor == nil {
+				return errors.New("breakglass: approval row is not bound to an authenticated immutable ceremony event")
+			}
+			if err := projections.ValidateSchemaVersion(event); err != nil {
+				return err
+			}
+			var payload projections.CACeremonyApproved
+			if err := json.Unmarshal(event.Data, &payload); err != nil {
+				return err
+			}
+			if payload.CeremonyID != ceremonyID || payload.Custodian != item.Custodian || event.Actor.Subject != item.Custodian {
+				return errors.New("breakglass: approval event actor/custodian/ceremony binding mismatch")
+			}
+			validated[item.Custodian] = true
 		}
-		if event.ID != item.EventID || event.TenantID != r.tenantID || event.Type != projections.EventCACeremonyApproved || event.Actor == nil {
-			return errors.New("breakglass: approval row is not bound to an authenticated immutable ceremony event")
-		}
-		var payload projections.CACeremonyApproved
-		if err := json.Unmarshal(event.Data, &payload); err != nil {
-			return err
-		}
-		if payload.CeremonyID != ceremonyID || payload.Custodian != item.Custodian || event.Actor.Subject != item.Custodian {
-			return errors.New("breakglass: approval event actor/custodian/ceremony binding mismatch")
-		}
-		validated[item.Custodian] = true
-		delete(expected, event.Sequence)
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
-	if len(expected) != 0 || len(validated) != len(evidence) {
+	if len(validated) != len(evidence) {
 		return nil, errors.New("breakglass: immutable approval evidence is incomplete")
 	}
 	approvers := make([]string, 0, len(validated))
