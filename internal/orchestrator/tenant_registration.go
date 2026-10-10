@@ -639,10 +639,11 @@ func tenantOffboardReceiverExistsTx(
 	return store.TenantOffboardReceiverExistsTx(ctx, tx, tenantID)
 }
 
-// recoverErasedTenantOffboard is the one deliberately expensive retry path.
+// recoverErasedTenantOffboard is the retained-history retry path.
 // The caller has already proved both SQL lifecycle anchors absent while holding
 // the exclusive missing-row fence and a history-generation read grant. Pinning
-// one head makes the fold deterministic even while unrelated tenants append.
+// one head and reading only the tenant's lifecycle event types makes the fold
+// deterministic even while unrelated tenants append.
 func recoverErasedTenantOffboard(
 	ctx context.Context,
 	log *events.Log,
@@ -658,65 +659,66 @@ func recoverErasedTenantOffboard(
 		byID               = make(map[string]events.Event)
 	)
 	if head != 0 {
-		err = log.ReplayThrough(ctx, 1, head, func(event events.Event) error {
-			if event.TenantID != next.TenantID ||
-				!isTenantLifecycleEvent(event.Type) {
+		err = log.ReplayTenantTypesThrough(ctx, next.TenantID, 1, head,
+			[]string{projections.EventTenantRegistered, projections.EventTenantOffboarded}, func(event events.Event) error {
+				if event.TenantID != next.TenantID ||
+					!isTenantLifecycleEvent(event.Type) {
+					return nil
+				}
+				if err := projections.ValidateSchemaVersion(event); err != nil {
+					return err
+				}
+				if event.ID == "" || event.Sequence == 0 || event.Time.IsZero() {
+					return fmt.Errorf("%w: retained tenant lifecycle envelope is incomplete", ErrIdempotencyConflict)
+				}
+				if prior, duplicate := byID[event.ID]; duplicate {
+					if err := projections.ValidateTenantLifecycleCanonical(prior, event); err != nil {
+						return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
+					}
+					// An exact duplicate producer identity is one logical event. Keep
+					// the first canonical sequence, matching EventByID semantics.
+					return nil
+				}
+				byID[event.ID] = event
+				switch event.Type {
+				case projections.EventTenantRegistered:
+					var payload struct {
+						Name string `json:"name"`
+					}
+					if err := json.Unmarshal(event.Data, &payload); err != nil || payload.Name == "" {
+						return fmt.Errorf("%w: retained tenant registration payload is malformed", ErrIdempotencyConflict)
+					}
+					if activeRegistration.ID != "" && isDurableTenantRegistrationIdentity(event.ID) {
+						return fmt.Errorf("%w: retained tenant lifecycle has consecutive live registrations", ErrIdempotencyConflict)
+					}
+					// Pre-durable-producer logs used tenant.registered as an upsert/rename
+					// event. Their arbitrary IDs are not a second lifecycle: the latest
+					// rename is exactly the tenants.event_seq identity from which a legacy
+					// offboard was derived. A v2 durable producer ID while a registration
+					// is already live is impossible and was rejected above.
+					activeRegistration = event
+				case projections.EventTenantOffboarded:
+					var payload struct {
+						RowsDeleted int `json:"rows_deleted"`
+					}
+					if err := json.Unmarshal(event.Data, &payload); err != nil {
+						return fmt.Errorf("%w: retained tenant offboard payload is malformed", ErrIdempotencyConflict)
+					}
+					if _, err := tenantOffboardAnchor(event.ID); err != nil {
+						return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
+					}
+					if activeRegistration.ID == "" {
+						return fmt.Errorf("%w: retained tenant lifecycle has an offboard without a live registration", ErrIdempotencyConflict)
+					}
+					if event.ID != projections.TenantOffboardEventID(
+						next.TenantID, activeRegistration.ID) {
+						return fmt.Errorf("%w: retained offboard identity does not name its registration", ErrIdempotencyConflict)
+					}
+					activeRegistration = events.Event{}
+				}
+				latest = event
 				return nil
-			}
-			if err := projections.ValidateSchemaVersion(event); err != nil {
-				return err
-			}
-			if event.ID == "" || event.Sequence == 0 || event.Time.IsZero() {
-				return fmt.Errorf("%w: retained tenant lifecycle envelope is incomplete", ErrIdempotencyConflict)
-			}
-			if prior, duplicate := byID[event.ID]; duplicate {
-				if err := projections.ValidateTenantLifecycleCanonical(prior, event); err != nil {
-					return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
-				}
-				// An exact duplicate producer identity is one logical event. Keep
-				// the first canonical sequence, matching EventByID semantics.
-				return nil
-			}
-			byID[event.ID] = event
-			switch event.Type {
-			case projections.EventTenantRegistered:
-				var payload struct {
-					Name string `json:"name"`
-				}
-				if err := json.Unmarshal(event.Data, &payload); err != nil || payload.Name == "" {
-					return fmt.Errorf("%w: retained tenant registration payload is malformed", ErrIdempotencyConflict)
-				}
-				if activeRegistration.ID != "" && isDurableTenantRegistrationIdentity(event.ID) {
-					return fmt.Errorf("%w: retained tenant lifecycle has consecutive live registrations", ErrIdempotencyConflict)
-				}
-				// Pre-durable-producer logs used tenant.registered as an upsert/rename
-				// event. Their arbitrary IDs are not a second lifecycle: the latest
-				// rename is exactly the tenants.event_seq identity from which a legacy
-				// offboard was derived. A v2 durable producer ID while a registration
-				// is already live is impossible and was rejected above.
-				activeRegistration = event
-			case projections.EventTenantOffboarded:
-				var payload struct {
-					RowsDeleted int `json:"rows_deleted"`
-				}
-				if err := json.Unmarshal(event.Data, &payload); err != nil {
-					return fmt.Errorf("%w: retained tenant offboard payload is malformed", ErrIdempotencyConflict)
-				}
-				if _, err := tenantOffboardAnchor(event.ID); err != nil {
-					return fmt.Errorf("%w: %v", ErrIdempotencyConflict, err)
-				}
-				if activeRegistration.ID == "" {
-					return fmt.Errorf("%w: retained tenant lifecycle has an offboard without a live registration", ErrIdempotencyConflict)
-				}
-				if event.ID != projections.TenantOffboardEventID(
-					next.TenantID, activeRegistration.ID) {
-					return fmt.Errorf("%w: retained offboard identity does not name its registration", ErrIdempotencyConflict)
-				}
-				activeRegistration = events.Event{}
-			}
-			latest = event
-			return nil
-		})
+			})
 		if err != nil {
 			return events.Event{}, fmt.Errorf("orchestrator: fold erased tenant lifecycle: %w", err)
 		}

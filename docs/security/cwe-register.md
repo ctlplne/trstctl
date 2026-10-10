@@ -485,8 +485,8 @@ not this file.
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:389` | a negative stored version is classified as drift before conversion (CWE-190). |
 | `internal/orchestrator/secret_rotation.go:352` | the positive int64 value always fits exactly in uint64 (CWE-190). |
-| `internal/orchestrator/tenant_registration_test.go:241` | bounded test sequence. |
-| `internal/orchestrator/tenant_registration_test.go:322` | test event sequence is PostgreSQL bigint-bounded. |
+| `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
+| `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/perf/live.go:875` | page size is positive and small (CWE-190) |
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |

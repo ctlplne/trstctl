@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -354,7 +355,12 @@ func (p *tenantLifecycleRegressionProjection) ApplyTx(
 
 func TestTenantOffboardErasedReceiverRecoveryAndLifecycleProjectionFence(t *testing.T) {
 	st := newStore(t)
-	log := openLog(t)
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	log, err := events.Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
 	extension := &tenantLifecycleRegressionProjection{store: st}
 	projector := projections.New(st, projections.WithEventProjection(extension))
 	command := registrationCommand(tenantA, "tenant-a", "offboard-recovery")
@@ -381,9 +387,28 @@ func TestTenantOffboardErasedReceiverRecoveryAndLifecycleProjectionFence(t *test
 	if _, err := st.GetTenant(context.Background(), tenantA); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("tenant after offboard error=%v, want pgx.ErrNoRows", err)
 	}
+	if _, err := log.Append(t.Context(), events.Event{
+		Type: "test.unrelated", TenantID: tenantA, Data: []byte(`{}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantB, Data: []byte(`{"name":"other"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orch = orchestrator.NewOrchestrator(log, st, nil, orchestrator.WithProjector(projector))
 
 	// Offboard committed by deleting both SQL anchors. The exact retry pays for
-	// one pinned lifecycle fold and returns the retained event, not a new append.
+	// one pinned lifecycle fold after a cold restart and returns the retained
+	// event, not a new append.
 	retryPayload, _ := json.Marshal(struct {
 		RowsDeleted int `json:"rows_deleted"`
 	}{})
