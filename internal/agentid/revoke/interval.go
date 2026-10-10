@@ -173,28 +173,31 @@ func (m *IntervalMonitor) Check(ctx context.Context, tenantID, directiveID strin
 }
 
 // exceedanceRecorded reports whether a distinct interval-exceeded event already exists in
-// the ledger for (tenantID, directiveID). It replays the ledger and matches on the event
-// type + directive id in the payload. This keeps the exceedance a single ledger fact per
+// the ledger for (tenantID, directiveID). It reads only the tenant's exceedance
+// subject through a checked source head and matches the directive id. This keeps
+// the exceedance a single ledger fact per
 // directive under repeated monitor passes (the event is the durable de-dup key, mirroring
 // how the terminal flag guards the terminal event).
 func (m *IntervalMonitor) exceedanceRecorded(ctx context.Context, tenantID, directiveID string) (bool, error) {
+	head, err := m.log.CheckedHead(ctx)
+	if err != nil {
+		return false, fmt.Errorf("revoke: read interval exceedance source head: %w", err)
+	}
 	found := false
-	if err := m.log.Replay(ctx, 1, func(e eventspec.Event) error {
-		if e.Type != TypeRevocationIntervalExceeded || e.TenantID != tenantID {
+	if err := m.log.ReplayTenantTypesThrough(ctx, tenantID, 1, head,
+		[]string{TypeRevocationIntervalExceeded}, func(e eventspec.Event) error {
+			var pl IntervalExceededPayload
+			if err := json.Unmarshal(e.Data, &pl); err != nil {
+				// A malformed prior event of this type is ignored for the de-dup decision
+				// (it does not name a directive we can match); we do not fail the monitor on
+				// someone else's bad payload.
+				return nil
+			}
+			if pl.DirectiveID == directiveID {
+				found = true
+			}
 			return nil
-		}
-		var pl IntervalExceededPayload
-		if err := json.Unmarshal(e.Data, &pl); err != nil {
-			// A malformed prior event of this type is ignored for the de-dup decision
-			// (it does not name a directive we can match); we do not fail the monitor on
-			// someone else's bad payload.
-			return nil
-		}
-		if pl.DirectiveID == directiveID {
-			found = true
-		}
-		return nil
-	}); err != nil {
+		}); err != nil {
 		return false, fmt.Errorf("revoke: scan for prior interval exceedance: %w", err)
 	}
 	return found, nil
