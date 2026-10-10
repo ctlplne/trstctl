@@ -1,0 +1,16 @@
+{
+  "node": {"id": "trstctl-pqc-lab", "cluster": "trstctl-local"},
+  "static_resources": {"clusters": [{
+    "name": "pqc_lab_xds",
+    "type": "STRICT_DNS",
+    "connect_timeout": "1s",
+    "load_assignment": {"cluster_name": "pqc_lab_xds", "endpoints": [{"lb_endpoints": [{"endpoint": {"address": {"socket_address": {"address": "pqc-envoy-controller", "port_value": 19080}}}}]}]}
+  }]},
+  "dynamic_resources": {"lds_config": {
+    "resource_api_version": "V3",
+    "api_config_source": {"api_type": "REST", "transport_api_version": "V3", "cluster_names": ["pqc_lab_xds"], "refresh_delay": "0.5s"}
+  }},
+  "admin": {
+    "address": {"socket_address": {"address": "0.0.0.0", "port_value": 9901}}
+  }
+}

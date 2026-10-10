@@ -306,6 +306,17 @@ func schemas() map[string]*api.Schema {
 			"asset_id": api.StringSchema(), "target_id": api.StringSchema(),
 			"desired": api.SchemaRef("PQCMigrationTLSPosture"),
 		}, "asset_id", "target_id", "desired"),
+		"PQCMigrationHostServed": api.ObjectSchema(map[string]*api.Schema{
+			"address": api.StringSchema(), "server_name": api.StringSchema(),
+			"tls_version": api.IntegerSchema(), "cipher_suite": api.IntegerSchema(),
+			"key_exchange_group": api.StringSchema(), "leaf_fingerprint": api.StringSchema(),
+		}, "address", "tls_version", "cipher_suite", "leaf_fingerprint"),
+		"PQCMigrationHostReadback": api.ObjectSchema(map[string]*api.Schema{
+			"served": api.SchemaRef("PQCMigrationHostServed"), "agent_id": api.StringSchema(),
+			"job_id": api.IntegerSchema(), "attempt": api.IntegerSchema(),
+			"evidence_digest": api.StringSchema(), "receipt_statement": api.StringSchema(),
+			"receipt_signature": api.StringSchema(), "receipt_signer_fingerprint": api.StringSchema(),
+		}, "served", "agent_id", "job_id", "attempt", "evidence_digest", "receipt_statement", "receipt_signature", "receipt_signer_fingerprint"),
 		"PQCMigration": api.ObjectSchema(map[string]*api.Schema{
 			"run_id":                      api.StringSchema(),
 			"queued":                      api.IntegerSchema(),
@@ -323,7 +334,8 @@ func schemas() map[string]*api.Schema {
 			"target_id": api.StringSchema(), "target_revision": api.StringSchema(), "connector": api.StringSchema(),
 			"desired": api.SchemaRef("PQCMigrationTLSPosture"), "previous": api.SchemaRef("PQCMigrationTLSPosture"),
 			"observed": api.SchemaRef("PQCMigrationTLSPosture"), "status": api.StringSchema(),
-			"failure": api.StringSchema(), "updated_at": api.TimestampSchema(),
+			"host_readback": api.SchemaRef("PQCMigrationHostReadback"),
+			"failure":       api.StringSchema(), "updated_at": api.TimestampSchema(),
 			"certificate_fingerprint": api.StringSchema(), "target_algorithm": api.StringSchema(), "effective_algorithm": api.StringSchema(),
 		}, "run_id", "asset_id", "finding_kind", "target_id", "target_revision", "connector", "desired", "status", "updated_at"),
 		"PQCMigrationProgress": api.ObjectSchema(map[string]*api.Schema{

@@ -55,6 +55,22 @@ export function PQCMigrationProgressDetails({ progress, assets, loading = false 
           )}
           {row.target_algorithm ? <span>{t("posture.pqcMigration.requestedAlgorithm", { algorithm: row.target_algorithm })}</span> : null}
           {row.effective_algorithm ? <span>{t("posture.pqcMigration.effectiveAlgorithm", { algorithm: row.effective_algorithm })}</span> : null}
+          {row.host_readback ? (
+            <>
+              <span>
+                {t("posture.pqcMigration.servedReadback", {
+                  address: row.host_readback.served.address,
+                  version: row.host_readback.served.tls_version === 0x0304 ? "TLSv1.3" : String(row.host_readback.served.tls_version),
+                  group: row.host_readback.served.key_exchange_group || t("posture.pqcMigration.groupUnreported"),
+                })}
+              </span>
+              <CredentialChip value={row.host_readback.served.leaf_fingerprint} label={t("posture.pqcMigration.servedLeafFingerprint")} />
+              <CredentialChip value={row.host_readback.evidence_digest} label={t("posture.pqcMigration.signedReadbackDigest")} />
+              <CredentialChip value={row.host_readback.receipt_signer_fingerprint} label={t("posture.pqcMigration.agentSignerFingerprint")} />
+            </>
+          ) : row.finding_kind !== "certificate-key" && (row.status === "applied" || row.status === "rolled_back") ? (
+            <span className="text-sm text-destructive">{t("posture.pqcMigration.signedReadbackMissing")}</span>
+          ) : null}
         </div>
       ),
     },

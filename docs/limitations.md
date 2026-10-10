@@ -2175,7 +2175,8 @@ rather than unfinished: handing out work nothing can perform fills a queue while
 control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
-`trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade` —
+`trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `cmdb.sync`,
+`mdm.sync`, `ticket.sync`, and `agent.upgrade` —
 all have shipped executors. Enabling a kind exposes that already-built executor; it
 does not turn a placeholder into work.
 Anything outside that allowlist is dropped even if an operator names it in
@@ -2379,8 +2380,8 @@ than sending an operator looking for a credential that was never there.
   row. It calls the same plan builder the start path calls over the same CBOM
   assets, so the preview cannot describe a different migration from the one
   that would execute. Both paths also preflight each exact TLS deployment
-  target; a host-agent Envoy target returns HTTP 409 until an agent-owned
-  posture executor with durable readback and rollback is implemented. A TLS
+  target; an Envoy host-agent target requires an enrolled, assigned host,
+  co-resident management endpoint, and loopback served-listener binding. A TLS
   finding without an explicit operator target binding returns HTTP 400.
 - Signing history is verifiable after the fact: `GET
   /api/v1/code-signing/identities` (and `trstctl-cli code-signing identities`)
@@ -4506,15 +4507,17 @@ target-held key custody, inspect the served leaf independently, and record the
 evidence in a PQC campaign. The automatic certificate-key path needs a
 target-bound key/CSR handoff and verified deployment before it can claim
 end-to-end migration. TLS posture rollout is a separate bound-target action.
-The shipped Envoy target is host-agent work. Its prior PQC posture worker used
-the control plane's in-process connector registry, which could mutate a reachable
-Envoy endpoint without the assigned host executing the job. Start now refuses
-that host target before queueing any work. Agent-owned posture execution, a
-durable signed readback and exact rollback receipt remain to be implemented;
-the automated TLS finding journey is not complete. Previously queued forward
-and rollback intents also refuse in-process execution. A posture applied by an
-older build must be recovered on the assigned host until agent-owned rollback
-is available.
+The Envoy PQC posture worker now queues an agent job through the outbox to the
+exact enrolled host assigned to the target. That host stores the observed
+predecessor encrypted before a native Envoy change, then signs a report that
+binds the active configuration, direct loopback TLS handshake, leaf fingerprint,
+and agent identity. Rollback requests return to that host and restore its exact
+predecessor. The local partner-lab Envoy xDS fixture is documented in
+`deploy/demo/lab/README.md`. This path remains unqualified for release until a
+running-product API, CLI, console, cold restart, and stock-client replay has
+passed; code and fixture tests alone do not establish that result. Previously
+queued pre-agent intents still refuse in-process execution, and posture changed
+by an older build has no host-retained predecessor to restore.
 
 The core CBOM posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+
 (and hybrid labels) when it finds them in your estate. Algorithm recognition
@@ -4536,7 +4539,8 @@ ML-DSA-65 subject leaf; the stock SPIFFE Workload API returns a two-entry
 response for one SPIFFE ID (the normal classical SVID and an ML-DSA-65
 SVID with its matching private key). The shipped-binary CBOM TLS finding
 rollout against Envoy remains open until the host-agent execution path above
-is implemented and replayed.
+is replayed in the running product. The automated TLS finding journey is not
+complete until that replay succeeds.
 
 Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure

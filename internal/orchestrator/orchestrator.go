@@ -31,14 +31,17 @@ const (
 	licensedCryptoMigrationReissueDestination        = "licensed_crypto.migration.reissue"
 	licensedCryptoMigrationTLSPostureDestination     = "connector.licensed_crypto.migration.tls_posture"
 	licensedCryptoMigrationTLSRollbackDestination    = "connector.licensed_crypto.migration.tls_posture.rollback"
+	licensedCryptoHostPostureDestination             = "pqc.posture"
+	licensedCryptoHostPostureRollbackDestination     = "pqc.posture.rollback"
 	licensedCryptoMigrationTLSRollbackRequestedEvent = "licensed_crypto.migration.tls_posture.rollback_requested"
 )
 
 type licensedCryptoMigrationTLSRollbackIntent struct {
-	TargetID       string          `json:"target_id"`
-	AssetIDs       []string        `json:"asset_ids"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	Payload        json.RawMessage `json:"payload"`
+	TargetID        string          `json:"target_id"`
+	AssetIDs        []string        `json:"asset_ids"`
+	IdempotencyKey  string          `json:"idempotency_key"`
+	Payload         json.RawMessage `json:"payload"`
+	RequiredAgentID string          `json:"required_agent_id,omitempty"`
 }
 
 type licensedCryptoMigrationTLSRollbackRequested struct {
@@ -1660,9 +1663,15 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 					if intent.TargetID == "" || len(intent.AssetIDs) == 0 || intent.IdempotencyKey == "" || len(intent.Payload) == 0 {
 						return fmt.Errorf("orchestrator: reconcile %s (seq %d): complete sealed rollback intent is required", ev.Type, ev.Sequence)
 					}
+					destination, role, agentID, lane := licensedCryptoMigrationTLSRollbackDestination, "", "", ""
+					if intent.RequiredAgentID != "" {
+						destination, role, agentID = licensedCryptoHostPostureRollbackDestination, "host", intent.RequiredAgentID
+						lane = "pqc-posture:target:" + intent.TargetID
+					}
 					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-						TenantID: ev.TenantID, Destination: licensedCryptoMigrationTLSRollbackDestination,
+						TenantID: ev.TenantID, Destination: destination,
 						IdempotencyKey: intent.IdempotencyKey, Payload: append([]byte(nil), intent.Payload...),
+						EffectLane: lane, RequiredAgentRole: role, RequiredAgentID: agentID,
 					})
 					if err != nil {
 						return err
@@ -1720,10 +1729,16 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 					if len(body) == 0 {
 						return fmt.Errorf("orchestrator: reconcile %s (seq %d): TLS posture is missing sealed outbox payload", ev.Type, ev.Sequence)
 					}
+					destination, role, agentID, lane := licensedCryptoMigrationTLSPostureDestination, "", "", ""
+					if posture.RequiredAgentID != "" {
+						destination, role, agentID = licensedCryptoHostPostureDestination, "host", posture.RequiredAgentID
+						lane = "pqc-posture:target:" + posture.TargetID
+					}
 					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-						TenantID: ev.TenantID, Destination: licensedCryptoMigrationTLSPostureDestination,
+						TenantID: ev.TenantID, Destination: destination,
 						IdempotencyKey: "licensed-crypto-migration-tls:" + posture.RunID + ":" + posture.AssetID,
 						Payload:        body,
+						EffectLane:     lane, RequiredAgentRole: role, RequiredAgentID: agentID,
 					})
 					if err != nil {
 						return err

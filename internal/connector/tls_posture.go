@@ -110,8 +110,12 @@ func ValidateObservedTLSPosture(p TLSPosture) error {
 }
 
 func validateTLSPostureLists(p TLSPosture) error {
-	if len(p.CipherSuites) == 0 || len(p.CipherSuites) > 64 {
-		return fmt.Errorf("connector: TLS posture requires between 1 and 64 cipher suites")
+	// TLS 1.3 cipher selection is not a portable listener setting. Envoy's
+	// tls_params.cipher_suites, for example, applies only to TLS 1.0-1.2. An
+	// empty list at a TLS 1.3 minimum means the backend's TLS 1.3 defaults;
+	// a caller must not claim that a named suite was enforced by this field.
+	if len(p.CipherSuites) > 64 || (p.MinimumVersion != TLSVersion13 && len(p.CipherSuites) == 0) {
+		return fmt.Errorf("connector: TLS posture requires 1-64 cipher suites below TLS 1.3, or at most 64 with a TLS 1.3 minimum")
 	}
 	if len(p.KeyExchangeGroups) == 0 || len(p.KeyExchangeGroups) > 32 {
 		return fmt.Errorf("connector: TLS posture requires between 1 and 32 key-exchange groups")
@@ -156,7 +160,7 @@ func EqualTLSPosture(a, b TLSPosture) bool {
 }
 
 func cloneTLSPosture(p TLSPosture) TLSPosture {
-	p.CipherSuites = append([]string(nil), p.CipherSuites...)
-	p.KeyExchangeGroups = append([]string(nil), p.KeyExchangeGroups...)
+	p.CipherSuites = append([]string{}, p.CipherSuites...)
+	p.KeyExchangeGroups = append([]string{}, p.KeyExchangeGroups...)
 	return p
 }

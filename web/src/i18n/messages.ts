@@ -25189,7 +25189,11 @@ export const messages = {
   "posture.pqcMigration.targetForAsset": { defaultMessage: "Deployment target for {location}", description: "Per-finding target selector label." },
   "posture.pqcMigration.chooseTarget": { defaultMessage: "Choose a target", description: "Empty deployment target option." },
   "posture.pqcMigration.minimumVersion": { defaultMessage: "Minimum TLS version: TLSv1.3", description: "Required PQC TLS minimum version." },
-  "posture.pqcMigration.cipherSuites": { defaultMessage: "Cipher suites (comma separated)", description: "Editable desired TLS cipher suites." },
+  "posture.pqcMigration.cipherSuites": {
+    defaultMessage:
+      "Envoy does not expose a TLS 1.3 cipher-suite restriction. This rollout enforces TLS 1.3 and the selected key-exchange groups; the served cipher is measured after activation.",
+    description: "Truthful Envoy TLS 1.3 cipher capability.",
+  },
   "posture.pqcMigration.keyExchangeGroups": {
     defaultMessage: "Key exchange groups (comma separated; include X25519MLKEM768)",
     description: "Editable desired TLS groups.",
@@ -25269,6 +25273,27 @@ export const messages = {
   "posture.pqcMigration.certificateFingerprint": {
     defaultMessage: "certificate fingerprint",
     description: "Copy label for the issued certificate fingerprint.",
+  },
+  "posture.pqcMigration.servedReadback": {
+    defaultMessage: "Served at {address}: {version}, {group}",
+    description: "Independent TLS handshake on the agent host.",
+  },
+  "posture.pqcMigration.groupUnreported": { defaultMessage: "group not reported", description: "Missing negotiated key-exchange group." },
+  "posture.pqcMigration.servedLeafFingerprint": {
+    defaultMessage: "served leaf fingerprint",
+    description: "Copy label for direct listener certificate fingerprint.",
+  },
+  "posture.pqcMigration.signedReadbackDigest": {
+    defaultMessage: "signed host readback digest",
+    description: "Copy label for signed agent observation digest.",
+  },
+  "posture.pqcMigration.agentSignerFingerprint": {
+    defaultMessage: "agent signer fingerprint",
+    description: "Copy label for enrolled agent certificate fingerprint.",
+  },
+  "posture.pqcMigration.signedReadbackMissing": {
+    defaultMessage: "No signed host readback is available for this applied finding.",
+    description: "Legacy or incomplete posture evidence must remain visible.",
   },
   "posture.pqcMigration.targetUnbound": { defaultMessage: "No bound target reported", description: "Missing target is not a successful deployment." },
   "posture.pqcMigration.certificateUnreported": { defaultMessage: "No certificate fingerprint reported", description: "Missing issuance evidence." },

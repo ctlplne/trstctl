@@ -11,6 +11,55 @@ Existing retained labs keep their stored provider configuration. Edit the
 its CAA issuer domain to `trstctl.partner-lab.example.com` before using the
 served `/directory`; this is a tenant configuration change, not a restart flag.
 
+## Local Envoy PQC host-agent target
+
+`docker-compose.pqc-envoy.yml` runs a real Envoy and a small native REST xDS
+controller in one shared network namespace for a separate, loopback-only PQC
+migration canary. A trstctl-agent container from the product image can join the
+controller service's network namespace to own both management and listener
+loopback addresses. It starts with
+TLS 1.2, `ECDHE-RSA-AES128-GCM-SHA256`, and classical X25519/P-256 groups.
+The controller retains its LDS state in its own named volume and only confirms
+a PUT after Envoy's active listener reports the requested policy. The product's
+assigned host agent still performs its own TLS handshake and signs the result.
+
+Create a disposable certificate and key in a private directory, then start the
+fixture from the repository root:
+
+```sh
+mkdir -p -m 700 "$PWD/private/pqc-envoy"
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+  -subj /CN=pqc-edge.local.qa \
+  -addext subjectAltName=DNS:pqc-edge.local.qa \
+  -keyout "$PWD/private/pqc-envoy/key.pem" \
+  -out "$PWD/private/pqc-envoy/cert.pem"
+chmod 600 "$PWD/private/pqc-envoy/"*.pem
+PQC_ENVOY_CERT_DIR="$PWD/private/pqc-envoy" \
+  docker compose -p trstctl-pqc-lab \
+  -f deploy/demo/lab/docker-compose.pqc-envoy.yml up -d
+```
+
+The management API is `http://127.0.0.1:19080/v1/tls-posture/pqc-edge`, the
+TLS listener is `127.0.0.1:11444`, and Envoy admin is at
+`http://127.0.0.1:19180`. All three published ports bind only to loopback.
+Register an enabled Envoy deployment target with `executor: agent`, the exact
+enrolled host assignment, `endpoint: http://127.0.0.1:19080`,
+`secret_name: pqc-edge`, `verify_address: 127.0.0.1:11444`, and
+`verify_server_name: pqc-edge.local.qa`. Start a host agent on that same
+machine with `--relay-claim`, `--host-rollback-dir` in persistent private
+storage, and a native OpenSSL 3.5+ `--host-exec-profile` TLS probe for the
+X25519MLKEM768 handshake. Enable `pqc.posture` and
+`pqc.posture.rollback` in the control plane's claimable job kinds. These
+actions use the normal target registration and agent enrollment APIs; a
+controller PUT by itself is only fixture setup, not product migration proof.
+
+Independent checks can use `openssl s_client -connect 127.0.0.1:11444
+-servername pqc-edge.local.qa -tls1_2 -brief` before migration and
+`-tls1_3 -groups X25519MLKEM768 -brief` afterward. After rollback, repeat
+both; the TLS 1.2 predecessor must work again and the hybrid-only TLS 1.3
+probe must fail. Keep the fixture's private certificate and the host rollback
+store outside disposable temporary directories.
+
 ## Run every safe local journey
 
 From the repository root:

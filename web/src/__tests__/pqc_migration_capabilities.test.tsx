@@ -98,7 +98,7 @@ describe("Core PQC runtime authority", () => {
               target_id: "target-1",
               desired: {
                 minimum_version: "TLSv1.3",
-                cipher_suites: ["TLS_AES_256_GCM_SHA384"],
+                cipher_suites: [],
                 key_exchange_groups: ["X25519MLKEM768", "X25519"],
               },
             },

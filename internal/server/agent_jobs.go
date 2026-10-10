@@ -84,7 +84,9 @@ var agentJobKindAllowlist = map[string]bool{
 	// and an operator migrating an estate needs to enable the custody change
 	// deliberately and target by target rather than have it arrive with a
 	// version bump.
-	agentJobKindEndpointRenew: true,
+	agentJobKindEndpointRenew:    true,
+	relay.KindPQCPosture:         true,
+	relay.KindPQCPostureRollback: true,
 	// A5: agent self-upgrade. Every row is narrowed to ONE agent by
 	// required_agent_id and enqueued only by the campaign dispatcher, so
 	// enabling the kind does not make binary replacement fleet-claimable —
@@ -215,7 +217,7 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		// and must never hold it: shipping ciphertext it has no key for is
 		// pointless at best, and at worst it is a copy of the credential sitting
 		// on a host, waiting for a future key compromise to make it readable.
-		payload, projectErr := a.projectClaimedJobPayload(job)
+		payload, projectErr := a.projectClaimedJobPayloadContext(ctx, job)
 		if projectErr != nil {
 			// A job whose envelope cannot be built is not handed out at all.
 			// Leaving it claimed is correct: the lease lapses and it returns.
@@ -717,6 +719,12 @@ func (a *agentService) ingestExecutedReport(
 		return ingestErr
 	}
 	switch claim.Destination {
+	case relay.KindPQCPosture, relay.KindPQCPostureRollback:
+		if a.recordPQCPostureResult == nil {
+			return errors.New("PQC host posture result receiver is not configured")
+		}
+		return a.recordPQCPostureResult(ctx, info.TenantID, agentID, claim, req,
+			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256)
 	case relay.KindEndpointContain:
 		if req.Outcome != transport.JobOutcomeExecuted {
 			return errors.New("containment result needs a terminal executed report")
@@ -851,6 +859,15 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	}
 
 	detail := strings.TrimSpace(req.Detail)
+	if claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback {
+		if a.recordPQCPostureResult == nil {
+			return nil, status.Error(codes.Internal, "PQC host posture result receiver is not configured")
+		}
+		if err := a.recordPQCPostureResult(ctx, info.TenantID, agentID, claim, req,
+			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
+			return nil, status.Errorf(codes.Internal, "ingest signed failed PQC host posture: %v", err)
+		}
+	}
 	if claim.Destination == relay.KindEndpointContain {
 		if err := a.recordEndpointContainmentFailure(ctx, info, claim, req); err != nil {
 			return nil, status.Errorf(codes.Internal, "record failed endpoint containment: %v", err)
@@ -903,7 +920,8 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	// A failed containment report may follow an attempted stop whose after
 	// probes could not complete. Re-executing it without an operator review
 	// would repeat an ambiguous emergency action indefinitely.
-	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain
+	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain ||
+		claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback
 	terminalReason := detail
 	if claim.Destination == relay.KindEndpointContain {
 		terminalReason = "containment_failed"
@@ -1277,6 +1295,16 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 // carries credential material, and rewriting their payloads would break A1's
 // contract for no gain.
 func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, error) {
+	return a.projectClaimedJobPayloadContext(context.Background(), job)
+}
+
+func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job store.AgentJob) ([]byte, error) {
+	if job.Destination == relay.KindPQCPosture || job.Destination == relay.KindPQCPostureRollback {
+		if a.openPQCPostureJob == nil {
+			return nil, errors.New("PQC host posture job opener is not configured")
+		}
+		return a.openPQCPostureJob(ctx, job.TenantID, job.Destination, job.IdempotencyKey, job.Payload)
+	}
 	if job.Destination == agentJobKindEndpointRenew {
 		// Older host jobs already pinned the target's reference-only config but
 		// did not enumerate its management credentials. Project the names from

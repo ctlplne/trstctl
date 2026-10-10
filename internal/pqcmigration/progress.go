@@ -13,7 +13,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -45,8 +47,16 @@ const (
 )
 
 type TLSFindingCompleted struct {
-	Intent  projections.LicensedCryptoMigrationTLSPosture `json:"intent"`
-	Receipt connector.TLSPostureReceipt                   `json:"receipt"`
+	Intent                   projections.LicensedCryptoMigrationTLSPosture `json:"intent"`
+	Receipt                  connector.TLSPostureReceipt                   `json:"receipt"`
+	Served                   *relay.PQCPostureServed                       `json:"served,omitempty"`
+	AgentID                  string                                        `json:"agent_id,omitempty"`
+	JobID                    int64                                         `json:"job_id,omitempty"`
+	Attempt                  int                                           `json:"attempt,omitempty"`
+	EvidenceDigest           string                                        `json:"evidence_digest,omitempty"`
+	ReceiptStatement         string                                        `json:"receipt_statement,omitempty"`
+	ReceiptSignature         string                                        `json:"receipt_signature,omitempty"`
+	ReceiptSignerFingerprint string                                        `json:"receipt_signer_fingerprint,omitempty"`
 }
 
 type TLSAssetRestore struct {
@@ -68,9 +78,17 @@ type TLSAssetRestore struct {
 }
 
 type TLSFindingRollbackCompleted struct {
-	RunID    string                      `json:"run_id"`
-	Restores []TLSAssetRestore           `json:"restores"`
-	Receipt  connector.TLSPostureReceipt `json:"receipt"`
+	RunID                    string                      `json:"run_id"`
+	Restores                 []TLSAssetRestore           `json:"restores"`
+	Receipt                  connector.TLSPostureReceipt `json:"receipt"`
+	Served                   *relay.PQCPostureServed     `json:"served,omitempty"`
+	AgentID                  string                      `json:"agent_id,omitempty"`
+	JobID                    int64                       `json:"job_id,omitempty"`
+	Attempt                  int                         `json:"attempt,omitempty"`
+	EvidenceDigest           string                      `json:"evidence_digest,omitempty"`
+	ReceiptStatement         string                      `json:"receipt_statement,omitempty"`
+	ReceiptSignature         string                      `json:"receipt_signature,omitempty"`
+	ReceiptSignerFingerprint string                      `json:"receipt_signer_fingerprint,omitempty"`
 }
 
 type TLSFindingFailure struct {
@@ -96,9 +114,24 @@ type FindingProgress struct {
 	Desired                connector.TLSPosture  `json:"desired"`
 	Previous               *connector.TLSPosture `json:"previous,omitempty"`
 	Observed               *connector.TLSPosture `json:"observed,omitempty"`
+	HostReadback           *HostReadback         `json:"host_readback,omitempty"`
 	Status                 string                `json:"status"`
 	Failure                string                `json:"failure,omitempty"`
 	UpdatedAt              time.Time             `json:"updated_at"`
+}
+
+// HostReadback is the agent-signed, independently negotiated listener result.
+// The detached signature covers the receipt statement and evidence digest;
+// operators can verify it with the enrolled agent's public certificate.
+type HostReadback struct {
+	Served                   relay.PQCPostureServed `json:"served"`
+	AgentID                  string                 `json:"agent_id"`
+	JobID                    int64                  `json:"job_id"`
+	Attempt                  int                    `json:"attempt"`
+	EvidenceDigest           string                 `json:"evidence_digest"`
+	ReceiptStatement         string                 `json:"receipt_statement"`
+	ReceiptSignature         string                 `json:"receipt_signature"`
+	ReceiptSignerFingerprint string                 `json:"receipt_signer_fingerprint"`
 }
 
 type progressKey struct {
@@ -257,7 +290,11 @@ func (p *ProgressProjection) projectCompleted(ctx context.Context, ev eventspec.
 	case "protocol":
 		protocol = completed.Receipt.Observed.MinimumVersion
 	case "cipher":
-		cipher = strings.Join(completed.Receipt.Observed.CipherSuites, ",")
+		if completed.Served != nil {
+			cipher = tlsprobe.CipherSuiteName(completed.Served.CipherSuite)
+		} else {
+			cipher = strings.Join(completed.Receipt.Observed.CipherSuites, ",")
+		}
 	default:
 		return fmt.Errorf("pqcmigration: unsupported TLS finding kind %q", intent.FindingKind)
 	}
@@ -281,6 +318,14 @@ func (p *ProgressProjection) applyCompleted(ev eventspec.Event, completed TLSFin
 		TargetID: intent.TargetID, TargetRevision: intent.TargetRevision, Connector: intent.Connector,
 		Desired: clonePosture(intent.Desired), Previous: &previous, Observed: &observed,
 		Status: TLSFindingApplied, UpdatedAt: eventTime(ev),
+	}
+	item := p.items[progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}]
+	if completed.Served != nil {
+		item.HostReadback = &HostReadback{Served: *completed.Served, AgentID: completed.AgentID,
+			JobID: completed.JobID, Attempt: completed.Attempt, EvidenceDigest: completed.EvidenceDigest,
+			ReceiptStatement: completed.ReceiptStatement, ReceiptSignature: completed.ReceiptSignature,
+			ReceiptSignerFingerprint: completed.ReceiptSignerFingerprint}
+		p.items[progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}] = item
 	}
 	p.mu.Unlock()
 }
@@ -319,6 +364,12 @@ func (p *ProgressProjection) applyRollback(ev eventspec.Event, completed TLSFind
 		observed := clonePosture(completed.Receipt.Observed)
 		item.Observed = &observed
 		item.Status, item.Failure, item.UpdatedAt = TLSFindingRolledBack, "", eventTime(ev)
+		if completed.Served != nil {
+			item.HostReadback = &HostReadback{Served: *completed.Served, AgentID: completed.AgentID,
+				JobID: completed.JobID, Attempt: completed.Attempt, EvidenceDigest: completed.EvidenceDigest,
+				ReceiptStatement: completed.ReceiptStatement, ReceiptSignature: completed.ReceiptSignature,
+				ReceiptSignerFingerprint: completed.ReceiptSignerFingerprint}
+		}
 		p.items[key] = item
 	}
 }
@@ -363,6 +414,10 @@ func cloneFindingProgress(item FindingProgress) FindingProgress {
 	if item.Observed != nil {
 		observed := clonePosture(*item.Observed)
 		item.Observed = &observed
+	}
+	if item.HostReadback != nil {
+		readback := *item.HostReadback
+		item.HostReadback = &readback
 	}
 	return item
 }

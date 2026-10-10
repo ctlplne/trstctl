@@ -101,6 +101,18 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
+			Kind:       KindPQCPosture,
+			Connectors: []string{"envoy"},
+			Flags:      []string{"--relay-claim"},
+			Roles:      []string{mtls.AgentRoleHost},
+		},
+		{
+			Kind:       KindPQCPostureRollback,
+			Connectors: []string{"envoy"},
+			Flags:      []string{"--relay-claim"},
+			Roles:      []string{mtls.AgentRoleHost},
+		},
+		{
 			// R1: revocation distribution-point health. It carries no credential
 			// — CRLs are public — so it is the one shipped kind that redeems
 			// nothing, and the loop routes it before the redemption step for

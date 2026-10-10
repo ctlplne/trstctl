@@ -82,6 +82,7 @@ func ClaimableKinds() []string {
 		// the three network-only kinds above when a host agent asks.
 		KindEndpointRenew,
 		KindEndpointContain,
+		KindPQCPosture, KindPQCPostureRollback,
 	}
 }
 
@@ -206,6 +207,11 @@ func RunOnceWithSelfUpgradeAndHostRollback(
 		return 0, errors.New("relay: no channel")
 	}
 	kinds := ClaimableKinds()
+	if len(hostProfile.AllowedRoots) == 0 && hostRollback != nil {
+		// A host with no exec profile may still manage its co-resident Envoy
+		// posture. Do not claim file/exec work it cannot perform.
+		kinds = []string{KindPQCPosture, KindPQCPostureRollback}
+	}
 	if selfUp != nil {
 		kinds = append(kinds, KindAgentUpgrade)
 	}
@@ -287,6 +293,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// redeems no credential, and routing it before deploy is what enforces that.
 	if job.Kind == KindTrustDistribute {
 		return runTrustDistribution(ctx, ch, hostProfile, job)
+	}
+	if job.Kind == KindPQCPosture || job.Kind == KindPQCPostureRollback {
+		return runHostPQCPosture(ctx, ch, client, hostRollback, hostProfile.TLSProbeOpenSSL, job)
 	}
 
 	// A rollback carries a rollback intent, not a deploy intent — no

@@ -750,6 +750,23 @@ export interface PQCMigrationFindingProgress {
   target_revision: string;
   connector: string;
   status: string;
+  host_readback?: {
+    served: {
+      address: string;
+      server_name: string;
+      tls_version: number;
+      cipher_suite: number;
+      key_exchange_group?: string;
+      leaf_fingerprint: string;
+    };
+    agent_id: string;
+    job_id: number;
+    attempt: number;
+    evidence_digest: string;
+    receipt_statement: string;
+    receipt_signature: string;
+    receipt_signer_fingerprint: string;
+  };
   failure?: string;
   updated_at: string;
 }

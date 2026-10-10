@@ -37,8 +37,9 @@ post-quantum target.
   secret material are protected is in [Secrets](../features/secrets.md).
 - The shipped Core path serves two concrete compatibility anchors: pure
   ML-DSA-65 leaf enrollment over EST with stock OpenSSL 3.5 and a two-entry classical +
-  ML-DSA-65 SPIFFE Workload API response. Host-agent CBOM TLS posture rollout
-  remains unavailable. See [Current limitations](../limitations.md) for the tested client boundary;
+  ML-DSA-65 SPIFFE Workload API response. The Envoy host-agent TLS posture
+  path requires an enrolled, assigned host agent, a bound loopback management
+  endpoint and listener, and a signed served-state report. See [Current limitations](../limitations.md) for the tested client boundary;
   it is not a promise that every legacy client understands ML-DSA.
 
 ## Steps
@@ -154,16 +155,21 @@ post-quantum target.
 
    For CBOM TLS endpoint and host-config findings, use the normal host-agent
    connector lifecycle, independently read the listener's effective TLS policy,
-   and rescan before recording remediation. The automatic migration API refuses
-   host-agent Envoy targets with HTTP 409 until posture work runs on that agent
-   and returns a durable readback and rollback receipt. For an automatic TLS
+   and rescan before recording remediation. An automatic Envoy TLS migration
+   queues an outbox job to the exact enrolled host assigned to the target. The
+   host stores the observed predecessor encrypted before changing Envoy, reads
+   Envoy's active posture, probes the served listener, and signs the result.
+   Rollback restores that predecessor on the same host and probes the listener
+   again. For an automatic TLS
    preview, bind each selected TLS finding to the exact enabled deployment
    target with `tls_bindings`: an `asset_id`, `target_id`, and `desired` posture
-   containing `minimum_version: "TLSv1.3"`, nonempty `cipher_suites`, and
-   `key_exchange_groups` including `X25519MLKEM768`. The console asks for
-   these bindings and sends the reviewed request unchanged at start. Missing
-   bindings return HTTP 400; preview and start both refuse a target that needs
-   the unimplemented host-agent posture executor with HTTP 409.
+   containing `minimum_version: "TLSv1.3"`, `cipher_suites: []`, and
+   `key_exchange_groups: ["X25519MLKEM768"]`. Envoy's cipher-suite field
+   controls TLS 1.2 and earlier; the agent records the actual TLS 1.3 suite
+   from the wire. The console asks for these bindings and sends the reviewed
+   request unchanged at start. Missing bindings return HTTP 400. An absent or
+   mismatched assigned host, management endpoint, or loopback verification
+   address returns HTTP 409 before enqueue.
 
 6. Inspect the rollback limit before broad rollout:
 

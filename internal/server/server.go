@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -220,13 +221,17 @@ type Deps struct {
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
-	TelemetryReporter                    *telemetry.Reporter
-	OutboxHandler                        orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions                           []api.Option         // auth/audit/etc.
-	License                              *license.Manager     // offline edition state exposed by GET /v1/editions
-	EnablePCAS                           bool                 // PCAS: proof-carrying algorithm succession (internal/succession); the succession API/orchestrator wiring keys off this
-	LicensedAPIOptionsFactory            LicensedAPIOptionsFactory
-	LicensedOutboxFactory                LicensedOutboxFactory
+	TelemetryReporter         *telemetry.Reporter
+	OutboxHandler             orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions                []api.Option         // auth/audit/etc.
+	License                   *license.Manager     // offline edition state exposed by GET /v1/editions
+	EnablePCAS                bool                 // PCAS: proof-carrying algorithm succession (internal/succession); the succession API/orchestrator wiring keys off this
+	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
+	LicensedOutboxFactory     LicensedOutboxFactory
+	// PQC host posture keeps edition logic outside the core agent channel.
+	// Nil callbacks refuse the job instead of accepting an unverifiable effect.
+	PQCPostureJobOpen                    func(context.Context, string, string, string, []byte) ([]byte, error)
+	PQCPostureJobResult                  func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
 	LicensedBackgroundWorkers            []BackgroundWorker
 	LicensedProjectionOptions            []projections.Option
 	LicensedLeafSigner                   LicensedLeafSigner
@@ -2082,6 +2087,8 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordADCSInventory:        s.recordADCSInventory,
 		recordRevocationHealth:     s.recordRevocationHealth,
 		recordMigrationResult:      s.recordMigrationResult,
+		openPQCPostureJob:          d.PQCPostureJobOpen,
+		recordPQCPostureResult:     d.PQCPostureJobResult,
 		recordCMDBSync:             s.recordCMDBSync,
 		recordCMDBSyncFailure:      s.recordCMDBSyncFailure,
 		recordMDMSync:              s.recordMDMSync,

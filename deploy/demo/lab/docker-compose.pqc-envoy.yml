@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Local-only real Envoy fixture for host-agent PQC posture and rollback.
+# Set PQC_ENVOY_CERT_DIR to a private directory with cert.pem and key.pem.
+services:
+  pqc-envoy-controller:
+    image: node@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7
+    command: ["node", "/app/controller.mjs"]
+    ports:
+      - "127.0.0.1:${PQC_ENVOY_CONTROLLER_PORT:-19080}:19080"
+      - "127.0.0.1:${PQC_ENVOY_TLS_PORT:-11444}:8443"
+      - "127.0.0.1:${PQC_ENVOY_ADMIN_PORT:-19180}:9901"
+    volumes:
+      - pqc-envoy-state:/state
+      - ./pqc-envoy-controller.mjs:/app/controller.mjs:ro
+      - ./pqc-envoy-lds.json:/app/initial-lds.json:ro
+    networks: [pqc-envoy]
+    restart: unless-stopped
+
+  pqc-envoy:
+    image: envoyproxy/envoy@sha256:fe2975b65b1412b537cbf0bee291d029e75af6eedf8122fac8576399f7f0a456
+    command: ["-c", "/etc/envoy/bootstrap.json"]
+    depends_on: [pqc-envoy-controller]
+    # Envoy, xDS controller, and the enrolled product agent share one loopback
+    # namespace. The agent can therefore verify and mutate only this host's
+    # listener, while the three public lab ports stay bound to Mac loopback.
+    network_mode: service:pqc-envoy-controller
+    volumes:
+      - ./pqc-envoy-bootstrap.json:/etc/envoy/bootstrap.json:ro
+      - ${PQC_ENVOY_CERT_DIR:?set PQC_ENVOY_CERT_DIR to private cert directory}:/etc/envoy-secrets:ro
+    restart: unless-stopped
+
+networks:
+  pqc-envoy:
+    # Host ports are loopback-only. An internal Docker network suppresses
+    # published ports on Docker Desktop, so keep this ordinary bridge.
+
+volumes:
+  pqc-envoy-state:

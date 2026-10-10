@@ -17,10 +17,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
@@ -196,17 +198,19 @@ type pqcMigrationRollbackPayload struct {
 }
 
 type pqcMigrationTLSRollbackPayload struct {
-	RunID    string                       `json:"run_id"`
-	Reason   string                       `json:"reason"`
-	Mutation connector.TLSPostureMutation `json:"mutation"`
-	Restores []TLSAssetRestore            `json:"restores"`
+	RunID           string                       `json:"run_id"`
+	Reason          string                       `json:"reason"`
+	RequiredAgentID string                       `json:"required_agent_id,omitempty"`
+	Mutation        connector.TLSPostureMutation `json:"mutation"`
+	Restores        []TLSAssetRestore            `json:"restores"`
 }
 
 type sealedTLSRollbackIntent struct {
-	TargetID       string          `json:"target_id"`
-	AssetIDs       []string        `json:"asset_ids"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	Payload        json.RawMessage `json:"payload"`
+	TargetID        string          `json:"target_id"`
+	AssetIDs        []string        `json:"asset_ids"`
+	IdempotencyKey  string          `json:"idempotency_key"`
+	Payload         json.RawMessage `json:"payload"`
+	RequiredAgentID string          `json:"required_agent_id,omitempty"`
 }
 
 type tlsRollbackRequested struct {
@@ -343,7 +347,14 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 		}
 		targetPostures[target.ID] = clonePosture(rollout.Desired)
 		asset := rollout.Asset
-		tlsPayloads = append(tlsPayloads, pqcMigrationTLSPosturePayload{
+		var requiredAgentID string
+		if hostPQCPostureTarget(target) {
+			requiredAgentID, err = s.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
+			if err != nil {
+				return Response{}, api.ErrWithStatus(http.StatusConflict, err)
+			}
+		}
+		payload := pqcMigrationTLSPosturePayload{
 			RunID: runID, AssetID: asset.ID, Kind: asset.Kind, FindingKind: rollout.FindingKind,
 			Location: asset.Location, Algorithm: asset.Algorithm, KeyBits: asset.KeyBits,
 			AssetProtocol: asset.Protocol, Cipher: asset.Cipher, Library: asset.Library,
@@ -352,13 +363,24 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			TargetID: target.ID, TargetRevision: target.RevisionID, Connector: target.Type,
 			Target: target.Name, TargetConfig: append(json.RawMessage(nil), target.Config...),
 			Desired: clonePosture(rollout.Desired), RollbackOnFailure: rollout.RollbackOnFailure,
-		})
+			RequiredAgentID: requiredAgentID,
+		}
+		if requiredAgentID != "" {
+			if _, err := hostPQCPostureIntent(payload, requiredAgentID); err != nil {
+				return Response{}, api.ErrWithStatus(http.StatusConflict, err)
+			}
+		}
+		tlsPayloads = append(tlsPayloads, payload)
 	}
 	for i := range tlsPayloads {
 		payload := tlsPayloads[i]
 		idempotencyKey := "licensed-crypto-migration-tls:" + payload.RunID + ":" + payload.AssetID
+		destination := licensedCryptoMigrationTLSPostureDestination
+		if payload.RequiredAgentID != "" {
+			destination = relay.KindPQCPosture
+		}
 		sealedPayload, err := sealTLSPostureOutboxForTenant(
-			ctx, s.tenantCrypto, s.integrityKey, tenantID, licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
+			ctx, s.tenantCrypto, s.integrityKey, tenantID, destination, idempotencyKey,
 			payload.RunID, payload.AssetID, payload.TargetRevision, payload,
 		)
 		if err != nil {
@@ -411,10 +433,17 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			if len(payload.SealedOutboxPayload) == 0 {
 				return errors.New("pqcmigration: TLS posture intent is missing its sealed outbox payload")
 			}
+			destination := licensedCryptoMigrationTLSPostureDestination
+			role, agentID, lane := "", "", ""
+			if payload.RequiredAgentID != "" {
+				destination, role, agentID = relay.KindPQCPosture, mtls.AgentRoleHost, payload.RequiredAgentID
+				lane = "pqc-posture:target:" + payload.TargetID
+			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-				TenantID: tenantID, Destination: licensedCryptoMigrationTLSPostureDestination,
+				TenantID: tenantID, Destination: destination,
 				IdempotencyKey: "licensed-crypto-migration-tls:" + payload.RunID + ":" + payload.AssetID,
 				Payload:        append([]byte(nil), payload.SealedOutboxPayload...),
+				EffectLane:     lane, RequiredAgentRole: role, RequiredAgentID: agentID,
 			}); err != nil {
 				return err
 			}
@@ -437,9 +466,45 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 // executed by this build. A plan without this check can look ready while start
 // refuses it, which gives the operator a false authorization step.
 func (s *pqcMigrationService) preflightTLSRolloutTargets(ctx context.Context, tenantID string, plan Plan) (map[string]store.DeploymentTarget, error) {
-	return preflightTLSRolloutTargets(plan, s.deployer, func(targetID string) (store.DeploymentTarget, error) {
+	targets, err := preflightTLSRolloutTargets(plan, s.deployer, func(targetID string) (store.DeploymentTarget, error) {
 		return s.store.GetDeploymentTarget(ctx, tenantID, targetID)
 	})
+	if err != nil {
+		return nil, err
+	}
+	for _, target := range targets {
+		if !hostPQCPostureTarget(target) {
+			continue
+		}
+		if _, err := s.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config); err != nil {
+			return nil, api.ErrWithStatus(http.StatusConflict, err)
+		}
+	}
+	return targets, nil
+}
+
+func hostPQCPostureTarget(target store.DeploymentTarget) bool {
+	vantage, known := connector.ShippedTargetVantage(target.Type)
+	return known && vantage == connector.VantageHostAgent && target.Type == "envoy"
+}
+
+func hostPQCPostureIntent(payload pqcMigrationTLSPosturePayload, agentID string) (relay.PQCPostureIntent, error) {
+	var config struct {
+		VerifyAddress    string `json:"verify_address"`
+		VerifyServerName string `json:"verify_server_name"`
+	}
+	if err := json.Unmarshal(payload.TargetConfig, &config); err != nil {
+		return relay.PQCPostureIntent{}, err
+	}
+	intent := relay.PQCPostureIntent{
+		RunID: payload.RunID, AssetID: payload.AssetID, FindingKind: payload.FindingKind,
+		TargetID: payload.TargetID, TargetRevision: payload.TargetRevision, Target: payload.Target,
+		Connector: payload.Connector, TargetConfig: append(json.RawMessage(nil), payload.TargetConfig...),
+		Desired: clonePosture(payload.Desired), RequiredAgentID: agentID,
+		RollbackOnFailure: payload.RollbackOnFailure,
+		VerifyAddress:     config.VerifyAddress, VerifyServerName: config.VerifyServerName,
+	}
+	return intent, relay.ValidatePQCPostureIntent(intent)
 }
 
 func preflightTLSRolloutTargets(plan Plan, deployer connector.TLSPostureDeployer, getTarget func(string) (store.DeploymentTarget, error)) (map[string]store.DeploymentTarget, error) {
@@ -448,12 +513,12 @@ func preflightTLSRolloutTargets(plan Plan, deployer connector.TLSPostureDeployer
 		if _, ok := targets[rollout.TargetID]; ok {
 			continue
 		}
-		if deployer == nil {
-			return nil, api.ErrStatus(http.StatusServiceUnavailable, "pqcmigration: TLS posture deployer is not configured")
-		}
 		target, err := getTarget(rollout.TargetID)
 		if err != nil {
 			return nil, err
+		}
+		if deployer == nil && !hostPQCPostureTarget(target) {
+			return nil, api.ErrStatus(http.StatusServiceUnavailable, "pqcmigration: TLS posture deployer is not configured")
 		}
 		if err := validateTLSRolloutTarget(target, deployer); err != nil {
 			return nil, api.ErrWithStatus(http.StatusConflict, err)
@@ -464,11 +529,24 @@ func preflightTLSRolloutTargets(plan Plan, deployer connector.TLSPostureDeployer
 }
 
 func validateTLSRolloutTarget(target store.DeploymentTarget, deployer connector.TLSPostureDeployer) error {
-	if deployer == nil {
+	if deployer == nil && !hostPQCPostureTarget(target) {
 		return errors.New("pqcmigration: TLS posture deployer is not configured")
 	}
 	if !target.Enabled || target.ID == "" || target.RevisionID == "" || target.Type == "" || target.Name == "" {
 		return fmt.Errorf("pqcmigration: deployment target %s is disabled or incomplete", target.ID)
+	}
+	if hostPQCPostureTarget(target) {
+		agentID, err := connector.TargetHostAgentID(target.Config)
+		if err != nil {
+			return err
+		}
+		_, err = hostPQCPostureIntent(pqcMigrationTLSPosturePayload{
+			RunID: "preflight", AssetID: "preflight", FindingKind: "preflight",
+			TargetID: target.ID, TargetRevision: target.RevisionID, Target: target.Name,
+			Connector: target.Type, TargetConfig: target.Config,
+			Desired: connector.TLSPosture{MinimumVersion: connector.TLSVersion13, KeyExchangeGroups: []string{HybridTLSGroup}},
+		}, agentID)
+		return err
 	}
 	if err := requirePostureExecutionVantage(target.ID, target.Type, deployer); err != nil {
 		return err
@@ -698,11 +776,26 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			return RollbackResponse{}, fmt.Errorf("pqcmigration: rollback must include every applied finding bound to target %s", targetID)
 		}
 		first := group.first
-		if err := requirePostureExecutionVantage(targetID, first.Intent.Connector, s.deployer); err != nil {
-			if errors.Is(err, errPostureRequiresAgent) {
+		if first.Intent.RequiredAgentID != "" {
+			current, err := s.store.GetDeploymentTarget(ctx, tenantID, targetID)
+			if err != nil {
+				return RollbackResponse{}, err
+			}
+			assigned, err := s.store.ValidateHostTargetAssignment(ctx, tenantID, current.Type, current.Config)
+			if err != nil {
 				return RollbackResponse{}, api.ErrWithStatus(http.StatusConflict, err)
 			}
-			return RollbackResponse{}, err
+			if !current.Enabled || current.RevisionID != first.Intent.TargetRevision || assigned != first.Intent.RequiredAgentID {
+				return RollbackResponse{}, api.ErrStatus(http.StatusConflict, "PQC host rollback target revision or assigned agent changed")
+			}
+		}
+		if first.Intent.RequiredAgentID == "" {
+			if err := requirePostureExecutionVantage(targetID, first.Intent.Connector, s.deployer); err != nil {
+				if errors.Is(err, errPostureRequiresAgent) {
+					return RollbackResponse{}, api.ErrWithStatus(http.StatusConflict, err)
+				}
+				return RollbackResponse{}, err
+			}
 		}
 		prepared, ok := tlsPrepared[first.Intent.AssetID]
 		if !ok || prepared.TargetID != first.Intent.TargetID || prepared.TargetRevision != first.Intent.TargetRevision ||
@@ -714,7 +807,7 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			return RollbackResponse{}, err
 		}
 		payload := pqcMigrationTLSRollbackPayload{
-			RunID: runID, Reason: req.Reason,
+			RunID: runID, Reason: req.Reason, RequiredAgentID: first.Intent.RequiredAgentID,
 			Mutation: connector.TLSPostureMutation{
 				RunID: runID, FindingID: "rollback:" + targetID, FindingKind: "rollback",
 				TargetID: first.Intent.TargetID, TargetRevision: first.Intent.TargetRevision,
@@ -722,6 +815,9 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 				TargetConfig: append(json.RawMessage(nil), forwardIntent.TargetConfig...),
 				Desired:      clonePosture(first.Receipt.Previous),
 			},
+		}
+		if first.Intent.RequiredAgentID != "" {
+			payload.Mutation.TargetConfig = append(json.RawMessage(nil), forwardIntent.TargetConfig...)
 		}
 		expected := clonePosture(first.Receipt.Observed)
 		payload.Mutation.ExpectedPrevious = &expected
@@ -754,8 +850,13 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			return RollbackResponse{}, errors.New("pqcmigration: TLS rollback payload has no asset restores")
 		}
 		idempotencyKey := "licensed-crypto-migration-tls-rollback:" + runID + ":" + payload.Mutation.TargetID
+		agentID := payload.RequiredAgentID
+		destination := licensedCryptoMigrationTLSRollbackDestination
+		if agentID != "" {
+			destination = relay.KindPQCPostureRollback
+		}
 		body, err := sealTLSPostureOutboxForTenant(
-			ctx, s.tenantCrypto, s.integrityKey, tenantID, licensedCryptoMigrationTLSRollbackDestination, idempotencyKey,
+			ctx, s.tenantCrypto, s.integrityKey, tenantID, destination, idempotencyKey,
 			payload.RunID, payload.Restores[0].AssetID, payload.Mutation.TargetRevision, payload,
 		)
 		if err != nil {
@@ -767,7 +868,8 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 		}
 		sealedTLS = append(sealedTLS, sealedTLSRollbackIntent{
 			TargetID: payload.Mutation.TargetID, AssetIDs: assetIDs, IdempotencyKey: idempotencyKey,
-			Payload: append(json.RawMessage(nil), body...),
+			Payload:         append(json.RawMessage(nil), body...),
+			RequiredAgentID: agentID,
 		})
 	}
 	var rollbackEvent *events.Event
@@ -803,10 +905,17 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			}
 		}
 		for _, intent := range sealedTLS {
+			destination := licensedCryptoMigrationTLSRollbackDestination
+			role, lane := "", ""
+			if intent.RequiredAgentID != "" {
+				destination, role = relay.KindPQCPostureRollback, mtls.AgentRoleHost
+				lane = "pqc-posture:target:" + intent.TargetID
+			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-				TenantID: tenantID, Destination: licensedCryptoMigrationTLSRollbackDestination,
+				TenantID: tenantID, Destination: destination,
 				IdempotencyKey: intent.IdempotencyKey,
 				Payload:        append([]byte(nil), intent.Payload...),
+				EffectLane:     lane, RequiredAgentRole: role, RequiredAgentID: intent.RequiredAgentID,
 			}); err != nil {
 				return err
 			}
@@ -874,9 +983,13 @@ func openCompletedTLSForwardIntentWith(
 		return pqcMigrationTLSPosturePayload{}, errors.New("pqcmigration: applied TLS finding is missing its sealed forward intent")
 	}
 	idempotencyKey := "licensed-crypto-migration-tls:" + intent.RunID + ":" + intent.AssetID
+	destination := licensedCryptoMigrationTLSPostureDestination
+	if intent.RequiredAgentID != "" {
+		destination = relay.KindPQCPosture
+	}
 	var opened pqcMigrationTLSPosturePayload
 	wrapper, err := open(
-		licensedCryptoMigrationTLSPostureDestination, idempotencyKey,
+		destination, idempotencyKey,
 		intent.SealedOutboxPayload, &opened,
 	)
 	if err != nil {

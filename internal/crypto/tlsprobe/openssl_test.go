@@ -116,7 +116,7 @@ func TestNativeProbeParserRequiresCompletedBoundedEvidence(t *testing.T) {
 	srv := httptest.NewTLSServer(http.NotFoundHandler())
 	defer srv.Close()
 	stdout, stderr := nativeOutputFixture(srv.Certificate().Raw)
-	if got, err := parseNativeProbeOutput(stdout, stderr, nil); err != nil || len(got.PeerCertificates) != 1 || !bytes.Equal(got.PeerCertificates[0], srv.Certificate().Raw) {
+	if got, err := parseNativeProbeOutput(stdout, stderr, nil); err != nil || got.CipherSuite != tls.TLS_AES_128_GCM_SHA256 || len(got.PeerCertificates) != 1 || !bytes.Equal(got.PeerCertificates[0], srv.Certificate().Raw) {
 		t.Fatal("valid public certificate evidence rejected")
 	}
 	for _, tc := range []struct {

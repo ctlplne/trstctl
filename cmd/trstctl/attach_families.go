@@ -279,6 +279,12 @@ func attachVerifiableDecommission(log *slog.Logger, deps *server.Deps) error {
 func attachPQC(log *slog.Logger, deps *server.Deps) {
 	cryptoRuntime := pqcruntime.NewRuntime()
 	migrationRuntime := pqcmigration.NewRuntime(deps.Store)
+	hostPosture := pqcmigration.HostAgentHooks{
+		Store: deps.Store, Log: deps.Log, Progress: migrationRuntime.Progress,
+		Key: deps.KEK, TenantCrypto: deps.TenantCrypto,
+	}
+	deps.PQCPostureJobOpen = hostPosture.OpenJob
+	deps.PQCPostureJobResult = hostPosture.RecordResult
 	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, migrationRuntime.APIOptionsFactory)
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, migrationRuntime.OutboxFactory)
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, migrationRuntime.ProjectionOptions...)

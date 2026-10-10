@@ -58,6 +58,11 @@ func ProbeWithOpenSSL(ctx context.Context, executable, addr string, opts ...Opti
 	args := []string{"s_client", "-connect", addr, "-servername", host,
 		"-tls1_3", "-no_ticket", "-no_ign_eof", "-showcerts", "-brief", "-debug",
 		"-nameopt", "RFC2253", "-no-CAfile", "-no-CApath", "-no-CAstore"}
+	if cfg.requiredHybridGroup {
+		// The native client offers one group only. A completed handshake is
+		// therefore a direct wire proof of X25519MLKEM768 support.
+		args = append(args, "-groups", "X25519MLKEM768")
+	}
 	for _, proto := range cfg.alpn {
 		if !nativeProbeToken(proto, 255) || strings.Contains(proto, ",") {
 			return Result{}, errors.New("tlsprobe: invalid native ALPN protocol")
@@ -131,7 +136,11 @@ func ProbeWithOpenSSL(ctx context.Context, executable, addr string, opts ...Opti
 	if waitErr != nil || ctx.Err() != nil {
 		return Result{}, &StageError{Stage: StageHandshake, Addr: addr, Err: errors.New("native TLS handshake did not complete")}
 	}
-	return parseNativeProbeOutput(stdout.Bytes()[:o.n], stderr.Bytes()[:e.n], cfg.alpn)
+	result, err := parseNativeProbeOutput(stdout.Bytes()[:o.n], stderr.Bytes()[:e.n], cfg.alpn)
+	if err == nil && cfg.requiredHybridGroup {
+		result.KeyExchangeGroup = "X25519MLKEM768"
+	}
+	return result, err
 }
 
 func nativeProbeToken(value string, max int) bool {
@@ -242,6 +251,20 @@ func parseNativeProbeOutput(stdout, stderr []byte, offered []string) (Result, er
 		return fail()
 	}
 	footer = footer[startSummary+len(summaryMarker):]
+	cipherEnd := bytes.IndexByte(footer, '\n')
+	if cipherEnd < 0 {
+		return fail()
+	}
+	switch string(footer[:cipherEnd]) {
+	case "TLS_AES_128_GCM_SHA256":
+		res.CipherSuite = tls.TLS_AES_128_GCM_SHA256
+	case "TLS_AES_256_GCM_SHA384":
+		res.CipherSuite = tls.TLS_AES_256_GCM_SHA384
+	case "TLS_CHACHA20_POLY1305_SHA256":
+		res.CipherSuite = tls.TLS_CHACHA20_POLY1305_SHA256
+	default:
+		return fail()
+	}
 	endSummary := bytes.Index(footer, []byte("\n---\n"))
 	if endSummary < 0 {
 		return fail()

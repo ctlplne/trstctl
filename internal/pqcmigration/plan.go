@@ -195,6 +195,9 @@ func validateDesiredPQCPosture(posture connector.TLSPosture) error {
 	if posture.MinimumVersion != connector.TLSVersion13 {
 		return fmt.Errorf("desired PQC rollout must set minimum_version to %s", connector.TLSVersion13)
 	}
+	if len(posture.CipherSuites) != 0 {
+		return fmt.Errorf("desired PQC rollout cannot claim TLS 1.3 cipher-suite enforcement through Envoy")
+	}
 	for _, group := range posture.KeyExchangeGroups {
 		if strings.EqualFold(group, HybridTLSGroup) {
 			return nil
@@ -204,8 +207,8 @@ func validateDesiredPQCPosture(posture connector.TLSPosture) error {
 }
 
 func clonePosture(posture connector.TLSPosture) connector.TLSPosture {
-	posture.CipherSuites = append([]string(nil), posture.CipherSuites...)
-	posture.KeyExchangeGroups = append([]string(nil), posture.KeyExchangeGroups...)
+	posture.CipherSuites = append([]string{}, posture.CipherSuites...)
+	posture.KeyExchangeGroups = append([]string{}, posture.KeyExchangeGroups...)
 	return posture
 }
 

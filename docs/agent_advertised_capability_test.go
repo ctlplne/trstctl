@@ -155,10 +155,12 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 		// names connectors without being listed here still fails, so adding one
 		// stays a deliberate, reviewable act.
 		connectorDriving := map[string]bool{
-			"connector.deploy":          true,
-			relay.KindConnectorTest:     true,
-			relay.KindConnectorRollback: true,
-			relay.KindEndpointRenew:     true,
+			"connector.deploy":           true,
+			relay.KindConnectorTest:      true,
+			relay.KindConnectorRollback:  true,
+			relay.KindEndpointRenew:      true,
+			relay.KindPQCPosture:         true,
+			relay.KindPQCPostureRollback: true,
 		}
 		connectorWork := connectorDriving[kind.Kind]
 		if connectorWork && len(kind.Connectors) == 0 {

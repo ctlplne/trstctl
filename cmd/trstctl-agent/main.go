@@ -24,6 +24,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -743,7 +744,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		}
 	}
 	var hostRollback *relay.HostRollbackStore
-	if len(hostProfile.AllowedRoots) > 0 {
+	if len(hostProfile.AllowedRoots) > 0 || (relayCh != nil && slices.Contains(a.Roles(), mtls.AgentRoleHost)) {
 		stateDir := strings.TrimSpace(o.hostRollbackDir)
 		if stateDir == "" {
 			stateDir = filepath.Join(filepath.Dir(o.keyPath), "host-rollbacks")

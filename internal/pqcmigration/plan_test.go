@@ -3,6 +3,8 @@
 package pqcmigration
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -69,8 +71,10 @@ func TestMLDSAPlannerRejectsUnsupportedOrAlreadyReadyAssets(t *testing.T) {
 func TestPlannerBindsEverySelectedProtocolAndCipherFinding(t *testing.T) {
 	desired := connector.TLSPosture{
 		MinimumVersion:    connector.TLSVersion13,
-		CipherSuites:      []string{"TLS_AES_256_GCM_SHA384"},
 		KeyExchangeGroups: []string{HybridTLSGroup, "X25519"},
+	}
+	if raw, err := json.Marshal(clonePosture(desired)); err != nil || !bytes.Contains(raw, []byte(`"cipher_suites":[]`)) {
+		t.Fatalf("TLS 1.3 unmanaged cipher list must stay an empty array on the wire: %s %v", raw, err)
 	}
 	plan, err := BuildPlan([]Asset{
 		{ID: "protocol-1", Kind: string(cbom.AssetTLSEndpoint), Location: "edge:443", Protocol: "TLSv1.0", Strength: "broken", QuantumVulnerable: true, OutOfPolicy: true},
@@ -108,6 +112,17 @@ func TestPlannerBindsEverySelectedProtocolAndCipherFinding(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("planner accepted a desired posture without the hybrid ML-KEM group")
+	}
+	claimedCipher := desired
+	claimedCipher.CipherSuites = []string{"TLS_AES_256_GCM_SHA384"}
+	_, err = BuildPlan([]Asset{{
+		ID: "protocol-1", Kind: string(cbom.AssetTLSEndpoint), Protocol: "TLSv1.0", QuantumVulnerable: true,
+	}}, Request{
+		AssetIDs: []string{"protocol-1"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolACME,
+		TLSBindings: []TLSBinding{{AssetID: "protocol-1", TargetID: "envoy-edge", Desired: claimedCipher}},
+	})
+	if err == nil {
+		t.Fatal("planner claimed an Envoy TLS 1.3 cipher-suite restriction it cannot enforce")
 	}
 
 	conflicting := desired

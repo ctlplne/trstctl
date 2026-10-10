@@ -46,7 +46,6 @@ func testTLSIntent() pqcMigrationTLSPosturePayload {
 		TargetConfig: json.RawMessage(`{"endpoint":"https://envoy.test","redirect_marker":"must-not-leak"}`),
 		Desired: connector.TLSPosture{
 			MinimumVersion:    connector.TLSVersion13,
-			CipherSuites:      []string{"TLS_AES_256_GCM_SHA384"},
 			KeyExchangeGroups: []string{HybridTLSGroup, "X25519"},
 		},
 	}
@@ -709,12 +708,13 @@ func TestTLSRolloutTargetPreflightRejectsUnsupportedAndIncompleteTargets(t *test
 	}
 }
 
-func TestTLSRolloutTargetPreflightRefusesHostWorkInControlPlane(t *testing.T) {
+func TestTLSRolloutTargetPreflightRoutesHostWorkWithoutControlPlaneExecution(t *testing.T) {
 	target := store.DeploymentTarget{
 		ID: "target-a", Name: "edge-listener", Type: "envoy", RevisionID: "revision-a", Enabled: true,
+		Config: json.RawMessage(`{"executor":"agent","required_agent_id":"11111111-1111-4111-8111-111111111111","endpoint":"http://127.0.0.1:19080","secret_name":"edge","verify_address":"127.0.0.1:10443","verify_server_name":"edge.example.test"}`),
 	}
-	if err := validateTLSRolloutTarget(target, connector.NewRegistry()); !errors.Is(err, errPostureRequiresAgent) || !strings.Contains(err.Error(), "requires host_agent") {
-		t.Fatalf("host target through in-process registry error = %v, want host-agent refusal", err)
+	if err := validateTLSRolloutTarget(target, connector.NewRegistry()); err != nil {
+		t.Fatalf("host target should route to its agent independently of the in-process registry: %v", err)
 	}
 	if err := requirePostureExecutionVantage(target.ID, target.Type, connector.NewRegistry()); !errors.Is(err, errPostureRequiresAgent) || !strings.Contains(err.Error(), "requires host_agent") {
 		t.Fatalf("old queued host intent through in-process registry error = %v, want host-agent refusal", err)
@@ -731,6 +731,7 @@ func TestTLSPlanAndStartShareExactTargetPreflight(t *testing.T) {
 	}}
 	target := store.DeploymentTarget{
 		ID: "target-a", Name: "edge-listener", Type: "envoy", RevisionID: "revision-a", Enabled: true,
+		Config: json.RawMessage(`{"executor":"agent","required_agent_id":"11111111-1111-4111-8111-111111111111","endpoint":"http://127.0.0.1:19080","secret_name":"edge","verify_address":"127.0.0.1:10443","verify_server_name":"edge.example.test"}`),
 	}
 	loads := 0
 	get := func(id string) (store.DeploymentTarget, error) {
@@ -740,8 +741,8 @@ func TestTLSPlanAndStartShareExactTargetPreflight(t *testing.T) {
 		}
 		return target, nil
 	}
-	if _, err := preflightTLSRolloutTargets(plan, connector.NewRegistry(), get); err == nil || !strings.Contains(err.Error(), "requires host_agent") {
-		t.Fatalf("preview admitted host work through the in-process registry: %v", err)
+	if _, err := preflightTLSRolloutTargets(plan, connector.NewRegistry(), get); err != nil {
+		t.Fatalf("preview should admit the validated host-agent route: %v", err)
 	}
 	if loads != 1 {
 		t.Fatalf("target loads = %d, want one load for two findings bound to the same target", loads)
@@ -752,8 +753,8 @@ func TestTLSPlanAndStartShareExactTargetPreflight(t *testing.T) {
 		t.Fatalf("validated exact target map=%+v loads=%d err=%v", targets, loads, err)
 	}
 	loads = 0
-	if _, err := preflightTLSRolloutTargets(plan, nil, get); err == nil || loads != 0 {
-		t.Fatalf("unconfigured executor touched a target: loads=%d err=%v", loads, err)
+	if _, err := preflightTLSRolloutTargets(plan, nil, get); err != nil || loads != 1 {
+		t.Fatalf("host-agent route should work without a control-plane deployer: loads=%d err=%v", loads, err)
 	}
 }
 

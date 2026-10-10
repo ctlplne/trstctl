@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -102,6 +103,35 @@ func TestPQCCertificateProgressMixedRunRetainsBothKinds(t *testing.T) {
 	}
 	if statuses[cert.AssetID] != "issued" || statuses[tls.AssetID] != TLSFindingApplied {
 		t.Fatalf("issuance and receiver verification were conflated: %v", statuses)
+	}
+}
+
+func TestPQCHostSignedReadbackSurvivesProjectionRestart(t *testing.T) {
+	intent := testTLSIntent()
+	served := relay.PQCPostureServed{Address: "127.0.0.1:11444", ServerName: "pqc-edge.local.qa",
+		TLSVersion: 0x0304, CipherSuite: 0x1302, KeyExchangeGroup: HybridTLSGroup, LeafFingerprint: "served-leaf"}
+	completed := TLSFindingCompleted{Intent: intent, Receipt: connector.TLSPostureReceipt{
+		RunID: intent.RunID, FindingID: intent.AssetID, FindingKind: intent.FindingKind,
+		TargetID: intent.TargetID, TargetRevision: intent.TargetRevision, Connector: intent.Connector,
+		Observed: intent.Desired, Applied: true,
+	}, Served: &served, AgentID: "host-a", JobID: 42, Attempt: 1,
+		EvidenceDigest: "signed-digest", ReceiptStatement: "statement", ReceiptSignature: "signature",
+		ReceiptSignerFingerprint: "agent-fingerprint"}
+	stamp := time.Date(2026, 10, 10, 1, 0, 0, 0, time.UTC)
+	log := []events.Event{{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: sealedTestTenant, Time: stamp,
+		Data: mustJSON(t, projections.LicensedCryptoMigrationStarted{RunID: intent.RunID, AssetIDs: []string{intent.AssetID}, TLSPostures: []projections.LicensedCryptoMigrationTLSPosture{intent}})},
+		{Type: EventTLSFindingCompleted, TenantID: sealedTestTenant, Time: stamp.Add(time.Second), Data: mustJSON(t, completed)}}
+	first := testProgressRuntime().Progress
+	applyProgressLog(t, first, log)
+	want := first.Snapshot(sealedTestTenant, intent.RunID)
+	if len(want) != 1 || want[0].HostReadback == nil || want[0].HostReadback.Served != served ||
+		want[0].HostReadback.EvidenceDigest != "signed-digest" || want[0].Status != TLSFindingApplied {
+		t.Fatalf("signed host readback missing from progress: %+v", want)
+	}
+	restarted := testProgressRuntime().Progress
+	applyProgressLog(t, restarted, log)
+	if got := restarted.Snapshot(sealedTestTenant, intent.RunID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("cold projection changed signed readback: got=%+v want=%+v", got, want)
 	}
 }
 

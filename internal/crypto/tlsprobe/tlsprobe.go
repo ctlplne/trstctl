@@ -26,6 +26,13 @@ import (
 // the probe enforces instead of duplicating a number in user-facing code.
 const DefaultTimeout = 10 * time.Second
 
+// TLSVersion13 is the wire version returned by a completed TLS 1.3 handshake.
+const TLSVersion13 uint16 = tls.VersionTLS13
+
+// CipherSuiteName renders a negotiated public wire identifier without moving
+// crypto/tls imports across the AN-3 boundary.
+func CipherSuiteName(id uint16) string { return tls.CipherSuiteName(id) }
+
 // Result is the outcome of a probe.
 type Result struct {
 	// PeerCertificates is the certificate chain the server presented, DER-encoded,
@@ -33,6 +40,10 @@ type Result struct {
 	PeerCertificates [][]byte
 	// TLSVersion is the negotiated TLS version (tls.VersionTLS12, etc.).
 	TLSVersion uint16
+	// CipherSuite and KeyExchangeGroup are the negotiated wire values. They
+	// describe this handshake, not the listener's whole configured allowlist.
+	CipherSuite      uint16
+	KeyExchangeGroup string
 	// NegotiatedProtocol is the ALPN protocol, if any.
 	NegotiatedProtocol string
 	// ACMEIdentifier is the 32-byte digest carried in the leaf's id-pe-acmeIdentifier
@@ -42,11 +53,19 @@ type Result struct {
 }
 
 type config struct {
-	timeout      time.Duration
-	dialer       *net.Dialer
-	alpn         []string
-	serverName   string
-	preHandshake PreHandshake
+	timeout             time.Duration
+	dialer              *net.Dialer
+	alpn                []string
+	serverName          string
+	preHandshake        PreHandshake
+	requiredHybridGroup bool
+}
+
+// WithRequiredHybridGroup offers only X25519MLKEM768. A successful handshake
+// then proves the peer accepts that group rather than merely advertising it in
+// a management API. It is intended for direct TLS 1.3 posture verification.
+func WithRequiredHybridGroup() Option {
+	return func(c *config) { c.requiredHybridGroup = true }
 }
 
 // PreHandshake negotiates an application-level upgrade to TLS on the raw TCP
@@ -151,7 +170,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 
 	// InsecureSkipVerify: we inventory whatever certificate is presented, valid or
 	// not — this connection is never used to send or trust data.
-	tlsConn := tls.Client(conn, &tls.Config{
+	tlsConfig := &tls.Config{
 		// An inventory probe must capture the presented certificate even when it
 		// is expired/untrusted and sends no data.
 		// codeql[go/disabled-certificate-check]
@@ -162,14 +181,25 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 		// codeql[go/insecure-tls]
 		MinVersion: tls.VersionTLS10,
 		NextProtos: cfg.alpn,
-	})
+	}
+	if cfg.requiredHybridGroup {
+		tlsConfig.MinVersion = tls.VersionTLS13
+		tlsConfig.CurvePreferences = []tls.CurveID{tls.X25519MLKEM768}
+	}
+	tlsConn := tls.Client(conn, tlsConfig)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return Result{}, &StageError{Stage: StageHandshake, Addr: addr, Err: err}
 	}
 
 	// Deliberately send no application data — the probe is non-invasive.
 	state := tlsConn.ConnectionState()
-	res := Result{TLSVersion: state.Version, NegotiatedProtocol: state.NegotiatedProtocol}
+	res := Result{TLSVersion: state.Version, CipherSuite: state.CipherSuite, NegotiatedProtocol: state.NegotiatedProtocol}
+	if state.CurveID == tls.X25519MLKEM768 {
+		res.KeyExchangeGroup = "X25519MLKEM768"
+	}
+	if cfg.requiredHybridGroup && res.KeyExchangeGroup != "X25519MLKEM768" {
+		return Result{}, fmt.Errorf("tlsprobe: %s did not negotiate X25519MLKEM768", addr)
+	}
 	for _, c := range state.PeerCertificates {
 		der := make([]byte, len(c.Raw))
 		copy(der, c.Raw)

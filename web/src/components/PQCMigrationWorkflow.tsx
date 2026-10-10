@@ -31,13 +31,7 @@ const findingLabel = (asset: CBOMAsset): string => [asset.location, asset.protoc
 const migrationTarget = (asset: CBOMAsset): string =>
   asset.migration_target || (asset.kind === "host-config" || asset.kind === "tls-endpoint" ? "X25519MLKEM768" : pqcTargetAlgorithm);
 
-const requestFor = (
-  assetIds: string[],
-  tlsAssets: CBOMAsset[],
-  targetIds: Record<string, string>,
-  cipherSuites: string,
-  groups: string,
-): PQCMigrationRequest => ({
+const requestFor = (assetIds: string[], tlsAssets: CBOMAsset[], targetIds: Record<string, string>, groups: string): PQCMigrationRequest => ({
   asset_ids: assetIds,
   target_algorithm: pqcTargetAlgorithm,
   protocol: "acme",
@@ -47,7 +41,7 @@ const requestFor = (
         tls_bindings: tlsAssets.map((asset) => ({
           asset_id: asset.id,
           target_id: targetIds[asset.id],
-          desired: { minimum_version: "TLSv1.3", cipher_suites: splitList(cipherSuites), key_exchange_groups: splitList(groups) },
+          desired: { minimum_version: "TLSv1.3", cipher_suites: [], key_exchange_groups: splitList(groups) },
         })),
       }
     : {}),
@@ -61,7 +55,6 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const rollbackAuthority = useRuntimeOperationExecution("rollbackPQCMigration");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [targetIds, setTargetIds] = useState<Record<string, string>>({});
-  const [cipherSuites, setCipherSuites] = useState("TLS_AES_256_GCM_SHA384");
   const [groups, setGroups] = useState("X25519MLKEM768, X25519");
   const [plan, setPlan] = useState<PQCMigrationPlan | null>(null);
   const [reviewedRequest, setReviewedRequest] = useState<PQCMigrationRequest | null>(null);
@@ -84,7 +77,6 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
     (!targets.loading &&
       !targets.error &&
       tlsAssets.every((asset) => enabledTargets.some((target) => target.id === targetIds[asset.id])) &&
-      splitList(cipherSuites).length > 0 &&
       splitList(groups).some((group) => group.toUpperCase() === "X25519MLKEM768"));
   function clearReview() {
     setPlan(null);
@@ -109,7 +101,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
     setError(null);
     setResult(null);
     try {
-      const request = requestFor(selectedIds, tlsAssets, targetIds, cipherSuites, groups);
+      const request = requestFor(selectedIds, tlsAssets, targetIds, groups);
       setPlan(await api.planPQCMigration(request));
       setReviewedRequest(request);
       setConfirmed(false);
@@ -234,18 +226,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
                 </label>
               ))}
               <p className="text-sm">{t("posture.pqcMigration.minimumVersion")}</p>
-              <label className="grid gap-1 text-sm">
-                <span>{t("posture.pqcMigration.cipherSuites")}</span>
-                <input
-                  className="rounded-control border border-border bg-background p-2"
-                  value={cipherSuites}
-                  disabled={busy !== null}
-                  onChange={(event) => {
-                    setCipherSuites(event.target.value);
-                    clearReview();
-                  }}
-                />
-              </label>
+              <p className="text-sm text-muted-foreground">{t("posture.pqcMigration.cipherSuites")}</p>
               <label className="grid gap-1 text-sm">
                 <span>{t("posture.pqcMigration.keyExchangeGroups")}</span>
                 <input
