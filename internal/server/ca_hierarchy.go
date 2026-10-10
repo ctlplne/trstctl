@@ -1782,6 +1782,9 @@ func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle stri
 		signer, err := client.SignerForDualControlHandle(ctx, handle, signing.PurposeCASign, h.signAuthz)
 		return signer, false, err
 	}
+	if status.Code(err) == codes.FailedPrecondition && status.Convert(err).Message() == signing.ErrDestroyedKeyHandle.Error() {
+		return nil, false, fmt.Errorf("%w: this ceremony's signer handle was destroyed after an earlier failed key operation; cancel it and start a new ceremony with fresh custodian approvals", api.ErrCAHierarchyConflict)
+	}
 	return nil, false, err
 }
 

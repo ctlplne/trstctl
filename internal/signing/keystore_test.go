@@ -12,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
@@ -43,6 +46,33 @@ func genCA(t *testing.T, s *signing.Server) []byte {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	return gen.GetPublicKey()
+}
+
+func TestDestroyedSignerHandleRefusesRecreationWithRecoverableStatus(t *testing.T) {
+	dir := t.TempDir()
+	kek := testKEK(t)
+	ctx := context.Background()
+	server, err := signing.NewPersistentServer(signing.NewKeyStore(dir, kek))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const handle = "ca-hierarchy-destroyed-ceremony"
+	request := &signerpb.GenerateKeyRequest{
+		Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256, RequestedId: handle,
+	}
+	if _, err := server.GenerateKey(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.DestroyKey(ctx, &signerpb.DestroyKeyRequest{Handle: &signerpb.KeyHandle{Id: handle}}); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := signing.NewPersistentServer(signing.NewKeyStore(dir, kek))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restarted.GenerateKey(ctx, request); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("recreating tombstoned key = %v; want FailedPrecondition", err)
+	}
 }
 
 // TestSignerPersistsKeysAcrossRestart is the R3.2 disconfirming test for the

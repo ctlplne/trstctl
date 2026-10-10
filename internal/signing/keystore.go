@@ -32,6 +32,10 @@ type KeyStore struct {
 	journalDirectory os.FileInfo
 }
 
+// ErrDestroyedKeyHandle is a durable tombstone, not a transient persistence
+// failure. Callers must choose a fresh ceremony and handle after destruction.
+var ErrDestroyedKeyHandle = errors.New("signing: destroyed key handle cannot be recreated")
+
 type signOperationLock struct {
 	mu   sync.Mutex
 	refs int
@@ -292,7 +296,7 @@ func (st *stagedSave) commit() error {
 	}
 	if destroyed {
 		st.discard()
-		return errors.New("signing: destroyed key handle cannot be recreated")
+		return ErrDestroyedKeyHandle
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil { // #nosec G703 -- both absolute paths passed the explicit signer-keystore confinement check above (CWE-22)
 		st.discard()

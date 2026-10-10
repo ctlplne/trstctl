@@ -209,6 +209,9 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		if errors.Is(err, errKeyHandleExists) {
 			return nil, status.Error(codes.AlreadyExists, "key handle already exists")
 		}
+		if errors.Is(err, ErrDestroyedKeyHandle) {
+			return nil, status.Error(codes.FailedPrecondition, ErrDestroyedKeyHandle.Error())
+		}
 		return nil, status.Errorf(codes.Internal, "persist key: %v", err)
 	}
 

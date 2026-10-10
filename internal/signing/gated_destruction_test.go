@@ -268,8 +268,8 @@ func TestGatedDestroyJournalRecoversAfterHandleRemovalAndReplaysExactResult(t *t
 	}
 	if _, err := peer.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
 		Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256, RequestedId: req.Handle,
-	}); status.Code(err) != codes.Internal {
-		t.Fatalf("destroyed persistent handle recreation = %v, want Internal refusal", err)
+	}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("destroyed persistent handle recreation = %v, want FailedPrecondition refusal", err)
 	}
 
 	recovering := &crashFinalizingGatedDestroyer{

@@ -218,7 +218,11 @@ for ceremonies.
 6. **Generate the signer-held CSR** with
    `POST /api/v1/ca/authorities/{offline-root-id}/offline-intermediates/csr`; the
    signer creates and keeps the intermediate private key, returning only a CSR
-   PEM plus signer handle.
+   PEM plus signer handle. If a failed attempt destroyed this ceremony's signer
+   handle, a retry returns `409` with recovery instructions. The signer never
+   recreates a destroyed handle: cancel the pending ceremony in Key custody (or
+   via the ceremony cancel API), start a new intermediate ceremony, collect fresh
+   approvals, and request a new CSR.
 7. **Sign the CSR on the offline root system**: move only the CSR over, sign it
    as a CA certificate under the offline root, and bring back only the signed
    certificate PEM.
