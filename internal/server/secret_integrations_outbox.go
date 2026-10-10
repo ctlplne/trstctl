@@ -930,8 +930,6 @@ func (d *secretIntegrationOutboxDispatcher) secretSyncTarget(tenantID, targetID 
 	return d.fallbackSyncTargets[targetID]
 }
 
-var errSecretSyncSourceLocated = errors.New("server: secret-sync queued source located")
-
 // validateProjectedSecretSyncSource treats the exact event at target_order as
 // command authority. This closes the final gap left by SQL triggers: the app role
 // may enqueue a pending row, but it cannot make a worker perform I/O unless every
@@ -946,19 +944,8 @@ func validateProjectedSecretSyncSource(
 	if job.TargetOrder <= 0 {
 		return errors.New("server: event-derived secret-sync source order is invalid")
 	}
-	var source events.Event
-	found := false
-	err := log.Replay(ctx, uint64(job.TargetOrder), func(event events.Event) error { // #nosec G115 -- positive int64 is exactly representable as uint64.
-		if event.Sequence < uint64(job.TargetOrder) { // #nosec G115 -- positive int64 is exactly representable as uint64.
-			return nil
-		}
-		if event.Sequence > uint64(job.TargetOrder) { // #nosec G115 -- positive int64 is exactly representable as uint64.
-			return errSecretSyncSourceLocated
-		}
-		source, found = event, true
-		return errSecretSyncSourceLocated
-	})
-	if err != nil && !errors.Is(err, errSecretSyncSourceLocated) {
+	source, found, err := log.EventAtSequence(ctx, uint64(job.TargetOrder)) // #nosec G115 -- positive int64 is exactly representable as uint64.
+	if err != nil {
 		return fmt.Errorf("server: read canonical secret-sync queued source: %w", err)
 	}
 	if !found || source.TenantID != job.TenantID || source.Sequence != uint64(job.TargetOrder) { // #nosec G115 -- positive int64 is exactly representable as uint64.

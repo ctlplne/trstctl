@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1494 annotated sites across 26 rules. Each row is
+1495 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -404,7 +404,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:349` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (235 sites)
+### G115 — CWE-190 Integer overflow or wraparound (236 sites)
 
 | Location | Reason |
 |---|---|
@@ -525,10 +525,11 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
+| `internal/server/secret_integrations_outbox.go:947` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:951` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:952` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:955` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:964` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
+| `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
+| `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
 | `internal/server/secrets_rotation_served_test.go:2566` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:116` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:118` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
