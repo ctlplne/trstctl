@@ -68,6 +68,18 @@ func TestHostPosturePredecessorSurvivesRestartAndRestoresExactOrder(t *testing.T
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := restarted.PreparedPosture("run-1", "target-1", "revision-1", desired); !errors.Is(err, relay.ErrHostPostureConflict) {
+		t.Fatalf("completed run could reapply after rollback: %v", err)
+	}
+	if err := restarted.PreparePosture("run-1", "target-1", "revision-1", previous, desired); !errors.Is(err, relay.ErrHostPostureConflict) {
+		t.Fatalf("completed run could replace its predecessor after rollback: %v", err)
+	}
+	if _, err := restarted.PreparedPosture("run-2", "target-1", "revision-1", desired); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("new run could not prepare after rollback: %v", err)
+	}
+	if err := restarted.PreparePosture("run-2", "target-1", "revision-1", previous, desired); err != nil {
+		t.Fatalf("new run could not preserve its own predecessor: %v", err)
+	}
 	other, err := relay.NewHostRollbackStore(root, "tenant-b")
 	if err != nil {
 		t.Fatal(err)

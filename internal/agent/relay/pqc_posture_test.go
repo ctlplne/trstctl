@@ -79,6 +79,14 @@ func TestHostPQCPostureApplySignedReadbackAndExactColdRollback(t *testing.T) {
 	if err := restarted.PreparePosture("run-2", "target-1", "revision-2", previous, desired); err != nil {
 		t.Fatalf("after verified rollback a new run should be possible: %v", err)
 	}
+	second := intent
+	second.RunID, second.TargetRevision = "run-2", "revision-2"
+	if _, err := executeHostPQCPosture(context.Background(), second, KindPQCPosture, restarted, server.Client(), ""); err != nil {
+		t.Fatalf("second run after exact rollback: %v", err)
+	}
+	if !connector.EqualTLSPosture(current, desired) {
+		t.Fatalf("second run did not reapply desired posture: %+v", current)
+	}
 }
 
 func TestPQCPostureManagementOriginRefusesDNSPathsAndRedirects(t *testing.T) {

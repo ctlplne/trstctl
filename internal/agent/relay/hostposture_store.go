@@ -135,6 +135,9 @@ func (s *HostRollbackStore) PreparePosture(runID, targetID, revision string, pre
 		}
 		return nil
 	}
+	if state != nil && state.RunID == runID {
+		return ErrHostPostureConflict
+	}
 	return s.savePosture(&hostPostureState{
 		Version: hostPostureStateVersion, TenantID: s.tenantID, RunID: runID,
 		TargetID: targetID, TargetRevision: revision, Previous: previous, Desired: desired, Status: "prepared",
@@ -155,7 +158,15 @@ func (s *HostRollbackStore) PreparedPosture(runID, targetID, revision string, de
 	if err != nil {
 		return connector.TLSPosture{}, err
 	}
-	if !sameHostPosture(state, runID, revision, desired) || state.Status == "rolled_back" {
+	if state.Status == "rolled_back" {
+		if state.RunID == runID {
+			return connector.TLSPosture{}, ErrHostPostureConflict
+		}
+		// The completed predecessor belongs to the old run. Let a new run
+		// observe and durably prepare the listener's current posture.
+		return connector.TLSPosture{}, fs.ErrNotExist
+	}
+	if !sameHostPosture(state, runID, revision, desired) {
 		return connector.TLSPosture{}, ErrHostPostureConflict
 	}
 	return state.Previous, nil

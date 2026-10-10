@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -293,8 +294,9 @@ func runHostPQCPosture(ctx context.Context, ch Channel, client *http.Client, sto
 	}
 	result, err := executeHostPQCPosture(ctx, intent, job.Kind, store, client, nativeProbe)
 	if err != nil {
-		// Do not put receiver errors or target configuration in a signed public
-		// detail. The native error is retained in the host's diagnostic log.
+		// The signed public detail stays generic. The host-local diagnostic
+		// log retains the native failure so its operator can repair the path.
+		log.Printf("trstctl-agent: PQC posture job %d attempt %d failed: %v", job.JobID, job.Attempt, err)
 		report(ctx, ch, job, OutcomeFailed, "PQC posture mutation or readback failed on assigned host")
 		return false
 	}
