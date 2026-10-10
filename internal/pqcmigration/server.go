@@ -1408,10 +1408,7 @@ func (h *outboxHandler) completedTLSFinding(ctx context.Context, tenantID string
 	}
 	var completed TLSFindingCompleted
 	found := false
-	err := h.log.Replay(ctx, h.progress.RunStartSequence(tenantID, intent.RunID), func(ev events.Event) error {
-		if ev.TenantID != tenantID || ev.Type != EventTLSFindingCompleted {
-			return nil
-		}
+	err := h.replayTLSFindingReceipts(ctx, tenantID, intent.RunID, EventTLSFindingCompleted, func(ev events.Event) error {
 		var candidate TLSFindingCompleted
 		if err := json.Unmarshal(ev.Data, &candidate); err != nil {
 			return err
@@ -1459,10 +1456,7 @@ func (h *outboxHandler) preparedTLSPosture(ctx context.Context, tenantID string,
 	}
 	var previous connector.TLSPosture
 	found := false
-	err := h.log.Replay(ctx, h.progress.RunStartSequence(tenantID, intent.RunID), func(ev events.Event) error {
-		if ev.TenantID != tenantID || ev.Type != EventTLSFindingPrepared {
-			return nil
-		}
+	err := h.replayTLSFindingReceipts(ctx, tenantID, intent.RunID, EventTLSFindingPrepared, func(ev events.Event) error {
 		var prepared TLSFindingPrepared
 		if err := json.Unmarshal(ev.Data, &prepared); err != nil {
 			return err
@@ -1481,6 +1475,24 @@ func (h *outboxHandler) preparedTLSPosture(ctx context.Context, tenantID string,
 		return nil
 	})
 	return previous, found, err
+}
+
+// Retry recovery reads only the one receipt kind in a finite source cut. The
+// history grant keeps a restore from changing generations between the cut and
+// the subject-indexed replay. The projection's inclusive run start is only a
+// lower bound: a missing or lagging projection safely starts at sequence one.
+func (h *outboxHandler) replayTLSFindingReceipts(ctx context.Context, tenantID, runID, eventType string, apply func(events.Event) error) error {
+	if h.log == nil {
+		return errors.New("pqcmigration: TLS receipt recovery requires the event log")
+	}
+	return h.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := h.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return h.log.ReplayTenantTypesThrough(readCtx, tenantID,
+			h.progress.RunStartSequence(tenantID, runID), head, []string{eventType}, apply)
+	})
 }
 
 func (h *outboxHandler) handleTLSPostureRollback(ctx context.Context, m orchestrator.Message) error {
