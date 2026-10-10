@@ -22,13 +22,18 @@ var errBackupRestoreTestCrash = errors.New("events: simulated backup restore cra
 func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 	ctx := context.Background()
 	log := openBackupHistoryTestLog(t)
+	state, err := log.schedulerSafetySnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldIndex := eventIDIndexPrefix + eventIDSourceEpoch(state)
 	artifactDigest := strings.Repeat("a", 64)
 	history := []BackupHistoryRecord{
 		backupHistoryEvent(t, 1, "resume-one", "owner.created"),
 		{Sequence: 2, GapThrough: 2},
 		backupHistoryEvent(t, 3, "resume-three", "owner.updated"),
 	}
-	_, err := log.RestoreBackupHistory(ctx, 3, artifactDigest, func(yield func(BackupHistoryRecord) error) error {
+	_, err = log.RestoreBackupHistory(ctx, 3, artifactDigest, func(yield func(BackupHistoryRecord) error) error {
 		if err := yield(history[0]); err != nil {
 			return err
 		}
@@ -36,6 +41,9 @@ func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 	})
 	if !errors.Is(err, errBackupRestoreTestCrash) {
 		t.Fatalf("first restore error = %v, want simulated crash", err)
+	}
+	if _, err := log.js.Stream(ctx, oldIndex); !errors.Is(err, jetstream.ErrStreamNotFound) {
+		t.Fatalf("pending restore retained old identity projection: %v", err)
 	}
 	head, err := log.LastSequence(ctx)
 	if err != nil {
@@ -53,6 +61,9 @@ func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 		t.Fatalf("resumed restore records = %d, want total live count 2", n)
 	}
 	assertBackupHistory(t, log, 3, history)
+	if event, found, err := log.EventByID(ctx, history[2].MessageID); err != nil || !found || event.Sequence != 3 {
+		t.Fatalf("restored identity lookup = %+v, %t, %v", event, found, err)
+	}
 }
 
 func TestExactBackupRestoreRejectsDifferentBackupAgainstPartialPrefix(t *testing.T) {

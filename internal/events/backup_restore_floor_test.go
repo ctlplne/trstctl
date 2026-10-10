@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ type pendingRestoreTailProbe struct {
 	*localHistoryRewriteCoordinator
 	firstReadDone chan struct{}
 	once          sync.Once
+	armed         atomic.Bool
 }
 
 func (p *pendingRestoreTailProbe) WithRead(
@@ -30,7 +32,9 @@ func (p *pendingRestoreTailProbe) WithRead(
 	fn func(context.Context) error,
 ) error {
 	err := p.localHistoryRewriteCoordinator.WithRead(ctx, fn)
-	p.once.Do(func() { close(p.firstReadDone) })
+	if p.armed.Load() {
+		p.once.Do(func() { close(p.firstReadDone) })
+	}
 	return err
 }
 
@@ -52,6 +56,7 @@ func TestAuthorizedExactRestoreResumesUnsafeBoundPrefixAfterFloor(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	historyCoordinator.armed.Store(true)
 
 	// Start the durable projector before the restore begins. A partial restore
 	// changes metadata on the same stream, so a tailer that checks only when it

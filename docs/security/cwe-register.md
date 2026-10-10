@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1493 annotated sites across 26 rules. Each row is
+1494 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -404,7 +404,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:349` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (234 sites)
+### G115 — CWE-190 Integer overflow or wraparound (235 sites)
 
 | Location | Reason |
 |---|---|
@@ -466,8 +466,9 @@ not this file.
 | `internal/dynsecret/drivers.go:238` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:246` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:688` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/events/backup_history_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/events/backup_restore_floor_test.go:593` | tiny fixed test sequence |
+| `internal/events/backup_history_test.go:227` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/events/backup_restore_floor_test.go:598` | tiny fixed test sequence |
+| `internal/events/event_id_index_test.go:148` | the fixture index is bounded to one or two. |
 | `internal/historycontinuity/continuity_test.go:203` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/idemgc/idemgc_test.go:35` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/kms/awskms/awskms_test.go:84` | bounded fixture/corpus value packing inside a test (CWE-190) |

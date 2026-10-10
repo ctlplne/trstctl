@@ -135,6 +135,18 @@ replicas than configured. The Docker Compose eval stack uses the same external c
 path but explicitly sets `TRSTCTL_NATS_REPLICAS=1` and
 `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true`; keep that opt-in out of production.
 
+The control plane also creates a file-backed `TRSTCTL_EVENT_IDS_<epoch>`
+JetStream stream for exact event-ID recovery. It uses the same replica count as
+the source event stream. Give the control-plane NATS account permission to
+create, list, read, publish to, and delete these streams and their
+`trstctl_event_ids.>` subjects. Startup rebuilds a missing index from the
+retained event log before serving; privacy rewrites, physical deletion, and
+authenticated restore discard old generations. An index that has not covered
+the current event head refuses to report an ID absent; each request advances
+at most 1,024 events and a retry resumes from its durable cursor. Retain the
+source event log for rebuilds. The index is derived state, not a backup of the
+source.
+
 ### Schema migrations
 
 trstctl embeds its PostgreSQL schema as versioned SQL migrations and applies them

@@ -1844,6 +1844,12 @@ func (l *Log) scrubAndDeleteSource(ctx context.Context, source, target jetstream
 			targetInfo.State.LastSeq, sourceInfo.State.LastSeq,
 		)
 	}
+	// The activated target is the only serving generation under this cutover.
+	// Remove hash-keyed identity facts before scrubbing source envelopes, so a
+	// crash cannot leave an erased subject's old identity index behind.
+	if err := l.discardEventIDIndexesAtCutover(ctx, sourceInfo.Config.Name); err != nil {
+		return err
+	}
 	first := sourceInfo.State.FirstSeq
 	if first == 0 {
 		first = 1

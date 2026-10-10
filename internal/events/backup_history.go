@@ -762,6 +762,13 @@ func (l *Log) restoreBackupHistory(
 			if err != nil {
 				return err
 			}
+			// The authenticated restore can materialize or secure-delete gap
+			// positions. Drop identity facts for the old cut before changing any
+			// source envelopes; a crash may leave this restore pending for a
+			// later authorized continuation.
+			if err := l.discardEventIDIndexesAtCutover(ctx, name); err != nil {
+				return err
+			}
 
 			var covered uint64
 			err = source(func(record BackupHistoryRecord) error {

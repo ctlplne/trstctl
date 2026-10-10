@@ -131,6 +131,10 @@ type Log struct {
 	legacySafety        schedulerSafetyState
 	legacySafeThrough   uint64
 	legacySafetyPresent bool
+	// idIndexMu serializes this process's event-ID projection catch-up. The
+	// projection itself is a separate file-backed JetStream stream and survives
+	// process crashes; cross-replica writes use per-subject compare-and-swap.
+	idIndexMu sync.Mutex
 	// backupRestoreAuthorizer is installed only by the recovery composition. Its
 	// locked deployment key verifies an opaque capability bound to one
 	// HMAC-verified artifact cut/digest and its exact staged history source before
@@ -269,6 +273,10 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 	if err := l.checkDurability(ctx); err != nil {
 		shutdown(srv, nc)
 		return nil, err
+	}
+	if err := l.warmEventIDIndex(ctx); err != nil && !errors.Is(err, ErrBackupRestoreIncomplete) {
+		shutdown(srv, nc)
+		return nil, fmt.Errorf("events: rebuild event identity index: %w", err)
 	}
 	return l, nil
 }
@@ -503,11 +511,11 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	return e, nil
 }
 
-// EventByID scans retained source-of-truth history for one producer identity.
-// JetStream remembers message IDs only for its finite duplicate window, so crash
-// reconciliation cannot use a fresh Publish ACK to decide whether an older event
-// already exists. If corrupted history contains the same ID with different bytes,
-// fail closed instead of silently selecting one canonical meaning.
+// EventByID reads the durable, generation-specific identity projection and then
+// verifies the exact canonical source envelope. The projection cursor must cover
+// the pinned head before absence or a conflict-free match is returned. A bounded
+// catch-up can advance the cursor after another replica's append; larger lag is
+// retried without scanning the full history on this request path.
 func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error) {
 	if strings.TrimSpace(eventID) == "" {
 		return Event{}, false, errors.New("events: event id lookup is empty")
@@ -515,66 +523,93 @@ func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error
 	var (
 		canonical Event
 		found     bool
-		unsafe    bool
-		conflict  error
 	)
 	err := l.withHistoryRead(ctx, func(ctx context.Context) error {
 		name, stream, head, err := l.resolveReplayStream(ctx)
 		if err != nil {
 			return err
 		}
-		enforceFloor := l.rejectLegacySchedulerRuns.Load()
-		// This lookup has no caller callback. Inspect the full retained cut
-		// once, withholding its result until the legacy floor and generation
-		// are verified. Public Replay still preflights before any callback.
-		err = l.replayResolved(ctx, name, stream, 1, head, func(event Event) error {
-			if enforceFloor {
-				requiresSanitation, inspectErr := schedulerhistory.RequiresSanitation(event.Type, event.SchemaVersion, event.Data)
-				if inspectErr != nil || requiresSanitation {
-					return schedulerhistory.ErrSanitationRequired
-				}
-			}
-			if event.ID != eventID {
-				return nil
-			}
-			if !enforceFloor {
-				requiresSanitation, inspectErr := schedulerhistory.RequiresSanitation(event.Type, event.SchemaVersion, event.Data)
-				if inspectErr != nil || requiresSanitation {
-					unsafe = true
-				}
-			}
-			if !found {
-				canonical = event
-				found = true
-				return nil
-			}
-			if !sameRetainedEvent(canonical, event) {
-				if conflict == nil {
-					conflict = fmt.Errorf("%w: event id %q has conflicting retained envelopes at sequences %d and %d",
-						ErrConflictingEventIdentity, eventID, canonical.Sequence, event.Sequence)
-				}
-				if !enforceFloor {
-					return conflict
-				}
-				// A later unsafe envelope must still take precedence, just
-				// as the public replay preflight did before lookup began.
-			}
-			return nil
-		})
-		if err != nil && enforceFloor {
-			canonical = Event{}
-			found = false
-		}
-		return err
-	})
-	if unsafe {
+		state, err := l.schedulerSafetySnapshot(ctx)
 		if err != nil {
-			return Event{}, false, errors.Join(schedulerhistory.ErrSanitationRequired, err)
+			return err
 		}
-		return Event{}, false, schedulerhistory.ErrSanitationRequired
-	}
-	if err == nil {
-		err = conflict
+		if state.Name != name || state.LastSequence < head {
+			return ErrGenerationChanged
+		}
+		l.idIndexMu.Lock()
+		index, epoch, err := l.eventIDIndexFor(ctx, state)
+		if err != nil {
+			l.idIndexMu.Unlock()
+			return err
+		}
+		covered, _, err := readEventIDCursor(ctx, index, epoch)
+		if err != nil {
+			l.idIndexMu.Unlock()
+			return err
+		}
+		if covered > head {
+			l.idIndexMu.Unlock()
+			return errors.New("events: identity projection cursor exceeds pinned source head")
+		}
+		limit := min(head, covered+eventIDIndexReadLimit)
+		for covered < limit {
+			cut := min(limit, covered+eventIDIndexBatch)
+			covered, err = l.indexEventIDsThrough(ctx, stream, state, cut)
+			if err != nil {
+				l.idIndexMu.Unlock()
+				return err
+			}
+		}
+		if covered > head {
+			l.idIndexMu.Unlock()
+			return ErrGenerationChanged
+		}
+		if covered < head {
+			l.idIndexMu.Unlock()
+			return fmt.Errorf("%w: covered %d of %d", ErrEventIDIndexBehind, covered, head)
+		}
+		entry, _, indexed, err := readEventIDEntry(ctx, index, epoch, eventID)
+		l.idIndexMu.Unlock()
+		if err != nil {
+			return err
+		}
+		if err := l.preflightLegacySchedulerHistory(ctx, stream, head); err != nil {
+			if entry.Conflict {
+				return errors.Join(err, ErrConflictingEventIdentity)
+			}
+			return err
+		}
+		if indexed {
+			raw, err := stream.GetMsg(ctx, entry.Sequence)
+			if err != nil {
+				return fmt.Errorf("events: indexed canonical seq %d: %w", entry.Sequence, err)
+			}
+			if crypto.SHA256Hex(raw.Data) != entry.Digest {
+				return errors.New("events: indexed canonical envelope differs from retained source")
+			}
+			canonical, err = decodeStored(raw.Data, entry.Sequence)
+			if err != nil {
+				return err
+			}
+			if canonical.ID != eventID {
+				return errors.New("events: indexed event ID differs from retained source")
+			}
+			found = true
+		}
+		after, err := l.schedulerSafetySnapshot(ctx)
+		if err != nil {
+			return err
+		}
+		if !appendOnlySince(state, after) || eventIDSourceEpoch(state) != eventIDSourceEpoch(after) {
+			return ErrGenerationChanged
+		}
+		if entry.Conflict {
+			return fmt.Errorf("%w: event id %q has conflicting retained envelopes", ErrConflictingEventIdentity, eventID)
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrConflictingEventIdentity) {
+		return Event{}, false, err
 	}
 	return canonical, found, err
 }
@@ -749,11 +784,14 @@ func (l *Log) Delete(ctx context.Context, seq uint64) error {
 					return fmt.Errorf("events: recover unfinished rewrite before delete: %w", err)
 				}
 			}
-			_, stream, err := l.resolveActiveStream(ctx)
+			name, stream, err := l.resolveActiveStream(ctx)
 			if err != nil {
 				return fmt.Errorf("events: resolve delete stream: %w", err)
 			}
 			if err := l.requireNoPendingBackupRestoreStream(ctx, stream); err != nil {
+				return err
+			}
+			if err := l.discardEventIDIndexesAtCutover(ctx, name); err != nil {
 				return err
 			}
 			if err := stream.DeleteMsg(ctx, seq); err != nil {
@@ -801,7 +839,7 @@ func (l *Log) PruneTenantThroughCheckpoint(
 					return fmt.Errorf("events: recover unfinished rewrite before retention prune: %w", err)
 				}
 			}
-			_, stream, err := l.resolveActiveStream(ctx)
+			name, stream, err := l.resolveActiveStream(ctx)
 			if err != nil {
 				return fmt.Errorf("events: resolve retention stream: %w", err)
 			}
@@ -842,6 +880,11 @@ func (l *Log) PruneTenantThroughCheckpoint(
 				}
 				if err := checkpoint(ctx); err != nil {
 					return fmt.Errorf("events: save retention checkpoint: %w", err)
+				}
+			}
+			if len(sequences) > 0 {
+				if err := l.discardEventIDIndexesAtCutover(ctx, name); err != nil {
+					return err
 				}
 			}
 			for _, seq := range sequences {

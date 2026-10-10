@@ -645,6 +645,14 @@ func TestTenantKeyDomainRewriteCrashMidScrubKeepsTargetAndFinishesScrub(t *testi
 			t.Fatalf("Append %d: %v", i, err)
 		}
 	}
+	if _, found, err := log.EventByID(ctx, "target-0"); err != nil || !found {
+		t.Fatalf("build pre-rewrite identity projection: found=%t err=%v", found, err)
+	}
+	before, err := log.schedulerSafetySnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldIndex := eventIDIndexPrefix + eventIDSourceEpoch(before)
 	var scrubCalls atomic.Int64
 	log.rewriteTestHook = func(phase rewritePhase) error {
 		if phase == rewritePhaseScrubbing && scrubCalls.Add(1) == 1 {
@@ -664,6 +672,9 @@ func TestTenantKeyDomainRewriteCrashMidScrubKeepsTargetAndFinishesScrub(t *testi
 	if scrubCalls.Load() != 1 {
 		t.Fatalf("scrub hook calls = %d, want 1 before crash", scrubCalls.Load())
 	}
+	if _, err := log.js.Stream(ctx, oldIndex); !errors.Is(err, jetstream.ErrStreamNotFound) {
+		t.Fatalf("mid-scrub crash retained erased identity facts: %v", err)
+	}
 	_ = log.Close()
 
 	reopened, err := openRewriteLog(t, cfg)
@@ -678,6 +689,12 @@ func TestTenantKeyDomainRewriteCrashMidScrubKeepsTargetAndFinishesScrub(t *testi
 	}
 	if _, err := reopened.js.Stream(ctx, streamName); !errors.Is(err, jetstream.ErrStreamNotFound) {
 		t.Fatalf("partially scrubbed source survived recovery: %v", err)
+	}
+	if _, err := reopened.js.Stream(ctx, oldIndex); !errors.Is(err, jetstream.ErrStreamNotFound) {
+		t.Fatalf("cold recovery restored erased identity facts: %v", err)
+	}
+	if got, found, err := reopened.EventByID(ctx, "target-0"); err != nil || !found || got.ID != "target-0" {
+		t.Fatalf("target generation identity lookup = %+v, %t, %v", got, found, err)
 	}
 }
 

@@ -11,9 +11,10 @@ import (
 )
 
 // Count real broker responses instead of asserting a machine-dependent runtime.
-// Lookup must still inspect the whole retained cut, including when the ID is
-// absent, but its internal privacy check must not double all stored-message I/O.
-func TestEventLookupChecksRetainedHistoryWithoutDuplicateReads(t *testing.T) {
+// The first lookup may populate the durable identity projection after a burst;
+// subsequent first, last, and absent lookups must no longer read that source
+// prefix. This is the request-path bound that a full replay could not meet.
+func TestEventLookupWarmsDurableIndexThenUsesBoundedReads(t *testing.T) {
 	ctx := context.Background()
 	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
@@ -30,7 +31,7 @@ func TestEventLookupChecksRetainedHistoryWithoutDuplicateReads(t *testing.T) {
 		ids[i] = event.ID
 	}
 	log.EnforceLegacySchedulerWriteFloor()
-	for _, item := range []struct {
+	for i, item := range []struct {
 		name, id string
 		found    bool
 	}{
@@ -47,9 +48,14 @@ func TestEventLookupChecksRetainedHistoryWithoutDuplicateReads(t *testing.T) {
 			}
 			replies := log.nc.Stats().InMsgs - before
 			t.Logf("retained events=%d broker responses=%d", count, replies)
-			// Allow stream/generation metadata responses around the retained cut.
-			if replies > count+32 {
-				t.Fatalf("lookup read amplification: %d broker responses for %d retained events; at most one event pass plus metadata expected", replies, count)
+			// The first call writes one index fact per source event; later
+			// calls read only cursor, one key, one exact envelope, and fences.
+			budget := uint64(32)
+			if i == 0 {
+				budget = 4*count + 64
+			}
+			if replies > budget {
+				t.Fatalf("identity projection used %d broker responses, budget %d for %d retained events", replies, budget, count)
 			}
 		})
 	}
