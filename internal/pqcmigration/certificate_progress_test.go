@@ -34,8 +34,13 @@ func TestPQCVerifiedHostCertificateAndExactRollbackSurviveColdReplay(t *testing.
 	started := projections.LicensedCryptoMigrationStarted{RunID: run, AssetIDs: []string{asset}, Reissues: []projections.LicensedCryptoMigrationReissue{{
 		RunID: run, AssetID: asset, TargetAlgorithm: TargetMLDSA65, EffectiveAlgorithm: TargetMLDSA65}}}
 	stamp := time.Date(2026, 10, 10, 7, 0, 0, 0, time.UTC)
-	log := []events.Event{{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: sealedTestTenant, Time: stamp, Data: mustJSON(t, started)},
-		{Type: EventCertificateFindingApplied, TenantID: sealedTestTenant, Time: stamp.Add(time.Second), Data: mustJSON(t, applied)}}
+	log := []events.Event{{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: sealedTestTenant, Sequence: 300414, Time: stamp, Data: mustJSON(t, started)},
+		{Type: EventCertificateFindingApplied, TenantID: sealedTestTenant, Sequence: 300416, Time: stamp.Add(time.Second), Data: mustJSON(t, applied)}}
+	delayedIssued := events.Event{Type: projections.EventLicensedCryptoMigrationAssetCompleted,
+		TenantID: sealedTestTenant, Sequence: 300415, Time: stamp.Add(500 * time.Millisecond),
+		Data: mustJSON(t, projections.LicensedCryptoMigrationAssetCompleted{
+			RunID: run, AssetID: asset, TargetAlgorithm: TargetMLDSA65,
+			EffectiveAlgorithm: TargetMLDSA65, CertificateFingerprint: newFP})}
 	first := NewProgressProjection(nil)
 	applyProgressLog(t, first, log)
 	progress := first.Snapshot(sealedTestTenant, run)
@@ -55,11 +60,22 @@ func TestPQCVerifiedHostCertificateAndExactRollbackSurviveColdReplay(t *testing.
 		CertificateFingerprint: renewedFP, Before: after, After: renewedAfter, Transcript: renewedTranscript,
 		AgentID: "agent-a", JobID: 9, Attempt: 1, EvidenceDigest: renewedTranscript.Digest(),
 		ReceiptStatement: "renewal statement", ReceiptSignature: "renewal signature", ReceiptSignerFingerprint: "agent-fingerprint"}
-	log = append(log, events.Event{Type: EventCertificateFindingRenewed, TenantID: sealedTestTenant,
+	log = append(log, events.Event{Type: EventCertificateFindingRenewed, TenantID: sealedTestTenant, Sequence: 300417,
 		Time: stamp.Add(2 * time.Second), Data: mustJSON(t, renewed)})
 	applyProgressLog(t, first, log[2:])
+	// The live command may project its event before the durable tail reaches it.
+	// The tail can then deliver that same event, followed by an older applied
+	// event from its own cursor. Neither may rewind the signed served leaf.
+	applyProgressLog(t, first, []events.Event{log[2], delayedIssued, log[1]})
 	if current, active := first.currentCertificateFingerprint(sealedTestTenant, run, asset); !active || current != renewedFP {
 		t.Fatalf("signed renewal did not advance rollback successor: current=%s active=%t", current, active)
+	}
+	conflicting := log[2]
+	changedRenewal := renewed
+	changedRenewal.ReceiptStatement = "different signed statement"
+	conflicting.Data = mustJSON(t, changedRenewal)
+	if err := first.Apply(context.Background(), conflicting); err == nil {
+		t.Fatal("same-sequence conflicting signed renewal was accepted")
 	}
 	if base, found, err := first.certificateAppliedReceipt(sealedTestTenant, run, asset); err != nil || !found || base.PredecessorFingerprint != oldFP {
 		t.Fatalf("renewal lost exact pre-migration predecessor: base=%+v found=%t err=%v", base, found, err)
@@ -69,9 +85,13 @@ func TestPQCVerifiedHostCertificateAndExactRollbackSurviveColdReplay(t *testing.
 		PredecessorFingerprint: oldFP, SuccessorFingerprint: renewedFP, Restored: before, Transcript: served,
 		AgentID: "agent-a", JobID: 8, Attempt: 1, EvidenceDigest: served.Digest(),
 		ReceiptStatement: "rollback statement", ReceiptSignature: "rollback signature", ReceiptSignerFingerprint: "agent-fingerprint"}
-	log = append(log, events.Event{Type: EventCertificateFindingRolledBack, TenantID: sealedTestTenant,
+	log = append(log, events.Event{Type: EventCertificateFindingRolledBack, TenantID: sealedTestTenant, Sequence: 300419,
 		Time: stamp.Add(3 * time.Second), Data: mustJSON(t, rolled)})
 	applyProgressLog(t, first, log[3:])
+	delayedFailure := events.Event{Type: EventCertificateFindingFailed,
+		TenantID: sealedTestTenant, Sequence: 300418, Time: stamp.Add(2500 * time.Millisecond),
+		Data: mustJSON(t, CertificateFindingFailure{RunID: run, AssetID: asset, Operation: "rollback"})}
+	applyProgressLog(t, first, []events.Event{log[3], delayedFailure, log[2], delayedIssued, log[1], log[0]})
 	want := first.Snapshot(sealedTestTenant, run)
 	if len(want) != 1 || want[0].Status != TLSFindingRolledBack || want[0].CertificateFingerprint != oldFP ||
 		want[0].CertificateReadback.Transcript.ObservedFingerprint != oldFP || want[0].EffectiveAlgorithm != "RSA" {

@@ -70,6 +70,12 @@ func (h *outboxHandler) certificateTerminalFailure(ctx context.Context, m orches
 }
 
 func (p *ProgressProjection) applyCertificateFailure(ev eventspec.Event, failed CertificateFindingFailure) error {
+	p.certificateApplyMu.Lock()
+	defer p.certificateApplyMu.Unlock()
+	key := progressKey{tenantID: ev.TenantID, runID: failed.RunID, assetID: failed.AssetID}
+	if projected, err := p.certificateEventAlreadyProjected(key, ev); projected || err != nil {
+		return err
+	}
 	if ev.SchemaVersion != 0 && ev.SchemaVersion != 1 {
 		return errors.New("pqcmigration: unsupported certificate failure schema")
 	}
@@ -84,10 +90,10 @@ func (p *ProgressProjection) applyCertificateFailure(ev eventspec.Event, failed 
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	key := progressKey{tenantID: ev.TenantID, runID: failed.RunID, assetID: failed.AssetID}
 	item := p.items[key]
 	item.RunID, item.AssetID, item.FindingKind = failed.RunID, failed.AssetID, "certificate-key"
 	item.Status, item.Failure, item.UpdatedAt = status, reason, eventTime(ev)
 	p.items[key] = item
+	p.certificateStateEvents[key] = cloneReceiptEvent(ev)
 	return nil
 }

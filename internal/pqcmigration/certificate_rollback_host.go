@@ -183,6 +183,12 @@ func (p *ProgressProjection) certificateRollbackReceipt(tenantID, runID, assetID
 }
 
 func (p *ProgressProjection) applyCertificateRolledBack(ctx context.Context, ev eventspec.Event, completed CertificateFindingRolledBack) error {
+	p.certificateApplyMu.Lock()
+	defer p.certificateApplyMu.Unlock()
+	key := progressKey{tenantID: ev.TenantID, runID: completed.RunID, assetID: completed.AssetID}
+	if projected, err := p.certificateEventAlreadyProjected(key, ev); projected || err != nil {
+		return err
+	}
 	if err := completed.Transcript.Validate(); err != nil {
 		return err
 	}
@@ -214,8 +220,8 @@ func (p *ProgressProjection) applyCertificateRolledBack(ctx context.Context, ev 
 	if p.certificateRollbackEvents == nil {
 		p.certificateRollbackEvents = map[progressKey]eventspec.Event{}
 	}
-	key := progressKey{tenantID: ev.TenantID, runID: completed.RunID, assetID: completed.AssetID}
 	p.certificateRollbackEvents[key] = cloneReceiptEvent(ev)
+	p.certificateStateEvents[key] = cloneReceiptEvent(ev)
 	item := p.items[key]
 	item.RunID, item.AssetID, item.FindingKind = completed.RunID, completed.AssetID, "certificate-key"
 	item.TargetID, item.TargetRevision = completed.TargetID, completed.TargetRevision

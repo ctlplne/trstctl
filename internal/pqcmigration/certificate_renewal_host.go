@@ -214,10 +214,15 @@ func (h HostAgentHooks) RecordCertificateRenewalResult(ctx context.Context, tena
 }
 
 func (p *ProgressProjection) applyCertificateRenewed(ctx context.Context, ev eventspec.Event, renewed CertificateFindingRenewed) error {
+	p.certificateApplyMu.Lock()
+	defer p.certificateApplyMu.Unlock()
+	key := progressKey{tenantID: ev.TenantID, runID: renewed.RunID, assetID: renewed.AssetID}
+	if projected, err := p.certificateEventAlreadyProjected(key, ev); projected || err != nil {
+		return err
+	}
 	if err := renewed.Transcript.Validate(); err != nil {
 		return err
 	}
-	key := progressKey{tenantID: ev.TenantID, runID: renewed.RunID, assetID: renewed.AssetID}
 	p.mu.RLock()
 	item, found := p.items[key]
 	p.mu.RUnlock()
@@ -249,6 +254,7 @@ func (p *ProgressProjection) applyCertificateRenewed(ctx context.Context, ev eve
 	}
 	p.mu.Lock()
 	p.certificateRenewalEvents[key] = cloneReceiptEvent(ev)
+	p.certificateStateEvents[key] = cloneReceiptEvent(ev)
 	item = p.items[key]
 	item.CertificateFingerprint = renewed.CertificateFingerprint
 	item.CertificateReadback = &CertificateReadback{Transcript: renewed.Transcript, AgentID: renewed.AgentID,

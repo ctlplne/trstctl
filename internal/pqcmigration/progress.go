@@ -3,6 +3,7 @@
 package pqcmigration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -147,7 +148,11 @@ type progressKey struct {
 type ProgressProjection struct {
 	store *store.Store
 	mu    sync.RWMutex
-	items map[progressKey]FindingProgress
+	// The command path and durable tail can apply the same signed host event at
+	// the same time. Serialize their CBOM write and in-memory receipt advance so
+	// an older tail delivery cannot overwrite a newer served fingerprint.
+	certificateApplyMu sync.Mutex
+	items              map[progressKey]FindingProgress
 	// Exact immutable event envelopes let the agent receipt path recover a
 	// predecessor or a prior signed outcome without rescanning the entire log.
 	preparedEvents            map[progressKey]eventspec.Event
@@ -156,6 +161,7 @@ type ProgressProjection struct {
 	certificateEvents         map[progressKey]eventspec.Event
 	certificateRenewalEvents  map[progressKey]eventspec.Event
 	certificateRollbackEvents map[progressKey]eventspec.Event
+	certificateStateEvents    map[progressKey]eventspec.Event
 	// An append whose projection failed remains retryable in this process.
 	// After a restart the immutable log rebuilds the indexes above.
 	pendingEvents map[string]eventspec.Event
@@ -188,6 +194,7 @@ func NewProgressProjection(st *store.Store) *ProgressProjection {
 		certificateEvents:         map[progressKey]eventspec.Event{},
 		certificateRenewalEvents:  map[progressKey]eventspec.Event{},
 		certificateRollbackEvents: map[progressKey]eventspec.Event{},
+		certificateStateEvents:    map[progressKey]eventspec.Event{},
 		runStarts:                 map[progressRunKey]uint64{}}
 }
 
@@ -201,6 +208,8 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	if p == nil {
 		return nil
 	}
+	p.certificateApplyMu.Lock()
+	defer p.certificateApplyMu.Unlock()
 	p.mu.Lock()
 	p.items = map[progressKey]FindingProgress{}
 	p.preparedEvents = map[progressKey]eventspec.Event{}
@@ -209,10 +218,37 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	p.certificateEvents = map[progressKey]eventspec.Event{}
 	p.certificateRenewalEvents = map[progressKey]eventspec.Event{}
 	p.certificateRollbackEvents = map[progressKey]eventspec.Event{}
+	p.certificateStateEvents = map[progressKey]eventspec.Event{}
 	p.pendingEvents = map[string]eventspec.Event{}
 	p.runStarts = map[progressRunKey]uint64{}
 	p.mu.Unlock()
 	return nil
+}
+
+// certificateEventAlreadyProjected uses the immutable stream sequence within
+// one run/asset. Boot replay, inline projection, and the durable tail may meet
+// at different cursors; the latest signed receipt wins, while a different
+// envelope at the same sequence is a corruption rather than an idempotent retry.
+// Callers hold certificateApplyMu through their store and memory updates.
+func (p *ProgressProjection) certificateEventAlreadyProjected(key progressKey, ev eventspec.Event) (bool, error) {
+	if ev.Sequence == 0 {
+		return false, nil // unit fixtures without stream coordinates
+	}
+	p.mu.RLock()
+	recorded := p.certificateStateEvents[key]
+	p.mu.RUnlock()
+	if recorded.Sequence > ev.Sequence {
+		return true, nil
+	}
+	if recorded.Sequence == ev.Sequence {
+		if recorded.ID != ev.ID || recorded.Type != ev.Type || recorded.TenantID != ev.TenantID ||
+			recorded.SchemaVersion != ev.SchemaVersion || !recorded.Time.Equal(ev.Time) ||
+			!bytes.Equal(recorded.Data, ev.Data) {
+			return false, fmt.Errorf("pqcmigration: certificate event sequence %d conflicts with its immutable predecessor", ev.Sequence)
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) error {
@@ -237,7 +273,7 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 		if err := json.Unmarshal(ev.Data, &issued); err != nil {
 			return err
 		}
-		p.applyCertificateIssued(ev, issued)
+		return p.applyCertificateIssued(ev, issued)
 	case EventCertificateFindingApplied:
 		var applied CertificateFindingApplied
 		if err := json.Unmarshal(ev.Data, &applied); err != nil {
@@ -261,7 +297,7 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 		if err := json.Unmarshal(ev.Data, &restored); err != nil {
 			return err
 		}
-		p.applyCertificateRollback(ev, restored)
+		return p.applyCertificateRollback(ev, restored)
 	case EventTLSFindingPrepared:
 		var prepared TLSFindingPrepared
 		if err := json.Unmarshal(ev.Data, &prepared); err != nil {

@@ -174,6 +174,12 @@ func (p *ProgressProjection) certificateAppliedReceipt(tenantID, runID, assetID 
 }
 
 func (p *ProgressProjection) applyCertificateApplied(ctx context.Context, ev eventspec.Event, completed CertificateFindingApplied) error {
+	p.certificateApplyMu.Lock()
+	defer p.certificateApplyMu.Unlock()
+	key := progressKey{tenantID: ev.TenantID, runID: completed.RunID, assetID: completed.AssetID}
+	if projected, err := p.certificateEventAlreadyProjected(key, ev); projected || err != nil {
+		return err
+	}
 	if err := completed.Transcript.Validate(); err != nil {
 		return err
 	}
@@ -206,8 +212,8 @@ func (p *ProgressProjection) applyCertificateApplied(ctx context.Context, ev eve
 	if p.certificateEvents == nil {
 		p.certificateEvents = map[progressKey]eventspec.Event{}
 	}
-	key := progressKey{tenantID: ev.TenantID, runID: completed.RunID, assetID: completed.AssetID}
 	p.certificateEvents[key] = cloneReceiptEvent(ev)
+	p.certificateStateEvents[key] = cloneReceiptEvent(ev)
 	item := p.items[key]
 	item.RunID, item.AssetID, item.FindingKind = completed.RunID, completed.AssetID, "certificate-key"
 	item.TargetID, item.TargetRevision, item.Connector = completed.TargetID, completed.TargetRevision, completed.Connector
