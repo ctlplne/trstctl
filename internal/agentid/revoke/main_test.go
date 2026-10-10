@@ -88,11 +88,12 @@ func freePort() uint32 {
 
 // harness bundles the live substrates a cascade test drives.
 type harness struct {
-	core   *corestore.Store
-	repo   *agidstore.Repo
-	log    *events.Log
-	outbox *orchestrator.Outbox
-	signer crypto.Signer
+	core     *corestore.Store
+	repo     *agidstore.Repo
+	log      *events.Log
+	eventDir string
+	outbox   *orchestrator.Outbox
+	signer   crypto.Signer
 }
 
 // newHarness opens a core store on a fresh database with the AGID DDL applied through
@@ -123,7 +124,8 @@ func newHarness(t *testing.T, dbName string) *harness {
 	}
 	t.Cleanup(func() { cs.Close() })
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	eventDir := t.TempDir()
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: eventDir})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
@@ -137,7 +139,7 @@ func newHarness(t *testing.T, dbName string) *harness {
 		t.Fatalf("generate evidence signer: %v", err)
 	}
 
-	return &harness{core: cs, repo: agidstore.New(cs), log: log, outbox: ob, signer: signer}
+	return &harness{core: cs, repo: agidstore.New(cs), log: log, eventDir: eventDir, outbox: ob, signer: signer}
 }
 
 // cascade builds a cascade over the harness substrates.

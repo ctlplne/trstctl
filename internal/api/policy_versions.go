@@ -440,6 +440,10 @@ func (a *API) policyVersions(ctx context.Context, tenantID string) (*policyVersi
 			},
 			&headMemoHooks[*policyVersionState]{
 				Copy: copyPolicyVersionState,
+				Replay: func(ctx context.Context, from, through uint64, visit func(events.Event) error) error {
+					return a.log.ReplayTenantTypesThrough(ctx, tenantID, from, through,
+						[]string{policyVersionAuthoredEventType, policyVersionActivatedEventType, policyVersionRolledBackEventType}, visit)
+				},
 				Fold: func(state **policyVersionState, ev events.Event) error {
 					return foldPolicyVersionEvent(*state, tenantID, ev)
 				},
@@ -451,11 +455,14 @@ func (a *API) policyVersions(ctx context.Context, tenantID string) (*policyVersi
 
 func (a *API) replayPolicyVersions(ctx context.Context, tenantID string) (*policyVersionState, uint64, error) {
 	state := &policyVersionState{items: map[string]*policyVersionResponse{}, activeByKind: map[string]string{}}
-	var through uint64
-	err := a.log.Replay(ctx, 0, func(ev events.Event) error {
-		through = ev.Sequence
-		return foldPolicyVersionEvent(state, tenantID, ev)
-	})
+	through, err := a.log.LastSequence(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	err = a.log.ReplayTenantTypesThrough(ctx, tenantID, 1, through,
+		[]string{policyVersionAuthoredEventType, policyVersionActivatedEventType, policyVersionRolledBackEventType}, func(ev events.Event) error {
+			return foldPolicyVersionEvent(state, tenantID, ev)
+		})
 	if err != nil {
 		return nil, 0, err
 	}

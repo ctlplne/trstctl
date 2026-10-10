@@ -532,7 +532,7 @@ func toMDMSCEPPolicyResponse(rec store.MDMSCEPPolicy) mdmSCEPPolicyResponse {
 // sequence zero per request — the third such endpoint, left unmemoized when
 // its two siblings were fixed (AUD-201 follow-up F5/V21). Its cost grew with
 // mdm.intune_scep_challenge volume, the very traffic it reports on. It now
-// rides the shared headMemo with incremental catch-up.
+// rides the shared headMemo with indexed cold rebuild and incremental catch-up.
 func (a *API) mdmSCEPTelemetry(ctx context.Context, tenantID string) (mdmSCEPTelemetryResponse, error) {
 	if a.log == nil {
 		return mdmSCEPTelemetryResponse{}, nil
@@ -540,18 +540,25 @@ func (a *API) mdmSCEPTelemetry(ctx context.Context, tenantID string) (mdmSCEPTel
 	return a.mdmTelemetryMemo.get(ctx, a.log, tenantID,
 		func(ctx context.Context) (mdmSCEPTelemetryResponse, uint64, error) {
 			var out mdmSCEPTelemetryResponse
-			var through uint64
-			err := a.log.Replay(ctx, 0, func(ev events.Event) error {
-				a.mdmTelemetryMemo.scannedEvents.Add(1)
-				through = ev.Sequence
-				return foldMDMSCEPTelemetryEvent(&out, tenantID, ev)
-			})
+			through, err := a.log.LastSequence(ctx)
+			if err != nil {
+				return out, 0, err
+			}
+			err = a.log.ReplayTenantTypesThrough(ctx, tenantID, 1, through,
+				[]string{"mdm.intune_scep_challenge", "mdm.intune_scep_challenge.replay_rejected"}, func(ev events.Event) error {
+					a.mdmTelemetryMemo.scannedEvents.Add(1)
+					return foldMDMSCEPTelemetryEvent(&out, tenantID, ev)
+				})
 			return out, through, err
 		},
 		&headMemoHooks[mdmSCEPTelemetryResponse]{
 			// The value is a plain struct of counters and strings; assignment
 			// copies it, so previously returned responses stay immutable.
 			Copy: func(in mdmSCEPTelemetryResponse) mdmSCEPTelemetryResponse { return in },
+			Replay: func(ctx context.Context, from, through uint64, visit func(events.Event) error) error {
+				return a.log.ReplayTenantTypesThrough(ctx, tenantID, from, through,
+					[]string{"mdm.intune_scep_challenge", "mdm.intune_scep_challenge.replay_rejected"}, visit)
+			},
 			Fold: func(state *mdmSCEPTelemetryResponse, ev events.Event) error {
 				return foldMDMSCEPTelemetryEvent(state, tenantID, ev)
 			},

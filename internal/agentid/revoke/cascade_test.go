@@ -11,7 +11,35 @@ import (
 
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/agentid/revoke"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 )
+
+func TestRevoke_CascadeRecoversIndexedEdgesAfterColdLogRestart(t *testing.T) {
+	h := newHarness(t, "revoke_indexed_cold")
+	h.seedChainCredential(t, tenantA, "cold-chain", "cold-root", "cold-child", "cold-root", "cold-credential")
+	if _, err := h.log.Append(t.Context(), events.Event{Type: "unrelated.audit.fact", TenantID: tenantA, Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: h.eventDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	h.log = reopened
+	result, err := h.cascade(t).EnqueueDirective(t.Context(), revoke.Directive{
+		TenantID: tenantA, Subject: "cold-root", Reason: revoke.ReasonCompromise,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Descendants) != 1 || result.Descendants[0] != credID("cold-credential") {
+		t.Fatalf("cold indexed descendant replay = %v, want only cold-credential", result.Descendants)
+	}
+}
 
 // TestRevoke_DescendantSetFromProjectionWatermark: on a directive naming a subject,
 // the cascade enumerates the descendant credential set from the AGID-02 delegation-tree

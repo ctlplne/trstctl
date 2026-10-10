@@ -40,8 +40,8 @@ type vaultCompatSnapshot struct {
 }
 
 // vaultCompatState is an event-log projection for the mutable compatibility
-// metadata. It deliberately owns no database and no process-local source of
-// truth: every read deterministically replays tenant-filtered events (AN-1/AN-2).
+// metadata. It owns no database or process-local source of truth: a cold read
+// folds tenant events through JetStream's event-type subject index (AN-1/AN-2).
 type vaultCompatState struct {
 	log *events.Log
 
@@ -65,8 +65,8 @@ func newVaultCompatState(log *events.Log) *vaultCompatState {
 // than with load.
 //
 // Correctness is unchanged: the cache is keyed on the log head, so any appended
-// event invalidates it. Reusing a projection while the log has not moved cannot
-// observe a different state than replaying would.
+// event invalidates it. Cold rebuild and catch-up both read only the relevant
+// event types; the retained event log remains authoritative.
 func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
 	if s == nil {
 		snap, _, err := (&vaultCompatState{}).replaySnapshot(ctx, tenantID)
@@ -81,6 +81,10 @@ func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vault
 		func(ctx context.Context) (vaultCompatSnapshot, uint64, error) { return s.replaySnapshot(ctx, tenantID) },
 		&headMemoHooks[vaultCompatSnapshot]{
 			Copy: copyVaultSnapshot,
+			Replay: func(ctx context.Context, from, through uint64, visit func(events.Event) error) error {
+				return s.log.ReplayTenantTypesThrough(ctx, tenantID, from, through,
+					[]string{vaultMountEnabledEventType, vaultMountDisabledEventType, vaultPolicyPutEventType, vaultPolicyDeletedEventType}, visit)
+			},
 			Fold: func(state *vaultCompatSnapshot, ev events.Event) error {
 				return foldVaultCompatEvent(state, tenantID, ev)
 			},
@@ -111,12 +115,15 @@ func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) 
 	if s == nil || s.log == nil {
 		return state, 0, nil
 	}
-	var through uint64
-	err := s.log.Replay(ctx, 0, func(ev events.Event) error {
-		s.memo.scannedEvents.Add(1)
-		through = ev.Sequence
-		return foldVaultCompatEvent(&state, tenantID, ev)
-	})
+	through, err := s.log.LastSequence(ctx)
+	if err != nil {
+		return state, 0, err
+	}
+	err = s.log.ReplayTenantTypesThrough(ctx, tenantID, 1, through,
+		[]string{vaultMountEnabledEventType, vaultMountDisabledEventType, vaultPolicyPutEventType, vaultPolicyDeletedEventType}, func(ev events.Event) error {
+			s.memo.scannedEvents.Add(1)
+			return foldVaultCompatEvent(&state, tenantID, ev)
+		})
 	return state, through, err
 }
 

@@ -54,6 +54,19 @@ func TestMDMTelemetryDoesNotReplayFromZeroPerRequest(t *testing.T) {
 	if again != first {
 		t.Fatalf("memoized telemetry %+v disagrees with the first read %+v", again, first)
 	}
+	for range 80 {
+		if _, err := log.Append(ctx, events.Event{Type: "unrelated.audit.fact", TenantID: "tenant-b", Data: []byte(`{}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before = a.mdmTelemetryMemo.scannedEvents.Load()
+	unrelated, err := a.mdmSCEPTelemetry(ctx, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned := a.mdmTelemetryMemo.scannedEvents.Load() - before; scanned != 0 || unrelated != first {
+		t.Fatalf("unrelated event burst changed telemetry or scanned its bodies: scanned=%d result=%+v", scanned, unrelated)
+	}
 
 	// New traffic catches up incrementally, not from zero.
 	const extra = 4

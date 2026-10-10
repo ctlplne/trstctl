@@ -60,79 +60,81 @@ func Load(ctx context.Context, log *events.Log, tenantID, deviceSerial, transact
 	wantSerial := normalizeSerial(deviceSerial)
 	wantTransaction := strings.TrimSpace(transactionID)
 	byTransaction := map[string]*Attempt{}
-	err := log.Replay(ctx, 0, func(ev events.Event) error {
-		if ev.TenantID != tenantID {
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = log.ReplayTenantTypesThrough(ctx, tenantID, 1, head,
+		[]string{scep.EventRequestObserved, scep.EventIssuanceObserved, "protocol.scep.enroll"}, func(ev events.Event) error {
+			switch ev.Type {
+			case scep.EventRequestObserved, scep.EventIssuanceObserved:
+				var payload scep.AttemptEvidence
+				if err := json.Unmarshal(ev.Data, &payload); err != nil {
+					return nil
+				}
+				payload.TransactionID = strings.TrimSpace(payload.TransactionID)
+				payload.DeviceSerial = normalizeSerial(payload.DeviceSerial)
+				if payload.TransactionID == "" || payload.DeviceSerial == "" {
+					return nil
+				}
+				if wantSerial != "" && payload.DeviceSerial != wantSerial {
+					return nil
+				}
+				if wantSerial == "" && wantTransaction != "" && payload.TransactionID != wantTransaction {
+					return nil
+				}
+				attempt := byTransaction[payload.TransactionID]
+				if attempt == nil {
+					attempt = &Attempt{TransactionID: payload.TransactionID, DeviceSerial: payload.DeviceSerial, Profile: payload.Profile}
+					byTransaction[payload.TransactionID] = attempt
+				}
+				fact := &Fact{Outcome: payload.Outcome, Detail: payload.Detail, At: ev.Time.UTC()}
+				if ev.Type == scep.EventRequestObserved {
+					attempt.Request = newerFact(attempt.Request, fact)
+					return nil
+				}
+				attempt.Issuance = newerFact(attempt.Issuance, fact)
+				if payload.Outcome == "ok" {
+					attempt.CertificateSerial = payload.CertificateSerial
+					attempt.CertificateFingerprint = payload.CertificateFingerprint
+					attempt.CertificateNotAfter = payload.CertificateNotAfter.UTC()
+				}
+			case "protocol.scep.enroll":
+				// Compatibility for pre-AUD-50 rows: the old event proves that the
+				// exact transaction reached a terminal SCEP decision, but it carries
+				// no device serial or minted certificate identity. Only an existing
+				// correlation row may select it by transaction id, and it can prove
+				// requested/accepted — never issued or renewing.
+				if wantTransaction == "" {
+					return nil
+				}
+				var legacy struct {
+					Decision      string `json:"decision"`
+					Reason        string `json:"reason"`
+					TransactionID string `json:"transaction_id"`
+					Profile       string `json:"profile"`
+				}
+				if err := json.Unmarshal(ev.Data, &legacy); err != nil || strings.TrimSpace(legacy.TransactionID) != wantTransaction {
+					return nil
+				}
+				if byTransaction[wantTransaction] != nil {
+					return nil
+				}
+				outcome := "failed"
+				if legacy.Decision == "allow" {
+					outcome = "ok"
+				}
+				detail := strings.TrimSpace(legacy.Reason)
+				if detail == "" {
+					detail = "Legacy SCEP terminal evidence was recorded before certificate identity fields were available."
+				}
+				byTransaction[wantTransaction] = &Attempt{
+					TransactionID: wantTransaction, DeviceSerial: wantSerial, Profile: legacy.Profile,
+					Request: &Fact{Outcome: outcome, Detail: detail, At: ev.Time.UTC()},
+				}
+			}
 			return nil
-		}
-		switch ev.Type {
-		case scep.EventRequestObserved, scep.EventIssuanceObserved:
-			var payload scep.AttemptEvidence
-			if err := json.Unmarshal(ev.Data, &payload); err != nil {
-				return nil
-			}
-			payload.TransactionID = strings.TrimSpace(payload.TransactionID)
-			payload.DeviceSerial = normalizeSerial(payload.DeviceSerial)
-			if payload.TransactionID == "" || payload.DeviceSerial == "" {
-				return nil
-			}
-			if wantSerial != "" && payload.DeviceSerial != wantSerial {
-				return nil
-			}
-			if wantSerial == "" && wantTransaction != "" && payload.TransactionID != wantTransaction {
-				return nil
-			}
-			attempt := byTransaction[payload.TransactionID]
-			if attempt == nil {
-				attempt = &Attempt{TransactionID: payload.TransactionID, DeviceSerial: payload.DeviceSerial, Profile: payload.Profile}
-				byTransaction[payload.TransactionID] = attempt
-			}
-			fact := &Fact{Outcome: payload.Outcome, Detail: payload.Detail, At: ev.Time.UTC()}
-			if ev.Type == scep.EventRequestObserved {
-				attempt.Request = newerFact(attempt.Request, fact)
-				return nil
-			}
-			attempt.Issuance = newerFact(attempt.Issuance, fact)
-			if payload.Outcome == "ok" {
-				attempt.CertificateSerial = payload.CertificateSerial
-				attempt.CertificateFingerprint = payload.CertificateFingerprint
-				attempt.CertificateNotAfter = payload.CertificateNotAfter.UTC()
-			}
-		case "protocol.scep.enroll":
-			// Compatibility for pre-AUD-50 rows: the old event proves that the
-			// exact transaction reached a terminal SCEP decision, but it carries
-			// no device serial or minted certificate identity. Only an existing
-			// correlation row may select it by transaction id, and it can prove
-			// requested/accepted — never issued or renewing.
-			if wantTransaction == "" {
-				return nil
-			}
-			var legacy struct {
-				Decision      string `json:"decision"`
-				Reason        string `json:"reason"`
-				TransactionID string `json:"transaction_id"`
-				Profile       string `json:"profile"`
-			}
-			if err := json.Unmarshal(ev.Data, &legacy); err != nil || strings.TrimSpace(legacy.TransactionID) != wantTransaction {
-				return nil
-			}
-			if byTransaction[wantTransaction] != nil {
-				return nil
-			}
-			outcome := "failed"
-			if legacy.Decision == "allow" {
-				outcome = "ok"
-			}
-			detail := strings.TrimSpace(legacy.Reason)
-			if detail == "" {
-				detail = "Legacy SCEP terminal evidence was recorded before certificate identity fields were available."
-			}
-			byTransaction[wantTransaction] = &Attempt{
-				TransactionID: wantTransaction, DeviceSerial: wantSerial, Profile: legacy.Profile,
-				Request: &Fact{Outcome: outcome, Detail: detail, At: ev.Time.UTC()},
-			}
-		}
-		return nil
-	})
+		})
 	if err != nil {
 		return nil, err
 	}

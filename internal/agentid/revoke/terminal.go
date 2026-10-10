@@ -292,10 +292,18 @@ func (tt *TerminalTransition) Transition(ctx context.Context, tenantID, directiv
 // It is how a repeat Transition (already-terminal) returns the canonical persisted
 // artifact rather than re-signing a fresh (byte-differing) one.
 func (tt *TerminalTransition) loadTerminalArtifact(ctx context.Context, tenantID, directiveID string) (AggregateEvidence, bool, error) {
+	return loadTerminalArtifactFromLog(ctx, tt.log, tenantID, directiveID)
+}
+
+func loadTerminalArtifactFromLog(ctx context.Context, log EventLog, tenantID, directiveID string) (AggregateEvidence, bool, error) {
 	var out AggregateEvidence
 	found := false
-	if err := tt.log.Replay(ctx, 1, func(e eventspec.Event) error {
-		if found || e.Type != TypeRevocationTerminal || e.TenantID != tenantID {
+	head, err := log.CheckedHead(ctx)
+	if err != nil {
+		return AggregateEvidence{}, false, fmt.Errorf("revoke: read terminal artifact head: %w", err)
+	}
+	if err := log.ReplayTenantTypesThrough(ctx, tenantID, 1, head, []string{TypeRevocationTerminal}, func(e eventspec.Event) error {
+		if found {
 			return nil
 		}
 		var pl terminalEventPayload
@@ -335,22 +343,9 @@ func LoadTerminalArtifact(ctx context.Context, log EventLog, tenantID, directive
 	if log == nil {
 		return nil, false, fmt.Errorf("revoke: LoadTerminalArtifact requires an event log")
 	}
-	var artifact AggregateEvidence
-	if err := log.Replay(ctx, 1, func(e eventspec.Event) error {
-		if found || e.Type != TypeRevocationTerminal || e.TenantID != tenantID {
-			return nil
-		}
-		var pl terminalEventPayload
-		if err := json.Unmarshal(e.Data, &pl); err != nil {
-			return nil // a malformed/foreign terminal event is skipped, not fatal
-		}
-		if pl.DirectiveID == directiveID {
-			artifact = pl.Aggregate
-			found = true
-		}
-		return nil
-	}); err != nil {
-		return nil, false, fmt.Errorf("revoke: load terminal artifact: %w", err)
+	artifact, found, err := loadTerminalArtifactFromLog(ctx, log, tenantID, directiveID)
+	if err != nil {
+		return nil, false, err
 	}
 	if !found {
 		return nil, false, nil

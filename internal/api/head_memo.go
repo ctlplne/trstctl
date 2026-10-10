@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 )
 
-// headMemo is THE per-tenant, head-keyed memo for event-log projections that
+// headMemo is THE per-tenant, generation-and-head-keyed memo for event-log projections that
 // sit on request paths (AUD-201 follow-up F4/V27b). vault_compat_state and
 // policy_versions each hand-rolled this exact flow — LastSequence, lock/lookup,
 // hit on atSeq == head, rebuild, store, fall back to an uncached rebuild when
@@ -33,21 +33,23 @@ type headMemoEntry[T any] struct {
 
 // headMemoHooks enables incremental catch-up (F3/V27a): Copy must deep-copy
 // the projection's shared structure — cached values are aliased by snapshots
-// already returned to callers — and Fold applies one event. Projections whose
-// fold mutates shared records may pass nil hooks and keep from-zero rebuilds.
+// already returned to callers — and Fold applies one event. Replay must read a
+// bounded source cut through the caller's durable index. A nil Replay disables
+// catch-up rather than silently scanning the whole source on a request.
 type headMemoHooks[T any] struct {
-	Copy func(T) T
-	Fold func(*T, events.Event) error
+	Copy   func(T) T
+	Fold   func(*T, events.Event) error
+	Replay func(context.Context, uint64, uint64, func(events.Event) error) error
 }
 
 // get returns the tenant's projection at the current log head. rebuild replays
 // from zero (the caller wraps its own scanned-event counting via count). On a
 // head mismatch with hooks present, only the events after the cached sequence
-// are folded — via ReplayThrough bounded to the captured head, so a racing
+// are folded — via a replay bounded to the captured head, so a racing
 // append cannot smuggle events past the recorded sequence — onto a Copy of the
 // cached value. Catch-up failures (generation switch, gap) and head
-// regressions fall back to the from-zero rebuild. A failed head read falls
-// back to an uncached rebuild rather than failing the request.
+// regressions fall back to the from-zero rebuild. A failed snapshot read
+// fails closed because it cannot establish which history generation is live.
 // rebuild replays the projection from zero and returns both the value and the
 // highest log sequence it actually folded through. The reached sequence — not
 // the head sampled before the rebuild — is what the value is stored at, because
@@ -64,24 +66,39 @@ func (m *headMemo[T]) get(
 		value, _, buildErr := rebuild(ctx)
 		return value, buildErr
 	}
-	head, err := log.LastSequence(ctx)
-	if err != nil {
-		value, _, buildErr := rebuild(ctx)
-		return value, buildErr
-	}
+	var result T
+	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		snapshot, err := log.Snapshot(readCtx)
+		if err != nil {
+			return err
+		}
+		result, err = m.getAtHistory(readCtx,
+			tenantID+"\x00"+snapshot.Name+"\x00"+snapshot.Generation, snapshot.LastSequence, rebuild, hooks)
+		return err
+	})
+	return result, err
+}
+
+func (m *headMemo[T]) getAtHistory(
+	ctx context.Context,
+	cacheKey string,
+	head uint64,
+	rebuild func(context.Context) (T, uint64, error),
+	hooks *headMemoHooks[T],
+) (T, error) {
 	m.mu.Lock()
-	cached, ok := m.byTenant[tenantID]
+	cached, ok := m.byTenant[cacheKey]
 	m.mu.Unlock()
 	if ok && cached.atSeq == head {
 		return cached.value, nil
 	}
-	if ok && cached.atSeq < head && hooks != nil && hooks.Copy != nil && hooks.Fold != nil {
+	if ok && cached.atSeq < head && hooks != nil && hooks.Copy != nil && hooks.Fold != nil && hooks.Replay != nil {
 		built := hooks.Copy(cached.value)
-		if err := log.ReplayThrough(ctx, cached.atSeq+1, head, func(ev events.Event) error {
+		if err := hooks.Replay(ctx, cached.atSeq+1, head, func(ev events.Event) error {
 			m.scannedEvents.Add(1)
 			return hooks.Fold(&built, ev)
 		}); err == nil {
-			m.store(tenantID, built, head)
+			m.store(cacheKey, built, head)
 			return built, nil
 		}
 	}
@@ -98,7 +115,7 @@ func (m *headMemo[T]) get(
 	if through < head {
 		through = head
 	}
-	m.store(tenantID, built, through)
+	m.store(cacheKey, built, through)
 	return built, nil
 }
 

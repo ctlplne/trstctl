@@ -24,6 +24,7 @@ import (
 type EventLog interface {
 	Append(ctx context.Context, e eventspec.Event) (eventspec.Event, error)
 	Replay(ctx context.Context, from uint64, fn func(eventspec.Event) error) error
+	ReplayTenantTypesThrough(ctx context.Context, tenantID string, from, through uint64, types []string, fn func(eventspec.Event) error) error
 	CheckedHead(ctx context.Context) (uint64, error)
 }
 
@@ -215,22 +216,23 @@ func (c *Cascade) descendantsAsOf(ctx context.Context, tenantID, subject string,
 	return set.Credentials, nil
 }
 
-// tenantPrefix replays the ledger prefix with sequence <= watermark and returns the
-// events for tenantID, with Sequence set (so the bounded fold is exact, AN-1). The
-// projection's fold ignores non-delegation events, so replaying the whole prefix and
-// filtering by tenant is correct and keeps this package from needing a tenant-scoped
-// event index.
+// tenantPrefix reads only the two event types that contribute delegation edges.
+// JetStream's retained subject index locates them across pooled and silo lanes;
+// the exact watermark still bounds the fold (AN-1/AN-2).
 func (c *Cascade) tenantPrefix(ctx context.Context, tenantID string, watermark uint64) ([]eventspec.Event, error) {
+	if watermark == delegation.UnboundedWatermark {
+		var err error
+		watermark, err = c.log.CheckedHead(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("revoke: read tenant prefix head: %w", err)
+		}
+	}
 	var out []eventspec.Event
-	if err := c.log.Replay(ctx, 1, func(e eventspec.Event) error {
-		if watermark != delegation.UnboundedWatermark && e.Sequence > watermark {
-			return nil
-		}
-		if e.TenantID == tenantID {
+	if err := c.log.ReplayTenantTypesThrough(ctx, tenantID, 1, watermark,
+		[]string{delegation.TypeDelegationRecorded, delegation.TypeIssuanceRecorded}, func(e eventspec.Event) error {
 			out = append(out, e)
-		}
-		return nil
-	}); err != nil {
+			return nil
+		}); err != nil {
 		return nil, fmt.Errorf("revoke: replay tenant prefix: %w", err)
 	}
 	return out, nil
