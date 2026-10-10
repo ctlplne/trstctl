@@ -156,7 +156,14 @@ post-quantum target.
    connector lifecycle, independently read the listener's effective TLS policy,
    and rescan before recording remediation. The automatic migration API refuses
    host-agent Envoy targets with HTTP 409 until posture work runs on that agent
-   and returns a durable readback and rollback receipt.
+   and returns a durable readback and rollback receipt. For an automatic TLS
+   preview, bind each selected TLS finding to the exact enabled deployment
+   target with `tls_bindings`: an `asset_id`, `target_id`, and `desired` posture
+   containing `minimum_version: "TLSv1.3"`, nonempty `cipher_suites`, and
+   `key_exchange_groups` including `X25519MLKEM768`. The console asks for
+   these bindings and sends the reviewed request unchanged at start. Missing
+   bindings return HTTP 400; preview and start both refuse a target that needs
+   the unimplemented host-agent posture executor with HTTP 409.
 
 6. Inspect the rollback limit before broad rollout:
 

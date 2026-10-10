@@ -685,6 +685,15 @@ export interface PQCMigrationRequest {
   target_algorithm: "ML-DSA-65";
   protocol: "acme";
   rollback_on_failure: boolean;
+  tls_bindings?: Array<{
+    asset_id: string;
+    target_id: string;
+    desired: {
+      minimum_version: string;
+      cipher_suites: string[];
+      key_exchange_groups: string[];
+    };
+  }>;
 }
 
 export interface PQCMigrationPlanReissue {

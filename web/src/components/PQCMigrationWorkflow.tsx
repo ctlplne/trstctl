@@ -3,6 +3,7 @@ import { PQCMigrationProgressDetails } from "@/components/PQCMigrationProgressDe
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type CBOMAsset, type PQCMigrationPlan, type PQCMigrationProgress, type PQCMigrationRequest, type PQCMigrationRun } from "@/lib/api";
+import { useApiQuery } from "@/lib/query";
 
 import { useRuntimeOperationExecution, type RuntimeOperationExecutionPosture } from "@/lib/capabilities";
 
@@ -21,11 +22,35 @@ function OperationNotice({ action }: { action: RuntimeOperationExecutionPosture 
 
 const pqcTargetAlgorithm = "ML-DSA-65";
 
-const requestFor = (assetIds: string[]): PQCMigrationRequest => ({
+const splitList = (value: string): string[] =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+const findingLabel = (asset: CBOMAsset): string => [asset.location, asset.protocol || asset.cipher].filter(Boolean).join(" · ");
+const migrationTarget = (asset: CBOMAsset): string =>
+  asset.migration_target || (asset.kind === "host-config" || asset.kind === "tls-endpoint" ? "X25519MLKEM768" : pqcTargetAlgorithm);
+
+const requestFor = (
+  assetIds: string[],
+  tlsAssets: CBOMAsset[],
+  targetIds: Record<string, string>,
+  cipherSuites: string,
+  groups: string,
+): PQCMigrationRequest => ({
   asset_ids: assetIds,
   target_algorithm: pqcTargetAlgorithm,
   protocol: "acme",
   rollback_on_failure: true,
+  ...(tlsAssets.length > 0
+    ? {
+        tls_bindings: tlsAssets.map((asset) => ({
+          asset_id: asset.id,
+          target_id: targetIds[asset.id],
+          desired: { minimum_version: "TLSv1.3", cipher_suites: splitList(cipherSuites), key_exchange_groups: splitList(groups) },
+        })),
+      }
+    : {}),
 });
 
 export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
@@ -35,8 +60,13 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const progressAuthority = useRuntimeOperationExecution("getPQCMigrationProgress");
   const rollbackAuthority = useRuntimeOperationExecution("rollbackPQCMigration");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [targetIds, setTargetIds] = useState<Record<string, string>>({});
+  const [cipherSuites, setCipherSuites] = useState("TLS_AES_256_GCM_SHA384");
+  const [groups, setGroups] = useState("X25519MLKEM768, X25519");
   const [plan, setPlan] = useState<PQCMigrationPlan | null>(null);
+  const [reviewedRequest, setReviewedRequest] = useState<PQCMigrationRequest | null>(null);
   const [run, setRun] = useState<PQCMigrationRun | null>(null);
+  const [runAssetIds, setRunAssetIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<PQCMigrationProgress | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [rollbackConfirmed, setRollbackConfirmed] = useState(false);
@@ -46,6 +76,23 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
 
   const vulnerable = useMemo(() => assets.filter((asset) => asset.quantum_vulnerable || asset.out_of_policy), [assets]);
   const selectedIds = vulnerable.filter((asset) => selected.has(asset.id)).map((asset) => asset.id);
+  const tlsAssets = vulnerable.filter((asset) => selected.has(asset.id) && (asset.kind === "host-config" || asset.kind === "tls-endpoint"));
+  const targets = useApiQuery(["pqc-migration-targets"], api.connectorTargets, { enabled: tlsAssets.length > 0, retry: false });
+  const enabledTargets = targets.data?.items.filter((target) => target.enabled && target.connector === "envoy") ?? [];
+  const tlsReady =
+    tlsAssets.length === 0 ||
+    (!targets.loading &&
+      !targets.error &&
+      tlsAssets.every((asset) => enabledTargets.some((target) => target.id === targetIds[asset.id])) &&
+      splitList(cipherSuites).length > 0 &&
+      splitList(groups).some((group) => group.toUpperCase() === "X25519MLKEM768"));
+  function clearReview() {
+    setPlan(null);
+    setReviewedRequest(null);
+    setConfirmed(false);
+    setResult(null);
+    setError(null);
+  }
   function toggle(assetId: string) {
     setSelected((current) => {
       const next = new Set(current);
@@ -53,10 +100,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
       else next.add(assetId);
       return next;
     });
-    setPlan(null);
-    setConfirmed(false);
-    setResult(null);
-    setError(null);
+    clearReview();
   }
 
   async function preview() {
@@ -65,7 +109,9 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
     setError(null);
     setResult(null);
     try {
-      setPlan(await api.planPQCMigration(requestFor(selectedIds)));
+      const request = requestFor(selectedIds, tlsAssets, targetIds, cipherSuites, groups);
+      setPlan(await api.planPQCMigration(request));
+      setReviewedRequest(request);
       setConfirmed(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("posture.pqcMigration.error"));
@@ -75,13 +121,14 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   }
 
   async function start() {
-    if (!startAuthority.runnable || !plan || !confirmed || selectedIds.length === 0) return;
+    if (!startAuthority.runnable || !plan || !reviewedRequest || !confirmed || selectedIds.length === 0) return;
     setBusy("start");
     setError(null);
     setResult(null);
     try {
-      const next = await api.startPQCMigration(requestFor(selectedIds));
+      const next = await api.startPQCMigration(reviewedRequest);
       setRun(next);
+      setRunAssetIds([...reviewedRequest.asset_ids]);
       setProgress(null);
       setResult(t("posture.pqcMigration.runQueued", { runId: next.run_id }));
     } catch (cause) {
@@ -105,12 +152,12 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   }
 
   async function rollback() {
-    if (!rollbackAuthority.runnable || !run || !rollbackConfirmed || selectedIds.length === 0) return;
+    if (!rollbackAuthority.runnable || !run || !rollbackConfirmed || runAssetIds.length === 0) return;
     setBusy("rollback");
     setError(null);
     setResult(null);
     try {
-      const response = await api.rollbackPQCMigration(run.run_id, selectedIds, t("posture.pqcMigration.rollbackReason"));
+      const response = await api.rollbackPQCMigration(run.run_id, runAssetIds, t("posture.pqcMigration.rollbackReason"));
       setResult(t("posture.pqcMigration.rollbackQueued", { count: String(response.queued) }));
       setRollbackConfirmed(false);
     } catch (cause) {
@@ -140,21 +187,82 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
                 <input
                   type="checkbox"
                   checked={selected.has(asset.id)}
+                  disabled={busy !== null}
                   onChange={() => toggle(asset.id)}
-                  aria-label={t("posture.pqcMigration.selectAsset", { location: asset.location })}
+                  aria-label={t("posture.pqcMigration.selectAsset", { location: findingLabel(asset) })}
                 />
                 <span>
                   <span className="block font-medium">{asset.location}</span>
                   <span className="text-xs text-muted-foreground">
-                    {asset.algorithm} → {asset.migration_target || pqcTargetAlgorithm}
+                    {asset.protocol || asset.cipher || asset.algorithm} → {migrationTarget(asset)}
                   </span>
                 </span>
               </label>
             ))}
           </fieldset>
 
+          {tlsAssets.length > 0 ? (
+            <fieldset className="grid gap-3 rounded-control border border-border p-3">
+              <legend className="text-sm font-medium">{t("posture.pqcMigration.tlsBindingLegend")}</legend>
+              <p className="text-sm text-muted-foreground">{t("posture.pqcMigration.tlsBindingHelp")}</p>
+              {targets.loading ? <p role="status">{t("posture.pqcMigration.targetsLoading")}</p> : null}
+              {targets.error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {targets.error}
+                </p>
+              ) : null}
+              {!targets.loading && !targets.error && enabledTargets.length === 0 ? <p role="status">{t("posture.pqcMigration.noTargets")}</p> : null}
+              {tlsAssets.map((asset) => (
+                <label key={asset.id} className="grid gap-1 text-sm">
+                  <span>{t("posture.pqcMigration.targetForAsset", { location: findingLabel(asset) })}</span>
+                  <select
+                    className="rounded-control border border-border bg-background p-2"
+                    value={targetIds[asset.id] ?? ""}
+                    disabled={busy !== null}
+                    onChange={(event) => {
+                      setTargetIds((current) => ({ ...current, [asset.id]: event.target.value }));
+                      clearReview();
+                    }}
+                  >
+                    <option value="">{t("posture.pqcMigration.chooseTarget")}</option>
+                    {enabledTargets.map((target) => (
+                      <option key={target.id} value={target.id}>
+                        {target.name} ({target.id})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <p className="text-sm">{t("posture.pqcMigration.minimumVersion")}</p>
+              <label className="grid gap-1 text-sm">
+                <span>{t("posture.pqcMigration.cipherSuites")}</span>
+                <input
+                  className="rounded-control border border-border bg-background p-2"
+                  value={cipherSuites}
+                  disabled={busy !== null}
+                  onChange={(event) => {
+                    setCipherSuites(event.target.value);
+                    clearReview();
+                  }}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span>{t("posture.pqcMigration.keyExchangeGroups")}</span>
+                <input
+                  className="rounded-control border border-border bg-background p-2"
+                  value={groups}
+                  disabled={busy !== null}
+                  onChange={(event) => {
+                    setGroups(event.target.value);
+                    clearReview();
+                  }}
+                />
+              </label>
+            </fieldset>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => void preview()} disabled={selectedIds.length === 0 || busy !== null}>
+            <Button type="button" onClick={() => void preview()} disabled={selectedIds.length === 0 || !tlsReady || busy !== null}>
               {busy === "plan" ? t("posture.pqcMigration.previewing") : t("posture.pqcMigration.preview")}
             </Button>
             <span className="text-sm text-muted-foreground">{t("posture.pqcMigration.selectedCount", { count: String(selectedIds.length) })}</span>

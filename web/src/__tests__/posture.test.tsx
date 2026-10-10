@@ -800,6 +800,31 @@ describe("posture collector disclosures", () => {
   });
 
   it("previews, starts, monitors issuance, and queues a core rollback", async () => {
+    apiMock.listCBOMAssets.mockResolvedValue({
+      migration_progress: {
+        total_assets: 1,
+        out_of_policy_assets: 1,
+        quantum_vulnerable_assets: 1,
+        post_quantum_ready_assets: 0,
+        percent_migrated: 0,
+      },
+      items: [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          kind: "certificate-key",
+          location: "legacy mesh edge",
+          algorithm: "RSA",
+          key_bits: 1024,
+          migration_generation: "wave-0",
+          migration_standard: "FIPS 203",
+          migration_target: "ML-DSA-65",
+          out_of_policy: true,
+          quantum_vulnerable: true,
+          reasons: ["RSA-1024 below policy floor"],
+          strength: "weak",
+        },
+      ],
+    });
     apiMock.planPQCMigration.mockResolvedValue({
       reissues: [
         {

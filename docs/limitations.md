@@ -2373,7 +2373,10 @@ than sending an operator looking for a credential that was never there.
   touch** — without queueing a run, minting a run id, or writing an outbox
   row. It calls the same plan builder the start path calls over the same CBOM
   assets, so the preview cannot describe a different migration from the one
-  that would execute.
+  that would execute. Both paths also preflight each exact TLS deployment
+  target; a host-agent Envoy target returns HTTP 409 until an agent-owned
+  posture executor with durable readback and rollback is implemented. A TLS
+  finding without an explicit operator target binding returns HTTP 400.
 - Signing history is verifiable after the fact: `GET
   /api/v1/code-signing/identities` (and `trstctl-cli code-signing identities`)
   lists recent signing operations with their identity kind (`managed` for a

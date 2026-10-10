@@ -724,6 +724,39 @@ func TestTLSRolloutTargetPreflightRefusesHostWorkInControlPlane(t *testing.T) {
 	}
 }
 
+func TestTLSPlanAndStartShareExactTargetPreflight(t *testing.T) {
+	plan := Plan{TLSRollouts: []TLSRollout{
+		{Asset: Asset{ID: "cipher-a"}, TargetID: "target-a"},
+		{Asset: Asset{ID: "protocol-b"}, TargetID: "target-a"},
+	}}
+	target := store.DeploymentTarget{
+		ID: "target-a", Name: "edge-listener", Type: "envoy", RevisionID: "revision-a", Enabled: true,
+	}
+	loads := 0
+	get := func(id string) (store.DeploymentTarget, error) {
+		loads++
+		if id != target.ID {
+			t.Fatalf("loaded %q, want exact target %q", id, target.ID)
+		}
+		return target, nil
+	}
+	if _, err := preflightTLSRolloutTargets(plan, connector.NewRegistry(), get); err == nil || !strings.Contains(err.Error(), "requires host_agent") {
+		t.Fatalf("preview admitted host work through the in-process registry: %v", err)
+	}
+	if loads != 1 {
+		t.Fatalf("target loads = %d, want one load for two findings bound to the same target", loads)
+	}
+	loads = 0
+	targets, err := preflightTLSRolloutTargets(plan, &scriptedTLSDeployer{}, get)
+	if err != nil || len(targets) != 1 || targets[target.ID].RevisionID != target.RevisionID || loads != 1 {
+		t.Fatalf("validated exact target map=%+v loads=%d err=%v", targets, loads, err)
+	}
+	loads = 0
+	if _, err := preflightTLSRolloutTargets(plan, nil, get); err == nil || loads != 0 {
+		t.Fatalf("unconfigured executor touched a target: loads=%d err=%v", loads, err)
+	}
+}
+
 func TestTLSRollbackRejectsTargetWithQueuedForwardFinding(t *testing.T) {
 	started := map[string]projections.LicensedCryptoMigrationTLSPosture{
 		"protocol-a": {RunID: sealedTestRun, AssetID: "protocol-a", TargetID: "target-a"},

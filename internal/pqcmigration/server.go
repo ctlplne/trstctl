@@ -243,9 +243,12 @@ func (s *pqcMigrationService) PlanPreview(ctx context.Context, tenantID string, 
 		if errors.As(err, &missing) {
 			return PlanPreviewResponse{}, pgx.ErrNoRows
 		}
-		return PlanPreviewResponse{}, err
+		return PlanPreviewResponse{}, api.ErrWithStatus(http.StatusBadRequest, err)
 	}
 	if err := s.preflightPQCReissues(ctx, tenantID, plan); err != nil {
+		return PlanPreviewResponse{}, err
+	}
+	if _, err := s.preflightTLSRolloutTargets(ctx, tenantID, plan); err != nil {
 		return PlanPreviewResponse{}, err
 	}
 	out := PlanPreviewResponse{
@@ -308,9 +311,13 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 		if errors.As(err, &missing) {
 			return Response{}, pgx.ErrNoRows
 		}
-		return Response{}, err
+		return Response{}, api.ErrWithStatus(http.StatusBadRequest, err)
 	}
 	if err := s.preflightPQCReissues(ctx, tenantID, plan); err != nil {
+		return Response{}, err
+	}
+	targets, err := s.preflightTLSRolloutTargets(ctx, tenantID, plan)
+	if err != nil {
 		return Response{}, err
 	}
 	runID := uuid.NewString()
@@ -330,19 +337,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 	tlsPayloads := make([]pqcMigrationTLSPosturePayload, 0, len(plan.TLSRollouts))
 	targetPostures := make(map[string]connector.TLSPosture, len(plan.TLSRollouts))
 	for _, rollout := range plan.TLSRollouts {
-		if s.deployer == nil {
-			return Response{}, errors.New("pqcmigration: TLS posture deployer is not configured")
-		}
-		target, err := s.store.GetDeploymentTarget(ctx, tenantID, rollout.TargetID)
-		if err != nil {
-			return Response{}, err
-		}
-		if err := validateTLSRolloutTarget(target, s.deployer); err != nil {
-			if errors.Is(err, errPostureRequiresAgent) {
-				return Response{}, api.ErrWithStatus(http.StatusConflict, err)
-			}
-			return Response{}, err
-		}
+		target := targets[rollout.TargetID]
 		if prior, exists := targetPostures[target.ID]; exists && !connector.EqualTLSPosture(prior, rollout.Desired) {
 			return Response{}, fmt.Errorf("pqcmigration: findings bound to target %s request conflicting TLS postures", target.ID)
 		}
@@ -436,6 +431,36 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 		MigrationProgress:  api.CBOMInventoryFromAssets(assets).MigrationProgress,
 		QueuedAt:           time.Now().UTC(),
 	}, nil
+}
+
+// Preview and start must agree on whether the exact selected targets can be
+// executed by this build. A plan without this check can look ready while start
+// refuses it, which gives the operator a false authorization step.
+func (s *pqcMigrationService) preflightTLSRolloutTargets(ctx context.Context, tenantID string, plan Plan) (map[string]store.DeploymentTarget, error) {
+	return preflightTLSRolloutTargets(plan, s.deployer, func(targetID string) (store.DeploymentTarget, error) {
+		return s.store.GetDeploymentTarget(ctx, tenantID, targetID)
+	})
+}
+
+func preflightTLSRolloutTargets(plan Plan, deployer connector.TLSPostureDeployer, getTarget func(string) (store.DeploymentTarget, error)) (map[string]store.DeploymentTarget, error) {
+	targets := make(map[string]store.DeploymentTarget, len(plan.TLSRollouts))
+	for _, rollout := range plan.TLSRollouts {
+		if _, ok := targets[rollout.TargetID]; ok {
+			continue
+		}
+		if deployer == nil {
+			return nil, api.ErrStatus(http.StatusServiceUnavailable, "pqcmigration: TLS posture deployer is not configured")
+		}
+		target, err := getTarget(rollout.TargetID)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateTLSRolloutTarget(target, deployer); err != nil {
+			return nil, api.ErrWithStatus(http.StatusConflict, err)
+		}
+		targets[rollout.TargetID] = target
+	}
+	return targets, nil
 }
 
 func validateTLSRolloutTarget(target store.DeploymentTarget, deployer connector.TLSPostureDeployer) error {

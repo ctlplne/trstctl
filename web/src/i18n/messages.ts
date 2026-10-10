@@ -25154,6 +25154,25 @@ export const messages = {
     defaultMessage: "Select {location} for PQC migration",
     description: "Accessible checkbox label for one vulnerable CBOM asset.",
   },
+  "posture.pqcMigration.tlsBindingLegend": {
+    defaultMessage: "TLS finding target and desired posture",
+    description: "Target binding controls for selected TLS findings.",
+  },
+  "posture.pqcMigration.tlsBindingHelp": {
+    defaultMessage:
+      "Choose the exact enabled Envoy target for each finding. Review the shared TLS 1.3 posture before previewing. The target must have a working host-agent execution path.",
+    description: "Explains that TLS migration needs explicit target binding and host execution.",
+  },
+  "posture.pqcMigration.targetsLoading": { defaultMessage: "Loading deployment targets...", description: "Target list loading state." },
+  "posture.pqcMigration.noTargets": { defaultMessage: "No enabled Envoy deployment targets are available.", description: "Missing TLS target state." },
+  "posture.pqcMigration.targetForAsset": { defaultMessage: "Deployment target for {location}", description: "Per-finding target selector label." },
+  "posture.pqcMigration.chooseTarget": { defaultMessage: "Choose a target", description: "Empty deployment target option." },
+  "posture.pqcMigration.minimumVersion": { defaultMessage: "Minimum TLS version: TLSv1.3", description: "Required PQC TLS minimum version." },
+  "posture.pqcMigration.cipherSuites": { defaultMessage: "Cipher suites (comma separated)", description: "Editable desired TLS cipher suites." },
+  "posture.pqcMigration.keyExchangeGroups": {
+    defaultMessage: "Key exchange groups (comma separated; include X25519MLKEM768)",
+    description: "Editable desired TLS groups.",
+  },
   "posture.pqcMigration.preview": {
     defaultMessage: "Preview migration plan",
     description: "Read-only planner action.",
