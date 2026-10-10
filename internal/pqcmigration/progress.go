@@ -147,6 +147,10 @@ type ProgressProjection struct {
 	store *store.Store
 	mu    sync.RWMutex
 	items map[progressKey]FindingProgress
+	// A run's start sequence bounds later evidence lookups. Replaying the
+	// entire tenant history for each signed host report can outlast the agent's
+	// acknowledgement window on a busy control plane.
+	runStarts map[progressRunKey]uint64
 	// Package-private projection hooks let restart/replay tests exercise the
 	// event fold without starting PostgreSQL. Production leaves them nil and
 	// always projects CBOM rows through Store under tenant RLS.
@@ -154,8 +158,13 @@ type ProgressProjection struct {
 	projectRollbackHook  func(context.Context, eventspec.Event, TLSFindingRollbackCompleted) error
 }
 
+type progressRunKey struct {
+	tenantID string
+	runID    string
+}
+
 func NewProgressProjection(st *store.Store) *ProgressProjection {
-	return &ProgressProjection{store: st, items: map[progressKey]FindingProgress{}}
+	return &ProgressProjection{store: st, items: map[progressKey]FindingProgress{}, runStarts: map[progressRunKey]uint64{}}
 }
 
 func WithProgressProjection(p *ProgressProjection) projections.Option {
@@ -170,6 +179,7 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	}
 	p.mu.Lock()
 	p.items = map[progressKey]FindingProgress{}
+	p.runStarts = map[progressRunKey]uint64{}
 	p.mu.Unlock()
 	return nil
 }
@@ -255,6 +265,10 @@ func (p *ProgressProjection) applyPrepared(ev eventspec.Event, prepared TLSFindi
 func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projections.LicensedCryptoMigrationStarted) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.runStarts == nil {
+		p.runStarts = map[progressRunKey]uint64{}
+	}
+	p.runStarts[progressRunKey{tenantID: ev.TenantID, runID: started.RunID}] = ev.Sequence
 	p.applyCertificateStarted(ev, started)
 	for _, intent := range started.TLSPostures {
 		key := progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}
@@ -275,6 +289,18 @@ func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projection
 			Desired: clonePosture(intent.Desired), Status: TLSFindingQueued, UpdatedAt: eventTime(ev),
 		}
 	}
+}
+
+// RunStartSequence is the inclusive replay boundary for one immutable run.
+// Zero means the start event has not reached this projection yet; callers then
+// use a full replay so a lagging projection can never hide durable evidence.
+func (p *ProgressProjection) RunStartSequence(tenantID, runID string) uint64 {
+	if p == nil {
+		return 0
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.runStarts[progressRunKey{tenantID: tenantID, runID: runID}]
 }
 
 func (p *ProgressProjection) projectCompleted(ctx context.Context, ev eventspec.Event, completed TLSFindingCompleted) error {

@@ -227,7 +227,7 @@ func (h HostAgentHooks) recordResult(ctx context.Context, tenantID, agentID stri
 		return errors.New("pqcmigration: host rollback requires durable event history")
 	}
 	var recorded *TLSFindingRollbackCompleted
-	if err := h.Log.Replay(ctx, 0, func(ev events.Event) error {
+	if err := h.Log.Replay(ctx, h.Progress.RunStartSequence(tenantID, rollback.RunID), func(ev events.Event) error {
 		if ev.TenantID != tenantID || ev.Type != EventTLSFindingRollbackCompleted {
 			return nil
 		}

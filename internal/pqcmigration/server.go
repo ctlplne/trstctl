@@ -574,7 +574,7 @@ func (s *pqcMigrationService) Progress(ctx context.Context, tenantID, runID stri
 		return RunProgressResponse{}, pgx.ErrNoRows
 	}
 	found := false
-	if err := s.log.Replay(ctx, 0, func(e events.Event) error {
+	if err := s.log.Replay(ctx, s.progress.RunStartSequence(tenantID, runID), func(e events.Event) error {
 		if found || e.TenantID != tenantID || e.Type != projections.EventLicensedCryptoMigrationStarted {
 			return nil
 		}
@@ -649,7 +649,7 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 	tlsSequence := make(map[string]uint64)
 	tlsFailed := make(map[string]bool)
 	rolledBack := make(map[string]bool)
-	if err := s.log.Replay(ctx, 0, func(e events.Event) error {
+	if err := s.log.Replay(ctx, s.progress.RunStartSequence(tenantID, runID), func(e events.Event) error {
 		if e.TenantID != tenantID {
 			return nil
 		}
@@ -1160,7 +1160,7 @@ func (h *outboxHandler) completedTLSFinding(ctx context.Context, tenantID string
 	}
 	var completed TLSFindingCompleted
 	found := false
-	err := h.log.Replay(ctx, 0, func(ev events.Event) error {
+	err := h.log.Replay(ctx, h.progress.RunStartSequence(tenantID, intent.RunID), func(ev events.Event) error {
 		if ev.TenantID != tenantID || ev.Type != EventTLSFindingCompleted {
 			return nil
 		}
@@ -1211,7 +1211,7 @@ func (h *outboxHandler) preparedTLSPosture(ctx context.Context, tenantID string,
 	}
 	var previous connector.TLSPosture
 	found := false
-	err := h.log.Replay(ctx, 0, func(ev events.Event) error {
+	err := h.log.Replay(ctx, h.progress.RunStartSequence(tenantID, intent.RunID), func(ev events.Event) error {
 		if ev.TenantID != tenantID || ev.Type != EventTLSFindingPrepared {
 			return nil
 		}

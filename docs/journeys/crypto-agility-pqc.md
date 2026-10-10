@@ -171,6 +171,13 @@ post-quantum target.
    mismatched assigned host, management endpoint, or loopback verification
    address returns HTTP 409 before enqueue.
 
+   Name the Envoy target after the exact listener resource exposed by the
+   co-resident management API. `secret_name` names its SDS certificate secret;
+   it does not choose the listener whose TLS policy is changed. The target's
+   `verify_address` is the listener address from the assigned agent's network
+   namespace, so a container sidecar uses its container port rather than a
+   port published on the Docker host.
+
 6. Inspect the rollback limit before broad rollout:
 
    ```json

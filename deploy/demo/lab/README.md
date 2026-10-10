@@ -42,13 +42,18 @@ PQC_ENVOY_CERT_DIR="$PWD/private/pqc-envoy" \
 The management API is `http://127.0.0.1:19080/v1/tls-posture/pqc-edge`, the
 TLS listener is `127.0.0.1:11444`, and Envoy admin is at
 `http://127.0.0.1:19180`. All three published ports bind only to loopback.
-Register an enabled Envoy deployment target with `executor: agent`, the exact
-enrolled host assignment, `endpoint: http://127.0.0.1:19080`,
-`secret_name: pqc-edge`, `verify_address: 127.0.0.1:11444`, and
-`verify_server_name: pqc-edge.local.qa`. Start a host agent on that same
-machine with `--relay-claim`, `--host-rollback-dir` in persistent private
-storage, and a native OpenSSL 3.5+ `--host-exec-profile` TLS probe for the
-X25519MLKEM768 handshake. Enable `pqc.posture` and
+Register an enabled Envoy deployment target **named `pqc-edge`**, because the
+target name selects `/v1/tls-posture/pqc-edge`; `secret_name` selects the SDS
+secret and does not select the posture resource. Set `executor: agent`, the
+exact enrolled host assignment, `endpoint: http://127.0.0.1:19080`,
+`secret_name: pqc-edge`, and `verify_server_name: pqc-edge.local.qa`.
+For an agent sharing the fixture's container network namespace, set
+`verify_address: 127.0.0.1:8443`; for an agent on the Mac host, use the
+published `127.0.0.1:11444`. Start that agent with `--relay-claim` and
+`--host-rollback-dir` in persistent private storage. The agent's Go TLS
+probe verifies X25519MLKEM768 directly; a native OpenSSL 3.5+ probe is an
+optional fallback when the host's Go TLS runtime cannot inspect a served
+leaf. Enable `pqc.posture` and
 `pqc.posture.rollback` in the control plane's claimable job kinds. These
 actions use the normal target registration and agent enrollment APIs; a
 controller PUT by itself is only fixture setup, not product migration proof.
