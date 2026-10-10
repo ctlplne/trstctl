@@ -77,25 +77,11 @@ func recoverCertificatesByIssuanceKey(ctx context.Context, st *store.Store, log 
 		return certs, nil
 	}
 	// Recovery asks one small question: did this exact issuance key already append
-	// a certificate before its idempotency transaction rolled back? Rebuilding
-	// every extension projection answers a much larger boot-time question and made
-	// each ordinary issuance slower as retained history grew. Scan immutable event
-	// envelopes, select only matching certificate events, and idempotently apply
-	// those rows. Full catch-up remains the startup/tailer responsibility.
-	var retained []events.Event
-	if err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.TenantID != tenantID || event.Type != projections.EventCertificateRecorded {
-			return nil
-		}
-		var payload projections.CertificateRecorded
-		if err := json.Unmarshal(event.Data, &payload); err != nil {
-			return fmt.Errorf("server: decode retained certificate event %s: %w", event.ID, err)
-		}
-		if payload.IssuanceIdempotencyKey == key {
-			retained = append(retained, event)
-		}
-		return nil
-	}); err != nil {
+	// a certificate before its idempotency transaction rolled back? Read only
+	// retained certificate facts for this tenant, then idempotently apply the
+	// matching rows. Full catch-up remains the startup/tailer responsibility.
+	retained, err := retainedCertificatesByIssuanceKey(ctx, log, tenantID, key)
+	if err != nil {
 		return nil, fmt.Errorf("server: scan issued certificate recovery events: %w", err)
 	}
 	projector := projections.New(st)
@@ -115,4 +101,29 @@ func recoverCertificatesByIssuanceKey(ctx context.Context, st *store.Store, log 
 		return nil, fmt.Errorf("%w: retained issuance has no recoverable certificate row", store.ErrCertificateRecordingRebuildRequired)
 	}
 	return certs, nil
+}
+
+func retainedCertificatesByIssuanceKey(ctx context.Context, log *events.Log, tenantID, key string) ([]events.Event, error) {
+	if log == nil {
+		return nil, errors.New("server: certificate recovery requires event log")
+	}
+	var retained []events.Event
+	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return log.ReplayTenantTypesThrough(readCtx, tenantID, 1, head,
+			[]string{projections.EventCertificateRecorded}, func(event events.Event) error {
+				var payload projections.CertificateRecorded
+				if err := json.Unmarshal(event.Data, &payload); err != nil {
+					return fmt.Errorf("server: decode retained certificate event %s: %w", event.ID, err)
+				}
+				if payload.IssuanceIdempotencyKey == key {
+					retained = append(retained, event)
+				}
+				return nil
+			})
+	})
+	return retained, err
 }
