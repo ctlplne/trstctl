@@ -729,6 +729,36 @@ type tlsRollbackGroup struct {
 	completed     []TLSFindingCompleted
 }
 
+// replayRollbackEvidence reads exactly the immutable facts the rollback fold
+// understands, in source order. The start cursor comes from the boot-rebuilt
+// progress index; zero still admits a newly appended, not-yet-projected run.
+// One history grant covers both the head and the indexed read, so a restore
+// cannot switch source generations between them.
+func (s *pqcMigrationService) replayRollbackEvidence(ctx context.Context, tenantID, runID string, apply func(events.Event) error) error {
+	if s.log == nil || s.progress == nil {
+		return errors.New("pqcmigration: rollback evidence requires event log and progress projection")
+	}
+	return s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := s.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return s.log.ReplayTenantTypesThrough(readCtx, tenantID,
+			s.progress.RunStartSequence(tenantID, runID), head,
+			[]string{
+				projections.EventLicensedCryptoMigrationStarted,
+				projections.EventLicensedCryptoMigrationAssetCompleted,
+				EventCertificateFindingApplied,
+				EventCertificateFindingRolledBack,
+				projections.EventLicensedCryptoMigrationRollbackCompleted,
+				EventTLSFindingCompleted,
+				EventTLSFindingPrepared,
+				EventTLSFindingRollbackCompleted,
+				EventTLSFindingFailed,
+			}, apply)
+	})
+}
+
 func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID string, req RollbackRequest) (RollbackResponse, error) {
 	var response RollbackResponse
 	err := withTLSPostureTenantCipher(ctx, s.tenantCrypto, s.integrityKey, tenantID, func(scoped context.Context, _ tlsPostureCipher) (err error) {
@@ -758,7 +788,7 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 	tlsSequence := make(map[string]uint64)
 	tlsFailed := make(map[string]bool)
 	rolledBack := make(map[string]bool)
-	if err := s.log.Replay(ctx, s.progress.RunStartSequence(tenantID, runID), func(e events.Event) error {
+	if err := s.replayRollbackEvidence(ctx, tenantID, runID, func(e events.Event) error {
 		if e.TenantID != tenantID {
 			return nil
 		}
