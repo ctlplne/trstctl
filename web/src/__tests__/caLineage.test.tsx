@@ -52,9 +52,11 @@ describe("CA lineage", () => {
     expect(new Set(rows.map((row) => row.authority.id))).toEqual(new Set(["a", "b"]));
   });
 
-  it("recognizes an offline root by kind", () => {
+  it("recognizes an offline root by its missing signer handle in the served API", () => {
     expect(isOfflineRoot(ca("r", { kind: "offline_root" }))).toBe(true);
+    expect(isOfflineRoot(ca("r", { kind: "root", signer_handle: "" }))).toBe(true);
     expect(isOfflineRoot(ca("r", { kind: "root" }))).toBe(false);
+    expect(isOfflineRoot(ca("i", { kind: "intermediate", signer_handle: "" }))).toBe(false);
   });
 
   it("returns an empty forest for no authorities", () => {

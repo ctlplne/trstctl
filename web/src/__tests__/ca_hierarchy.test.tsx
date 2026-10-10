@@ -700,6 +700,36 @@ describe("CA hierarchy and custody surface", () => {
     expect(await within(dialog).findByText("leaf-1")).toBeInTheDocument();
   });
 
+  it("routes an imported offline root to a signer-held intermediate without offering signing", async () => {
+    const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "offline-root-1",
+          tenant_id: "tenant-1",
+          common_name: "Offline Root",
+          kind: "root",
+          status: "active",
+          signer_handle: "",
+          certificate_pem: "public root",
+          serial: "01",
+          max_path_len: 1,
+          created_at: "2026-10-10T00:00:00Z",
+        },
+      ],
+    });
+    renderCAHierarchy();
+    await within(await screen.findByRole("table", { name: "Served CA authorities" })).findByText("Offline Root");
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    const dialog = await screen.findByRole("dialog", { name: "Offline Root" });
+    expect(within(dialog).queryByRole("button", { name: /Issue leaf/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /Sign intermediate CSR/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/private key is offline/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Create a signer-held intermediate" }));
+    expect(await screen.findByRole("tab", { name: "Imports" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Offline-root authority ID")).toHaveValue("offline-root-1");
+  });
+
   it("renders issuers with kind, chain, public key, and certificate links", async () => {
     const user = userEvent.setup();
     renderCAHierarchy();

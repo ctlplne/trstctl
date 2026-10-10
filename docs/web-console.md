@@ -603,8 +603,11 @@ remain UTC.
   `/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).
 - **CA hierarchy** — the m-of-n key ceremony flow, existing-CA-chain import,
   offline-root import/intermediate-CSR workflow, and HSM/KMS managed-key custody
-  (generate, list, inspect, rotate, revoke, zeroize), guarded by RBAC. The key
-  inventory comes from the durable tenant projection and survives refresh and
+  (generate, list, inspect, rotate, revoke, zeroize), guarded by RBAC. The
+  private key of an imported offline root stays outside trstctl. Its detail view opens the
+  signer-held intermediate workflow and does not offer direct signing actions.
+  The API returns a conflict with that recovery path if a client tries direct
+  issuance. Key inventory comes from the durable tenant projection and survives refresh and
   restart; a key from a detached provider stays visible but cannot be changed
   until that provider is restored. The issuer catalog has
   schema-driven config forms for built-in and upstream issuer types, sensitive-field

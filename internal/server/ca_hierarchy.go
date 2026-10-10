@@ -1790,7 +1790,10 @@ func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle stri
 
 func (h *caHierarchyService) signerForAuthority(ctx context.Context, ca store.CAAuthority) (*signing.RemoteSigner, error) {
 	if ca.SignerHandle == "" {
-		return nil, fmt.Errorf("%w: CA %s has no signer handle", api.ErrCAHierarchyUnavailable, ca.ID)
+		if ca.Kind == "root" {
+			return nil, fmt.Errorf("%w: offline root %s has no signer handle; create and import a signer-held intermediate under it before issuing certificates", api.ErrCAHierarchyConflict, ca.ID)
+		}
+		return nil, fmt.Errorf("%w: authority %s has no signer handle; select or import a signer-backed authority", api.ErrCAHierarchyConflict, ca.ID)
 	}
 	h.mu.Lock()
 	if signer := h.signers[ca.ID]; signer != nil {

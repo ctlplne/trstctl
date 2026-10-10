@@ -1233,8 +1233,8 @@ func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
 		"csr_pem":     leafCSRPEM,
 		"ttl_seconds": int64((24 * time.Hour).Seconds()),
 	})
-	if code != http.StatusServiceUnavailable {
-		t.Fatalf("offline root hot-path leaf issue = %d body=%s; want 503 because root key is absent", code, body)
+	if code != http.StatusConflict || !strings.Contains(string(body), "offline root") || !strings.Contains(string(body), "intermediate") {
+		t.Fatalf("offline root hot-path leaf issue = %d body=%s; want 409 with the signer-held intermediate recovery path", code, body)
 	}
 
 	interSpec := map[string]any{

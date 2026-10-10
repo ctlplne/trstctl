@@ -30,7 +30,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
-import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
+import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree, isOfflineRoot } from "./cahierarchy/CAHierarchyPageParts";
 import {
   CACeremonyReviewDialog,
   CancelCeremonyDialog,
@@ -1194,6 +1194,11 @@ export function CAHierarchy() {
         <AuthorityDetailDialog
           authority={authorityDetail}
           onClose={() => setAuthorityDetail(null)}
+          onOpenImports={() => {
+            setOfflineIntermediateForm((current) => ({ ...current, parentID: authorityDetail.id }));
+            setAuthorityDetail(null);
+            selectTab("imports");
+          }}
           onIssueLeaf={() => {
             setAuthorityDetail(null);
             setLeafTarget(authorityDetail);
@@ -2516,16 +2521,19 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
 function AuthorityDetailDialog({
   authority,
   onClose,
+  onOpenImports,
   onIssueLeaf,
   onSignCSR,
 }: {
   authority: CAAuthority;
   onClose: () => void;
+  onOpenImports: () => void;
   onIssueLeaf: () => void;
   onSignCSR: () => void;
 }) {
   const { t } = useTranslation();
   const titleId = "authority-detail-heading";
+  const offlineRoot = isOfflineRoot(authority);
   return (
     <Dialog
       open
@@ -2558,13 +2566,22 @@ function AuthorityDetailDialog({
           <KeyValue label="Signer handle" value={authority.signer_handle || "-"} mono />
         </dl>
         <CertificatePEMBlock label="Certificate PEM" pem={authority.certificate_pem} />
+        {offlineRoot && <p className="rounded-control border border-border bg-muted/40 p-3 text-sm">{t("caHierarchy.offline.rootReadOnly")}</p>}
         <footer className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-          <Button type="button" variant="outline" onClick={onSignCSR}>
-            {t("parity.signIntermediateCsr_cf1361")}
-          </Button>
-          <Button type="button" onClick={onIssueLeaf}>
-            {t("parity.issueLeaf_f1c3ee")}
-          </Button>
+          {offlineRoot ? (
+            <Button type="button" onClick={onOpenImports}>
+              {t("caHierarchy.offline.createIntermediate")}
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="outline" onClick={onSignCSR}>
+                {t("parity.signIntermediateCsr_cf1361")}
+              </Button>
+              <Button type="button" onClick={onIssueLeaf}>
+                {t("parity.issueLeaf_f1c3ee")}
+              </Button>
+            </>
+          )}
           <Button type="button" variant="ghost" onClick={onClose}>
             {translateNow("source.close.7d9eb7acb1")}
           </Button>

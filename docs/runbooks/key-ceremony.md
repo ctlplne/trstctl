@@ -233,7 +233,8 @@ for ceremonies.
    public key from the CSR.
 
 Leaf issuance then uses `POST /api/v1/ca/authorities/{intermediate-id}/issue`.
-Issuing directly from the imported offline root fails closed (no signer handle).
+Issuing directly from the imported offline root returns HTTP 409 with the
+signer-held intermediate recovery path: its private key is outside trstctl.
 
 ## Procedure: importing an existing signer-backed CA chain
 

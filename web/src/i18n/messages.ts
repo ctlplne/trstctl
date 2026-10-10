@@ -9643,6 +9643,15 @@ export const messages = {
     defaultMessage: "offline",
     description: "Metadata value when an imported offline root has no signer handle.",
   },
+  "caHierarchy.offline.rootReadOnly": {
+    defaultMessage:
+      "This root's private key is offline. Create a signer-held intermediate, have the offline root sign its CSR, then issue certificates from that intermediate.",
+    description: "Explains why an imported offline root cannot sign in the console and names the supported path.",
+  },
+  "caHierarchy.offline.createIntermediate": {
+    defaultMessage: "Create a signer-held intermediate",
+    description: "Opens the offline intermediate workflow from a public-only root detail.",
+  },
   "caHierarchy.offline.placeholderCertificate": {
     defaultMessage: "-----BEGIN CERTIFICATE-----",
     description: "Placeholder for certificate PEM textareas.",
@@ -21122,7 +21131,7 @@ export const messages = {
   },
   "parity.signerBackedRootsAndIntermediatesThis_957f38": {
     defaultMessage:
-      "Signer-backed roots and intermediates this control plane serves. Open a row for the certificate PEM, issue a leaf from an authority, or sign an externally generated intermediate CSR.",
+      "Public offline roots and signer-backed authorities in this control plane. Open a row for its certificate and available actions; offline roots cannot sign here.",
     description: "CLI-parity console flow copy.",
   },
   "parity.specJson_e57c5c": {

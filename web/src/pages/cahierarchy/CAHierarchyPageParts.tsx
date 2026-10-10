@@ -53,7 +53,7 @@ export function flattenCALineage(nodes: CALineageNode[]): CALineageNode[] {
 
 export function isOfflineRoot(authority: CAAuthority): boolean {
   const kind = (authority.kind ?? "").toLowerCase();
-  return kind.includes("offline");
+  return kind === "offline_root" || (kind === "root" && !authority.signer_handle);
 }
 
 export function CALineageTree({ authorities }: { authorities: CAAuthority[] }) {
