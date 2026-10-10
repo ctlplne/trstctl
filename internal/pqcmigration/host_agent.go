@@ -187,9 +187,12 @@ func (h HostAgentHooks) recordResult(ctx context.Context, tenantID, agentID stri
 		// The event log and idempotency ledger are separate durable systems. A
 		// crash after append and before ledger commit must replay this one signed
 		// outcome, not append a second completion or a new predecessor.
-		if prior, found, err := handler.completedTLSFinding(ctx, tenantID, forward, claim.Payload); err != nil {
+		if prior, found, err := h.Progress.hostCompletedReceipt(tenantID, forward.RunID, forward.AssetID); err != nil {
 			return err
 		} else if found {
+			if err := validateCompletedTLSFinding(forward, claim.Payload, prior); err != nil {
+				return err
+			}
 			if prior.EvidenceDigest != req.EvidenceDigest ||
 				!connector.EqualTLSPosture(prior.Receipt.Previous, result.Receipt.Previous) ||
 				!connector.EqualTLSPosture(prior.Receipt.Observed, result.Receipt.Observed) ||
@@ -198,56 +201,40 @@ func (h HostAgentHooks) recordResult(ctx context.Context, tenantID, agentID stri
 			}
 			return nil
 		}
-		if previous, found, err := handler.preparedTLSPosture(ctx, tenantID, forward); err != nil {
+		if prepared, found, err := h.Progress.hostPreparedReceipt(tenantID, forward.RunID, forward.AssetID); err != nil {
 			return err
 		} else if found {
-			if !connector.EqualTLSPosture(previous, result.Receipt.Previous) {
+			if prepared.FindingKind != forward.FindingKind || prepared.TargetID != forward.TargetID ||
+				prepared.TargetRevision != forward.TargetRevision || prepared.Connector != forward.Connector ||
+				!connector.EqualTLSPosture(prepared.Previous, result.Receipt.Previous) {
 				return errors.New("pqcmigration: host posture retry changed the durable predecessor")
 			}
-		} else if err := handler.appendProjected(ctx, tenantID, EventTLSFindingPrepared, TLSFindingPrepared{
-			RunID: forward.RunID, AssetID: forward.AssetID, FindingKind: forward.FindingKind,
-			TargetID: forward.TargetID, TargetRevision: forward.TargetRevision,
-			Connector: forward.Connector, Previous: result.Receipt.Previous,
-		}); err != nil {
+		} else if err := h.appendHostReceiptEvent(ctx, tenantID, forward.RunID, forward.AssetID,
+			EventTLSFindingPrepared, TLSFindingPrepared{
+				RunID: forward.RunID, AssetID: forward.AssetID, FindingKind: forward.FindingKind,
+				TargetID: forward.TargetID, TargetRevision: forward.TargetRevision,
+				Connector: forward.Connector, Previous: result.Receipt.Previous,
+			}); err != nil {
 			return err
 		}
 		forward.TargetConfig = nil
 		forward.SealedOutboxPayload = append(json.RawMessage(nil), claim.Payload...)
-		return handler.appendProjected(ctx, tenantID, EventTLSFindingCompleted, TLSFindingCompleted{
-			Intent: forward, Receipt: result.Receipt, Served: &result.Served,
-			AgentID: signed.AgentID, JobID: signed.JobID, Attempt: signed.Attempt,
-			EvidenceDigest: signed.EvidenceDigest, ReceiptStatement: signed.ReceiptStatement,
-			ReceiptSignature: signed.ReceiptSignature, ReceiptSignerFingerprint: signed.ReceiptSignerFingerprint,
-		})
+		return h.appendHostReceiptEvent(ctx, tenantID, forward.RunID, forward.AssetID,
+			EventTLSFindingCompleted, TLSFindingCompleted{
+				Intent: forward, Receipt: result.Receipt, Served: &result.Served,
+				AgentID: signed.AgentID, JobID: signed.JobID, Attempt: signed.Attempt,
+				EvidenceDigest: signed.EvidenceDigest, ReceiptStatement: signed.ReceiptStatement,
+				ReceiptSignature: signed.ReceiptSignature, ReceiptSignerFingerprint: signed.ReceiptSignerFingerprint,
+			})
 	}
 	if !connector.EqualTLSPosture(result.Receipt.Observed, rollback.Mutation.Desired) {
 		return errors.New("pqcmigration: host rollback readback differs from sealed predecessor")
 	}
-	if h.Log == nil {
-		return errors.New("pqcmigration: host rollback requires durable event history")
-	}
-	var recorded *TLSFindingRollbackCompleted
-	if err := h.Log.Replay(ctx, h.Progress.RunStartSequence(tenantID, rollback.RunID), func(ev events.Event) error {
-		if ev.TenantID != tenantID || ev.Type != EventTLSFindingRollbackCompleted {
-			return nil
-		}
-		var prior TLSFindingRollbackCompleted
-		if err := json.Unmarshal(ev.Data, &prior); err != nil {
-			return err
-		}
-		if prior.RunID != rollback.RunID || prior.Receipt.TargetID != intent.TargetID {
-			return nil
-		}
-		if recorded != nil && (recorded.EvidenceDigest != prior.EvidenceDigest ||
-			!connector.EqualTLSPosture(recorded.Receipt.Observed, prior.Receipt.Observed)) {
-			return errors.New("pqcmigration: conflicting host rollback completions")
-		}
-		recorded = &prior
-		return nil
-	}); err != nil {
+	recorded, found, err := h.Progress.hostRollbackReceipt(tenantID, rollback.RunID, intent.TargetID)
+	if err != nil {
 		return err
 	}
-	if recorded != nil {
+	if found {
 		if recorded.EvidenceDigest != req.EvidenceDigest ||
 			!connector.EqualTLSPosture(recorded.Receipt.Previous, result.Receipt.Previous) ||
 			!connector.EqualTLSPosture(recorded.Receipt.Observed, result.Receipt.Observed) ||
@@ -256,10 +243,11 @@ func (h HostAgentHooks) recordResult(ctx context.Context, tenantID, agentID stri
 		}
 		return nil
 	}
-	return handler.appendProjected(ctx, tenantID, EventTLSFindingRollbackCompleted, TLSFindingRollbackCompleted{
-		RunID: rollback.RunID, Restores: rollback.Restores, Receipt: result.Receipt, Served: &result.Served,
-		AgentID: signed.AgentID, JobID: signed.JobID, Attempt: signed.Attempt,
-		EvidenceDigest: signed.EvidenceDigest, ReceiptStatement: signed.ReceiptStatement,
-		ReceiptSignature: signed.ReceiptSignature, ReceiptSignerFingerprint: signed.ReceiptSignerFingerprint,
-	})
+	return h.appendHostReceiptEvent(ctx, tenantID, rollback.RunID, intent.TargetID,
+		EventTLSFindingRollbackCompleted, TLSFindingRollbackCompleted{
+			RunID: rollback.RunID, Restores: rollback.Restores, Receipt: result.Receipt, Served: &result.Served,
+			AgentID: signed.AgentID, JobID: signed.JobID, Attempt: signed.Attempt,
+			EvidenceDigest: signed.EvidenceDigest, ReceiptStatement: signed.ReceiptStatement,
+			ReceiptSignature: signed.ReceiptSignature, ReceiptSignerFingerprint: signed.ReceiptSignerFingerprint,
+		})
 }

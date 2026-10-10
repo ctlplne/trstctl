@@ -147,6 +147,14 @@ type ProgressProjection struct {
 	store *store.Store
 	mu    sync.RWMutex
 	items map[progressKey]FindingProgress
+	// Exact immutable event envelopes let the agent receipt path recover a
+	// predecessor or a prior signed outcome without rescanning the entire log.
+	preparedEvents  map[progressKey]eventspec.Event
+	completedEvents map[progressKey]eventspec.Event
+	rollbackEvents  map[progressRollbackKey]eventspec.Event
+	// An append whose projection failed remains retryable in this process.
+	// After a restart the immutable log rebuilds the indexes above.
+	pendingEvents map[string]eventspec.Event
 	// A run's start sequence bounds later evidence lookups. Replaying the
 	// entire tenant history for each signed host report can outlast the agent's
 	// acknowledgement window on a busy control plane.
@@ -163,8 +171,17 @@ type progressRunKey struct {
 	runID    string
 }
 
+type progressRollbackKey struct {
+	tenantID string
+	runID    string
+	targetID string
+}
+
 func NewProgressProjection(st *store.Store) *ProgressProjection {
-	return &ProgressProjection{store: st, items: map[progressKey]FindingProgress{}, runStarts: map[progressRunKey]uint64{}}
+	return &ProgressProjection{store: st, items: map[progressKey]FindingProgress{},
+		preparedEvents: map[progressKey]eventspec.Event{}, completedEvents: map[progressKey]eventspec.Event{},
+		rollbackEvents: map[progressRollbackKey]eventspec.Event{}, pendingEvents: map[string]eventspec.Event{},
+		runStarts: map[progressRunKey]uint64{}}
 }
 
 func WithProgressProjection(p *ProgressProjection) projections.Option {
@@ -179,6 +196,10 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	}
 	p.mu.Lock()
 	p.items = map[progressKey]FindingProgress{}
+	p.preparedEvents = map[progressKey]eventspec.Event{}
+	p.completedEvents = map[progressKey]eventspec.Event{}
+	p.rollbackEvents = map[progressRollbackKey]eventspec.Event{}
+	p.pendingEvents = map[string]eventspec.Event{}
 	p.runStarts = map[progressRunKey]uint64{}
 	p.mu.Unlock()
 	return nil
@@ -260,6 +281,10 @@ func (p *ProgressProjection) applyPrepared(ev eventspec.Event, prepared TLSFindi
 		item.Status = TLSFindingQueued
 	}
 	p.items[key] = item
+	if p.preparedEvents == nil {
+		p.preparedEvents = map[progressKey]eventspec.Event{}
+	}
+	p.preparedEvents[key] = cloneReceiptEvent(ev)
 }
 
 func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projections.LicensedCryptoMigrationStarted) {
@@ -353,6 +378,10 @@ func (p *ProgressProjection) applyCompleted(ev eventspec.Event, completed TLSFin
 			ReceiptSignerFingerprint: completed.ReceiptSignerFingerprint}
 		p.items[progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}] = item
 	}
+	if p.completedEvents == nil {
+		p.completedEvents = map[progressKey]eventspec.Event{}
+	}
+	p.completedEvents[progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}] = cloneReceiptEvent(ev)
 	p.mu.Unlock()
 }
 
@@ -382,6 +411,11 @@ func (p *ProgressProjection) projectRollback(ctx context.Context, ev eventspec.E
 func (p *ProgressProjection) applyRollback(ev eventspec.Event, completed TLSFindingRollbackCompleted) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.rollbackEvents == nil {
+		p.rollbackEvents = map[progressRollbackKey]eventspec.Event{}
+	}
+	p.rollbackEvents[progressRollbackKey{tenantID: ev.TenantID, runID: completed.RunID,
+		targetID: completed.Receipt.TargetID}] = cloneReceiptEvent(ev)
 	for _, restore := range completed.Restores {
 		key := progressKey{tenantID: ev.TenantID, runID: completed.RunID, assetID: restore.AssetID}
 		item := p.items[key]
