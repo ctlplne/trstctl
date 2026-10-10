@@ -142,29 +142,36 @@ func (h *Handler) DeliverLicensed(ctx context.Context, message orchestrator.Mess
 
 func (h *Handler) replayEvidence(ctx context.Context, requested RequestedV1) ([]eventspec.Event, bool, error) {
 	var tenantEvents []eventspec.Event
-	err := h.log.ReplayThrough(ctx, 1, requested.LedgerPosition, func(ev events.Event) error {
-		if ev.TenantID == requested.TenantID {
-			tenantEvents = append(tenantEvents, ev)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, false, err
-	}
 	laterRegistration := false
-	err = h.log.Replay(ctx, requested.LedgerPosition+1, func(ev events.Event) error {
-		if ev.TenantID != requested.TenantID || ev.Type != depstate.TypeDependencyRegistered {
+	// The frozen audit-chain proof still needs every tenant event through the
+	// command's exact position. Only the later registration refusal can select
+	// a narrow subject. One history grant keeps both reads on one generation.
+	err := h.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		if err := h.log.ReplayThrough(readCtx, 1, requested.LedgerPosition, func(ev events.Event) error {
+			if ev.TenantID == requested.TenantID {
+				tenantEvents = append(tenantEvents, ev)
+			}
 			return nil
+		}); err != nil {
+			return err
 		}
-		payload, err := depstate.Decode(ev)
+		head, err := h.log.LastSequence(readCtx)
 		if err != nil {
 			return err
 		}
-		registered, ok := payload.(depstate.DependencyRegisteredV1)
-		if ok && registered.KeyID == requested.KeyID {
-			laterRegistration = true
-		}
-		return nil
+		return h.log.ReplayTenantTypesThrough(readCtx, requested.TenantID,
+			requested.LedgerPosition+1, head, []string{depstate.TypeDependencyRegistered},
+			func(ev events.Event) error {
+				payload, err := depstate.Decode(ev)
+				if err != nil {
+					return err
+				}
+				registered, ok := payload.(depstate.DependencyRegisteredV1)
+				if ok && registered.KeyID == requested.KeyID {
+					laterRegistration = true
+				}
+				return nil
+			})
 	})
 	return tenantEvents, laterRegistration, err
 }
