@@ -550,10 +550,12 @@ func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 		"two-entry response",
 		"tls finding rollout",
 		"envoy",
-		"automated tls finding journey is not complete",
+		"stock openssl observed the served tls posture",
+		"rollback to the exact predecessor",
+		"signed agent",
 		"hybrid-to-pure cutover",
 	}) {
-		t.Error("limitations.md must disclose the served PQC client proofs and the incomplete Envoy rollout — TRACE-008")
+		t.Error("limitations.md must disclose the served PQC client proofs and the bounded Envoy rollout — TRACE-008")
 	}
 
 	lcp := strings.ToLower(read(t, "features/lifecycle-and-pqc.md"))

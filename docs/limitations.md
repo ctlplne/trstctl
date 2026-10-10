@@ -4543,9 +4543,12 @@ ML-DSA-65 CSR, enrolls it through EST, and verifies the returned pure
 ML-DSA-65 subject leaf; the stock SPIFFE Workload API returns a two-entry
 response for one SPIFFE ID (the normal classical SVID and an ML-DSA-65
 SVID with its matching private key). The shipped-binary CBOM TLS finding
-rollout against Envoy remains open until the host-agent execution path above
-is replayed in the running product. The automated TLS finding journey is not
-complete until that replay succeeds.
+rollout against local Envoy was replayed through the host agent and outbox:
+stock OpenSSL observed the served TLS posture before migration, after
+migration, and after rollback to the exact predecessor; a signed agent
+readback recorded each applied state. This proves the local Envoy target,
+not an external appliance or every TLS client. Older runs created before
+the host-agent path existed remain historical evidence, not rollout proof.
 
 Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure
