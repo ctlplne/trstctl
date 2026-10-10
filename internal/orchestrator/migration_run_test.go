@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -102,9 +103,14 @@ func TestMigrationRunEventProjectsQueuesRecoversAndIsolatesAUD40(t *testing.T) {
 
 func TestMigrationRunDifferentReceiptCatchesUpAppendWonProjectionLostAUD40(t *testing.T) {
 	st := newStore(t)
-	log := openLog(t)
-	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
 	ctx := context.Background()
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	log, err := events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
 	runID := "40400000-0000-4000-8000-000000000050"
 	run, startActions, err := migration.StartRun(migration.Run{ID: runID, Waves: []migration.RunWave{{
 		ID: "canary", Ordinal: 1, Members: []migration.RunMember{{
@@ -151,6 +157,17 @@ func TestMigrationRunDifferentReceiptCatchesUpAppendWonProjectionLostAUD40(t *te
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := log.Append(ctx, events.Event{Type: "unrelated.audit.fact", TenantID: tenantB, Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orch = orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
 
 	issuedFingerprint := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	updated, err := orch.UpdateMigrationRun(ctx, tenantA, runID,

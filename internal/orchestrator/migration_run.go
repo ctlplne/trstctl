@@ -215,18 +215,22 @@ func (o *Orchestrator) catchUpMigrationRunTx(
 	if from == 0 {
 		return errors.New("orchestrator: migration event sequence overflow")
 	}
-	return o.log.Replay(ctx, from, func(ev events.Event) error {
-		if ev.Type != projections.EventMigrationRunRecorded || ev.TenantID != tenantID {
-			return nil
+	return o.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := o.log.LastSequence(readCtx)
+		if err != nil {
+			return err
 		}
-		var recorded projections.MigrationRunRecorded
-		if err := json.Unmarshal(ev.Data, &recorded); err != nil {
-			return fmt.Errorf("orchestrator: decode retained migration run: %w", err)
-		}
-		if recorded.Run.ID != runID {
-			return nil
-		}
-		return o.applyMigrationEventTx(ctx, tx, ev)
+		return o.log.ReplayTenantTypesThrough(readCtx, tenantID, from, head,
+			[]string{projections.EventMigrationRunRecorded}, func(ev events.Event) error {
+				var recorded projections.MigrationRunRecorded
+				if err := json.Unmarshal(ev.Data, &recorded); err != nil {
+					return fmt.Errorf("orchestrator: decode retained migration run: %w", err)
+				}
+				if recorded.Run.ID != runID {
+					return nil
+				}
+				return o.applyMigrationEventTx(readCtx, tx, ev)
+			})
 	})
 }
 
