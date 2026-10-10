@@ -1,4 +1,4 @@
--- PCAS succession store (internal/succession/store) — BUSL-1.1 core.
+-- PCAS succession store (internal/succession/store) — proprietary Enterprise/Provider.
 -- Version 900001 is in the reserved extension high band (>= 900000) so it cannot
 -- collide with core migration versions. Two tenant-scoped tables, both with
 -- FORCE-d row-level security so cross-tenant access is denied (AN-1, claim 7).
