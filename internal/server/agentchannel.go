@@ -317,9 +317,13 @@ type agentService struct {
 	// recordMigrationResult converts an exact-agent, lease-bound signed result
 	// into the trust/successor/rollback gate before the job claim is closed
 	// (AUD-40/H2).
-	recordMigrationResult  func(ctx context.Context, tenantID, agentID, destination, idempotencyKey string, payload []byte, outcome, report, evidenceDigest string) (bool, error)
-	openPQCPostureJob      func(context.Context, string, string, string, []byte) ([]byte, error)
-	recordPQCPostureResult func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	recordMigrationResult                   func(ctx context.Context, tenantID, agentID, destination, idempotencyKey string, payload []byte, outcome, report, evidenceDigest string) (bool, error)
+	openPQCPostureJob                       func(context.Context, string, string, string, []byte) ([]byte, error)
+	recordPQCPostureResult                  func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	recordPQCCertificateResult              func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	recordPQCCertificateRenewalResult       func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	recordPQCCertificateRollbackResult      func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	completePQCCertificateRollbackLifecycle func(context.Context, string, []byte) error
 
 	// recordEndpointVerification turns a relay's verification sweep into
 	// observed endpoint state (epic D2). Without it the sweep's report would

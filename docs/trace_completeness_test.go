@@ -563,15 +563,12 @@ func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 		"in every build",
 		"stock openssl 3.5",
 		"two-entry classical + ml-dsa-65 response",
-		"host-target tls posture migration is currently",
-		"agent-owned posture jobs",
+		"host-bound certificate-key rollout",
+		"envoy tls posture rollout and rollback",
 	} {
 		if !strings.Contains(lcp, want) {
 			t.Errorf("features/lifecycle-and-pqc.md must disclose the core client proofs and host-agent limit (missing %q) — TRACE-008", want)
 		}
-	}
-	if strings.Contains(lcp, "receiver readback and exact rollback") {
-		t.Error("features/lifecycle-and-pqc.md still claims completed Envoy rollout evidence — TRACE-008")
 	}
 	if strings.Contains(lcp, "every legacy client") && !strings.Contains(lcp, "not a claim about every legacy client") {
 		t.Error("features/lifecycle-and-pqc.md over-claims universal PQC client compatibility — TRACE-008")

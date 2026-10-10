@@ -600,35 +600,48 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 		defer destroyManagement()
 		var outcome, detail, evidence string
 		var denied, restoreStarted bool
-		err = hostRollback.Restore(intent.Connector, intent.TargetID, intent.PredecessorFingerprint,
-			func(certPEM, keyPEM []byte) (bool, error) {
-				restoreStarted = true
-				material := Material{
-					"credential.cert_pem": certPEM,
-					"credential.key_pem":  keyPEM,
-				}
-				for ref, value := range management {
-					material[ref] = value
-				}
-				stats, execErr := ExecuteOnHost(ctx, hostProfile, DeployIntent{
-					Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
-					Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
-					VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
-				}, material, client)
-				if execErr != nil {
-					return false, execErr
-				}
-				if stats.Denied > 0 {
-					denied = true
-					return false, errors.New("host rollback capability denied")
-				}
-				outcome, detail, evidence = postDeployVerificationWithNative(ctx, DeployIntent{
-					Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
-					Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
-					VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
-				}, material, hostProfile.TLSProbeOpenSSL)
-				return outcome != transport.OutcomeVerifyFailed, nil
-			})
+		restore := func(certPEM, keyPEM []byte) (bool, error) {
+			restoreStarted = true
+			material := Material{
+				"credential.cert_pem": certPEM,
+				"credential.key_pem":  keyPEM,
+			}
+			for ref, value := range management {
+				material[ref] = value
+			}
+			stats, execErr := ExecuteOnHost(ctx, hostProfile, DeployIntent{
+				Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
+				Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
+				VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
+			}, material, client)
+			if execErr != nil {
+				return false, execErr
+			}
+			if stats.Denied > 0 {
+				denied = true
+				return false, errors.New("host rollback capability denied")
+			}
+			outcome, detail, evidence = postDeployVerificationWithNative(ctx, DeployIntent{
+				Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
+				Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
+				VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
+			}, material, hostProfile.TLSProbeOpenSSL)
+			if intent.PQCRunID != "" {
+				return outcome == transport.OutcomeVerified, nil
+			}
+			return outcome != transport.OutcomeVerifyFailed, nil
+		}
+		if intent.PQCRunID != "" || intent.PQCAssetID != "" {
+			if intent.PQCRunID == "" || intent.PQCAssetID == "" || intent.SuccessorFingerprint == "" ||
+				intent.VerifyAddress == "" || intent.VerifyServerName == "" {
+				report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedBadPayload)
+				return false
+			}
+			err = hostRollback.RestorePQC(intent.Connector, intent.TargetID, intent.PQCRunID,
+				intent.PredecessorFingerprint, restore)
+		} else {
+			err = hostRollback.Restore(intent.Connector, intent.TargetID, intent.PredecessorFingerprint, restore)
+		}
 		switch {
 		case errors.Is(err, ErrHostRollbackPredecessorMissing):
 			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedHostPredecessorMissing)
@@ -646,7 +659,13 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 			report(ctx, ch, job, OutcomeFailed, transport.RollbackFailedAtTarget)
 			return false
 		}
-		reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
+		accepted, reportErr := ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, evidence)
+		logReportOutcome(job, outcome, accepted, reportErr)
+		if intent.PQCRunID != "" && accepted && reportErr == nil && outcome == transport.OutcomeVerified {
+			if err := hostRollback.FinalizePQCRestore(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PredecessorFingerprint); err != nil {
+				return false
+			}
+		}
 		return outcome != transport.OutcomeVerifyFailed
 	}
 
@@ -729,13 +748,6 @@ func logReportOutcome(job Job, outcome string, accepted bool, err error) {
 	case !accepted:
 		log.Printf("trstctl-agent: job %d attempt %d outcome %s: report not accepted (claim no longer held); the work may be re-offered", job.JobID, job.Attempt, outcome)
 	}
-}
-
-func reportWithEvidenceAndCustody(ctx context.Context, ch CustodyReceiptChannel, job Job,
-	outcome, detail, evidence, fingerprint string, record custody.Record) {
-	accepted, err := ch.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt, outcome, detail,
-		evidence, fingerprint, record)
-	logReportOutcome(job, outcome, accepted, err)
 }
 
 func decodeIntent(payload []byte, out *DeployIntent) error {

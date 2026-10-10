@@ -1,5 +1,6 @@
 {
   "allowed_roots": ["/lab/tls"],
+  "tls_probe_openssl": "/usr/bin/openssl",
   "actions": [
     { "logical_name": "apachectl", "command": "/usr/local/apache2/bin/apachectl", "pass_args": true, "timeout_seconds": 15 },
     { "logical_name": "nginx", "command": "/usr/sbin/nginx", "pass_args": true, "timeout_seconds": 15 },

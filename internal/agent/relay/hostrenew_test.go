@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/relay"
@@ -292,6 +293,32 @@ func TestARelayVantageConnectorCannotTakeRenewalWork(t *testing.T) {
 	if ch.signCalls != 0 {
 		t.Errorf("an appliance connector reached the signing call %d times; host-generated "+
 			"renewal is host-only by construction", ch.signCalls)
+	}
+}
+
+func TestPQCHostRefusesMissingNativeProbeBeforeChangingFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	ch := &renewChannel{}
+	ch.jobs = []relay.Job{renewJob(t, relay.DeployIntent{
+		Connector: "apache", Target: "lab", TargetID: "target-a",
+		SubjectCommonName: "apache.example.test", SubjectKeyAlgorithm: "ML-DSA-65",
+		PQCRunID: "run-a", PQCAssetID: "asset-a", PQCPredecessorFingerprint: "predecessor",
+		TargetConfig: renewTargetConfig(t, filepath.Join(dir, "apache.crt"), filepath.Join(dir, "apache.key")),
+	})}
+	if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
+		connector.LocalOpsConfig{AllowedRoots: []string{dir}}, 4, 60); err != nil {
+		t.Fatalf("RunOnceWithHost: %v", err)
+	}
+	if ch.signCalls != 0 || ch.redeemed != 0 {
+		t.Fatalf("missing PQC readback crossed custody boundary: signed=%d redeemed=%d", ch.signCalls, ch.redeemed)
+	}
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed ||
+		!strings.Contains(ch.reports[0].detail, "tls_probe_openssl") {
+		t.Fatalf("missing native probe was not explained before deployment: %+v", ch.reports)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "apache.crt")); !os.IsNotExist(err) {
+		t.Fatalf("PQC target changed without a native readback: %v", err)
 	}
 }
 

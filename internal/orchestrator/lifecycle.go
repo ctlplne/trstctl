@@ -39,7 +39,7 @@ type edge struct{ from, to State }
 //
 //	requested      -> issued
 //	issued         -> deployed | revoked
-//	deployed       -> renewing | revoked
+//	deployed       -> issued (verified rollback only) | renewing | revoked
 //	renewing       -> deployed | renewal_failed | revoked
 //	renewal_failed -> renewing | deployed | revoked
 //	revoked        -> retired        (retired is terminal)
@@ -47,6 +47,7 @@ var transitionEvents = map[edge]string{
 	{StateRequested, StateIssued}:  "identity.issued",
 	{StateIssued, StateDeployed}:   "identity.deployed",
 	{StateIssued, StateRevoked}:    "identity.revoked",
+	{StateDeployed, StateIssued}:   "identity.undeployed",
 	{StateDeployed, StateRenewing}: "identity.renewing",
 	{StateDeployed, StateRevoked}:  "identity.revoked",
 	{StateRenewing, StateDeployed}: "identity.renewed",
@@ -69,6 +70,7 @@ var transitionEvents = map[edge]string{
 var sideEffects = map[edge]string{
 	{StateRequested, StateIssued}:       "ca.issue",
 	{StateIssued, StateDeployed}:        "connector.deploy",
+	{StateDeployed, StateIssued}:        "connector.rollback",
 	{StateDeployed, StateRenewing}:      "ca.renew",
 	{StateRenewing, StateDeployed}:      "connector.deploy",
 	{StateIssued, StateRevoked}:         "revocation.publish",
@@ -83,6 +85,9 @@ var sideEffects = map[edge]string{
 
 // CanTransition reports whether from -> to is a valid lifecycle transition.
 func CanTransition(from, to State) bool {
+	if from == StateDeployed && to == StateIssued {
+		return false // only the verified host rollback receiver may use this edge
+	}
 	_, ok := transitionEvents[edge{from, to}]
 	return ok
 }
@@ -90,6 +95,9 @@ func CanTransition(from, to State) bool {
 // EventTypeFor returns the event type emitted by a valid transition, and whether
 // the transition is valid.
 func EventTypeFor(from, to State) (string, bool) {
+	if from == StateDeployed && to == StateIssued {
+		return "", false
+	}
 	t, ok := transitionEvents[edge{from, to}]
 	return t, ok
 }
@@ -116,6 +124,9 @@ func sideEffectFor(from, to State) (string, bool) {
 // enqueue. It is intentionally read-only: operator previews use the same
 // registry as execution instead of maintaining a second, drift-prone table.
 func SideEffectFor(from, to State) (string, bool) {
+	if from == StateDeployed && to == StateIssued {
+		return "", false
+	}
 	return sideEffectFor(from, to)
 }
 

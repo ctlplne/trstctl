@@ -3,6 +3,7 @@
 package pqcmigration
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -12,14 +13,15 @@ import (
 // and execution would have to be a divergence in BuildPlan itself.
 func TestBuildPlanSeparatesReissuesFromResiduals(t *testing.T) {
 	assets := []Asset{
-		{ID: "a-rsa", Kind: "certificate-key", Location: "svc-a:443", Algorithm: "RSA", KeyBits: 2048, QuantumVulnerable: true},
-		{ID: "a-ecdsa", Kind: "certificate-key", Location: "svc-b:443", Algorithm: "ECDSA", KeyBits: 256, QuantumVulnerable: true},
+		{ID: "a-rsa", Kind: "certificate-key", Location: "svc-a:443", Algorithm: "RSA", KeyBits: 2048, QuantumVulnerable: true, CertificateFingerprint: strings.Repeat("a", 64)},
+		{ID: "a-ecdsa", Kind: "certificate-key", Location: "svc-b:443", Algorithm: "ECDSA", KeyBits: 256, QuantumVulnerable: true, CertificateFingerprint: strings.Repeat("b", 64)},
 	}
 
 	plan, err := BuildPlan(assets, Request{
-		AssetIDs:        []string{"a-rsa", "a-ecdsa"},
-		TargetAlgorithm: "ML-DSA-65",
-		Protocol:        "acme",
+		AssetIDs:            []string{"a-rsa", "a-ecdsa"},
+		TargetAlgorithm:     "ML-DSA-65",
+		Protocol:            ProtocolHostCSR,
+		CertificateBindings: []CertificateBinding{{AssetID: "a-rsa", IdentityID: "id-a", TargetID: "target-a"}, {AssetID: "a-ecdsa", IdentityID: "id-b", TargetID: "target-b"}},
 	})
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
@@ -31,7 +33,7 @@ func TestBuildPlanSeparatesReissuesFromResiduals(t *testing.T) {
 		if reissue.TargetAlgorithm != "ML-DSA-65" {
 			t.Fatalf("reissue %s targets %q", reissue.Asset.ID, reissue.TargetAlgorithm)
 		}
-		if reissue.Protocol != "acme" {
+		if reissue.Protocol != ProtocolHostCSR {
 			t.Fatalf("reissue %s protocol = %q", reissue.Asset.ID, reissue.Protocol)
 		}
 	}

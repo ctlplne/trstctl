@@ -25160,7 +25160,7 @@ export const messages = {
   },
   "posture.pqcMigration.description": {
     defaultMessage:
-      "Select CBOM migration candidates, including observed TLS 1.2 compatibility, and preview the exact plan. Certificate-key reissue only proves issuance; it does not deploy or retain the subject key.",
+      "Select observed certificate and TLS findings, bind each to its exact host target, and preview the effects. The host agent retains the subject key and original certificate for verified rollback.",
     description: "Explains the guarded PQC migration workflow.",
   },
   "posture.pqcMigration.noAssets": {
@@ -25178,6 +25178,27 @@ export const messages = {
   "posture.pqcMigration.tlsBindingLegend": {
     defaultMessage: "TLS finding target and desired posture",
     description: "Target binding controls for selected TLS findings.",
+  },
+  "posture.pqcMigration.certBindingLegend": {
+    defaultMessage: "Certificate finding, host target and requested identity",
+    description: "Exact subject and target binding for host CSR migration.",
+  },
+  "posture.pqcMigration.certBindingHelp": {
+    defaultMessage:
+      "Choose an enabled host target serving the observed address, then its requested ML-DSA-65 identity. The agent checks and seals the currently served certificate and key before issuing a successor.",
+    description: "Explains certificate migration custody, target binding and preflight.",
+  },
+  "posture.pqcMigration.certBindingsLoading": {
+    defaultMessage: "Loading host targets and requested identities...",
+    description: "Loading state for certificate bindings.",
+  },
+  "posture.pqcMigration.identityForAsset": {
+    defaultMessage: "Requested identity for {location}",
+    description: "Identity selector for an observed certificate finding.",
+  },
+  "posture.pqcMigration.chooseIdentity": {
+    defaultMessage: "Choose a requested identity",
+    description: "Empty certificate identity option.",
   },
   "posture.pqcMigration.tlsBindingHelp": {
     defaultMessage:
@@ -25215,7 +25236,7 @@ export const messages = {
     description: "Heading for the served PQC plan preview.",
   },
   "posture.pqcMigration.reissues": {
-    defaultMessage: "Certificate issuances (not deployed)",
+    defaultMessage: "Host certificate rollouts",
     description: "Plan metric counting certificate reissues.",
   },
   "posture.pqcMigration.tlsRollouts": {
@@ -25227,7 +25248,7 @@ export const messages = {
     description: "Plan metric counting assets that cannot migrate.",
   },
   "posture.pqcMigration.startConfirmation": {
-    defaultMessage: "I reviewed the exact queued effects. Certificate issuance does not prove deployment or recovery.",
+    defaultMessage: "I reviewed the exact host targets and identities. Completion requires a signed readback of the served listener.",
     description: "Explicit confirmation required before starting migration.",
   },
   "posture.pqcMigration.start": {
@@ -25241,6 +25262,22 @@ export const messages = {
   "posture.pqcMigration.runQueued": {
     defaultMessage: "Migration run {runId} queued",
     description: "Success message after starting a migration.",
+  },
+  "posture.pqcMigration.loadRunLabel": {
+    defaultMessage: "Existing migration run ID",
+    description: "Label for opening a durable PQC migration after the console is reloaded.",
+  },
+  "posture.pqcMigration.loadRunPlaceholder": {
+    defaultMessage: "Paste the run ID",
+    description: "Placeholder for a durable PQC migration UUID.",
+  },
+  "posture.pqcMigration.loadRun": {
+    defaultMessage: "Open run",
+    description: "Read current progress for a previously started PQC migration.",
+  },
+  "posture.pqcMigration.runMismatch": {
+    defaultMessage: "The returned progress belongs to a different run.",
+    description: "Refusal when run progress does not match the operator's exact run ID.",
   },
   "posture.pqcMigration.progressHeading": {
     defaultMessage: "Run {runId}",
@@ -25278,6 +25315,10 @@ export const messages = {
     defaultMessage: "Listener at {address}: {version}, {group}",
     description: "Independent TLS handshake on the agent host.",
   },
+  "posture.pqcMigration.certificateServedReadback": {
+    defaultMessage: "Agent {agent} verified the certificate served at {address}",
+    description: "Signed local listener readback for a certificate-key migration.",
+  },
   "posture.pqcMigration.groupUnreported": { defaultMessage: "group not reported", description: "Missing negotiated key-exchange group." },
   "posture.pqcMigration.servedLeafFingerprint": {
     defaultMessage: "listener certificate fingerprint",
@@ -25299,6 +25340,10 @@ export const messages = {
   "posture.pqcMigration.certificateUnreported": { defaultMessage: "No certificate fingerprint reported", description: "Missing issuance evidence." },
   "posture.pqcMigration.requestedAlgorithm": { defaultMessage: "Requested: {algorithm}", description: "Requested key algorithm retained in evidence." },
   "posture.pqcMigration.effectiveAlgorithm": { defaultMessage: "Issued: {algorithm}", description: "Effective key algorithm from issuance evidence." },
+  "posture.pqcMigration.originalCertificateRestored": {
+    defaultMessage: "Original {algorithm} certificate restored; the PQC leaf is no longer served.",
+    description: "A signed host rollback restored the predecessor instead of serving the migration algorithm.",
+  },
   "posture.pqcMigration.queuedStatus": { defaultMessage: "Queued", description: "Work is waiting for execution." },
   "posture.pqcMigration.issuedStatus": {
     defaultMessage: "Issued; deployment not verified",

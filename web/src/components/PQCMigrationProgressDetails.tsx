@@ -53,8 +53,16 @@ export function PQCMigrationProgressDetails({ progress, assets, loading = false 
           ) : (
             <span>{t("posture.pqcMigration.certificateUnreported")}</span>
           )}
-          {row.target_algorithm ? <span>{t("posture.pqcMigration.requestedAlgorithm", { algorithm: row.target_algorithm })}</span> : null}
-          {row.effective_algorithm ? <span>{t("posture.pqcMigration.effectiveAlgorithm", { algorithm: row.effective_algorithm })}</span> : null}
+          {row.status === "rolled_back" && row.finding_kind === "certificate-key" ? (
+            <span>
+              {t("posture.pqcMigration.originalCertificateRestored", { algorithm: row.effective_algorithm || t("posture.pqcMigration.groupUnreported") })}
+            </span>
+          ) : (
+            <>
+              {row.target_algorithm ? <span>{t("posture.pqcMigration.requestedAlgorithm", { algorithm: row.target_algorithm })}</span> : null}
+              {row.effective_algorithm ? <span>{t("posture.pqcMigration.effectiveAlgorithm", { algorithm: row.effective_algorithm })}</span> : null}
+            </>
+          )}
           {row.host_readback ? (
             <>
               <span>
@@ -68,7 +76,21 @@ export function PQCMigrationProgressDetails({ progress, assets, loading = false 
               <CredentialChip value={row.host_readback.evidence_digest} label={t("posture.pqcMigration.signedReadbackDigest")} />
               <CredentialChip value={row.host_readback.receipt_signer_fingerprint} label={t("posture.pqcMigration.agentSignerFingerprint")} />
             </>
-          ) : row.finding_kind !== "certificate-key" && (row.status === "applied" || row.status === "rolled_back") ? (
+          ) : null}
+          {row.certificate_readback ? (
+            <>
+              <span>
+                {t("posture.pqcMigration.certificateServedReadback", {
+                  address: row.certificate_readback.transcript.Address,
+                  agent: row.certificate_readback.agent_id,
+                })}
+              </span>
+              <CredentialChip value={row.certificate_readback.transcript.ObservedFingerprint} label={t("posture.pqcMigration.servedLeafFingerprint")} />
+              <CredentialChip value={row.certificate_readback.evidence_digest} label={t("posture.pqcMigration.signedReadbackDigest")} />
+              <CredentialChip value={row.certificate_readback.receipt_signer_fingerprint} label={t("posture.pqcMigration.agentSignerFingerprint")} />
+            </>
+          ) : null}
+          {!row.host_readback && !row.certificate_readback && (row.status === "applied" || row.status === "rolled_back") ? (
             <span className="text-sm text-destructive">{t("posture.pqcMigration.signedReadbackMissing")}</span>
           ) : null}
         </div>

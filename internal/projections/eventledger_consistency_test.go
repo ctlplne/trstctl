@@ -73,6 +73,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventIdentityIssued:                           "EventIdentityIssued",
 	projections.EventFirstIssuanceRetryRequested:              "EventFirstIssuanceRetryRequested",
 	projections.EventIdentityDeployed:                         "EventIdentityDeployed",
+	projections.EventIdentityUndeployed:                       "EventIdentityUndeployed",
 	projections.EventIdentityRenewing:                         "EventIdentityRenewing",
 	projections.EventIdentityRenewed:                          "EventIdentityRenewed",
 	projections.EventIdentityRevoked:                          "EventIdentityRevoked",

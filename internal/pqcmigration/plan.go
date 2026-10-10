@@ -15,30 +15,43 @@ const (
 	TargetMLDSA65      = string(eepqc.MLDSA65)
 	EffectiveHybridTLS = eepqc.HybridMLDSA44ECDSAP256Algorithm
 	ProtocolACME       = "acme"
+	ProtocolHostCSR    = "host-csr"
 	HybridTLSGroup     = "X25519MLKEM768"
 )
 
 type Asset struct {
-	ID                string
-	Kind              string
-	Location          string
-	Algorithm         string
-	KeyBits           int
-	Protocol          string
-	Cipher            string
-	Library           string
-	Strength          string
-	QuantumVulnerable bool
-	OutOfPolicy       bool
-	Reasons           []string
+	ID                     string
+	CertificateFingerprint string
+	Kind                   string
+	Location               string
+	Algorithm              string
+	KeyBits                int
+	Protocol               string
+	Cipher                 string
+	Library                string
+	Strength               string
+	QuantumVulnerable      bool
+	OutOfPolicy            bool
+	Reasons                []string
 }
 
 type Request struct {
-	AssetIDs          []string
-	TargetAlgorithm   string
-	Protocol          string
-	RollbackOnFailure bool
-	TLSBindings       []TLSBinding
+	AssetIDs            []string
+	TargetAlgorithm     string
+	Protocol            string
+	RollbackOnFailure   bool
+	TLSBindings         []TLSBinding
+	CertificateBindings []CertificateBinding
+}
+
+// CertificateBinding joins one observed public key to a tenant-owned identity
+// and a host target. The identity supplies owner, profile, issuer and reviewed
+// subject choice; the target supplies the exact enrolled host agent and
+// independent served-listener address.
+type CertificateBinding struct {
+	AssetID    string
+	IdentityID string
+	TargetID   string
 }
 
 // TLSBinding is operator-authored intent binding exactly one selected TLS
@@ -52,6 +65,8 @@ type TLSBinding struct {
 
 type Reissue struct {
 	Asset              Asset
+	IdentityID         string
+	TargetID           string
 	TargetAlgorithm    string
 	EffectiveAlgorithm string
 	Protocol           string
@@ -94,14 +109,29 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 	if req.TargetAlgorithm != TargetMLDSA65 {
 		return Plan{}, fmt.Errorf("pqcmigration: certificate-key migration target must be %s", TargetMLDSA65)
 	}
-	if protocol != ProtocolACME {
-		return Plan{}, fmt.Errorf("pqcmigration: certificate-key migration protocol must be %s", ProtocolACME)
+	if protocol != ProtocolACME && protocol != ProtocolHostCSR {
+		return Plan{}, fmt.Errorf("pqcmigration: migration protocol must be %s or %s", ProtocolACME, ProtocolHostCSR)
 	}
 	byID := make(map[string]Asset, len(assets))
 	for _, asset := range assets {
 		byID[asset.ID] = asset
 	}
 	bindings := make(map[string]TLSBinding, len(req.TLSBindings))
+	certBindings := make(map[string]CertificateBinding, len(req.CertificateBindings))
+	usedTargets := make(map[string]string, len(req.CertificateBindings))
+	for _, binding := range req.CertificateBindings {
+		if binding.AssetID == "" || binding.IdentityID == "" || binding.TargetID == "" {
+			return Plan{}, fmt.Errorf("pqcmigration: certificate binding requires asset_id, identity_id, and target_id")
+		}
+		if _, duplicate := certBindings[binding.AssetID]; duplicate {
+			return Plan{}, fmt.Errorf("pqcmigration: certificate finding %s has more than one binding", binding.AssetID)
+		}
+		if first := usedTargets[binding.TargetID]; first != "" {
+			return Plan{}, fmt.Errorf("pqcmigration: findings %s and %s cannot change the same certificate target in one run", first, binding.AssetID)
+		}
+		certBindings[binding.AssetID] = binding
+		usedTargets[binding.TargetID] = binding.AssetID
+	}
 	targetPostures := make(map[string]connector.TLSPosture, len(req.TLSBindings))
 	for _, binding := range req.TLSBindings {
 		if binding.AssetID == "" || binding.TargetID == "" {
@@ -109,6 +139,9 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 		}
 		if _, duplicate := bindings[binding.AssetID]; duplicate {
 			return Plan{}, fmt.Errorf("pqcmigration: TLS finding %s has more than one target binding", binding.AssetID)
+		}
+		if first := usedTargets[binding.TargetID]; first != "" {
+			return Plan{}, fmt.Errorf("pqcmigration: certificate finding %s and TLS finding %s cannot change the same target in one run", first, binding.AssetID)
 		}
 		if err := validateDesiredPQCPosture(binding.Desired); err != nil {
 			return Plan{}, fmt.Errorf("pqcmigration: TLS binding for %s: %w", binding.AssetID, err)
@@ -138,10 +171,22 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 			if !asset.QuantumVulnerable {
 				return Plan{}, fmt.Errorf("pqcmigration: asset %s is already post-quantum-ready", id)
 			}
+			binding, bound := certBindings[id]
+			if !bound {
+				return Plan{}, fmt.Errorf("pqcmigration: certificate-key asset %s has no host identity and target binding", id)
+			}
+			if asset.CertificateFingerprint == "" {
+				return Plan{}, fmt.Errorf("pqcmigration: certificate-key asset %s has no observed leaf fingerprint", id)
+			}
+			if protocol != "host-csr" {
+				return Plan{}, fmt.Errorf("pqcmigration: certificate-key asset %s requires protocol host-csr", id)
+			}
 			plan.Reissues = append(plan.Reissues, Reissue{
 				Asset:              cloneAsset(asset),
+				IdentityID:         binding.IdentityID,
+				TargetID:           binding.TargetID,
 				TargetAlgorithm:    req.TargetAlgorithm,
-				EffectiveAlgorithm: EffectiveHybridTLS,
+				EffectiveAlgorithm: TargetMLDSA65,
 				Protocol:           protocol,
 				RollbackOnFailure:  req.RollbackOnFailure,
 			})
@@ -173,6 +218,11 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 	for assetID := range bindings {
 		if !selected[assetID] {
 			return Plan{}, fmt.Errorf("pqcmigration: TLS binding for unselected asset %s is not allowed", assetID)
+		}
+	}
+	for assetID := range certBindings {
+		if !selected[assetID] {
+			return Plan{}, fmt.Errorf("pqcmigration: certificate binding for unselected asset %s is not allowed", assetID)
 		}
 	}
 	if len(plan.Reissues)+len(plan.TLSRollouts) != len(req.AssetIDs) {

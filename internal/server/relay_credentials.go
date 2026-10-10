@@ -379,9 +379,12 @@ type RelayDeployIntent struct {
 	// it likes; it may not choose what that key gets to be called.
 	// SubjectKeyAlgorithm pins the reviewed subject choice, independently of
 	// allowed profile algorithms. The signer refuses a different algorithm.
-	SubjectKeyAlgorithm string   `json:"subject_key_algorithm,omitempty"`
-	SubjectCommonName   string   `json:"subject_common_name,omitempty"`
-	SubjectDNSNames     []string `json:"subject_dns_names,omitempty"`
+	SubjectKeyAlgorithm       string   `json:"subject_key_algorithm,omitempty"`
+	SubjectCommonName         string   `json:"subject_common_name,omitempty"`
+	SubjectDNSNames           []string `json:"subject_dns_names,omitempty"`
+	PQCRunID                  string   `json:"pqc_run_id,omitempty"`
+	PQCAssetID                string   `json:"pqc_asset_id,omitempty"`
+	PQCPredecessorFingerprint string   `json:"pqc_predecessor_fingerprint,omitempty"`
 	// PredecessorCertificateID is the certificate this renewal replaces (B2).
 	//
 	// It travels in the payload because the control plane must know it when the
@@ -497,11 +500,12 @@ func relayDeployIntentFromSealed(job store.AgentJob) (RelayDeployIntent, error) 
 // to the management interface — because a relay still has to log in to
 // re-point a listener.
 type RelayRollbackIntent struct {
-	Connector    string          `json:"connector"`
-	Target       string          `json:"target"`
-	TargetID     string          `json:"target_id,omitempty"`
-	IdentityID   string          `json:"identity_id,omitempty"`
-	TargetConfig json.RawMessage `json:"target_config,omitempty"`
+	Connector      string          `json:"connector"`
+	Target         string          `json:"target"`
+	TargetID       string          `json:"target_id,omitempty"`
+	TargetRevision string          `json:"target_revision,omitempty"`
+	IdentityID     string          `json:"identity_id,omitempty"`
+	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
 	// PredecessorFingerprint names the installed object to bind back to.
 	PredecessorFingerprint string   `json:"predecessor_fingerprint"`
 	SuccessorFingerprint   string   `json:"successor_fingerprint,omitempty"`
@@ -509,6 +513,9 @@ type RelayRollbackIntent struct {
 	CredentialRefs         []string `json:"credential_refs,omitempty"`
 	VerifyAddress          string   `json:"verify_address,omitempty"`
 	VerifyServerName       string   `json:"verify_server_name,omitempty"`
+	PQCRunID               string   `json:"pqc_run_id,omitempty"`
+	PQCAssetID             string   `json:"pqc_asset_id,omitempty"`
+	RequiredAgentID        string   `json:"required_agent_id,omitempty"`
 }
 
 // projectRollbackIntent builds the agent's view of a rollback job.

@@ -458,6 +458,21 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if err := a.recordCertificateCustodyFromJob(ctx, info, claim, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "record signed certificate custody: %v", err)
 	}
+	if pqcCertificateJob(claim) {
+		if a.recordPQCCertificateResult == nil {
+			return nil, status.Error(codes.Internal, "PQC host certificate receiver is not configured")
+		}
+		if err := a.recordPQCCertificateResult(ctx, info.TenantID, agentID, claim, req,
+			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
+			return nil, status.Errorf(codes.Internal, "record signed PQC host certificate: %v", err)
+		}
+	}
+	if claim.Destination == agentJobKindEndpointRenew && a.recordPQCCertificateRenewalResult != nil {
+		if err := a.recordPQCCertificateRenewalResult(ctx, info.TenantID, agentID, claim, req,
+			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
+			return nil, status.Errorf(codes.Internal, "record signed PQC host renewal: %v", err)
+		}
+	}
 
 	if receiptErr := a.recordAgentConnectorDelivery(ctx, info, claim, req); receiptErr != nil {
 		return nil, status.Errorf(codes.Internal, "record signed agent connector delivery: %v", receiptErr)
@@ -745,6 +760,13 @@ func (a *agentService) ingestExecutedReport(
 		if req.Outcome != transport.JobOutcomeVerified && req.Outcome != transport.JobOutcomeVerifyFailed {
 			return nil
 		}
+		if pqcCertificateRollbackJob(claim) {
+			if a.recordPQCCertificateRollbackResult == nil {
+				return errors.New("PQC host certificate rollback receiver is not configured")
+			}
+			return a.recordPQCCertificateRollbackResult(ctx, info.TenantID, agentID, claim, req,
+				string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256)
+		}
 		if a.recordDeployVerification == nil {
 			return errors.New("deployment verification receiver is not configured")
 		}
@@ -868,6 +890,9 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 			return nil, status.Errorf(codes.Internal, "ingest signed failed PQC host posture: %v", err)
 		}
 	}
+	if err := a.recordFailedPQCCertificateResult(ctx, info, agentID, claim, req); err != nil {
+		return nil, err
+	}
 	if claim.Destination == relay.KindEndpointContain {
 		if err := a.recordEndpointContainmentFailure(ctx, info, claim, req); err != nil {
 			return nil, status.Errorf(codes.Internal, "record failed endpoint containment: %v", err)
@@ -965,6 +990,41 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
+}
+
+// recordFailedPQCCertificateResult keeps the signed certificate outcome and
+// its rollback lifecycle together before the failed claim is released.
+func (a *agentService) recordFailedPQCCertificateResult(ctx context.Context, info mtls.PeerCertInfo,
+	agentID string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+	if pqcCertificateJob(claim) {
+		if a.recordPQCCertificateResult == nil {
+			return status.Error(codes.Internal, "PQC host certificate receiver is not configured")
+		}
+		if err := a.recordPQCCertificateResult(ctx, info.TenantID, agentID, claim, req,
+			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
+			return status.Errorf(codes.Internal, "record failed PQC host certificate: %v", err)
+		}
+	}
+	if !pqcCertificateRollbackJob(claim) {
+		return nil
+	}
+	if a.recordPQCCertificateRollbackResult == nil {
+		return status.Error(codes.Internal, "PQC host certificate rollback receiver is not configured")
+	}
+	if err := a.recordPQCCertificateRollbackResult(ctx, info.TenantID, agentID, claim, req,
+		string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
+		return status.Errorf(codes.Internal, "record failed PQC host certificate rollback: %v", err)
+	}
+	if req.Outcome != transport.JobOutcomeVerified {
+		return nil
+	}
+	if a.completePQCCertificateRollbackLifecycle == nil {
+		return status.Error(codes.Internal, "PQC rollback lifecycle receiver is not configured")
+	}
+	if err := a.completePQCCertificateRollbackLifecycle(ctx, info.TenantID, claim.Payload); err != nil {
+		return status.Errorf(codes.Internal, "record verified PQC rollback lifecycle: %v", err)
+	}
+	return nil
 }
 
 // receiptSkew bounds how far a receipt's own timestamp may sit from the
@@ -1082,10 +1142,14 @@ func (a *agentService) validateCertificateCustodyReceipt(ctx context.Context, in
 		return "certificate custody differs from the renewal connector and authenticated agent"
 	}
 	cert, err := a.store.GetCertificateByFingerprint(ctx, info.TenantID, req.CredentialFingerprint)
+	issuanceSlot := req.Attempt
+	if intent.PQCRunID != "" {
+		issuanceSlot = 0
+	}
 	if err != nil || cert.KeyOrigin != string(custody.OriginHostAgent) ||
 		cert.KeyGeneratedBy != info.CommonName ||
 		!strings.HasPrefix(cert.IssuanceIdempotencyKey,
-			fmt.Sprintf("agentcsr:%d:%d:", req.JobID, req.Attempt)) {
+			fmt.Sprintf("agentcsr:%d:%d:", req.JobID, issuanceSlot)) {
 		return "certificate custody names no certificate issued for this renewal attempt"
 	}
 	return ""
@@ -1178,6 +1242,22 @@ func (a *agentService) recordCertificateCustodyFromJob(ctx context.Context, info
 		ReceiptSignature:         base64.StdEncoding.EncodeToString(req.Signature),
 		ReceiptSignerFingerprint: info.FingerprintSHA256,
 	})
+}
+
+func pqcCertificateJob(claim store.AgentJobResultClaim) bool {
+	if claim.Destination != agentJobKindEndpointRenew {
+		return false
+	}
+	var intent RelayDeployIntent
+	return json.Unmarshal(claim.Payload, &intent) == nil && intent.PQCRunID != ""
+}
+
+func pqcCertificateRollbackJob(claim store.AgentJobResultClaim) bool {
+	if claim.Destination != "connector.rollback" {
+		return false
+	}
+	var intent relay.RollbackIntent
+	return json.Unmarshal(claim.Payload, &intent) == nil && intent.PQCRunID != ""
 }
 
 func (a *agentService) recordAgentJobEvent(ctx context.Context, tenantID, eventType string, data map[string]any) {

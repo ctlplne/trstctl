@@ -924,6 +924,70 @@ func TestCompletedConnectorEffectAdvancesOwnershipReadyIdentityWithoutReplay(t *
 	}
 }
 
+func TestCompletedHostCSRIssuanceAdvancesRequestedIdentityWithoutDuplicateIssue(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	const identityID = "acacacac-acac-4cac-8cac-acacacacacad"
+	const ownerID = "bdbdbdbd-bdbd-4dbd-8dbd-bdbdbdbdbbde"
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "host CSR receipt tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertOwner(ctx, store.Owner{ID: ownerID, TenantID: tenantA, Kind: store.OwnerService,
+		Name: "host CSR owner"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertIdentity(ctx, store.Identity{ID: identityID, TenantID: tenantA,
+		Kind: store.KindX509Certificate, Name: "host-csr.example.test", OwnerID: ownerID,
+		Status: string(orchestrator.StateRequested)}); err != nil {
+		t.Fatal(err)
+	}
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s),
+		orchestrator.WithProjector(projections.New(s)))
+	if err := orch.TransitionAfterCompletedSideEffect(ctx, tenantA, identityID,
+		orchestrator.StateIssued, "signed host CSR receipt", "ca.issue"); err != nil {
+		t.Fatalf("record completed host CSR issuance: %v", err)
+	}
+	if state, err := orch.State(ctx, tenantA, identityID); err != nil || state != orchestrator.StateIssued {
+		t.Fatalf("host CSR identity state = %s, err=%v, want issued", state, err)
+	}
+	var retained events.Event
+	if err := log.Replay(ctx, 1, func(ev events.Event) error {
+		if ev.Type == projections.EventIdentityIssued {
+			retained = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if retained.SchemaVersion != projections.LifecycleCompletedSideEffectEventSchemaVersion {
+		t.Fatalf("host CSR receipt schema = v%d", retained.SchemaVersion)
+	}
+	var envelope struct {
+		SideEffect replayableTransitionSideEffect `json:"side_effect"`
+	}
+	if err := json.Unmarshal(retained.Data, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SideEffect.Destination != "ca.issue" || !envelope.SideEffect.Completed ||
+		envelope.SideEffect.IdempotencyKey == "" || len(envelope.SideEffect.Payload) != 0 {
+		t.Fatalf("host CSR receipt is not a closed issuance: %+v", envelope.SideEffect)
+	}
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil || healed != 0 {
+		t.Fatalf("completed host CSR reconciled %d issue intents: %v", healed, err)
+	}
+	var queued int
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'ca.issue'`, tenantA).Scan(&queued)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("completed host CSR queued %d duplicate CA issues", queued)
+	}
+}
+
 func TestReconcileOutboxRejectsNewLifecycleSideEffectEventWithoutReplayablePayload(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)

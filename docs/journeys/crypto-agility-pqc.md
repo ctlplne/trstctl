@@ -25,8 +25,9 @@ post-quantum target.
 > **In the console:** the `/posture` screen shows the CBOM cryptographic inventory, a
 > PQC readiness gauge (readiness % with quantum-vulnerable / PQC-ready / out-of-policy
 > counts), and the migration-orchestration panel that queues and can roll back a
-> migration run. Certificate-key rollback is inventory-only; it does not restore
-> a served certificate. See [The web console](../web-console.md).
+> migration run. An enrolled host with a retained encrypted predecessor can
+> restore and verify that exact served certificate; issuance-only historical
+> runs still have inventory-only rollback. See [The web console](../web-console.md).
 
 ## Before you start
 
@@ -118,16 +119,37 @@ post-quantum target.
    certificate was issued under. Profiles are covered in
    [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
-5. Start the Core PQC migration for certificate-key assets. Pick the
-   `certificate-key` asset ids from `GET /api/v1/cbom/assets` whose
-   migration target is `ML-DSA-65`, then queue the migration through the API:
+5. Prepare a host-bound certificate migration. The selected CBOM
+   `certificate-key` asset must contain the SHA-256 fingerprint of the leaf
+   actually served at its `location`. Register an enabled host-agent connector
+   target with `cert_path`, `key_path`, `verify_address` equal to that location,
+   `verify_server_name` equal to the certificate DNS name, and an enrolled
+   `required_agent_id`. The host execution profile must allow both file paths
+   and, for an ML-DSA TLS listener, name a local OpenSSL 3.5 executable through
+   `tls_probe_openssl`.
+
+   Create an active certificate profile allowing `ML-DSA-65`, `serverAuth`,
+   the DNS suffix, and the `api` protocol. Create an X.509 identity in
+   `requested` state for that name and owner. Its attributes must pin
+   `deployment_target_id`, `profile_name`, `subject_key_algorithm: ML-DSA-65`,
+   `issuing_authority_source`, and `issuing_authority_id`; bind it to the target
+   with `POST /api/v1/identities/{id}/connector-target`. The selected issuing
+   authority must be the platform CA or a signer-backed managed private CA.
+   A profile requiring distinct issuance approval needs its own approved
+   operation before use; migration start will not bypass that control.
+
+   Pick the observed asset ID from `GET /api/v1/cbom/assets`, then send the
+   same exact target and identity binding to plan and start:
 
    ```json
    {
      "asset_ids": ["<cbom-asset-id>"],
      "target_algorithm": "ML-DSA-65",
-     "protocol": "acme",
-     "rollback_on_failure": true
+     "protocol": "host-csr",
+     "rollback_on_failure": true,
+     "certificate_bindings": [
+       {"asset_id": "<cbom-asset-id>", "target_id": "<host-target-id>", "identity_id": "<requested-identity-id>"}
+     ]
    }
    ```
 
@@ -141,17 +163,18 @@ post-quantum target.
    ```
 
    The response returns a `run_id`, `queued`, `effective_algorithm`, and current
-   `migration_progress`. The outbox worker mints a `Hybrid-ML-DSA-44-ECDSA-P256`
-   transition certificate through the served ACME/protocol issuer, records
-   `protocol.issued` and `licensed_crypto.migration.asset_completed`, and updates
-   the run's issuance counters. It does not update observed CBOM posture without
-   a verified deployment or a new observation. The `trstctl-cli migration` commands drive it; PQC ships in the core
-   since 2026-09-20.
-   Preview and start refuse names denied by the active served profile before a
-   run is queued. For certificate-key assets, the current worker does not retain
-   the temporary CSR subject key or deploy the leaf; `issued` is an issuance
-   receipt only. Use the normal certificate lifecycle to install and independently
-   verify a replacement before marking a PQC campaign finding remediated.
+   `migration_progress`. The outbox routes an `endpoint.renew` job to the exact
+   enrolled host. The agent first checks the installed certificate and key
+   against the CBOM fingerprint and the served leaf, then seals that exact
+   predecessor in its encrypted local rollback store. It generates and keeps
+   the ML-DSA-65 subject key locally, sends only a CSR to the selected signer,
+   installs the returned leaf and key, and signs an independent TLS readback.
+   Only the verified signed result changes the CBOM finding to `applied`.
+   `trstctl-cli migration plan|start|status|rollback` drives the same Core API.
+   The normal host renewal path then rotates the deployed identity without
+   moving its subject key into the control plane. Each renewed served leaf gets
+   a new signed readback and CBOM fingerprint; rollback is bound to that latest
+   verified successor and the original pinned predecessor.
 
    For CBOM TLS endpoint and host-config findings, use the normal host-agent
    connector lifecycle, independently read the listener's effective TLS policy,
@@ -178,7 +201,8 @@ post-quantum target.
    namespace, so a container sidecar uses its container port rather than a
    port published on the Docker host.
 
-6. Inspect the rollback limit before broad rollout:
+6. Verify the served leaf independently with a stock TLS client, then exercise
+   rollback before broad rollout:
 
    ```json
    {
@@ -198,10 +222,16 @@ post-quantum target.
      -d @pqc-rollback.json
    ```
 
-   For certificate-key assets this records an inventory-only
-   `rollback_unverified` result. It does not restore a deployed leaf or prove
-   that a client accepts the predecessor. Restore through the normal connector
-   lifecycle, verify the served certificate independently, and rescan.
+   A host-bound certificate rollback queues a `connector.rollback` job to the
+   same agent and target revision. The agent restores the sealed original
+   certificate and key, probes the listener, and signs the readback. The run
+   becomes `rolled_back` and CBOM returns to its original facts only after that
+   receipt is accepted. The managed identity returns to `issued`: its leaf still
+   exists, but that leaf is no longer deployed. Read the served leaf again with
+   a stock client. A cold restart completes the lifecycle event if the control
+   plane stopped after the signed receipt and before that event. Older
+   issuance-only runs have no host predecessor and retain their truthful
+   `rollback_unverified` state.
 
 7. Set the renewal window the migration will ride on. Migration re-issues
    credentials, and lifecycle thresholds govern when renewal happens. Configure them:
@@ -217,8 +247,7 @@ post-quantum target.
 
    You should see `renew_before` (the window before expiry in which trstctl
    re-issues) and `alert_before` (when it warns) take effect. The PQC migration trigger
-   still uses the served issuance path directly; lifecycle scheduling controls ordinary
-   renewal pressure around it.
+   creates a managed identity; lifecycle scheduling controls later renewals.
 
 8. Keep what protects your secrets quantum-aware too. Secret material — including
    the key-encryption key that seals everything at rest — lives only in wipeable

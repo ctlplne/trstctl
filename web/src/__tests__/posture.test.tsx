@@ -25,6 +25,8 @@ const { apiMock } = vi.hoisted(() => ({
     startPQCMigration: vi.fn(),
     getPQCMigrationProgress: vi.fn(),
     rollbackPQCMigration: vi.fn(),
+    connectorTargets: vi.fn(),
+    identities: vi.fn(),
   },
 }));
 
@@ -427,6 +429,32 @@ describe("posture collector disclosures", () => {
     apiMock.startPQCMigration.mockReset();
     apiMock.getPQCMigrationProgress.mockReset();
     apiMock.rollbackPQCMigration.mockReset();
+    apiMock.connectorTargets.mockReset().mockResolvedValue({
+      items: [
+        {
+          id: "apache-1",
+          name: "Lab Apache",
+          connector: "apache",
+          enabled: true,
+          config: {
+            executor: "agent",
+            cert_path: "/lab/tls/apache.crt",
+            key_path: "/lab/tls/apache.key",
+            verify_address: "127.0.0.1:10443",
+            verify_server_name: "apache.partner-lab.example.com",
+          },
+        },
+      ],
+    });
+    apiMock.identities.mockReset().mockResolvedValue([
+      {
+        id: "identity-1",
+        kind: "x509_certificate",
+        status: "requested",
+        name: "apache.partner-lab.example.com",
+        attributes: { subject_key_algorithm: "ML-DSA-65", deployment_target_id: "apache-1" },
+      },
+    ]);
   });
 
   it("leads with the upgrade decision and keeps collector machinery behind named disclosures", async () => {
@@ -792,7 +820,7 @@ describe("posture collector disclosures", () => {
     await renderPosture();
     await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
     expect(screen.getByRole("heading", { name: "PQC migration workflow" })).toBeInTheDocument();
-    expect(screen.getByText(/Certificate-key reissue only proves issuance; it does not deploy or retain the subject key/)).toBeInTheDocument();
+    expect(screen.getByText(/The host agent retains the subject key and original certificate for verified rollback/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview migration plan" })).toBeDisabled();
     expect(apiMock.editions).not.toHaveBeenCalled();
     expect(apiMock.planPQCMigration).not.toHaveBeenCalled();
@@ -812,7 +840,7 @@ describe("posture collector disclosures", () => {
         {
           id: "11111111-1111-1111-1111-111111111111",
           kind: "certificate-key",
-          location: "legacy mesh edge",
+          location: "127.0.0.1:10443",
           algorithm: "RSA",
           key_bits: 1024,
           migration_generation: "wave-0",
@@ -829,11 +857,11 @@ describe("posture collector disclosures", () => {
       reissues: [
         {
           asset_id: "11111111-1111-1111-1111-111111111111",
-          location: "legacy mesh edge",
+          location: "127.0.0.1:10443",
           current_algorithm: "RSA-1024",
           target_algorithm: "ML-DSA-65",
-          effective_algorithm: "hybrid",
-          protocol: "acme",
+          effective_algorithm: "ML-DSA-65",
+          protocol: "host-csr",
           rollback_on_failure: true,
         },
       ],
@@ -848,8 +876,8 @@ describe("posture collector disclosures", () => {
       certificate_reissues_queued: 1,
       tls_findings_queued: 0,
       target_algorithm: "ML-DSA-65",
-      effective_algorithm: "hybrid",
-      protocol: "acme",
+      effective_algorithm: "ML-DSA-65",
+      protocol: "host-csr",
       rollback_configured: true,
       migration_progress: {
         total_assets: 2,
@@ -888,28 +916,32 @@ describe("posture collector disclosures", () => {
     const user = userEvent.setup();
     await renderPosture();
     await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
-    await user.click(screen.getByRole("checkbox", { name: "Select legacy mesh edge for PQC migration" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select 127.0.0.1:10443 for PQC migration" }));
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Deployment target for 127.0.0.1:10443" }), "apache-1");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Requested identity for 127.0.0.1:10443" }), "identity-1");
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
     await waitFor(() =>
       expect(apiMock.planPQCMigration).toHaveBeenCalledWith({
         asset_ids: ["11111111-1111-1111-1111-111111111111"],
         target_algorithm: "ML-DSA-65",
-        protocol: "acme",
+        protocol: "host-csr",
         rollback_on_failure: true,
+        certificate_bindings: [{ asset_id: "11111111-1111-1111-1111-111111111111", target_id: "apache-1", identity_id: "identity-1" }],
       }),
     );
 
     const startButton = await screen.findByRole("button", { name: "Start migration" });
     expect(startButton).toBeDisabled();
-    expect(screen.getByText("Certificate issuances (not deployed)")).toBeInTheDocument();
-    await user.click(screen.getByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
+    expect(screen.getByText("Host certificate rollouts")).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /Completion requires a signed readback/ }));
     await user.click(startButton);
     expect(await screen.findByText("Migration run run-pqc-1 queued")).toBeInTheDocument();
     expect(apiMock.startPQCMigration).toHaveBeenCalledWith({
       asset_ids: ["11111111-1111-1111-1111-111111111111"],
       target_algorithm: "ML-DSA-65",
-      protocol: "acme",
+      protocol: "host-csr",
       rollback_on_failure: true,
+      certificate_bindings: [{ asset_id: "11111111-1111-1111-1111-111111111111", target_id: "apache-1", identity_id: "identity-1" }],
     });
 
     await user.click(screen.getByRole("button", { name: "Refresh progress" }));
@@ -918,14 +950,7 @@ describe("posture collector disclosures", () => {
     expect(apiMock.getPQCMigrationProgress).toHaveBeenCalledWith("run-pqc-1");
 
     await user.click(screen.getByRole("checkbox", { name: /I reviewed the current run evidence/ }));
-    await user.click(screen.getByRole("button", { name: "Queue rollback" }));
-    await waitFor(() =>
-      expect(apiMock.rollbackPQCMigration).toHaveBeenCalledWith(
-        "run-pqc-1",
-        ["11111111-1111-1111-1111-111111111111"],
-        "operator rollback from the Posture console",
-      ),
-    );
-    expect(await screen.findByText("1 rollback actions queued")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Queue rollback" })).toBeDisabled();
+    expect(apiMock.rollbackPQCMigration).not.toHaveBeenCalled();
   });
 });

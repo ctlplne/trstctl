@@ -3,6 +3,7 @@
 package relay
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,12 +59,279 @@ type hostRollbackSnapshot struct {
 }
 
 type hostRollbackState struct {
-	Version   int                   `json:"version"`
-	TenantID  string                `json:"tenant_id"`
-	Connector string                `json:"connector"`
-	TargetID  string                `json:"target_id"`
-	Active    *hostRollbackSnapshot `json:"active,omitempty"`
-	Previous  *hostRollbackSnapshot `json:"previous,omitempty"`
+	Version    int                   `json:"version"`
+	TenantID   string                `json:"tenant_id"`
+	Connector  string                `json:"connector"`
+	TargetID   string                `json:"target_id"`
+	Active     *hostRollbackSnapshot `json:"active,omitempty"`
+	Previous   *hostRollbackSnapshot `json:"previous,omitempty"`
+	PQCRunID   string                `json:"pqc_run_id,omitempty"`
+	PQCPinned  *hostRollbackSnapshot `json:"pqc_pinned,omitempty"`
+	PQCPending *hostPQCPending       `json:"pqc_pending,omitempty"`
+}
+
+// A pending host CSR stays encrypted on this machine until the signed terminal
+// report is accepted. A reclaimed job reuses the same key and certificate.
+type hostPQCPending struct {
+	RunID       string `json:"run_id"`
+	AssetID     string `json:"asset_id"`
+	CSRDER      []byte `json:"csr_der"`
+	KeyPEM      []byte `json:"key_pem"`
+	CertPEM     []byte `json:"cert_pem,omitempty"`
+	ChainPEM    []byte `json:"chain_pem,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+func clonePQCPending(in *hostPQCPending) *hostPQCPending {
+	if in == nil {
+		return nil
+	}
+	return &hostPQCPending{RunID: in.RunID, AssetID: in.AssetID,
+		CSRDER: append([]byte(nil), in.CSRDER...), KeyPEM: append([]byte(nil), in.KeyPEM...),
+		CertPEM: append([]byte(nil), in.CertPEM...), ChainPEM: append([]byte(nil), in.ChainPEM...), Fingerprint: in.Fingerprint}
+}
+
+func wipePQCPending(in *hostPQCPending) {
+	if in == nil {
+		return
+	}
+	secret.Wipe(in.CSRDER)
+	secret.Wipe(in.KeyPEM)
+	secret.Wipe(in.CertPEM)
+	secret.Wipe(in.ChainPEM)
+}
+
+// LoadPQCPending returns an owned copy which the caller must wipe. It refuses
+// another run or asset while a signed outcome is unresolved.
+func (s *HostRollbackStore) LoadPQCPending(connectorName, targetID, runID, assetID string) (*hostPQCPending, error) {
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer wipeHostRollbackState(state)
+	if state.PQCRunID != runID || state.PQCPinned == nil {
+		return nil, ErrHostRollbackStateMismatch
+	}
+	if state.PQCPending != nil && (state.PQCPending.RunID != runID || state.PQCPending.AssetID != assetID) {
+		return nil, ErrHostRollbackStateMismatch
+	}
+	return clonePQCPending(state.PQCPending), nil
+}
+
+func (s *HostRollbackStore) RecordPQCKey(connectorName, targetID, runID, assetID string, csrDER, keyPEM []byte) error {
+	if runID == "" || assetID == "" || len(csrDER) == 0 || len(keyPEM) == 0 {
+		return errors.New("relay: pending PQC key is incomplete")
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.PQCRunID != runID || state.PQCPinned == nil {
+		return ErrHostRollbackStateMismatch
+	}
+	if pending := state.PQCPending; pending != nil {
+		if pending.RunID != runID || pending.AssetID != assetID || !bytes.Equal(pending.CSRDER, csrDER) || !bytes.Equal(pending.KeyPEM, keyPEM) {
+			return ErrHostRollbackStateMismatch
+		}
+		return nil
+	}
+	state.PQCPending = &hostPQCPending{RunID: runID, AssetID: assetID, CSRDER: append([]byte(nil), csrDER...), KeyPEM: append([]byte(nil), keyPEM...)}
+	return s.save(state)
+}
+
+func (s *HostRollbackStore) RecordPQCCertificate(connectorName, targetID, runID, assetID string, certPEM, chainPEM []byte, fingerprint string) error {
+	if len(certPEM) == 0 || fingerprint == "" {
+		return errors.New("relay: pending PQC certificate is incomplete")
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	p := state.PQCPending
+	if state.PQCRunID != runID || p == nil || p.RunID != runID || p.AssetID != assetID {
+		return ErrHostRollbackStateMismatch
+	}
+	if len(p.CertPEM) != 0 {
+		if !bytes.Equal(p.CertPEM, certPEM) || !bytes.Equal(p.ChainPEM, chainPEM) || p.Fingerprint != fingerprint {
+			return ErrHostRollbackStateMismatch
+		}
+		return nil
+	}
+	p.CertPEM = append([]byte(nil), certPEM...)
+	p.ChainPEM = append([]byte(nil), chainPEM...)
+	p.Fingerprint = fingerprint
+	return s.save(state)
+}
+
+func (s *HostRollbackStore) ClearPQCPending(connectorName, targetID, runID, assetID string) error {
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.PQCRunID != runID || state.PQCPending == nil || state.PQCPending.AssetID != assetID {
+		return ErrHostRollbackStateMismatch
+	}
+	wipePQCPending(state.PQCPending)
+	state.PQCPending = nil
+	return s.save(state)
+}
+
+func (s *HostRollbackStore) HasPQCPredecessor(connectorName, targetID, runID, fingerprint string) (bool, error) {
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer wipeHostRollbackState(state)
+	if state.PQCRunID == "" {
+		return false, nil
+	}
+	return state.PQCRunID == runID && state.PQCPinned != nil && sameHostRollbackFingerprint(state.PQCPinned.Fingerprint, fingerprint), nil
+}
+
+// PinPQCPredecessor seals a certificate and key already installed on an
+// operator-owned host before a first managed replacement. A later deploy must
+// never manufacture its rollback predecessor from the newly issued material.
+
+// The run-pinned snapshot survives ordinary two-generation renewal rotation
+// until an exact, independently verified rollback clears it. A different run
+// cannot overwrite an unresolved predecessor.
+func (s *HostRollbackStore) PinPQCPredecessor(connectorName, targetID, runID, fingerprint string, certPEM, keyPEM []byte) error {
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(runID) == "" {
+		return errors.New("relay: PQC predecessor pin requires a run id")
+	}
+	if len(certPEM) == 0 || len(keyPEM) == 0 {
+		return errors.New("relay: predecessor adoption requires certificate and private-key bytes")
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if state != nil {
+		defer wipeHostRollbackState(state)
+		if state.PQCRunID != "" {
+			if state.PQCRunID != runID || state.PQCPinned == nil ||
+				state.PQCPinned.Fingerprint != fingerprint || !bytes.Equal(state.PQCPinned.CertPEM, certPEM) || !bytes.Equal(state.PQCPinned.KeyPEM, keyPEM) {
+				return ErrHostRollbackStateMismatch
+			}
+			return nil
+		}
+		if state.Active == nil || state.Active.Fingerprint != fingerprint || !bytes.Equal(state.Active.CertPEM, certPEM) || !bytes.Equal(state.Active.KeyPEM, keyPEM) {
+			return ErrHostRollbackStateMismatch
+		}
+		state.PQCRunID = runID
+		state.PQCPinned = cloneHostRollbackSnapshot(state.Active)
+		return s.save(state)
+	}
+	state = &hostRollbackState{
+		Version: hostRollbackStateVersion, TenantID: s.tenantID,
+		Connector: connectorName, TargetID: targetID, PQCRunID: runID,
+		Active: &hostRollbackSnapshot{
+			Fingerprint: fingerprint,
+			CertPEM:     append([]byte(nil), certPEM...),
+			KeyPEM:      append([]byte(nil), keyPEM...),
+		},
+	}
+	state.PQCPinned = cloneHostRollbackSnapshot(state.Active)
+	defer wipeHostRollbackState(state)
+	return s.save(state)
+}
+
+// RestorePQC borrows the pinned pre-migration bundle and makes it active only
+// after independent listener verification. The pin stays until the signed
+// result is accepted by the control plane, so a report crash is retryable.
+func (s *HostRollbackStore) RestorePQC(connectorName, targetID, runID, fingerprint string, fn func(certPEM, keyPEM []byte) (bool, error)) error {
+	if fn == nil || strings.TrimSpace(runID) == "" {
+		return errors.New("relay: PQC restore requires run id and callback")
+	}
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ErrHostRollbackPredecessorMissing
+	}
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.PQCRunID != runID || state.PQCPinned == nil || state.PQCPinned.Fingerprint != fingerprint {
+		return ErrHostRollbackPredecessorMissing
+	}
+	commit, err := fn(state.PQCPinned.CertPEM, state.PQCPinned.KeyPEM)
+	if err != nil || !commit {
+		return err
+	}
+	if state.Active.Fingerprint != fingerprint {
+		wipeHostRollbackSnapshot(state.Previous)
+		state.Previous = state.Active
+		state.Active = cloneHostRollbackSnapshot(state.PQCPinned)
+	}
+	return s.save(state)
+}
+
+func (s *HostRollbackStore) FinalizePQCRestore(connectorName, targetID, runID, fingerprint string) error {
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.PQCRunID != runID || state.PQCPinned == nil || state.Active == nil ||
+		state.PQCPinned.Fingerprint != fingerprint || state.Active.Fingerprint != fingerprint {
+		return ErrHostRollbackStateMismatch
+	}
+	wipeHostRollbackSnapshot(state.PQCPinned)
+	state.PQCPinned = nil
+	state.PQCRunID = ""
+	wipePQCPending(state.PQCPending)
+	state.PQCPending = nil
+	return s.save(state)
+}
+
+func cloneHostRollbackSnapshot(in *hostRollbackSnapshot) *hostRollbackSnapshot {
+	if in == nil {
+		return nil
+	}
+	return &hostRollbackSnapshot{Fingerprint: in.Fingerprint,
+		CertPEM: append([]byte(nil), in.CertPEM...), KeyPEM: append([]byte(nil), in.KeyPEM...)}
 }
 
 // NewHostRollbackStore prepares and validates one machine-local ledger root.
@@ -330,4 +598,8 @@ func wipeHostRollbackState(state *hostRollbackState) {
 	if state.Previous != state.Active {
 		wipeHostRollbackSnapshot(state.Previous)
 	}
+	if state.PQCPinned != state.Active && state.PQCPinned != state.Previous {
+		wipeHostRollbackSnapshot(state.PQCPinned)
+	}
+	wipePQCPending(state.PQCPending)
 }

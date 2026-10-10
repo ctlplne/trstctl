@@ -86,6 +86,15 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			"this agent has no host exec profile configured for file and reload deploys")
 		return false
 	}
+	// Go's TLS client cannot authenticate a pure ML-DSA server leaf. Require
+	// the operator-pinned native probe before taking custody of the predecessor
+	// or changing the listener; otherwise a real successful deploy is reported
+	// as failed and the original files may already have been replaced.
+	if intent.PQCRunID != "" && intent.SubjectKeyAlgorithm == "ML-DSA-65" && profile.TLSProbeOpenSSL == "" {
+		report(ctx, ch, job, OutcomeFailed,
+			"PQC host migration requires tls_probe_openssl in the host execution profile before deployment")
+		return false
+	}
 
 	names := renewalSubjectNames(intent)
 	if len(names) == 0 {
@@ -117,19 +126,61 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			return false
 		}
 	}
-
-	key, err := generateHostRenewSubjectKey(intent)
-	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "a subject key could not be generated on this host")
+	if err := adoptPQCPredecessor(ctx, profile, hostRollback, intent); err != nil {
+		report(ctx, ch, job, OutcomeFailed, "PQC predecessor cannot be retained before issuance: "+err.Error())
 		return false
 	}
-	// The key's life ends here on EVERY path out, including a panic inside a
-	// connector. This defer is the load-bearing line of the file: it is what
-	// makes "the private half never outlives the deploy" a property of the code
-	// rather than a claim in a document.
-	defer key.Destroy()
 
-	certPEM, chainPEM, fingerprint, err := signHostCSR(ctx, signer, job, key.CSRDER, claim != nil)
+	var csrDER, certPEM, chainPEM []byte
+	var fingerprint string
+	var keyBuf *secret.Buffer
+	var pending *hostPQCPending
+	if intent.PQCRunID != "" {
+		pending, err = hostRollback.LoadPQCPending(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "PQC pending key could not be recovered")
+			return false
+		}
+		defer wipePQCPending(pending)
+	}
+	if pending != nil {
+		csrDER, certPEM, chainPEM, fingerprint = pending.CSRDER, pending.CertPEM, pending.ChainPEM, pending.Fingerprint
+		keyBuf, err = secret.NewFrom(pending.KeyPEM)
+	} else {
+		key, keyErr := generateHostRenewSubjectKey(intent)
+		if keyErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "a subject key could not be generated on this host")
+			return false
+		}
+		defer key.Destroy()
+		csrDER = key.CSRDER
+		// Move the exported PEM into locked memory before recording the pending
+		// job. The encrypted host ledger is the only durable copy of this key.
+		exported, exportErr := key.PrivateKeyPEM()
+		if exportErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "the generated key could not be exported for installation")
+			return false
+		}
+		keyBuf, err = secret.NewFrom(exported)
+		secret.Wipe(exported)
+		if err == nil && intent.PQCRunID != "" {
+			err = hostRollback.RecordPQCKey(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID, csrDER, keyBuf.Bytes())
+		}
+	}
+	if err != nil {
+		if keyBuf != nil {
+			keyBuf.Destroy()
+		}
+		report(ctx, ch, job, OutcomeFailed, "host subject key could not be locked and retained")
+		return false
+	}
+	defer keyBuf.Destroy()
+	if len(certPEM) == 0 {
+		certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, claim != nil)
+		if err == nil && intent.PQCRunID != "" {
+			err = hostRollback.RecordPQCCertificate(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID, certPEM, chainPEM, fingerprint)
+		}
+	}
 	if err != nil {
 		if transport.IsCSRValidityRefusal(err) {
 			report(ctx, ch, job, OutcomeFailed, transport.CSRValidityRefusalDetail)
@@ -156,28 +207,6 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		return false
 	}
 
-	exported, err := key.PrivateKeyPEM()
-	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "the generated key could not be exported for installation")
-		return false
-	}
-	// The exported PEM goes straight into a LOCKED buffer (AN-8), the same
-	// custody the redeemed-credential path gives appliance secrets in
-	// AdoptMaterial.
-	//
-	// PrivateKeyPEM hands back ordinary heap memory — pem.EncodeToMemory
-	// allocates a plain []byte — so without this the private half of a key this
-	// epic exists to protect would spend its life swappable and dumpable, while
-	// every other secret the agent handles sits in mlock'd, MADV_DONTDUMP
-	// pages. The window is short, but "short" is not a memory-protection
-	// property, and a host that swaps during a deploy writes the key to disk.
-	keyBuf, err := secret.NewFrom(exported)
-	secret.Wipe(exported)
-	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "the generated key could not be moved into locked memory")
-		return false
-	}
-	defer keyBuf.Destroy()
 	keyPEM := keyBuf.Bytes()
 
 	material := Material{
@@ -208,7 +237,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			"a certificate was issued for this host but could not be installed")
 		return false
 	}
-	if intent.MigrationRunID != "" && hostRollback == nil {
+	if (intent.MigrationRunID != "" || intent.PQCRunID != "") && hostRollback == nil {
 		report(ctx, ch, job, OutcomeFailed,
 			"migration renewal cannot retain its local predecessor for rollback")
 		return false
@@ -239,7 +268,14 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "the installed key custody could not be classified")
 		return false
 	}
-	reportWithEvidenceAndCustody(ctx, custodyReporter, job, outcome, detail, evidence, fingerprint, record)
+	accepted, reportErr := custodyReporter.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt,
+		outcome, detail, evidence, fingerprint, record)
+	logReportOutcome(job, outcome, accepted, reportErr)
+	if accepted && reportErr == nil && outcome == transport.OutcomeVerified && intent.PQCRunID != "" {
+		if err := hostRollback.ClearPQCPending(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID); err != nil {
+			return false
+		}
+	}
 	return outcome != OutcomeFailed
 }
 

@@ -94,6 +94,7 @@ const (
 	EventIdentityIssued                           = "identity.issued"
 	EventFirstIssuanceRetryRequested              = "issuance.retry_requested"
 	EventIdentityDeployed                         = "identity.deployed"
+	EventIdentityUndeployed                       = "identity.undeployed"
 	EventIdentityRenewing                         = "identity.renewing"
 	EventIdentityRenewed                          = "identity.renewed"
 	// A renewal that produced no new certificate, and the operator's later
@@ -248,6 +249,7 @@ var ledger = []FeatureEvent{
 	{"F4", "CA-agnostic outbound issuance", "retry_issuance", "retryFirstIssuance", []string{EventFirstIssuanceRetryRequested}},
 	{"F6", "Lifecycle automation", "create_identity", "createIdentity", []string{EventIdentityCreated}},
 	{"F6", "Lifecycle automation", "deploy", "transitionIdentity", []string{EventIdentityDeployed}},
+	{"F6", "Lifecycle automation", "rollback", "verifiedHostRollback", []string{EventIdentityUndeployed}},
 	{"F6", "Lifecycle automation", "renew", "transitionIdentity", []string{
 		EventIdentityRenewing, EventIdentityRenewed,
 		EventIdentityRenewalFailed, EventIdentityRenewalRecovered,

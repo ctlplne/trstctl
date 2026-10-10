@@ -20,7 +20,7 @@ func TestCustodyReceiptAndEvidencePackStayEndToEndAUD25(t *testing.T) {
 			"trstctl-agent-job-receipt/v2", "credential_fingerprint", "key_origin", "key_storage", "key_exportable", "key_generated_by",
 		}},
 		{"../internal/agent/relay/hostrenew.go", []string{
-			"HostRenewCustody", "reportWithEvidenceAndCustody", "StorageOSStore", "StorageService", "StorageFile",
+			"HostRenewCustody", "ReportJobResultWithCustody", "StorageOSStore", "StorageService", "StorageFile",
 		}},
 		{"../internal/server/agent_jobs.go", []string{
 			"validateCertificateCustodyReceipt", "recordCertificateCustodyFromJob", "AttestCertificateCustody",

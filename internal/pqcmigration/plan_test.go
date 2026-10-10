@@ -6,22 +6,25 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/connector"
 )
 
-func TestPQCPlannerTargetsMLDSA65WithHybridEffectiveLeaf(t *testing.T) {
+func TestPQCPlannerTargetsHostMLDSA65WithExactObservedPredecessor(t *testing.T) {
 	plan, err := BuildPlan([]Asset{{
 		ID: "asset-rsa", Kind: string(cbom.AssetCertKey), Location: "payments.internal:443",
-		Algorithm: "RSA", KeyBits: 2048, Strength: "weak", QuantumVulnerable: true,
+		CertificateFingerprint: strings.Repeat("a", 64),
+		Algorithm:              "RSA", KeyBits: 2048, Strength: "weak", QuantumVulnerable: true,
 		Reasons: []string{"RSA is quantum-vulnerable"},
 	}}, Request{
-		AssetIDs:          []string{"asset-rsa"},
-		TargetAlgorithm:   TargetMLDSA65,
-		Protocol:          ProtocolACME,
-		RollbackOnFailure: true,
+		AssetIDs:            []string{"asset-rsa"},
+		TargetAlgorithm:     TargetMLDSA65,
+		Protocol:            ProtocolHostCSR,
+		RollbackOnFailure:   true,
+		CertificateBindings: []CertificateBinding{{AssetID: "asset-rsa", IdentityID: "identity-a", TargetID: "target-a"}},
 	})
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
@@ -30,10 +33,10 @@ func TestPQCPlannerTargetsMLDSA65WithHybridEffectiveLeaf(t *testing.T) {
 		t.Fatalf("reissues = %d, want 1", len(plan.Reissues))
 	}
 	got := plan.Reissues[0]
-	if got.TargetAlgorithm != TargetMLDSA65 || got.EffectiveAlgorithm != EffectiveHybridTLS || got.Protocol != ProtocolACME {
+	if got.TargetAlgorithm != TargetMLDSA65 || got.EffectiveAlgorithm != TargetMLDSA65 || got.Protocol != ProtocolHostCSR {
 		t.Fatalf("reissue target/effective/protocol = %q/%q/%q", got.TargetAlgorithm, got.EffectiveAlgorithm, got.Protocol)
 	}
-	if !got.RollbackOnFailure || got.Asset.ID != "asset-rsa" || got.Asset.Reasons[0] != "RSA is quantum-vulnerable" {
+	if !got.RollbackOnFailure || got.Asset.ID != "asset-rsa" || got.IdentityID != "identity-a" || got.TargetID != "target-a" || got.Asset.Reasons[0] != "RSA is quantum-vulnerable" {
 		t.Fatalf("reissue payload lost asset/rollback evidence: %+v", got)
 	}
 }

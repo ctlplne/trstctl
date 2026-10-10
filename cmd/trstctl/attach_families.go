@@ -285,6 +285,20 @@ func attachPQC(log *slog.Logger, deps *server.Deps) {
 	}
 	deps.PQCPostureJobOpen = hostPosture.OpenJob
 	deps.PQCPostureJobResult = hostPosture.RecordResult
+	deps.PQCCertificateJobResult = hostPosture.RecordCertificateResult
+	deps.PQCCertificateRenewalJobResult = hostPosture.RecordCertificateRenewalResult
+	deps.PQCCertificateRollbackJobResult = hostPosture.RecordCertificateRollbackResult
+	deps.PQCCertificateRollbackCandidates = func() []server.PQCRollbackLifecycleCandidate {
+		candidates := migrationRuntime.Progress.RollbackLifecycleCandidates()
+		out := make([]server.PQCRollbackLifecycleCandidate, 0, len(candidates))
+		for _, candidate := range candidates {
+			out = append(out, server.PQCRollbackLifecycleCandidate{
+				TenantID: candidate.TenantID, IdentityID: candidate.IdentityID, AssetID: candidate.AssetID,
+				PredecessorFingerprint: candidate.PredecessorFingerprint, EventSequence: candidate.EventSequence,
+			})
+		}
+		return out
+	}
 	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, migrationRuntime.APIOptionsFactory)
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, migrationRuntime.OutboxFactory)
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, migrationRuntime.ProjectionOptions...)

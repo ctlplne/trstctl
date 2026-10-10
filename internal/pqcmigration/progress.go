@@ -115,6 +115,7 @@ type FindingProgress struct {
 	Previous               *connector.TLSPosture `json:"previous,omitempty"`
 	Observed               *connector.TLSPosture `json:"observed,omitempty"`
 	HostReadback           *HostReadback         `json:"host_readback,omitempty"`
+	CertificateReadback    *CertificateReadback  `json:"certificate_readback,omitempty"`
 	Status                 string                `json:"status"`
 	Failure                string                `json:"failure,omitempty"`
 	UpdatedAt              time.Time             `json:"updated_at"`
@@ -149,9 +150,12 @@ type ProgressProjection struct {
 	items map[progressKey]FindingProgress
 	// Exact immutable event envelopes let the agent receipt path recover a
 	// predecessor or a prior signed outcome without rescanning the entire log.
-	preparedEvents  map[progressKey]eventspec.Event
-	completedEvents map[progressKey]eventspec.Event
-	rollbackEvents  map[progressRollbackKey]eventspec.Event
+	preparedEvents            map[progressKey]eventspec.Event
+	completedEvents           map[progressKey]eventspec.Event
+	rollbackEvents            map[progressRollbackKey]eventspec.Event
+	certificateEvents         map[progressKey]eventspec.Event
+	certificateRenewalEvents  map[progressKey]eventspec.Event
+	certificateRollbackEvents map[progressKey]eventspec.Event
 	// An append whose projection failed remains retryable in this process.
 	// After a restart the immutable log rebuilds the indexes above.
 	pendingEvents map[string]eventspec.Event
@@ -181,7 +185,10 @@ func NewProgressProjection(st *store.Store) *ProgressProjection {
 	return &ProgressProjection{store: st, items: map[progressKey]FindingProgress{},
 		preparedEvents: map[progressKey]eventspec.Event{}, completedEvents: map[progressKey]eventspec.Event{},
 		rollbackEvents: map[progressRollbackKey]eventspec.Event{}, pendingEvents: map[string]eventspec.Event{},
-		runStarts: map[progressRunKey]uint64{}}
+		certificateEvents:         map[progressKey]eventspec.Event{},
+		certificateRenewalEvents:  map[progressKey]eventspec.Event{},
+		certificateRollbackEvents: map[progressKey]eventspec.Event{},
+		runStarts:                 map[progressRunKey]uint64{}}
 }
 
 func WithProgressProjection(p *ProgressProjection) projections.Option {
@@ -199,6 +206,9 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	p.preparedEvents = map[progressKey]eventspec.Event{}
 	p.completedEvents = map[progressKey]eventspec.Event{}
 	p.rollbackEvents = map[progressRollbackKey]eventspec.Event{}
+	p.certificateEvents = map[progressKey]eventspec.Event{}
+	p.certificateRenewalEvents = map[progressKey]eventspec.Event{}
+	p.certificateRollbackEvents = map[progressKey]eventspec.Event{}
 	p.pendingEvents = map[string]eventspec.Event{}
 	p.runStarts = map[progressRunKey]uint64{}
 	p.mu.Unlock()
@@ -228,6 +238,24 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 			return err
 		}
 		p.applyCertificateIssued(ev, issued)
+	case EventCertificateFindingApplied:
+		var applied CertificateFindingApplied
+		if err := json.Unmarshal(ev.Data, &applied); err != nil {
+			return err
+		}
+		return p.applyCertificateApplied(ctx, ev, applied)
+	case EventCertificateFindingRenewed:
+		var renewed CertificateFindingRenewed
+		if err := json.Unmarshal(ev.Data, &renewed); err != nil {
+			return err
+		}
+		return p.applyCertificateRenewed(ctx, ev, renewed)
+	case EventCertificateFindingRolledBack:
+		var restored CertificateFindingRolledBack
+		if err := json.Unmarshal(ev.Data, &restored); err != nil {
+			return err
+		}
+		return p.applyCertificateRolledBack(ctx, ev, restored)
 	case projections.EventLicensedCryptoMigrationRollbackCompleted:
 		var restored projections.LicensedCryptoMigrationRollbackCompleted
 		if err := json.Unmarshal(ev.Data, &restored); err != nil {

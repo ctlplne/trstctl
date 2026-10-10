@@ -48,6 +48,33 @@ func TestLocalOpsExecutesOnlyExactOperatorProfile(t *testing.T) {
 	}
 }
 
+func TestReadLocalFileUsesHostAllowlistAndRefusesSymlink(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	insidePath := filepath.Join(root, "cert.pem")
+	outsidePath := filepath.Join(outside, "key.pem")
+	if err := os.WriteFile(insidePath, []byte("allowed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsidePath, []byte("forbidden"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	profile := LocalOpsConfig{AllowedRoots: []string{root}}
+	read, err := ReadLocalFile(profile, insidePath)
+	if err != nil || string(read) != "allowed" {
+		t.Fatalf("allowed read = %q, %v", read, err)
+	}
+	if _, err := ReadLocalFile(profile, outsidePath); err == nil {
+		t.Fatal("read outside operator root")
+	}
+	link := filepath.Join(root, "link.pem")
+	if err := os.Symlink(outsidePath, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadLocalFile(profile, link); err == nil {
+		t.Fatal("read through symlink")
+	}
+}
+
 func TestLocalOpsContainmentNeedsExplicitEmptyLogicalArgs(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {

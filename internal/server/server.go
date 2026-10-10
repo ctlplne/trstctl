@@ -232,6 +232,10 @@ type Deps struct {
 	// Nil callbacks refuse the job instead of accepting an unverifiable effect.
 	PQCPostureJobOpen                    func(context.Context, string, string, string, []byte) ([]byte, error)
 	PQCPostureJobResult                  func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	PQCCertificateJobResult              func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	PQCCertificateRenewalJobResult       func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	PQCCertificateRollbackJobResult      func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
+	PQCCertificateRollbackCandidates     func() []PQCRollbackLifecycleCandidate
 	LicensedBackgroundWorkers            []BackgroundWorker
 	LicensedProjectionOptions            []projections.Option
 	LicensedLeafSigner                   LicensedLeafSigner
@@ -1034,6 +1038,9 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	orch, idem, err := s.configureMutationSpine(ctx, d, proj)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.recoverPQCCertificateRollbackLifecycle(ctx, d.PQCCertificateRollbackCandidates); err != nil {
 		return nil, err
 	}
 	if err := configureProviderCommandSurface(&d, orch); err != nil {
@@ -2082,21 +2089,25 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// D5: an agent's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page. Control-plane previews write the same
 		// event-sourced receipt through the outbox dispatcher.
-		recordDryRun:               s.dryRunReceipt,
-		recordRollback:             s.rollbackReceipt,
-		recordADCSInventory:        s.recordADCSInventory,
-		recordRevocationHealth:     s.recordRevocationHealth,
-		recordMigrationResult:      s.recordMigrationResult,
-		openPQCPostureJob:          d.PQCPostureJobOpen,
-		recordPQCPostureResult:     d.PQCPostureJobResult,
-		recordCMDBSync:             s.recordCMDBSync,
-		recordCMDBSyncFailure:      s.recordCMDBSyncFailure,
-		recordMDMSync:              s.recordMDMSync,
-		recordDiscoveryScan:        s.recordDiscoveryScan,
-		recordTicketSync:           s.recordTicketSync,
-		recordTicketSyncFailure:    s.recordTicketSyncFailure,
-		recordEndpointVerification: s.recordEndpointVerificationSweep,
-		recordDeployVerification:   s.recordDeployVerification,
+		recordDryRun:                            s.dryRunReceipt,
+		recordRollback:                          s.rollbackReceipt,
+		recordADCSInventory:                     s.recordADCSInventory,
+		recordRevocationHealth:                  s.recordRevocationHealth,
+		recordMigrationResult:                   s.recordMigrationResult,
+		openPQCPostureJob:                       d.PQCPostureJobOpen,
+		recordPQCPostureResult:                  d.PQCPostureJobResult,
+		recordPQCCertificateResult:              d.PQCCertificateJobResult,
+		recordPQCCertificateRenewalResult:       d.PQCCertificateRenewalJobResult,
+		recordPQCCertificateRollbackResult:      d.PQCCertificateRollbackJobResult,
+		completePQCCertificateRollbackLifecycle: s.completePQCCertificateRollbackLifecycle,
+		recordCMDBSync:                          s.recordCMDBSync,
+		recordCMDBSyncFailure:                   s.recordCMDBSyncFailure,
+		recordMDMSync:                           s.recordMDMSync,
+		recordDiscoveryScan:                     s.recordDiscoveryScan,
+		recordTicketSync:                        s.recordTicketSync,
+		recordTicketSyncFailure:                 s.recordTicketSyncFailure,
+		recordEndpointVerification:              s.recordEndpointVerificationSweep,
+		recordDeployVerification:                s.recordDeployVerification,
 		// B2: the CSR that comes back UP from a host-generated renewal is signed
 		// through the SAME issuance dispatcher the control plane's own mints go
 		// through, so the profile gate, the CA and the certificate record cannot

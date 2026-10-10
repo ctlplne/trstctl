@@ -90,6 +90,65 @@ func TestHostRollbackStorePersistsEncryptedBoundedPredecessorAcrossRestart(t *te
 	}
 }
 
+func TestHostRollbackStorePinsExactUnmanagedPredecessorAcrossRenewal(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "host-rollbacks")
+	st, err := relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldCert, oldKey := []byte("unmanaged-rsa-cert"), []byte("unmanaged-rsa-key")
+	if err := st.PinPQCPredecessor("apache", "target-a", "run-a", "sha256:old", oldCert, oldKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PinPQCPredecessor("apache", "target-a", "run-a", "old", oldCert, oldKey); err != nil {
+		t.Fatalf("idempotent adoption: %v", err)
+	}
+	for _, changed := range []struct {
+		fp        string
+		cert, key []byte
+	}{
+		{"other", oldCert, oldKey}, {"old", []byte("other-cert"), oldKey}, {"old", oldCert, []byte("other-key")},
+	} {
+		if err := st.PinPQCPredecessor("apache", "target-a", "run-a", changed.fp, changed.cert, changed.key); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+			t.Fatalf("changed predecessor accepted: %v", err)
+		}
+	}
+	if err := st.PinPQCPredecessor("apache", "target-a", "run-b", "old", oldCert, oldKey); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+		t.Fatalf("different run displaced unresolved predecessor: %v", err)
+	}
+	restarted, err := relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RecordDeploy("apache", "target-a", "new", []byte("mldsa-cert"), []byte("mldsa-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RecordDeploy("apache", "target-a", "renewed", []byte("renewed-cert"), []byte("renewed-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RestorePQC("apache", "target-a", "run-a", "old", func(cert, key []byte) (bool, error) {
+		if !bytes.Equal(cert, oldCert) || !bytes.Equal(key, oldKey) {
+			t.Fatal("rollback lost the original predecessor after renewal")
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RestorePQC("apache", "target-a", "run-a", "old", func([]byte, []byte) (bool, error) {
+		return true, nil
+	}); err != nil {
+		t.Fatalf("restore after a lost signed report must remain retryable: %v", err)
+	}
+	if err := restarted.FinalizePQCRestore("apache", "target-a", "run-a", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RestorePQC("apache", "target-a", "run-a", "old", func([]byte, []byte) (bool, error) {
+		return true, nil
+	}); !errors.Is(err, relay.ErrHostRollbackPredecessorMissing) {
+		t.Fatalf("committed rollback left pinned key behind: %v", err)
+	}
+}
+
 // One process can receive a redelivery while another poll goroutine is still
 // restoring the same listener. The second callback must not begin until the
 // first has finished; the database lane supplies the same exclusion across

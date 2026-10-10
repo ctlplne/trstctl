@@ -275,6 +275,17 @@ func (o *localOps) ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(clean) // #nosec G304 -- operator-configured local-ops connector path; local file deploy is the feature (CWE-22)
 }
 
+// ReadLocalFile applies the same operator-owned path allowlist and symlink
+// refusal as host connector reads. It is used to seal a live predecessor before
+// a host-generated replacement is allowed to change that service.
+func ReadLocalFile(config LocalOpsConfig, path string) ([]byte, error) {
+	ops, err := NewLocalOps(config)
+	if err != nil {
+		return nil, err
+	}
+	return ops.(*localOps).ReadFile(path)
+}
+
 func (o *localOps) WriteFile(path string, data []byte) error {
 	clean, err := o.allowedPath(path)
 	if err != nil {

@@ -230,6 +230,9 @@ func (s *Store) ApplyCryptoAssetRolledBackTx(ctx context.Context, tx pgx.Tx, a C
 }
 
 func (s *Store) replaceCryptoAssetTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, eventSequence uint64, observedAt time.Time, restoreMissing bool) error {
+	if err := validateCryptoAssetFingerprint(a); err != nil {
+		return err
+	}
 	reasons := a.Reasons
 	if reasons == nil {
 		reasons = []string{}
@@ -294,10 +297,10 @@ func (s *Store) replaceCryptoAssetTx(ctx context.Context, tx pgx.Tx, a CryptoAss
 		    SET signature = $3, kind = $4, location = $5, algorithm = $6, key_bits = $7,
 		        protocol = $8, cipher = $9, library = $10, strength = $11,
 		        quantum_vulnerable = $12, out_of_policy = $13, reasons = $14,
-		        event_sequence = $15, is_active = true, certificate_fingerprint = ''
+		        event_sequence = $15, is_active = true, certificate_fingerprint = $16
 		  WHERE tenant_id = $1 AND id = $2`,
 		a.TenantID, a.ID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits,
-		a.Protocol, a.Cipher, a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, sequence)
+		a.Protocol, a.Cipher, a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, sequence, a.CertificateFingerprint)
 	if err != nil {
 		return err
 	}

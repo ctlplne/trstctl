@@ -230,8 +230,10 @@ func TestSuccessionJobs_HybridToPurePQCSeam(t *testing.T) {
 func TestCredentialsFromPlan_BridgesReissues(t *testing.T) {
 	plan, err := BuildPlan([]Asset{{
 		ID: "asset-rsa", Kind: string(cbom.AssetCertKey), Algorithm: "RSA", KeyBits: 2048,
-		QuantumVulnerable: true, Reasons: []string{"RSA is quantum-vulnerable"},
-	}}, Request{AssetIDs: []string{"asset-rsa"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolACME, RollbackOnFailure: true})
+		CertificateFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		QuantumVulnerable:      true, Reasons: []string{"RSA is quantum-vulnerable"},
+	}}, Request{AssetIDs: []string{"asset-rsa"}, TargetAlgorithm: TargetMLDSA65, Protocol: ProtocolHostCSR, RollbackOnFailure: true,
+		CertificateBindings: []CertificateBinding{{AssetID: "asset-rsa", IdentityID: "identity-a", TargetID: "target-a"}}})
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
 	}

@@ -298,60 +298,60 @@ an operator starts a migration.
 ### PQC migration orchestration (F57)
 
 Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is the
-starting point. PQC migration planning and issuance are served
-in every build (`internal/pqcmigration`): the orchestrator
-consumes the CBOM read model, finds quantum-vulnerable certificate-key assets, and queues
-re-issuance through the outbox toward the selected target algorithm.
+starting point. PQC migration planning and host execution are served in every
+build (`internal/pqcmigration`). A certificate-key asset must be bound to an
+exact enabled host target and requested ML-DSA-65 identity before start. The
+outbox routes the work to that target's enrolled agent.
 
 The migration API attaches `POST /api/v1/pqc/migrations` and
 `POST /api/v1/pqc/migrations/{run_id}/rollback` through the attach seam, so those routes
 are not part of the static OpenAPI golden; `trstctl-cli migration start|rollback`
 drives them, while the `pqc campaigns` commands record operator work and never call them.
-For certificate reissues, preview and start check the observed name against the
-active served default certificate profile before queueing work. A refused name
-returns a conflict with the profile reason and creates no run or outbox intent.
-The issuer checks the actual CSR again when work executes, so a profile change
-between review and execution cannot bypass the policy.
+For certificate reissues, preview and start check the selected identity, target,
+issuer and active named profile before queueing work. A refused name returns a
+conflict and creates no run or outbox intent. The issuer checks the actual host
+CSR again at execution against the retained profile revision and effective TTL;
+a profile change between review and execution cannot widen the policy.
 Run progress comes from retained events. CBOM posture changes only with an
 independent observation or a verified TLS posture receipt; issuing a certificate
 alone does not change the algorithm the endpoint is recorded as serving.
 
 Read `GET /api/v1/pqc/migrations/{run_id}` to distinguish work that was queued,
 issued, applied, failed, or rolled back. The console's **Refresh progress** action
-shows each finding, its bound target when present, and the issued certificate's
-fingerprint and requested/effective algorithms. Run progress is tenant-scoped and
-rebuilt from retained events, including certificate reissues in older runs.
+shows the bound target, certificate fingerprint, and signed listener readback.
+Run progress is tenant-scoped and rebuilt from retained events, including older
+issuance-only runs.
 
-For certificate-key findings, `issued` means the issuer returned a certificate;
-it does not prove installation or that a listener serves it. These findings count
-under `issued`, not `applied`. Historical certificate rollback reports
-`rollback_unverified`, counted separately from `rolled_back`, because it carries
-no endpoint recovery receipt. Its event remains in history without rewriting
-observed inventory. A new scan or read-model rebuild corrects inventory previously
-changed by these issuance-only or unverified rollback events. Exhausted issuance and rollback attempts
-report `failed` and `rollback_failed` with a redacted explanation. A missing target
-or deployment proof remains visible; neither a successful issuance nor an unverified
-rollback establishes working key custody, renewal, or endpoint recovery.
+For a new host-bound certificate-key finding, `applied` requires the host's
+signed readback of the deployed ML-DSA-65 leaf. The agent checks and seals the
+exact installed predecessor before generating a new subject key. That key stays
+on the host across later renewals. Each renewal updates the finding and CBOM
+from its own signed served-leaf readback. Host rollback restores the sealed
+certificate and key on the same target, even after a later renewal;
+`rolled_back` requires a signed readback of the original leaf and returns the
+managed identity to `issued` because it is no longer deployed. A cold restart
+finishes that lifecycle event if the process stopped after accepting the host
+receipt. An `issued` state alone is not deployment proof. Historical
+issuance-only certificate runs keep `rollback_unverified`, counted separately
+from `rolled_back`, because they have no recoverable host predecessor. Exhausted
+issue and rollback attempts report `failed` and `rollback_failed`.
 Rollback accepts only findings with an applied, rollback-eligible result in that run.
 For a known run whose selected finding failed before application, the API returns
 HTTP 409 with the finding ID and queues no recovery work. A run outside the caller's
 tenant, or a nonexistent run, returns HTTP 404; duplicate or empty asset IDs return
 HTTP 400. Correct the selection and retry with a new idempotency key.
-The current certificate-key reissue worker generates its hybrid CSR from a temporary
-key and does not retain or deploy that key. Its `issued` state is therefore only an
-issuance receipt, not a usable replacement for a served certificate. Use the
-normal certificate lifecycle to place and verify a replacement, then record
-its evidence in a PQC campaign. See [Current limitations](../limitations.md).
+The host-bound path requires an enabled file-based host connector, an enrolled
+host, an explicit certificate/key path pair, a listener address and SNI, a
+compatible active profile and signer, and a native TLS client that can read an
+ML-DSA leaf. See [the operator journey](../journeys/crypto-agility-pqc.md) for
+the exact setup and [Current limitations](../limitations.md) for coverage.
 
-**Execution status:** served in every build through `internal/pqcmigration`, for CBOM
-certificate-key assets through ACME hybrid transition issuance and an inventory-only
-rollback. Neither operation deploys or verifies a replacement leaf. The core
-also exposes CBOM posture, profile selection, migration campaign tracking and
-proof, PQC algorithms, and issuance. Host-target TLS posture migration is currently
-refused at start: the available in-process connector registry cannot execute an
-Envoy target on its enrolled host agent. Agent-owned posture jobs, signed results,
-and recovery are required before that rollout is usable. See
-[Current limitations](../limitations.md).
+**Execution status:** Core includes host-bound certificate-key rollout and
+exact-predecessor rollback for the supported file connectors, and agent-owned
+Envoy TLS posture rollout and rollback. Both require signed host readback before
+the observed CBOM state changes. The core also exposes CBOM posture, profile
+selection, campaign tracking and proof, and PQC issuance. See
+[Current limitations](../limitations.md) for client and connector limits.
 An expired commercial license does not disable Core migration or rollback;
 tenant authorization and idempotency requirements still apply.
 

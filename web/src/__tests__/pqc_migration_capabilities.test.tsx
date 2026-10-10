@@ -15,13 +15,14 @@ const mocks = vi.hoisted(() => ({
   getPQCMigrationProgress: vi.fn(),
   rollbackPQCMigration: vi.fn(),
   connectorTargets: vi.fn(),
+  identities: vi.fn(),
 }));
 vi.mock("@/lib/api", () => ({ api: mocks }));
 const operations = ["planPQCMigration", "startPQCMigration", "getPQCMigrationProgress", "rollbackPQCMigration"];
 const asset = {
   id: "asset-1",
   kind: "certificate-key",
-  location: "localhost:8443",
+  location: "127.0.0.1:10443",
   algorithm: "ECDSA",
   quantum_vulnerable: true,
   migration_target: "ML-DSA-65",
@@ -62,10 +63,61 @@ beforeEach(() => {
   mocks.editions.mockResolvedValue({ tier: "community", state: "community", features: [] });
   mocks.planPQCMigration.mockResolvedValue({ reissues: [], tls_rollouts: [], residuals: [], reissue_count: 1, tls_rollout_count: 0 });
   mocks.startPQCMigration.mockResolvedValue({ run_id: "run-1" });
-  mocks.getPQCMigrationProgress.mockResolvedValue({ applied: 1, queued: 0, failed: 0, rolled_back: 0 });
+  mocks.getPQCMigrationProgress.mockResolvedValue({
+    run_id: "run-1",
+    total: 1,
+    applied: 1,
+    queued: 0,
+    failed: 0,
+    rolled_back: 0,
+    findings: [
+      {
+        run_id: "run-1",
+        asset_id: "asset-1",
+        finding_kind: "certificate-key",
+        status: "applied",
+        target_id: "apache-1",
+        target_revision: "revision-1",
+        connector: "apache",
+        updated_at: "2026-10-10T00:00:00Z",
+      },
+    ],
+  });
   mocks.rollbackPQCMigration.mockResolvedValue({ queued: 1 });
-  mocks.connectorTargets.mockResolvedValue({ items: [{ id: "target-1", name: "Lab Envoy", connector: "envoy", enabled: true }] });
+  mocks.connectorTargets.mockResolvedValue({
+    items: [
+      { id: "target-1", name: "Lab Envoy", connector: "envoy", enabled: true },
+      {
+        id: "apache-1",
+        name: "Lab Apache",
+        connector: "apache",
+        enabled: true,
+        config: {
+          executor: "agent",
+          cert_path: "/lab/tls/apache.crt",
+          key_path: "/lab/tls/apache.key",
+          verify_address: "127.0.0.1:10443",
+          verify_server_name: "apache.partner-lab.example.com",
+        },
+      },
+    ],
+  });
+  mocks.identities.mockResolvedValue([
+    {
+      id: "identity-1",
+      kind: "x509_certificate",
+      status: "requested",
+      name: "apache.partner-lab.example.com",
+      attributes: { subject_key_algorithm: "ML-DSA-65", deployment_target_id: "apache-1" },
+    },
+  ]);
 });
+
+async function bindCertificate(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("checkbox", { name: "Select 127.0.0.1:10443 for PQC migration" }));
+  await user.selectOptions(await screen.findByRole("combobox", { name: "Deployment target for 127.0.0.1:10443" }), "apache-1");
+  await user.selectOptions(screen.getByRole("combobox", { name: "Requested identity for 127.0.0.1:10443" }), "identity-1");
+}
 
 describe("Core PQC runtime authority", () => {
   it("offers an observed TLS 1.2 endpoint for a reviewed PQC posture rollout even when current policy permits it", async () => {
@@ -120,26 +172,68 @@ describe("Core PQC runtime authority", () => {
         }),
       ),
     );
-    await user.click(await screen.findByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
+    await user.click(await screen.findByRole("checkbox", { name: /Completion requires a signed readback/ }));
     await user.click(screen.getByRole("button", { name: "Start migration" }));
     expect(mocks.startPQCMigration).toHaveBeenCalledWith(mocks.planPQCMigration.mock.calls[0][0]);
   });
   it.each(["community", "read_only"] as const)("allows the whole reviewed workflow with %s license state", async (state) => {
     const user = userEvent.setup();
     render(workflow(view(state)));
-    await user.click(await screen.findByRole("checkbox", { name: "Select localhost:8443 for PQC migration" }));
+    await bindCertificate(user);
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
     const start = await screen.findByRole("button", { name: "Start migration" });
     expect(start).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Completion requires a signed readback/ }));
     await user.click(start);
     await user.click(await screen.findByRole("button", { name: "Refresh progress" }));
     expect(await screen.findByText("1 applied · 0 queued · 0 failed · 0 rolled back")).toBeInTheDocument();
-    await user.click(screen.getByRole("checkbox", { name: "Select localhost:8443 for PQC migration" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select 127.0.0.1:10443 for PQC migration" }));
     await user.click(screen.getByRole("checkbox", { name: /I reviewed the current run evidence/ }));
     await user.click(screen.getByRole("button", { name: "Queue rollback" }));
     await waitFor(() => expect(mocks.rollbackPQCMigration).toHaveBeenCalledWith("run-1", ["asset-1"], expect.any(String)));
     expect(mocks.editions).not.toHaveBeenCalled();
+  });
+
+  it("reopens a durable run after console reload and scopes rollback to its applied finding", async () => {
+    const user = userEvent.setup();
+    const runId = "61590807-8822-484b-beb7-e471dc892d4d";
+    mocks.getPQCMigrationProgress.mockResolvedValue({
+      run_id: runId,
+      total: 2,
+      applied: 1,
+      queued: 1,
+      failed: 0,
+      rolled_back: 0,
+      findings: [
+        {
+          run_id: runId,
+          asset_id: "asset-1",
+          finding_kind: "certificate-key",
+          status: "applied",
+          target_id: "apache-1",
+          target_revision: "revision-1",
+          connector: "apache",
+          updated_at: "2026-10-10T00:00:00Z",
+        },
+        {
+          run_id: runId,
+          asset_id: "queued-asset",
+          finding_kind: "tls-endpoint",
+          status: "queued",
+          target_id: "envoy-1",
+          target_revision: "revision-1",
+          connector: "envoy",
+          updated_at: "2026-10-10T00:00:00Z",
+        },
+      ],
+    });
+    render(workflow(view()));
+    await user.type(screen.getByRole("textbox", { name: "Existing migration run ID" }), runId);
+    await user.click(screen.getByRole("button", { name: "Open run" }));
+    expect(await screen.findByText(`Run ${runId}`)).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /I reviewed the current run evidence/ }));
+    await user.click(screen.getByRole("button", { name: "Queue rollback" }));
+    await waitFor(() => expect(mocks.rollbackPQCMigration).toHaveBeenCalledWith(runId, ["asset-1"], expect.any(String)));
   });
 
   it.each(["denied", "unavailable"] as const)("refuses %s planning without pretending it needs a license", async (state) => {
@@ -169,9 +263,9 @@ describe("Core PQC runtime authority", () => {
   it("rechecks start authority after preview", async () => {
     const user = userEvent.setup();
     const result = render(workflow(view()));
-    await user.click(await screen.findByRole("checkbox", { name: "Select localhost:8443 for PQC migration" }));
+    await bindCertificate(user);
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
-    await user.click(await screen.findByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
+    await user.click(await screen.findByRole("checkbox", { name: /Completion requires a signed readback/ }));
     result.rerender(workflow(view("community", [{ operation_id: "startPQCMigration", state: "denied" }])));
     const start = screen.getByRole("button", { name: "Start migration" });
     expect(start).toBeDisabled();
@@ -182,9 +276,9 @@ describe("Core PQC runtime authority", () => {
   it("checks progress and rollback separately after planning permission changes", async () => {
     const user = userEvent.setup();
     const result = render(workflow(view()));
-    await user.click(await screen.findByRole("checkbox", { name: "Select localhost:8443 for PQC migration" }));
+    await bindCertificate(user);
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
-    await user.click(await screen.findByRole("checkbox", { name: /Certificate issuance does not prove deployment or recovery/ }));
+    await user.click(await screen.findByRole("checkbox", { name: /Completion requires a signed readback/ }));
     await user.click(screen.getByRole("button", { name: "Start migration" }));
     await screen.findByRole("button", { name: "Refresh progress" });
     result.rerender(

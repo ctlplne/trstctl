@@ -1017,7 +1017,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = identityTransitionV6
 	}
-	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+	for _, eventType := range []string{EventIdentityIssued, EventIdentityDeployed, EventIdentityRenewed, EventIdentityUndeployed} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = identityTransitionV7
 	}
 	for _, eventType := range []string{
@@ -1708,7 +1708,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV6]()
 	}
-	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+	for _, eventType := range []string{EventIdentityIssued, EventIdentityDeployed, EventIdentityRenewed, EventIdentityUndeployed} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV7]()
 	}
 	return shapes

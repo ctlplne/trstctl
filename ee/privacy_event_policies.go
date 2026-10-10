@@ -332,6 +332,16 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			rejectingTypedLicensedPrivacyPolicy[pqcmigration.TLSFindingRollbackCompleted]()),
 		entry(pqcmigration.EventTLSFindingFailed, 1,
 			rejectingTypedLicensedPrivacyPolicy[pqcmigration.TLSFindingFailure]()),
+		entry(pqcmigration.EventCertificateFindingApplied, 1,
+			rejectingTypedLicensedPrivacyPolicy[pqcmigration.CertificateFindingApplied]()),
+		entry(pqcmigration.EventCertificateFindingRenewed, 1,
+			rejectingTypedLicensedPrivacyPolicy[pqcmigration.CertificateFindingRenewed]()),
+		entry(pqcmigration.EventCertificateFindingRolledBack, 1,
+			rejectingTypedLicensedPrivacyPolicy[pqcmigration.CertificateFindingRolledBack]()),
+		entry(pqcmigration.EventCertificateRollbackRequested, 1,
+			rejectingTypedLicensedPrivacyPolicy[pqcmigration.HostCertificateRollbackRequested](
+				licensedPrivacyRule("/intents/*/payload", events.PrivacyFieldOpaqueExact),
+			)),
 		entry("licensed_crypto.migration.tls_posture.rollback_requested", 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedPQCTLSRollbackRequested](
 				licensedPrivacyRule("/intents/*/payload", events.PrivacyFieldOpaqueExact),

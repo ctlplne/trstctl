@@ -263,6 +263,27 @@ func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, paylo
 	if err != nil {
 		return err
 	}
+	if intent.PQCRunID != "" {
+		// The single host job completed both external effects: signer issuance
+		// against its CSR and connector installation verified on the listener.
+		// Record each lifecycle edge after the signed receiver evidence so a
+		// restart can resume between the two without enqueueing another issue.
+		if outcome != transport.JobOutcomeVerified {
+			return nil
+		}
+		if state == orchestrator.StateRequested {
+			if err := s.orch.TransitionAfterCompletedSideEffect(ctx, tenantID, identityID,
+				orchestrator.StateIssued, "PQC host CSR issued and listener verified", "ca.issue"); err != nil {
+				return err
+			}
+			state = orchestrator.StateIssued
+		}
+		if state == orchestrator.StateIssued {
+			return s.orch.TransitionAfterCompletedSideEffect(ctx, tenantID, identityID,
+				orchestrator.StateDeployed, "PQC host certificate installed and listener verified", "connector.deploy")
+		}
+		return nil
+	}
 	switch state {
 	case orchestrator.StateIssued:
 		// endpoint.renew also carries first issuance for an agent-executed

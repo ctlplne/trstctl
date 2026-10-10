@@ -108,7 +108,9 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 			                  FROM certificates cert
 			                 WHERE cert.tenant_id = $1
 			                   AND cert.issuance_idempotency_key LIKE
-			                       format('agentcsr:%s:%s:%%', job.id, job.claim_attempts)
+			                       format('agentcsr:%s:%s:%%', job.id,
+			                         CASE WHEN COALESCE(convert_from(job.payload, 'UTF8')::jsonb ->> 'pqc_run_id', '') <> ''
+			                              THEN 0 ELSE job.claim_attempts END)
 			                 ORDER BY cert.created_at DESC, cert.id DESC
 			                 LIMIT 1
 			              ), '')

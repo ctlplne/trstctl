@@ -4495,29 +4495,34 @@ matches its exact inspected CSR algorithm, while a hybrid enrollment
 carries a classical subject key and stays governed by its classical family
 label. The selected profile still controls which algorithms an enrollment may use.
 
-**PQC certificate-key migration limit:** The migration preview and start refuse
-an observed name that the active default certificate profile would deny before
-any run or outbox item is created. The current certificate-key reissue worker
-constructs a hybrid CSR with a temporary subject key and destroys that key after
-constructing the CSR. It does not transfer a usable subject key to a deployment
-target or verify a served replacement. An `issued` run result only proves that
-the issuer returned a certificate; it cannot complete a certificate lifecycle
-migration. Operators must use the normal issuer and connector lifecycle with
-target-held key custody, inspect the served leaf independently, and record the
-evidence in a PQC campaign. The automatic certificate-key path needs a
-target-bound key/CSR handoff and verified deployment before it can claim
-end-to-end migration. TLS posture rollout is a separate bound-target action.
+**PQC certificate-key migration limits:** New host-bound runs require an exact
+CBOM leaf fingerprint, a requested ML-DSA-65 identity, an active profile that
+allows that subject key and DNS name, a signer-backed platform or managed
+private CA, and an enabled file-based host connector with an enrolled agent.
+The current exact-predecessor reader supports Apache, NGINX, Caddy,
+Elasticsearch, MySQL, PostgreSQL, RabbitMQ, Tomcat, and Traefik targets whose
+certificate and private key are separate files under the host execution
+profile. Other connector storage layouts need their own predecessor reader.
+A native OpenSSL 3.5 probe and a server capable of serving ML-DSA certificates
+are required for signed TLS readback; classical-only clients cannot be
+presented as PQC verification. The issuing CA key remains classical
+ECDSA-P256, so the leaf has an ML-DSA subject key but not a fully post-quantum
+certificate chain. Historical issuance-only runs have no retained host key or
+predecessor and still report `rollback_unverified`. A profile requiring
+distinct issuance approval remains refused by this migration path until the
+exact operation has its own approval workflow; the control is not bypassed.
+
+TLS posture rollout is a separate bound-target action.
 The Envoy PQC posture worker now queues an agent job through the outbox to the
 exact enrolled host assigned to the target. That host stores the observed
 predecessor encrypted before a native Envoy change, then signs a report that
 binds the active configuration, direct loopback TLS handshake, leaf fingerprint,
 and agent identity. Rollback requests return to that host and restore its exact
 predecessor. The local partner-lab Envoy xDS fixture is documented in
-`deploy/demo/lab/README.md`. This path remains unqualified for release until a
-running-product API, CLI, console, cold restart, and stock-client replay has
-passed; code and fixture tests alone do not establish that result. Previously
-queued pre-agent intents still refuse in-process execution, and posture changed
-by an older build has no host-retained predecessor to restore.
+`deploy/demo/lab/README.md`. Previously queued pre-agent intents still refuse
+in-process execution, and posture changed by an older build has no host-retained
+predecessor to restore. These local fixtures do not qualify an external
+appliance or a multi-host deployment.
 
 The core CBOM posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+
 (and hybrid labels) when it finds them in your estate. Algorithm recognition

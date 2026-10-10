@@ -61,6 +61,23 @@ describe("PQC certificate progress", () => {
     expect(screen.queryByText("Rollback verified on target")).not.toBeInTheDocument();
   });
 
+  it("shows the restored algorithm after signed host rollback", () => {
+    render(
+      <PQCMigrationProgressDetails
+        assets={[asset]}
+        progress={{
+          ...progress,
+          issued: 0,
+          rolled_back: 1,
+          findings: [{ ...finding, status: "rolled_back", effective_algorithm: "RSA-2048" }],
+        }}
+      />,
+    );
+    expect(screen.getByText("Original RSA-2048 certificate restored; the PQC leaf is no longer served.")).toBeInTheDocument();
+    expect(screen.queryByText("Requested: ML-DSA-65")).not.toBeInTheDocument();
+    expect(screen.queryByText("Issued: RSA-2048")).not.toBeInTheDocument();
+  });
+
   it("does not invent zero unfinished work when an older response lacks the counters", () => {
     render(<PQCMigrationProgressDetails assets={[asset]} progress={{ ...progress, issued: undefined, rollback_unverified: undefined }} />);
     expect(screen.getByText(/Certificate issuance and recovery counts were not reported/)).toBeInTheDocument();

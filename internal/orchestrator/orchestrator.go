@@ -25,15 +25,16 @@ import (
 )
 
 const (
-	ctSubmissionEventQueued                          = "ct.submission.queued"
-	ctSubmissionDestination                          = "ct.submit"
-	ctSubmissionCapability                           = "CAP-REV-06"
-	licensedCryptoMigrationReissueDestination        = "licensed_crypto.migration.reissue"
-	licensedCryptoMigrationTLSPostureDestination     = "connector.licensed_crypto.migration.tls_posture"
-	licensedCryptoMigrationTLSRollbackDestination    = "connector.licensed_crypto.migration.tls_posture.rollback"
-	licensedCryptoHostPostureDestination             = "pqc.posture"
-	licensedCryptoHostPostureRollbackDestination     = "pqc.posture.rollback"
-	licensedCryptoMigrationTLSRollbackRequestedEvent = "licensed_crypto.migration.tls_posture.rollback_requested"
+	ctSubmissionEventQueued                                  = "ct.submission.queued"
+	ctSubmissionDestination                                  = "ct.submit"
+	ctSubmissionCapability                                   = "CAP-REV-06"
+	licensedCryptoMigrationReissueDestination                = "licensed_crypto.migration.reissue"
+	licensedCryptoMigrationTLSPostureDestination             = "connector.licensed_crypto.migration.tls_posture"
+	licensedCryptoMigrationTLSRollbackDestination            = "connector.licensed_crypto.migration.tls_posture.rollback"
+	licensedCryptoHostPostureDestination                     = "pqc.posture"
+	licensedCryptoHostPostureRollbackDestination             = "pqc.posture.rollback"
+	licensedCryptoMigrationTLSRollbackRequestedEvent         = "licensed_crypto.migration.tls_posture.rollback_requested"
+	licensedCryptoMigrationCertificateRollbackRequestedEvent = "licensed_crypto.migration.certificate.rollback_requested"
 )
 
 type licensedCryptoMigrationTLSRollbackIntent struct {
@@ -47,6 +48,19 @@ type licensedCryptoMigrationTLSRollbackIntent struct {
 type licensedCryptoMigrationTLSRollbackRequested struct {
 	RunID   string                                     `json:"run_id"`
 	Intents []licensedCryptoMigrationTLSRollbackIntent `json:"intents"`
+}
+
+type licensedCryptoMigrationHostCertificateRollbackIntent struct {
+	AssetID         string          `json:"asset_id"`
+	TargetID        string          `json:"target_id"`
+	IdempotencyKey  string          `json:"idempotency_key"`
+	RequiredAgentID string          `json:"required_agent_id"`
+	Payload         json.RawMessage `json:"payload"`
+}
+
+type licensedCryptoMigrationHostCertificateRollbackRequested struct {
+	RunID   string                                                 `json:"run_id"`
+	Intents []licensedCryptoMigrationHostCertificateRollbackIntent `json:"intents"`
 }
 
 // Orchestrator is the command (write) side of the event-sourced spine. It drives
@@ -232,6 +246,22 @@ func (o *Orchestrator) TransitionAfterCompletedSideEffect(ctx context.Context, t
 	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil, nil, completedDestination)
 }
 
+// TransitionAfterVerifiedRollback records that the host restored a signed,
+// exact predecessor. The managed certificate remains issued but is no longer
+// served. Only the trusted agent-result receiver may use this edge; generic
+// lifecycle mutations cannot claim a rollback happened.
+func (o *Orchestrator) TransitionAfterVerifiedRollback(ctx context.Context, tenantID, identityID string, expectedVersion ...uint64) error {
+	if len(expectedVersion) > 1 {
+		return errors.New("orchestrator: multiple rollback lifecycle versions")
+	}
+	var version *uint64
+	if len(expectedVersion) == 1 {
+		version = &expectedVersion[0]
+	}
+	return o.transition(ctx, tenantID, identityID, StateIssued, "pqc_host_predecessor_restored",
+		nil, "", "", nil, nil, nil, version, "connector.rollback", transitionOptions{verifiedRollback: true})
+}
+
 // TransitionWithIdempotency moves an identity like Transition, but binds any
 // outbox side effect to the served request's Idempotency-Key. The generic HTTP
 // idempotency cache should normally catch a replay before this method is called;
@@ -325,9 +355,10 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 }
 
 type transitionOptions struct {
-	reviewed       []*store.Identity
-	renewalAttempt *store.RenewalAttempt
-	compromise     *EndpointContainmentRequest
+	reviewed         []*store.Identity
+	renewalAttempt   *store.RenewalAttempt
+	compromise       *EndpointContainmentRequest
+	verifiedRollback bool
 }
 
 // FailRenewalAttempt records the exact authenticated job attempt in the durable
@@ -384,6 +415,10 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		return fmt.Errorf("orchestrator: load identity %s: %w", identityID, err)
 	}
 	from := State(ident.Status)
+	if (from == StateDeployed && to == StateIssued) != option.verifiedRollback ||
+		(option.verifiedRollback && completedDestination != "connector.rollback") {
+		return errors.New("orchestrator: deployed-to-issued requires a verified host rollback")
+	}
 	if approval != nil && from == to {
 		// DoDurableEffectBound may retry after the target transaction committed but
 		// before its HTTP result was cached. The consumed request is not enough by
@@ -423,6 +458,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 
 	evType, ok := EventTypeFor(from, to)
+	if option.verifiedRollback {
+		evType, ok = transitionEvents[edge{from, to}]
+	}
 	if !ok {
 		return &TransitionError{IdentityID: identityID, From: from, To: to}
 	}
@@ -1686,6 +1724,38 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == licensedCryptoMigrationCertificateRollbackRequestedEvent {
+			var requested licensedCryptoMigrationHostCertificateRollbackRequested
+			if err := json.Unmarshal(ev.Data, &requested); err != nil {
+				return err
+			}
+			if requested.RunID == "" || len(requested.Intents) == 0 {
+				return errors.New("orchestrator: PQC certificate rollback event has no run or intents")
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				for _, intent := range requested.Intents {
+					if intent.AssetID == "" || intent.TargetID == "" || intent.RequiredAgentID == "" ||
+						intent.IdempotencyKey != "licensed-crypto-migration-host-rollback:"+requested.RunID+":"+intent.AssetID || len(intent.Payload) == 0 {
+						return errors.New("orchestrator: PQC certificate rollback intent is incomplete")
+					}
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID: ev.TenantID, Destination: "connector.rollback", IdempotencyKey: intent.IdempotencyKey,
+						Payload: append([]byte(nil), intent.Payload...), EffectLane: store.ConnectorTargetLanePrefix + intent.TargetID,
+						RequiredAgentRole: "host", RequiredAgentID: intent.RequiredAgentID,
+					})
+					if err != nil {
+						return err
+					}
+					if inserted {
+						healed++
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventLicensedCryptoMigrationStarted {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err
@@ -1704,16 +1774,32 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 					if reissue.RunID == "" || reissue.AssetID == "" {
 						return fmt.Errorf("orchestrator: reconcile %s (seq %d): reissue requires run_id and asset_id", ev.Type, ev.Sequence)
 					}
-					body, err := json.Marshal(reissue)
-					if err != nil {
-						return err
+					var body []byte
+					entry := Entry{TenantID: ev.TenantID, Destination: licensedCryptoMigrationReissueDestination,
+						IdempotencyKey: "licensed-crypto-migration:" + reissue.RunID + ":" + reissue.AssetID}
+					if reissue.HostJobPayload != nil {
+						if reissue.IdentityID == "" || reissue.TargetID == "" || reissue.TargetRevision == "" ||
+							reissue.RequiredAgentID == "" || reissue.PredecessorFingerprint == "" {
+							return fmt.Errorf("orchestrator: PQC host reissue has incomplete immutable execution authority")
+						}
+						var err error
+						body, err = json.Marshal(reissue.HostJobPayload)
+						if err != nil {
+							return err
+						}
+						entry.Destination = "endpoint.renew"
+						entry.EffectLane = store.ConnectorTargetLanePrefix + reissue.TargetID
+						entry.RequiredAgentRole = "host"
+						entry.RequiredAgentID = reissue.RequiredAgentID
+					} else {
+						var err error
+						body, err = json.Marshal(reissue)
+						if err != nil {
+							return err
+						}
 					}
-					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-						TenantID:       ev.TenantID,
-						Destination:    licensedCryptoMigrationReissueDestination,
-						IdempotencyKey: "licensed-crypto-migration:" + reissue.RunID + ":" + reissue.AssetID,
-						Payload:        body,
-					})
+					entry.Payload = body
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
 					if err != nil {
 						return err
 					}

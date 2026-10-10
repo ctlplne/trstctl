@@ -2057,7 +2057,8 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 	}
 	compactProjectionsGo := strings.Join(strings.Fields(projectionsGo), " ")
 	for _, want := range []string{
-		"EventIdentityIssued: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true}",
+		"EventIdentityIssued: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true}",
+		"EventIdentityUndeployed: {LifecycleCompletedSideEffectEventSchemaVersion: true}",
 		"EventIdentityRetired: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true}",
 		"EventCertificateRecorded: {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true, CertificateObservationEventSchemaVersion: true}",
 		"EventCAIssuedCertificate: {1: true, CAIssuedCertificateEvidenceSchemaVersion: true}",

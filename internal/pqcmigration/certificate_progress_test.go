@@ -5,14 +5,88 @@ package pqcmigration
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 )
+
+func TestPQCVerifiedHostCertificateAndExactRollbackSurviveColdReplay(t *testing.T) {
+	oldFP, newFP, renewedFP := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+	asset := "f530ac6a-c27f-4d43-a22a-c0d8e8fcdf04"
+	run := "ad659d89-d28d-4f4d-b797-071321c7f328"
+	before := projections.CBOMAssetObserved{ID: asset, Kind: "certificate-key", Location: "127.0.0.1:10443",
+		CertificateFingerprint: oldFP, Algorithm: "RSA", KeyBits: 2048, Strength: "weak", QuantumVulnerable: true}
+	after := before
+	after.CertificateFingerprint, after.Algorithm, after.KeyBits, after.Strength, after.QuantumVulnerable = newFP, TargetMLDSA65, 0, "strong", false
+	served := transport.ProbeTranscript{Address: before.Location, ServerName: "apache.example.test", Vantage: transport.VantageLocal,
+		Reached: true, ExpectedFingerprint: newFP, ObservedFingerprint: newFP, ObservedAtUnix: 1791610000}
+	applied := CertificateFindingApplied{RunID: run, AssetID: asset, IdentityID: "identity-a", TargetID: "target-a",
+		TargetRevision: "revision-a", Connector: "apache", PredecessorFingerprint: oldFP,
+		CertificateFingerprint: newFP, Before: before, After: after, Transcript: served,
+		AgentID: "agent-a", JobID: 7, Attempt: 2, EvidenceDigest: served.Digest(),
+		ReceiptStatement: "signed statement", ReceiptSignature: "signature", ReceiptSignerFingerprint: "agent-fingerprint"}
+	started := projections.LicensedCryptoMigrationStarted{RunID: run, AssetIDs: []string{asset}, Reissues: []projections.LicensedCryptoMigrationReissue{{
+		RunID: run, AssetID: asset, TargetAlgorithm: TargetMLDSA65, EffectiveAlgorithm: TargetMLDSA65}}}
+	stamp := time.Date(2026, 10, 10, 7, 0, 0, 0, time.UTC)
+	log := []events.Event{{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: sealedTestTenant, Time: stamp, Data: mustJSON(t, started)},
+		{Type: EventCertificateFindingApplied, TenantID: sealedTestTenant, Time: stamp.Add(time.Second), Data: mustJSON(t, applied)}}
+	first := NewProgressProjection(nil)
+	applyProgressLog(t, first, log)
+	progress := first.Snapshot(sealedTestTenant, run)
+	if len(progress) != 1 || progress[0].Status != TLSFindingApplied || progress[0].CertificateReadback == nil ||
+		progress[0].CertificateReadback.Transcript.ObservedFingerprint != newFP {
+		t.Fatalf("signed served successor was not projected: %+v", progress)
+	}
+	if _, found, err := first.certificateAppliedReceipt(sealedTestTenant, run, asset); err != nil || !found {
+		t.Fatalf("durable applied receipt not indexed: found=%t err=%v", found, err)
+	}
+	renewedAfter := after
+	renewedAfter.CertificateFingerprint = renewedFP
+	renewedTranscript := served
+	renewedTranscript.ExpectedFingerprint, renewedTranscript.ObservedFingerprint = renewedFP, renewedFP
+	renewed := CertificateFindingRenewed{RunID: run, AssetID: asset, IdentityID: "identity-a",
+		TargetID: "target-a", TargetRevision: "revision-a", PredecessorFingerprint: newFP,
+		CertificateFingerprint: renewedFP, Before: after, After: renewedAfter, Transcript: renewedTranscript,
+		AgentID: "agent-a", JobID: 9, Attempt: 1, EvidenceDigest: renewedTranscript.Digest(),
+		ReceiptStatement: "renewal statement", ReceiptSignature: "renewal signature", ReceiptSignerFingerprint: "agent-fingerprint"}
+	log = append(log, events.Event{Type: EventCertificateFindingRenewed, TenantID: sealedTestTenant,
+		Time: stamp.Add(2 * time.Second), Data: mustJSON(t, renewed)})
+	applyProgressLog(t, first, log[2:])
+	if current, active := first.currentCertificateFingerprint(sealedTestTenant, run, asset); !active || current != renewedFP {
+		t.Fatalf("signed renewal did not advance rollback successor: current=%s active=%t", current, active)
+	}
+	if base, found, err := first.certificateAppliedReceipt(sealedTestTenant, run, asset); err != nil || !found || base.PredecessorFingerprint != oldFP {
+		t.Fatalf("renewal lost exact pre-migration predecessor: base=%+v found=%t err=%v", base, found, err)
+	}
+	served.ExpectedFingerprint, served.ObservedFingerprint = oldFP, oldFP
+	rolled := CertificateFindingRolledBack{RunID: run, AssetID: asset, TargetID: "target-a", TargetRevision: "revision-a",
+		PredecessorFingerprint: oldFP, SuccessorFingerprint: renewedFP, Restored: before, Transcript: served,
+		AgentID: "agent-a", JobID: 8, Attempt: 1, EvidenceDigest: served.Digest(),
+		ReceiptStatement: "rollback statement", ReceiptSignature: "rollback signature", ReceiptSignerFingerprint: "agent-fingerprint"}
+	log = append(log, events.Event{Type: EventCertificateFindingRolledBack, TenantID: sealedTestTenant,
+		Time: stamp.Add(3 * time.Second), Data: mustJSON(t, rolled)})
+	applyProgressLog(t, first, log[3:])
+	want := first.Snapshot(sealedTestTenant, run)
+	if len(want) != 1 || want[0].Status != TLSFindingRolledBack || want[0].CertificateFingerprint != oldFP ||
+		want[0].CertificateReadback.Transcript.ObservedFingerprint != oldFP || want[0].EffectiveAlgorithm != "RSA" {
+		t.Fatalf("rollback did not restore signed predecessor: %+v", want)
+	}
+	if candidates := first.RollbackLifecycleCandidates(); len(candidates) != 1 || candidates[0].IdentityID != applied.IdentityID ||
+		candidates[0].PredecessorFingerprint != oldFP {
+		t.Fatalf("signed rollback lifecycle recovery candidates = %+v", candidates)
+	}
+	restarted := NewProgressProjection(nil)
+	applyProgressLog(t, restarted, log)
+	if got := restarted.Snapshot(sealedTestTenant, run); !reflect.DeepEqual(got, want) {
+		t.Fatalf("cold replay changed signed certificate journey: got=%+v want=%+v", got, want)
+	}
+}
 
 // These tests exercise the actual event fold. An issuance event is not evidence
 // that the endpoint serves the replacement, even when its legacy name says

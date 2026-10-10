@@ -683,7 +683,7 @@ export type {
 export interface PQCMigrationRequest {
   asset_ids: string[];
   target_algorithm: "ML-DSA-65";
-  protocol: "acme";
+  protocol: "acme" | "host-csr";
   rollback_on_failure: boolean;
   tls_bindings?: Array<{
     asset_id: string;
@@ -694,10 +694,14 @@ export interface PQCMigrationRequest {
       key_exchange_groups: string[];
     };
   }>;
+  certificate_bindings?: Array<{ asset_id: string; identity_id: string; target_id: string }>;
 }
 
 export interface PQCMigrationPlanReissue {
   asset_id: string;
+  identity_id: string;
+  target_id: string;
+  predecessor_fingerprint: string;
   location: string;
   current_algorithm: string;
   target_algorithm: string;
@@ -758,6 +762,24 @@ export interface PQCMigrationFindingProgress {
       cipher_suite: number;
       key_exchange_group?: string;
       leaf_fingerprint: string;
+    };
+    agent_id: string;
+    job_id: number;
+    attempt: number;
+    evidence_digest: string;
+    receipt_statement: string;
+    receipt_signature: string;
+    receipt_signer_fingerprint: string;
+  };
+  certificate_readback?: {
+    transcript: {
+      Address: string;
+      ServerName: string;
+      Vantage: string;
+      Reached: boolean;
+      ExpectedFingerprint: string;
+      ObservedFingerprint: string;
+      Mismatch: string;
     };
     agent_id: string;
     job_id: number;

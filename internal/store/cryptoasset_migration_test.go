@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,40 @@ import (
 
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestCryptoAssetMigrationRetainsExactCertificateFingerprintForRollback(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	seedTwoTenants(t, st)
+	now := time.Now().UTC()
+	predecessor := store.CryptoAsset{ID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaf", TenantID: tenantA,
+		Kind: "certificate-key", Location: "127.0.0.1:10443", Algorithm: "RSA", KeyBits: 2048,
+		CertificateFingerprint: strings.Repeat("a", 64), Strength: "weak", QuantumVulnerable: true}
+	apply := func(asset store.CryptoAsset, sequence uint64, mutation func(context.Context, pgx.Tx, store.CryptoAsset, uint64, time.Time) error) {
+		t.Helper()
+		if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return mutation(ctx, tx, asset, sequence, now)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply(predecessor, 1, st.ApplyCryptoAssetObservedTx)
+	successor := predecessor
+	successor.Algorithm, successor.KeyBits = "ML-DSA-65", 0
+	successor.CertificateFingerprint = strings.Repeat("b", 64)
+	successor.Strength, successor.QuantumVulnerable = "strong", false
+	apply(successor, 2, st.ApplyCryptoAssetMigratedTx)
+	apply(successor, 2, st.ApplyCryptoAssetMigratedTx)
+	assets, err := st.ListCryptoAssets(ctx, tenantA)
+	if err != nil || len(assets) != 1 || assets[0].CertificateFingerprint != successor.CertificateFingerprint {
+		t.Fatalf("signed successor fingerprint vanished from CBOM: %+v, err=%v", assets, err)
+	}
+	apply(predecessor, 3, st.ApplyCryptoAssetRolledBackTx)
+	assets, err = st.ListCryptoAssets(ctx, tenantA)
+	if err != nil || len(assets) != 1 || assets[0].CertificateFingerprint != predecessor.CertificateFingerprint {
+		t.Fatalf("exact predecessor fingerprint was not restored: %+v, err=%v", assets, err)
+	}
+}
 
 func TestCryptoAssetMigrationMergesExistingDesiredSignatureUnderTenantRLS(t *testing.T) {
 	ctx := context.Background()

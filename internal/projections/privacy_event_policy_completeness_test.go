@@ -493,7 +493,7 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 	}
 
 	for _, eventType := range []string{
-		EventIdentityIssued, EventIdentityDeployed, EventIdentityRevoked,
+		EventIdentityIssued, EventIdentityDeployed, EventIdentityUndeployed, EventIdentityRevoked,
 		EventIdentityRenewing, EventIdentityRenewed, EventIdentityRetired,
 	} {
 		for version := range knownSchemaVersions[eventType] {

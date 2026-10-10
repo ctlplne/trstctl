@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -13,6 +14,58 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestPQCHostCSRVerifiedResultClosesBothLifecycleEdges(t *testing.T) {
+	ctx := context.Background()
+	h := newIssuanceDispatcherHarness(t)
+	projector := projections.New(h.store, projections.WithOwnershipAttestationCadence(time.Hour))
+	orch := orchestrator.NewOrchestrator(h.log, h.store, h.outbox,
+		orchestrator.WithProjector(projector), orchestrator.WithOwnershipAttestationCadence(time.Hour))
+	srv := &Server{orch: orch}
+	owner, err := orch.CreateOwnerRecord(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerService,
+		Name: "PQC host CSR owner", ApplicationID: "pqc-host", Environment: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err = orch.AttestOwnership(ctx, h.tenant, owner.ID, "qa-operator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := orch.CreateIdentity(ctx, h.tenant, store.Identity{Kind: store.KindX509Certificate,
+		Name: "pqc-host.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(RelayDeployIntent{IdentityID: identity.ID, PQCRunID: "pqc-verified-run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil); err != nil {
+		t.Fatalf("verified host CSR lifecycle: %v", err)
+	}
+	if state, err := orch.State(ctx, h.tenant, identity.ID); err != nil || state != orchestrator.StateDeployed {
+		t.Fatalf("verified host CSR state=%s, err=%v", state, err)
+	}
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil); err != nil {
+		t.Fatalf("duplicate signed result retransitioned: %v", err)
+	}
+	for _, destination := range []string{"ca.issue", "connector.deploy"} {
+		var queued int
+		if err := h.store.SystemPool().QueryRow(ctx,
+			`SELECT count(*) FROM outbox WHERE tenant_id=$1 AND destination=$2`, h.tenant, destination).Scan(&queued); err != nil {
+			t.Fatal(err)
+		}
+		if queued != 0 {
+			t.Fatalf("completed %s queued %d duplicate effects", destination, queued)
+		}
+	}
+	if err := projector.Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("cold replay of completed host CSR: %v", err)
+	}
+	if state, err := orch.State(ctx, h.tenant, identity.ID); err != nil || state != orchestrator.StateDeployed {
+		t.Fatalf("cold replay host CSR state=%s, err=%v", state, err)
+	}
+}
 
 // The real NGINX outage recovered on the host but its lifecycle report was
 // refused only when the production ownership-attestation gate was enabled.

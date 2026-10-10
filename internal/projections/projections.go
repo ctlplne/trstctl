@@ -138,6 +138,7 @@ const (
 	EventIdentityCreated              = "identity.created"
 	EventIdentityIssued               = "identity.issued"
 	EventIdentityDeployed             = "identity.deployed"
+	EventIdentityUndeployed           = "identity.undeployed"
 	EventIdentityRevoked              = "identity.revoked"
 	EventIdentityRenewing             = "identity.renewing"
 	EventIdentityRenewed              = "identity.renewed"
@@ -2538,23 +2539,65 @@ type LicensedCryptoMigrationTLSPosture struct {
 // before committing the outbox rows, the boot reconciler can recreate the exact
 // tenant-scoped reissue intents from these public CBOM facts.
 type LicensedCryptoMigrationReissue struct {
-	RunID              string   `json:"run_id"`
-	AssetID            string   `json:"asset_id"`
-	Kind               string   `json:"kind"`
-	Location           string   `json:"location"`
-	Algorithm          string   `json:"algorithm"`
-	KeyBits            int      `json:"key_bits,omitempty"`
-	AssetProtocol      string   `json:"asset_protocol,omitempty"`
-	Cipher             string   `json:"cipher,omitempty"`
-	Library            string   `json:"library,omitempty"`
-	Strength           string   `json:"strength"`
-	QuantumVulnerable  bool     `json:"quantum_vulnerable"`
-	OutOfPolicy        bool     `json:"out_of_policy"`
-	Reasons            []string `json:"reasons,omitempty"`
-	TargetAlgorithm    string   `json:"target_algorithm"`
-	EffectiveAlgorithm string   `json:"effective_algorithm"`
-	Protocol           string   `json:"protocol"`
-	RollbackOnFailure  bool     `json:"rollback_on_failure"`
+	RunID                  string                 `json:"run_id"`
+	AssetID                string                 `json:"asset_id"`
+	IdentityID             string                 `json:"identity_id,omitempty"`
+	TargetID               string                 `json:"target_id,omitempty"`
+	TargetRevision         string                 `json:"target_revision,omitempty"`
+	RequiredAgentID        string                 `json:"required_agent_id,omitempty"`
+	PredecessorFingerprint string                 `json:"predecessor_fingerprint,omitempty"`
+	HostJobPayload         *LicensedCryptoHostJob `json:"host_job_payload,omitempty"`
+	Kind                   string                 `json:"kind"`
+	Location               string                 `json:"location"`
+	Algorithm              string                 `json:"algorithm"`
+	KeyBits                int                    `json:"key_bits,omitempty"`
+	AssetProtocol          string                 `json:"asset_protocol,omitempty"`
+	Cipher                 string                 `json:"cipher,omitempty"`
+	Library                string                 `json:"library,omitempty"`
+	Strength               string                 `json:"strength"`
+	QuantumVulnerable      bool                   `json:"quantum_vulnerable"`
+	OutOfPolicy            bool                   `json:"out_of_policy"`
+	Reasons                []string               `json:"reasons,omitempty"`
+	TargetAlgorithm        string                 `json:"target_algorithm"`
+	EffectiveAlgorithm     string                 `json:"effective_algorithm"`
+	Protocol               string                 `json:"protocol"`
+	RollbackOnFailure      bool                   `json:"rollback_on_failure"`
+}
+
+// LicensedCryptoHostJob is the closed, reference-only host intent retained for
+// event replay. The target's private credentials are absent; the host agent
+// uses its operator-owned path and command allowlist for the local effect.
+type LicensedCryptoHostJob struct {
+	Connector                 string                                 `json:"connector"`
+	Target                    string                                 `json:"target"`
+	TargetID                  string                                 `json:"target_id"`
+	TargetRevision            string                                 `json:"target_revision"`
+	IdentityID                string                                 `json:"identity_id"`
+	TargetConfig              LicensedCryptoHostTargetConfig         `json:"target_config"`
+	VerifyAddress             string                                 `json:"verify_address"`
+	VerifyServerName          string                                 `json:"verify_server_name"`
+	SubjectKeyAlgorithm       string                                 `json:"subject_key_algorithm"`
+	SubjectCommonName         string                                 `json:"subject_common_name"`
+	SubjectDNSNames           []string                               `json:"subject_dns_names"`
+	PQCRunID                  string                                 `json:"pqc_run_id"`
+	PQCAssetID                string                                 `json:"pqc_asset_id"`
+	PQCPredecessorFingerprint string                                 `json:"pqc_predecessor_fingerprint"`
+	IssuingAuthoritySource    string                                 `json:"issuing_authority_source"`
+	IssuingAuthorityID        string                                 `json:"issuing_authority_id"`
+	RequiredAgentID           string                                 `json:"required_agent_id"`
+	Issuance                  store.OperationApprovalIssuanceBinding `json:"issuance"`
+}
+
+type LicensedCryptoHostTargetConfig struct {
+	Executor          string `json:"executor"`
+	CertPath          string `json:"cert_path"`
+	KeyPath           string `json:"key_path"`
+	ConfigPath        string `json:"config_path,omitempty"`
+	ReloadAction      string `json:"reload_action,omitempty"`
+	VerifyAddress     string `json:"verify_address"`
+	VerifyServerName  string `json:"verify_server_name"`
+	RequiredAgentID   string `json:"required_agent_id"`
+	RequiredAgentRole string `json:"required_agent_role"`
 }
 
 // LicensedCryptoMigrationAssetCompleted projects a migrated CBOM row after the outbox worker
@@ -3654,8 +3697,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
-	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true},
+	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
 	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
+	EventIdentityUndeployed:                       {LifecycleCompletedSideEffectEventSchemaVersion: true},
 	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleKeyCompromiseEventSchemaVersion: true},
 	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
@@ -3806,11 +3850,12 @@ func init() {
 }
 
 var lifecycleEventTypes = map[string]bool{
-	EventIdentityIssued:   true,
-	EventIdentityDeployed: true,
-	EventIdentityRevoked:  true,
-	EventIdentityRenewing: true,
-	EventIdentityRenewed:  true,
+	EventIdentityIssued:     true,
+	EventIdentityDeployed:   true,
+	EventIdentityUndeployed: true,
+	EventIdentityRevoked:    true,
+	EventIdentityRenewing:   true,
+	EventIdentityRenewed:    true,
 	// renewal_failed / renewal_recovered were emitted by the orchestrator's
 	// state machine but never registered here (AUD-201 follow-up D1/V1), so
 	// ApplyTx fell through to nil: a served renewing -> renewal_failed
@@ -6830,7 +6875,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				}
 			}
 			ownershipSchema := schemaVersionOf(e) == LifecycleOwnershipReadinessEventSchemaVersion ||
-				schemaVersionOf(e) == LifecycleCompletedSideEffectEventSchemaVersion
+				(schemaVersionOf(e) == LifecycleCompletedSideEffectEventSchemaVersion && pl.To == "deployed")
 			if ownershipSchema && p.ownershipAttestationCadence > 0 {
 				if pl.OwnershipReadiness == nil || pl.To != "deployed" ||
 					!pl.OwnershipReadiness.EvaluatedAt.Equal(e.Time) {
@@ -7145,13 +7190,22 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 		}
 		return nil
 	case LifecycleCompletedSideEffectEventSchemaVersion:
-		if hasApproval || hasIssuance || pl.To != "deployed" ||
-			(e.Type != EventIdentityDeployed && e.Type != EventIdentityRenewed) ||
-			(pl.From != "issued" && pl.From != "renewing") {
+		issue := e.Type == EventIdentityIssued && pl.From == "requested" && pl.To == "issued"
+		deploy := pl.To == "deployed" &&
+			((e.Type == EventIdentityDeployed && pl.From == "issued") ||
+				(e.Type == EventIdentityRenewed && pl.From == "renewing"))
+		undeploy := e.Type == EventIdentityUndeployed && pl.From == "deployed" && pl.To == "issued"
+		if hasApproval || hasIssuance || (!issue && !deploy && !undeploy) {
 			return fmt.Errorf("projections: %s completed side-effect payload/schema mismatch", e.Type)
 		}
+		destination := "connector.deploy"
+		if issue {
+			destination = "ca.issue"
+		} else if undeploy {
+			destination = "connector.rollback"
+		}
 		if pl.SideEffect == nil || !pl.SideEffect.Completed ||
-			pl.SideEffect.Destination != "connector.deploy" ||
+			pl.SideEffect.Destination != destination ||
 			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
 			len(pl.SideEffect.Payload) != 0 || pl.SideEffect.RequiredAgentRole != "" {
 			return fmt.Errorf("projections: %s completed side-effect receipt mismatch", e.Type)

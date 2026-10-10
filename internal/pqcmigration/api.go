@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	pqcMigrationTargetMLDSA65 = "ML-DSA-65"
-	pqcMigrationProtocolACME  = "acme"
+	pqcMigrationTargetMLDSA65   = "ML-DSA-65"
+	pqcMigrationProtocolACME    = "acme"
+	pqcMigrationProtocolHostCSR = "host-csr"
 )
 
 type Service interface {
@@ -31,11 +32,18 @@ type Service interface {
 }
 
 type APIRequest struct {
-	AssetIDs          []string        `json:"asset_ids"`
-	TargetAlgorithm   string          `json:"target_algorithm"`
-	Protocol          string          `json:"protocol"`
-	RollbackOnFailure bool            `json:"rollback_on_failure"`
-	TLSBindings       []APITLSBinding `json:"tls_bindings,omitempty"`
+	AssetIDs            []string                `json:"asset_ids"`
+	TargetAlgorithm     string                  `json:"target_algorithm"`
+	Protocol            string                  `json:"protocol"`
+	RollbackOnFailure   bool                    `json:"rollback_on_failure"`
+	TLSBindings         []APITLSBinding         `json:"tls_bindings,omitempty"`
+	CertificateBindings []APICertificateBinding `json:"certificate_bindings,omitempty"`
+}
+
+type APICertificateBinding struct {
+	AssetID    string `json:"asset_id"`
+	IdentityID string `json:"identity_id"`
+	TargetID   string `json:"target_id"`
 }
 
 type APITLSBinding struct {
@@ -220,8 +228,8 @@ func startHandler(a *api.API, svc Service) http.HandlerFunc {
 			if req.Protocol == "" {
 				req.Protocol = pqcMigrationProtocolACME
 			}
-			if req.Protocol != pqcMigrationProtocolACME {
-				return 0, nil, api.ErrStatus(http.StatusBadRequest, "protocol must be "+pqcMigrationProtocolACME)
+			if req.Protocol != pqcMigrationProtocolACME && req.Protocol != pqcMigrationProtocolHostCSR {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "protocol must be acme or host-csr")
 			}
 			start := time.Now()
 			var opErr error
@@ -270,17 +278,20 @@ func rollbackHandler(a *api.API, svc Service) http.HandlerFunc {
 func schemas() map[string]*api.Schema {
 	return map[string]*api.Schema{
 		"PQCMigrationRequest": api.ObjectSchema(map[string]*api.Schema{
-			"asset_ids":           api.ArraySchema(api.StringSchema()),
-			"target_algorithm":    api.StringSchema(),
-			"protocol":            api.StringSchema(),
-			"rollback_on_failure": api.BooleanSchema(),
-			"tls_bindings":        api.ArraySchema(api.SchemaRef("PQCMigrationTLSBinding")),
+			"asset_ids":            api.ArraySchema(api.StringSchema()),
+			"target_algorithm":     api.StringSchema(),
+			"protocol":             api.StringSchema(),
+			"rollback_on_failure":  api.BooleanSchema(),
+			"tls_bindings":         api.ArraySchema(api.SchemaRef("PQCMigrationTLSBinding")),
+			"certificate_bindings": api.ArraySchema(api.SchemaRef("PQCMigrationCertificateBinding")),
 		}, "asset_ids", "target_algorithm"),
 		"PQCMigrationPlanReissue": api.ObjectSchema(map[string]*api.Schema{
 			"asset_id": api.StringSchema(), "location": api.StringSchema(),
 			"current_algorithm": api.StringSchema(), "target_algorithm": api.StringSchema(),
 			"effective_algorithm": api.StringSchema(), "protocol": api.StringSchema(),
-			"rollback_on_failure": api.BooleanSchema(),
+			"identity_id": api.StringSchema(), "target_id": api.StringSchema(),
+			"predecessor_fingerprint": api.StringSchema(),
+			"rollback_on_failure":     api.BooleanSchema(),
 		}, "asset_id", "target_algorithm", "protocol"),
 		"PQCMigrationPlanTLSRollout": api.ObjectSchema(map[string]*api.Schema{
 			"asset_id": api.StringSchema(), "location": api.StringSchema(),
@@ -306,6 +317,9 @@ func schemas() map[string]*api.Schema {
 			"asset_id": api.StringSchema(), "target_id": api.StringSchema(),
 			"desired": api.SchemaRef("PQCMigrationTLSPosture"),
 		}, "asset_id", "target_id", "desired"),
+		"PQCMigrationCertificateBinding": api.ObjectSchema(map[string]*api.Schema{
+			"asset_id": api.StringSchema(), "identity_id": api.StringSchema(), "target_id": api.StringSchema(),
+		}, "asset_id", "identity_id", "target_id"),
 		"PQCMigrationHostServed": api.ObjectSchema(map[string]*api.Schema{
 			"address": api.StringSchema(), "server_name": api.StringSchema(),
 			"tls_version": api.IntegerSchema(), "cipher_suite": api.IntegerSchema(),
@@ -317,6 +331,20 @@ func schemas() map[string]*api.Schema {
 			"evidence_digest": api.StringSchema(), "receipt_statement": api.StringSchema(),
 			"receipt_signature": api.StringSchema(), "receipt_signer_fingerprint": api.StringSchema(),
 		}, "served", "agent_id", "job_id", "attempt", "evidence_digest", "receipt_statement", "receipt_signature", "receipt_signer_fingerprint"),
+		"PQCMigrationCertificateTranscript": api.ObjectSchema(map[string]*api.Schema{
+			"Address": api.StringSchema(), "ServerName": api.StringSchema(), "Vantage": api.StringSchema(),
+			"Reached": api.BooleanSchema(), "ExpectedFingerprint": api.StringSchema(),
+			"ObservedFingerprint": api.StringSchema(), "Mismatch": api.StringSchema(),
+			"CheckedSANs": api.BooleanSchema(), "CheckedChain": api.BooleanSchema(),
+			"ObservedAtUnix": api.IntegerSchema(), "HandshakeMillis": api.IntegerSchema(),
+			"ChainBytes": api.IntegerSchema(),
+		}, "Address", "Vantage", "Reached", "ExpectedFingerprint", "ObservedFingerprint", "Mismatch"),
+		"PQCMigrationCertificateReadback": api.ObjectSchema(map[string]*api.Schema{
+			"transcript": api.SchemaRef("PQCMigrationCertificateTranscript"), "agent_id": api.StringSchema(),
+			"job_id": api.IntegerSchema(), "attempt": api.IntegerSchema(), "evidence_digest": api.StringSchema(),
+			"receipt_statement": api.StringSchema(), "receipt_signature": api.StringSchema(),
+			"receipt_signer_fingerprint": api.StringSchema(),
+		}, "transcript", "agent_id", "job_id", "attempt", "evidence_digest", "receipt_statement", "receipt_signature", "receipt_signer_fingerprint"),
 		"PQCMigration": api.ObjectSchema(map[string]*api.Schema{
 			"run_id":                      api.StringSchema(),
 			"queued":                      api.IntegerSchema(),
@@ -334,8 +362,9 @@ func schemas() map[string]*api.Schema {
 			"target_id": api.StringSchema(), "target_revision": api.StringSchema(), "connector": api.StringSchema(),
 			"desired": api.SchemaRef("PQCMigrationTLSPosture"), "previous": api.SchemaRef("PQCMigrationTLSPosture"),
 			"observed": api.SchemaRef("PQCMigrationTLSPosture"), "status": api.StringSchema(),
-			"host_readback": api.SchemaRef("PQCMigrationHostReadback"),
-			"failure":       api.StringSchema(), "updated_at": api.TimestampSchema(),
+			"host_readback":        api.SchemaRef("PQCMigrationHostReadback"),
+			"certificate_readback": api.SchemaRef("PQCMigrationCertificateReadback"),
+			"failure":              api.StringSchema(), "updated_at": api.TimestampSchema(),
 			"certificate_fingerprint": api.StringSchema(), "target_algorithm": api.StringSchema(), "effective_algorithm": api.StringSchema(),
 		}, "run_id", "asset_id", "finding_kind", "target_id", "target_revision", "connector", "desired", "status", "updated_at"),
 		"PQCMigrationProgress": api.ObjectSchema(map[string]*api.Schema{
@@ -362,13 +391,16 @@ func schemas() map[string]*api.Schema {
 // execute — same BuildPlan, same assets — so a preview can never describe a
 // different migration from the one that runs.
 type PlanPreviewReissue struct {
-	AssetID            string `json:"asset_id"`
-	Location           string `json:"location"`
-	CurrentAlgorithm   string `json:"current_algorithm"`
-	TargetAlgorithm    string `json:"target_algorithm"`
-	EffectiveAlgorithm string `json:"effective_algorithm"`
-	Protocol           string `json:"protocol"`
-	RollbackOnFailure  bool   `json:"rollback_on_failure"`
+	AssetID                string `json:"asset_id"`
+	IdentityID             string `json:"identity_id"`
+	TargetID               string `json:"target_id"`
+	PredecessorFingerprint string `json:"predecessor_fingerprint"`
+	Location               string `json:"location"`
+	CurrentAlgorithm       string `json:"current_algorithm"`
+	TargetAlgorithm        string `json:"target_algorithm"`
+	EffectiveAlgorithm     string `json:"effective_algorithm"`
+	Protocol               string `json:"protocol"`
+	RollbackOnFailure      bool   `json:"rollback_on_failure"`
 }
 
 type PlanPreviewTLSRollout struct {

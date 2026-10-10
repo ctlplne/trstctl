@@ -84,9 +84,18 @@ type DeployIntent struct {
 	SubjectKeyAlgorithm string   `json:"subject_key_algorithm,omitempty"`
 	SubjectCommonName   string   `json:"subject_common_name,omitempty"`
 	SubjectDNSNames     []string `json:"subject_dns_names,omitempty"`
+	// A PQC certificate migration binds the discovered public predecessor to
+	// this exact host job. The agent verifies it on the listener and seals the
+	// local certificate/key pair before generating any replacement key.
+	PQCRunID                  string `json:"pqc_run_id,omitempty"`
+	PQCAssetID                string `json:"pqc_asset_id,omitempty"`
+	PQCPredecessorFingerprint string `json:"pqc_predecessor_fingerprint,omitempty"`
 	// PredecessorCertificateID is control-plane bookkeeping the agent never
 	// reads. It is declared so the intent round-trips without loss.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	// RotationRunID is read from the durable server-created renewal job so a
+	// signed PQC renewal can be joined to its exact lifecycle run.
+	RotationRunID string `json:"rotation_run_id,omitempty"`
 	// IssuingAuthorityID freezes the signer-backed CA selected by an executable
 	// migration manifest. The agent does not interpret it; SignJobCSR re-reads
 	// this immutable job field and refuses to mint through any other authority.
@@ -206,11 +215,12 @@ func Execute(ctx context.Context, client *http.Client, intent DeployIntent, mate
 // object already installed on an appliance or an encrypted predecessor in the
 // exact host agent's local ledger.
 type RollbackIntent struct {
-	Connector    string          `json:"connector"`
-	Target       string          `json:"target"`
-	TargetID     string          `json:"target_id,omitempty"`
-	IdentityID   string          `json:"identity_id,omitempty"`
-	TargetConfig json.RawMessage `json:"target_config,omitempty"`
+	Connector      string          `json:"connector"`
+	Target         string          `json:"target"`
+	TargetID       string          `json:"target_id,omitempty"`
+	TargetRevision string          `json:"target_revision,omitempty"`
+	IdentityID     string          `json:"identity_id,omitempty"`
+	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
 	// Management credentials only; the predecessor key stays in local custody.
 	CredentialRefs []string `json:"credential_refs,omitempty"`
 	// PredecessorFingerprint identifies the installed object to bind back to.
@@ -226,6 +236,8 @@ type RollbackIntent struct {
 	MigrationRunID  string `json:"migration_run_id,omitempty"`
 	MigrationWaveID string `json:"migration_wave_id,omitempty"`
 	RequiredAgentID string `json:"required_agent_id,omitempty"`
+	PQCRunID        string `json:"pqc_run_id,omitempty"`
+	PQCAssetID      string `json:"pqc_asset_id,omitempty"`
 }
 
 // Rollback drives the appliance re-bind model. Host restore is implemented in
