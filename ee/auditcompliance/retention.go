@@ -288,30 +288,6 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 }
 
 func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint audit.Checkpoint) error {
-	found := false
-	if err := w.log.Replay(ctx, checkpoint.BoundarySeq+1, func(event events.Event) error {
-		if event.TenantID != checkpoint.TenantID || event.Type != audit.EventTypeArchived {
-			return nil
-		}
-		var payload audit.ArchivedEvent
-		if err := json.Unmarshal(event.Data, &payload); err != nil {
-			return fmt.Errorf("decode audit archive event at sequence %d: %w", event.Sequence, err)
-		}
-		if event.SchemaVersion == audit.ArchivedEventSchemaVersion &&
-			payload.SourceHistoryRetained &&
-			payload.BoundarySeq == checkpoint.BoundarySeq &&
-			payload.BoundaryHash == checkpoint.BoundaryHash &&
-			payload.ArchiveURI == checkpoint.ArchiveURI &&
-			payload.Count == checkpoint.RecordCount {
-			found = true
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	if found {
-		return nil
-	}
 	payload := audit.ArchivedEvent{
 		Count:                 checkpoint.RecordCount,
 		BoundarySeq:           checkpoint.BoundarySeq,
@@ -330,8 +306,22 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint au
 		checkpoint.BoundaryHash,
 		checkpoint.ArchiveURI,
 	)))
+	id := "audit-archive-" + idDigest
+	retained, found, err := w.log.EventByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("audit retention: find exact archive event: %w", err)
+	}
+	if found {
+		var prior audit.ArchivedEvent
+		if retained.TenantID != checkpoint.TenantID || retained.Type != audit.EventTypeArchived ||
+			retained.SchemaVersion != audit.ArchivedEventSchemaVersion ||
+			json.Unmarshal(retained.Data, &prior) != nil || prior != payload {
+			return errors.New("audit retention: retained archive event conflicts with its checkpoint")
+		}
+		return nil
+	}
 	if _, err := w.log.Append(ctx, events.Event{
-		ID:            "audit-archive-" + idDigest,
+		ID:            id,
 		Type:          audit.EventTypeArchived,
 		TenantID:      checkpoint.TenantID,
 		SchemaVersion: audit.ArchivedEventSchemaVersion,
