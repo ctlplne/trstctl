@@ -68,6 +68,20 @@ beforeEach(() => {
 });
 
 describe("Core PQC runtime authority", () => {
+  it("offers an observed TLS 1.2 endpoint for a reviewed PQC posture rollout even when current policy permits it", async () => {
+    const observed = {
+      id: "observed-tls12",
+      kind: "tls-endpoint",
+      location: "edge.internal:443",
+      protocol: "TLSv1.2",
+      strength: "acceptable",
+      quantum_vulnerable: false,
+      out_of_policy: false,
+    } as CBOMAsset;
+    render(workflow(view(), false, [observed]));
+    expect(await screen.findByRole("checkbox", { name: "Select edge.internal:443 · TLSv1.2 for PQC migration" })).toBeInTheDocument();
+  });
+
   it("distinguishes protocol and cipher findings at the same config path", async () => {
     const user = userEvent.setup();
     const cipherAsset = { ...tlsAsset, id: "tls-asset-2", protocol: undefined, cipher: "TLS_RSA_WITH_3DES_EDE_CBC_SHA" } as CBOMAsset;

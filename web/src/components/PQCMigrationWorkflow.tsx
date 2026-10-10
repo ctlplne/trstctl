@@ -67,7 +67,10 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const vulnerable = useMemo(() => assets.filter((asset) => asset.quantum_vulnerable || asset.out_of_policy), [assets]);
+  const vulnerable = useMemo(
+    () => assets.filter((asset) => asset.quantum_vulnerable || asset.out_of_policy || (asset.kind === "tls-endpoint" && asset.protocol === "TLSv1.2")),
+    [assets],
+  );
   const selectedIds = vulnerable.filter((asset) => selected.has(asset.id)).map((asset) => asset.id);
   const tlsAssets = vulnerable.filter((asset) => selected.has(asset.id) && (asset.kind === "host-config" || asset.kind === "tls-endpoint"));
   const targets = useApiQuery(["pqc-migration-targets"], api.connectorTargets, { enabled: tlsAssets.length > 0, retry: false });

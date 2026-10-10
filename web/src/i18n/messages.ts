@@ -25160,15 +25160,15 @@ export const messages = {
   },
   "posture.pqcMigration.description": {
     defaultMessage:
-      "Select vulnerable CBOM assets and preview the exact plan. Certificate-key reissue only proves issuance; it does not deploy or retain the subject key.",
+      "Select CBOM migration candidates, including observed TLS 1.2 compatibility, and preview the exact plan. Certificate-key reissue only proves issuance; it does not deploy or retain the subject key.",
     description: "Explains the guarded PQC migration workflow.",
   },
   "posture.pqcMigration.noAssets": {
-    defaultMessage: "No vulnerable CBOM assets are currently eligible for migration.",
+    defaultMessage: "No CBOM assets are currently eligible for migration.",
     description: "Empty state for the core migration selector.",
   },
   "posture.pqcMigration.selectLegend": {
-    defaultMessage: "Vulnerable assets",
+    defaultMessage: "Migration candidates",
     description: "Legend above selectable CBOM migration assets.",
   },
   "posture.pqcMigration.selectAsset": {
@@ -25191,7 +25191,7 @@ export const messages = {
   "posture.pqcMigration.minimumVersion": { defaultMessage: "Minimum TLS version: TLSv1.3", description: "Required PQC TLS minimum version." },
   "posture.pqcMigration.cipherSuites": {
     defaultMessage:
-      "Envoy does not expose a TLS 1.3 cipher-suite restriction. This rollout enforces TLS 1.3 and the selected key-exchange groups; the served cipher is measured after activation.",
+      "Envoy does not expose a TLS 1.3 cipher-suite restriction. This rollout enforces TLS 1.3 and the selected key-exchange groups; the negotiated cipher is measured after activation.",
     description: "Truthful Envoy TLS 1.3 cipher capability.",
   },
   "posture.pqcMigration.keyExchangeGroups": {
@@ -25275,12 +25275,12 @@ export const messages = {
     description: "Copy label for the issued certificate fingerprint.",
   },
   "posture.pqcMigration.servedReadback": {
-    defaultMessage: "Served at {address}: {version}, {group}",
+    defaultMessage: "Listener at {address}: {version}, {group}",
     description: "Independent TLS handshake on the agent host.",
   },
   "posture.pqcMigration.groupUnreported": { defaultMessage: "group not reported", description: "Missing negotiated key-exchange group." },
   "posture.pqcMigration.servedLeafFingerprint": {
-    defaultMessage: "served leaf fingerprint",
+    defaultMessage: "listener certificate fingerprint",
     description: "Copy label for direct listener certificate fingerprint.",
   },
   "posture.pqcMigration.signedReadbackDigest": {
