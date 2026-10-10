@@ -749,10 +749,13 @@ JSON
 trstctl-cli ca authorities rotate-preview <predecessor-ca-authority-id> -f ca-rotation.json
 trstctl-cli ca authorities rotate <predecessor-ca-authority-id> -f ca-rotation.json
 
-# Re-key a signer-backed CA authority after a purpose-bound ceremony.
+# Re-key a signer-backed CA authority. Copy the current authority's common name,
+# DNS constraints, EKUs, and path length from `ca authorities list`; review the
+# exact lifetime and reason before custodians approve it.
 cat > ca-rekey-ceremony.json <<'JSON'
-{"operation":"rekey_ca","authority_id":"<ca-authority-id>","threshold":2,"spec":{"common_name":"Reviewed CA re-key"}}
+{"operation":"rekey_ca","authority_id":"<ca-authority-id>","threshold":2,"reason":"planned CA renewal","spec":{"common_name":"Issuing CA","permitted_dns_domains":["example.test"],"extended_key_usages":["serverAuth"],"max_path_len":0,"ttl_seconds":7776000,"signature_algorithm":"ecdsa-p256"}}
 JSON
+trstctl-cli ca ceremonies preview -f ca-rekey-ceremony.json
 trstctl-cli ca ceremonies start -f ca-rekey-ceremony.json
 
 cat > ca-rekey.json <<'JSON'

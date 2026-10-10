@@ -993,12 +993,63 @@ func TestServedCARekeyCAPCA06(t *testing.T) {
 		t.Fatalf("pre-rekey leaf did not chain to original CA: %v", err)
 	}
 
-	rekeyCeremony := createCARekeyCeremony(t, h, operator, oldCA.ID, 1, "rekey-ceremony")
+	rekeyTTL := int64((90 * 24 * time.Hour).Seconds())
+	rekeyReason := "CAP-CA-06 planned CA certificate renewal and re-key"
+	rekeySpec := map[string]any{
+		"common_name": "rekey issuing intermediate", "ttl_seconds": rekeyTTL,
+		"permitted_dns_domains": []string{"rekey.example.test"},
+		"extended_key_usages":   []string{"serverAuth"}, "max_path_len": 0,
+		"signature_algorithm": "ecdsa-p256",
+	}
+	previewCode, previewBody := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", map[string]any{
+		"operation": "rekey_ca", "authority_id": oldCA.ID, "threshold": 1,
+		"spec": rekeySpec, "reason": rekeyReason,
+	})
+	if previewCode != http.StatusOK || !bytes.Contains(previewBody, []byte(`"ttl_seconds":7776000`)) ||
+		!bytes.Contains(previewBody, []byte(`"signature_algorithm":"ecdsa-p256"`)) || !bytes.Contains(previewBody, []byte(rekeyReason)) {
+		t.Fatalf("exact re-key preview = %d body=%s", previewCode, previewBody)
+	}
+	for _, tc := range []struct {
+		name   string
+		spec   map[string]any
+		reason string
+	}{
+		{"missing lifetime and profile", map[string]any{"common_name": "rekey issuing intermediate"}, rekeyReason},
+		{"missing reason", rekeySpec, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", map[string]any{
+				"operation": "rekey_ca", "authority_id": oldCA.ID, "threshold": 1,
+				"spec": tc.spec, "reason": tc.reason,
+			})
+			if code != http.StatusUnprocessableEntity {
+				t.Fatalf("inexact re-key preview = %d body=%s; want 422", code, body)
+			}
+		})
+	}
+	rekeyCeremony := createCARekeyCeremony(t, h, operator, oldCA.ID, rekeySpec, rekeyReason, 1, "rekey-ceremony")
 	approveCACeremony(t, h, approver, rekeyCeremony.ID, 1, "rekey-approval")
+	for _, tc := range []struct {
+		name   string
+		ttl    int64
+		reason string
+	}{
+		{"changed lifetime", rekeyTTL + 86400, rekeyReason},
+		{"changed reason", rekeyTTL, "different reason"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rekey", operator, "rekey-refuse-"+tc.name, map[string]any{
+				"ceremony_id": rekeyCeremony.ID, "ttl_seconds": tc.ttl, "reason": tc.reason,
+			})
+			if code != http.StatusConflict {
+				t.Fatalf("changed reviewed re-key plan = %d body=%s; want 409", code, body)
+			}
+		})
+	}
 	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rekey", operator, "rekey-activate-cap-ca-06", map[string]any{
 		"ceremony_id": rekeyCeremony.ID,
-		"ttl_seconds": int64((90 * 24 * time.Hour).Seconds()),
-		"reason":      "CAP-CA-06 planned CA certificate renewal and re-key",
+		"ttl_seconds": rekeyTTL,
+		"reason":      rekeyReason,
 	})
 	if code != http.StatusCreated {
 		t.Fatalf("re-key CA authority = %d body=%s; want 201", code, body)
@@ -1522,15 +1573,14 @@ func createCACeremonyWithCSR(t *testing.T, h *servedHarness, token, parentID, cs
 	return got
 }
 
-func createCARekeyCeremony(t *testing.T, h *servedHarness, token, authorityID string, threshold int, idem string) servedCACeremony {
+func createCARekeyCeremony(t *testing.T, h *servedHarness, token, authorityID string, spec map[string]any, reason string, threshold int, idem string) servedCACeremony {
 	t.Helper()
 	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, map[string]any{
 		"operation":    "rekey_ca",
 		"authority_id": authorityID,
 		"threshold":    threshold,
-		"spec": map[string]any{
-			"common_name": "re-key existing CA",
-		},
+		"spec":         spec,
+		"reason":       reason,
 	})
 	if code != http.StatusCreated {
 		t.Fatalf("create rekey_ca ceremony = %d body=%s; want 201", code, raw)

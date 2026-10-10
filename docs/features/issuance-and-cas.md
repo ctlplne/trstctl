@@ -182,8 +182,9 @@ reviewed resource: `root:<sha256-of-ca-spec>`,
 `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. Existing CA import uses
 `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>`,
 binding the reviewed chain to the exact signer-held key handle, and renewal/re-key
-uses `rotation:<ca-id>` to create fresh signer-held CA material for the selected
-authority. Short approvals return `ErrQuorumNotMet`; an opener approving their own
+uses `ca-rekey-v2:<sha256-of-authority/spec/reason>` to create fresh signer-held
+CA material for the selected authority with the reviewed lifetime and profile.
+Short approvals return `ErrQuorumNotMet`; an opener approving their own
 ceremony, or a ceremony already used or opened for a different resource/spec, fails
 closed before the CA mutation commits — stopping one compromised admin account from
 minting a rogue root or intermediate, and stopping one valid ceremony from being
@@ -220,7 +221,7 @@ exactly one public certificate PEM (never a private key), generates a signer-hel
 intermediate CSR for the operator to sign outside trstctl, and imports the result
 only if it chains to the offline root, matches the reviewed `CASpec`, and carries the
 signer-held public key. Rotation and re-key activations both promote a signer-backed
-successor (re-key from a fresh `rotation:<ca-id>` ceremony), mark the predecessor
+successor (re-key from a fresh `ca-rekey-v2` ceremony), mark the predecessor
 `superseded`, record `replaces_id`, and keep both issue URLs live while new
 certificates chain to the successor; offline-root re-key works the same way but stays
 an operator ceremony since the offline key never enters trstctl. Every served step

@@ -2300,8 +2300,9 @@ than sending an operator looking for a credential that was never there.
   the predecessor superseded, records the successor's `replaces_id`, keeps the
   predecessor issue URL live while new certificates route to the successor).
   Signer-backed renewal/re-key is served at
-  `/api/v1/ca/authorities/{id}/rekey` (consumes a `rotation:<ca-id>` ceremony,
-  mints fresh CA key/certificate material, records `ca.authority.rekeyed`, keeps
+  `/api/v1/ca/authorities/{id}/rekey` (consumes a `ca-rekey-v2` ceremony bound to
+  the authority profile, lifetime, and reason; mints fresh CA key/certificate
+  material, records `ca.authority.rekeyed`, keeps
   the stable issue URL live), and cross-signing at
   `/api/v1/ca/authorities/{id}/cross-sign`. Offline-root re-key
   (`/api/v1/ca/authorities/{id}/offline-rekey`) and cross-certificate

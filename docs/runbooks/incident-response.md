@@ -55,8 +55,8 @@ process; its compromise is the worst case.
    the successor authority exists, activate zero-downtime overlap with
    `POST /api/v1/ca/authorities/{predecessor-id}/rotate` and a `successor_id`.
    For same-lane signer-backed CA renewal, use
-   `POST /api/v1/ca/authorities/{predecessor-id}/rekey` after a `rotation:<ca-id>`
-   ceremony to mint fresh CA material directly. In both cases the predecessor issue
+   `POST /api/v1/ca/authorities/{predecessor-id}/rekey` after a `ca-rekey-v2`
+   ceremony that binds the authority profile, validity, and reason. In both cases the predecessor issue
    URL remains valid, but new certificates are signed by the successor.
 4. **Revoke** suspect leaves through the served lifecycle path; OCSP answers change
    immediately and trusted revocation paths publish a fresh tenant CRL. If the CA

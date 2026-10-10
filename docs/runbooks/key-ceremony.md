@@ -39,6 +39,7 @@ Purpose values are deliberately concrete:
 | `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>` | Importing a public, self-signed offline root certificate matching `CASpec`. |
 | `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>` | Generating a signer-held CSR under the offline root, then importing the signed intermediate. |
 | `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>` | Importing an existing certificate chain, bound to the named signer-held key handle. |
+| `ca-rekey-v2:<sha256-of-authority/spec/reason>` | Re-keying one active signer-backed authority with the exact reviewed profile and lifetime. |
 | `cross-sign:<ca-id>:<sha256-of-target-cert-der>` | One cross-signature from that CA over the target certificate. |
 | `offline-root-rekey:<sha256-of-authority/successor/both-cross-certs/reason/spec>` | Importing an offline-root successor plus both direction-specific cross-certificates; private keys stay on the disconnected systems. |
 | `offline-cross-sign:<sha256-of-authority/target/cross-cert>` | Importing an already-produced offline-root cross-certificate for a target. |
@@ -315,19 +316,34 @@ lane. The served path covers signer-backed online roots/intermediates;
 offline-root private operations stay outside the binary, though the import path
 verifies their public successor and cross-certificates.
 
-1. Start a ceremony with `POST /api/v1/ca/ceremonies`:
+1. Read the active authority from `GET /api/v1/ca/authorities`. Copy its
+   common name, DNS constraints, EKUs, and path length into the proposed
+   spec. Choose a positive lifetime and write the reason before approval.
+   Preview the exact body with `POST /api/v1/ca/ceremonies/preview`, then
+   start it with `POST /api/v1/ca/ceremonies`:
 
    ```json
    {
      "operation": "rekey_ca",
      "authority_id": "<ca-authority-id>",
      "threshold": 2,
-     "spec": { "common_name": "Reviewed re-key" }
+     "reason": "planned CA renewal",
+     "spec": {
+       "common_name": "Issuing CA",
+       "permitted_dns_domains": ["example.test"],
+       "extended_key_usages": ["serverAuth"],
+       "max_path_len": 0,
+       "ttl_seconds": 7776000,
+       "signature_algorithm": "ecdsa-p256"
+     }
    }
    ```
 
-   The ceremony purpose is `rotation:<ca-authority-id>`, so it cannot be replayed
-   against a different CA.
+   The server checks the supplied profile against the current authority and
+   displays the normalized spec, reason, and request fingerprint. The opaque
+   `ca-rekey-v2` ceremony purpose binds the authority ID, exact profile,
+   lifetime, and reason. A pending legacy `rotation:<ca-authority-id>` ceremony
+   cannot authorize this operation; cancel it and start a new one.
 2. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals`.
 3. Activate the re-key with `POST /api/v1/ca/authorities/{id}/rekey`:
 
@@ -339,7 +355,9 @@ verifies their public successor and cross-certificates.
    }
    ```
 
-   The server creates a fresh signer-held CA key, issues a replacement
+   A changed lifetime, reason, or authority profile is refused with 409; start
+   a new ceremony for the revised plan. The server creates a fresh signer-held
+   CA key, issues a replacement
    certificate matching the predecessor's common name, DNS constraints, EKUs,
    and path length; emits `ca.authority.rekeyed`; marks the predecessor
    `superseded`; and records `replaces_id` on the successor.

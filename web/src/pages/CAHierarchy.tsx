@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Building2,
@@ -42,6 +42,8 @@ import {
   managedIntermediateDefaultSpec,
 } from "./cahierarchy/CAHierarchyCeremonyParts";
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
+import { KeyValue, LabeledInput, LabeledSelect } from "./cahierarchy/CAHierarchyFormParts";
+import { CARekeyPanel } from "./cahierarchy/CAHierarchyRekeyParts";
 import {
   api,
   ApiError,
@@ -800,13 +802,33 @@ export function CAHierarchy() {
 
   async function startCARekeyCeremony() {
     const authorityID = rekeyAuthorityID.trim();
-    const selected = (caDiscovery?.items ?? []).find((item) => item.source_id === authorityID);
+    const selected = authorities.find((item) => item.id === authorityID);
+    const days = Number(rekeyTTLDays.trim());
+    const reason = rekeyReason.trim();
+    if (!selected || !selected.signer_handle || selected.status !== "active") {
+      setRekeyError(t("caHierarchy.rekey.selectAuthority"));
+      return;
+    }
+    if (!Number.isSafeInteger(days) || days < 1 || days > 106751) {
+      setRekeyError(t("caHierarchy.rekey.validityRequired"));
+      return;
+    }
+    if (!reason) {
+      setRekeyError(t("caHierarchy.rekey.reasonRequired"));
+      return;
+    }
     const request: CACeremonyStartRequest = {
       operation: "rekey_ca",
       authority_id: authorityID,
       threshold: 2,
+      reason,
       spec: {
-        common_name: selected?.name ?? "Re-key existing CA",
+        common_name: selected.common_name,
+        permitted_dns_domains: selected.permitted_dns_names ?? [],
+        max_path_len: selected.max_path_len,
+        extended_key_usages: selected.extended_key_usages ?? [],
+        ttl_seconds: days * 24 * 60 * 60,
+        signature_algorithm: "ecdsa-p256",
       },
     };
     await openCeremonyReview(
@@ -824,12 +846,19 @@ export function CAHierarchy() {
     setRekeyBusy(true);
     setRekeyError(null);
     try {
-      const days = Number.parseInt(rekeyTTLDays.trim(), 10);
-      const ttlSeconds = Number.isFinite(days) && days > 0 ? days * 24 * 60 * 60 : undefined;
+      const days = Number(rekeyTTLDays.trim());
+      if (!Number.isSafeInteger(days) || days < 1 || days > 106751) {
+        setRekeyError(t("caHierarchy.rekey.validityRequired"));
+        return;
+      }
+      if (!rekeyReason.trim()) {
+        setRekeyError(t("caHierarchy.rekey.reasonRequired"));
+        return;
+      }
       const next = await api.rekeyCAAuthority(rekeyAuthorityID.trim(), {
         ceremony_id: rekeyCeremonyID.trim(),
-        ttl_seconds: ttlSeconds,
-        reason: rekeyReason.trim() || undefined,
+        ttl_seconds: days * 24 * 60 * 60,
+        reason: rekeyReason.trim(),
       });
       setRekeyResult(next);
       await load();
@@ -1010,10 +1039,10 @@ export function CAHierarchy() {
       <div className={tab === "lifecycle" ? undefined : "hidden"}>
         <CARekeyPanel
           authorityID={rekeyAuthorityID}
+          authorities={authorities}
           busy={rekeyBusy}
           ceremonyID={rekeyCeremonyID}
           error={rekeyError}
-          inventory={caDiscovery}
           reason={rekeyReason}
           result={rekeyResult}
           ttlDays={rekeyTTLDays}
@@ -1585,134 +1614,6 @@ function CARotationPanel({
         )}
       </section>
     </section>
-  );
-}
-
-function CARekeyPanel({
-  authorityID,
-  busy,
-  ceremonyID,
-  error,
-  inventory,
-  reason,
-  result,
-  ttlDays,
-  onActivate,
-  onAuthorityChange,
-  onCeremonyChange,
-  onReasonChange,
-  onStartCeremony,
-  onTTLChange,
-}: {
-  authorityID: string;
-  busy: boolean;
-  ceremonyID: string;
-  error: string | null;
-  inventory: CADiscovery | null;
-  reason: string;
-  result: CAAuthorityRotation | null;
-  ttlDays: string;
-  onActivate: () => void;
-  onAuthorityChange: (value: string) => void;
-  onCeremonyChange: (value: string) => void;
-  onReasonChange: (value: string) => void;
-  onStartCeremony: () => void;
-  onTTLChange: (value: string) => void;
-}) {
-  const { t } = useTranslation();
-  const authorities = (inventory?.items ?? []).filter(
-    (item) => item.source === "ca_hierarchy" && item.managed && item.issuance_path && item.status === "active",
-  );
-  const readyToStart = authorityID.trim() !== "";
-  const readyToRekey = readyToStart && ceremonyID.trim() !== "";
-
-  return (
-    <section aria-labelledby="ca-rekey-heading" className="grid gap-3 border-b border-border py-4">
-      <div className="flex items-start gap-3">
-        <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <h2 id="ca-rekey-heading" className="text-title font-semibold">
-            {translateNow("source.ca.renewal.and.re.key.fb27d9e180")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6")}</p>
-        </div>
-      </div>
-      {error && <ErrorState title={translateNow("source.ca.re.key.failed.c94515c43b")}>{error}</ErrorState>}
-      <section aria-labelledby="ca-rekey-form-heading" className="ui-panel p-comfortable text-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 id="ca-rekey-form-heading" className="text-title font-semibold">
-              {translateNow("source.fresh.ca.material.d1a53a627a")}
-            </h3>
-            {result && <p className="mt-1 font-mono text-xs">{result.active_issue_path}</p>}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={onStartCeremony} disabled={busy || !readyToStart}>
-              <FileKey2 className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.start.re.key.ceremony.c2e02a1a0c")}
-            </Button>
-            <Button type="button" size="sm" onClick={onActivate} disabled={busy || !readyToRekey}>
-              <KeyRound className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.re.key.ca.4aadf37c7a")}
-            </Button>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-4">
-          <LabeledSelect id="ca-rekey-authority" label="CA authority" value={authorityID} onChange={onAuthorityChange}>
-            <option value="">{translateNow("source.select.authority.b2858bf4f3")}</option>
-            {authorities.map((item) => (
-              <option key={item.id} value={item.source_id}>
-                {item.name} ({item.status})
-              </option>
-            ))}
-          </LabeledSelect>
-          <LabeledInput id="ca-rekey-ceremony" label={t("parity.ceremonyId_6f8ee6")} value={ceremonyID} onChange={onCeremonyChange} />
-          <LabeledInput id="ca-rekey-ttl" label="Validity days" value={ttlDays} type="number" onChange={onTTLChange} />
-          <LabeledInput id="ca-rekey-reason" label="Re-key reason" value={reason} onChange={onReasonChange} />
-        </div>
-        {authorities.length === 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.create.or.import.a.signer.backed.authority.938d8e0658")}</p>
-        )}
-        {result && (
-          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
-            <KeyValue label="Fresh successor" value={`${result.successor.common_name} (${result.successor.status})`} />
-            <KeyValue label="Stable issue URL" value={result.issue_path} mono />
-            <KeyValue label="Active issue URL" value={result.active_issue_path} mono />
-          </dl>
-        )}
-      </section>
-    </section>
-  );
-}
-
-function LabeledSelect({
-  children,
-  id,
-  label,
-  onChange,
-  value,
-}: {
-  children: ReactNode;
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="grid gap-2">
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="rounded-control border border-border bg-background px-3 py-2 outline-none transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
-      >
-        {children}
-      </select>
-    </div>
   );
 }
 
@@ -2695,44 +2596,6 @@ function IssuerCatalogCard({ onConfigure, type }: { type: IssuerTypeConfig; onCo
   );
 }
 
-function LabeledInput({
-  id,
-  label,
-  onChange,
-  placeholder,
-  required,
-  type = "text",
-  value,
-  inputRef,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  type?: "text" | "password" | "number";
-  required?: boolean;
-  placeholder?: string;
-  onChange: (value: string) => void;
-  inputRef?: RefObject<HTMLInputElement>;
-}) {
-  return (
-    <div className="grid gap-2">
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        ref={inputRef}
-        id={id}
-        type={type}
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
-      />
-    </div>
-  );
-}
-
 function LabeledTextarea({
   id,
   label,
@@ -2792,15 +2655,6 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
         {translateNow("source.dismiss.48845bff33")}
       </Button>
-    </div>
-  );
-}
-
-function KeyValue({ label, mono = false, value }: { label: string; mono?: boolean; value: ReactNode }) {
-  return (
-    <div>
-      <dt className="font-medium text-muted-foreground">{label}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "font-medium"}>{value}</dd>
     </div>
   );
 }

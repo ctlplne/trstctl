@@ -246,7 +246,7 @@ describe("CA hierarchy and custody surface", () => {
         authority_count: 2,
       },
     });
-    apiMock.previewCACeremony.mockImplementation(async (input: { operation: string; threshold: number; spec: Record<string, unknown> }) => ({
+    apiMock.previewCACeremony.mockImplementation(async (input: { operation: string; threshold: number; spec: Record<string, unknown>; reason?: string }) => ({
       capability: "F48",
       operation: input.operation,
       ready: true,
@@ -254,7 +254,8 @@ describe("CA hierarchy and custody surface", () => {
       approval_threshold: input.threshold,
       required_permission: "issuers:write",
       normalized_spec: input.spec,
-      changes: ["Prepare the reviewed CA trust change without creating a ceremony or key."],
+      changes:
+        input.operation === "rekey_ca" ? [`Re-key reason: ${input.reason}`] : ["Prepare the reviewed CA trust change without creating a ceremony or key."],
       risks: ["A completed ceremony can authorize a later trust or signing-authority change."],
       verification_steps: ["Verify distinct approvals and the immutable ceremony event before execution."],
       sensitive_inputs: input.operation === "import_existing_ca" ? ["certificate_pem", "signer_handle"] : [],
@@ -295,7 +296,7 @@ describe("CA hierarchy and custody surface", () => {
         return { ...base, id: "ceremony-existing-ca", purpose: "import-existing-ca:customer-existing-ca" };
       }
       if (input.operation === "rekey_ca") {
-        return { ...base, id: "ceremony-rekey-ca", purpose: "rotation:ca-existing-imported" };
+        return { ...base, id: "ceremony-rekey-ca", purpose: "ca-rekey-v2:reviewed-plan-hash" };
       }
       return { ...base, id: "ceremony-root-1", purpose: "create_root:Trust Root CA" };
     });
@@ -846,11 +847,35 @@ describe("CA hierarchy and custody surface", () => {
 
   it("starts a CA re-key ceremony and activates fresh CA material", async () => {
     const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "ca-existing-imported",
+          tenant_id: "tenant-1",
+          kind: "intermediate",
+          status: "active",
+          common_name: "Imported Existing CA",
+          signer_handle: "customer-existing-ca",
+          certificate_pem: "",
+          serial: "03",
+          max_path_len: 0,
+          permitted_dns_names: ["example.test"],
+          extended_key_usages: ["serverAuth"],
+          created_at: "2026-06-26T14:00:00Z",
+        },
+      ],
+    });
     renderCAHierarchy();
 
     await screen.findByRole("heading", { name: "CA renewal and re-key" });
     await user.selectOptions(screen.getByLabelText("CA authority"), "ca-existing-imported");
+    await user.clear(screen.getByLabelText("Validity days"));
+    await user.type(screen.getByLabelText("Validity days"), "90");
+    await user.clear(screen.getByLabelText("Re-key reason"));
+    await user.type(screen.getByLabelText("Re-key reason"), "planned renewal");
     await user.click(screen.getByRole("button", { name: "Start re-key ceremony" }));
+    expect(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByText(/"ttl_seconds": 7776000/)).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog", { name: "Review CA ceremony" })).getByText("Re-key reason: planned renewal")).toBeInTheDocument();
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
@@ -858,15 +883,19 @@ describe("CA hierarchy and custody surface", () => {
         operation: "rekey_ca",
         authority_id: "ca-existing-imported",
         threshold: 2,
-        spec: { common_name: "Imported Existing CA" },
+        reason: "planned renewal",
+        spec: {
+          common_name: "Imported Existing CA",
+          permitted_dns_domains: ["example.test"],
+          max_path_len: 0,
+          extended_key_usages: ["serverAuth"],
+          ttl_seconds: 7_776_000,
+          signature_algorithm: "ecdsa-p256",
+        },
       }),
     );
     expect(await screen.findByDisplayValue("ceremony-rekey-ca")).toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText("Validity days"));
-    await user.type(screen.getByLabelText("Validity days"), "90");
-    await user.clear(screen.getByLabelText("Re-key reason"));
-    await user.type(screen.getByLabelText("Re-key reason"), "planned renewal");
     await user.click(screen.getByRole("button", { name: "Re-key CA" }));
 
     await waitFor(() =>

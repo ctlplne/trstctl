@@ -8457,6 +8457,18 @@ export const messages = {
   },
   "caHierarchy.preview.commonName": { defaultMessage: "CA common name", description: "Label for the reviewed CA profile common name." },
   "caHierarchy.preview.exactSpec": { defaultMessage: "Exact CA spec", description: "Normalized public CA parameters bound to the ceremony fingerprint." },
+  "caHierarchy.rekey.selectAuthority": {
+    defaultMessage: "Choose an active signer-backed CA before starting re-key review.",
+    description: "Re-key ceremony authority validation.",
+  },
+  "caHierarchy.rekey.validityRequired": {
+    defaultMessage: "Enter a whole number of validity days from 1 to 106751.",
+    description: "Re-key ceremony lifetime validation.",
+  },
+  "caHierarchy.rekey.reasonRequired": {
+    defaultMessage: "Enter a reason before starting or activating the re-key ceremony.",
+    description: "Re-key ceremony reason validation.",
+  },
   "caHierarchy.preview.authority": { defaultMessage: "Existing authority", description: "Label for the tenant-scoped authority referenced by the ceremony." },
   "caHierarchy.preview.fingerprint": { defaultMessage: "Request fingerprint", description: "Label for the exact non-secret CA ceremony request digest." },
   "caHierarchy.preview.changes": { defaultMessage: "What this prepares", description: "Heading for the later CA change authorized by the ceremony." },

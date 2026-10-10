@@ -94,7 +94,7 @@ func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID strin
 	if err := h.ceremonyThresholdFloor(req.Threshold); err != nil {
 		return api.CACeremonyPlanPreview{}, err
 	}
-	purpose, err := hierarchyPurposeFromStartRequest(req)
+	purpose, normalizedSpec, err := h.ceremonyPurposeAndSpec(ctx, tenantID, req)
 	if err != nil {
 		return api.CACeremonyPlanPreview{}, err
 	}
@@ -112,13 +112,16 @@ func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID strin
 		RequestFingerprint:     crypto.SHA256Hex(fingerprintPayload),
 		ApprovalThreshold:      req.Threshold,
 		RequiredPermission:     "issuers:write",
-		NormalizedSpec:         req.Spec,
+		NormalizedSpec:         normalizedSpec,
 		Changes:                ceremonyPreviewChanges(req.Operation),
 		Risks:                  ceremonyPreviewRisks(req.Operation),
 		VerificationSteps:      ceremonyPreviewVerification(req.Operation),
 		SensitiveInputs:        ceremonySensitiveInputs(req),
 		PreviewWrites:          []string{},
 		PreviewExternalEffects: []string{},
+	}
+	if req.Operation == "rekey_ca" {
+		preview.Changes = append(preview.Changes, "Re-key reason: "+strings.TrimSpace(req.Reason))
 	}
 	if req.ParentID != "" {
 		parent, loadErr := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.ParentID))
@@ -279,7 +282,7 @@ func (h *caHierarchyService) StartCeremony(ctx context.Context, tenantID string,
 	if err := h.ceremonyThresholdFloor(req.Threshold); err != nil {
 		return api.CAKeyCeremony{}, err
 	}
-	purpose, err := hierarchyPurposeFromStartRequest(req)
+	purpose, _, err := h.ceremonyPurposeAndSpec(ctx, tenantID, req)
 	if err != nil {
 		return api.CAKeyCeremony{}, err
 	}
@@ -1009,15 +1012,14 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 	if caID == "" || ceremonyID == "" {
 		return api.CAAuthorityRotation{}, fmt.Errorf("%w: authority id and ceremony_id are required", api.ErrCAHierarchyInvalid)
 	}
-	if req.TTLSeconds < 0 {
-		return api.CAAuthorityRotation{}, fmt.Errorf("%w: ttl_seconds cannot be negative", api.ErrCAHierarchyInvalid)
+	if req.TTLSeconds <= 0 {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: ttl_seconds must be positive", api.ErrCAHierarchyInvalid)
 	}
 	if req.TTLSeconds > math.MaxInt64/int64(time.Second) {
 		return api.CAAuthorityRotation{}, fmt.Errorf("%w: ttl_seconds exceeds the supported duration range", api.ErrCAHierarchyInvalid)
 	}
-	purpose, err := rekeyCAPurpose(caID)
-	if err != nil {
-		return api.CAAuthorityRotation{}, err
+	if strings.TrimSpace(req.Reason) == "" {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: reason is required for rekey_ca", api.ErrCAHierarchyInvalid)
 	}
 	handle := hierarchySignerHandle(ceremonyID)
 	newID := uuid.NewString()
@@ -1025,7 +1027,7 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 	var rekeySigner *signing.RemoteSigner
 	var signerCreated bool
 	eventAppended := false
-	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		var err error
 		predecessor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
 		if err != nil {
@@ -1034,14 +1036,21 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 		if err := validateAuthorityRekey(predecessor); err != nil {
 			return err
 		}
+		spec := rekeyAuthoritySpec(predecessor, req.TTLSeconds)
+		purpose, err := rekeyCAPurpose(caID, spec, req.Reason)
+		if err != nil {
+			return err
+		}
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
+			if errors.Is(err, store.ErrKeyCeremonyPurposeMismatch) {
+				return fmt.Errorf("%w: reviewed re-key plan differs from this ceremony; cancel it and start a new ceremony for the current CA profile, lifetime, and reason", api.ErrCAHierarchyConflict)
+			}
 			return err
 		}
 		rekeySigner, signerCreated, err = h.createOrBindSigner(ctx, handle)
 		if err != nil {
 			return err
 		}
-		spec := rekeyAuthoritySpec(predecessor, req.TTLSeconds)
 		issued, chainPEM, err := h.issueRekeyedCA(ctx, tx, tenantID, predecessor, rekeySigner, spec)
 		if err != nil {
 			return err
@@ -1430,14 +1439,6 @@ func validateAuthorityRekey(ca store.CAAuthority) error {
 	}
 }
 
-func rekeyAuthoritySpec(ca store.CAAuthority, ttlSeconds int64) api.CASpec {
-	return api.CASpec{
-		CommonName: ca.CommonName, PermittedDNSDomains: append([]string(nil), ca.PermittedDNSNames...),
-		MaxPathLen: ca.MaxPathLen, ExtendedKeyUsages: append([]string(nil), ca.EKUs...),
-		TTLSeconds: ttlSeconds, SignatureAlgorithm: "ecdsa-p256",
-	}
-}
-
 func sameStringPtr(a, b *string) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
@@ -1511,7 +1512,7 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 		}
 		return externalIntermediateCSRPurpose(req.ParentID, csrDER, req.Spec)
 	case "rekey_ca":
-		return rekeyCAPurpose(req.AuthorityID)
+		return "", fmt.Errorf("%w: rekey_ca requires authority-backed plan validation", api.ErrCAHierarchyInvalid)
 	case "cross_sign_ca":
 		targetDER, _, err := singleCertificatePEM(req.TargetCertificatePEM)
 		if err != nil {
@@ -1598,14 +1599,6 @@ func externalIntermediateCSRPurpose(parentID string, csrDER []byte, spec api.CAS
 		return "", err
 	}
 	return "intermediate-csr:" + parentID + ":" + crypto.SHA256Hex(csrDER) + ":" + specPurpose, nil
-}
-
-func rekeyCAPurpose(authorityID string) (string, error) {
-	authorityID = strings.TrimSpace(authorityID)
-	if authorityID == "" {
-		return "", fmt.Errorf("%w: authority_id is required for rekey_ca", api.ErrCAHierarchyInvalid)
-	}
-	return libhierarchy.PurposeRotate(authorityID), nil
 }
 
 func offlineCrossSignPurpose(authorityID string, targetDER, crossDER []byte) string {
