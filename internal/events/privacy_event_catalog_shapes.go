@@ -240,6 +240,15 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"actor_id":"","outcome":""}`), true
 	case "ca.authority.horizon_alerted":
 		return shape(`{"ca_authority_id":"","common_name":"","kind":"","not_after":"","horizon_months":1,"months_remaining":1,"renew_by":"","validity_compressed":true,"dependent_certificates":1}`), true
+	case "ca.intermediate_csr.sign_requested":
+		return shape(`{"ca_id":"","ceremony_id":"","csr_sha256":""}`), true
+	case "ca.intermediate_csr.issued":
+		// One event name has two already-served, mutually exclusive producers:
+		// the offline signer-held CSR and the online signed CSR audit result.
+		return PrivacyPayloadShapeOneOf(
+			shape(`{"ca_id":"","ceremony_id":"","signer_handle":"","csr_sha256":"","offline_root":true}`),
+			shape(`{"ca_id":"","ceremony_id":"","serial":"","subject":"","csr_sha256":""}`),
+		), true
 	case "certificate.expiring":
 		return shape(`{"certificate_id":"","serial":"","not_after":""}`), true
 	case "broker.agent_identity.task_bound":

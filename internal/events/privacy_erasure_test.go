@@ -536,6 +536,41 @@ func TestCoreProductionPrivacyCatalogCoversCAHorizonAlert(t *testing.T) {
 	}
 }
 
+func TestCoreProductionPrivacyCatalogCoversLiveCAIntermediateCSREvents(t *testing.T) {
+	t.Parallel()
+	const subject = "alice@example.com"
+	for _, fixture := range []struct {
+		name      string
+		eventType string
+		payload   string
+	}{
+		{"online-request", "ca.intermediate_csr.sign_requested", `{"ca_id":"ca-1","ceremony_id":"ceremony-1","csr_sha256":"digest-1"}`},
+		{"offline-issued", "ca.intermediate_csr.issued", `{"ca_id":"ca-1","ceremony_id":"ceremony-1","signer_handle":"ca-handle-1","csr_sha256":"digest-1","offline_root":true}`},
+		{"online-issued", "ca.intermediate_csr.issued", `{"ca_id":"ca-1","ceremony_id":"ceremony-1","serial":"01","subject":"alice@example.com","csr_sha256":"digest-1"}`},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			if !HasPrivacyEventPolicy(fixture.eventType, DefaultSchemaVersion) {
+				t.Fatalf("live %s event has no closed privacy policy", fixture.eventType)
+			}
+			if err := validateRegisteredPrivacyEventPayload([]byte(fixture.payload), fixture.eventType, DefaultSchemaVersion); err != nil {
+				t.Fatalf("live %s payload rejected: %v", fixture.eventType, err)
+			}
+			withExtra := strings.TrimSuffix(fixture.payload, "}") + `,"undeclared":"field"}`
+			if err := validateRegisteredPrivacyEventPayload([]byte(withExtra), fixture.eventType, DefaultSchemaVersion); err == nil {
+				t.Fatal("closed CA CSR privacy policy accepted an undeclared field")
+			}
+		})
+	}
+	rewritten, changed, err := applyRegisteredPrivacyEventPolicy(
+		[]byte(`{"ca_id":"ca-1","ceremony_id":"ceremony-1","serial":"01","subject":"alice@example.com","csr_sha256":"digest-1"}`),
+		"11111111-1111-4111-8111-111111111111", subject, "ca.intermediate_csr.issued", DefaultSchemaVersion,
+	)
+	if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) ||
+		!bytes.Contains(rewritten, []byte(`"csr_sha256":"digest-1"`)) {
+		t.Fatalf("CA CSR subject erasure = changed %t err %v payload %s", changed, err, rewritten)
+	}
+}
+
 func TestCoreProductionPrivacyCatalogCoversSignedDNSPluginAuditEvents(t *testing.T) {
 	t.Parallel()
 	const subject = "_acme-challenge.customer.example"
