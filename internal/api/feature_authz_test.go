@@ -8,10 +8,13 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/featureparity"
+	succapi "trstctl.com/trstctl/internal/succession/api"
 )
 
 func TestFeatureAuthzManifestEnumeratesAPIRoutes(t *testing.T) {
-	routes := api.New(nil, nil, nil).Routes()
+	// Core families attach through the route seam at runtime. Include their
+	// actual metadata so a new operation cannot escape the feature/RBAC census.
+	routes := api.New(nil, nil, nil, api.WithCoreRoutes(succapi.Routes(nil)...)).Routes()
 	var manifestInput []featureparity.APIRouteAuthz
 	for _, rt := range routes {
 		if rt.OperationID == "" {
