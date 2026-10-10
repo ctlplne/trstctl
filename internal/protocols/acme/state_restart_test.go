@@ -47,7 +47,12 @@ func rewriteBaseURL(t *testing.T, rawURL, base string) string {
 
 func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 	ctx := context.Background()
-	log := openACMEStateLog(t)
+	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	log, err := events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
 	const tenantID = "tenant-acme-state"
 
 	srv1, err := acmesrv.New(mustBuiltin(t), acmesrv.AcceptAll{}).WithStateLog(ctx, tenantID, log)
@@ -122,6 +127,19 @@ func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 		t.Fatalf("ARI certID: %v", err)
 	}
 	ts1.Close()
+	if _, err := log.Append(ctx, events.Event{Type: "test.unrelated", TenantID: tenantID, Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: "acme.account.upserted", TenantID: "other-tenant", Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	srv2, err := acmesrv.New(mustBuiltin(t), acmesrv.AcceptAll{}).WithStateLog(ctx, tenantID, log)
 	if err != nil {

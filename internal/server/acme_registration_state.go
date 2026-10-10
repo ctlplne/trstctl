@@ -76,17 +76,22 @@ func (l acmeRegistrationLog) Replay(ctx context.Context, from uint64, apply func
 		if current != expected {
 			return errors.New("server: ACME registration changed during replay")
 		}
-		return l.log.Replay(readCtx, from, func(event events.Event) error {
-			// Event positions can change during restore, and a publish can finish
-			// after a database session disappears. New producers bind the immutable
-			// envelope ID as well as checking the live transaction. History rewrites
-			// preserve that ID. Never grant a delayed old event current authority.
-			if strings.HasPrefix(event.ID, acmeRegistrationEventNamespace) &&
-				!strings.HasPrefix(event.ID, acmeRegistrationEventPrefix(expected)) {
-				return nil
-			}
-			return apply(event)
-		})
+		head, err := l.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return l.log.ReplayTenantTypesThrough(readCtx, l.tenantID, from, head,
+			acme.StateEventTypes(), func(event events.Event) error {
+				// Event positions can change during restore, and a publish can finish
+				// after a database session disappears. New producers bind the immutable
+				// envelope ID as well as checking the live transaction. History rewrites
+				// preserve that ID. Never grant a delayed old event current authority.
+				if strings.HasPrefix(event.ID, acmeRegistrationEventNamespace) &&
+					!strings.HasPrefix(event.ID, acmeRegistrationEventPrefix(expected)) {
+					return nil
+				}
+				return apply(event)
+			})
 	})
 }
 

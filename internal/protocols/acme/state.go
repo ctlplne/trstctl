@@ -27,6 +27,18 @@ const (
 	acmeEventEarlyRenewalMarked = "acme.ari.early_renewal_marked"
 )
 
+// StateEventTypes is the exact retained fact set needed to rebuild an ACME
+// server's account, order, issuance, revocation, and ARI state. Audit-only ACME
+// events do not change this state. Keep this list aligned with the cases in
+// applyStateEventLocked when adding a new persisted state transition.
+func StateEventTypes() []string {
+	return []string{
+		acmeEventAccountUpserted, acmeEventOrderCreated,
+		acmeEventChallengeValidated, acmeEventCertificateIssued,
+		acmeEventCertificateRevoked, acmeEventEarlyRenewalMarked,
+	}
+}
+
 type eventLog interface {
 	Append(context.Context, events.Event) (events.Event, error)
 	Replay(context.Context, uint64, func(events.Event) error) error

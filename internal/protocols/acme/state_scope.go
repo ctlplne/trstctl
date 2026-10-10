@@ -95,12 +95,28 @@ func (s *Server) replayStateScopeLocked(ctx context.Context) error {
 	if s.stateLog == nil {
 		return errors.New("acme: scoped state requires an event log")
 	}
-	return s.stateLog.Replay(ctx, from, func(ev events.Event) error {
+	apply := func(ev events.Event) error {
 		if ev.TenantID != s.stateTenantID || !strings.HasPrefix(ev.Type, acmeEventPrefix) {
 			return nil
 		}
 		return s.applyStateEventLocked(ev)
-	})
+	}
+	// The direct embedded-log path can use the same source index as the served
+	// registration adapter. Other eventLog implementations keep their contract.
+	if indexed, ok := s.stateLog.(interface {
+		ReplayTenantTypesThrough(context.Context, string, uint64, uint64, []string, func(events.Event) error) error
+		LastSequence(context.Context) (uint64, error)
+		WithHistoryRead(context.Context, func(context.Context) error) error
+	}); ok {
+		return indexed.WithHistoryRead(ctx, func(readCtx context.Context) error {
+			head, err := indexed.LastSequence(readCtx)
+			if err != nil {
+				return err
+			}
+			return indexed.ReplayTenantTypesThrough(readCtx, s.stateTenantID, from, head, StateEventTypes(), apply)
+		})
+	}
+	return s.stateLog.Replay(ctx, from, apply)
 }
 
 func (s *Server) resetStateScopeLocked() {
