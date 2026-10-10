@@ -114,8 +114,8 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 // Resolve origin from retained issuance facts, not mutable inventory source or
 // the identity's current selection. Host recording overwrites source=external-ca
 // with source=issued; the upstream's original event still proves who signed it.
-// This single history pass resolves the entire bounded page. Missing or conflicting
-// provenance refuses the page before any upstream call or revocation event.
+// One tenant/type-indexed source cut resolves the entire bounded page. Missing
+// or conflicting provenance refuses it before any upstream call or revocation.
 func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, tenantID string, certs []store.Certificate) (map[string]certificateRevocationOrigin, error) {
 	origins := make(map[string]certificateRevocationOrigin, len(certs))
 	if len(certs) == 0 {
@@ -132,10 +132,7 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 		}
 		selected[cert.Fingerprint] = cert
 	}
-	err := d.log.Replay(ctx, 0, func(event events.Event) error {
-		if event.TenantID != tenantID || event.Type != projections.EventCertificateRecorded {
-			return nil
-		}
+	apply := func(event events.Event) error {
 		var fact projections.CertificateRecorded
 		if err := json.Unmarshal(event.Data, &fact); err != nil {
 			return err
@@ -167,6 +164,17 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 		}
 		origins[cert.Fingerprint] = origin
 		return nil
+	}
+	// Pin the source generation across the head read and typed replay. A
+	// certificate recorded by another replica before this cut is considered;
+	// later appends belong to the next retry, never to a partial authority view.
+	err := d.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := d.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return d.log.ReplayTenantTypesThrough(readCtx, tenantID, 1, head,
+			[]string{projections.EventCertificateRecorded}, apply)
 	})
 	if err != nil {
 		return nil, err
