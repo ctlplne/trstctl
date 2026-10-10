@@ -190,8 +190,8 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	if preview.Capability != "F52" || !preview.Ready || !preview.EffectFree ||
 		len(preview.NormalizedRequest.TLSEndpoints) != 1 || preview.NormalizedRequest.TLSEndpoints[0] != u.Host ||
 		len(preview.NormalizedRequest.HostConfigs) != 1 || preview.NormalizedRequest.HostConfigs[0] != conf ||
-		preview.TLSConnectionLimit != 1 || preview.HostFileReadLimit != 256 || preview.HostFileByteLimit != 1<<20 ||
-		preview.FindingWriteLimit != 1026 || preview.WorkerLimit != 4 || preview.QueueDepth != 64 ||
+		preview.TLSConnectionLimit != 2 || preview.HostFileReadLimit != 256 || preview.HostFileByteLimit != 1<<20 ||
+		preview.FindingWriteLimit != 1027 || preview.WorkerLimit != 4 || preview.QueueDepth != 64 ||
 		preview.SignerCalls != 0 || preview.OutboxCalls != 0 || len(preview.RecoverySteps) < 3 {
 		t.Fatalf("CBOM preview does not state the exact safe plan: %+v body=%s", preview, body)
 	}

@@ -64,14 +64,14 @@ func TestCBOMNativePreviewDeclaresBothAttemptsWithoutExecution(t *testing.T) {
 	for _, tc := range []struct {
 		name, path string
 		want       int
-	}{{"default", "", 2}, {"native", native, 4}} {
+	}{{"default", "", 4}, {"native", native, 6}} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := new(Server).buildCBOMService(Deps{Store: new(store.Store), Log: new(events.Log), CBOMTLSProbeOpenSSL: tc.path})
 			preview, err := svc.Preview(t.Context(), "tenant", api.CBOMScanRequest{TLSEndpoints: []string{"https://one.example.test", "one.example.test:443", "two.example.test:443"}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !preview.Ready || !preview.EffectFree || preview.TLSConnectionLimit != tc.want || preview.FindingWriteLimit != 4 || preview.PerEndpointTimeoutSeconds != int(tlsprobe.DefaultTimeout.Seconds()) || preview.SignerCalls != 0 || preview.OutboxCalls != 0 {
+			if !preview.Ready || !preview.EffectFree || preview.TLSConnectionLimit != tc.want || preview.FindingWriteLimit != 6 || preview.PerEndpointTimeoutSeconds != int(tlsprobe.DefaultTimeout.Seconds()) || preview.SignerCalls != 0 || preview.OutboxCalls != 0 {
 				t.Fatalf("incorrect bounded preview: %+v", preview)
 			}
 			data, err := json.Marshal(preview)

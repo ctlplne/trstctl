@@ -1552,7 +1552,7 @@ not this file.
 | `internal/crypto/mtls/tls_floor_test.go:34` | loopback test dial against the test's own self-signed server (CWE-295) |
 | `internal/crypto/tlsprobe/native_fallback_test.go:20` | interoperability fixture pins TLS 1.2 to prove the native fallback preserves an existing supported listener. |
 | `internal/crypto/tlsprobe/openssl_test.go:59` | negative control: this fixture must reject the TLS 1.3-only native probe. |
-| `internal/crypto/tlsprobe/tlsprobe.go:177` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
+| `internal/crypto/tlsprobe/tlsprobe.go:189` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
 
 ### G403 — CWE-326 Inadequate encryption strength (RSA key size) (1 sites)
 

@@ -45,9 +45,11 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 	if err != nil {
 		return api.CBOMScanPreview{}, err
 	}
-	tlsConnectionLimit := len(normalized.TLSEndpoints)
+	// One ordinary handshake, one TLS-1.2-capped compatibility handshake,
+	// and optionally one native fallback after the ordinary Go probe fails.
+	tlsConnectionLimit := len(normalized.TLSEndpoints) * 2
 	if s.nativeTLSExecutable != "" {
-		tlsConnectionLimit *= 2
+		tlsConnectionLimit += len(normalized.TLSEndpoints)
 	}
 	sourceCount := 0
 	findingWriteLimit := 0
@@ -57,9 +59,9 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 	hostFileByteLimit := int64(0)
 	if len(normalized.TLSEndpoints) > 0 {
 		sourceCount++
-		findingWriteLimit += min(len(normalized.TLSEndpoints)*2, cbom.DefaultMaxFindingsPerSource)
+		findingWriteLimit += min(len(normalized.TLSEndpoints)*3, cbom.DefaultMaxFindingsPerSource)
 		outsideCalls = append(outsideCalls,
-			fmt.Sprintf("Open at most %d TLS connections across %d normalized endpoints, with no application request or payload. When a native probe is configured, a failed Go handshake may be followed by one native handshake within the same endpoint deadline.", tlsConnectionLimit, len(normalized.TLSEndpoints)))
+			fmt.Sprintf("Open at most %d TLS connections across %d normalized endpoints within each endpoint's shared deadline, with no application request or payload. A successful TLS 1.3 negotiation is followed by a TLS 1.2-capped compatibility probe. When a native probe is configured, a failed ordinary Go handshake may also be followed by one native handshake.", tlsConnectionLimit, len(normalized.TLSEndpoints)))
 	}
 	if len(normalized.HostConfigs) > 0 {
 		sourceCount++
@@ -115,6 +117,12 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 		if s.nativeTLSExecutable != "" {
 			options = append(options, tlssource.WithProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
 				return tlsprobe.ProbeWithNativeFallback(ctx, s.nativeTLSExecutable, addr)
+			}))
+			// The native fallback deliberately offers TLS 1.3. Keep the
+			// compatibility probe on Go's capped ClientHello so a TLS 1.3
+			// native success can never masquerade as TLS 1.2 acceptance.
+			options = append(options, tlssource.WithCompatibilityProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
+				return tlsprobe.Probe(ctx, addr, tlsprobe.WithMaxVersion(tlsprobe.TLSVersion12))
 			}))
 		}
 		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints, options...))

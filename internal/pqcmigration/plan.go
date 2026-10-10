@@ -146,7 +146,12 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 				RollbackOnFailure:  req.RollbackOnFailure,
 			})
 		case string(cbom.AssetTLSEndpoint), string(cbom.AssetHostConfig):
-			if !asset.QuantumVulnerable && !asset.OutOfPolicy {
+			// TLS 1.2 may be allowed by a tenant's general TLS policy, but it
+			// cannot negotiate the hybrid ML-KEM key exchange that this explicit
+			// PQC rollout asks the target to serve. A confirmed TLS 1.2
+			// compatibility path is therefore an actionable migration finding.
+			if !asset.QuantumVulnerable && !asset.OutOfPolicy &&
+				(asset.Kind != string(cbom.AssetTLSEndpoint) || asset.Protocol != "TLSv1.2") {
 				return Plan{}, fmt.Errorf("pqcmigration: TLS asset %s is already policy-compliant", id)
 			}
 			binding, bound := bindings[id]

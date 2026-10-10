@@ -210,8 +210,10 @@ call, or outbox call.
 
 `POST /api/v1/cbom/scans` (`discovery:write`, accepts an `Idempotency-Key`) rebuilds
 that plan, then runs it in the serving binary. One request accepts at most 64 TLS
-targets and 64 absolute file/glob selectors. TLS discovery normally performs one handshake per
-target with a ten-second timeout and sends no application data. Host discovery reads
+targets and 64 absolute file/glob selectors. TLS discovery performs a default handshake
+and, when it negotiates TLS 1.3, a second handshake capped at TLS 1.2. Both share
+a ten-second endpoint deadline and send no application data. A successful capped
+handshake records the lower protocol separately; a refusal does not invent a finding. Host discovery reads
 at most 256 matching files and 1 MiB per file, returns no file contents, and the scan
 can append/project no more than 1,024 findings per source. Every successful observation
 is first recorded as an immutable `cbom.asset.observed` event. After a complete
@@ -233,7 +235,8 @@ older assets. Host-config parsing supports NGINX `ssl_protocols` and Apache
 `SSLProtocol`, including ordered `+` and `-` modifiers and the `all` macro. An
 Apache `all` declaration describes the maximum allowed by the config; the linked
 OpenSSL build can support fewer versions, so scan the live TLS endpoint to verify
-what clients can actually negotiate.
+what clients can actually negotiate. The capped probe detects a TLS 1.2 compatibility
+path that a normal TLS 1.3 handshake would hide.
 
 Each returned asset includes the discovered algorithm, source, policy result, PQC
 posture, and a migration target:

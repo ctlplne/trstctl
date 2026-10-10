@@ -53,6 +53,46 @@ func TestScanReportsProtocolAndKey(t *testing.T) {
 	}
 }
 
+func TestScanRecordsTLS12CompatibilityHiddenByTLS13(t *testing.T) {
+	der, _, err := ctlogtest.IssueCert("svc", "svc.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary := func(context.Context, string) (tlsprobe.Result, error) {
+		return tlsprobe.Result{TLSVersion: tlsprobe.TLSVersion13, PeerCertificates: [][]byte{der}}, nil
+	}
+	lower := func(context.Context, string) (tlsprobe.Result, error) {
+		return tlsprobe.Result{TLSVersion: tlsprobe.TLSVersion12, PeerCertificates: [][]byte{der}}, nil
+	}
+	findings, err := tlssource.New([]string{"edge.example.com:443"},
+		tlssource.WithProber(primary), tlssource.WithCompatibilityProber(lower)).Scan(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 3 || findings[0].Protocol != "TLSv1.3" || findings[1].Protocol != "TLSv1.2" ||
+		findings[2].Kind != cbom.AssetCertKey {
+		t.Fatalf("TLS compatibility finding hidden: %+v", findings)
+	}
+}
+
+func TestScanDoesNotInventLowerVersionAfterRefusal(t *testing.T) {
+	der, _, err := ctlogtest.IssueCert("svc", "svc.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary := func(context.Context, string) (tlsprobe.Result, error) {
+		return tlsprobe.Result{TLSVersion: tlsprobe.TLSVersion13, PeerCertificates: [][]byte{der}}, nil
+	}
+	lower := func(context.Context, string) (tlsprobe.Result, error) {
+		return tlsprobe.Result{}, errors.New("protocol version refused")
+	}
+	findings, err := tlssource.New([]string{"edge.example.com:443"},
+		tlssource.WithProber(primary), tlssource.WithCompatibilityProber(lower)).Scan(t.Context())
+	if err != nil || len(findings) != 2 || findings[0].Protocol != "TLSv1.3" {
+		t.Fatalf("refused lower protocol must not be invented: findings=%+v err=%v", findings, err)
+	}
+}
+
 func TestScanReportsUnreachableWithoutFindings(t *testing.T) {
 	prober := func(context.Context, string) (tlsprobe.Result, error) {
 		return tlsprobe.Result{}, errors.New("connection refused")

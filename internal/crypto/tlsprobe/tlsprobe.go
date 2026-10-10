@@ -29,6 +29,11 @@ const DefaultTimeout = 10 * time.Second
 // TLSVersion13 is the wire version returned by a completed TLS 1.3 handshake.
 const TLSVersion13 uint16 = tls.VersionTLS13
 
+// TLSVersion12 is the last pre-TLS-1.3 wire version. Inventory can cap a
+// second, read-only handshake at this version to find a compatibility path
+// hidden by a successful TLS 1.3 negotiation.
+const TLSVersion12 uint16 = tls.VersionTLS12
+
 // CipherSuiteName renders a negotiated public wire identifier without moving
 // crypto/tls imports across the AN-3 boundary.
 func CipherSuiteName(id uint16) string { return tls.CipherSuiteName(id) }
@@ -59,6 +64,7 @@ type config struct {
 	serverName          string
 	preHandshake        PreHandshake
 	requiredHybridGroup bool
+	maxVersion          uint16
 }
 
 // WithRequiredHybridGroup offers only X25519MLKEM768. A successful handshake
@@ -66,6 +72,12 @@ type config struct {
 // a management API. It is intended for direct TLS 1.3 posture verification.
 func WithRequiredHybridGroup() Option {
 	return func(c *config) { c.requiredHybridGroup = true }
+}
+
+// WithMaxVersion caps the version offered by an inventory handshake. It does
+// not change the default or the trust decision of an application client.
+func WithMaxVersion(version uint16) Option {
+	return func(c *config) { c.maxVersion = version }
 }
 
 // PreHandshake negotiates an application-level upgrade to TLS on the raw TCP
@@ -180,6 +192,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 		// probe; application clients still require TLS 1.2+.
 		// codeql[go/insecure-tls]
 		MinVersion: tls.VersionTLS10,
+		MaxVersion: cfg.maxVersion,
 		NextProtos: cfg.alpn,
 	}
 	if cfg.requiredHybridGroup {

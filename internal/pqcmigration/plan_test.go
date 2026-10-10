@@ -142,6 +142,19 @@ func TestPlannerBindsEverySelectedProtocolAndCipherFinding(t *testing.T) {
 	}
 }
 
+func TestPlannerAcceptsObservedTLS12CompatibilityForExplicitPQCPosture(t *testing.T) {
+	desired := connector.TLSPosture{MinimumVersion: connector.TLSVersion13,
+		KeyExchangeGroups: []string{HybridTLSGroup}}
+	plan, err := BuildPlan([]Asset{{ID: "observed-tls12", Kind: string(cbom.AssetTLSEndpoint),
+		Location: "edge:443", Protocol: "TLSv1.2", Strength: "acceptable"}}, Request{
+		AssetIDs: []string{"observed-tls12"}, TargetAlgorithm: TargetMLDSA65,
+		TLSBindings: []TLSBinding{{AssetID: "observed-tls12", TargetID: "envoy-edge", Desired: desired}},
+	})
+	if err != nil || len(plan.TLSRollouts) != 1 {
+		t.Fatalf("observed TLS 1.2 compatibility path should be actionable: plan=%+v err=%v", plan, err)
+	}
+}
+
 func TestCompletedCapabilitiesLeaveOnlyEvidenceGatedPureCutoverResidual(t *testing.T) {
 	residuals := ResidualDenominator()
 	var sawCutover bool

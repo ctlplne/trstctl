@@ -93,7 +93,7 @@ func TestServedCBOMNativeScanObservesMLDSALeaves(t *testing.T) {
 			if err := json.Unmarshal(body, &preview); err != nil {
 				t.Fatal(err)
 			}
-			if !preview.Ready || !preview.EffectFree || preview.Connections != 2 {
+			if !preview.Ready || !preview.EffectFree || preview.Connections != 3 {
 				t.Fatalf("native preview=%+v", preview)
 			}
 			if after, err := h.log.LastSequence(t.Context()); err != nil || after != before {
