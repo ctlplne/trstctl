@@ -25,7 +25,9 @@ type EventLog interface {
 	Append(ctx context.Context, e eventspec.Event) (eventspec.Event, error)
 	Replay(ctx context.Context, from uint64, fn func(eventspec.Event) error) error
 	ReplayTenantTypesThrough(ctx context.Context, tenantID string, from, through uint64, types []string, fn func(eventspec.Event) error) error
+	ReplayTypesThrough(ctx context.Context, from, through uint64, types []string, fn func(eventspec.Event) error) error
 	CheckedHead(ctx context.Context) (uint64, error)
+	WithHistoryRead(ctx context.Context, fn func(context.Context) error) error
 }
 
 // OutboxEnqueuer is the AN-6 transactional-outbox seam the cascade enqueues on. It is
