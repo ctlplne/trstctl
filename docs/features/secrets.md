@@ -129,14 +129,20 @@ Supported paths are intentionally small:
 | `POST`/`PUT /v1/pki/issue/{role}`          | Issues a short-lived certificate and key via the signer-backed dynamic PKI secret.     |
 | `POST`/`PUT /v1/pki/sign/{role}`           | Signs a requester-generated CSR and returns no private key.                            |
 
-It skips Vault mount management, ACL policies, cubbyhole, response wrapping, transit
-paths, and every dynamic secret engine — the native trstctl API remains the full
-surface. The machine-readable contract is pinned separately as
+The served compatibility contract also includes tenant-authored KV v2, PKI, and
+transit mounts, Vault ACL policy management, and common transit operations. It
+still omits cubbyhole, response wrapping, and the native dynamic secret engines;
+the native trstctl API remains the full surface. The machine-readable contract is
+pinned separately as
 [`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json),
 since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept
-`Idempotency-Key`; since the stock CLI sends none, trstctl derives one from method,
-path, and body so a retry can't mint a duplicate certificate — force a fresh one with a
-different `Idempotency-Key`, or use the native `/api/v1/secrets/pki` route.
+`Idempotency-Key`. For the stock CLI's KV put and PKI issue/sign commands,
+trstctl derives a token-keyed digest of method, path, and body when the header is
+absent, so an exact retry cannot mint a duplicate certificate or secret version.
+An identical request from the same token replays its original result; force a fresh
+issue with a different explicit `Idempotency-Key`, or use the native
+`/api/v1/secrets/pki` route. Mount, policy, and transit mutations require an
+explicit `Idempotency-Key` so intentional repeated rotations stay distinguishable.
 
 ### The developer secrets experience (F64)
 

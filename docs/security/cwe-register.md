@@ -890,7 +890,7 @@ not this file.
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
-| `internal/server/vault_compat_served_test.go:96` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/vault_compat_served_test.go:107` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
@@ -978,7 +978,7 @@ not this file.
 | `tools/dodcensus/main.go:1285` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/pqclab/main.go:455` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/trstctllint/idempotency/idempotency_test.go:198` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/trstctllint/idempotency/idempotency_test.go:212` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
 ### G302 — CWE-276 Incorrect default permissions (chmod) (40 sites)
 
@@ -1531,7 +1531,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:427` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:430` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/trstctllint/idempotency/idempotency_test.go:201` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/trstctllint/idempotency/idempotency_test.go:215` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
 ### G401 — CWE-328 Use of weak hash (5 sites)
 
@@ -1674,7 +1674,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/vault_compat_served_test.go:79` | test path inside its own tempdir/checkout (CWE-22) |
+| `internal/server/vault_compat_served_test.go:90` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/signing/keystore.go:301` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:312` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:449` | path passed the explicit signer-keystore confinement check above (CWE-22) |

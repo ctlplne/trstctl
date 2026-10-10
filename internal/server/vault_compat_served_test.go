@@ -27,11 +27,17 @@ func TestVaultCLICompatibilityAgainstServedHandler(t *testing.T) {
 
 	runVault(t, vault, home, h.ts.URL, token, "login", "-no-store", token)
 
-	runVault(t, vault, home, h.ts.URL, token,
-		"kv", "put", "-header=Idempotency-Key=vault-compat-kv-put-1", "secret/trstctl-vault",
+	firstPut := runVault(t, vault, home, h.ts.URL, token,
+		"kv", "put", "secret/trstctl-vault",
 		"username=app",
 		"password=vault-compat-s3cr3t",
 	)
+	replayedPut := runVault(t, vault, home, h.ts.URL, token,
+		"kv", "put", "secret/trstctl-vault",
+		"username=app", "password=vault-compat-s3cr3t")
+	if string(firstPut) != string(replayedPut) {
+		t.Fatal("stock CLI exact KV retry did not replay the original response")
+	}
 	kvRaw := runVault(t, vault, home, h.ts.URL, token,
 		"kv", "get", "-format=json", "secret/trstctl-vault",
 	)
@@ -48,8 +54,13 @@ func TestVaultCLICompatibilityAgainstServedHandler(t *testing.T) {
 	}
 
 	pkiRaw := runVault(t, vault, home, h.ts.URL, token,
-		"write", "-header=Idempotency-Key=vault-compat-pki-issue-1", "-format=json", "pki/issue/trstctl", "common_name=svc.vault.test", "ttl=1h",
+		"write", "-format=json", "pki/issue/trstctl", "common_name=svc.vault.test", "ttl=1h",
 	)
+	pkiReplay := runVault(t, vault, home, h.ts.URL, token,
+		"write", "-format=json", "pki/issue/trstctl", "common_name=svc.vault.test", "ttl=1h")
+	if string(pkiRaw) != string(pkiReplay) {
+		t.Fatal("stock CLI exact PKI retry minted a different certificate")
+	}
 	var issued struct {
 		Data struct {
 			Serial      string `json:"serial_number"`

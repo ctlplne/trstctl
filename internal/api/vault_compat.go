@@ -460,7 +460,7 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, "secret path is required")
 		return
 	}
-	idempotencyKey, ok := vaultMutationKey(w, r)
+	idempotencyKey, ok := vaultStockCLIKey(w, r, body)
 	if !ok {
 		return
 	}
@@ -756,7 +756,7 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusServiceUnavailable, "dynamic PKI secret issuance unavailable")
 		return
 	}
-	idempotencyKey, ok := vaultMutationKey(w, r)
+	idempotencyKey, ok := vaultStockCLIKey(w, r, body)
 	if !ok {
 		return
 	}
@@ -828,7 +828,7 @@ func (a *API) vaultPKISign(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusServiceUnavailable, "dynamic PKI secret issuance unavailable")
 		return
 	}
-	idempotencyKey, ok := vaultMutationKey(w, r)
+	idempotencyKey, ok := vaultStockCLIKey(w, r, body)
 	if !ok {
 		return
 	}
@@ -953,6 +953,36 @@ func vaultMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {
 		return "", false
 	}
 	return key, true
+}
+
+// vaultStockCLIKey keeps the common KV and PKI commands usable by an unmodified
+// Vault/OpenBao CLI, which does not send Idempotency-Key. A token-keyed digest
+// binds the fallback to the exact method, escaped path and request bytes without
+// putting a low-entropy secret body's plain hash in the event log. Repeating the
+// same command with the same token replays its result; a caller that wants a new
+// PKI issue for identical input must supply a fresh explicit key.
+func vaultStockCLIKey(w http.ResponseWriter, r *http.Request, body []byte) (string, bool) {
+	if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
+		return key, true
+	}
+	credential := bearerTokenBytes(r)
+	if len(credential) == 0 {
+		writeVaultError(w, http.StatusBadRequest, "Idempotency-Key is required without a Vault API token")
+		return "", false
+	}
+	defer secret.Wipe(credential)
+	digest := crypto.NewSHA256HMACDigest(credential)
+	_, err := io.Copy(digest, io.MultiReader(
+		strings.NewReader("trstctl.vault-stock-idempotency.v1\x00"),
+		strings.NewReader(r.Method), strings.NewReader("\x00"),
+		strings.NewReader(r.URL.EscapedPath()), strings.NewReader("\x00"),
+		bytes.NewReader(body),
+	))
+	if err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "cannot bind Vault request")
+		return "", false
+	}
+	return "vault-stock-v1-" + digest.HMACSHA256Hex(), true
 }
 
 func rawJSONObject(raw []byte) bool {
