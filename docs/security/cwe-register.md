@@ -869,10 +869,10 @@ not this file.
 | `internal/server/java_sdk_served_test.go:55` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:879` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
-| `internal/server/pam_served_test.go:889` | fixed best-effort test cleanup bounded by a context deadline (CWE-78) |
-| `internal/server/pam_served_test.go:903` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:934` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:883` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/server/pam_served_test.go:893` | fixed best-effort test cleanup bounded by a context deadline (CWE-78) |
+| `internal/server/pam_served_test.go:907` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:938` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:311` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:370` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:400` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1299,7 +1299,7 @@ not this file.
 | `internal/server/host_keystore_credentials_served_test.go:117` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/host_keystore_credentials_served_test.go:166` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/pam_served_test.go:906` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/pam_served_test.go:910` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:119` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |

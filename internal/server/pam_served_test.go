@@ -839,12 +839,16 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 		t.Fatalf("write sshd Dockerfile: %v", err)
 	}
 	image := "trstctl-pam-sshd:" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if out, err := pamDockerOutput(t, 3*time.Minute, "build", "-t", image, dir); err != nil {
-		t.Skipf("build sshd container image: %v\n%s", err, out)
+	// The acceptance test needs the image in this daemon, not only in BuildKit's cache.
+	if out, err := pamDockerOutput(t, 10*time.Minute, "build", "--load", "-t", image, dir); err != nil {
+		t.Fatalf("build sshd container image: %v\n%s", err, out)
 	}
 	t.Cleanup(func() { pamDockerCleanup("image", "rm", "-f", image) })
+	if out, err := pamDockerOutput(t, 30*time.Second, "image", "inspect", image); err != nil {
+		t.Fatalf("sshd image build did not load %s into the local daemon: %v\n%s", image, err, out)
+	}
 	name := "trstctl-pam-sshd-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if out, err := pamDockerOutput(t, 30*time.Second, "run", "-d", "--name", name, "-p", "127.0.0.1::22", image); err != nil {
+	if out, err := pamDockerOutput(t, 30*time.Second, "run", "-d", "--pull=never", "--name", name, "-p", "127.0.0.1::22", image); err != nil {
 		t.Fatalf("run sshd container: %v\n%s", err, out)
 	}
 	t.Cleanup(func() { pamDockerCleanup("rm", "-f", name) })
