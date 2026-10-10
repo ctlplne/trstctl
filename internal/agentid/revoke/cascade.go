@@ -19,11 +19,12 @@ import (
 // durable event and replay the stream. The concrete implementation is
 // internal/events.Log (JetStream); this interface keeps the cascade testable and
 // documents that the cascade only ever appends (never deletes) directive/evidence
-// events and reads the prefix to determine descendants. Sequence is assigned by
-// Append and set on Replay, exactly as events.Log does.
+// events and reads the prefix to determine descendants. CheckedHead verifies the
+// source safety floor before returning indexed broker metadata.
 type EventLog interface {
 	Append(ctx context.Context, e eventspec.Event) (eventspec.Event, error)
 	Replay(ctx context.Context, from uint64, fn func(eventspec.Event) error) error
+	CheckedHead(ctx context.Context) (uint64, error)
 }
 
 // OutboxEnqueuer is the AN-6 transactional-outbox seam the cascade enqueues on. It is
@@ -187,17 +188,11 @@ func (c *Cascade) EnqueueDirective(ctx context.Context, d Directive) (DirectiveR
 }
 
 // ledgerHead returns the highest event sequence currently in the log — the watermark
-// the descendant set is determined as-of. It replays only to observe the last
-// sequence (the fold to determine descendants is a second, bounded pass). A log with
-// no events yields 0.
+// the descendant set is determined as-of. The log checks its sanitation floor
+// before returning indexed broker metadata; it does not fold every event here.
 func (c *Cascade) ledgerHead(ctx context.Context) (uint64, error) {
-	var head uint64
-	if err := c.log.Replay(ctx, 1, func(e eventspec.Event) error {
-		if e.Sequence > head {
-			head = e.Sequence
-		}
-		return nil
-	}); err != nil {
+	head, err := c.log.CheckedHead(ctx)
+	if err != nil {
 		return 0, fmt.Errorf("revoke: read ledger head: %w", err)
 	}
 	return head, nil

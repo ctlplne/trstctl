@@ -384,16 +384,11 @@ func (tt *TerminalTransition) appendTerminalEvent(ctx context.Context, tenantID,
 }
 
 // ledgerHead returns the highest event sequence currently in the log — the ledger head
-// bound into the aggregate as of the terminal revoked state (AGID-claim-33). A log with no
-// events yields 0.
+// bound into the aggregate as of the terminal revoked state (AGID-claim-33).
+// The event log verifies its sanitation floor before returning broker metadata.
 func (tt *TerminalTransition) ledgerHead(ctx context.Context) (uint64, error) {
-	var head uint64
-	if err := tt.log.Replay(ctx, 1, func(e eventspec.Event) error {
-		if e.Sequence > head {
-			head = e.Sequence
-		}
-		return nil
-	}); err != nil {
+	head, err := tt.log.CheckedHead(ctx)
+	if err != nil {
 		return 0, fmt.Errorf("revoke: read ledger head: %w", err)
 	}
 	return head, nil

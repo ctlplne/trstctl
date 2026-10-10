@@ -65,7 +65,18 @@ func (l *Log) UnsafeLegacySchedulerHistoryTenants(
 		if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
 			return err
 		}
-		return l.replayActive(readCtx, 0, func(event Event) error {
+		name, replayStream, head, err := l.resolveReplayStream(readCtx)
+		if err != nil {
+			return err
+		}
+		before, err := l.schedulerSafetySnapshot(readCtx)
+		if err != nil {
+			return err
+		}
+		if name != before.Name || head > before.LastSequence {
+			return ErrGenerationChanged
+		}
+		if err := l.replayResolved(readCtx, name, replayStream, 1, head, func(event Event) error {
 			unsafe, err := schedulerhistory.RequiresSanitation(
 				event.Type, event.SchemaVersion, event.Data,
 			)
@@ -76,7 +87,24 @@ func (l *Log) UnsafeLegacySchedulerHistoryTenants(
 				unsafeTenants[event.TenantID] = struct{}{}
 			}
 			return nil
-		})
+		}); err != nil {
+			return err
+		}
+		after, err := l.schedulerSafetySnapshot(readCtx)
+		if err != nil {
+			return err
+		}
+		if !appendOnlySince(before, after) {
+			return ErrGenerationChanged
+		}
+		if len(unsafeTenants) == 0 {
+			l.legacySafetyMu.Lock()
+			l.legacySafety = after
+			l.legacySafeThrough = head
+			l.legacySafetyPresent = true
+			l.legacySafetyMu.Unlock()
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err

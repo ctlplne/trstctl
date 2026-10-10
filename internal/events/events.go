@@ -125,6 +125,12 @@ type Log struct {
 	// closes every normal live/federated ingress path while the restore-only path
 	// remains able to stage an authenticated pre-patch artifact for sanitation.
 	rejectLegacySchedulerRuns atomic.Bool
+	// legacySafety is a process-local verified prefix. Stream metadata fences it
+	// against deletion and generation changes; a cold process must verify again.
+	legacySafetyMu      sync.Mutex
+	legacySafety        schedulerSafetyState
+	legacySafeThrough   uint64
+	legacySafetyPresent bool
 	// backupRestoreAuthorizer is installed only by the recovery composition. Its
 	// locked deployment key verifies an opaque capability bound to one
 	// HMAC-verified artifact cut/digest and its exact staged history source before
@@ -677,23 +683,7 @@ func (l *Log) preflightLegacySchedulerHistory(
 	stream jetstream.Stream,
 	through uint64,
 ) error {
-	return readRetainedEventsThrough(ctx, stream, 1, through, func(event Event) error {
-		unsafe, inspectErr := schedulerhistory.RequiresSanitation(
-			event.Type, event.SchemaVersion, event.Data,
-		)
-		if inspectErr != nil || unsafe {
-			return schedulerhistory.ErrSanitationRequired
-		}
-		return nil
-	})
-}
-
-func (l *Log) replayActive(ctx context.Context, from uint64, fn func(Event) error) error {
-	name, stream, head, err := l.resolveReplayStream(ctx)
-	if err != nil {
-		return err
-	}
-	return l.replayResolved(ctx, name, stream, from, head, fn)
+	return l.preflightSchedulerPrefix(ctx, stream, through)
 }
 
 func (l *Log) resolveReplayStream(
