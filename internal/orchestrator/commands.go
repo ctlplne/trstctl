@@ -31,7 +31,6 @@ import (
 
 var (
 	connectorRightSizeIdentityNamespace = uuid.MustParse("64ad96b4-b750-5e90-b55b-baf67c779a4a")
-	errPrivacyErasureEventFound         = errors.New("orchestrator: privacy erasure event found")
 	// ErrProfileRestoreStale is returned when the active profile changed after
 	// an operator reviewed a restore preview. The mutation fails closed instead
 	// of copying an old rule over a newer decision.
@@ -1046,7 +1045,8 @@ func (o *Orchestrator) recoverPrivacyErasure(
 		return authoritative, found, err
 	}
 
-	// JetStream's Msg-Id deduplication collapses live races, while replay heals
+	// JetStream's Msg-Id deduplication collapses live races, while indexed
+	// source lookup heals
 	// the append-ACK/projection-failure gap. Once healed, the independent
 	// PostgreSQL operation record is the long-window authority even if retention
 	// moves this event from the live stream into the signed archive.
@@ -1092,21 +1092,11 @@ func (o *Orchestrator) findPrivacyErasureOperation(
 }
 
 func (o *Orchestrator) findPrivacyErasureEvent(ctx context.Context, eventID string) (events.Event, bool, error) {
-	var found events.Event
-	err := o.log.Replay(ctx, 1, func(ev events.Event) error {
-		if ev.ID != eventID {
-			return nil
-		}
-		found = ev
-		return errPrivacyErasureEventFound
-	})
-	if errors.Is(err, errPrivacyErasureEventFound) {
-		return found, true, nil
-	}
+	found, ok, err := o.log.EventByID(ctx, eventID)
 	if err != nil {
 		return events.Event{}, false, fmt.Errorf("orchestrator: find canonical privacy erasure event: %w", err)
 	}
-	return events.Event{}, false, nil
+	return found, ok, nil
 }
 
 func privacyErasureFromEvent(

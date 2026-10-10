@@ -931,19 +931,11 @@ func lifecycleApprovalEventByID(ctx context.Context, log *events.Log, eventID st
 	if log == nil || eventID == "" {
 		return events.Event{}, false, errors.New("orchestrator: lifecycle approval event lookup is incomplete")
 	}
-	stop := errors.New("orchestrator: lifecycle approval event found")
-	var found events.Event
-	err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.ID != eventID {
-			return nil
-		}
-		found = event
-		return stop
-	})
-	if errors.Is(err, stop) {
-		return found, true, nil
+	found, ok, err := log.EventByID(ctx, eventID)
+	if err != nil {
+		return events.Event{}, false, err
 	}
-	return events.Event{}, false, err
+	return found, ok, nil
 }
 
 func validateRetainedLifecycleApprovalEvent(
