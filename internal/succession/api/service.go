@@ -32,6 +32,7 @@ import (
 // request. The signer-side orchestrator (PCAS-08) consumes it and mints the
 // successor; the IdempotencyKey renders redeliveries exactly-once (AN-5 ↔ AN-6).
 const (
+	GenesisRequestDestination    = "pcas.genesis-request"
 	SuccessionRequestDestination = "pcas.succession-request"
 	RecoveryRequestDestination   = "pcas.recovery-request"
 	FederationImportDestination  = "pcas.federation-import"
@@ -114,11 +115,104 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 
 var _ Service = (*service)(nil)
 
+// RegisterGenesis queues first-use signer custody and a trust-root-attested
+// public anchor. No key generation occurs inside the API request process.
+func (s *service) RegisterGenesis(ctx context.Context, tenantID string, req GenesisRegistrationRequest) (AsyncRequestResponse, error) {
+	if s.store == nil || s.outbox == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS genesis outbox is unavailable")
+	}
+	if _, err := succession.GenesisDigest(succession.GenesisRecord{Algorithm: crypto.Algorithm(req.Algorithm)}); err != nil {
+		return AsyncRequestResponse{}, api.ErrWithStatus(http.StatusBadRequest, fmt.Errorf("unsupported PCAS genesis algorithm: %w", err))
+	}
+	if s.repo != nil {
+		if _, found, err := s.repo.GetGenesis(ctx, tenantID, req.IdentityID); err != nil {
+			return AsyncRequestResponse{}, err
+		} else if found {
+			return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+				"PCAS identity already has an immutable genesis; read its signed chain before requesting a new epoch")
+		}
+	}
+	requestID := events.NewID()
+	queuedAt := time.Now().UTC()
+	var actor *events.Actor
+	if attributed, ok := events.ActorFromContext(ctx); ok {
+		actor = &attributed
+	}
+	payload, err := json.Marshal(struct {
+		RequestID string                     `json:"request_id"`
+		QueuedAt  time.Time                  `json:"queued_at"`
+		Request   GenesisRegistrationRequest `json:"request"`
+		Actor     *events.Actor              `json:"actor,omitempty"`
+	}{RequestID: requestID, QueuedAt: queuedAt, Request: req, Actor: actor})
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID: tenantID, Destination: GenesisRequestDestination, IdempotencyKey: requestID, Payload: payload,
+		})
+		return err
+	}); err != nil {
+		return AsyncRequestResponse{}, fmt.Errorf("pcas api: enqueue genesis: %w", err)
+	}
+	return AsyncRequestResponse{RequestID: requestID, IdentityID: req.IdentityID, Status: "queued",
+		QueuedAt: queuedAt, StatusURL: "/api/v1/pcas/requests/" + requestID}, nil
+}
+
+// GetRequestStatus reads only this tenant's two first-use outbox destinations.
+// Raw worker errors stay in the operator outbox ledger, outside this public
+// response, because they may include upstream data.
+func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID string) (RequestStatus, bool, error) {
+	if s.store == nil {
+		return RequestStatus{}, false, nil
+	}
+	var result RequestStatus
+	var found bool
+	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var destination string
+		err := tx.QueryRow(ctx, `SELECT destination, status, attempts, created_at, delivered_at FROM outbox
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND idempotency_key = $1
+			AND destination IN ($2, $3)`, requestID, GenesisRequestDestination, SuccessionRequestDestination).
+			Scan(&destination, &result.Status, &result.Attempts, &result.CreatedAt, &result.DeliveredAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		found = true
+		result.RequestID = requestID
+		if destination == GenesisRequestDestination {
+			result.Kind = "genesis"
+		} else {
+			result.Kind = "succession"
+		}
+		return nil
+	})
+	return result, found, err
+}
+
 // RequestSuccession records an accepted succession request as an idempotent outbox
 // job for the signer to mint (AN-4/AN-5/AN-6). It returns a request acknowledgment;
 // the actual dual-signed record is produced asynchronously by the signer-side
 // orchestrator.
 func (s *service) RequestSuccession(ctx context.Context, tenantID string, req RequestSuccessionRequest) (RequestSuccessionResponse, error) {
+	if s.repo != nil {
+		anchor, found, err := s.repo.GetGenesis(ctx, tenantID, req.IdentityID)
+		if err != nil {
+			return RequestSuccessionResponse{}, err
+		}
+		if !found {
+			return RequestSuccessionResponse{}, api.ErrStatus(http.StatusConflict,
+				"PCAS identity has no registered genesis; register it at POST /api/v1/pcas/genesis and wait for delivery before requesting succession")
+		}
+		if anchor.Genesis.DeploymentScope != req.DeploymentScope {
+			return RequestSuccessionResponse{}, api.ErrStatus(http.StatusConflict, "deployment_scope differs from the registered PCAS genesis")
+		}
+		if err := succession.VerifyGenesis(anchor.TrustRootPublicDER, anchor.Genesis); err != nil {
+			return RequestSuccessionResponse{}, fmt.Errorf("pcas api: stored genesis verification failed: %w", err)
+		}
+	}
 	requestID := events.NewID()
 	payload, err := json.Marshal(struct {
 		RequestID string `json:"request_id"`
@@ -145,6 +239,7 @@ func (s *service) RequestSuccession(ctx context.Context, tenantID string, req Re
 		TargetAlgorithm: req.TargetAlgorithm,
 		Status:          "queued",
 		QueuedAt:        time.Now().UTC(),
+		StatusURL:       "/api/v1/pcas/requests/" + requestID,
 	}, nil
 }
 
@@ -606,6 +701,18 @@ func (s *service) FetchChain(ctx context.Context, tenantID, identityID string) (
 	resp := ChainResponse{IdentityID: identityID, Records: [][]byte{}}
 	if s.repo == nil {
 		return resp, nil
+	}
+	if anchor, found, err := s.repo.GetGenesis(ctx, tenantID, identityID); err != nil {
+		return ChainResponse{}, err
+	} else if found {
+		if anchor.Genesis.TenantID != tenantID || anchor.Genesis.IdentityID != identityID {
+			return ChainResponse{}, errors.New("pcas api: genesis scope does not match request")
+		}
+		if err := succession.VerifyGenesis(anchor.TrustRootPublicDER, anchor.Genesis); err != nil {
+			return ChainResponse{}, fmt.Errorf("pcas api: stored genesis verification failed: %w", err)
+		}
+		resp.Genesis = &anchor.Genesis
+		resp.TrustRootPublicDER = anchor.TrustRootPublicDER
 	}
 	recs, err := s.repo.FetchChain(ctx, tenantID, identityID)
 	if err != nil {

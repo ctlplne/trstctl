@@ -12,6 +12,8 @@ import (
 // Ledger event types for the NHI algorithm lifecycle, carried on the AN-2 event
 // log. Dotted-lowercase per repo convention (cf. "ca.authority.rekeyed").
 const (
+	// TypeGenesis binds the first signer-held key to its tenant trust root.
+	TypeGenesis = "nhi.algorithm.genesis"
 	// TypeFinding records a classification finding that an identity's credential
 	// uses an out-of-policy or quantum-vulnerable algorithm (lifecycle step 2).
 	TypeFinding = "nhi.crypto.finding"
@@ -44,6 +46,7 @@ const (
 // (Type, SchemaVersion) and treats an unknown or newer-than-known version as a
 // skip (Unknown), so replay is forward-compatible and never mis-projects.
 const (
+	GenesisSchemaV1         = 1
 	FindingSchemaV1         = 1
 	SuccessionSchemaV1      = 1
 	RetirementSchemaV1      = 1
@@ -66,6 +69,22 @@ const (
 
 // Payload is a decoded, typed succession-lifecycle event payload.
 type Payload interface{ isSuccessionPayload() }
+
+// GenesisV1 is the immutable public anchor for a newly registered identity.
+// The trust-root signature is part of the evidence and must never be rewritten.
+type GenesisV1 struct {
+	RequestID          string `json:"request_id"`
+	IdentityID         string `json:"identity_id"`
+	TenantID           string `json:"tenant_id"`
+	DeploymentScope    string `json:"deployment_scope"`
+	Algorithm          string `json:"algorithm"`
+	PublicKeyDER       []byte `json:"public_key_der"`
+	Epoch              uint64 `json:"epoch"`
+	TrustRootAtt       []byte `json:"trust_root_att"`
+	TrustRootPublicDER []byte `json:"trust_root_public_der"`
+}
+
+func (GenesisV1) isSuccessionPayload() {}
 
 // FindingV1 seeds posture at an observed (pre-succession) credential.
 type FindingV1 struct {
@@ -197,6 +216,8 @@ func (Unknown) isSuccessionPayload() {}
 // Sequence are assigned by events.Log.Append.
 func Encode(p Payload) (eventspec.Event, error) {
 	switch v := p.(type) {
+	case GenesisV1:
+		return marshalEvent(TypeGenesis, GenesisSchemaV1, v.TenantID, v)
 	case FindingV1:
 		return marshalEvent(TypeFinding, FindingSchemaV1, v.TenantID, v)
 	case SuccessionV1:
@@ -236,6 +257,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 		ver = eventspec.DefaultSchemaVersion
 	}
 	switch e.Type {
+	case TypeGenesis:
+		if ver > GenesisSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p GenesisV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
 	case TypeFinding:
 		if ver > FindingSchemaV1 {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil

@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cli"
 	"trstctl.com/trstctl/internal/license"
+	succapi "trstctl.com/trstctl/internal/succession/api"
 )
 
 // requiredPages are the documentation pages S7.6 must deliver, as paths relative
@@ -753,6 +754,14 @@ func TestFeatureLedgerSurfacesAreBackedByOpenAPIAndCLI(t *testing.T) {
 	}
 
 	operations := openAPIOperationIDs(t)
+	// Core PCAS routes attach to the served API at runtime, so they are absent
+	// from the static base golden. Verify the registered route metadata too.
+	for _, route := range succapi.Routes(nil) {
+		if operations[route.OperationID] {
+			t.Fatalf("duplicate attached OpenAPI operationId %q", route.OperationID)
+		}
+		operations[route.OperationID] = true
+	}
 	commands := cliCommandNames()
 	for _, row := range ledger.Items {
 		for _, op := range row.APISurface {
@@ -760,7 +769,7 @@ func TestFeatureLedgerSurfacesAreBackedByOpenAPIAndCLI(t *testing.T) {
 				continue
 			}
 			if !operations[op] {
-				t.Errorf("%s claims OpenAPI operationId %q, but the generated OpenAPI golden does not expose it", row.ID, op)
+				t.Errorf("%s claims OpenAPI operationId %q, but neither the base golden nor core attached routes expose it", row.ID, op)
 			}
 		}
 		for _, cmd := range row.CLISurface {

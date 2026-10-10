@@ -6,12 +6,61 @@ current. The control plane records a tenant-scoped request, the outbox drains it
 and the isolated signer mints or zeroizes key material. Private keys stay in the
 signer process.
 
+## First use: register, verify, then succeed an identity
+
+Use a tenant principal with `keys:write` to register the immutable starting
+anchor. The control plane queues the operation; the isolated signer creates the
+tenant trust root and identity key. Registration is complete only after the
+request status says `delivered` and the chain endpoint returns `genesis` and
+`trust_root_public_der`. A `certs:read` principal can read status and chain;
+`certs:write` is needed to request a succession.
+
+```bash
+cat > /secure/operator-genesis.json <<'JSON'
+{"identity_id":"spiffe://example.test/workload/api","algorithm":"ECDSA-P256","deployment_scope":"spiffe://example.test"}
+JSON
+trstctl pcas genesis register -f /secure/operator-genesis.json
+trstctl pcas requests status REQUEST_ID
+trstctl pcas chain get --identity_id spiffe://example.test/workload/api
+```
+
+Save the returned trust-root public key fingerprint in an independently
+controlled trust store before distributing the chain. A fresh client must not
+silently trust a root supplied in the same response it verifies. Confirm the
+registered tenant, identity, scope, algorithm and epoch zero, then verify the
+root signature on genesis. The Posture console shows the root fingerprint and
+chain count for this review. Keep the output as public evidence; it contains no
+private key.
+
+After genesis is delivered, submit a different target algorithm and poll its
+request. The successor record is returned in `records` as base64 JSON bytes;
+verify both signatures, epoch continuity, policy and scope against the pinned
+root before changing a relying party. The chain API does not deploy a new
+credential or make a relying party adopt it.
+
+```bash
+cat > /secure/operator-succession.json <<'JSON'
+{"identity_id":"spiffe://example.test/workload/api","credential_type":"workload-svid","target_algorithm":"ECDSA-P384","policy_ref":"policy:operator","deployment_scope":"spiffe://example.test"}
+JSON
+trstctl pcas succession request -f /secure/operator-succession.json
+trstctl pcas requests status REQUEST_ID
+trstctl pcas chain get --identity_id spiffe://example.test/workload/api
+```
+
+Use distinct idempotency keys for distinct POST operations. A request for an
+unregistered identity returns 409 with the registration path; it never creates
+an unanchored chain. Do not register the same identity under a different scope
+or algorithm to recover an error: the anchor is immutable. A previously used
+unscoped signer handle requires an explicit custody migration, as described in
+[PCAS key custody](../pcas-key-custody.md).
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the
 shared feature metrics:
 
 - `trstctl_feature_operations_total{feature="pcas_succession",action="mint",outcome="success"}`
+- `trstctl_feature_operations_total{feature="pcas_succession",action="genesis",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_kem",action="rewrap",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_retirement",action="worker",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_checkpoint",action="worker",outcome="success"}`

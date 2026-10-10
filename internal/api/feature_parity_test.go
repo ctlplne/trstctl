@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/featureparity"
+	succapi "trstctl.com/trstctl/internal/succession/api"
 )
 
 func TestFeatureParityMapsCatalogRowsToOpenAPIOperations(t *testing.T) {
-	operations := openAPIOperationIDs(t, fetchSpec(t))
+	operations := featureParityOperationIDs(t)
 
 	for _, item := range loadFeatureParityCatalog(t).Items {
 		if len(item.APISurface) == 0 && strings.TrimSpace(item.APINA) == "" {
@@ -32,7 +33,7 @@ func TestFeatureParityMapsCatalogRowsToOpenAPIOperations(t *testing.T) {
 }
 
 func TestEveryOpenAPIOperationMapsToFeature(t *testing.T) {
-	operations := openAPIOperationIDs(t, fetchSpec(t))
+	operations := featureParityOperationIDs(t)
 	mapped := map[string][]string{}
 	for _, item := range loadFeatureParityCatalog(t).Items {
 		for _, opID := range item.APISurface {
@@ -48,6 +49,21 @@ func TestEveryOpenAPIOperationMapsToFeature(t *testing.T) {
 			t.Errorf("OpenAPI operationId %q is served but not mapped to a feature catalog row", opID)
 		}
 	}
+}
+
+// The static OpenAPI fixture covers the base API. Core PCAS attaches through
+// the same route seam as the served runtime, so include those registered
+// operations when checking the feature contract in both directions.
+func featureParityOperationIDs(t *testing.T) map[string]bool {
+	t.Helper()
+	operations := openAPIOperationIDs(t, fetchSpec(t))
+	for _, route := range succapi.Routes(nil) {
+		if operations[route.OperationID] {
+			t.Fatalf("duplicate attached OpenAPI operationId %q", route.OperationID)
+		}
+		operations[route.OperationID] = true
+	}
+	return operations
 }
 
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {

@@ -49,9 +49,11 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 
 	// Onboard the genesis key INSIDE the signer under TenantKeyHandle(tenant,id,0). This is the
 	// identity's epoch-0 key; the worker resolves it as the first predecessor.
-	if _, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0)); err != nil {
+	key, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0))
+	if err != nil {
 		t.Fatalf("onboard genesis key: %v", err)
 	}
+	registerWorkerFixtureGenesis(t, cs, id, key.Public().DER)
 
 	orch := orchestrator.New(cs, client) // *signing.Client is the remote minter (INT-01)
 	worker := orchestrator.NewSuccessionRequestWorker(orch)
@@ -80,6 +82,34 @@ func TestINT03_RequestWorker_EndToEnd(t *testing.T) {
 		t.Fatalf("worker handle (idempotent re-delivery): %v", err)
 	}
 	assertChainLen(t, cs, id, 2)
+}
+
+// Worker tests inject a signed, public anchor as fixture state. The separate
+// operator conformance test exercises registration through the real outbox.
+func registerWorkerFixtureGenesis(t *testing.T, cs *corestore.Store, id string, identityPublicDER []byte) {
+	t.Helper()
+	root, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	genesis := succession.GenesisRecord{
+		DeploymentScope: "spiffe://d", IdentityID: id, TenantID: tenantA,
+		Algorithm: crypto.ECDSAP256, PublicKey: identityPublicDER, Epoch: 0,
+	}
+	digest, err := succession.GenesisDigest(genesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	genesis.TrustRootAtt, err = root.Sign(digest, crypto.SignOptions{Hash: crypto.SHA256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pcasstore.New(cs).PutGenesis(context.Background(), tenantA, pcasstore.GenesisAnchor{
+		Genesis: genesis, TrustRootPublicDER: root.Public().DER,
+		EventID: "fixture:" + id, RequestID: "fixture:" + id,
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func reqPayload(requestID, identityID string, alg crypto.Algorithm) []byte {

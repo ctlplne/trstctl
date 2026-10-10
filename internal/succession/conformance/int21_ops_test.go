@@ -13,7 +13,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
-	"trstctl.com/trstctl/internal/succession"
 	succapi "trstctl.com/trstctl/internal/succession/api"
 	pcasorch "trstctl.com/trstctl/internal/succession/orchestrator"
 )
@@ -35,23 +34,30 @@ func TestINT21_PCASOpsSLOBackpressureAndCrash(t *testing.T) {
 	tenants := []string{st.tenantID, int21TenantB}
 	const perTenant = 2
 	const targetQPS = 1
-	start := time.Now()
 	idsByTenant := map[string][]string{}
 	for _, tenantID := range tenants {
 		for i := 0; i < perTenant; i++ {
 			// The same identity string in two tenants must not share the
 			// signer's key handle or sealed epoch floor.
 			id := fmt.Sprintf("spiffe://int21.example/shared/workload-%d", i)
-			if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantID, id, 0)); err != nil {
-				t.Fatalf("genesis %s: %v", id, err)
+			if _, err := st.svc.RegisterGenesis(st.ctx, tenantID, succapi.GenesisRegistrationRequest{
+				IdentityID: id, Algorithm: string(crypto.ECDSAP256), DeploymentScope: "spiffe://int21.example",
+			}); err != nil {
+				t.Fatalf("register genesis %s: %v", id, err)
 			}
+			idsByTenant[tenantID] = append(idsByTenant[tenantID], id)
+		}
+	}
+	st.dispatchAll(t)
+	start := time.Now()
+	for tenantID, ids := range idsByTenant {
+		for _, id := range ids {
 			if _, err := st.svc.RequestSuccession(st.ctx, tenantID, succapi.RequestSuccessionRequest{
 				IdentityID: id, CredentialType: "x509", TargetAlgorithm: string(crypto.ECDSAP384),
 				PolicyRef: "policy:int21-load", DeploymentScope: "spiffe://int21.example",
 			}); err != nil {
 				t.Fatalf("request succession %s: %v", id, err)
 			}
-			idsByTenant[tenantID] = append(idsByTenant[tenantID], id)
 		}
 	}
 	total := len(tenants) * perTenant
@@ -96,9 +102,12 @@ func TestINT21_PCASOpsSLOBackpressureAndCrash(t *testing.T) {
 func (st *int20Stack) assertDuplicateRedeliveryDoesNotDoubleMint(t *testing.T) {
 	t.Helper()
 	const id = "spiffe://int21.example/crash-redelivery"
-	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.TenantKeyHandle(st.tenantID, id, 0)); err != nil {
+	if _, err := st.svc.RegisterGenesis(st.ctx, st.tenantID, succapi.GenesisRegistrationRequest{
+		IdentityID: id, Algorithm: string(crypto.ECDSAP256), DeploymentScope: "spiffe://int21.example",
+	}); err != nil {
 		t.Fatalf("redelivery genesis: %v", err)
 	}
+	st.dispatchAll(t)
 	payload, err := json.Marshal(map[string]any{
 		"request_id":       "int21-duplicate-redelivery",
 		"identity_id":      id,

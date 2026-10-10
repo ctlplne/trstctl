@@ -92,10 +92,22 @@ func openStore(t *testing.T) *corestore.Store {
 // fakeService records calls so the HTTP contract can be asserted without a database.
 type fakeService struct {
 	mu           sync.Mutex
+	genesisCalls int
 	requestCalls int
 	lastReq      succapi.RequestSuccessionRequest
 	lastAck      succapi.AckRequest
 	chainRecords [][]byte
+}
+
+func (f *fakeService) RegisterGenesis(_ context.Context, _ string, req succapi.GenesisRegistrationRequest) (succapi.AsyncRequestResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.genesisCalls++
+	return succapi.AsyncRequestResponse{RequestID: "genesis-1", IdentityID: req.IdentityID, Status: "queued"}, nil
+}
+
+func (f *fakeService) GetRequestStatus(_ context.Context, _, requestID string) (succapi.RequestStatus, bool, error) {
+	return succapi.RequestStatus{RequestID: requestID, Kind: "genesis", Status: "delivered"}, true, nil
 }
 
 func (f *fakeService) RequestSuccession(_ context.Context, _ string, req succapi.RequestSuccessionRequest) (succapi.RequestSuccessionResponse, error) {
@@ -184,7 +196,7 @@ func (f *fakeService) ListMisissuance(context.Context, string) (succapi.Misissua
 	return succapi.MisissuanceListResponse{Findings: []succapi.MisissuanceResponse{}, Count: 0}, nil
 }
 
-var pcasRole = authz.Role{Name: "pcas-operator", Permissions: []authz.Permission{authz.CertsWrite, authz.CertsRead}}
+var pcasRole = authz.Role{Name: "pcas-operator", Permissions: []authz.Permission{authz.CertsWrite, authz.CertsRead, authz.KeysWrite}}
 
 func newAPI(t *testing.T, svc succapi.Service) *api.API {
 	t.Helper()
@@ -197,6 +209,51 @@ func newAPI(t *testing.T, svc succapi.Service) *api.API {
 		api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
 	}
 	return api.New(cs, idem, nil, opts...)
+}
+
+func TestGenesisRegistration_IdempotencyRBACAndStatus(t *testing.T) {
+	svc := &fakeService{}
+	a := newAPI(t, svc)
+	body := `{"identity_id":"spiffe://d/new","algorithm":"ECDSA-P256","deployment_scope":"spiffe://d"}`
+	do := func(key string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/genesis", bytes.NewBufferString(body))
+		if key != "" {
+			r.Header.Set("Idempotency-Key", key)
+		}
+		rr := httptest.NewRecorder()
+		a.ServeHTTP(rr, r)
+		return rr
+	}
+	if rr := do(""); rr.Code != http.StatusBadRequest {
+		t.Fatalf("missing idempotency key = %d, want 400: %s", rr.Code, rr.Body.String())
+	}
+	first, replay := do("genesis-key"), do("genesis-key")
+	if first.Code != http.StatusAccepted || replay.Code != http.StatusAccepted || first.Body.String() != replay.Body.String() {
+		t.Fatalf("idempotent genesis responses = %d/%d, body=%s/%s", first.Code, replay.Code, first.Body.String(), replay.Body.String())
+	}
+	if svc.genesisCalls != 1 {
+		t.Fatalf("genesis service calls = %d, want 1", svc.genesisCalls)
+	}
+	status := httptest.NewRequest(http.MethodGet, "/api/v1/pcas/requests/genesis-1", nil)
+	rr := httptest.NewRecorder()
+	a.ServeHTTP(rr, status)
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`"status":"delivered"`)) {
+		t.Fatalf("status readback = %d, %s", rr.Code, rr.Body.String())
+	}
+
+	cs := openStore(t)
+	readOnly := authz.Role{Name: "pcas-reader", Permissions: []authz.Permission{authz.CertsRead}}
+	principal := authz.Principal{TenantID: tenantA, Subject: "reader", Grants: []authz.Grant{{Role: readOnly, Scope: authz.Scope{TenantID: tenantA}}}}
+	deniedAPI := api.New(cs, orchestrator.NewIdempotency(cs), nil,
+		api.WithLicensedRoutes(succapi.Routes(svc)...), api.WithRoles(readOnly),
+		api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/genesis", bytes.NewBufferString(body))
+	r.Header.Set("Idempotency-Key", "reader-genesis")
+	rr = httptest.NewRecorder()
+	deniedAPI.ServeHTTP(rr, r)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("read-only genesis = %d, want 403: %s", rr.Code, rr.Body.String())
+	}
 }
 
 // TestRequestSuccession_Idempotent: a replayed Idempotency-Key returns the original

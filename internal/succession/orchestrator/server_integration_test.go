@@ -35,9 +35,11 @@ func TestINT04_LicensedOutboxFactory_DrivesMint(t *testing.T) {
 
 	client := serveProductionSigner(t)
 	const id = "spiffe://d/int04"
-	if _, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0)); err != nil {
+	key, err := client.GenerateKeyHandle(ctx, crypto.ECDSAP256, succession.TenantKeyHandle(tenantA, id, 0))
+	if err != nil {
 		t.Fatalf("onboard genesis: %v", err)
 	}
+	registerWorkerFixtureGenesis(t, cs, id, key.Public().DER)
 
 	// Build the handler exactly as internal/server does: the out-of-process signer
 	// client is the succession minter.
@@ -85,6 +87,11 @@ func TestINT04_FailsClosedWithoutSigner(t *testing.T) {
 	if err := cs.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	fixtureKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerWorkerFixtureGenesis(t, cs, "spiffe://d/int04-nominter", fixtureKey.Public().DER)
 	h, err := orchestrator.NewLicensedOutboxFactory()(editionseam.LicensedOutboxDeps{Store: cs, Minter: nil})
 	if err != nil {
 		t.Fatalf("factory: %v", err)

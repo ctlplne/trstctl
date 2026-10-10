@@ -19,6 +19,10 @@ package cli
 // when its edition is unavailable; the CLI uses the served contract rather than
 // guessing the server's edition ahead of the call.
 var licensedRouteCommands = []Command{
+	{Name: []string{"pcas", "genesis", "register"}, Method: "POST", Path: "/api/v1/pcas/genesis", Body: bodyFile, Summary: "Register a tenant-scoped signer-held PCAS genesis key"},
+	{Name: []string{"pcas", "requests", "status"}, Method: "GET", Path: "/api/v1/pcas/requests/{request_id}", Summary: "Show durable PCAS genesis or succession progress"},
+	{Name: []string{"pcas", "succession", "request"}, Method: "POST", Path: "/api/v1/pcas/successions", Body: bodyFile, Summary: "Queue an algorithm succession after genesis is delivered"},
+	{Name: []string{"pcas", "chain", "get"}, Method: "GET", Path: "/api/v1/pcas/chain", Query: []string{"identity_id"}, Summary: "Read the signed genesis and successor chain"},
 	{Name: []string{"ca", "keys", "retire"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", Body: bodyFile, Summary: "Irreversibly retire a superseded CA key through the isolated signer and retain its signed destruction record"},
 	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
 	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a Core PQC migration run over selected CBOM assets"},

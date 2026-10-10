@@ -33,6 +33,7 @@ func NewLicensedOutboxFactory(opts ...FactoryOption) editionseam.LicensedOutboxF
 		}
 		return &licensedOutboxHandler{
 			orch:      New(d.Store, d.Minter),
+			genesis:   NewGenesisWorker(d.Store, d.Log, d.KEMCustody),
 			breadth:   NewBreadthWorker(d.Store, d.KEMCustody),
 			hasMinter: d.Minter != nil,
 			hasKEM:    d.KEMCustody != nil,
@@ -84,6 +85,7 @@ func (t BreadthTopics) resolved() BreadthTopics {
 
 type licensedOutboxHandler struct {
 	orch      *Orchestrator
+	genesis   *GenesisWorker
 	breadth   *BreadthWorker
 	hasMinter bool
 	hasKEM    bool
@@ -102,6 +104,10 @@ func (h *licensedOutboxHandler) DeliverLicensed(ctx context.Context, m coreorch.
 		}
 	}
 	switch {
+	case m.Destination == GenesisDestination:
+		err := h.genesis.Deliver(ctx, m)
+		observe(err)
+		return true, err
 	case m.Destination == RequestDestination: // pcas.succession-request
 		if !h.hasMinter {
 			err := errors.New("pcas: no out-of-process signer configured; cannot mint (fail closed)")
@@ -161,6 +167,8 @@ func (h *licensedOutboxHandler) observe(feature, action string, start time.Time,
 
 func (h *licensedOutboxHandler) featureAction(destination string) (feature, action string, ok bool) {
 	switch destination {
+	case GenesisDestination:
+		return "pcas_succession", "genesis", true
 	case RequestDestination:
 		return "pcas_succession", "mint", true
 	case PublishDestination:

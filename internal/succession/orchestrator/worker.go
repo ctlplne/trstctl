@@ -15,6 +15,7 @@ import (
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/succession"
+	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
 
 // RequestDestination is the outbox destination a control-plane API enqueues a
@@ -74,6 +75,19 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 	}
 	if p.IdentityID == "" || p.TargetAlgorithm == "" {
 		return errors.New("succession worker: request missing identity or target algorithm")
+	}
+	anchor, found, err := pcasstore.New(w.orch.core).GetGenesis(ctx, tenantID, p.IdentityID)
+	if err != nil {
+		return fmt.Errorf("succession worker: read genesis: %w", err)
+	}
+	if !found {
+		return errors.New("succession worker: no registered genesis for identity")
+	}
+	if anchor.Genesis.DeploymentScope != p.DeploymentScope {
+		return errors.New("succession worker: deployment scope differs from registered genesis")
+	}
+	if err := succession.VerifyGenesis(anchor.TrustRootPublicDER, anchor.Genesis); err != nil {
+		return fmt.Errorf("succession worker: invalid genesis: %w", err)
 	}
 
 	// Resolve the identity's current epoch (0 => genesis, no succession yet) and the

@@ -67,6 +67,9 @@
           "status": {
             "type": "string"
           },
+          "status_url": {
+            "type": "string"
+          },
           "target": {
             "type": "string"
           }
@@ -250,6 +253,25 @@
           "identity_id",
           "foreign_trust_root_der",
           "foreign_genesis"
+        ]
+      },
+      "PCASGenesisRequest": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "deployment_scope": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "algorithm",
+          "deployment_scope"
         ]
       },
       "PCASIssueLeafRequest": {
@@ -592,6 +614,38 @@
           "authorization"
         ]
       },
+      "PCASRequestStatus": {
+        "type": "object",
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "delivered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "kind",
+          "status",
+          "attempts",
+          "created_at"
+        ]
+      },
       "PCASRetirementPolicy": {
         "type": "object",
         "properties": {
@@ -735,6 +789,9 @@
           "status": {
             "type": "string"
           },
+          "status_url": {
+            "type": "string"
+          },
           "target_algorithm": {
             "type": "string"
           }
@@ -751,6 +808,35 @@
           "count": {
             "type": "integer"
           },
+          "genesis": {
+            "type": "object",
+            "properties": {
+              "algorithm": {
+                "type": "string"
+              },
+              "deployment_scope": {
+                "type": "string"
+              },
+              "epoch": {
+                "type": "integer"
+              },
+              "identity_id": {
+                "type": "string"
+              },
+              "public_key": {
+                "type": "string"
+              },
+              "signer_attestation": {
+                "type": "string"
+              },
+              "tenant_id": {
+                "type": "string"
+              },
+              "trust_root_att": {
+                "type": "string"
+              }
+            }
+          },
           "identity_id": {
             "type": "string"
           },
@@ -759,6 +845,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "trust_root_public_der": {
+            "type": "string"
           }
         },
         "required": [
@@ -987,6 +1076,38 @@
         "summary": "Queue a PCAS federation bridge import"
       }
     },
+    "/api/v1/pcas/genesis": {
+      "post": {
+        "operationId": "registerPCASGenesis",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASGenesisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "success"
+          }
+        },
+        "summary": "Register a tenant-scoped PCAS identity and signer-held genesis key"
+      }
+    },
     "/api/v1/pcas/issuers": {
       "post": {
         "operationId": "registerPCASIssuerAuthority",
@@ -1178,6 +1299,17 @@
           }
         },
         "summary": "Queue a threshold-authenticated PCAS recovery mint"
+      }
+    },
+    "/api/v1/pcas/requests/{request_id}": {
+      "get": {
+        "operationId": "getPCASRequestStatus",
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "Read durable progress of a PCAS genesis or succession request"
       }
     },
     "/api/v1/pcas/retirement": {

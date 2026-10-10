@@ -34,6 +34,7 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
+import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 
 const emptyCBOMProgress: CBOMMigrationProgress = {
   total_assets: 0,
@@ -421,6 +422,7 @@ export function Posture() {
           />
           <PQCCampaigns assets={cbomInventory.items} />
           <PQCMigrationWorkflow assets={cbomInventory.items} />
+          <PCASSuccessionWorkflow />
         </section>
       </details>
     </section>

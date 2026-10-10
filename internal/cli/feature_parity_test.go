@@ -295,8 +295,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F33's exact issuance-request show gives headless operators the same
 	// decision and issuance evidence after the recent list rolls over.
 	// U6 adds a separate reviewed PAM session request before activation.
-	if len(out) != 490 {
-		t.Fatalf("CLI commands = %d, want 490", len(out))
+	// PCAS first use adds registration, request status, succession, and chain readback.
+	if len(out) != 494 {
+		t.Fatalf("CLI commands = %d, want 494", len(out))
 	}
 	return out
 }

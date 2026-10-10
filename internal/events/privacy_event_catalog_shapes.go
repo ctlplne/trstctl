@@ -157,6 +157,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return catalogPrivacyPayloadShape(example, options[0])
 	}
 	switch eventType {
+	case "nhi.algorithm.genesis":
+		return shape(`{"request_id":"","identity_id":"","tenant_id":"","deployment_scope":"","algorithm":"","public_key_der":"","epoch":0,"trust_root_att":"","trust_root_public_der":""}`), true
 	case "acme.account.upserted":
 		return shape(`{"seq":1,"id":"","url":"","jwk":{},"contact":[""],"status":"","eab_key_id":""}`,
 			catalogPrivacyShapeOptions{

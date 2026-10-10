@@ -17,7 +17,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
+	"trstctl.com/trstctl/internal/crypto"
 	corestore "trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/succession"
 
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -94,6 +96,41 @@ func rec(identity string, epoch uint64) pcasstore.Record {
 		IdentityID: identity, Epoch: epoch, PredecessorEpoch: epoch - 1,
 		PredecessorAlg: "ECDSA-P256", SuccessorAlg: "Ed25519",
 		SuccessorPub: []byte{byte(epoch & 0xFF)}, Encoded: []byte{0xAB, byte(epoch & 0xFF)},
+	}
+}
+
+func TestGenesisProjectionIsTenantScopedAndImmutable(t *testing.T) {
+	repo := newRepo(t)
+	const id = "spiffe://shared.example/workload"
+	anchor := pcasstore.GenesisAnchor{
+		Genesis: succession.GenesisRecord{IdentityID: id, TenantID: tenantA, DeploymentScope: "spiffe://shared.example",
+			Algorithm: crypto.ECDSAP256, PublicKey: []byte{1, 2, 3}, Epoch: 0, TrustRootAtt: []byte{4, 5}},
+		TrustRootPublicDER: []byte{6, 7}, EventID: "event-a", RequestID: "request-a",
+	}
+	if err := repo.PutGenesis(context.Background(), tenantA, anchor); err != nil {
+		t.Fatalf("project genesis: %v", err)
+	}
+	if err := repo.PutGenesis(context.Background(), tenantA, anchor); err != nil {
+		t.Fatalf("duplicate event must be idempotent: %v", err)
+	}
+	if _, found, err := repo.GetGenesis(context.Background(), tenantB, id); err != nil || found {
+		t.Fatalf("cross-tenant read found=%v err=%v, want false,nil", found, err)
+	}
+	other := anchor
+	other.Genesis.TenantID = tenantB
+	other.EventID = "event-b"
+	other.RequestID = "request-b"
+	if err := repo.PutGenesis(context.Background(), tenantB, other); err != nil {
+		t.Fatalf("same identity in another tenant: %v", err)
+	}
+	conflict := anchor
+	conflict.Genesis.PublicKey = []byte{9}
+	if err := repo.PutGenesis(context.Background(), tenantA, conflict); err == nil {
+		t.Fatal("conflicting signed genesis replaced established anchor")
+	}
+	got, found, err := repo.GetGenesis(context.Background(), tenantA, id)
+	if err != nil || !found || string(got.Genesis.PublicKey) != string(anchor.Genesis.PublicKey) {
+		t.Fatalf("anchor changed after conflict: %+v found=%v err=%v", got, found, err)
 	}
 }
 

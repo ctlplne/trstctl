@@ -11487,12 +11487,13 @@
             "phase": "P2",
             "priority": 67,
             "served_state": "partial",
-            "backend_status": "partial: served profile-selection for classical labels through internal/crypto validation plus CBOM migration inventory; proprietary Enterprise/PQC algorithms and migration orchestration attach from ee/",
-            "current_frontend_mapping": "serve: Profiles guided builder exposes classical signature labels; Posture at /posture provides a choose, effect-free review, bounded scan, separate saved-inventory verification, migration guidance, and recovery journey, with proprietary PQC controls supplied by ee/ when licensed",
+            "backend_status": "partial: core serves algorithm profiles, CBOM inventory, PQC migration and PCAS signer-held first-use succession; relying-party adoption and hardware custody require separate qualification",
+            "current_frontend_mapping": "serve: Profiles guides algorithm choice; Posture at /posture provides CBOM scanning, reviewed PQC migration, and PCAS genesis and succession request progress with signed-chain readback",
             "target_gui_mapping": "Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers.",
-            "acceptance_test": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical signature labels through internal/crypto, CBOM exposes migration targets, and proprietary EE tests cover PQC migration re-issuance with rollback.",
+            "acceptance_test": "Served tests prove profile validation, CBOM migration targets, core PQC host-agent rollout and rollback, plus PCAS genesis registration and independently verifiable succession through the isolated signer.",
             "source_docs": [
-                "docs/features/lifecycle-and-pqc.md"
+                "docs/features/lifecycle-and-pqc.md",
+                "docs/runbooks/pcas-operations.md"
             ],
             "source_backend": [
                 "internal/crypto",
@@ -11500,21 +11501,27 @@
                 "internal/cbom",
                 "internal/api/profiles.go",
                 "internal/api/cbom.go",
-                "internal/pqcmigration"
+                "internal/pqcmigration",
+                "internal/succession"
             ],
             "source_frontend": [
                 "web/src/pages/Profiles.tsx",
                 "web/src/pages/Posture.tsx",
-                "web/src/pages/posture/CBOMScanWorkflow.tsx"
+                "web/src/pages/posture/CBOMScanWorkflow.tsx",
+                "web/src/pages/posture/PCASSuccessionWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "Complete vertical slice closed on exact g138 candidate 90921be12671fee121c9bd57810355307ba3d302. PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; internal/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. The exact-candidate live receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves effect-free API/real-CLI parity, bounded loopback TLS discovery, independent inventory readback, stable migration IDs, byte-identical idempotent replay, controlled process restart, and post-restart API/CLI agreement. The browser receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the served choose, review, execute, observe, recover, and saved-evidence journey at desktop and mobile widths, zero console errors or page overflow, strict HTTPS restoration, and durable saved IDs after restart. The preserved first live receipt records a QA-oracle object-order defect instead of hiding the failed control.",
+            "notes": "Historical g138 receipts are retained for traceability. Current core PQC host-agent migration and rollback are proven in the 2026-09-29 QA campaign; PCAS first-use genesis and succession have signer-backed conformance coverage and require same-candidate live replay before campaign verification. External relying-party adoption and hardware custody remain separate qualification work.",
             "api_surface": [
                 "createProfile",
                 "listProfiles",
                 "getProfileVersion",
                 "startCBOMScan",
-                "listCBOMAssets"
+                "listCBOMAssets",
+                "registerPCASGenesis",
+                "getPCASRequestStatus",
+                "requestSuccession",
+                "getSuccessionChain"
             ],
             "cli_surface": [
                 "cbom assets",
@@ -11525,16 +11532,20 @@
                 "migration status",
                 "profiles create",
                 "profiles get-version",
-                "profiles list"
+                "profiles list",
+                "pcas genesis register",
+                "pcas requests status",
+                "pcas succession request",
+                "pcas chain get"
             ],
             "facet_evidence": {
                 "served": {
                     "evidence": [
                         "POST /api/v1/profiles rejects unsupported allowed_key_algorithms before profile.created and accepts served classical signature labels classified by internal/crypto.",
-                        "GET /api/v1/cbom/assets exposes algorithm inventory, licensed migration targets, and migration progress.",
-                        "PACKAGING-007 moves PQC algorithms, APIs, UI, and tests behind the proprietary ee/ boundary.",
+                        "GET /api/v1/cbom/assets exposes algorithm inventory, migration targets, and migration progress.",
+                        "Core PCAS registers tenant-scoped signer-held genesis and serves a signed succession chain.",
                         "served_state=partial",
-                        "backend_status=partial: served profile-selection for classical labels through internal/crypto validation plus CBOM migration inventory; proprietary Enterprise/PQC algorithms and migration orchestration attach from ee/"
+                        "backend_status=partial: core profile selection, CBOM, PQC migration, and PCAS first-use succession are served; relying-party adoption and hardware custody require separate qualification"
                     ],
                     "refs": [
                         "internal/crypto/classify.go",
@@ -11551,7 +11562,7 @@
                     "evidence": [
                         "Profiles guided builder exposes RSA/ECDSA/Ed25519 profile-selection choices in the MPL core.",
                         "Posture at /posture shows CBOM algorithm inventory, disallowed/quantum-vulnerable state, and remediation handoff.",
-                        "target_gui_mapping: Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, licensed PQC readiness, hybrid policy, and migration blockers."
+                        "Posture shows reviewed core PQC migration, PCAS genesis registration, request progress, and signed-chain readback."
                     ],
                     "refs": [
                         "web/src/pages/Profiles.tsx",
@@ -11566,7 +11577,8 @@
                         "CLI command: profiles list",
                         "CLI command: profiles get-version",
                         "CLI command: cbom scan",
-                        "CLI command: cbom assets"
+                        "CLI command: cbom assets",
+                        "CLI commands: pcas genesis register, pcas requests status, pcas succession request, pcas chain get"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -11580,7 +11592,8 @@
                         "OpenAPI operationId: listProfiles",
                         "OpenAPI operationId: getProfileVersion",
                         "OpenAPI operationId: startCBOMScan",
-                        "OpenAPI operationId: listCBOMAssets"
+                        "OpenAPI operationId: listCBOMAssets",
+                        "Core attached operationIds: registerPCASGenesis, getPCASRequestStatus, requestSuccession, getSuccessionChain"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -11592,9 +11605,9 @@
                 "test": {
                     "evidence": [
                         "acceptance_test: internal/server/crypto_agility_served_test.go proves served profile-selection validation for unsupported and classical signature labels.",
-                        "internal/server/cbom_served_test.go proves CBOM exposes licensed migration targets and progress.",
-                        "internal/pqcmigration proves licensed ACME hybrid PQC migration re-issuance and rollback.",
-                        "PACKAGING-007 moves hybrid/PQC profile UI evidence to proprietary ee/.",
+                        "internal/server/cbom_served_test.go proves CBOM migration targets and progress.",
+                        "internal/pqcmigration tests prove core host-agent migration and rollback.",
+                        "TestOperatorGenesisThenSuccessionThroughOutbox proves signer-backed first-use PCAS succession and offline verification.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -11602,6 +11615,7 @@
                         "internal/server/crypto_agility_served_test.go",
                         "internal/server/cbom_served_test.go",
                         "internal/pqcmigration",
+                        "internal/succession/conformance/operator_genesis_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/operations_surface.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
@@ -11610,15 +11624,16 @@
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/lifecycle-and-pqc.md"
+                        "documented in docs/features/lifecycle-and-pqc.md and docs/runbooks/pcas-operations.md"
                     ],
                     "refs": [
-                        "docs/features/lifecycle-and-pqc.md"
+                        "docs/features/lifecycle-and-pqc.md",
+                        "docs/runbooks/pcas-operations.md"
                     ]
                 },
                 "rbac": {
                     "evidence": [
-                        "create/list/get profile operations are guarded by profiles:write/profiles:read; CBOM inventory is guarded by risk:read; PQC migration start/rollback authz belongs to proprietary ee/.",
+                        "Profile routes use profiles:write/profiles:read; CBOM inventory uses risk:read; core PQC and PCAS routes declare their own explicit permissions.",
                         "feature authz manifest maps the claimed API operations to route permissions and internal/api/feature_authz_test.go verifies permission metadata.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the claimed operations."
                     ],
@@ -11632,7 +11647,7 @@
                 "audit": {
                     "evidence": [
                         "Profile creation emits profile.created/profile.updated events after algorithm validation.",
-                        "CBOM scan emits cbom.asset.observed events and licensed PQC migration emits licensed_crypto.migration.started, licensed_crypto.migration.asset_completed, licensed_crypto.migration.rollback_completed, and protocol.issued events."
+                        "CBOM, core PQC migration, and PCAS genesis/succession changes emit immutable, tenant-scoped events with the authenticated actor."
                     ],
                     "refs": [
                         "internal/orchestrator/commands.go",
@@ -11644,7 +11659,7 @@
                 "telemetry": {
                     "evidence": [
                         "served HTTP/profile and CBOM entrypoints are covered by normalized request metrics and tracing without tenant/secret labels.",
-                        "PQC migration telemetry belongs to the proprietary ee/ route bundle when licensed."
+                        "Core PQC and PCAS HTTP routes use the same normalized request metrics and tracing."
                     ],
                     "refs": [
                         "internal/observ/middleware.go",

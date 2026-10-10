@@ -65,6 +65,9 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		}
 	}
 	catalog := []productionPrivacyEventPolicy{
+		// The root attestation covers every genesis field. Privacy rewrite must
+		// refuse the signed artifact instead of silently breaking its signature.
+		rejectingEntry("nhi.algorithm.genesis"),
 		entry("acme.account.upserted",
 			catalogPrivacyRule("/seq", opaque), catalogPrivacyRule("/id", opaque),
 			catalogPrivacyRule("/url", opaque), catalogPrivacyRule("/jwk", opaque),

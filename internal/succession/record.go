@@ -2,7 +2,12 @@
 
 package succession
 
-import "trstctl.com/trstctl/internal/crypto"
+import (
+	"encoding/json"
+	"errors"
+
+	"trstctl.com/trstctl/internal/crypto"
+)
 
 // PossessionProofKind names the mechanism of the successor possession-proof limb
 // (PCAS-claim-25). PCAS-04 implements the successor-signature variant; the KEM
@@ -98,13 +103,56 @@ const (
 // parties obtain the trust-root public key out of band, exactly as trust anchors
 // are obtained today.
 type GenesisRecord struct {
-	DeploymentScope string
-	IdentityID      string
-	TenantID        string
-	Algorithm       crypto.Algorithm
-	PublicKey       []byte // SubjectPublicKeyInfo (PKIX/DER)
-	Epoch           uint64 // genesis is epoch 0
+	DeploymentScope string           `json:"deployment_scope"`
+	IdentityID      string           `json:"identity_id"`
+	TenantID        string           `json:"tenant_id"`
+	Algorithm       crypto.Algorithm `json:"algorithm"`
+	PublicKey       []byte           `json:"public_key"` // SubjectPublicKeyInfo (PKIX/DER)
+	Epoch           uint64           `json:"epoch"`      // genesis is epoch 0
 
-	TrustRootAtt      []byte // tenant-trust-root signature over the genesis encoding
-	SignerAttestation []byte // optional signer countersignature
+	TrustRootAtt      []byte `json:"trust_root_att"`               // tenant-trust-root signature over the genesis encoding
+	SignerAttestation []byte `json:"signer_attestation,omitempty"` // optional signer countersignature
+}
+
+// UnmarshalJSON accepts the published v1 conformance vectors, whose field names
+// used Go casing, alongside the snake-case API representation. Signatures bind
+// the canonical field encoding, not JSON field names. Mixed encodings are
+// rejected so one document cannot present two interpretations of the anchor.
+func (g *GenesisRecord) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if _, legacy := fields["DeploymentScope"]; legacy {
+		if _, modern := fields["deployment_scope"]; modern {
+			return errors.New("pcas genesis: mixed legacy and current JSON fields")
+		}
+		var old struct {
+			DeploymentScope   string
+			IdentityID        string
+			TenantID          string
+			Algorithm         crypto.Algorithm
+			PublicKey         []byte
+			Epoch             uint64
+			TrustRootAtt      []byte
+			SignerAttestation []byte
+		}
+		if err := json.Unmarshal(data, &old); err != nil {
+			return err
+		}
+		*g = GenesisRecord{
+			DeploymentScope: old.DeploymentScope, IdentityID: old.IdentityID,
+			TenantID: old.TenantID, Algorithm: old.Algorithm, PublicKey: old.PublicKey,
+			Epoch: old.Epoch, TrustRootAtt: old.TrustRootAtt,
+			SignerAttestation: old.SignerAttestation,
+		}
+		return nil
+	}
+	type current GenesisRecord
+	var next current
+	if err := json.Unmarshal(data, &next); err != nil {
+		return err
+	}
+	*g = GenesisRecord(next)
+	return nil
 }

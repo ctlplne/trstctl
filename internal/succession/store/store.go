@@ -8,6 +8,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -19,16 +20,89 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	corestore "trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/succession"
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 // MigrationsFS returns the PCAS succession DDL as a migration source for the core
-// store's feature-neutral WithExtraMigrations seam. It is wired only through the
-// tagged ee_attach seam (PCAS-08); the core-only build never references it, so the
-// core-only build applies zero PCAS migrations (G6).
+// store's feature-neutral WithExtraMigrations seam. PCAS is a core family and
+// both standard and core-only builds include these migrations.
 func MigrationsFS() fs.FS { return migrationsFS }
+
+// GenesisAnchor is public chain material projected from an immutable genesis
+// event. No private key or signer authorization token enters PostgreSQL.
+type GenesisAnchor struct {
+	Genesis            succession.GenesisRecord
+	TrustRootPublicDER []byte
+	EventID            string
+	RequestID          string
+}
+
+// GetGenesis loads one tenant's first-use anchor through the RLS boundary.
+func (r *Repo) GetGenesis(ctx context.Context, tenantID, identityID string) (GenesisAnchor, bool, error) {
+	var anchor GenesisAnchor
+	var raw []byte
+	var found bool
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT genesis_json, trust_root_public_der, event_id, request_id
+			FROM pcas_genesis WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, identityID).
+			Scan(&raw, &anchor.TrustRootPublicDER, &anchor.EventID, &anchor.RequestID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		found = true
+		return json.Unmarshal(raw, &anchor.Genesis)
+	})
+	return anchor, found, err
+}
+
+// PutGenesis applies one immutable genesis event to the serving projection.
+// A duplicate delivery may repeat the same event; a conflicting event cannot
+// replace a tenant's established anchor.
+func (r *Repo) PutGenesis(ctx context.Context, tenantID string, anchor GenesisAnchor) error {
+	raw, err := json.Marshal(anchor.Genesis)
+	if err != nil {
+		return err
+	}
+	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO pcas_genesis
+			(tenant_id, identity_id, genesis_json, trust_root_public_der, event_id, request_id)
+			VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5)
+			ON CONFLICT (tenant_id, identity_id) DO NOTHING`,
+			anchor.Genesis.IdentityID, raw, anchor.TrustRootPublicDER, anchor.EventID, anchor.RequestID)
+		if err != nil {
+			return err
+		}
+		var storedJSON []byte
+		var storedRoot []byte
+		var storedEvent string
+		if err := tx.QueryRow(ctx, `SELECT genesis_json, trust_root_public_der, event_id FROM pcas_genesis
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, anchor.Genesis.IdentityID).
+			Scan(&storedJSON, &storedRoot, &storedEvent); err != nil {
+			return err
+		}
+		var stored succession.GenesisRecord
+		if err := json.Unmarshal(storedJSON, &stored); err != nil {
+			return err
+		}
+		if storedEvent != anchor.EventID || !equalGenesis(stored, anchor.Genesis) || !bytes.Equal(storedRoot, anchor.TrustRootPublicDER) {
+			return errors.New("pcas genesis: conflicting immutable anchor")
+		}
+		return nil
+	})
+}
+
+func equalGenesis(a, b succession.GenesisRecord) bool {
+	return a.DeploymentScope == b.DeploymentScope && a.IdentityID == b.IdentityID &&
+		a.TenantID == b.TenantID && a.Algorithm == b.Algorithm && a.Epoch == b.Epoch &&
+		bytes.Equal(a.PublicKey, b.PublicKey) && bytes.Equal(a.TrustRootAtt, b.TrustRootAtt) &&
+		bytes.Equal(a.SignerAttestation, b.SignerAttestation)
+}
 
 // ErrHighWaterRegression is returned by UpsertHighWater when the requested epoch
 // is not strictly greater than the stored high-water (defense in depth; the

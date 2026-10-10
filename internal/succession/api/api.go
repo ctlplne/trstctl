@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/succession"
 )
 
 // plannableCredentialTypes is the PCAS-claim-9 identity/credential genus the API accepts,
@@ -41,6 +42,14 @@ type RequestSuccessionRequest struct {
 	DelegationScope string `json:"delegation_scope,omitempty"`
 }
 
+// GenesisRegistrationRequest establishes the first signer-held key for one
+// tenant-scoped identity. The private key and tenant trust root stay in custody.
+type GenesisRegistrationRequest struct {
+	IdentityID      string `json:"identity_id"`
+	Algorithm       string `json:"algorithm"`
+	DeploymentScope string `json:"deployment_scope"`
+}
+
 // RequestSuccessionResponse acknowledges an accepted (idempotent) succession request.
 type RequestSuccessionResponse struct {
 	RequestID       string    `json:"request_id"`
@@ -49,15 +58,18 @@ type RequestSuccessionResponse struct {
 	TargetAlgorithm string    `json:"target_algorithm"`
 	Status          string    `json:"status"`
 	QueuedAt        time.Time `json:"queued_at"`
+	StatusURL       string    `json:"status_url"`
 }
 
 // ChainResponse is an identity's succession chain: the ordered, gapless list of
 // opaque encoded dual-signed records (PCAS-04), which a relying party verifies
 // offline with PCAS-07.
 type ChainResponse struct {
-	IdentityID string   `json:"identity_id"`
-	Records    [][]byte `json:"records"`
-	Count      int      `json:"count"`
+	IdentityID         string                    `json:"identity_id"`
+	Genesis            *succession.GenesisRecord `json:"genesis,omitempty"`
+	TrustRootPublicDER []byte                    `json:"trust_root_public_der,omitempty"`
+	Records            [][]byte                  `json:"records"`
+	Count              int                       `json:"count"`
 }
 
 // AckRequest is a relying party's signed post-quantum-capability acknowledgment.
@@ -128,6 +140,18 @@ type AsyncRequestResponse struct {
 	QueuedAt   time.Time `json:"queued_at"`
 	Target     string    `json:"target,omitempty"`
 	IdentityID string    `json:"identity_id,omitempty"`
+	StatusURL  string    `json:"status_url,omitempty"`
+}
+
+// RequestStatus reports durable outbox progress without exposing worker error
+// strings that could contain tenant input or an upstream response body.
+type RequestStatus struct {
+	RequestID   string     `json:"request_id"`
+	Kind        string     `json:"kind"`
+	Status      string     `json:"status"`
+	Attempts    int        `json:"attempts"`
+	CreatedAt   time.Time  `json:"created_at"`
+	DeliveredAt *time.Time `json:"delivered_at,omitempty"`
 }
 
 type FederationImportRequest struct {
@@ -291,6 +315,8 @@ type MisissuanceResponse struct {
 // Service is the PCAS API backend. The concrete implementation is store/log/outbox
 // backed (see service.go); handlers depend only on this interface.
 type Service interface {
+	RegisterGenesis(ctx context.Context, tenantID string, req GenesisRegistrationRequest) (AsyncRequestResponse, error)
+	GetRequestStatus(ctx context.Context, tenantID, requestID string) (RequestStatus, bool, error)
 	RequestSuccession(ctx context.Context, tenantID string, req RequestSuccessionRequest) (RequestSuccessionResponse, error)
 	FetchChain(ctx context.Context, tenantID, identityID string) (ChainResponse, error)
 	RecordAck(ctx context.Context, tenantID string, req AckRequest) (AckResponse, error)
@@ -332,6 +358,19 @@ func NewAPIOptionsFactory(opts ...ServiceOption) editionseam.LicensedAPIOptionsF
 // the exact served routes against a test Service.
 func Routes(svc Service) []api.LicensedRoute {
 	return []api.LicensedRoute{
+		{
+			Method: "POST", Path: "/api/v1/pcas/genesis", OperationID: "registerPCASGenesis",
+			Summary:       "Register a tenant-scoped PCAS identity and signer-held genesis key",
+			Handler:       func(a *api.API) http.HandlerFunc { return genesisHandler(a, svc) },
+			RequestSchema: "PCASGenesisRequest", ResponseSchema: "PCASAsyncRequest",
+			SuccessCode: "202", Mutation: true, Permission: authz.KeysWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/pcas/requests/{request_id}", OperationID: "getPCASRequestStatus",
+			Summary:        "Read durable progress of a PCAS genesis or succession request",
+			Handler:        func(a *api.API) http.HandlerFunc { return requestStatusHandler(a, svc) },
+			ResponseSchema: "PCASRequestStatus", SuccessCode: "200", Permission: authz.CertsRead,
+		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/successions", OperationID: "requestSuccession",
 			Summary:       "Request an algorithm succession for an identity (idempotent)",
@@ -472,6 +511,50 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:        func(a *api.API) http.HandlerFunc { return misissuanceHandler(a, svc) },
 			ResponseSchema: "PCASMisissuanceList", SuccessCode: "200", Permission: authz.CertsRead,
 		},
+	}
+}
+
+func requestStatusHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		requestID := r.PathValue("request_id")
+		if requestID == "" {
+			writeProblem(w, http.StatusBadRequest, "request_id is required")
+			return
+		}
+		resp, found, err := svc.GetRequestStatus(r.Context(), tenantID, requestID)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to read PCAS request")
+			return
+		}
+		if !found {
+			writeProblem(w, http.StatusNotFound, "PCAS request not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func genesisHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+			var req GenesisRegistrationRequest
+			if err := api.DecodeJSON(r, &req); err != nil {
+				return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+			}
+			if req.IdentityID == "" || req.Algorithm == "" || req.DeploymentScope == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id, algorithm and deployment_scope are required")
+			}
+			resp, err := svc.RegisterGenesis(ctx, tenantID, req)
+			if err != nil {
+				return 0, nil, err
+			}
+			return http.StatusAccepted, resp, nil
+		})
 	}
 }
 
@@ -898,6 +981,19 @@ func writeProblem(w http.ResponseWriter, status int, detail string) {
 
 func schemas() map[string]*api.Schema {
 	return map[string]*api.Schema{
+		"PCASGenesisRequest": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id":      api.StringSchema(),
+			"algorithm":        api.StringSchema(),
+			"deployment_scope": api.StringSchema(),
+		}, "identity_id", "algorithm", "deployment_scope"),
+		"PCASRequestStatus": api.ObjectSchema(map[string]*api.Schema{
+			"request_id":   api.StringSchema(),
+			"kind":         api.StringSchema(),
+			"status":       api.StringSchema(),
+			"attempts":     api.IntegerSchema(),
+			"created_at":   api.TimestampSchema(),
+			"delivered_at": api.TimestampSchema(),
+		}, "request_id", "kind", "status", "attempts", "created_at"),
 		"PCASSuccessionRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":      api.StringSchema(),
 			"credential_type":  api.StringSchema(),
@@ -913,11 +1009,23 @@ func schemas() map[string]*api.Schema {
 			"target_algorithm": api.StringSchema(),
 			"status":           api.StringSchema(),
 			"queued_at":        api.TimestampSchema(),
+			"status_url":       api.StringSchema(),
 		}, "request_id", "identity_id", "status"),
 		"PCASSuccessionChain": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id": api.StringSchema(),
-			"records":     api.ArraySchema(api.StringSchema()), // base64-encoded opaque records
-			"count":       api.IntegerSchema(),
+			"genesis": api.ObjectSchema(map[string]*api.Schema{
+				"deployment_scope":   api.StringSchema(),
+				"identity_id":        api.StringSchema(),
+				"tenant_id":          api.StringSchema(),
+				"algorithm":          api.StringSchema(),
+				"public_key":         api.StringSchema(),
+				"epoch":              api.IntegerSchema(),
+				"trust_root_att":     api.StringSchema(),
+				"signer_attestation": api.StringSchema(),
+			}),
+			"trust_root_public_der": api.StringSchema(),
+			"records":               api.ArraySchema(api.StringSchema()), // base64-encoded opaque records
+			"count":                 api.IntegerSchema(),
 		}, "identity_id", "records", "count"),
 		"PCASAckRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":   api.StringSchema(),
@@ -977,6 +1085,7 @@ func schemas() map[string]*api.Schema {
 			"queued_at":   api.TimestampSchema(),
 			"target":      api.StringSchema(),
 			"identity_id": api.StringSchema(),
+			"status_url":  api.StringSchema(),
 		}, "request_id", "status", "queued_at"),
 		"PCASFederationImportRequest": api.ObjectSchema(map[string]*api.Schema{
 			"foreign_deployment_id":  api.StringSchema(),

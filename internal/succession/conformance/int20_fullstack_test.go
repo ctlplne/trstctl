@@ -89,12 +89,12 @@ func TestINT20_FullStackPCASUserJourneys(t *testing.T) {
 	st.misissuanceProofPersists(t)
 	st.checkpointAndPostureVerify(t, coreID)
 
-	if kemID == "" || len(genesis.TrustRootAtt) == 0 || len(trustRoot.Public().DER) == 0 {
+	if kemID == "" || len(genesis.TrustRootAtt) == 0 || len(trustRoot) == 0 {
 		t.Fatal("full-stack e2e did not retain core journey evidence")
 	}
 }
 
-func startINT20Stack(t *testing.T) *int20Stack {
+func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack {
 	t.Helper()
 	ctx := context.Background()
 	dsn, stopPG := startEmbeddedPostgres(t)
@@ -111,7 +111,7 @@ func startINT20Stack(t *testing.T) *int20Stack {
 		t.Fatalf("seed tenant: %v", err)
 	}
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, logOptions...)
 	if err != nil {
 		t.Fatalf("open embedded JetStream: %v", err)
 	}
@@ -153,29 +153,21 @@ func (st *int20Stack) close() {
 	}
 }
 
-func (st *int20Stack) requestSuccessionChain(t *testing.T) (string, succession.GenesisRecord, *signing.RemoteSigner) {
+func (st *int20Stack) requestSuccessionChain(t *testing.T) (string, succession.GenesisRecord, []byte) {
 	t.Helper()
 	const id = "spiffe://int20.example/workload/core"
-	genesisKey, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.TenantKeyHandle(st.tenantID, id, 0))
-	if err != nil {
-		t.Fatalf("onboard genesis key: %v", err)
+	if _, err := st.svc.RegisterGenesis(st.ctx, st.tenantID, succapi.GenesisRegistrationRequest{
+		IdentityID: id, Algorithm: string(crypto.ECDSAP256), DeploymentScope: "spiffe://int20.example",
+	}); err != nil {
+		t.Fatalf("register genesis: %v", err)
 	}
-	trustRoot, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, "int20-trust-root")
-	if err != nil {
-		t.Fatalf("provision trust root: %v", err)
+	st.dispatchAll(t)
+	initial, err := st.svc.FetchChain(st.ctx, st.tenantID, id)
+	if err != nil || initial.Genesis == nil || len(initial.TrustRootPublicDER) == 0 {
+		t.Fatalf("registered genesis readback: %+v, %v", initial, err)
 	}
-	genesis := succession.GenesisRecord{
-		DeploymentScope: "spiffe://int20.example", IdentityID: id, TenantID: st.tenantID,
-		Algorithm: genesisKey.Algorithm(), PublicKey: genesisKey.Public().DER, Epoch: 0,
-	}
-	gd, err := succession.GenesisDigest(genesis)
-	if err != nil {
-		t.Fatal(err)
-	}
-	genesis.TrustRootAtt, err = crypto.SignerFromDigestSigner(trustRoot).Sign(gd, crypto.SignOptions{Hash: crypto.SHA256})
-	if err != nil {
-		t.Fatalf("sign genesis: %v", err)
-	}
+	genesis := *initial.Genesis
+	trustRoot := initial.TrustRootPublicDER
 
 	if _, err := st.svc.RequestSuccession(st.ctx, st.tenantID, succapi.RequestSuccessionRequest{
 		IdentityID: id, CredentialType: "x509", TargetAlgorithm: string(crypto.ECDSAP384),
@@ -194,7 +186,7 @@ func (st *int20Stack) requestSuccessionChain(t *testing.T) (string, succession.G
 	}
 	chain := decodeChain(t, chainResp.Records)
 	res, err := rpverify.Verify(rpverify.Input{
-		TrustRootPubDER: trustRoot.Public().DER, Genesis: genesis, Chain: chain,
+		TrustRootPubDER: trustRoot, Genesis: genesis, Chain: chain,
 	}, &memEpochStore{m: map[string]uint64{}}, rpverify.Options{ExpectedTenant: st.tenantID})
 	if err != nil {
 		t.Fatalf("offline RP verify of served chain: %v", err)

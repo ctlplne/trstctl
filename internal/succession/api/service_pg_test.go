@@ -5,6 +5,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -76,28 +77,28 @@ func TestService_FetchChain_Verifiable(t *testing.T) {
 	}
 }
 
-// TestService_RequestSuccession_EnqueuesOutbox: request-succession records an
-// idempotent outbox job for the signer to mint (AN-5/AN-6).
-func TestService_RequestSuccession_EnqueuesOutbox(t *testing.T) {
+// A new identity cannot receive a misleading queued response until the
+// operator has registered and verified its signer-held genesis.
+func TestService_RequestSuccession_RefusesMissingGenesis(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
 	outbox := orchestrator.NewOutbox(cs)
 	svc := succapi.NewService(cs, nil, outbox)
 
-	resp, err := svc.RequestSuccession(ctx, tenantA, succapi.RequestSuccessionRequest{
+	_, err := svc.RequestSuccession(ctx, tenantA, succapi.RequestSuccessionRequest{
 		IdentityID: "spiffe://d/enq", CredentialType: "x509", TargetAlgorithm: "ML-DSA-65",
 	})
-	if err != nil {
-		t.Fatalf("RequestSuccession: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "registered genesis") {
+		t.Fatalf("missing genesis: %v", err)
 	}
 	var n int
 	if err := cs.SystemPool().QueryRow(ctx,
-		`SELECT count(*) FROM outbox WHERE destination = $1 AND idempotency_key = $2`,
-		succapi.SuccessionRequestDestination, resp.RequestID).Scan(&n); err != nil {
+		`SELECT count(*) FROM outbox WHERE destination = $1`,
+		succapi.SuccessionRequestDestination).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Fatalf("outbox rows for the request = %d, want 1", n)
+	if n != 0 {
+		t.Fatalf("outbox rows for unregistered identity = %d, want 0", n)
 	}
 }
 
