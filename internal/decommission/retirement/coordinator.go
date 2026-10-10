@@ -191,35 +191,40 @@ func (c *Coordinator) snapshot(ctx context.Context, tenantID string) (uint64, []
 
 func (c *Coordinator) dependencyChangedBetween(ctx context.Context, tenantID, keyID string, from, through uint64) (bool, error) {
 	changed := false
-	err := c.log.ReplayThrough(ctx, from, through, func(ev events.Event) error {
-		if ev.TenantID != tenantID {
-			return nil
-		}
-		switch ev.Type {
-		case depstate.TypeDependencyRegistered, depstate.TypeDependencyReleased,
+	err := c.log.ReplayTenantTypesThrough(ctx, tenantID, from, through,
+		[]string{
+			depstate.TypeDependencyRegistered, depstate.TypeDependencyReleased,
 			depstate.TypeDependencyErasureDesignated, depstate.TypeReprotectionCompleted,
-			depstate.TypeRevocationCompleted:
-		default:
+			depstate.TypeRevocationCompleted,
+		}, func(ev events.Event) error {
+			if ev.TenantID != tenantID {
+				return nil
+			}
+			switch ev.Type {
+			case depstate.TypeDependencyRegistered, depstate.TypeDependencyReleased,
+				depstate.TypeDependencyErasureDesignated, depstate.TypeReprotectionCompleted,
+				depstate.TypeRevocationCompleted:
+			default:
+				return nil
+			}
+			payload, err := depstate.Decode(ev)
+			if err != nil {
+				return err
+			}
+			switch value := payload.(type) {
+			case depstate.DependencyRegisteredV1:
+				changed = changed || value.KeyID == keyID
+			case depstate.DependencyReleasedV1:
+				changed = changed || value.KeyID == keyID
+			case depstate.DependencyErasureDesignatedV1:
+				changed = changed || value.KeyID == keyID
+			case depstate.ReprotectionCompletedV1:
+				changed = changed || value.KeyID == keyID
+			case depstate.RevocationCompletedV1:
+				changed = changed || value.KeyID == keyID
+			}
 			return nil
-		}
-		payload, err := depstate.Decode(ev)
-		if err != nil {
-			return err
-		}
-		switch value := payload.(type) {
-		case depstate.DependencyRegisteredV1:
-			changed = changed || value.KeyID == keyID
-		case depstate.DependencyReleasedV1:
-			changed = changed || value.KeyID == keyID
-		case depstate.DependencyErasureDesignatedV1:
-			changed = changed || value.KeyID == keyID
-		case depstate.ReprotectionCompletedV1:
-			changed = changed || value.KeyID == keyID
-		case depstate.RevocationCompletedV1:
-			changed = changed || value.KeyID == keyID
-		}
-		return nil
-	})
+		})
 	return changed, err
 }
 
