@@ -25341,8 +25341,9 @@ export const messages = {
   "posture.pqcMigration.requestedAlgorithm": { defaultMessage: "Requested: {algorithm}", description: "Requested key algorithm retained in evidence." },
   "posture.pqcMigration.effectiveAlgorithm": { defaultMessage: "Issued: {algorithm}", description: "Effective key algorithm from issuance evidence." },
   "posture.pqcMigration.originalCertificateRestored": {
-    defaultMessage: "Original {algorithm} certificate restored; the PQC leaf is no longer served.",
-    description: "A signed host rollback restored the predecessor instead of serving the migration algorithm.",
+    defaultMessage:
+      "At this rollback, the original {algorithm} certificate was restored and this run's PQC leaf stopped being served. A later run may change the current leaf.",
+    description: "A signed historical host rollback restored the predecessor; a later migration can supersede that observed state.",
   },
   "posture.pqcMigration.queuedStatus": { defaultMessage: "Queued", description: "Work is waiting for execution." },
   "posture.pqcMigration.issuedStatus": {
