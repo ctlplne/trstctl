@@ -95,6 +95,14 @@ const sshKRLSyncTimeout = 5 * time.Second
 // this long.
 const sshKRLSyncInterval = 2 * time.Second
 
+// A public host poll must not make one request consume an arbitrarily long
+// source tail. A lagging replica advances in finite pages and refuses to serve
+// a partial KRL until it reaches the captured head. Startup is a separate
+// recovery operation and must rebuild the entire retained source before HTTP.
+const sshKRLRequestReplayLimit uint64 = 1024
+
+var errSSHKRLBehind = errors.New("server: SSH revocation projection is behind the event log")
+
 // newSSHProtocol wires the served SSH CA surface over a built ssh.CA. A fresh KRL is
 // attached so revocations published through it render as a binary KRL sshd consumes.
 //
@@ -253,7 +261,7 @@ func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) e
 	p.syncMu.Lock()
 	p.log = log
 	p.syncMu.Unlock()
-	return p.syncRevocations(ctx, true)
+	return p.syncRevocationsWithLimit(ctx, true, 0)
 }
 
 // syncRevocations applies every tenant ssh.cert.revoked event appended since the
@@ -263,6 +271,10 @@ func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) e
 // an unchanged generation/head/retained-state snapshot skips the expensive
 // replay. Every changed snapshot still passes the full event-history floor.
 func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
+	return p.syncRevocationsWithLimit(ctx, force, sshKRLRequestReplayLimit)
+}
+
+func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, limit uint64) error {
 	arrived := time.Now()
 	p.syncMu.Lock()
 	defer p.syncMu.Unlock()
@@ -281,6 +293,9 @@ func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
 	if p.verifiedSnapshot.Generation != "" &&
 		(before.Name != p.verifiedSnapshot.Name || before.Generation != p.verifiedSnapshot.Generation) {
 		return errors.New("server: SSH revocation generation changed; reconcile the host KRL lineage before restarting this issuer")
+	}
+	if p.applied > before.LastSequence {
+		return errors.New("server: SSH revocation cursor is beyond the retained event log head")
 	}
 	started := time.Now()
 	if !force && before == p.verifiedSnapshot {
@@ -301,8 +316,12 @@ func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
 		candidate.krl.RevokeKeyID(keyID)
 	}
 	candidate.krlVersion.Store(p.krlVersion.Load())
+	through := before.LastSequence
+	if limit != 0 && through-p.applied > limit {
+		through = p.applied + limit
+	}
 	p.replayCount++
-	if err := p.log.ReplayThrough(ctx, p.applied+1, before.LastSequence, candidate.applyRevocationEvent); err != nil {
+	if err := p.log.ReplayThrough(ctx, p.applied+1, through, candidate.applyRevocationEvent); err != nil {
 		return fmt.Errorf("server: replay SSH revocations: %w", err)
 	}
 	after, err := p.log.Snapshot(ctx)
@@ -315,12 +334,19 @@ func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
 		after.Messages-before.Messages != after.LastSequence-before.LastSequence {
 		return errors.New("server: SSH revocation generation changed during replay")
 	}
-	if before.LastSequence > candidate.applied {
-		candidate.applied = before.LastSequence // a retained trailing gap is still covered
+	if through > candidate.applied {
+		candidate.applied = through // a retained trailing gap is still covered
 	}
 	p.krl = candidate.krl
 	p.krlVersion.Store(candidate.krlVersion.Load())
 	p.applied = candidate.applied
+	if through < before.LastSequence {
+		// Keep the verified head and poll throttle behind the source. The
+		// partial projection is private to this process; every served read
+		// returns 503 until a later page reaches the current head.
+		p.syncedFrom = time.Time{}
+		return fmt.Errorf("%w: covered %d of %d", errSSHKRLBehind, through, before.LastSequence)
+	}
 	p.verifiedSnapshot = before
 	p.syncedFrom = started
 	return nil
