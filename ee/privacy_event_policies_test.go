@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/ee/silo"
 	"trstctl.com/trstctl/internal/agentid/delegation"
 	agidrevoke "trstctl.com/trstctl/internal/agentid/revoke"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
 	"trstctl.com/trstctl/internal/decommission/retirement"
@@ -23,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/reconcile/quarantine"
 	"trstctl.com/trstctl/internal/reconcile/rounds"
 	"trstctl.com/trstctl/internal/reconcile/witness"
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
 )
 
@@ -46,6 +48,38 @@ func TestLicensedProductionPrivacyCatalogIsRegistered(t *testing.T) {
 func TestProviderWithdrawalHasPrivacyPolicy(t *testing.T) {
 	if !events.HasPrivacyEventPolicy(provider.AuditBreakGlassWithdrawn, 1) {
 		t.Fatal("requester withdrawal cannot be appended without its licensed privacy policy")
+	}
+}
+
+func TestPQCHostRollbackRequestedPrivacySchemaIsVersioned(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
+	}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	const eventType = "licensed_crypto.migration.tls_posture.rollback_requested"
+	legacy := []byte(`{"run_id":"run-a","intents":[{"target_id":"target-a","asset_ids":["asset-a"],"idempotency_key":"rollback-a","payload":{"sealed":"fixture"}}]}`)
+	host := []byte(`{"run_id":"run-b","intents":[{"target_id":"target-b","asset_ids":["asset-b"],"idempotency_key":"rollback-b","payload":{"sealed":"fixture"},"required_agent_id":"agent-b"}]}`)
+	for _, test := range []struct {
+		name    string
+		version int
+		data    []byte
+		accept  bool
+	}{
+		{"legacy v1", 1, legacy, true},
+		{"host field forbidden in v1", 1, host, false},
+		{"host field admitted in v2", 2, host, true},
+		{"unreviewed host field forbidden in v2", 2, []byte(`{"run_id":"run-b","intents":[{"target_id":"target-b","asset_ids":["asset-b"],"idempotency_key":"rollback-b","payload":{"sealed":"fixture"},"required_agent_id":"agent-b","unexpected":"unsafe"}]}`), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := log.Append(t.Context(), events.Event{TenantID: store.ZeroUUID,
+				Type: eventType, SchemaVersion: test.version, Data: test.data})
+			if (err == nil) != test.accept {
+				t.Fatalf("append v%d accepted=%t, want %t: %v", test.version, err == nil, test.accept, err)
+			}
+		})
 	}
 }
 
@@ -80,6 +114,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: pqcmigration.EventTLSFindingRollbackCompleted, SchemaVersion: 1},
 		{EventType: pqcmigration.EventTLSFindingFailed, SchemaVersion: 1},
 		{EventType: "licensed_crypto.migration.tls_posture.rollback_requested", SchemaVersion: 1},
+		{EventType: "licensed_crypto.migration.tls_posture.rollback_requested", SchemaVersion: 2},
 		{EventType: agidrevoke.TypeRevocationEffectRecorded, SchemaVersion: agidrevoke.RevocationEffectSchemaV1},
 		{EventType: agidrevoke.TypeRevocationIntervalExceeded, SchemaVersion: agidrevoke.RevocationIntervalExceededSchemaV1},
 		{EventType: agidrevoke.TypeRevocationTerminal, SchemaVersion: agidrevoke.RevocationTerminalSchemaV1},

@@ -218,6 +218,15 @@ type tlsRollbackRequested struct {
 	Intents []sealedTLSRollbackIntent `json:"intents"`
 }
 
+func newTLSRollbackRequestedEvent(tenantID, runID string, intents []sealedTLSRollbackIntent) (events.Event, error) {
+	data, err := json.Marshal(tlsRollbackRequested{RunID: runID, Intents: intents})
+	if err != nil {
+		return events.Event{}, err
+	}
+	return events.Event{Type: eventTLSRollbackRequested,
+		SchemaVersion: 2, TenantID: tenantID, Data: data}, nil
+}
+
 // PlanPreview answers B-3: what WOULD this migration change. It runs the same
 // BuildPlan the start path runs, over the same CBOM assets, and returns the
 // result without queueing anything — no run id, no outbox row, no event. An
@@ -874,11 +883,11 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 	}
 	var rollbackEvent *events.Event
 	if len(sealedTLS) > 0 {
-		data, err := json.Marshal(tlsRollbackRequested{RunID: runID, Intents: sealedTLS})
+		command, err := newTLSRollbackRequestedEvent(tenantID, runID, sealedTLS)
 		if err != nil {
 			return RollbackResponse{}, err
 		}
-		ev, err := s.log.Append(ctx, events.Event{Type: eventTLSRollbackRequested, TenantID: tenantID, Data: data})
+		ev, err := s.log.Append(ctx, command)
 		if err != nil {
 			return RollbackResponse{}, err
 		}

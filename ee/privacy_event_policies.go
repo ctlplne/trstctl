@@ -115,6 +115,21 @@ type licensedPQCTLSRollbackRequested struct {
 	Intents []licensedPQCTLSRollbackIntent `json:"intents"`
 }
 
+// Schema v2 binds a host rollback to its assigned agent. Keep the v1 shape
+// closed for retained control-plane rollback events that predate this field.
+type licensedPQCHostTLSRollbackIntent struct {
+	TargetID        string          `json:"target_id"`
+	AssetIDs        []string        `json:"asset_ids"`
+	IdempotencyKey  string          `json:"idempotency_key"`
+	Payload         json.RawMessage `json:"payload"`
+	RequiredAgentID string          `json:"required_agent_id,omitempty"`
+}
+
+type licensedPQCHostTLSRollbackRequested struct {
+	RunID   string                             `json:"run_id"`
+	Intents []licensedPQCHostTLSRollbackIntent `json:"intents"`
+}
+
 type licensedAgentRevocationTerminal struct {
 	DirectiveID string                       `json:"directive_id"`
 	Aggregate   agidrevoke.AggregateEvidence `json:"aggregate"`
@@ -319,6 +334,10 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			rejectingTypedLicensedPrivacyPolicy[pqcmigration.TLSFindingFailure]()),
 		entry("licensed_crypto.migration.tls_posture.rollback_requested", 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedPQCTLSRollbackRequested](
+				licensedPrivacyRule("/intents/*/payload", events.PrivacyFieldOpaqueExact),
+			)),
+		entry("licensed_crypto.migration.tls_posture.rollback_requested", 2,
+			rejectingTypedLicensedPrivacyPolicy[licensedPQCHostTLSRollbackRequested](
 				licensedPrivacyRule("/intents/*/payload", events.PrivacyFieldOpaqueExact),
 			)),
 
