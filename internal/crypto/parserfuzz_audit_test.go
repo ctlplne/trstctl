@@ -140,6 +140,9 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	requireFuzzFuncByName(t, "../tsa", map[string]string{
 		"FuzzParseTimeStampReq": "served RFC 3161 TimeStampReq DER (http.go parseTimeStampReq)",
 	})
+	requireFuzzFuncByName(t, "../api", map[string]string{
+		"FuzzDecodeSecretImportRequest": "served batch-secret JSON and duplicate-key boundary (secrets_import_event.go)",
+	})
 
 	// The non-CMS instance/workload attesters each parse an UNTRUSTED token/envelope
 	// at their Attest entry point before trust is established (FUZZ-003): the GCP/

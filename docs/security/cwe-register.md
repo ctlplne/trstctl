@@ -493,7 +493,7 @@ not this file.
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
-| `internal/projections/full_dr_test.go:467` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/projections/full_dr_test.go:480` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/projections.go:5153` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1218,7 +1218,7 @@ not this file.
 | `internal/crypto/mtls/signer.go:107` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
-| `internal/crypto/parserfuzz_audit_test.go:262` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/parserfuzz_audit_test.go:265` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/alias_test.go:120` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |

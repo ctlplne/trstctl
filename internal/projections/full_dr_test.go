@@ -178,6 +178,19 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		restoredFence.ActorSubjectRef != privacy.SubjectRef(tenantA, wantFenceActor.Subject) {
 		t.Fatalf("application-secret fence actor changed across full DR: %+v", restoredFence)
 	}
+	batch, err := dst.GetApplicationSecretImportBatch(ctx, tenantA, "00000000-0000-0000-0000-00000000a018")
+	if err != nil || len(batch.Names) != 1 || batch.Names[0] != "app/pending-batch" ||
+		batch.Actor == nil || batch.Actor.Subject != "full-dr-batch-actor" || len(batch.Payload) == 0 {
+		t.Fatalf("application-secret batch command and name fence changed across full DR: %+v err=%v", batch, err)
+	}
+	batchReceipt, err := dst.GetApplicationSecretImportReceipt(ctx, tenantA, "00000000-0000-0000-0000-00000000a019")
+	if err != nil || len(batchReceipt.Items) != 1 || batchReceipt.Items[0].Name != "app/db" ||
+		batchReceipt.Items[0].Version != 1 {
+		t.Fatalf("application-secret batch receipt changed across full DR: %+v err=%v", batchReceipt, err)
+	}
+	if _, err := dst.GetApplicationSecretImportBatch(ctx, tenantB, batch.EventID); !store.IsNotFound(err) {
+		t.Fatalf("other tenant could read restored batch command: %v", err)
+	}
 	const restoredScheduleID = "00000000-0000-4000-8000-00000000a106"
 	restoredCommand, err := dst.GetLatestSecretRotationScheduleCommand(ctx, tenantA, restoredScheduleID)
 	if err != nil {
@@ -578,11 +591,25 @@ func seedRecoveredFromPostgresTables(
 		tenantA, registrationSequence, rotationScheduleID, rotationDueAt)
 	rotationTickKey := "full-dr-idempotency"
 	rotationTickBinding := strings.Repeat("7", 64)
+	batchPayload, err := json.Marshal(projections.ApplicationSecretBatchImport{
+		TenantEpoch: "00000000-0000-0000-0000-00000000a017", IdempotencyKeyDigest: strings.Repeat("a", 64),
+		RequestBinding: strings.Repeat("e", 64), CommandEvidence: strings.Repeat("f", 64), Surface: "native",
+		Items: []projections.ApplicationSecretBatchImportItem{{Name: "app/pending-batch", Sealed: []byte{0x01, 0x02}}},
+	})
+	if err != nil {
+		t.Fatalf("marshal full-DR batch command: %v", err)
+	}
+	batchReceiptItems, err := json.Marshal([]store.ApplicationSecretImportItem{{
+		Name: "app/db", Version: 1, CreatedAt: now, UpdatedAt: now,
+	}})
+	if err != nil {
+		t.Fatalf("marshal full-DR batch receipt: %v", err)
+	}
 	approvedTargetApproval := fmt.Sprintf(
 		`{"request_id":%q,"intent_digest":%q,"resource_kind":"code_signing","resource_id":"code_signing:full-dr","action":"sign","required_approvals":1}`,
 		approvedTargetRequestID, approvedTargetIntentDigest,
 	)
-	err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+	err = st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		statements := []struct {
 			sql  string
 			args []any
@@ -704,6 +731,20 @@ func seedRecoveredFromPostgresTables(
 					`{"subject":"full-dr-secret-actor","roles":["auditor","operator"]}`,
 					privacy.SubjectRef(tenantA, "full-dr-secret-actor"),
 				}},
+			// An interrupted import is a PostgreSQL-backed command plus a per-name
+			// reservation. Restore both before the worker resumes the single event.
+			{`INSERT INTO application_secret_import_batches
+			        (tenant_id, event_id, tenant_epoch, request_binding, payload_sha256,
+			         command_payload, actor, actor_subject_ref, event_time)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a018",
+					"00000000-0000-0000-0000-00000000a017", strings.Repeat("e", 64),
+					crypto.SHA256Hex(batchPayload), batchPayload,
+					`{"subject":"full-dr-batch-actor","roles":["operator"]}`,
+					privacy.SubjectRef(tenantA, "full-dr-batch-actor"), now}},
+			{`INSERT INTO application_secret_import_name_fences (tenant_id, secret_name, event_id)
+			  VALUES ($1, $2, $3)`,
+				[]any{tenantA, "app/pending-batch", "00000000-0000-0000-0000-00000000a018"}},
 			// AUD-77: approved certificate/code-signing first-command fences are
 			// independent PostgreSQL recovery state until their target projection
 			// commits. Full DR must not silently make a consumed grant unrecoverable.
@@ -731,6 +772,13 @@ func seedRecoveredFromPostgresTables(
 					tenantA, "00000000-0000-0000-0000-00000000a014", strings.Repeat("c", 64),
 					strings.Repeat("d", 64), "app/db", "create", 1, now, now, now,
 				}},
+			// A completed import has no pending command. The receipt is still
+			// independent PostgreSQL state and must survive the restore cut.
+			{`INSERT INTO application_secret_import_receipts
+			        (tenant_id, event_id, semantic_sha256, request_binding, items, applied_at)
+			  VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a019", strings.Repeat("f", 64),
+					strings.Repeat("e", 64), string(batchReceiptItems), now}},
 			{`INSERT INTO ssh_keys (id, tenant_id, fingerprint, key_type, comment, source, location, standing_access, orphaned) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, []any{"00000000-0000-0000-0000-00000000a011", tenantA, "SHA256:fulldr", "ssh-ed25519", "edge", "authorized_keys", "/home/app/.ssh/authorized_keys", true, false}},
 		}
 		for _, stmt := range statements {
