@@ -321,9 +321,11 @@ func (s *Store) ListIncidentExecutionsPage(ctx context.Context, tenantID, compro
 			        evidence_bundle_format, evidence_bundle, failed_targets,
 			        rollback_refs, idempotency_key, created_by, created_at, updated_at
 			   FROM incident_executions
-			  WHERE tenant_id = $1 AND id > $2
+			  WHERE tenant_id = $1
+			    AND ($2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR (created_at, id) <
+			      (SELECT created_at, id FROM incident_executions WHERE tenant_id = $1 AND id = $2::uuid))
 			    AND ($3 = '' OR compromised_identity_id::text = $3)
-			  ORDER BY id
+			  ORDER BY created_at DESC, id DESC
 			  LIMIT $4`, tenantID, afterID, compromisedIdentityID, limit)
 		if err != nil {
 			return err
@@ -374,9 +376,11 @@ func (s *Store) ListIncidentFleetReissuanceRunsPage(ctx context.Context, tenantI
 			        evidence_bundle_format, evidence_bundle, idempotency_key, created_by,
 			        created_at, updated_at
 			   FROM incident_fleet_reissuance_runs
-			  WHERE tenant_id = $1 AND id > $2
+			  WHERE tenant_id = $1
+			    AND ($2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR (created_at, id) <
+			      (SELECT created_at, id FROM incident_fleet_reissuance_runs WHERE tenant_id = $1 AND id = $2::uuid))
 			    AND ($3 = '' OR issuer_id::text = $3)
-			  ORDER BY id
+			  ORDER BY created_at DESC, id DESC
 			  LIMIT $4`, tenantID, afterID, issuerID, limit)
 		if err != nil {
 			return err

@@ -135,6 +135,29 @@ describe("incident situation summary", () => {
     expect(screen.getByText("Review the fleet halt or rollback evidence before deciding whether to resume.")).toBeInTheDocument();
   });
 
+  it("uses the newest executed fleet response after an older rollback", () => {
+    renderSummary({
+      fleetRuns: [
+        fleetRun({ id: "older", status: "rolled_back", failed_targets: ["host-a"], created_at: "2026-08-20T12:00:00Z" }),
+        fleetRun({ id: "newer", status: "executed", created_at: "2026-08-20T13:00:00Z" }),
+      ],
+    });
+
+    expect(screen.getByText("The latest fleet response has status Executed and covers one credential.")).toBeInTheDocument();
+    expect(screen.getByText(/verify recovery and close temporary access/i)).toBeInTheDocument();
+    expect(screen.queryByText(/recover the failed delivery target/i)).not.toBeInTheDocument();
+  });
+
+  it("compares the newest individual and fleet response across lists", () => {
+    renderSummary({
+      executions: [execution({ status: "failed", created_at: "2026-08-20T12:00:00Z" })],
+      fleetRuns: [fleetRun({ status: "executed", created_at: "2026-08-20T13:00:00Z" })],
+    });
+
+    expect(screen.getByText("The latest fleet response has status Executed and covers one credential.")).toBeInTheDocument();
+    expect(screen.queryByText(/response for Payments certificate failed/i)).not.toBeInTheDocument();
+  });
+
   it("uses plural fleet language when multiple credentials are affected", () => {
     renderSummary({ fleetRuns: [fleetRun({ affected_identity_ids: ["credential-1", "credential-2"] })] });
 

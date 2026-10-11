@@ -167,8 +167,15 @@ export function IncidentSituationSummary({
   error: string | null;
 }) {
   const { t } = useTranslation();
-  const latestExecution = executions[0];
-  const latestFleetRun = fleetRuns[0];
+  // The API sends newest-first pages. Use timestamps within the loaded page as
+  // well so an out-of-order response cannot make old recovery advice look live.
+  const newest = <T extends { created_at: string }>(rows: T[]): T | undefined =>
+    rows.reduce<T | undefined>((latest, row) => (!latest || Date.parse(row.created_at) > Date.parse(latest.created_at) ? row : latest), undefined);
+  const newestExecution = newest(executions);
+  const newestFleetRun = newest(fleetRuns);
+  const fleetIsNewest = Boolean(newestFleetRun && (!newestExecution || Date.parse(newestFleetRun.created_at) >= Date.parse(newestExecution.created_at)));
+  const latestExecution = fleetIsNewest ? undefined : newestExecution;
+  const latestFleetRun = fleetIsNewest ? newestFleetRun : undefined;
 
   let happening = t("incidents.situation.happeningEmpty");
   let affected = t("incidents.situation.affectedEmpty");
@@ -222,7 +229,8 @@ export function IncidentSituationSummary({
   } else if (latestFleetRun) {
     const affectedCredentials = latestFleetRun.affected_identity_ids.length;
     const failedTargets = latestFleetRun.failed_targets?.length ?? 0;
-    const fleetStopped = ["failed", "halted", "rolled_back"].includes(latestFleetRun.status.toLowerCase());
+    const fleetStatus = latestFleetRun.status.toLowerCase();
+    const fleetStopped = ["failed", "halted", "rolled_back"].includes(fleetStatus);
     happening = t(affectedCredentials === 1 ? "incidents.situation.fleetRecordedOne" : "incidents.situation.fleetRecordedMany", {
       status: humanizeStatus(latestFleetRun.status),
       count: affectedCredentials,
@@ -237,7 +245,9 @@ export function IncidentSituationSummary({
           })
         : fleetStopped
           ? t("incidents.situation.containmentFleetStopped")
-          : t("incidents.situation.containmentContinueFleet");
+          : fleetStatus === "executed"
+            ? t("incidents.situation.containmentVerifyRecovery")
+            : t("incidents.situation.containmentContinueFleet");
   }
 
   return (
