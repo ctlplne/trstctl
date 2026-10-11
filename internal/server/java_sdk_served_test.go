@@ -37,6 +37,7 @@ func TestJavaSDKAuthIssueAndSecretsRoundTripAgainstServedHandler(t *testing.T) {
 	java := javaTool(t, "java")
 
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Java SDK served acceptance tenant")
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	work := t.TempDir()
