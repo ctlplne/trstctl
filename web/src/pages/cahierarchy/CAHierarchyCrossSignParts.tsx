@@ -30,12 +30,16 @@ const schema = z
 type Values = z.infer<typeof schema>;
 type Review = { key: string; issuerID: string; targetPEM: string; targetSHA: string; reason: string; preview: CACeremonyPlanPreview };
 
-async function certificateSHA(pem: string, invalid: string): Promise<string> {
-  const blocks = [...pem.matchAll(/-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]+)-----END CERTIFICATE-----/g)];
-  if (blocks.length !== 1) throw new Error(invalid);
+async function publicTargetCertificate(pem: string, inventoryChain: boolean, invalid: string): Promise<{ pem: string; sha256: string }> {
+  const pattern = /-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]+)-----END CERTIFICATE-----/g;
+  const blocks = [...pem.matchAll(pattern)];
+  // Inventory returns the authority first, followed by its issuing chain.
+  // A pasted target must be one certificate, so an accidental bundle cannot
+  // hide a different leaf from the operator's exact-purpose review.
+  if (!blocks.length || (!inventoryChain && blocks.length !== 1) || pem.replace(pattern, "").trim()) throw new Error(invalid);
   const bytes = Uint8Array.from(atob(blocks[0][1].replace(/\s/g, "")), (c) => c.charCodeAt(0));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, "0")).join("");
+  return { pem: `${blocks[0][0].trim()}\n`, sha256: [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, "0")).join("") };
 }
 
 function formKey(values: Values): string {
@@ -89,17 +93,18 @@ export function CACrossSignPanel({ authorities }: { authorities: CAAuthority[] }
     setBusy(true);
     setActionError(null);
     try {
+      const inventoried = !values.targetPEM;
       const publicTarget = values.targetPEM || authorities.find((ca) => ca.id === values.targetID)?.certificate_pem || "";
-      const digest = await certificateSHA(publicTarget, t("caHierarchy.crossSign.invalidPEM"));
+      const target = await publicTargetCertificate(publicTarget, inventoried, t("caHierarchy.crossSign.invalidPEM"));
       const preview = await api.previewCACeremony({
         operation: "cross_sign_ca",
         authority_id: values.issuerID,
-        target_certificate_pem: publicTarget,
+        target_certificate_pem: target.pem,
         threshold: 2,
         reason: values.reason,
       });
       if (!preview.ready) throw new Error(t("caHierarchy.crossSign.notReady"));
-      setReviewed({ key: formKey(values), issuerID: values.issuerID, targetPEM: publicTarget, targetSHA: digest, reason: values.reason, preview });
+      setReviewed({ key: formKey(values), issuerID: values.issuerID, targetPEM: target.pem, targetSHA: target.sha256, reason: values.reason, preview });
       setStep(1);
     } catch (error) {
       fail(error);

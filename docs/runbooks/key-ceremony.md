@@ -310,7 +310,9 @@ ceremony rules, then activate it behind the predecessor's stable issue URL.
    cross-signs from before the receipt projection are recovered by one indexed
    event-ID lookup on first read. The
    console's **CA hierarchy → Lifecycle → Cross-sign a CA** panel can preview,
-   open, resume, and execute the same ceremony. Verify the returned certificate
+   open, resume, and execute the same ceremony. For an inventoried target, it
+   reviews the first certificate in that authority's PEM chain; a pasted
+   external target must contain exactly one certificate. Verify the returned certificate
    independently against the issuer before distributing the new chain.
    Older in-process hierarchy events that recorded only the issuer and ceremony
    have no public certificate to recover; their receipt lookup remains 404.
