@@ -3782,6 +3782,13 @@ export const messages = {
     description: "Recovery guidance when secret-sync status cannot be read.",
   },
   "secrets.sync.jobID": { defaultMessage: "Job ID", description: "Durable secret-sync receipt identifier." },
+  "secrets.sync.lookupTitle": { defaultMessage: "Check a previous delivery", description: "Secret-sync job lookup heading." },
+  "secrets.sync.lookupHelp": {
+    defaultMessage:
+      "Paste a job ID from a receipt, API response, or CLI run to reopen its durable delivery status. The link keeps the job ID so you can return after a restart.",
+    description: "How an operator reopens a secret-sync job after leaving the page.",
+  },
+  "secrets.sync.lookupAction": { defaultMessage: "Check delivery", description: "Read an existing secret-sync job by ID." },
   "secrets.sync.attempts": { defaultMessage: "Delivery attempts: {count}", description: "Number of durable secret-sync worker attempts." },
   "secrets.sync.refreshDelivery": { defaultMessage: "Refresh delivery", description: "Manually re-read a secret-sync delivery receipt." },
   "nav.group.secretsAccess": {
@@ -25282,7 +25289,7 @@ export const messages = {
   },
   "posture.pqcMigration.certBindingHelp": {
     defaultMessage:
-      "Choose an enabled host target serving the observed address, then its requested ML-DSA-65 identity. The agent checks and seals the currently served certificate and key before issuing a successor.",
+      "Choose an enabled host target at the observed address, then its requested ML-DSA-65 identity. The agent checks and seals the certificate and key currently presented by that host before issuing a successor.",
     description: "Explains certificate migration custody, target binding and preflight.",
   },
   "posture.pqcMigration.certBindingsLoading": {
@@ -25345,7 +25352,7 @@ export const messages = {
     description: "Plan metric counting assets that cannot migrate.",
   },
   "posture.pqcMigration.startConfirmation": {
-    defaultMessage: "I reviewed the exact host targets and identities. Completion requires a signed readback of the served listener.",
+    defaultMessage: "I reviewed the exact host targets and identities. Completion requires a signed readback of the live listener.",
     description: "Explicit confirmation required before starting migration.",
   },
   "posture.pqcMigration.start": {
@@ -25413,7 +25420,7 @@ export const messages = {
     description: "Independent TLS handshake on the agent host.",
   },
   "posture.pqcMigration.certificateServedReadback": {
-    defaultMessage: "Agent {agent} verified the certificate served at {address}",
+    defaultMessage: "Agent {agent} verified the certificate presented at {address}",
     description: "Signed local listener readback for a certificate-key migration.",
   },
   "posture.pqcMigration.groupUnreported": { defaultMessage: "group not reported", description: "Missing negotiated key-exchange group." },
@@ -25439,7 +25446,7 @@ export const messages = {
   "posture.pqcMigration.effectiveAlgorithm": { defaultMessage: "Issued: {algorithm}", description: "Effective key algorithm from issuance evidence." },
   "posture.pqcMigration.originalCertificateRestored": {
     defaultMessage:
-      "At this rollback, the original {algorithm} certificate was restored and this run's PQC leaf stopped being served. A later run may change the current leaf.",
+      "At this rollback, the original {algorithm} certificate was restored and this run's PQC leaf was no longer presented. A later run may change the current leaf.",
     description: "A signed historical host rollback restored the predecessor; a later migration can supersede that observed state.",
   },
   "posture.pqcMigration.queuedStatus": { defaultMessage: "Queued", description: "Work is waiting for execution." },

@@ -86,7 +86,9 @@ export function SecretSyncWorkflow({
   const [result, setResult] = useState<SecretSync | null>(null);
   const [values, setValues] = useState<SecretSyncForm>(() => ({ name: initialName, target: catalog?.configured_targets[0] ?? "", remoteKey: "" }));
   const [searchParams, setSearchParams] = useSearchParams();
-  const jobID = result?.job_id ?? searchParams.get("job_id") ?? "";
+  const linkedJobID = searchParams.get("job_id") ?? "";
+  const [lookupJobID, setLookupJobID] = useState(linkedJobID);
+  const jobID = result?.job_id ?? linkedJobID;
   const jobQuery = useApiQuery(["secret-sync-job", jobID], () => api.secretSyncJob(jobID), {
     enabled: Boolean(jobID),
     live: { intervalMs: 5_000 },
@@ -109,6 +111,8 @@ export function SecretSyncWorkflow({
   useEffect(() => {
     if (!name && initialName) setValues((current) => ({ ...current, name: initialName }));
   }, [initialName, name]);
+
+  useEffect(() => setLookupJobID(linkedJobID), [linkedJobID]);
 
   useEffect(() => {
     if (!target && configuredTargets[0]) setValues((current) => ({ ...current, target: configuredTargets[0].id }));
@@ -168,6 +172,7 @@ export function SecretSyncWorkflow({
       const queued = await api.syncSecret({ ...currentReview.request, preview_fingerprint: currentReview.plan.request_fingerprint }, idempotencyKey);
       setResult(queued);
       if (queued.job_id) {
+        setLookupJobID(queued.job_id);
         const next = new URLSearchParams(searchParams);
         next.set("job_id", queued.job_id);
         setSearchParams(next, { replace: true });
@@ -189,7 +194,48 @@ export function SecretSyncWorkflow({
     }
   }
 
+  function lookupExistingJob() {
+    const id = lookupJobID.trim();
+    if (!id) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("job_id", id);
+    setResult(null);
+    setSearchParams(next);
+  }
+
   const configureReady = Boolean(name.trim() && target.trim());
+  const statusLookup = (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("secrets.sync.lookupTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <p className="text-muted-foreground">{t("secrets.sync.lookupHelp")}</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label={t("secrets.sync.jobID")}>
+            {(field) => (
+              <Input
+                {...field}
+                value={lookupJobID}
+                onChange={(event) => setLookupJobID(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  lookupExistingJob();
+                }}
+                autoComplete="off"
+                className="min-w-64"
+              />
+            )}
+          </Field>
+          <Button type="button" variant="outline" disabled={!lookupJobID.trim()} onClick={lookupExistingJob}>
+            {t("secrets.sync.lookupAction")}
+          </Button>
+        </div>
+        {jobID && jobQuery.error && !receipt ? <ErrorState title={t("secrets.sync.statusUnavailable")}>{t("secrets.sync.statusRecovery")}</ErrorState> : null}
+      </CardContent>
+    </Card>
+  );
   const steps = [
     {
       id: "configure",
@@ -205,26 +251,12 @@ export function SecretSyncWorkflow({
     },
   ];
 
-  if (catalog && configuredTargets.length === 0) {
-    return (
-      <section id="secret-sync-setup" aria-label={t("secrets.sync.setupTitle")} tabIndex={-1}>
-        <UnavailableState title={t("secrets.sync.noDestinationTitle")}>
-          <p>{t("secrets.sync.noDestinationBody")}</p>
-          <ol className="mt-2 list-decimal space-y-1 ps-5">
-            <li>{t("secrets.sync.setupConfig")}</li>
-            <li>{t("secrets.sync.setupCredential")}</li>
-            <li>{t("secrets.sync.setupRestart")}</li>
-          </ol>
-        </UnavailableState>
-      </section>
-    );
-  }
-
   return (
     <form
       id="secret-sync-setup"
       tabIndex={-1}
-      aria-label={t("secrets.sync.formLabel")}
+      role={catalog && configuredTargets.length === 0 ? "region" : undefined}
+      aria-label={catalog && configuredTargets.length === 0 ? t("secrets.sync.setupTitle") : t("secrets.sync.formLabel")}
       className="-order-1 grid gap-4"
       onSubmit={(event) => {
         event.preventDefault();
@@ -237,125 +269,137 @@ export function SecretSyncWorkflow({
           {previewAction.unavailable?.detail ?? executeAction.unavailable?.detail ?? t("secrets.sync.permissionHelp")}
         </UnavailableState>
       ) : null}
-      <StepShell
-        steps={steps}
-        currentIndex={step}
-        nextDisabled={!configureReady || previewBusy || loadBlocked || !previewRunnable || configuredTargets.length === 0}
-        nextLabel={previewBusy ? t("secrets.sync.reviewing") : t("secrets.sync.reviewAction")}
-        onNext={step === 0 ? () => void reviewPlan(values) : undefined}
-        onPrevious={step === 1 ? () => setStep(0) : undefined}
-        progressLabel={t("secrets.sync.progress")}
-      >
-        {step === 0 ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label={t("secrets.sync.secretName")} required>
-              {(field) => (
-                <Input
-                  {...field}
-                  value={name}
-                  onChange={(event) => {
-                    setValues((current) => ({ ...current, name: event.target.value }));
-                    invalidateReview();
-                  }}
-                  placeholder={t("secrets.sync.secretNameExample")}
-                  required
-                />
-              )}
-            </Field>
-            <Field label={t("secrets.sync.target")} description={t("secrets.sync.targetHelp")} required>
-              {(field) => (
-                <Select
-                  {...field}
-                  value={target}
-                  onChange={(event) => {
-                    setValues((current) => ({ ...current, target: event.target.value }));
-                    invalidateReview();
-                  }}
-                  required
-                >
-                  <option value="">{t("secrets.sync.chooseTarget")}</option>
-                  {configuredTargets.map((configuredTarget) => (
-                    <option key={configuredTarget.id} value={configuredTarget.id}>
-                      {configuredTarget.label} — {configuredTarget.id}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field label={t("secrets.sync.remoteKey")} description={t("secrets.sync.remoteKeyHelp")}>
-              {(field) => (
-                <Input
-                  {...field}
-                  value={remoteKey}
-                  onChange={(event) => {
-                    setValues((current) => ({ ...current, remoteKey: event.target.value }));
-                    invalidateReview();
-                  }}
-                  placeholder={t("secrets.sync.remoteKeyExample")}
-                />
-              )}
-            </Field>
-          </div>
-        ) : currentReview ? (
-          <div className="grid gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">{currentReview.plan.ready ? t("secrets.sync.previewReady") : t("secrets.sync.previewBlocked")}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{t("secrets.sync.previewNoEffects")}</p>
-              </div>
-              <StatusBadge
-                value={currentReview.plan.ready ? "ready" : "blocked"}
-                label={currentReview.plan.ready ? t("secrets.sync.ready") : t("secrets.sync.blocked")}
-                tone={currentReview.plan.ready ? "success" : "warning"}
-              />
+      {statusLookup}
+      {catalog && configuredTargets.length === 0 ? (
+        <UnavailableState title={t("secrets.sync.noDestinationTitle")}>
+          <p>{t("secrets.sync.noDestinationBody")}</p>
+          <ol className="mt-2 list-decimal space-y-1 ps-5">
+            <li>{t("secrets.sync.setupConfig")}</li>
+            <li>{t("secrets.sync.setupCredential")}</li>
+            <li>{t("secrets.sync.setupRestart")}</li>
+          </ol>
+        </UnavailableState>
+      ) : (
+        <StepShell
+          steps={steps}
+          currentIndex={step}
+          nextDisabled={!configureReady || previewBusy || loadBlocked || !previewRunnable || configuredTargets.length === 0}
+          nextLabel={previewBusy ? t("secrets.sync.reviewing") : t("secrets.sync.reviewAction")}
+          onNext={step === 0 ? () => void reviewPlan(values) : undefined}
+          onPrevious={step === 1 ? () => setStep(0) : undefined}
+          progressLabel={t("secrets.sync.progress")}
+        >
+          {step === 0 ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              <Field label={t("secrets.sync.secretName")} required>
+                {(field) => (
+                  <Input
+                    {...field}
+                    value={name}
+                    onChange={(event) => {
+                      setValues((current) => ({ ...current, name: event.target.value }));
+                      invalidateReview();
+                    }}
+                    placeholder={t("secrets.sync.secretNameExample")}
+                    required
+                  />
+                )}
+              </Field>
+              <Field label={t("secrets.sync.target")} description={t("secrets.sync.targetHelp")} required>
+                {(field) => (
+                  <Select
+                    {...field}
+                    value={target}
+                    onChange={(event) => {
+                      setValues((current) => ({ ...current, target: event.target.value }));
+                      invalidateReview();
+                    }}
+                    required
+                  >
+                    <option value="">{t("secrets.sync.chooseTarget")}</option>
+                    {configuredTargets.map((configuredTarget) => (
+                      <option key={configuredTarget.id} value={configuredTarget.id}>
+                        {configuredTarget.label} — {configuredTarget.id}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label={t("secrets.sync.remoteKey")} description={t("secrets.sync.remoteKeyHelp")}>
+                {(field) => (
+                  <Input
+                    {...field}
+                    value={remoteKey}
+                    onChange={(event) => {
+                      setValues((current) => ({ ...current, remoteKey: event.target.value }));
+                      invalidateReview();
+                    }}
+                    placeholder={t("secrets.sync.remoteKeyExample")}
+                  />
+                )}
+              </Field>
             </div>
-            <p className="text-sm font-medium">{t("secrets.sync.versionSummary", { version: currentReview.plan.secret_version })}</p>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <dt className="text-muted-foreground">{t("secrets.sync.secretName")}</dt>
-                <dd className="break-all font-medium">{currentReview.plan.name}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("secrets.sync.target")}</dt>
-                <dd className="break-all font-medium">{currentReview.plan.target}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("secrets.sync.remoteKey")}</dt>
-                <dd className="break-all font-mono text-xs">{currentReview.plan.remote_key}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("secrets.sync.permission")}</dt>
-                <dd className="font-mono text-xs">{currentReview.plan.required_permission}</dd>
-              </div>
-            </dl>
-            {currentReview.plan.blockers.length > 0 ? (
-              <ErrorState title={t("secrets.sync.previewBlocked")}>
-                <ul className="list-disc space-y-1 ps-5">
-                  {currentReview.plan.blockers.map((blocker) => (
-                    <li key={blocker}>{blocker}</li>
-                  ))}
-                </ul>
-              </ErrorState>
-            ) : null}
-            <div className="grid gap-4 lg:grid-cols-3">
-              <PlanList title={t("secrets.sync.effects")} items={[...currentReview.plan.execute_writes, ...currentReview.plan.execute_external_effects]} />
-              <PlanList title={t("secrets.sync.recovery")} items={currentReview.plan.recovery_steps} />
-              <PlanList title={t("secrets.sync.verification")} items={currentReview.plan.verification_steps} />
-            </div>
-            <p className="text-sm text-muted-foreground">{currentReview.plan.secret_data_handling}</p>
-            {currentReview.plan.request_fingerprint ? (
-              <details>
-                <summary className="cursor-pointer text-sm font-medium text-primary">{t("secrets.sync.exactEvidence")}</summary>
-                <div className="mt-2">
-                  <CredentialChip value={currentReview.plan.request_fingerprint} label={t("secrets.sync.fingerprint")} fullValue />
+          ) : currentReview ? (
+            <div className="grid gap-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{currentReview.plan.ready ? t("secrets.sync.previewReady") : t("secrets.sync.previewBlocked")}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("secrets.sync.previewNoEffects")}</p>
                 </div>
-              </details>
-            ) : null}
-          </div>
-        ) : (
-          <ErrorState title={t("secrets.sync.previewFailed")}>{t("secrets.sync.reviewRequired")}</ErrorState>
-        )}
-      </StepShell>
+                <StatusBadge
+                  value={currentReview.plan.ready ? "ready" : "blocked"}
+                  label={currentReview.plan.ready ? t("secrets.sync.ready") : t("secrets.sync.blocked")}
+                  tone={currentReview.plan.ready ? "success" : "warning"}
+                />
+              </div>
+              <p className="text-sm font-medium">{t("secrets.sync.versionSummary", { version: currentReview.plan.secret_version })}</p>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <dt className="text-muted-foreground">{t("secrets.sync.secretName")}</dt>
+                  <dd className="break-all font-medium">{currentReview.plan.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">{t("secrets.sync.target")}</dt>
+                  <dd className="break-all font-medium">{currentReview.plan.target}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">{t("secrets.sync.remoteKey")}</dt>
+                  <dd className="break-all font-mono text-xs">{currentReview.plan.remote_key}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">{t("secrets.sync.permission")}</dt>
+                  <dd className="font-mono text-xs">{currentReview.plan.required_permission}</dd>
+                </div>
+              </dl>
+              {currentReview.plan.blockers.length > 0 ? (
+                <ErrorState title={t("secrets.sync.previewBlocked")}>
+                  <ul className="list-disc space-y-1 ps-5">
+                    {currentReview.plan.blockers.map((blocker) => (
+                      <li key={blocker}>{blocker}</li>
+                    ))}
+                  </ul>
+                </ErrorState>
+              ) : null}
+              <div className="grid gap-4 lg:grid-cols-3">
+                <PlanList title={t("secrets.sync.effects")} items={[...currentReview.plan.execute_writes, ...currentReview.plan.execute_external_effects]} />
+                <PlanList title={t("secrets.sync.recovery")} items={currentReview.plan.recovery_steps} />
+                <PlanList title={t("secrets.sync.verification")} items={currentReview.plan.verification_steps} />
+              </div>
+              <p className="text-sm text-muted-foreground">{currentReview.plan.secret_data_handling}</p>
+              {currentReview.plan.request_fingerprint ? (
+                <details>
+                  <summary className="cursor-pointer text-sm font-medium text-primary">{t("secrets.sync.exactEvidence")}</summary>
+                  <div className="mt-2">
+                    <CredentialChip value={currentReview.plan.request_fingerprint} label={t("secrets.sync.fingerprint")} fullValue />
+                  </div>
+                </details>
+              ) : null}
+            </div>
+          ) : (
+            <ErrorState title={t("secrets.sync.previewFailed")}>{t("secrets.sync.reviewRequired")}</ErrorState>
+          )}
+        </StepShell>
+      )}
       {error ? <ErrorState title={step === 0 ? t("secrets.sync.previewFailed") : t("secrets.sync.executeFailed")}>{error}</ErrorState> : null}
       {step === 1 && currentReview?.plan.ready ? (
         <div className="flex justify-end">

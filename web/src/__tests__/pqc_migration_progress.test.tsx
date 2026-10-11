@@ -75,7 +75,7 @@ describe("PQC certificate progress", () => {
     );
     expect(
       screen.getByText(
-        "At this rollback, the original RSA-2048 certificate was restored and this run's PQC leaf stopped being served. A later run may change the current leaf.",
+        "At this rollback, the original RSA-2048 certificate was restored and this run's PQC leaf was no longer presented. A later run may change the current leaf.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Requested: ML-DSA-65")).not.toBeInTheDocument();

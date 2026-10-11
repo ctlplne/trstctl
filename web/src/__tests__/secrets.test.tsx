@@ -2225,6 +2225,33 @@ describe("secrets surface", () => {
     expect(apiMock.syncSecret).not.toHaveBeenCalled();
   });
 
+  it("looks up an existing pending delivery after navigation even when its target is gone", async () => {
+    apiMock.secretSyncTargets.mockResolvedValueOnce({ ...syncTargetCatalogFixture(), configured_targets: [] });
+    apiMock.secretSyncJob.mockResolvedValue({
+      job_id: "sync-queued-after-restart",
+      name: "app/db/password",
+      secret_version: 6,
+      target: "retired-ci",
+      remote_key: "DB_PASSWORD",
+      status: "pending",
+      attempts: 0,
+      requested_at: "2026-10-11T02:31:23Z",
+      updated_at: "2026-10-11T02:31:23Z",
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/sync");
+
+    const setup = within(await screen.findByRole("region", { name: "Secret sync setup" }));
+    expect(setup.getByText("No destination is set up yet")).toBeInTheDocument();
+    const lookup = within(setup.getByRole("heading", { name: "Check a previous delivery" }).closest("div")!.parentElement!);
+    await user.type(lookup.getByLabelText("Job ID"), "sync-queued-after-restart{enter}");
+
+    expect(await screen.findByText("Pending delivery")).toBeInTheDocument();
+    expect(screen.getByText("Delivery attempts: 0")).toBeInTheDocument();
+    expect(apiMock.secretSyncJob).toHaveBeenCalledWith("sync-queued-after-restart");
+    expect(apiMock.syncSecret).not.toHaveBeenCalled();
+  });
+
   it("fails F68 closed when the server describes a preview with effects", async () => {
     apiMock.previewSecretSync.mockResolvedValueOnce({
       capability: "F68",

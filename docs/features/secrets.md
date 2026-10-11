@@ -612,6 +612,10 @@ worker's target receipt, so independently read the target to verify its value.
 are configured. Shipped concrete pushers: AWS Secrets Manager, GCP Secret Manager,
 Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu,
 HashiCorp Vault/OpenBao KV v2, and a generic CI/JSON endpoint.
+The console's **Check a previous delivery** field accepts a job ID from any
+receipt or CLI run. It reads the same durable status and keeps the ID in the
+page URL, including when the target is no longer configured. A pending status
+does not prove the external value changed; read the destination independently.
 
 Every redelivery reuses the same sync-operation ID — AWS Secrets Manager sends it as
 both `ClientRequestToken` and `Idempotency-Key`; GCP Secret Manager and Azure Key Vault

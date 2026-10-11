@@ -1,12 +1,28 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
-import { SecretImport } from "@/components/secrets";
+import { SecretImport } from "@/components/secrets/SecretImport";
+
+const { importSecrets } = vi.hoisted(() => ({ importSecrets: vi.fn() }));
+vi.mock("@/lib/api", async (original) => {
+  const actual = await original<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, importSecrets } };
+});
 
 describe("U2-5 secret import", () => {
-  it("discloses that bulk import is unavailable without rendering an active mutation", () => {
+  it("rejects a JSON array before any batch mutation is offered", async () => {
+    importSecrets.mockReset();
+    const user = userEvent.setup();
     render(<SecretImport />);
-    expect(screen.getByText(/Bulk import is disabled/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import unavailable" })).toBeDisabled();
+    const raw = '[{"name":"qa/unsafe","value":"secret"}]';
+    const file = new File([raw], "wrong-shape.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => raw });
+
+    await user.upload(screen.getByLabelText("Choose JSON import file"), file);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Use a JSON object with an optional prefix and a values object");
+    expect(screen.queryByRole("button", { name: "Import reviewed secrets" })).not.toBeInTheDocument();
+    expect(importSecrets).not.toHaveBeenCalled();
   });
 });
