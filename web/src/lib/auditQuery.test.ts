@@ -72,7 +72,7 @@ describe("one audit selector across every evidence encoding", () => {
     expect(click).not.toHaveBeenCalled();
   });
 
-  it("sets a 15-second cap and forwards audit and expiry cancellation to fetch", async () => {
+  it("gives audit a 60-second cap while forwarding route and expiry cancellation", async () => {
     const timeout = vi.spyOn(AbortSignal, "timeout");
     const signals: AbortSignal[] = [];
     vi.stubGlobal(
@@ -86,7 +86,7 @@ describe("one audit selector across every evidence encoding", () => {
     await api.auditEvents(query, controller.signal);
     await api.certificateHealth(controller.signal);
     expect(timeout).toHaveBeenCalledTimes(2);
-    expect(timeout).toHaveBeenNthCalledWith(1, 15_000);
+    expect(timeout).toHaveBeenNthCalledWith(1, 60_000);
     expect(timeout).toHaveBeenNthCalledWith(2, 15_000);
     expect(signals.every((signal) => !signal.aborted)).toBe(true);
     controller.abort();

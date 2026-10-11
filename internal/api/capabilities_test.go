@@ -202,20 +202,15 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if previewUnavailable.Code != "dependency_not_configured" || !strings.Contains(previewUnavailable.Detail, "native secret store is turned off") {
 		t.Fatalf("F64 previewSecretAccess unavailable=%+v, want exact native-store dependency reason", previewUnavailable)
 	}
-	foundUnavailable := false
-	for _, action := range f64.Actions.Unavailable {
-		if action.OperationID == "importSecrets" && action.Code == "not_implemented" && action.Detail != "" {
-			foundUnavailable = true
-		}
-	}
-	if !foundUnavailable {
-		t.Fatalf("F64 unavailable actions=%+v, want honest importSecrets refusal", f64.Actions.Unavailable)
+	importUnavailable := findUnavailableCapabilityAction(t, f64, "importSecrets")
+	if importUnavailable.Code != "dependency_not_configured" || !strings.Contains(importUnavailable.Detail, "native secret store is turned off") {
+		t.Fatalf("F64 importSecrets unavailable=%+v, want exact native-store dependency reason", importUnavailable)
 	}
 	f63 := findCapabilityViewItem(t, operator, "F63")
 	if f63.RuntimeState != "unavailable" || len(f63.Actions.Allowed) != 0 {
 		t.Fatalf("operator F63 runtime=%q allowed=%v, want unavailable/none without the native secret store", f63.RuntimeState, f63.Actions.Allowed)
 	}
-	for _, operationID := range []string{"previewSecretCreate", "createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
+	for _, operationID := range []string{"previewSecretCreate", "createSecret", "importSecrets", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
 		action := findUnavailableCapabilityAction(t, f63, operationID)
 		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "native secret store is turned off") {
 			t.Fatalf("F63 %s unavailable=%+v, want exact native-store dependency reason", operationID, action)

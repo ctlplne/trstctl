@@ -18,6 +18,9 @@ export function auditQueryParams(options?: AuditQuery): URLSearchParams {
 }
 
 export function auditReadSignal(signal?: AbortSignal): AbortSignal {
-  const timeout = AbortSignal.timeout(15_000);
+  // A tenant audit read verifies the retained event window before it returns.
+  // Give that read room to finish on a loaded self-hosted node while still
+  // honoring route-change cancellation and a finite operator wait.
+  const timeout = AbortSignal.timeout(60_000);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }

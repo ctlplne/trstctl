@@ -825,7 +825,7 @@
         "docs/journeys/manage-secrets.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual atomic bulk import plus broader Vault and Terraform developer integration remains outside the fully served GA denominator."
+      "ga_scope_reason": "Residual Vault and Terraform developer integration remains outside the fully served GA denominator."
     },
     {
       "requirement_id": "F65",

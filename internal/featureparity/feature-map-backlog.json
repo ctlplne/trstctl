@@ -15912,10 +15912,10 @@
             "phase": "P1",
             "priority": 34,
             "served_state": "partial",
-            "backend_status": "partial: the supported single-secret workflow has an effect-free access-plan route, generated CLI/API/SDK contract, exact-version read test, trstctl-cli run injection, and reference resolution; atomic bulk import and broader Vault/Terraform developer integrations remain explicit residuals",
-            "current_frontend_mapping": "operate: Use secrets in apps at /secrets/developer reviews one exact value-free server plan, copies generated CLI/API/SDK examples, performs a real version-bound access test, retries failures, invalidates stale plans, and visibly fails closed on bulk import",
+            "backend_status": "partial: the supported single-secret workflow has an effect-free access-plan route, generated CLI/API/SDK contract, exact-version read test, trstctl-cli run injection, reference resolution, and atomic event-sourced bulk import; broader Vault/Terraform developer integrations remain explicit residuals",
+            "current_frontend_mapping": "operate: Use secrets in apps at /secrets/developer reviews one exact value-free server plan, copies generated CLI/API/SDK examples, performs a real version-bound access test, retries failures, invalidates stale plans, and provides a reviewed bulk-import workflow",
             "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation.",
-            "acceptance_test": "TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree plus the focused web secrets suite prove UI examples match the CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
+            "acceptance_test": "TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree and batch-import served tests plus the focused web secrets suite prove UI examples match the CLI/API contract, atomic bulk import has API/CLI/UI receipts, resolved reads are explicit, and generated snippets never include real secret values.",
             "source_docs": [
                 "docs/features/secrets.md",
                 "docs/cli.md",
@@ -15934,12 +15934,13 @@
                 "web/src/pages/Secrets.tsx",
                 "web/src/pages/secrets/SecretsPageParts.tsx",
                 "web/src/components/secrets/index.tsx",
+                "web/src/components/secrets/SecretImport.tsx",
                 "web/src/__tests__/secrets.test.tsx",
                 "web/src/lib/navigation.ts",
                 "web/src/App.tsx"
             ],
             "status": "closed",
-            "notes": "F64 is a first-class review-first workflow at /secrets/developer. POST /api/v1/secrets/access/preview transiently proves a tenant-scoped value and optional reference graph can be opened, wipes bytes, and returns an exact value-free plan with current version, least privilege, generated CLI/API/TypeScript instructions, recovery, verification, and a keyed fingerprint. The UI refuses execution until that plan is ready and unchanged, performs the real served read, verifies exact name/version, renders only a metadata receipt, keeps retry after ordinary failure, and invalidates stale input or version. CLI preview and trstctl-cli run cover automation. Bulk import remains visibly fail-closed until an atomic event-sourced batch command exists.",
+            "notes": "F64 is a first-class review-first workflow at /secrets/developer. POST /api/v1/secrets/access/preview transiently proves a tenant-scoped value and optional reference graph can be opened, wipes bytes, and returns an exact value-free plan with current version, least privilege, generated CLI/API/TypeScript instructions, recovery, verification, and a keyed fingerprint. The UI refuses execution until that plan is ready and unchanged, performs the real served read, verifies exact name/version, renders only a metadata receipt, keeps retry after ordinary failure, and invalidates stale input or version. CLI preview and trstctl-cli run cover automation. Bulk import reviews names and count before the atomic API command and exposes metadata-only receipts through API, CLI, and console.",
             "api_surface": [
                 "previewSecretAccess",
                 "createSecret",
@@ -15953,6 +15954,7 @@
             "cli_surface": [
                 "secrets access preview",
                 "secrets store put",
+                "secrets store import",
                 "secrets store list",
                 "secrets store get",
                 "secrets store update",
@@ -15966,7 +15968,7 @@
                         "POST /api/v1/secrets/access/preview returns a server-keyed, value-free, effect-free plan only after opening and wiping the selected value and optional references.",
                         "The served test distinguishes missing source vs referenced secrets, rejects cycles, proves stable plan identity, and detects any secret value in the response or event log.",
                         "served_state=partial",
-                        "backend_status=partial: the supported single-secret workflow has an effect-free access plan, exact-version execution, and CLI run injection; atomic bulk import and broader Vault/Terraform integrations remain explicit residuals"
+                        "backend_status=partial: the supported single-secret workflow has an effect-free access plan, exact-version execution, CLI run injection, and atomic event-sourced bulk import; broader Vault/Terraform integrations remain explicit residuals"
                     ],
                     "refs": [
                         "internal/api/secret_access_preview.go",
@@ -15979,7 +15981,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: /secrets/developer provides review, generated snippets, execute, retry, stale-plan invalidation, exact-version verification, and explicit bulk-import disclosure without rendering secret values.",
+                        "current_frontend_mapping: operate: /secrets/developer provides review, generated snippets, execute, retry, stale-plan invalidation, exact-version verification, and reviewed bulk import without rendering secret values.",
                         "target_gui_mapping: Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation."
                     ],
                     "refs": [
@@ -16000,7 +16002,7 @@
                         "CLI command: secrets store update",
                         "CLI command: secrets store delete",
                         "CLI command: run",
-                        "No CLI command is registered for the explicitly unavailable bulk-import compatibility route."
+                        "CLI command: secrets store import produces an atomic metadata-only batch receipt."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -16013,7 +16015,7 @@
                         "OpenAPI operationId: createSecret",
                         "OpenAPI operationId: previewSecretAccess",
                         "OpenAPI operationId: listSecrets",
-                        "OpenAPI operationId importSecrets is deprecated, marked x-trstctl-availability=unavailable, and publishes 501 with no success response.",
+                        "OpenAPI operationId importSecrets publishes atomic batch import with success and conflict responses.",
                         "OpenAPI operationId: getSecret",
                         "OpenAPI operationId: rotateSecret",
                         "OpenAPI operationId: deleteSecret"
@@ -16063,7 +16065,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "importSecrets is an explicit no-write 501 guard until an atomic event-sourced batch command exists.",
+                        "importSecrets emits one batch event; projection and audit expose a metadata-only receipt after the durable command.",
                         "Available secret mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -16103,7 +16105,7 @@
                 }
             },
             "ga_served_scope": "out_of_ga",
-            "ga_scope_reason": "Residual atomic bulk import plus broader Vault and Terraform developer integration remains outside the fully served GA denominator.",
+            "ga_scope_reason": "Residual Vault and Terraform developer integration remains outside the fully served GA denominator.",
             "dod_capabilities": [
                 "secrets_residuals"
             ],
