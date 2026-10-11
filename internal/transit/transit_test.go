@@ -76,6 +76,33 @@ func TestTransitHMACAndSign(t *testing.T) {
 	}
 }
 
+func TestTransitSignReturnsOwnedPublicDER(t *testing.T) {
+	ctx := context.Background()
+	k := New("t1", nil)
+	if err := k.CreateKey(ctx, "sig", KindSign); err != nil {
+		t.Fatal(err)
+	}
+	message := []byte("owned public key buffer")
+	_, publicDER, err := k.Sign(ctx, "sig", message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := bytes.Clone(publicDER)
+	for i := range publicDER {
+		publicDER[i] = 0
+	}
+	signature, afterWipe, err := k.Sign(ctx, "sig", message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(afterWipe, original) {
+		t.Fatal("caller wiped the signer's retained public key")
+	}
+	if err := k.VerifyNamed(ctx, "sig", message, signature, afterWipe); err != nil {
+		t.Fatalf("named signature verification after caller wipe: %v", err)
+	}
+}
+
 func TestTransitKindMismatch(t *testing.T) {
 	ctx := context.Background()
 	k := New("t1", nil)

@@ -28,6 +28,7 @@ type TransitService interface {
 	HMAC(ctx context.Context, tenantID, name string, data []byte) ([]byte, error)
 	Sign(ctx context.Context, tenantID, name string, message []byte) ([]byte, []byte, error)
 	Verify(ctx context.Context, tenantID string, message, sig, pubDER []byte) error
+	VerifyNamed(ctx context.Context, tenantID, name string, message, sig, pubDER []byte) error
 }
 
 // WithTransit mounts the served transit/EaaS surface. When unset, the routes fail

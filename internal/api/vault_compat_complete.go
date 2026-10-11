@@ -816,7 +816,7 @@ func (a *API) vaultTransitSign(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) vaultTransitVerify(w http.ResponseWriter, r *http.Request) {
-	a.vaultTransitMutation(w, r, func(ctx context.Context, tenantID, _ string, req vaultTransitInputRequest) (any, error) {
+	a.vaultTransitMutation(w, r, func(ctx context.Context, tenantID, name string, req vaultTransitInputRequest) (any, error) {
 		if len(req.Input) == 0 {
 			return nil, errStatus(http.StatusBadRequest, "input is required")
 		}
@@ -832,7 +832,7 @@ func (a *API) vaultTransitVerify(w http.ResponseWriter, r *http.Request) {
 		if publicLen <= 0 || publicLen >= len(packed)-4 {
 			return nil, errStatus(http.StatusBadRequest, "signature is malformed")
 		}
-		err = a.transit.Verify(ctx, tenantID, req.Input, packed[4+publicLen:], packed[4:4+publicLen])
+		err = a.transit.VerifyNamed(ctx, tenantID, name, req.Input, packed[4+publicLen:], packed[4:4+publicLen])
 		return map[string]bool{"valid": err == nil}, nil
 	})
 }

@@ -9,6 +9,7 @@
 package transit
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -209,6 +210,19 @@ func (s *Service) Sign(ctx context.Context, tenantID, name string, message []byt
 
 func (s *Service) Verify(ctx context.Context, tenantID string, message, sig, pubDER []byte) error {
 	return s.ring(tenantID).Verify(ctx, message, sig, pubDER)
+}
+
+// VerifyNamed checks both the signature and that its public key belongs to a
+// retained version of the requested tenant key. Vault's named verify route must
+// not treat an arbitrary valid signature as proof for another key or tenant.
+func (s *Service) VerifyNamed(ctx context.Context, tenantID, name string, message, sig, pubDER []byte) error {
+	s.mu.Lock()
+	k := s.rings[tenantID]
+	s.mu.Unlock()
+	if k == nil {
+		return fmt.Errorf("transit: unknown signing key %q", name)
+	}
+	return k.VerifyNamed(ctx, name, message, sig, pubDER)
 }
 
 // Destroy zeroizes every tenant keyring.
@@ -483,7 +497,9 @@ func (k *Keyring) Sign(ctx context.Context, name string, message []byte) (sig, p
 		return nil, nil, err
 	}
 	k.event(ctx, "transit.sign", name)
-	return sig, s.Public().DER, nil
+	// The caller owns and may wipe its return buffer. Never hand out the
+	// signer's cached public DER slice, even though its contents are public.
+	return sig, bytes.Clone(s.Public().DER), nil
 }
 
 // Verify checks a transit signature.
@@ -493,6 +509,32 @@ func (k *Keyring) Verify(ctx context.Context, message, sig, pubDER []byte) error
 		k.event(ctx, "transit.verify", "signature")
 	}
 	return err
+}
+
+// VerifyNamed accepts prior versions after rotation while rejecting a public
+// key that was never held by this named key in this tenant.
+func (k *Keyring) VerifyNamed(ctx context.Context, name string, message, sig, pubDER []byte) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	nk, ok := k.keys[name]
+	if !ok || nk.kind != KindSign {
+		return fmt.Errorf("transit: %q is not a signing key", name)
+	}
+	if nk.latest >= len(nk.sign) {
+		return fmt.Errorf("transit: signing key %q has incomplete version history", name)
+	}
+	for version := 1; version <= nk.latest; version++ {
+		signer := nk.sign[version]
+		if signer == nil || !bytes.Equal(signer.Public().DER, pubDER) {
+			continue
+		}
+		if err := crypto.VerifyMessage(pubDER, message, sig); err != nil {
+			return err
+		}
+		k.event(ctx, "transit.verify", name)
+		return nil
+	}
+	return fmt.Errorf("transit: signature key does not belong to %q", name)
 }
 
 // Destroy zeroizes every key byte and destroys locked signing keys. The keyring is

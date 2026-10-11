@@ -106,6 +106,27 @@ func TestVaultCompatMountACLTransitServedAndReplayed(t *testing.T) {
 	if !bytes.Contains(verified, []byte(`"valid":true`)) {
 		t.Fatalf("verify response: %s", verified)
 	}
+	vaultRequest(t, handler, vaultCompleteTenantA, "admin", http.MethodPost, "/v1/transit/keys/other-signer", map[string]any{"type": "ecdsa-p256"}, http.StatusNoContent)
+	wrongKey := vaultRequest(t, handler, vaultCompleteTenantA, "admin", http.MethodPost, "/v1/transit/verify/other-signer", map[string]any{
+		"input": base64.StdEncoding.EncodeToString(plaintext), "signature": signature,
+	}, http.StatusOK)
+	if !bytes.Contains(wrongKey, []byte(`"valid":false`)) {
+		t.Fatalf("signature from signer verified under another named key: %s", wrongKey)
+	}
+	vaultRequest(t, handler, vaultCompleteTenantB, "admin", http.MethodPost, "/v1/transit/keys/signer", map[string]any{"type": "ecdsa-p256"}, http.StatusNoContent)
+	wrongTenant := vaultRequest(t, handler, vaultCompleteTenantB, "admin", http.MethodPost, "/v1/transit/verify/signer", map[string]any{
+		"input": base64.StdEncoding.EncodeToString(plaintext), "signature": signature,
+	}, http.StatusOK)
+	if !bytes.Contains(wrongTenant, []byte(`"valid":false`)) {
+		t.Fatalf("tenant A signature verified under tenant B key: %s", wrongTenant)
+	}
+	vaultRequest(t, handler, vaultCompleteTenantA, "admin", http.MethodPost, "/v1/transit/keys/signer/rotate", map[string]any{}, http.StatusNoContent)
+	oldVersion := vaultRequest(t, handler, vaultCompleteTenantA, "admin", http.MethodPost, "/v1/transit/verify/signer", map[string]any{
+		"input": base64.StdEncoding.EncodeToString(plaintext), "signature": signature,
+	}, http.StatusOK)
+	if !bytes.Contains(oldVersion, []byte(`"valid":true`)) {
+		t.Fatalf("signature from retained key version failed after rotation: %s", oldVersion)
+	}
 }
 
 func vaultRequest(t *testing.T, handler http.Handler, tenantID, role, method, target string, body any, wantStatus int) []byte {

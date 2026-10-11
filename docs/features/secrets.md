@@ -141,6 +141,10 @@ since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept
 `Idempotency-Key`. For the stock CLI's KV put and PKI issue/sign commands,
 trstctl derives a token-keyed digest of method, path, and body when the header is
 absent, so an exact retry cannot mint a duplicate certificate or secret version.
+Vault transit `verify/{name}` accepts a signature only when its public key belongs
+to a retained version of that named key in the current tenant. Rotation keeps
+older signatures verifiable under the same name, while another name or tenant
+returns `valid: false`.
 The stock CLI's `vault secrets enable/disable` and `vault policy write/delete`
 commands also work without a custom header: the fallback is bound to the last
 event for that exact mount or policy, so a retry does not append twice and a
