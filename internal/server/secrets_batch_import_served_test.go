@@ -136,9 +136,11 @@ func TestServedSecretBatchImportReconcilesBothCrashGaps(t *testing.T) {
 				t.Fatal(err)
 			}
 			if afterAppend {
+				// A previously published event may retain nanoseconds even though
+				// PostgreSQL rounded the durable command to microseconds.
 				if _, err := h.log.Append(ctx, events.Event{
 					ID: id, Type: projections.EventApplicationSecretBatchImported,
-					TenantID: h.tenant, Time: batch.EventTime,
+					TenantID: h.tenant, Time: batch.EventTime.Add(321 * time.Nanosecond),
 					SchemaVersion: projections.ApplicationSecretBatchImportSchemaVersion,
 					Data:          batch.Payload, Actor: batch.Actor,
 				}); err != nil {

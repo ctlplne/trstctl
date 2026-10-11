@@ -337,7 +337,8 @@ func (a *API) appendApplicationSecretImportEvent(ctx context.Context, candidate 
 
 func sameApplicationSecretImportEvent(a, b events.Event) bool {
 	return a.ID == b.ID && a.Type == b.Type && a.TenantID == b.TenantID &&
-		a.Time.Equal(b.Time) && a.SchemaVersion == b.SchemaVersion &&
+		a.Time.UTC().Truncate(time.Microsecond).Equal(b.Time.UTC().Truncate(time.Microsecond)) &&
+		a.SchemaVersion == b.SchemaVersion &&
 		bytes.Equal(a.Data, b.Data) && reflect.DeepEqual(a.Actor, b.Actor)
 }
 

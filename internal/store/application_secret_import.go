@@ -75,6 +75,9 @@ func validateApplicationSecretImportBatch(batch ApplicationSecretImportBatch) er
 // transaction. It acquires the same advisory lock as a single-secret command
 // claim, in lexical order. A collision therefore publishes no partial event.
 func (s *Store) ClaimApplicationSecretImportBatch(ctx context.Context, batch ApplicationSecretImportBatch) (ApplicationSecretImportBatch, error) {
+	// PostgreSQL TIMESTAMPTZ retains microseconds. Use its exact precision for
+	// the event as well, so a fresh projection and a crash replay compare equal.
+	batch.EventTime = batch.EventTime.UTC().Truncate(time.Microsecond)
 	if err := validateApplicationSecretImportBatch(batch); err != nil {
 		return ApplicationSecretImportBatch{}, err
 	}
@@ -95,6 +98,7 @@ func (s *Store) RunApplicationSecretImportCommand(
 	ctx context.Context, batch ApplicationSecretImportBatch,
 	fn func(context.Context, ApplicationSecretImportBatch) error,
 ) error {
+	batch.EventTime = batch.EventTime.UTC().Truncate(time.Microsecond)
 	if err := validateApplicationSecretImportBatch(batch); err != nil {
 		return err
 	}
@@ -333,7 +337,7 @@ func (s *Store) ApplyApplicationSecretImportTx(
 		}
 		if canonical.TenantEpoch != batch.TenantEpoch || canonical.RequestBinding != batch.RequestBinding ||
 			canonical.PayloadDigest != batch.PayloadDigest || !slices.Equal(canonical.Names, batch.Names) ||
-			!canonical.EventTime.Equal(batch.EventTime) {
+			!canonical.EventTime.Equal(batch.EventTime.UTC().Truncate(time.Microsecond)) {
 			return ErrIdempotencyConflict
 		}
 	}
