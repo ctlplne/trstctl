@@ -56,21 +56,13 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 	if err != nil {
 		return store.SecretRotationSchedule{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventSecretRotationScheduleUpserted, tenantID, payload)
-	if err != nil {
+	if _, err := o.emit(ctx, projections.EventSecretRotationScheduleUpserted, tenantID, payload); err != nil {
 		return store.SecretRotationSchedule{}, err
 	}
-	nextRunAt := in.NextRunAt
-	if nextRunAt.IsZero() {
-		nextRunAt = ev.Time.Add(time.Duration(in.IntervalSeconds) * time.Second)
-	}
-	return store.SecretRotationSchedule{
-		ID: id, TenantID: tenantID, Name: strings.TrimSpace(in.Name),
-		Provider: strings.TrimSpace(in.Provider), Key: strings.TrimSpace(in.Key),
-		OldRef: strings.TrimSpace(in.OldRef), IntervalSeconds: in.IntervalSeconds,
-		ConfigEventSequence: ev.Sequence, Enabled: in.Enabled, NextRunAt: nextRunAt,
-		CreatedAt: ev.Time, UpdatedAt: ev.Time,
-	}, nil
+	// PostgreSQL persists timestamps at microsecond precision. Return the
+	// projected row so the create receipt is byte-for-byte the same record an
+	// operator (or an idempotent retry) reads back later.
+	return o.store.GetSecretRotationSchedule(ctx, tenantID, id)
 }
 
 // ControlSecretRotationSchedule records a future-eligibility decision as an
