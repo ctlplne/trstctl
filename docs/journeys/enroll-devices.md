@@ -92,22 +92,24 @@ against its rules, and hands back a signed certificate.
    You should receive a PEM certificate chain. The token is checked-and-deleted
    atomically, so it works exactly once.
 
-6. For MDM-managed phones and laptops, gate enrollment with a challenge. When a
-   mobile-device-management platform (Intune, JAMF) pushes a SCEP profile, you want
-   only MDM-provisioned devices to enroll. trstctl issues an HMAC-signed challenge
-   token the MDM embeds in the device's SCEP profile `challengePassword`, and the
-   SCEP server validates it (constant-time check, expiry) before issuing — fail-closed
-   on any defect. You should see enrollment succeed only for devices carrying a valid
-   challenge. This is covered in
+6. For MDM-managed phones and laptops, gate enrollment with a challenge. When an
+   Intune deployment pushes a SCEP profile, only devices with an MDM-signed JWS in
+   the CSR's `challengePassword` may enroll. trstctl verifies that signature
+   against the enabled policy's referenced public certificate, requires the
+   expected audience, checks tenant and CSR claims, and atomically consumes the
+   nonce in PostgreSQL before issuing. Missing or reused challenges fail closed,
+   including after a control-plane restart. This is covered in
    [Enrollment protocols](../features/enrollment-protocols.md).
 
    > Served boundary: EST, SCEP, CMP, embedded bootstrap, and embedded renewal are
    > cross-checked end to end. With the Enterprise/PQC license attached, the same EST
    > route accepts an RFC 9881 ML-DSA-65 CSR produced by stock OpenSSL 3.5 and returns
-   > a pure ML-DSA leaf that stock OpenSSL verifies. The MDM challenge gate is also
-   > served; its live validator trust anchors come from
-   > `protocols.scep.intune_challenge` startup configuration, while policy CRUD and
-   > rotation evidence remain visible through `/api/v1/mdm/scep/*`.
+   > a pure ML-DSA leaf that stock OpenSSL verifies. The local Intune-style JWS
+   > enrollment path is served and uses enabled policy `secret://` public trust
+   > anchors at validation time; `protocols.scep.intune_challenge` remains a
+   > bootstrap fallback. A local SCEP client and JWS signer do not prove Microsoft
+   > Intune installation or Jamf integration. The `hmac-dynamic` policy choice is
+   > not yet a served enrollment path; do not select it for live devices.
 
 ## Where next
 

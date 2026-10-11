@@ -64,7 +64,7 @@ func TestC11FeatureDocsReflectParitySurfaces(t *testing.T) {
 		{"features/policy-and-governance.md", []string{"severity-to-channel routing matrix", "EffectiveAlertChannels", "per-(subject, threshold, channel)", "/api/v1/notifications/{id}/requeue"}},
 		{"features/graph-query-ai.md", []string{"route-backed REST MCP tools", "rest_list_notifications", "MCP-vs-REST parity CI guard"}},
 		{"web-console.md", []string{"issuer catalog", "Test connection", "Jobs and queues", "Alerts and delivery", "Team column", "issuance-rate chart", "CTA empty states", "onboarding carousel", "server-side record search"}},
-		{"limitations.md", []string{"ACME trust_authenticated", "SCEP Intune challenge", "notification routing matrix", "MCP-vs-REST parity guard", "onboarding carousel"}},
+		{"limitations.md", []string{"ACME trust_authenticated", "SCEP Intune JWS challenge", "notification routing matrix", "MCP-vs-REST parity guard", "onboarding carousel"}},
 	}
 	for _, tc := range cases {
 		body := read(t, tc.file)

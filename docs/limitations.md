@@ -1179,12 +1179,15 @@ never live in the API process. What you can do end to end against the running bi
   account-keyed order/hour and concurrent-order limits. Served EST includes
   `/serverkeygen`, RFC 9266 `tls-server-end-point` binding, profile PathID dispatch,
   and an mTLS sibling route when configured. Served SCEP includes the
-  SCEP Intune challenge gate with tenant/CSR binding, single-use replay rejection,
+  SCEP Intune JWS challenge gate with tenant/CSR binding and durable single-use
+  nonce rejection across control-plane restarts,
   per-profile RA material, and per-device rate limiting. The MDM SCEP control
   surface serves `/api/v1/mdm/scep/status`, policy CRUD, challenge-rotation
-  evidence, CLI commands, and Protocols UI telemetry; live SCEP validator trust
-  anchors are still supplied by `protocols.scep.intune_challenge` configuration
-  rather than hot-swapped from policy CRUD.
+  evidence, CLI commands, and Protocols UI telemetry. Live SCEP validator trust
+  anchors resolve enabled policy `secret://` references per decision;
+  `protocols.scep.intune_challenge` is a bootstrap fallback. The selectable
+  `hmac-dynamic` mode still lacks a served policy resolver and must not be used
+  for live enrollment until that path is implemented end to end.
 - Revocation hardening: RFC 5280 named revocation reasons, bulk revoke routes,
   delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching,
   and CRL ETag / `If-None-Match` caching. CT precertificate/final-certificate
