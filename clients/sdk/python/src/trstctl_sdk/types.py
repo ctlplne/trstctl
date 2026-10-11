@@ -5282,6 +5282,25 @@ FleetReissuanceHealthGate = TypedDict(
     total=False,
 )
 
+FleetReissuancePreview = TypedDict(
+    'FleetReissuancePreview',
+    {
+        'affected_identity_ids': list[str],
+        'blockers': list[str],
+        'candidate_trust_hosts': list[str],
+        'candidate_trust_store_ids': list[str],
+        'capability': str,
+        'durable_writes': list[str],
+        'effect_free': bool,
+        'exact_trust_hosts': list[str],
+        'exact_trust_store_ids': list[str],
+        'outside_calls': list[str],
+        'ready': bool,
+        'signer_calls': int,
+    },
+    total=False,
+)
+
 FleetReissuanceRequest = TypedDict(
     'FleetReissuanceRequest',
     {

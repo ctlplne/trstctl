@@ -106,8 +106,12 @@ waves with revoked predecessors are not rolled back to those credentials. A
 control-plane restart resumes the run from its recorded wave; it never revokes a
 predecessor whose successor has not passed these proofs.
 
-The served CLI family is `trstctl-cli incidents fleet-reissuance
-start|list|get|pause|resume|rollback|evidence`. For its request fields, game-day
+Before starting, run `trstctl-cli incidents fleet-reissuance preview -f
+compromised-issuer.json`. The effect-free result names missing exact trust
+relationships, host bindings, or game-day restrictions. Fix those prerequisites
+and preview the same request again; Start rechecks at execution time. The served
+CLI family is `trstctl-cli incidents fleet-reissuance
+preview|start|list|get|pause|resume|rollback|evidence`. For its request fields, game-day
 restrictions, and signed evidence contract, see
 [Fleet re-issuance for CA compromise](../features/incident-and-jit.md#fleet-re-issuance-for-ca-compromise-f32).
 

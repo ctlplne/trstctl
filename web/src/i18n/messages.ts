@@ -1590,6 +1590,23 @@ export const messages = {
       "Starting records the immutable H1 plan first, then queues only the canary. No predecessor is revoked until signed trust and live-serving gates pass.",
     description: "Fleet review safety warning.",
   },
+  "incidents.fleet.previewChecking": {
+    defaultMessage: "Checking the exact issuer, trust stores, targets, and wave bindings…",
+    description: "Effect-free fleet review loading state.",
+  },
+  "incidents.fleet.previewUnavailable": {
+    defaultMessage: "The fleet plan could not be checked",
+    description: "Fleet review read error title; starting remains disabled.",
+  },
+  "incidents.fleet.previewBlocked": {
+    defaultMessage: "Fix these fleet blockers before starting",
+    description: "Fleet review blocker title.",
+  },
+  "incidents.fleet.previewReady": {
+    defaultMessage:
+      "Ready to start: {stores} exact trust stores on {hosts} hosts and {identities} affected identities. The server checks the plan again at Start.",
+    description: "Effect-free fleet review scope and race caveat.",
+  },
   "incidents.fleet.exactRequest": { defaultMessage: "Show exact request", description: "Fleet advanced exact request disclosure." },
   "certificates.tabs.inventory": {
     defaultMessage: "Inventory",

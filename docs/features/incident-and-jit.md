@@ -135,7 +135,15 @@ display label. Terminal success or rollback is mirrored to
 offline. Pause/resume and restart retain the same H2 cursor and immutable bindings. The
 legacy `POST /api/v1/incidents/executions` mutation now returns conflict with this H2
 route as guidance; historical execution reads remain available. CLI parity is
-`trstctl-cli incidents fleet-reissuance start|list|get|pause|resume|rollback|evidence`.
+`trstctl-cli incidents fleet-reissuance preview|start|list|get|pause|resume|rollback|evidence`.
+
+`POST /api/v1/incidents/fleet-reissuance-runs/preview` accepts the exact Start
+body without an idempotency key. It checks the current issuer, exact certificate/SPKI
+trust-store and host relationship, affected identities, cohort bindings, and
+game-day authorization and environment. It returns `ready`, named `blockers`,
+and the observed exact/candidate scope. It writes no event, queues no work, and
+calls no signer or external target. Run it before Start; Start repeats the checks
+because a preview cannot reserve an estate that may change between calls.
 
 The `/incidents` console configures the same contract as a three-step journey; it
 does not ask an operator to paste UUIDs or hand-write cohort JSON. First choose a
@@ -146,7 +154,9 @@ before start. An empty issuer, authority, agent, or affected-identity roster
 blocks progress with a named prerequisite instead of guessing. The advanced
 exact-request disclosure remains available for audit and API comparison, while
 the primary path keeps the immutable-plan, canary-first, signed-gate, and
-predecessor-after-proof safety order visible in plain language.
+predecessor-after-proof safety order visible in plain language. The review step
+calls the served preview and disables Start while it is blocked or unavailable.
+Clicking Start rechecks the preview before submitting the mutation.
 
 ### Just-in-time issuance with approval (F33)
 

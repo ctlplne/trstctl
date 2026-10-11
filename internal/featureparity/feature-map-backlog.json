@@ -13744,14 +13744,15 @@
             "priority": 73,
             "served_state": "conditional",
             "backend_status": "conditional: served compromised-issuer response freezes exact H1 trust scope and ordered H2 cohorts before mutation, gates trust/issue/deploy/live verification on signed agent evidence, revokes each exact predecessor only after its cohort passes, rolls back the current unrevoked cohort on failure, and seals compact-JWS evidence",
-            "current_frontend_mapping": "served: Incidents at /incidents uses a three-step, served-roster workflow to choose the compromised X.509 issuer and active replacement authority, build ordered identity-to-agent migration waves with explicit trust-anchor paths, and review the exact live or separately authorized test-only game-day request before mutation. It then shows immutable plan digest/current signed gate/revocation verdicts and records pause/resume/current-cohort rollback/JWS export actions from served API data; the unsafe direct single-identity action is retired with fleet guidance",
+            "current_frontend_mapping": "served: Incidents at /incidents uses a three-step, served-roster workflow to choose the compromised X.509 issuer and active replacement authority, build ordered identity-to-agent migration waves with explicit trust-anchor paths, and review the exact live or separately authorized test-only game-day request. The review calls an effect-free served prerequisite preview, names exact H1 or environment blockers, disables Start until ready, and rechecks at click time. It then shows immutable plan digest/current signed gate/revocation verdicts and records pause/resume/current-cohort rollback/JWS export actions from served API data; the unsafe direct single-identity action is retired with fleet guidance",
             "target_gui_mapping": "Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts.",
-            "acceptance_test": "Served e2e test proves plan-before-mutation exact-H1 enumeration, separately authorized and structurally test-only game-day operation, signed trust/live gates, post-verification exact predecessor revocation, offline-verifiable compact-JWS evidence, and failed-live-cohort automatic rollback with zero revocation; UI tests prove the same explicit H2 contract and retired direct-action guidance.",
+            "acceptance_test": "Served e2e test proves plan-before-mutation exact-H1 enumeration, separately authorized and structurally test-only game-day operation, signed trust/live gates, post-verification exact predecessor revocation, offline-verifiable compact-JWS evidence, and failed-live-cohort automatic rollback with zero revocation; UI tests prove the same explicit H2 contract, effect-free preview refusal and ready review, and retired direct-action guidance.",
             "source_docs": [
                 "docs/features/incident-and-jit.md"
             ],
             "source_backend": [
                 "/api/v1/incidents/fleet-reissuance-runs",
+                "/api/v1/incidents/fleet-reissuance-runs/preview",
                 "/api/v1/incidents/fleet-reissuance-runs/{id}",
                 "/api/v1/incidents/fleet-reissuance-runs/{id}/pause",
                 "/api/v1/incidents/fleet-reissuance-runs/{id}/resume",
@@ -13768,6 +13769,7 @@
             "status": "closed",
             "notes": "Complete review-first vertical slice. The real PostgreSQL/JetStream/out-of-process-signer/mTLS-agent test proves immutable exact-H1 planning precedes every H2 mutation, trust and live-serving receipts gate each cohort, predecessor revocation is exact and post-verification, success and rollback packs verify as compact JWS, a failed live cohort restores trust with zero revocation, game-day requires incidents:game-day and refuses production bindings, and the old direct route fails closed. Exact g193 source qualification passed full repository lint, race-enabled make test, all 1,276 web tests, i18n, production build, and unchanged bundle budgets. Installed g193 browser qualification first proved the missing-prerequisite refusal, then used a real two-custodian ceremony and exact approved authority to prove the three-step served-roster setup, canary wave builder, plain-language safety boundary, and exact request disclosure without exposing raw IDs as the primary journey.",
             "api_surface": [
+                "previewFleetReissuance",
                 "startFleetReissuance",
                 "listFleetReissuanceRuns",
                 "getFleetReissuanceRun",
@@ -13778,6 +13780,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "incidents fleet-reissuance preview",
                 "incidents fleet-reissuance start",
                 "incidents fleet-reissuance list",
                 "incidents fleet-reissuance get",
@@ -13813,6 +13816,7 @@
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: incidents fleet-reissuance preview",
                         "CLI command: incidents fleet-reissuance start",
                         "CLI command: incidents fleet-reissuance list",
                         "CLI command: incidents fleet-reissuance get",
@@ -13828,6 +13832,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewFleetReissuance",
                         "OpenAPI operationId: startFleetReissuance",
                         "OpenAPI operationId: listFleetReissuanceRuns",
                         "OpenAPI operationId: getFleetReissuanceRun",

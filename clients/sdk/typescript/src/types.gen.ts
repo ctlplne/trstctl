@@ -1528,6 +1528,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/cross-signs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the event-projected public cross-certificate by ceremony ID */
+        get: operations["getCACrossSignReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/discovery": {
         parameters: {
             query?: never;
@@ -3220,6 +3237,23 @@ export interface paths {
         put?: never;
         /** Run exact-H1, signed-gate compromised-issuer H2 cohorts */
         post: operations["startFleetReissuance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/fleet-reissuance-runs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review exact-H1 trust and signed-gate H2 cohort prerequisites without effects */
+        post: operations["previewFleetReissuance"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8876,7 +8910,7 @@ export interface components {
             reason?: string;
             reverse_cross_certificate_pem?: string;
             signer_handle?: string;
-            spec: components["schemas"]["CASpec"];
+            spec?: components["schemas"]["CASpec"];
             target_certificate_pem?: string;
             threshold: number;
         };
@@ -11252,6 +11286,20 @@ export interface components {
             name: string;
             status: string;
         };
+        FleetReissuancePreview: {
+            affected_identity_ids: string[];
+            blockers: string[];
+            candidate_trust_hosts?: string[];
+            candidate_trust_store_ids?: string[];
+            capability: string;
+            durable_writes: string[];
+            effect_free: boolean;
+            exact_trust_hosts: string[];
+            exact_trust_store_ids: string[];
+            outside_calls: string[];
+            ready: boolean;
+            signer_calls: number;
+        };
         FleetReissuanceRequest: {
             cohorts: components["schemas"]["MigrationRunStartWave"][];
             /** Format: uuid */
@@ -12149,7 +12197,10 @@ export interface components {
             trust_anchor_reference_keys: string[];
         };
         MDMSCEPPolicyRequest: {
-            /** @enum {string} */
+            /**
+             * @description Only intune-jws with the intune provider can be enabled on the served SCEP gate. Other modes may be staged disabled; enabled previews and writes are blocked.
+             * @enum {string}
+             */
             challenge_mode?: "intune-jws" | "hmac-dynamic";
             enabled?: boolean;
             expected_audience?: string;
@@ -20578,6 +20629,46 @@ export interface operations {
             };
         };
     };
+    getCACrossSignReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CACrossSign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listCADiscoveryInventory: {
         parameters: {
             query?: never;
@@ -25417,6 +25508,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewFleetReissuance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetReissuanceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuancePreview"];
                 };
             };
             /** @description client error */

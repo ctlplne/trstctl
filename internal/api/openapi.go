@@ -3534,6 +3534,18 @@ func componentSchemas() map[string]*Schema {
 		"reason": str(), "cohorts": {Type: "array", Items: ref("MigrationRunStartWave")},
 		"rollback_ref": str(),
 	}, "issuer_id", "replacement_authority_id", "mode", "cohorts")
+	fleetReissuancePreview := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"blockers":                  {Type: "array", Items: str()},
+		"exact_trust_store_ids":     {Type: "array", Items: str()},
+		"exact_trust_hosts":         {Type: "array", Items: str()},
+		"candidate_trust_store_ids": {Type: "array", Items: str()},
+		"candidate_trust_hosts":     {Type: "array", Items: str()},
+		"affected_identity_ids":     {Type: "array", Items: uuid()},
+		"outside_calls":             {Type: "array", Items: str()},
+		"signer_calls":              {Type: "integer"},
+		"durable_writes":            {Type: "array", Items: str()},
+	}, "capability", "ready", "effect_free", "blockers", "exact_trust_store_ids", "exact_trust_hosts", "affected_identity_ids", "outside_calls", "signer_calls", "durable_writes")
 	fleetReissuanceActionReq := object(map[string]*Schema{
 		"reason": str(), "rollback_ref": str(),
 	})
@@ -6683,6 +6695,7 @@ func componentSchemas() map[string]*Schema {
 		"FleetReissuanceHealthGate":                fleetHealthGate,
 		"FleetReissuanceBatch":                     fleetBatch,
 		"FleetReissuanceRequest":                   fleetReissuanceReq,
+		"FleetReissuancePreview":                   fleetReissuancePreview,
 		"FleetReissuanceActionRequest":             fleetReissuanceActionReq,
 		"FleetReissuanceRun":                       fleetReissuanceRun,
 		"FleetReissuanceRunList":                   list("FleetReissuanceRun"),

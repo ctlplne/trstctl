@@ -35,6 +35,32 @@ type fleetReissuanceActionRequest struct {
 	RollbackRef string `json:"rollback_ref"`
 }
 
+type fleetReissuancePreviewResponse struct {
+	Capability             string   `json:"capability"`
+	Ready                  bool     `json:"ready"`
+	EffectFree             bool     `json:"effect_free"`
+	Blockers               []string `json:"blockers"`
+	ExactTrustStoreIDs     []string `json:"exact_trust_store_ids"`
+	ExactTrustHosts        []string `json:"exact_trust_hosts"`
+	CandidateTrustStoreIDs []string `json:"candidate_trust_store_ids"`
+	CandidateTrustHosts    []string `json:"candidate_trust_hosts"`
+	AffectedIdentityIDs    []string `json:"affected_identity_ids"`
+	OutsideCalls           []string `json:"outside_calls"`
+	SignerCalls            int      `json:"signer_calls"`
+	DurableWrites          []string `json:"durable_writes"`
+}
+
+type fleetReissuancePreparation struct {
+	Run                    migration.Run
+	ExactTrustStoreIDs     []string
+	ExactTrustHosts        []string
+	CandidateTrustStoreIDs []string
+	CandidateTrustHosts    []string
+	AffectedIdentityIDs    []string
+	GraphImpact            json.RawMessage
+	Reason                 string
+}
+
 type fleetReissuanceRunResponse struct {
 	ID                     string                            `json:"id"`
 	TenantID               string                            `json:"tenant_id"`
@@ -158,6 +184,138 @@ func toFleetReissuanceRunResponse(r store.IncidentFleetReissuanceRun) fleetReiss
 	}
 }
 
+// previewFleetReissuance uses the same read-only preparation as Start. The
+// returned plan contains public identifiers and blocker text, never the frozen
+// target configuration, certificate bytes, or a credential. Start checks again
+// under its own idempotency key because the estate can change after review.
+func (a *API) previewFleetReissuance(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req fleetReissuanceRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid JSON body: "+err.Error()))
+		return
+	}
+	canonical, err := json.Marshal(req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	plan, err := a.prepareFleetReissuance(r.Context(), tenantID,
+		"preview:"+crypto.SHA256Hex(canonical), req)
+	response := fleetReissuancePreviewResponse{
+		Capability: "F32", Ready: err == nil, EffectFree: true,
+		Blockers: []string{}, ExactTrustStoreIDs: plan.ExactTrustStoreIDs,
+		ExactTrustHosts: plan.ExactTrustHosts, CandidateTrustStoreIDs: plan.CandidateTrustStoreIDs,
+		CandidateTrustHosts: plan.CandidateTrustHosts, AffectedIdentityIDs: plan.AffectedIdentityIDs,
+		OutsideCalls: []string{}, SignerCalls: 0, DurableWrites: []string{},
+	}
+	if err != nil {
+		var apiErr *apiError
+		if errors.As(err, &apiErr) && apiErr.status == http.StatusForbidden {
+			a.writeError(w, err)
+			return
+		}
+		response.Blockers = append(response.Blockers, err.Error())
+	}
+	if response.ExactTrustStoreIDs == nil {
+		response.ExactTrustStoreIDs = []string{}
+	}
+	if response.ExactTrustHosts == nil {
+		response.ExactTrustHosts = []string{}
+	}
+	if response.CandidateTrustStoreIDs == nil {
+		response.CandidateTrustStoreIDs = []string{}
+	}
+	if response.CandidateTrustHosts == nil {
+		response.CandidateTrustHosts = []string{}
+	}
+	if response.AffectedIdentityIDs == nil {
+		response.AffectedIdentityIDs = []string{}
+	}
+	a.writeJSON(w, http.StatusOK, response)
+}
+
+// prepareFleetReissuance reads the current tenant estate and validates the
+// executable H2 plan without appending an event, queuing a job, or signing.
+// Returning the partial public scope lets preview explain an H1 blocker.
+func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyKey string, req fleetReissuanceRequest) (fleetReissuancePreparation, error) {
+	var plan fleetReissuancePreparation
+	req.IssuerID = strings.TrimSpace(req.IssuerID)
+	req.ReplacementAuthorityID = strings.TrimSpace(req.ReplacementAuthorityID)
+	if req.IssuerID == "" || req.ReplacementAuthorityID == "" || len(req.Cohorts) == 0 {
+		return plan, errStatus(http.StatusBadRequest, "issuer_id, replacement_authority_id, and at least one cohort are required")
+	}
+	if req.Mode != migration.IncidentModeLive && req.Mode != migration.IncidentModeGameDay {
+		return plan, errStatus(http.StatusBadRequest, "mode must be live or game_day")
+	}
+	principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+	if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
+		return plan, errStatus(http.StatusForbidden, "forbidden: fleet reissuance that mints replacements requires "+string(authz.CertsIssue))
+	}
+	if req.Mode == migration.IncidentModeGameDay && !principal.Can(authz.IncidentsGameDay, authz.Scope{TenantID: tenantID}) {
+		return plan, errStatus(http.StatusForbidden, "forbidden: incident rehearsal requires "+string(authz.IncidentsGameDay))
+	}
+	if _, err := a.store.GetIssuer(ctx, tenantID, req.IssuerID); err != nil {
+		return plan, err
+	}
+	g, err := graph.Build(ctx, a.store, tenantID)
+	if err != nil {
+		return plan, err
+	}
+	issuerNodeID := "iss:" + req.IssuerID
+	if _, ok := g.Node(issuerNodeID); !ok {
+		return plan, errStatus(http.StatusNotFound, "graph node not found for compromised issuer")
+	}
+	exactStores, exactHosts := g.TrustStoresForIssuer(issuerNodeID)
+	candidateStores, candidateHosts := g.TrustCandidatesForIssuer(issuerNodeID)
+	plan.ExactTrustStoreIDs, plan.ExactTrustHosts = graphNodeIDs(exactStores), graphNodeNames(exactHosts)
+	plan.CandidateTrustStoreIDs, plan.CandidateTrustHosts = graphNodeIDs(candidateStores), graphNodeNames(candidateHosts)
+	if len(exactStores) == 0 || len(exactHosts) == 0 {
+		return plan, errStatus(http.StatusConflict, "incident execution requires at least one exact certificate/SPKI trust-store relationship and host")
+	}
+	plan.Reason = strings.TrimSpace(req.Reason)
+	if plan.Reason == "" {
+		plan.Reason = "verified compromised issuer fleet reissuance"
+	}
+	affected, err := a.store.ListRevocableIdentitiesByIssuer(ctx, tenantID, req.IssuerID)
+	if err != nil {
+		return plan, err
+	}
+	if len(affected) == 0 {
+		return plan, errStatus(http.StatusConflict, "fleet reissuance requires at least one issued, deployed, or renewing identity for the issuer")
+	}
+	for _, identity := range affected {
+		plan.AffectedIdentityIDs = append(plan.AffectedIdentityIDs, identity.ID)
+	}
+	plan.GraphImpact, err = json.Marshal(g.BlastRadius(issuerNodeID))
+	if err != nil {
+		return plan, err
+	}
+	plan.Run, err = a.buildMigrationRun(ctx, tenantID, idempotencyKey, migrationStartRequest{
+		PlanID: "incident:" + req.IssuerID, NewAuthorityID: req.ReplacementAuthorityID, Waves: req.Cohorts,
+	})
+	if err != nil {
+		return plan, errStatus(http.StatusBadRequest, err.Error())
+	}
+	if err := a.bindIncidentMigrationMembers(ctx, tenantID, plan.ExactTrustHosts, &plan.Run); err != nil {
+		return plan, errStatus(http.StatusBadRequest, err.Error())
+	}
+	plan.Run.Incident = &migration.IncidentPlan{
+		Mode: req.Mode, CompromisedIssuerID: req.IssuerID,
+		ReplacementAuthorityID: req.ReplacementAuthorityID,
+		ExactTrustStoreIDs:     plan.ExactTrustStoreIDs, ExactTrustHosts: plan.ExactTrustHosts,
+		AffectedIdentityIDs: plan.AffectedIdentityIDs,
+	}
+	if err := migration.ValidateExecutableRunForStart(plan.Run); err != nil {
+		return plan, errStatus(http.StatusBadRequest, err.Error())
+	}
+	return plan, nil
+}
+
 //trstctl:mutation
 func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
 	var req fleetReissuanceRequest
@@ -177,86 +335,22 @@ func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
 	}
 	binding := crypto.SHA256Hex([]byte("incident-fleet-start\x00" + principalSubject + "\x00" + string(canonical)))
 	idempotencyKey := r.Header.Get("Idempotency-Key")
+	// Preserve the normalized identifiers in the event as well as the
+	// preparation. The request digest above still binds the caller's exact body.
+	req.IssuerID = strings.TrimSpace(req.IssuerID)
+	req.ReplacementAuthorityID = strings.TrimSpace(req.ReplacementAuthorityID)
 	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		req.IssuerID = strings.TrimSpace(req.IssuerID)
-		req.ReplacementAuthorityID = strings.TrimSpace(req.ReplacementAuthorityID)
-		if req.IssuerID == "" || req.ReplacementAuthorityID == "" || len(req.Cohorts) == 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "issuer_id, replacement_authority_id, and at least one cohort are required")
+		prepared, err := a.prepareFleetReissuance(ctx, tenantID, idempotencyKey, req)
+		if err != nil {
+			return 0, nil, err
 		}
-		if req.Mode != migration.IncidentModeLive && req.Mode != migration.IncidentModeGameDay {
-			return 0, nil, errStatus(http.StatusBadRequest, "mode must be live or game_day")
-		}
+		run := prepared.Run
+		exactStoreIDs, exactHostIDs := prepared.ExactTrustStoreIDs, prepared.ExactTrustHosts
+		candidateStoreIDs, candidateHostIDs := prepared.CandidateTrustStoreIDs, prepared.CandidateTrustHosts
+		affectedIDs := prepared.AffectedIdentityIDs
+		impactJSON := prepared.GraphImpact
+		reason := prepared.Reason
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
-			return 0, nil, errStatus(http.StatusForbidden, "forbidden: fleet reissuance that mints replacements requires "+string(authz.CertsIssue))
-		}
-		if req.Mode == migration.IncidentModeGameDay && !principal.Can(authz.IncidentsGameDay, authz.Scope{TenantID: tenantID}) {
-			return 0, nil, errStatus(http.StatusForbidden, "forbidden: incident rehearsal requires "+string(authz.IncidentsGameDay))
-		}
-		if _, err := a.store.GetIssuer(ctx, tenantID, req.IssuerID); err != nil {
-			return 0, nil, err
-		}
-
-		// Freeze both the affected certificate set and H1's exact public-key
-		// relationships before publishing any estate effect. Subject-only
-		// candidates remain visible guidance, but never enter execution authority.
-		g, err := graph.Build(ctx, a.store, tenantID)
-		if err != nil {
-			return 0, nil, err
-		}
-		issuerNodeID := "iss:" + req.IssuerID
-		if _, ok := g.Node(issuerNodeID); !ok {
-			return 0, nil, errStatus(http.StatusNotFound, "graph node not found for compromised issuer")
-		}
-		exactStores, exactHosts := g.TrustStoresForIssuer(issuerNodeID)
-		candidateStores, candidateHosts := g.TrustCandidatesForIssuer(issuerNodeID)
-		if len(exactStores) == 0 || len(exactHosts) == 0 {
-			return 0, nil, errStatus(http.StatusConflict, "incident execution requires at least one exact certificate/SPKI trust-store relationship and host")
-		}
-		reason := strings.TrimSpace(req.Reason)
-		if reason == "" {
-			reason = "verified compromised issuer fleet reissuance"
-		}
-		affected, err := a.store.ListRevocableIdentitiesByIssuer(ctx, tenantID, req.IssuerID)
-		if err != nil {
-			return 0, nil, err
-		}
-		if len(affected) == 0 {
-			return 0, nil, errStatus(http.StatusConflict, "fleet reissuance requires at least one issued, deployed, or renewing identity for the issuer")
-		}
-		impact := g.BlastRadius(issuerNodeID)
-		impactJSON, err := json.Marshal(impact)
-		if err != nil {
-			return 0, nil, err
-		}
-
-		migrationReq := migrationStartRequest{
-			PlanID:         "incident:" + req.IssuerID,
-			NewAuthorityID: req.ReplacementAuthorityID,
-			Waves:          req.Cohorts,
-		}
-		run, err := a.buildMigrationRun(ctx, tenantID, idempotencyKey, migrationReq)
-		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
-		}
-		exactStoreIDs, exactHostIDs := graphNodeIDs(exactStores), graphNodeNames(exactHosts)
-		candidateStoreIDs, candidateHostIDs := graphNodeIDs(candidateStores), graphNodeNames(candidateHosts)
-		affectedIDs := make([]string, 0, len(affected))
-		for _, identity := range affected {
-			affectedIDs = append(affectedIDs, identity.ID)
-		}
-		if err := a.bindIncidentMigrationMembers(ctx, tenantID, exactHostIDs, &run); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
-		}
-		run.Incident = &migration.IncidentPlan{
-			Mode: req.Mode, CompromisedIssuerID: req.IssuerID,
-			ReplacementAuthorityID: req.ReplacementAuthorityID,
-			ExactTrustStoreIDs:     exactStoreIDs, ExactTrustHosts: exactHostIDs,
-			AffectedIdentityIDs: affectedIDs,
-		}
-		if err := migration.ValidateExecutableRunForStart(run); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
-		}
 		planBytes, err := json.Marshal(run)
 		if err != nil {
 			return 0, nil, err

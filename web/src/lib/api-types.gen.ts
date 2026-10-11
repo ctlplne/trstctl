@@ -3832,6 +3832,21 @@ export interface FleetReissuanceHealthGate {
   status: string;
 }
 
+export interface FleetReissuancePreview {
+  affected_identity_ids: string[];
+  blockers: string[];
+  candidate_trust_hosts?: string[];
+  candidate_trust_store_ids?: string[];
+  capability: string;
+  durable_writes: string[];
+  effect_free: boolean;
+  exact_trust_hosts: string[];
+  exact_trust_store_ids: string[];
+  outside_calls: string[];
+  ready: boolean;
+  signer_calls: number;
+}
+
 export interface FleetReissuanceRequest {
   cohorts: MigrationRunStartWave[];
   issuer_id: string;

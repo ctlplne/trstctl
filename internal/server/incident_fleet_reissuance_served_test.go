@@ -81,6 +81,17 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
 
 	gameDayBody := success.startBody(replacementAuthority.ID, migration.IncidentModeGameDay)
+	previewStatus, _ := secretsReq(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs/preview", ordinaryToken, gameDayBody)
+	if previewStatus != http.StatusForbidden {
+		t.Fatalf("game-day preview without dedicated grant = %d, want 403", previewStatus)
+	}
+	previewStatus, previewBody := secretsReq(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs/preview", gameDayToken, gameDayBody)
+	if previewStatus != http.StatusOK || !bytes.Contains(previewBody, []byte(`"ready":false`)) ||
+		!bytes.Contains(previewBody, []byte("not explicitly non-production")) {
+		t.Fatalf("effect-free production game-day preview = %d %s", previewStatus, previewBody)
+	}
 	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
 		"/api/v1/incidents/fleet-reissuance-runs", ordinaryToken, "aud41-game-day-no-grant", gameDayBody)
 	if statusCode != http.StatusForbidden {
@@ -96,6 +107,17 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	// classifications say test. This is not a UI flag: H2 validates the copied
 	// environment inside the aggregate before StartRun can emit any action.
 	success.setEnvironment(t, h, "test")
+	previewStatus, previewBody = secretsReq(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs/preview", gameDayToken, gameDayBody)
+	if previewStatus != http.StatusOK || !bytes.Contains(previewBody, []byte(`"ready":true`)) ||
+		!bytes.Contains(previewBody, []byte(`"effect_free":true`)) {
+		t.Fatalf("effect-free executable game-day preview = %d %s", previewStatus, previewBody)
+	}
+	listStatus, listBody := secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/incidents/fleet-reissuance-runs", gameDayToken, nil)
+	if listStatus != http.StatusOK || !bytes.Contains(listBody, []byte(`"items":[]`)) {
+		t.Fatalf("preview unexpectedly recorded a fleet run = %d %s", listStatus, listBody)
+	}
 	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
 		"/api/v1/incidents/fleet-reissuance-runs", gameDayToken, "aud41-game-day-start", gameDayBody)
 	if statusCode != http.StatusCreated {

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
-import { api, type FleetReissuanceRequest, type FleetReissuanceRun } from "@/lib/api";
+import { api, type FleetReissuancePreview, type FleetReissuanceRequest, type FleetReissuanceRun } from "@/lib/api";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
 
@@ -56,10 +56,18 @@ export function FleetReissuanceConfiguration(props: FleetReissuanceConfiguration
 function FleetReissuanceConfigurationBody({ initialReason, running, onStart }: FleetReissuanceConfigurationProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
+  const [reviewRequest, setReviewRequest] = useState<FleetReissuanceRequest | null>(null);
+  const [latestPreview, setLatestPreview] = useState<FleetReissuancePreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const issuersQuery = useApiQuery(["fleet-reissuance", "issuers"], () => api.issuers(), { retry: false });
   const authoritiesQuery = useApiQuery(["fleet-reissuance", "authorities"], () => api.caAuthorities(), { retry: false });
   const identitiesQuery = useApiQuery(["fleet-reissuance", "identities"], () => api.identities(), { retry: false });
   const agentsQuery = useApiQuery(["fleet-reissuance", "agents"], () => api.agents(), { retry: false });
+  const previewQuery = useApiQuery(["fleet-reissuance", "preview", reviewRequest], () => api.previewFleetReissuance(reviewRequest!), {
+    enabled: step === 2 && reviewRequest !== null,
+    retry: false,
+  });
   const schema = useMemo(
     () =>
       z
@@ -143,8 +151,35 @@ function FleetReissuanceConfigurationBody({ initialReason, running, onStart }: F
 
   async function advance() {
     const fields = step === 0 ? (["issuer_id", "replacement_authority_id", "mode", "reason", "rollback_ref"] as const) : (["cohorts"] as const);
-    if (await trigger(fields)) setStep((current) => Math.min(2, current + 1));
+    if (await trigger(fields)) {
+      if (step === 1) {
+        setReviewRequest(getValues());
+        setLatestPreview(null);
+        setPreviewError(null);
+      }
+      setStep((current) => Math.min(2, current + 1));
+    }
   }
+
+  async function startReviewed(request: FleetReissuanceRequest) {
+    if (verifying) return;
+    setVerifying(true);
+    setPreviewError(null);
+    try {
+      // Re-read at action time; the graph or target binding may have changed
+      // since the review was displayed. Start repeats the same gate atomically.
+      const current = await api.previewFleetReissuance(request);
+      setLatestPreview(current);
+      if (current.ready) await onStart(request);
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  const reviewedPlan = latestPreview ?? previewQuery.data;
+  const reviewReady = step === 2 && !previewQuery.loading && !previewQuery.error && !previewError && reviewedPlan?.ready === true;
 
   function addMember(cohortIndex: number) {
     const members = getValues(`cohorts.${cohortIndex}.members`) ?? [];
@@ -388,13 +423,35 @@ function FleetReissuanceConfigurationBody({ initialReason, running, onStart }: F
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">{t("incidents.fleet.reviewWarning")}</p>
+                {previewQuery.loading ? <LoadingState>{t("incidents.fleet.previewChecking")}</LoadingState> : null}
+                {previewQuery.error || previewError ? (
+                  <ErrorState title={t("incidents.fleet.previewUnavailable")}>{previewError ?? previewQuery.error}</ErrorState>
+                ) : null}
+                {reviewedPlan && !reviewedPlan.ready ? (
+                  <UnavailableState title={t("incidents.fleet.previewBlocked")}>
+                    <ul className="list-disc ps-5">
+                      {reviewedPlan.blockers.map((blocker) => (
+                        <li key={blocker}>{blocker}</li>
+                      ))}
+                    </ul>
+                  </UnavailableState>
+                ) : null}
+                {reviewedPlan?.ready ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t("incidents.fleet.previewReady", {
+                      stores: reviewedPlan.exact_trust_store_ids.length,
+                      hosts: reviewedPlan.exact_trust_hosts.length,
+                      identities: reviewedPlan.affected_identity_ids.length,
+                    })}
+                  </p>
+                ) : null}
                 <details>
                   <summary className="cursor-pointer text-sm font-medium">{t("incidents.fleet.exactRequest")}</summary>
                   <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap rounded-control bg-muted p-3 font-mono text-caption">
                     {JSON.stringify(getValues(), null, 2)}
                   </pre>
                 </details>
-                <FleetStartAction running={running} onStart={handleSubmit((request) => onStart(request))} />
+                <FleetStartAction running={running || verifying} reviewReady={reviewReady} onStart={handleSubmit(startReviewed)} />
               </CardContent>
             </Card>
           </div>
@@ -404,13 +461,13 @@ function FleetReissuanceConfigurationBody({ initialReason, running, onStart }: F
   );
 }
 
-export function FleetStartAction({ running, onStart }: { running: boolean; onStart: () => void }) {
+export function FleetStartAction({ running, onStart, reviewReady = true }: { running: boolean; onStart: () => void; reviewReady?: boolean }) {
   const { t } = useTranslation();
   const action = useCapabilityExecution("F32", "startFleetReissuance");
   const explanation = capabilityExecutionReason(action, t);
   return (
     <div className="grid gap-2">
-      <Button type="button" onClick={onStart} disabled={running || !action.runnable} title={!action.runnable ? explanation : undefined}>
+      <Button type="button" onClick={onStart} disabled={running || !action.runnable || !reviewReady} title={!action.runnable ? explanation : undefined}>
         <Play className="h-4 w-4" aria-hidden="true" />
         {running ? translateNow("source.starting.82b93630a9") : translateNow("source.start.fleet.run.140963492c")}
       </Button>

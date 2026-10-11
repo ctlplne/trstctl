@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     remediationOwnerActions: vi.fn(),
     acceptOwnerRemediationAction: vi.fn(),
     fleetReissuanceRuns: vi.fn(),
+    previewFleetReissuance: vi.fn(),
     startFleetReissuance: vi.fn(),
     pauseFleetReissuance: vi.fn(),
     resumeFleetReissuance: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock("@/lib/api", async (orig) => {
       remediationOwnerActions: apiMock.remediationOwnerActions,
       acceptOwnerRemediationAction: apiMock.acceptOwnerRemediationAction,
       fleetReissuanceRuns: apiMock.fleetReissuanceRuns,
+      previewFleetReissuance: apiMock.previewFleetReissuance,
       startFleetReissuance: apiMock.startFleetReissuance,
       pauseFleetReissuance: apiMock.pauseFleetReissuance,
       resumeFleetReissuance: apiMock.resumeFleetReissuance,
@@ -489,6 +491,20 @@ describe("incident response served execution surface", () => {
     apiMock.acceptOwnerRemediationAction.mockReset().mockResolvedValue(ownerRemediationRun);
     apiMock.dispatchResponseIntegrations.mockReset().mockResolvedValue(responseDispatch);
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
+    apiMock.previewFleetReissuance.mockReset().mockResolvedValue({
+      capability: "F32",
+      ready: true,
+      effect_free: true,
+      blockers: [],
+      exact_trust_store_ids: ["trust-store-1"],
+      exact_trust_hosts: ["host-1"],
+      candidate_trust_store_ids: [],
+      candidate_trust_hosts: [],
+      affected_identity_ids: ["11111111-1111-1111-1111-111111111111"],
+      outside_calls: [],
+      signer_calls: 0,
+      durable_writes: [],
+    });
     apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
     apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
     apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "running", phase: "batch_resumed" });
@@ -828,7 +844,9 @@ describe("incident response served execution surface", () => {
       },
     ];
     await user.click(fleetWorkspace.getByRole("button", { name: "Review fleet run" }));
+    await waitFor(() => expect(fleetWorkspace.getByRole("button", { name: "Start fleet run" })).toBeEnabled());
     await user.click(fleetWorkspace.getByRole("button", { name: "Start fleet run" }));
+    expect(apiMock.previewFleetReissuance).toHaveBeenCalledWith(expect.objectContaining({ issuer_id: "77777777-7777-7777-7777-777777777777" }));
     await waitFor(() =>
       expect(apiMock.startFleetReissuance).toHaveBeenCalledWith(
         expect.objectContaining({

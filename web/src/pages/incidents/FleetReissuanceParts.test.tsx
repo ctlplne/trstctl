@@ -78,6 +78,18 @@ describe("fleet re-issuance runtime preflight", () => {
 
 describe("fleet re-issuance configuration", () => {
   it("turns served prerequisite rosters into a reviewed structured request", async () => {
+    vi.spyOn(api, "previewFleetReissuance").mockResolvedValue({
+      capability: "F32",
+      ready: true,
+      effect_free: true,
+      blockers: [],
+      exact_trust_store_ids: ["store-a"],
+      exact_trust_hosts: ["payments-host"],
+      affected_identity_ids: ["identity-a"],
+      outside_calls: [],
+      signer_calls: 0,
+      durable_writes: [],
+    });
     vi.spyOn(api, "issuers").mockResolvedValue([
       { id: "issuer-old", kind: "x509_ca", name: "Compromised public CA" },
       { id: "issuer-ssh", kind: "ssh_ca", name: "SSH CA" },
@@ -153,6 +165,7 @@ describe("fleet re-issuance configuration", () => {
     expect(await screen.findByText("Compromised public CA")).toBeInTheDocument();
     expect(screen.getByText("Clean replacement CA")).toBeInTheDocument();
     expect(screen.getByText("payments.example → payments-host")).toBeInTheDocument();
+    expect(await screen.findByText(/Ready to start: 1 exact trust stores/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start fleet run" }));
 
     await waitFor(() => expect(onStart).toHaveBeenCalledOnce());
@@ -170,6 +183,105 @@ describe("fleet re-issuance configuration", () => {
         ],
       }),
     );
+  });
+
+  it("keeps Start disabled when the served exact plan has no H1 trust host", async () => {
+    const preview = vi.spyOn(api, "previewFleetReissuance").mockResolvedValue({
+      capability: "F32",
+      ready: false,
+      effect_free: true,
+      blockers: ["incident execution requires at least one exact certificate/SPKI trust-store relationship and host"],
+      exact_trust_store_ids: [],
+      exact_trust_hosts: [],
+      affected_identity_ids: [],
+      outside_calls: [],
+      signer_calls: 0,
+      durable_writes: [],
+    });
+    vi.spyOn(api, "issuers").mockResolvedValue([{ id: "issuer-old", kind: "x509_ca", name: "Compromised CA" }]);
+    vi.spyOn(api, "caAuthorities").mockResolvedValue({
+      items: [
+        {
+          id: "authority-new",
+          tenant_id: "tenant-a",
+          common_name: "Clean CA",
+          kind: "intermediate",
+          status: "active",
+          max_path_len: 0,
+          serial: "02",
+          signer_handle: "signer:new",
+          certificate_pem: "public certificate",
+          created_at: "2026-09-04T00:00:00Z",
+        },
+      ],
+    });
+    vi.spyOn(api, "identities").mockResolvedValue([
+      {
+        id: "identity-a",
+        kind: "x509_certificate",
+        name: "edge.demo",
+        owner_id: "owner-a",
+        issuer_id: "issuer-old",
+        status: "issued",
+        attributes: { environment: "production" },
+      },
+    ]);
+    vi.spyOn(api, "agents").mockResolvedValue([
+      {
+        id: "agent-a",
+        name: "edge-host",
+        status: "active",
+        roles: ["host"],
+        discovery_capabilities: [],
+        inventory_report_path: "",
+        relay_capabilities: [],
+        role_source: "certificate",
+        presence: { state: "online", online: true, detail: "fresh", evaluated_at: "2026-09-04T00:00:00Z" },
+        workload_api: { state: "unreported", detail: "not configured", svids_issued: 0 },
+        enrollment_proxy: {
+          state: "unreported",
+          detail: "not configured",
+          forwarded_requests: 0,
+          healthy_upstreams: 0,
+          refused_requests: 0,
+          reported_at: "2026-09-04T00:00:00Z",
+          unhealthy_upstreams: 0,
+          unknown_upstreams: 0,
+          upstream_failures: 0,
+        },
+      },
+    ]);
+    const onStart = vi.fn();
+    render(
+      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+        <AppQueryProvider>
+          <CapabilityFixtureProvider view={runtime(fleetCapability(true))}>
+            <FleetReissuanceConfiguration running={false} onStart={onStart} />
+          </CapabilityFixtureProvider>
+        </AppQueryProvider>
+      </IntlProvider>,
+    );
+    const user = userEvent.setup();
+    await screen.findByRole("option", { name: /Compromised CA/ });
+    await user.selectOptions(screen.getByRole("combobox", { name: "Compromised issuer" }), "issuer-old");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Replacement CA authority" }), "authority-new");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Mode" }), "game_day");
+    await user.click(screen.getByRole("button", { name: "Build migration waves" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Identity" }), "identity-a");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Agent" }), "agent-a");
+    await user.click(screen.getByRole("button", { name: "Review fleet run" }));
+    expect(await screen.findByText("Fix these fleet blockers before starting")).toBeInTheDocument();
+    expect(screen.getByText(/exact certificate\/SPKI trust-store relationship/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start fleet run" })).toBeDisabled();
+    expect(preview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issuer_id: "issuer-old",
+        replacement_authority_id: "authority-new",
+        mode: "game_day",
+        cohorts: [expect.objectContaining({ members: [expect.objectContaining({ identity_id: "identity-a", agent_id: "agent-a" })] })],
+      }),
+    );
+    expect(onStart).not.toHaveBeenCalled();
   });
 
   it("keeps the workflow on prerequisite selection when required rosters are empty", async () => {

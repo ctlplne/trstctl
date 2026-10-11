@@ -1418,10 +1418,26 @@ func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 }
 
 func TestFleetReissuanceCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) {
+	var previewCap capture
+	previewSrv := mockServer(t, 200, `{"ready":false,"effect_free":true,"blockers":["missing exact H1 trust relationship"]}`, &previewCap)
+	startBody := `{"issuer_id":"issuer-1","replacement_authority_id":"ca-2","mode":"live","reason":"compromised intermediate","cohorts":[{"id":"canary","ordinal":1,"members":[{"identity_id":"identity-1","agent_id":"agent-1","trust_anchor_path":"/etc/trstctl/next-root.pem"}]}]}`
+	code, _, _ := run(t, []string{"incidents", "fleet-reissuance", "preview", "-f", "-"}, cli.Env{Server: previewSrv.URL, HTTPClient: previewSrv.Client()}, startBody)
+	if code != 0 {
+		t.Fatalf("preview exit = %d", code)
+	}
+	if previewCap.Method != "POST" || previewCap.Path != "/api/v1/incidents/fleet-reissuance-runs/preview" {
+		t.Errorf("preview request = %s %s", previewCap.Method, previewCap.Path)
+	}
+	if strings.TrimSpace(string(previewCap.Body)) != startBody {
+		t.Errorf("preview body = %q, want %q", previewCap.Body, startBody)
+	}
+	if previewCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free fleet reissuance preview must not send an Idempotency-Key")
+	}
+
 	var startCap capture
 	startSrv := mockServer(t, 201, `{"id":"fleet-1","status":"executed"}`, &startCap)
-	startBody := `{"issuer_id":"issuer-1","replacement_authority_id":"ca-2","mode":"live","reason":"compromised intermediate","cohorts":[{"id":"canary","ordinal":1,"members":[{"identity_id":"identity-1","agent_id":"agent-1","trust_anchor_path":"/etc/trstctl/next-root.pem"}]}]}`
-	code, _, _ := run(t, []string{"incidents", "fleet-reissuance", "start", "-f", "-"}, cli.Env{Server: startSrv.URL, HTTPClient: startSrv.Client()}, startBody)
+	code, _, _ = run(t, []string{"incidents", "fleet-reissuance", "start", "-f", "-"}, cli.Env{Server: startSrv.URL, HTTPClient: startSrv.Client()}, startBody)
 	if code != 0 {
 		t.Fatalf("start exit = %d", code)
 	}

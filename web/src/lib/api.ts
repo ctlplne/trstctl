@@ -269,6 +269,7 @@ import type {
   ExternalCAList,
   FleetReissuanceActionRequest,
   FleetReissuanceEvidence,
+  FleetReissuancePreview,
   FleetReissuanceRequest,
   FleetReissuanceRun,
   FleetReissuanceRunList,
@@ -1024,6 +1025,7 @@ export type {
   ExternalCAIssueRequest,
   FleetReissuanceActionRequest,
   FleetReissuanceEvidence,
+  FleetReissuancePreview,
   FleetReissuanceRequest,
   FleetReissuanceRun,
   FleetReissuanceRunList,
@@ -1774,6 +1776,7 @@ export interface Api {
   getRemediationPlaybookRun(id: string): Promise<RemediationPlaybookRun>;
   ownerRemediationActions(options?: { ownerId?: string }): Promise<OwnerRemediationQueue>;
   acceptOwnerRemediationAction(id: string, input: OwnerRemediationAcceptRequest): Promise<OwnerRemediationRun>;
+  previewFleetReissuance(input: FleetReissuanceRequest): Promise<FleetReissuancePreview>;
   startFleetReissuance(input: FleetReissuanceRequest): Promise<FleetReissuanceRun>;
   fleetReissuanceRuns(options?: { limit?: number; cursor?: string; issuerId?: string }): Promise<FleetReissuanceRunList>;
   getFleetReissuanceRun(id: string): Promise<FleetReissuanceRun>;
@@ -2414,6 +2417,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   ownerRemediationActions: (options) =>
     req<OwnerRemediationQueue>(`/api/v1/remediation/owner-actions${options?.ownerId ? `?owner_id=${encodeURIComponent(options.ownerId)}` : ""}`),
   acceptOwnerRemediationAction: (id, input) => mutate<OwnerRemediationRun>("POST", `/api/v1/remediation/owner-actions/${encodeURIComponent(id)}/accept`, input),
+  previewFleetReissuance: (input) => postRead<FleetReissuancePreview>("/api/v1/incidents/fleet-reissuance-runs/preview", input),
   startFleetReissuance: (input) => mutate<FleetReissuanceRun>("POST", "/api/v1/incidents/fleet-reissuance-runs", input),
   fleetReissuanceRuns: (options) =>
     req<FleetReissuanceRunList>(`/api/v1/incidents/fleet-reissuance-runs${pageQueryString(options, options?.issuerId, "issuer_id")}`),

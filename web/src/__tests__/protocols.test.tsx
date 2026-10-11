@@ -2119,15 +2119,15 @@ describe("protocol surface", () => {
       policy: { ...mdm.policies[0], rotation_version: 3, last_rotated_at: "2026-06-26T14:05:00Z" },
     });
 
-    await user.click(screen.getByRole("button", { name: "Rotate challenge for intune-mobile" }));
-    let dialog = screen.getByRole("dialog", { name: "Rotate SCEP challenge for intune-mobile?" });
+    await user.click(await screen.findByRole("button", { name: "Record challenge rotation for intune-mobile" }));
+    let dialog = screen.getByRole("dialog", { name: "Record SCEP challenge rotation for intune-mobile?" });
     expect(await within(dialog).findByText("Rotation version 2 will become version 3.")).toBeInTheDocument();
     expect(within(dialog).getByText(/This check made no writes/)).toBeInTheDocument();
     expect(within(dialog).getByText("Retry safely if the request is interrupted.")).toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", { name: "Rotate challenge" }));
+    await user.click(within(dialog).getByRole("button", { name: "Record rotation" }));
     expect(await within(dialog).findByText("rotation worker offline")).toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", { name: "Rotate challenge" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Rotate SCEP challenge/ })).not.toBeInTheDocument());
+    await user.click(within(dialog).getByRole("button", { name: "Record rotation" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Record SCEP challenge rotation/ })).not.toBeInTheDocument());
     expect(screen.getByText("Rotation version 3")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Delete SCEP policy intune-mobile" }));

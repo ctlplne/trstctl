@@ -15790,6 +15790,84 @@
         ],
         "type": "object"
       },
+      "FleetReissuancePreview": {
+        "properties": {
+          "affected_identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "candidate_trust_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "candidate_trust_store_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "durable_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "exact_trust_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exact_trust_store_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "outside_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "signer_calls": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "blockers",
+          "exact_trust_store_ids",
+          "exact_trust_hosts",
+          "affected_identity_ids",
+          "outside_calls",
+          "signer_calls",
+          "durable_writes"
+        ],
+        "type": "object"
+      },
       "FleetReissuanceRequest": {
         "properties": {
           "cohorts": {
@@ -19243,6 +19321,7 @@
       "MDMSCEPPolicyRequest": {
         "properties": {
           "challenge_mode": {
+            "description": "Only intune-jws with the intune provider can be enabled on the served SCEP gate. Other modes may be staged disabled; enabled previews and writes are blocked.",
             "enum": [
               "intune-jws",
               "hmac-dynamic"
@@ -48470,6 +48549,64 @@
         ],
         "summary": "Run exact-H1, signed-gate compromised-issuer H2 cohorts",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs/preview": {
+      "post": {
+        "operationId": "previewFleetReissuance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetReissuanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuancePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review exact-H1 trust and signed-gate H2 cohort prerequisites without effects",
+        "x-trstctl-permission": "incidents:write",
+        "x-trstctl-read-only": true
       }
     },
     "/api/v1/incidents/fleet-reissuance-runs/{id}": {

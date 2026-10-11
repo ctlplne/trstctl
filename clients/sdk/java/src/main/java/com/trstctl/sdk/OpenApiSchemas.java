@@ -375,6 +375,7 @@ public final class OpenApiSchemas {
       "FleetReissuanceBatch",
       "FleetReissuanceEvidence",
       "FleetReissuanceHealthGate",
+      "FleetReissuancePreview",
       "FleetReissuanceRequest",
       "FleetReissuanceRun",
       "FleetReissuanceRunList",

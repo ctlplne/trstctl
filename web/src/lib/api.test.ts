@@ -603,6 +603,9 @@ describe("exported API surface census", () => {
       "/api/v1/migrations/assess",
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
+      // F32: reads the exact H1/H2 incident scope and game-day boundaries
+      // without recording a run, queuing a cohort, or contacting the signer.
+      "/api/v1/incidents/fleet-reissuance-runs/preview",
       // Endpoint lifecycle preview: computes the exact plan (issuer, destination,
       // custody, DNS-01 coverage, owner readiness) and fails closed on missing
       // prerequisites; it queues, issues, and persists nothing (qa-repair g250).
