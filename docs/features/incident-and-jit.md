@@ -118,6 +118,11 @@ starts. A failed trust/live gate automatically restores only the current unrevok
 and removes its replacement trust. Completed earlier cohorts are not rolled back after
 their predecessors have been revoked. Every action is idempotent, journaled in the same
 transaction as the H2 event projection, and executed in the bounded fleet lane.
+The predecessor revocation gate publishes the signed CRL from that predecessor's
+exact issuing authority before it reports success. After a crash between the
+revocation event and CRL publication, the next startup or freshness sweep detects
+the newer revoked serial and republishes the CRL; operators should still verify
+the signed CRL or OCSP answer with a stock client.
 
 **Status:** compromised-issuer fleet re-issuance is served through
 `POST /api/v1/incidents/fleet-reissuance-runs`, with list/get evidence at
@@ -138,6 +143,10 @@ offline. Pause/resume and restart retain the same H2 cursor and immutable bindin
 legacy `POST /api/v1/incidents/executions` mutation now returns conflict with this H2
 route as guidance; historical execution reads remain available. CLI parity is
 `trstctl-cli incidents fleet-reissuance preview|start|list|get|pause|resume|rollback|evidence`.
+Incident execution and fleet run lists return newest-created records first. Their
+opaque cursors preserve that order across pages even when an older run changes
+status. The console's situation summary compares the latest records from both
+lists before offering recovery guidance.
 
 `POST /api/v1/incidents/fleet-reissuance-runs/preview` accepts the exact Start
 body without an idempotency key. It checks the current issuer, exact certificate/SPKI

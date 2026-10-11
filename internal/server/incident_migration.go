@@ -57,6 +57,13 @@ func (d *issuanceDispatcher) handleIncidentMigrationRevoke(ctx context.Context, 
 		cert.Fingerprint, cert.Serial, intent.PredecessorCAID, reason, reasonCode); err != nil {
 		return err
 	}
+	// The predecessor's issuing authority owns its CRL. Publish that exact
+	// authority before acknowledging the revocation gate; a platform CRL cannot
+	// carry an intermediate CA's serial. The worker retries this publication
+	// after a crash using the same event ID and immutable predecessor binding.
+	if err := d.publishPredecessorCRL(ctx, m.TenantID, intent.PredecessorCAID); err != nil {
+		return err
+	}
 	updated, err := d.orch.UpdateMigrationRun(ctx, m.TenantID, intent.RunID,
 		orchestrator.MigrationEventID(m.TenantID, intent.RunID, "revocation-receipt:"+m.IdempotencyKey),
 		func(current migration.Run) (migration.Run, []migration.Action, error) {
@@ -73,15 +80,18 @@ func (d *issuanceDispatcher) handleIncidentMigrationRevoke(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	// Republish the CRL. Recording certificate.revoked updates the read model,
-	// but a relying party only learns about it from a freshly published CRL (or
-	// an OCSP answer derived from the same projection). Without this the
-	// scheduled sweep is the only thing that eventually republishes, so a
-	// KEY-COMPROMISE revocation — the most urgent kind there is, and the reason
-	// this path exists — stayed invisible to verifiers for up to a full CRL
-	// period. Every other revocation path already publishes here.
-	if err := d.publishTenantCRL(ctx, m.TenantID); err != nil {
-		return err
-	}
 	return syncIncidentMigrationState(ctx, d.store, d.orch, d.audit, m.TenantID, updated)
+}
+
+func (d *issuanceDispatcher) publishPredecessorCRL(ctx context.Context, tenantID, caID string) error {
+	if caID == IssuingCAID() {
+		if d.publishCRL == nil {
+			return errors.New("server: predecessor platform CA CRL publication is unavailable")
+		}
+		return d.publishCRL(ctx, tenantID)
+	}
+	if d.publishAuthorityCRL == nil {
+		return errors.New("server: predecessor managed CA CRL publication is unavailable")
+	}
+	return d.publishAuthorityCRL(ctx, tenantID, caID)
 }

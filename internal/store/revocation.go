@@ -377,9 +377,10 @@ func (s *Store) TenantsWithIssuedCerts(ctx context.Context, caID string) ([]stri
 	return out, rows.Err()
 }
 
-// CRLDueForRegeneration reports whether the CA's latest published CRL is missing
-// or will expire within lead (so the scheduler regenerates ahead of nextUpdate,
-// keeping the served CRL fresh). It is tenant-scoped under RLS (AN-1).
+// CRLDueForRegeneration reports whether the CA's latest published CRL is missing,
+// near expiry, or predates a projected revocation. The last case repairs a crash
+// between certificate.revoked and CRL publication on startup or the next sweep.
+// It is tenant-scoped under RLS (AN-1) and uses the revoked-serial index.
 func (s *Store) CRLDueForRegeneration(ctx context.Context, tenantID, caID string, now time.Time, lead time.Duration) (bool, error) {
 	crl, found, err := s.LatestCRL(ctx, tenantID, caID)
 	if err != nil {
@@ -388,7 +389,17 @@ func (s *Store) CRLDueForRegeneration(ctx context.Context, tenantID, caID string
 	if !found {
 		return true, nil
 	}
-	return !crl.NextUpdate.After(now.Add(lead)), nil
+	if !crl.NextUpdate.After(now.Add(lead)) {
+		return true, nil
+	}
+	var stale bool
+	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (
+		  SELECT 1 FROM ca_issued_certs
+		   WHERE tenant_id = $1 AND ca_id = $2 AND revoked_at > $3
+		)`, tenantID, caID, crl.ThisUpdate).Scan(&stale)
+	})
+	return stale, err
 }
 
 // LatestCRL returns the most recently published CRL for a CA and whether one

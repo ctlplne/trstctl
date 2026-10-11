@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -167,6 +168,14 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	assertIncidentTerminalAUD41(t, h, gameDayToken, rehearsed.ID, success.identityID, "executed")
 	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), success.predecessor.Serial); err != nil || !found || !ledger.Revoked() {
 		t.Fatalf("verified predecessor was not revoked in responder ledger = %+v found=%v err=%v", ledger, found, err)
+	}
+	crl, found, err := h.store.LatestCRL(ctx, h.tenant, IssuingCAID())
+	if err != nil || !found {
+		t.Fatalf("predecessor CA CRL publication = found %v err %v", found, err)
+	}
+	parsedCRL, err := crypto.ParseCRL(crl.DER, h.srv.revoc.caCertDER)
+	if err != nil || !protoContains(parsedCRL.RevokedSerials, success.predecessor.Serial) {
+		t.Fatalf("signed predecessor CA CRL serials = %v err %v, want %s", parsedCRL.RevokedSerials, err, success.predecessor.Serial)
 	}
 
 	// The second, live run deliberately probes a static listener that keeps the
