@@ -83,6 +83,7 @@ func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 		{Type: eventSSHCertRevoked, TenantID: "tenant-a", Data: []byte(`{"serial":42}`)},
 		{Type: "unrelated.event", TenantID: "tenant-b", Data: []byte(`{}`)},
 		{Type: eventSSHCertRevoked, TenantID: "tenant-a", Data: []byte(`{"key_id":"retired-host"}`)},
+		{Type: eventSSHCertRevoked, TenantID: "tenant-b", Data: []byte(`{"serial":`)},
 	} {
 		if _, err := log.Append(ctx, event); err != nil {
 			t.Fatal(err)
@@ -96,7 +97,8 @@ func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 		t.Fatalf("partial cursor=%d throttle=%s, want 2 and immediate retry", p.applied, p.syncedFrom)
 	}
 	// Simulate a process loss before the next page: the in-memory cursor is
-	// gone, so the replacement must rebuild all three source events.
+	// gone, so the replacement must rebuild the tenant's revocations through
+	// all four source positions, without parsing the other tenant's payload.
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +114,7 @@ func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 	if err := restored.restoreRevocations(ctx, reopened); err != nil {
 		t.Fatal(err)
 	}
-	if restored.KRLVersion() != 2 || restored.RevokedCount() != 2 || restored.applied != 3 {
+	if restored.KRLVersion() != 2 || restored.RevokedCount() != 2 || restored.applied != 4 {
 		t.Fatalf("cold restore cursor=%d version=%d count=%d", restored.applied, restored.KRLVersion(), restored.RevokedCount())
 	}
 	for _, event := range []events.Event{
@@ -131,7 +133,7 @@ func TestSSHProtocolBoundsRequestCatchUpAndRestoresAfterRestart(t *testing.T) {
 	if err := restored.syncRevocationsWithLimit(ctx, false, 2); err != nil {
 		t.Fatalf("second later page: %v", err)
 	}
-	if restored.applied != 6 || restored.KRLVersion() != 3 || restored.RevokedCount() != 3 {
+	if restored.applied != 7 || restored.KRLVersion() != 3 || restored.RevokedCount() != 3 {
 		t.Fatalf("complete cursor=%d version=%d count=%d", restored.applied, restored.KRLVersion(), restored.RevokedCount())
 	}
 }

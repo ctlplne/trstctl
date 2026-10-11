@@ -264,12 +264,12 @@ func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) e
 	return p.syncRevocationsWithLimit(ctx, true, 0)
 }
 
-// syncRevocations applies every tenant ssh.cert.revoked event appended since the
-// last one this process read, whichever replica appended it. Catch-ups are
+// syncRevocations applies tenant ssh.cert.revoked events appended since the
+// last source cut this process read, whichever replica appended them. Catch-ups are
 // serialized and coalesced. Unless force is set (startup or after a local
 // revocation), a caller skips within sshKRLSyncInterval. Outside that window,
-// an unchanged generation/head/retained-state snapshot skips the expensive
-// replay. Every changed snapshot still passes the full event-history floor.
+// an unchanged generation/head/retained-state snapshot skips the indexed read.
+// Every changed snapshot still passes the full event-history safety floor.
 func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
 	return p.syncRevocationsWithLimit(ctx, force, sshKRLRequestReplayLimit)
 }
@@ -321,7 +321,8 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 		through = p.applied + limit
 	}
 	p.replayCount++
-	if err := p.log.ReplayThrough(ctx, p.applied+1, through, candidate.applyRevocationEvent); err != nil {
+	if err := p.log.ReplayTenantTypesThrough(ctx, p.tenantID, p.applied+1, through,
+		[]string{eventSSHCertRevoked}, candidate.applyRevocationEvent); err != nil {
 		return fmt.Errorf("server: replay SSH revocations: %w", err)
 	}
 	after, err := p.log.Snapshot(ctx)
@@ -352,8 +353,8 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	return nil
 }
 
-// applyRevocationEvent applies one event under syncMu. Every event advances the
-// read position; only this tenant's ssh.cert.revoked events change the KRL.
+// applyRevocationEvent applies one selected event under syncMu. The caller
+// advances the source cursor to the verified cut, including unrelated gaps.
 func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 	if event.Type == eventSSHCertRevoked && event.TenantID == p.tenantID {
 		var req sshRevokeRequest
