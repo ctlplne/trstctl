@@ -130,7 +130,9 @@ signed evidence export at
 public `trust_anchor_path`. `live` is the production response. `game_day` additionally
 requires `incidents:game-day`, and H2 refuses any member whose frozen owner/target
 environment is not explicitly non-production. It is therefore a safety boundary, not a
-display label. Terminal success or rollback is mirrored to
+display label. `non_production` is accepted as an explicit non-production
+environment spelling for both the accountable owner and target; `production` still
+fails the game-day gate. Terminal success or rollback is mirrored to
 `incident.fleet_reissuance.recorded` only with a compact-JWS audit export that verifies
 offline. Pause/resume and restart retain the same H2 cursor and immutable bindings. The
 legacy `POST /api/v1/incidents/executions` mutation now returns conflict with this H2

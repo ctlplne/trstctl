@@ -398,6 +398,11 @@ func TestGameDayRunStructurallyRefusesProductionBindingsAUD41(t *testing.T) {
 	if err := migration.ValidateExecutableRunForStart(run); err != nil {
 		t.Fatalf("explicit test cohort was refused: %v", err)
 	}
+	binding.Environment = "non_production"
+	run.Waves[0].Members[0].Binding = binding
+	if err := migration.ValidateExecutableRunForStart(run); err != nil {
+		t.Fatalf("explicit non_production cohort was refused: %v", err)
+	}
 }
 
 func completeBindingAUD40(targetID, predecessorID string) migration.MemberBinding {

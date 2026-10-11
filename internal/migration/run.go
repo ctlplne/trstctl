@@ -855,7 +855,7 @@ func successorWorkWasPublished(wave RunWave) bool {
 
 func nonProductionEnvironment(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "test", "testing", "qa", "quality-assurance", "staging", "stage", "development", "dev", "sandbox", "game-day", "game_day", "non-production", "nonproduction":
+	case "test", "testing", "qa", "quality-assurance", "staging", "stage", "development", "dev", "sandbox", "game-day", "game_day", "non-production", "non_production", "nonproduction":
 		return true
 	default:
 		return false

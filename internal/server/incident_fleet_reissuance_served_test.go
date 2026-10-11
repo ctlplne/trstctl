@@ -104,9 +104,9 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	}
 
 	// The same frozen member is safe only after BOTH ownership and target
-	// classifications say test. This is not a UI flag: H2 validates the copied
+	// classifications say non_production. This is not a UI flag: H2 validates the copied
 	// environment inside the aggregate before StartRun can emit any action.
-	success.setEnvironment(t, h, "test")
+	success.setEnvironment(t, h, "non_production")
 	previewStatus, previewBody = secretsReq(t, h.servedHarness, http.MethodPost,
 		"/api/v1/incidents/fleet-reissuance-runs/preview", gameDayToken, gameDayBody)
 	if previewStatus != http.StatusOK || !bytes.Contains(previewBody, []byte(`"ready":true`)) ||
