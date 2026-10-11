@@ -321,8 +321,11 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 		through = p.applied + limit
 	}
 	p.replayCount++
+	// The indexed selector must include every event applyRevocationEvent can
+	// use to change the KRL. Omitting a type makes a durable PAM revocation
+	// invisible even though the decoder below knows how to apply it.
 	if err := p.log.ReplayTenantTypesThrough(ctx, p.tenantID, p.applied+1, through,
-		[]string{eventSSHCertRevoked}, candidate.applyRevocationEvent); err != nil {
+		[]string{eventSSHCertRevoked, projections.EventPAMSessionRevocationRequested, projections.EventPAMSSHSigningRecoveryRequested}, candidate.applyRevocationEvent); err != nil {
 		return fmt.Errorf("server: replay SSH revocations: %w", err)
 	}
 	after, err := p.log.Snapshot(ctx)
@@ -367,7 +370,7 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 		}
 		p.Revoke(req.Serial, req.KeyID)
 	}
-	if event.Type == "pam.session.revocation_requested" && event.TenantID == p.tenantID {
+	if event.Type == projections.EventPAMSessionRevocationRequested && event.TenantID == p.tenantID {
 		var req struct {
 			ID     string `json:"id"`
 			Serial uint64 `json:"ssh_serial"`

@@ -75,6 +75,7 @@ func TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree(t *test
 		BulkImport        struct {
 			Available bool   `json:"available"`
 			Reason    string `json:"reason"`
+			SafePath  string `json:"safe_path"`
 		} `json:"bulk_import"`
 	}
 	if err := json.Unmarshal(body, &plan); err != nil {
@@ -98,7 +99,8 @@ func TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree(t *test
 	}
 	if len(plan.Blockers) != 0 || len(plan.PreviewWrites) != 0 || len(plan.PreviewExternalEffects) != 0 ||
 		len(plan.RecoverySteps) == 0 || len(plan.VerificationSteps) == 0 || plan.DataHandling == "" ||
-		plan.BulkImport.Available || plan.BulkImport.Reason == "" {
+		!plan.BulkImport.Available || plan.BulkImport.Reason == "" || plan.BulkImport.SafePath == "" ||
+		strings.Contains(plan.BulkImport.SafePath, userValue) || strings.Contains(plan.BulkImport.SafePath, passwordValue) {
 		t.Fatalf("preview did not publish the full safe boundary: %+v", plan)
 	}
 	after, err := h.store.GetSecret(t.Context(), h.tenant, "app/db/dsn")
