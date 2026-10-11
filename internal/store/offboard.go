@@ -233,6 +233,7 @@ var TenantScopedTables = []string{
 	"honey_tokens",
 	"machine_sessions",
 	"machine_auth_method_overrides",
+	"ca_cross_sign_receipts",
 	"ca_authorities",
 	"ca_issued_certs",
 	"ca_crls",
