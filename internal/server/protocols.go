@@ -106,6 +106,10 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 }
 
 func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
+	return p.issueProtocolLeafWithOriginProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, p.defaultProfile)
+}
+
+func (p *protocolIssuer) issueProtocolLeafWithOriginProfile(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile string) ([]byte, error) {
 	var work tenancy.ServiceWork
 	if p.store != nil {
 		work = p.store.BeginTenantService
@@ -119,17 +123,21 @@ func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenant
 		return nil, err
 	}
 	if p.tenantCrypto == nil {
-		return p.issueProtocolLeaf(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
+		return p.issueProtocolLeafForProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
 	}
 	var leaf []byte
 	err = withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
-		leaf, err = p.issueProtocolLeaf(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
+		leaf, err = p.issueProtocolLeafForProfile(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
 		return err
 	})
 	return leaf, err
 }
 
 func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
+	return p.issueProtocolLeafForProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, p.defaultProfile)
+}
+
+func (p *protocolIssuer) issueProtocolLeafForProfile(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile string) ([]byte, error) {
 	if err := requireACMERequestRegistration(ctx, p.store, p.log, tenantID); err != nil {
 		return nil, err
 	}
@@ -176,7 +184,7 @@ func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protoc
 		}
 		// PKIGOV-002 served profile gate: validate before signing, fail closed, and
 		// record the decision (AN-2). A no-op when no default profile is configured.
-		leafProfile, selectedTTL, err := p.enforceProfile(ctx, tenantID, protocolName, csrInfo, dnsNames, ttl)
+		leafProfile, selectedTTL, err := p.enforceProfile(ctx, tenantID, protocolName, selectedProfile, csrInfo, dnsNames, ttl)
 		if err != nil {
 			return nil, err
 		}
@@ -353,30 +361,31 @@ func (p *protocolIssuer) ensureTenantCRL(ctx context.Context, tenantID string) e
 	return p.ensureCRL(ctx, tenantID)
 }
 
-// enforceProfile applies the served certificate-profile model to a protocol mint
+// enforceProfile applies the selected certificate profile to a protocol mint
 // (PKIGOV-002), mirroring the API mint's gate (internal/server/issuance.go) and the
-// IssuanceService gate so all three produce the same audit shape. A no-op when no
-// default profile is configured; a configured-but-unresolved profile fails closed.
+// IssuanceService gate so all three produce the same audit shape. Generic protocols
+// pass the deployment default; MDM SCEP passes its authenticated policy profile.
+// A configured-but-unresolved profile fails closed.
 // Protocol adapters select a lifetime internally, so shorten it to the bound
 // profile's ceiling before validation. Resolve the profile once, inside the
 // issuance's idempotency callback, so validation, audit and signing use one version
 // and a replay still returns its original certificate after policy changes.
-func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName string, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, time.Duration, error) {
-	if p.defaultProfile == "" {
+func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName, selectedProfile string, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, time.Duration, error) {
+	if selectedProfile == "" {
 		return p.leafProfile, ttl, nil
 	}
-	rec, err := p.store.GetActiveProfile(ctx, tenantID, p.defaultProfile)
+	rec, err := p.store.GetActiveProfile(ctx, tenantID, selectedProfile)
 	if err != nil {
 		if store.IsNotFound(err) {
-			msg := fmt.Sprintf("served default profile %q not found", p.defaultProfile)
-			p.auditProfileDecision(ctx, tenantID, protocolName, 0, "deny", msg)
+			msg := fmt.Sprintf("served profile %q not found", selectedProfile)
+			p.auditProfileDecision(ctx, tenantID, protocolName, selectedProfile, 0, "deny", msg)
 			return crypto.LeafProfile{}, 0, fmt.Errorf("server: %s (fail closed)", msg)
 		}
 		return crypto.LeafProfile{}, 0, err
 	}
 	var prof profile.CertificateProfile
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
-		return crypto.LeafProfile{}, 0, fmt.Errorf("server: decode profile %q: %w", p.defaultProfile, err)
+		return crypto.LeafProfile{}, 0, fmt.Errorf("server: decode profile %q: %w", selectedProfile, err)
 	}
 	prof.Name, prof.Version = rec.Name, rec.Version
 	if maximum := time.Duration(prof.MaxValidity); maximum > 0 && ttl > maximum {
@@ -395,10 +404,10 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 		Protocol:       protocolName,
 	}
 	if verr := prof.Validate(preq); verr != nil {
-		p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "deny", verr.Error())
+		p.auditProfileDecision(ctx, tenantID, protocolName, selectedProfile, rec.Version, "deny", verr.Error())
 		return crypto.LeafProfile{}, 0, verr
 	}
-	p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "allow", "")
+	p.auditProfileDecision(ctx, tenantID, protocolName, selectedProfile, rec.Version, "allow", "")
 	return leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), ttl, nil
 }
 
@@ -469,15 +478,20 @@ type enrollerAdapter struct {
 	issuer   *protocolIssuer
 }
 
-// Enroll implements the EST/SCEP/CMP Enroller interface. profileName is passed
-// through; the served issuer applies the configured default profile (PKIGOV-002).
+// Enroll implements the EST/SCEP/CMP Enroller interface. A verified MDM SCEP
+// policy supplies profileName; the issuer must carry it through the signer gate
+// instead of silently substituting the deployment default (PKIGOV-002).
 // The idempotencyKey is the protocol's natural request key (CSR hash, transaction
 // id), so a retried enrollment dedupes (AN-5).
 func (e enrollerAdapter) Enroll(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) ([]byte, error) {
 	tenant := e.tenantID
+	selectedProfile := strings.TrimSpace(profileName)
+	if selectedProfile == "" {
+		selectedProfile = e.issuer.defaultProfile
+	}
 	// This adapter receives the client CSR for simple enrollment. EST server
 	// key generation has a separate interface and does not take this path.
-	return e.issuer.issueProtocolLeafWithOrigin(ctx, tenant, protocol, idempotencyKey, csrDER, protocolLeafTTL, custody.OriginRequester)
+	return e.issuer.issueProtocolLeafWithOriginProfile(ctx, tenant, protocol, idempotencyKey, csrDER, protocolLeafTTL, custody.OriginRequester, selectedProfile)
 }
 
 // servedEnrollAuth is the EST §3.2.3 HTTP authenticator for the served EST endpoint:
@@ -654,7 +668,7 @@ func (p *protocolIssuer) auditRevoked(ctx context.Context, tenantID, protocolNam
 // as an AN-2 event, mirroring the API mint's issuance.profile_evaluated record so
 // the served paths produce the same audit shape. A nil log is a no-op, but the deny
 // (the returned error in enforceProfile) still rejects the mint.
-func (p *protocolIssuer) auditProfileDecision(ctx context.Context, tenantID, protocolName string, version int, decision, reason string) {
+func (p *protocolIssuer) auditProfileDecision(ctx context.Context, tenantID, protocolName, selectedProfile string, version int, decision, reason string) {
 	if p.log == nil {
 		return
 	}
@@ -664,7 +678,7 @@ func (p *protocolIssuer) auditProfileDecision(ctx context.Context, tenantID, pro
 		Decision string `json:"decision"`
 		Reason   string `json:"reason,omitempty"`
 		Protocol string `json:"protocol,omitempty"`
-	}{p.defaultProfile, version, decision, reason, protocolName})
+	}{selectedProfile, version, decision, reason, protocolName})
 	if err != nil {
 		return
 	}

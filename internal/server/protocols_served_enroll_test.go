@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
@@ -419,6 +420,10 @@ func TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010(t *testing.T) {
 		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	}, withSecretsEnabled(t, nil))
 	registerServedTenant(t, h, "MDM SCEP trust-anchor tenant")
+	storeServerTestProfile(t, h.store, h.tenant, "mobile-scep", profile.CertificateProfile{
+		Name: "mobile-scep", AllowedProtocols: []string{"scep"},
+		MaxValidity: profile.Duration(7 * 24 * time.Hour),
+	})
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{

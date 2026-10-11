@@ -1283,6 +1283,47 @@ func TestProtocolIssuerServedProfileControlsAndRejectsLeafEKUs(t *testing.T) {
 	}
 }
 
+func TestSCEPEnrollerHonorsVerifiedPolicyProfileOverGlobalDefault(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	storeServerTestProfile(t, h.store, h.tenant, "acme-only-default", profile.CertificateProfile{
+		Name: "acme-only-default", MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"acme"},
+	})
+	storeServerTestProfile(t, h.store, h.tenant, "mobile-scep", profile.CertificateProfile{
+		Name: "mobile-scep", MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"scep"},
+	})
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "Policy-Selected SCEP CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signCalls := 0
+	issuer := &protocolIssuer{
+		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+			signCalls++
+			leaf, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+			if err != nil {
+				return nil, err
+			}
+			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf}), nil
+		},
+		orch: h.orch, idem: orchestrator.NewIdempotency(h.store), store: h.store, log: h.log,
+		caID: IssuingCAID(), defaultProfile: "acme-only-default",
+	}
+	adapter := enrollerAdapter{tenantID: h.tenant, issuer: issuer}
+	csr := serverTestCSR(t, "policy-selected.scep.test", nil)
+	leaf, err := adapter.Enroll(t.Context(), csr, "mobile-scep", "scep", "policy-selected-scep-1")
+	if err != nil {
+		t.Fatalf("verified MDM profile was overridden: %v", err)
+	}
+	if len(leaf) == 0 || signCalls != 1 {
+		t.Fatalf("selected profile mint leaf bytes=%d sign calls=%d", len(leaf), signCalls)
+	}
+}
+
 func TestProtocolIssuerRecoversRecordedDERBeforeRetryingSigner(t *testing.T) {
 	for _, gap := range []string{"projection rollback", "side effects committed"} {
 		t.Run(gap, func(t *testing.T) {

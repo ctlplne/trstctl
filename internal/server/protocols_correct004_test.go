@@ -30,7 +30,7 @@ func TestProtocolAuditDoesNotSilentlyDropAppendFailures(t *testing.T) {
 	// Empty tenant id forces a clean Append error on each emit.
 	p.auditIssued(ctx, "", "acme", "01")
 	p.auditRevoked(ctx, "", "acme", "01", 0)
-	p.auditProfileDecision(ctx, "", "acme", 1, "allow", "")
+	p.auditProfileDecision(ctx, "", "acme", "default", 1, "allow", "")
 
 	if got, want := auditsink.DroppedEvents(), before+3; got != want {
 		t.Fatalf("DroppedEvents = %d; want %d: a failed protocol audit append must be counted, not swallowed (CORRECT-004)", got, want)
