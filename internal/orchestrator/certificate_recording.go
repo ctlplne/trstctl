@@ -173,14 +173,23 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 	}
 	var retained events.Event
 	var found bool
-	if eventID == "" {
-		err = o.log.ReplayThrough(ctx, from, through, visit)
-	} else {
-		// Lookup and recovery inspect the same immutable cut under the tenant
-		// metadata/privacy fences. Reuse decoded envelopes, not a SQL maximum
-		// or a cross-command cache of previously verified history.
-		retained, found, err = o.log.ReplayThroughAndLookup(ctx, from, through, eventID, visit)
+	if eventID != "" {
+		// The durable identity projection covers the retained source, including
+		// an older command before the metadata cursor. Never accept a command
+		// appended after this transaction's frozen source cut; retry with a new
+		// cut instead of mixing a newer identity with an older metadata view.
+		retained, found, err = o.log.EventByID(ctx, eventID)
+		if err != nil {
+			return events.Event{}, false, err
+		}
+		if found && retained.Sequence > through {
+			return events.Event{}, false, errors.New("orchestrator: certificate recording identity advanced past the frozen source cut; retry")
+		}
 	}
+	// The tenant/type source index visits only metadata dependencies. The
+	// source cut and privacy barrier still fence recovery against a rewrite.
+	err = o.log.ReplayTenantTypesThrough(ctx, tenantID, from, through,
+		projections.CertificateMetadataEventTypes(), visit)
 	if err != nil {
 		return events.Event{}, false, err
 	}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -248,26 +249,33 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 // A statement trigger alone is too late for those operations. Commands that
 // prelock rows before ApplyTx (revocation and migration updates) must also take
 // this fence at command entry. Unrelated events keep their own domain ordering.
+var certificateMetadataEventTypes = [...]string{
+	EventCertificateRecorded, EventCAEndEntityIssued, EventCAIssuedCertificate, EventEdgeIssuanceReconciled,
+	EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
+	EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,
+	EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
+	EventEndpointVerified, EventOwnershipAssigned,
+}
+
+// CertificateMetadataEventTypes is the source subject set the command recovery
+// path must inspect before it may append a new certificate recording. Keep the
+// selector and CertificateMetadataEvent's domain classification on one list.
+func CertificateMetadataEventTypes() []string {
+	return slices.Clone(certificateMetadataEventTypes[:])
+}
+
 func CertificateMetadataEvent(e events.Event) (bool, error) {
 	if err := ValidateSchemaVersion(e); err != nil {
 		return false, err
 	}
 	switch e.Type {
-	case EventCertificateRecorded, EventCAEndEntityIssued, EventCAIssuedCertificate, EventEdgeIssuanceReconciled,
-		EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
-		EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,
-		EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
-		EventEndpointVerified:
-		if e.Type == EventCAEndEntityIssued {
-			if schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion {
-				return LegacyManagedCALeafEvidence(e)
-			}
-			return schemaVersionOf(e) == CAEndEntityInventorySchemaVersion, nil
+	case EventCAEndEntityIssued:
+		if schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion {
+			return LegacyManagedCALeafEvidence(e)
 		}
-		if e.Type == EventCAIssuedCertificate {
-			return schemaVersionOf(e) == CASecretInventorySchemaVersion, nil
-		}
-		return true, nil
+		return schemaVersionOf(e) == CAEndEntityInventorySchemaVersion, nil
+	case EventCAIssuedCertificate:
+		return schemaVersionOf(e) == CASecretInventorySchemaVersion, nil
 	case EventOwnershipAssigned:
 		var assignment OwnershipAssigned
 		if err := decode(e, &assignment); err != nil {
@@ -278,6 +286,8 @@ func CertificateMetadataEvent(e events.Event) (bool, error) {
 				return true, nil
 			}
 		}
+	default:
+		return slices.Contains(certificateMetadataEventTypes[:], e.Type), nil
 	}
 	return false, nil
 }
