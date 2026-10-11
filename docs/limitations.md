@@ -3416,12 +3416,14 @@ when off, requiring a KEK when on):
   `secret/`, `POST/PUT/GET /v1/secret/data/{path}`, and
   `POST/PUT /v1/pki/sign/{role}` for requester-generated CSRs, and the deprecated
   `POST/PUT /v1/pki/issue/{role}` server-keygen path for stock `vault` CLI token lookup, KV v2
-  put/get, and PKI issue — deliberately a subset over the native secret store
+  put/get, mount and ACL policy lifecycle, and PKI issue — deliberately a subset over the native secret store
   and dynamic PKI secret. Tenant-authored mount management, ACL policies,
   and common transit paths are also served. Cubbyhole, response wrapping, and
   the native dynamic secret engines are outside this shim. The stock Vault CLI's KV put and
   PKI issue/sign commands derive a token-keyed idempotency key when no header is
-  sent. Other shim mutations require an explicit `Idempotency-Key`.
+  sent. Mount and ACL mutations also derive a token-keyed key with the exact
+  mount or policy event generation, allowing stock CLI retries and later
+  delete/recreate cycles. Transit mutations require an explicit `Idempotency-Key`.
 - Dynamic secrets (F65) are served when tenant providers are configured:
   `POST /api/v1/secrets/leases`, `GET /api/v1/secrets/leases/{lease_id}`,
   `POST /api/v1/secrets/leases/{lease_id}/renew`, and

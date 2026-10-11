@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"sort"
@@ -111,6 +112,36 @@ func vaultMountResponse(mount vaultCompatMount) map[string]any {
 	}
 }
 
+// A stock Vault CLI has no custom Idempotency-Key flag. Bind its synthetic key
+// to the last event for this exact mount or policy name. A fresh lifecycle
+// after disable/delete gets a new key; an immediate retry observes the current
+// state and returns success without appending a second event. Explicit caller
+// keys retain their existing exact-response replay semantics.
+func (a *API) vaultLifecycleKey(w http.ResponseWriter, r *http.Request, body []byte, name string, policy bool) (string, bool) {
+	if strings.TrimSpace(r.Header.Get("Idempotency-Key")) != "" {
+		return vaultMutationKey(w, r)
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		writeVaultError(w, http.StatusForbidden, "permission denied")
+		return "", false
+	}
+	state, err := a.vaultCompat.snapshot(r.Context(), tenantID)
+	if err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "mount and policy projection unavailable")
+		return "", false
+	}
+	epoch := state.mountEpochs[name]
+	if policy {
+		epoch = state.policyEpochs[name]
+	}
+	key, ok := vaultStockCLIKey(w, r, body)
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprintf("%s-e%d", key, epoch), true
+}
+
 //trstctl:mutation
 func (a *API) vaultEnableMount(w http.ResponseWriter, r *http.Request) {
 	body, ok := a.captureVaultBody(w, r)
@@ -123,7 +154,7 @@ func (a *API) vaultEnableMount(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key, ok := vaultMutationKey(w, r)
+	key, ok := a.vaultLifecycleKey(w, r, body, path, false)
 	if !ok {
 		return
 	}
@@ -151,14 +182,21 @@ func (a *API) vaultEnableMount(w http.ResponseWriter, r *http.Request) {
 		default:
 			return 0, nil, errStatus(http.StatusBadRequest, "mount type must be kv, pki, or transit")
 		}
+		mount := vaultCompatMount{Path: path, Type: req.Type, Description: strings.TrimSpace(req.Description), Options: req.Options}
 		state, err := a.vaultCompat.snapshot(ctx, tenantID)
 		if err != nil {
 			return 0, nil, err
 		}
-		if _, exists := state.mounts[path]; exists || path == "secret" || path == "pki" || path == "transit" {
+		if existing, exists := state.mounts[path]; exists {
+			if r.Header.Get("Idempotency-Key") == "" && existing.Type == mount.Type &&
+				existing.Description == mount.Description && maps.Equal(existing.Options, mount.Options) {
+				return http.StatusNoContent, nil, nil
+			}
 			return 0, nil, errStatus(http.StatusConflict, "path is already in use")
 		}
-		mount := vaultCompatMount{Path: path, Type: req.Type, Description: strings.TrimSpace(req.Description), Options: req.Options}
+		if path == "secret" || path == "pki" || path == "transit" {
+			return 0, nil, errStatus(http.StatusConflict, "path is already in use")
+		}
 		if _, err := a.vaultCompat.append(ctx, tenantID, vaultMountEnabledEventType, mount); err != nil {
 			return 0, nil, err
 		}
@@ -173,7 +211,7 @@ func (a *API) vaultDisableMount(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key, ok := vaultMutationKey(w, r)
+	key, ok := a.vaultLifecycleKey(w, r, nil, path, false)
 	if !ok {
 		return
 	}
@@ -186,6 +224,9 @@ func (a *API) vaultDisableMount(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		mount, exists := state.mounts[path]
+		if !exists && r.Header.Get("Idempotency-Key") == "" && state.mountEpochs[path] != 0 {
+			return http.StatusNoContent, nil, nil
+		}
 		if !exists {
 			return 0, nil, errStatus(http.StatusNotFound, "no such mount")
 		}
@@ -349,7 +390,7 @@ func (a *API) vaultPutPolicy(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key, ok := vaultMutationKey(w, r)
+	key, ok := a.vaultLifecycleKey(w, r, body, name, true)
 	if !ok {
 		return
 	}
@@ -365,6 +406,15 @@ func (a *API) vaultPutPolicy(w http.ResponseWriter, r *http.Request) {
 		if _, err := parseVaultACL(req.Policy); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
+		if r.Header.Get("Idempotency-Key") == "" {
+			state, err := a.vaultCompat.snapshot(ctx, tenantID)
+			if err != nil {
+				return 0, nil, err
+			}
+			if existing, ok := state.policies[name]; ok && existing.Policy == req.Policy {
+				return http.StatusNoContent, nil, nil
+			}
+		}
 		if _, err := a.vaultCompat.append(ctx, tenantID, vaultPolicyPutEventType, vaultCompatPolicy{Name: name, Policy: req.Policy}); err != nil {
 			return 0, nil, err
 		}
@@ -379,7 +429,7 @@ func (a *API) vaultDeletePolicy(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key, ok := vaultMutationKey(w, r)
+	key, ok := a.vaultLifecycleKey(w, r, nil, name, true)
 	if !ok {
 		return
 	}
@@ -387,6 +437,9 @@ func (a *API) vaultDeletePolicy(w http.ResponseWriter, r *http.Request) {
 		state, err := a.vaultCompat.snapshot(ctx, tenantID)
 		if err != nil {
 			return 0, nil, err
+		}
+		if _, exists := state.policies[name]; !exists && r.Header.Get("Idempotency-Key") == "" && state.policyEpochs[name] != 0 {
+			return http.StatusNoContent, nil, nil
 		}
 		if _, exists := state.policies[name]; !exists {
 			return 0, nil, errStatus(http.StatusNotFound, "no such policy")

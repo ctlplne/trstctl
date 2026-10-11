@@ -594,7 +594,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -706,7 +706,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -820,7 +820,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -932,7 +932,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1130,7 +1130,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1251,7 +1251,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1519,7 +1519,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1589,7 +1589,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1669,7 +1669,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1805,7 +1805,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -1937,7 +1937,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -2017,7 +2017,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -2178,7 +2178,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -2266,7 +2266,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -2356,9 +2356,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2445,9 +2446,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2536,9 +2538,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2624,9 +2627,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2714,9 +2718,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2802,9 +2807,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2892,7 +2898,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -2981,7 +2987,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -3072,9 +3078,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -3160,9 +3167,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -3250,9 +3258,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -3340,9 +3349,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -3428,9 +3438,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -3518,7 +3529,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -3606,7 +3617,7 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
             "in": "header",
             "name": "Idempotency-Key",
             "schema": {
@@ -3696,9 +3707,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -3784,9 +3796,10 @@
             }
           },
           {
-            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
             "in": "header",
             "name": "Idempotency-Key",
+            "required": true,
             "schema": {
               "type": "string"
             }

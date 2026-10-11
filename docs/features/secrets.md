@@ -141,10 +141,14 @@ since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept
 `Idempotency-Key`. For the stock CLI's KV put and PKI issue/sign commands,
 trstctl derives a token-keyed digest of method, path, and body when the header is
 absent, so an exact retry cannot mint a duplicate certificate or secret version.
+The stock CLI's `vault secrets enable/disable` and `vault policy write/delete`
+commands also work without a custom header: the fallback is bound to the last
+event for that exact mount or policy, so a retry does not append twice and a
+later delete/recreate cycle is a fresh operation.
 An identical request from the same token replays its original result; force a fresh
 issue with a different explicit `Idempotency-Key`, or use the native
-`/api/v1/secrets/pki` route. Mount, policy, and transit mutations require an
-explicit `Idempotency-Key` so intentional repeated rotations stay distinguishable.
+`/api/v1/secrets/pki` route. Transit mutations require an explicit
+`Idempotency-Key` so intentional repeated rotations stay distinguishable.
 
 ### The developer secrets experience (F64)
 

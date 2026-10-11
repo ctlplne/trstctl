@@ -418,7 +418,7 @@ not this file.
 | `internal/api/machine_sessions_served_test.go:63` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:210` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
-| `internal/api/vault_compat_complete.go:714` | DER length of a public key, far under the uint32 bound (CWE-190) |
+| `internal/api/vault_compat_complete.go:767` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:172` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `internal/backup/backup.go:172` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
 | `internal/backup/backup.go:703` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
@@ -979,7 +979,7 @@ not this file.
 | `tools/dodcensus/main.go:1285` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/pqclab/main.go:455` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/trstctllint/idempotency/idempotency_test.go:212` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/trstctllint/idempotency/idempotency_test.go:225` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
 ### G302 — CWE-276 Incorrect default permissions (chmod) (40 sites)
 
@@ -1532,7 +1532,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:427` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:430` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/trstctllint/idempotency/idempotency_test.go:215` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/trstctllint/idempotency/idempotency_test.go:228` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
 ### G401 — CWE-328 Use of weak hash (5 sites)
 

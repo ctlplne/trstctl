@@ -35,8 +35,10 @@ type vaultCompatPolicy struct {
 }
 
 type vaultCompatSnapshot struct {
-	mounts   map[string]vaultCompatMount
-	policies map[string]vaultCompatPolicy
+	mounts       map[string]vaultCompatMount
+	policies     map[string]vaultCompatPolicy
+	mountEpochs  map[string]uint64
+	policyEpochs map[string]uint64
 }
 
 // vaultCompatState is an event-log projection for the mutable compatibility
@@ -95,8 +97,10 @@ func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vault
 // so copying the maps is enough to keep previously returned snapshots immutable.
 func copyVaultSnapshot(in vaultCompatSnapshot) vaultCompatSnapshot {
 	out := vaultCompatSnapshot{
-		mounts:   make(map[string]vaultCompatMount, len(in.mounts)),
-		policies: make(map[string]vaultCompatPolicy, len(in.policies)),
+		mounts:       make(map[string]vaultCompatMount, len(in.mounts)),
+		policies:     make(map[string]vaultCompatPolicy, len(in.policies)),
+		mountEpochs:  make(map[string]uint64, len(in.mountEpochs)),
+		policyEpochs: make(map[string]uint64, len(in.policyEpochs)),
 	}
 	for k, v := range in.mounts {
 		out.mounts[k] = v
@@ -104,13 +108,21 @@ func copyVaultSnapshot(in vaultCompatSnapshot) vaultCompatSnapshot {
 	for k, v := range in.policies {
 		out.policies[k] = v
 	}
+	for k, v := range in.mountEpochs {
+		out.mountEpochs[k] = v
+	}
+	for k, v := range in.policyEpochs {
+		out.policyEpochs[k] = v
+	}
 	return out
 }
 
 func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, uint64, error) {
 	state := vaultCompatSnapshot{
-		mounts:   map[string]vaultCompatMount{},
-		policies: map[string]vaultCompatPolicy{},
+		mounts:       map[string]vaultCompatMount{},
+		policies:     map[string]vaultCompatPolicy{},
+		mountEpochs:  map[string]uint64{},
+		policyEpochs: map[string]uint64{},
 	}
 	if s == nil || s.log == nil {
 		return state, 0, nil
@@ -144,6 +156,7 @@ func foldVaultCompatEvent(state *vaultCompatSnapshot, tenantID string, ev events
 			return errors.New("vault mount-enabled event is missing path or type")
 		}
 		state.mounts[mount.Path] = mount
+		state.mountEpochs[mount.Path] = ev.Sequence
 	case vaultMountDisabledEventType:
 		var mount vaultCompatMount
 		if err := json.Unmarshal(ev.Data, &mount); err != nil {
@@ -153,6 +166,7 @@ func foldVaultCompatEvent(state *vaultCompatSnapshot, tenantID string, ev events
 			return errors.New("vault mount-disabled event is missing path")
 		}
 		delete(state.mounts, mount.Path)
+		state.mountEpochs[mount.Path] = ev.Sequence
 	case vaultPolicyPutEventType:
 		var policy vaultCompatPolicy
 		if err := json.Unmarshal(ev.Data, &policy); err != nil {
@@ -162,6 +176,7 @@ func foldVaultCompatEvent(state *vaultCompatSnapshot, tenantID string, ev events
 			return errors.New("vault policy-put event is missing name or policy")
 		}
 		state.policies[policy.Name] = policy
+		state.policyEpochs[policy.Name] = ev.Sequence
 	case vaultPolicyDeletedEventType:
 		var policy vaultCompatPolicy
 		if err := json.Unmarshal(ev.Data, &policy); err != nil {
@@ -171,6 +186,7 @@ func foldVaultCompatEvent(state *vaultCompatSnapshot, tenantID string, ev events
 			return errors.New("vault policy-deleted event is missing name")
 		}
 		delete(state.policies, policy.Name)
+		state.policyEpochs[policy.Name] = ev.Sequence
 	}
 	return nil
 }

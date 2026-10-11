@@ -98,10 +98,23 @@ func vaultCompatParameters(rt vaultCompatRoute) []Parameter {
 		}
 	}
 	if rt.mutation {
+		fallback := strings.HasPrefix(rt.contractPath, "/v1/secret/data/") ||
+			strings.HasPrefix(rt.contractPath, "/v1/pki/issue/") ||
+			strings.HasPrefix(rt.contractPath, "/v1/pki/sign/") ||
+			strings.HasPrefix(rt.contractPath, "/v1/sys/mounts/") ||
+			strings.HasPrefix(rt.contractPath, "/v1/sys/policies/acl/") ||
+			strings.HasSuffix(rt.contractPath, "/data/{name}") ||
+			strings.HasSuffix(rt.contractPath, "/issue/{role}") ||
+			strings.HasSuffix(rt.contractPath, "/sign/{name}")
+		description := "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command."
+		if fallback {
+			description = "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key."
+		}
 		out = append(out, Parameter{
 			Name:        "Idempotency-Key",
 			In:          "header",
-			Description: "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+			Required:    !fallback,
+			Description: description,
 			Schema:      str(),
 		})
 	}
