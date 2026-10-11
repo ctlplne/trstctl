@@ -48,15 +48,19 @@ type SecretRotationSchedule struct {
 	// ConfigEventSequence is the immutable event revision of the configuration
 	// tuple. Zero is reserved for rows projected before migration 0155.
 	ConfigEventSequence uint64
-	Enabled             bool
-	NextRunAt           time.Time
-	LastRunID           *string
-	LastRunAt           *time.Time
-	LastRunStatus       string
-	LastNewRef          string
-	LastError           string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	// ControlEventSequence fences replayed pause/resume/retire events without
+	// changing the immutable configuration revision of an in-flight due edge.
+	ControlEventSequence uint64
+	Enabled              bool
+	NextRunAt            time.Time
+	RetiredAt            *time.Time
+	LastRunID            *string
+	LastRunAt            *time.Time
+	LastRunStatus        string
+	LastNewRef           string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 // SecretRotationScheduleRun is the projected result of one scheduled rotation
@@ -189,14 +193,62 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 		          old_ref = EXCLUDED.old_ref,
 		          interval_seconds = EXCLUDED.interval_seconds,
 		          config_event_sequence = EXCLUDED.config_event_sequence,
-		          enabled = EXCLUDED.enabled,
+		          enabled = CASE
+		              WHEN secret_rotation_schedules.retired_at IS NOT NULL OR
+		                   secret_rotation_schedules.control_event_sequence > EXCLUDED.config_event_sequence
+		              THEN secret_rotation_schedules.enabled
+		              ELSE EXCLUDED.enabled
+		          END,
 		          next_run_at = EXCLUDED.next_run_at,
 		          updated_at = EXCLUDED.updated_at
-		    WHERE secret_rotation_schedules.config_event_sequence <= EXCLUDED.config_event_sequence`,
+		    WHERE secret_rotation_schedules.retired_at IS NULL
+		      AND secret_rotation_schedules.config_event_sequence < EXCLUDED.config_event_sequence`,
 		sched.ID, sched.TenantID, sched.Name, sched.Provider, sched.Key, sched.OldRef,
 		sched.IntervalSeconds, sched.ConfigEventSequence, sched.Enabled, sched.NextRunAt,
 		sched.CreatedAt, sched.UpdatedAt)
 	return err
+}
+
+// ApplySecretRotationScheduleControlTx projects one immutable lifecycle event.
+// It changes only eligibility; an already-claimed due edge can still record its
+// exact successor and receipt without a stale configuration CAS or another call.
+func (s *Store) ApplySecretRotationScheduleControlTx(
+	ctx context.Context, tx pgx.Tx, tenantID, id, action string, sequence uint64, at time.Time,
+) error {
+	if action != "pause" && action != "resume" && action != "retire" {
+		return fmt.Errorf("store: unsupported secret rotation schedule action %q", action)
+	}
+	if sequence == 0 || sequence > math.MaxInt64 || at.IsZero() {
+		return fmt.Errorf("store: secret rotation schedule control lacks event authority")
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE secret_rotation_schedules
+		    SET enabled = CASE
+		            WHEN retired_at IS NOT NULL OR $3 = 'retire' THEN false
+		            WHEN $3 = 'resume' THEN true ELSE false END,
+		        retired_at = CASE WHEN $3 = 'retire' THEN COALESCE(retired_at, $5::timestamptz)
+		                          ELSE retired_at END,
+		        control_event_sequence = $4,
+		        updated_at = $5::timestamptz
+		  WHERE tenant_id = $1 AND id = $2::uuid
+		    AND control_event_sequence < $4`,
+		tenantID, id, action, int64(sequence), at.UTC()) // #nosec G115 -- checked against MaxInt64 above (CWE-190).
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var retained int64
+	if err := tx.QueryRow(ctx,
+		`SELECT control_event_sequence FROM secret_rotation_schedules
+		  WHERE tenant_id = $1 AND id = $2::uuid`, tenantID, id).Scan(&retained); err != nil {
+		return err
+	}
+	if retained >= int64(sequence) { // #nosec G115 -- checked against MaxInt64 above (CWE-190).
+		return nil
+	}
+	return fmt.Errorf("store: secret rotation schedule control event did not project")
 }
 
 // ApplySecretRotationScheduleRunTx projects a scheduled rotation outcome and
@@ -1212,7 +1264,8 @@ func (s *Store) ListSecretRotationSchedulesPage(ctx context.Context, tenantID, a
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
-			        enabled, next_run_at, last_run_id::text, last_run_at, last_run_status,
+		        enabled, next_run_at, control_event_sequence, retired_at,
+		        last_run_id::text, last_run_at, last_run_status,
 			        last_new_ref, last_error, created_at, updated_at
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id > $2
@@ -1253,7 +1306,8 @@ func (s *Store) ListDueSecretRotationSchedulesPage(
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
-			        enabled, next_run_at, last_run_id::text, last_run_at, last_run_status,
+		        enabled, next_run_at, control_event_sequence, retired_at,
+		        last_run_id::text, last_run_at, last_run_status,
 			        last_new_ref, last_error, created_at, updated_at
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
@@ -1298,7 +1352,8 @@ func (s *Store) ListDueSecretRotationSchedulesRingPage(
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
-			        enabled, next_run_at, last_run_id::text, last_run_at, last_run_status,
+		        enabled, next_run_at, control_event_sequence, retired_at,
+		        last_run_id::text, last_run_at, last_run_status,
 			        last_new_ref, last_error, created_at, updated_at
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
@@ -1328,7 +1383,8 @@ func (s *Store) GetSecretRotationSchedule(ctx context.Context, tenantID, id stri
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanSecretRotationSchedule(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
-			        enabled, next_run_at, last_run_id::text, last_run_at, last_run_status,
+		        enabled, next_run_at, control_event_sequence, retired_at,
+		        last_run_id::text, last_run_at, last_run_status,
 			        last_new_ref, last_error, created_at, updated_at
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
@@ -1339,6 +1395,7 @@ func (s *Store) GetSecretRotationSchedule(ctx context.Context, tenantID, id stri
 func scanSecretRotationSchedule(row rowScanner, sched *SecretRotationSchedule) error {
 	if err := row.Scan(&sched.ID, &sched.TenantID, &sched.Name, &sched.Provider, &sched.Key,
 		&sched.OldRef, &sched.IntervalSeconds, &sched.ConfigEventSequence, &sched.Enabled, &sched.NextRunAt,
+		&sched.ControlEventSequence, &sched.RetiredAt,
 		&sched.LastRunID, &sched.LastRunAt, &sched.LastRunStatus, &sched.LastNewRef,
 		&sched.LastError, &sched.CreatedAt, &sched.UpdatedAt); err != nil {
 		return err

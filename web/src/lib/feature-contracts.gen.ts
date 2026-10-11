@@ -5334,12 +5334,20 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: rotateStaticSecret",
             "OpenAPI operationId: createSecretRotationSchedule",
             "OpenAPI operationId: listSecretRotationSchedules",
+            "OpenAPI operationId: getSecretRotationSchedule",
+            "OpenAPI operationId: pauseSecretRotationSchedule",
+            "OpenAPI operationId: resumeSecretRotationSchedule",
+            "OpenAPI operationId: retireSecretRotationSchedule",
             "OpenAPI operationId: runDueSecretRotationSchedules",
             "CLI command: secrets store update",
             "CLI command: secrets rotations preview",
             "CLI command: secrets rotations run",
             "CLI command: secrets rotation-schedules create",
             "CLI command: secrets rotation-schedules list",
+            "CLI command: secrets rotation-schedules get",
+            "CLI command: secrets rotation-schedules pause",
+            "CLI command: secrets rotation-schedules resume",
+            "CLI command: secrets rotation-schedules retire",
             "CLI command: secrets rotation-schedules run-due"
           ]
         }

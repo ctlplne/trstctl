@@ -328,7 +328,7 @@ exhaustive subcommand list:
 | `secrets honeytokens`             | Inert API bait credentials: plant with `-f` JSON (`name`, `placement`), list/get metadata, inspect first trigger, and revoke (`plant` · `list` · `get` · `revoke`). Mutations use `Idempotency-Key`; the bearer is revealed only in the plant response. |
 | `secrets honeytokens aws`         | Operator-attached AWS IAM bait keys: list configured accounts, effect-free preview with `-f` JSON (`account_id`, `name`, `placement`, `ttl_seconds`), plant the same request with its optional `preview_fingerprint`, list/get monitoring evidence, rearm after triage, and retire (`accounts` · `preview` · `plant` · `list` · `get` · `rearm` · `retire`). The secret access key is revealed only in the plant response. |
 | `secrets rotations`               | Effect-free exact review, then worker-owned connector rotation; static and dynamic provider modes fail closed before effects (`preview` · `run`)                                                                                                                                                                    |
-| `secrets rotation-schedules`      | Scheduled connector rotations with bounded durable due-run receipts (`create` · `list` · `run-due`)                                                                                                                                                                                                                 |
+| `secrets rotation-schedules`      | Scheduled connector rotations with bounded durable due-run receipts (`create` · `list` · `get` · `pause` · `resume` · `retire` · `run-due`)                                                                                                                                                                                                                 |
 | `secrets syncs`                   | Push a stored secret to an external sync target (`run` · `targets`)                                                                                                                                                                                                                                                 |
 | `secrets scans`                   | Gitleaks scanning: CI runs, repository/third-party webhooks, local pre-commit and staged-diff (`run` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `staged-diff` · `pre-commit install`)                                                                                       |
 | `secrets shares`                  | Review without sending the value, create with safe same-key recovery, and redeem a one-time share (`preview` · `create` · `redeem`)                                                                                                                                                                                   |
@@ -976,6 +976,11 @@ cat > connector-rotation-schedule.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key connector-rotation-schedule-1 secrets rotation-schedules create -f connector-rotation-schedule.json
 trstctl-cli secrets rotation-schedules list
+trstctl-cli secrets rotation-schedules get <schedule-id>
+trstctl-cli --idempotency-key schedule-pause-1 secrets rotation-schedules pause <schedule-id>
+trstctl-cli --idempotency-key schedule-resume-1 secrets rotation-schedules resume <schedule-id>
+# Retirement preserves history and reserves the schedule name; --force acknowledges the permanent stop.
+trstctl-cli --force --idempotency-key schedule-retire-1 secrets rotation-schedules retire <schedule-id>
 trstctl-cli --idempotency-key connector-rotation-due-1 secrets rotation-schedules run-due
 
 # Review a stored-secret delivery before allowing any write or network effect.

@@ -267,8 +267,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Exact enrolled-controller cert-manager request provenance adds one read.
 	// An exact, tenant-scoped issuance-request read makes older decisions usable
 	// after they leave the recent list; F33 owns the added operation.
-	if len(out) != 478 {
-		t.Fatalf("OpenAPI operationIds = %d, want 478", len(out))
+	// F37 adds one exact schedule read and three event-sourced lifecycle controls.
+	if len(out) != 482 {
+		t.Fatalf("OpenAPI operationIds = %d, want 482", len(out))
 	}
 	return out
 }

@@ -19,6 +19,61 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// 0258 adds event-control authority to existing schedule projections. Historical
+// enabled/disabled rows must retain their due edge and predecessor; zero means
+// they have no control event, not that a pause or retirement was inferred.
+func testMigration0258SecretScheduleControlStartsUnclaimed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, id::text, name, provider, secret_key,
+		old_ref, interval_seconds, enabled, next_run_at::text,
+		coalesce(last_run_id::text, ''), coalesce(last_run_at::text, ''),
+		last_run_status, last_new_ref, last_error, created_at::text, updated_at::text
+		FROM secret_rotation_schedules ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 258, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				enabled := index == 0
+				if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name)
+					VALUES ($1, $2) ON CONFLICT (tenant_id) DO NOTHING`,
+					tenantID, fmt.Sprintf("pre-0258-tenant-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO secret_rotation_schedules
+					(id, tenant_id, name, provider, secret_key, old_ref,
+					 interval_seconds, enabled, next_run_at, created_at, updated_at)
+					VALUES ($1::uuid, $2::uuid, $3, 'connector:ci', $4, 'version:3',
+					 3600, $5, '2026-10-11T16:00:00Z'::timestamptz,
+					 '2026-10-11T15:00:00Z'::timestamptz,
+					 '2026-10-11T15:00:00Z'::timestamptz)`,
+					fmt.Sprintf("25800000-0000-4000-8000-%012d", index+1), tenantID,
+					fmt.Sprintf("pre-0258-schedule-%d", index), fmt.Sprintf("qa/pre-0258-%d", index), enabled); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var noInventedControl, noInventedRetirement bool
+			if err := pool.QueryRow(ctx, `SELECT count(*),
+				bool_and(control_event_sequence = 0), bool_and(retired_at IS NULL)
+				FROM secret_rotation_schedules WHERE name LIKE 'pre-0258-schedule-%'`).Scan(
+				&rows, &noInventedControl, &noInventedRetirement); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !noInventedControl || !noInventedRetirement {
+				t.Fatalf("0258 invented schedule control: rows=%d want=%d zero=%t unretired=%t",
+					rows, want, noInventedControl, noInventedRetirement)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE secret_rotation_schedules
+				SET control_event_sequence = -1 WHERE tenant_id = $1`, tenantA); err == nil {
+				t.Fatal("0258 accepted negative control event sequence")
+			}
+			if _, err := pool.Exec(ctx, `UPDATE secret_rotation_schedules
+				SET retired_at = now() WHERE tenant_id = $1`, tenantA); err == nil {
+				t.Fatal("0258 accepted an enabled retired schedule")
+			}
+		})
+}
+
 // Migration 0250 must not turn a historical active key into a claimed live
 // provider proof. Existing tenant rows acquire an explicit not_checked result
 // and no check time; their lifecycle and public material remain byte-identical.
@@ -611,6 +666,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	258: true, // TestMigrationDataContentBackfills/0258_secret_schedule_control_starts_unclaimed
 	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
@@ -1672,6 +1728,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0258_secret_schedule_control_starts_unclaimed", testMigration0258SecretScheduleControlStartsUnclaimed)
 	t.Run("0250_managed_key_custody_starts_unproven", testMigration0250ManagedKeyCustodyStartsUnproven)
 	t.Run("0251_managed_key_deletion_pending_preserves_history", testMigration0251ManagedKeyDeletionPendingPreservesHistory)
 	t.Run("0254_pam_revocation_failure_starts_unknown", testMigration0254PAMRevocationFailureStartsUnknown)

@@ -402,6 +402,23 @@ its phase chain is crash-safe. A queued connector run advances `old_ref`; a
 connector whose local version committed before terminal delivery failure also
 advances to that committed version so later cadences cannot stale-loop.
 
+An operator can read one schedule at `GET /api/v1/secrets/rotation-schedules/{id}`
+and use `POST .../{id}/pause`, `.../{id}/resume`, or `.../{id}/retire` with a fresh
+`Idempotency-Key` and `secrets:write`. The console exposes these actions in the
+schedule table; the CLI has matching `secrets rotation-schedules` commands. Pause
+stops future due-run claims but retains the exact next due time, predecessor
+reference, and run history. Resume checks that the connector still exists and
+the predecessor matches the current native secret version, then starts from that
+retained due time; if it is past due, the next scheduler tick can run it. Retirement
+is permanent, keeps the schedule and its receipts visible, and reserves its name.
+The immutable `secret.rotation_schedule.paused`, `.resumed`, and `.retired`
+events each carry a matching closed action and operator-request reason code, so
+audit filters for one action cannot silently include the others. Their
+tenant-scoped projection changes only future eligibility. A run already claimed
+when an operator pauses or retires can
+finish and record its exact successor and delivery receipt. The console shows a
+separate retired state and reviews this effect before retirement.
+
 The terminal `error` field is a closed, status-specific evidence class, never a
 provider response or wrapped error string. Empty-success statuses carry no error;
 delivery and rollback failures use their exact fixed classes; unavailable and

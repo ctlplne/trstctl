@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1495 annotated sites across 26 rules. Each row is
+1497 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -404,7 +404,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:349` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (236 sites)
+### G115 — CWE-190 Integer overflow or wraparound (238 sites)
 
 | Location | Reason |
 |---|---|
@@ -484,7 +484,7 @@ not this file.
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:389` | a negative stored version is classified as drift before conversion (CWE-190). |
-| `internal/orchestrator/secret_rotation.go:352` | the positive int64 value always fits exactly in uint64 (CWE-190). |
+| `internal/orchestrator/secret_rotation.go:378` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -494,7 +494,7 @@ not this file.
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:480` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5153` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5168` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -601,8 +601,10 @@ not this file.
 | `internal/store/projection_checkpoint.go:299` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:321` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:328` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/secret_rotation_schedule.go:292` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:316` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:235` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:248` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:344` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:368` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/snapshot.go:503` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
 | `internal/store/snapshot.go:518` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -739,7 +741,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3525` | closed test table list above |
+| `internal/store/migration_content_test.go:3582` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

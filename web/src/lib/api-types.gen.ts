@@ -7690,6 +7690,7 @@ export interface SecretRotationSchedule {
   next_run_at: string;
   old_ref: string;
   provider: string;
+  retired_at?: string;
   tenant_id: string;
   updated_at: string;
 }

@@ -5614,6 +5614,7 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(),
 		"key": str(), "old_ref": str(), "interval_seconds": {Type: "integer"},
 		"enabled": {Type: "boolean"}, "next_run_at": timestamp(),
+		"retired_at":  timestamp(),
 		"last_run_id": uuid(), "last_run_at": timestamp(), "last_run_status": secretRotationScheduleLastRunStatus,
 		"last_new_ref": str(), "last_error": str(),
 		"created_at": timestamp(), "updated_at": timestamp(),

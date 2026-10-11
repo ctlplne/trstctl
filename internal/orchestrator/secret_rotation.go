@@ -73,6 +73,32 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 	}, nil
 }
 
+// ControlSecretRotationSchedule records a future-eligibility decision as an
+// immutable event. The projector preserves the exact in-flight due tuple; a
+// command already claimed before pause or retirement still records its receipt.
+func (o *Orchestrator) ControlSecretRotationSchedule(
+	ctx context.Context, tenantID, id, action, reasonCode string,
+) (store.SecretRotationSchedule, error) {
+	eventType := map[string]string{
+		"pause":  projections.EventSecretRotationSchedulePaused,
+		"resume": projections.EventSecretRotationScheduleResumed,
+		"retire": projections.EventSecretRotationScheduleRetired,
+	}[action]
+	if eventType == "" || reasonCode != "operator_request" {
+		return store.SecretRotationSchedule{}, fmt.Errorf("orchestrator: invalid rotation schedule control action or reason")
+	}
+	payload, err := json.Marshal(projections.SecretRotationScheduleControlled{
+		ID: id, Action: action, ReasonCode: reasonCode,
+	})
+	if err != nil {
+		return store.SecretRotationSchedule{}, err
+	}
+	if _, err := o.emit(ctx, eventType, tenantID, payload); err != nil {
+		return store.SecretRotationSchedule{}, err
+	}
+	return o.store.GetSecretRotationSchedule(ctx, tenantID, id)
+}
+
 // RecordSecretRotationScheduleRun records the outcome of one due scheduled
 // rotation. It stores metadata and refs only; credential values stay inside the
 // configured rotator/provider.

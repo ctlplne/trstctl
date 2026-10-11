@@ -10566,6 +10566,7 @@ SecretRotationSchedule = TypedDict(
         'next_run_at': str,
         'old_ref': str,
         'provider': str,
+        'retired_at': str,
         'tenant_id': str,
         'updated_at': str,
     },

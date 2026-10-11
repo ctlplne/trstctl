@@ -80,6 +80,9 @@ const (
 	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
 	EventComplianceReportRunRecorded              = "compliance.report_run.recorded"
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
+	EventSecretRotationSchedulePaused             = "secret.rotation_schedule.paused"
+	EventSecretRotationScheduleResumed            = "secret.rotation_schedule.resumed"
+	EventSecretRotationScheduleRetired            = "secret.rotation_schedule.retired"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
 	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
@@ -377,6 +380,9 @@ var ledger = []FeatureEvent{
 
 	// F37 — rollback-safe static secret rotation schedules.
 	{"F37", "Secret rotation engine", "schedule_secret_rotation", "createSecretRotationSchedule", []string{EventSecretRotationScheduleUpserted}},
+	{"F37", "Secret rotation engine", "pause_secret_rotation_schedule", "pauseSecretRotationSchedule", []string{EventSecretRotationSchedulePaused}},
+	{"F37", "Secret rotation engine", "resume_secret_rotation_schedule", "resumeSecretRotationSchedule", []string{EventSecretRotationScheduleResumed}},
+	{"F37", "Secret rotation engine", "retire_secret_rotation_schedule", "retireSecretRotationSchedule", []string{EventSecretRotationScheduleRetired}},
 	{"F37", "Secret rotation engine", "run_due_secret_rotations", "runDueSecretRotationSchedules", []string{EventSecretRotationScheduleRan}},
 }
 

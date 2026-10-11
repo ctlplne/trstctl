@@ -443,6 +443,7 @@ type secretRotationScheduleResponse struct {
 	IntervalSeconds int        `json:"interval_seconds"`
 	Enabled         bool       `json:"enabled"`
 	NextRunAt       time.Time  `json:"next_run_at"`
+	RetiredAt       *time.Time `json:"retired_at,omitempty"`
 	LastRunID       *string    `json:"last_run_id,omitempty"`
 	LastRunAt       *time.Time `json:"last_run_at,omitempty"`
 	LastRunStatus   string     `json:"last_run_status"`
@@ -1155,6 +1156,105 @@ func (a *API) listSecretRotationSchedules(w http.ResponseWriter, r *http.Request
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
 }
 
+func (a *API) getSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	schedule, err := a.store.GetSecretRotationSchedule(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toSecretRotationScheduleResponse(schedule))
+}
+
+//trstctl:mutation
+func (a *API) pauseSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), "pause")
+	})
+}
+
+//trstctl:mutation
+func (a *API) resumeSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), "resume")
+	})
+}
+
+//trstctl:mutation
+func (a *API) retireSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), "retire")
+	})
+}
+
+func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, action string) (int, any, error) {
+	schedule, err := a.store.GetSecretRotationSchedule(ctx, tenantID, id)
+	if err != nil {
+		return 0, nil, err
+	}
+	if schedule.RetiredAt != nil {
+		if action == "retire" {
+			return http.StatusOK, toSecretRotationScheduleResponse(schedule), nil
+		}
+		return 0, nil, errStatus(http.StatusConflict, "retired rotation schedules cannot be resumed or paused")
+	}
+	if (action == "pause" && !schedule.Enabled) || (action == "resume" && schedule.Enabled) {
+		return http.StatusOK, toSecretRotationScheduleResponse(schedule), nil
+	}
+	if action == "resume" {
+		if !isConnectorSecretRotation(schedule.Provider) {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, scheduledStaticRotationUnavailableDetail)
+		}
+		targetID, _, err := connectorSecretRotationTarget(secretRotationRequest{
+			Provider: schedule.Provider, Key: schedule.Key, OldRef: schedule.OldRef,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		if a.secrets.syncTargets(tenantID)[targetID] == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, connectorRotationTargetUnavailableDetail)
+		}
+		current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, schedule.Key)
+		if err != nil {
+			if errors.Is(err, store.ErrSecretNotFound) {
+				return 0, nil, errStatus(http.StatusConflict, "schedule source secret no longer exists")
+			}
+			return 0, nil, err
+		}
+		if schedule.OldRef != "version:"+strconv.Itoa(current.Version) {
+			return 0, nil, errStatus(http.StatusConflict, "schedule predecessor no longer matches the current secret version")
+		}
+	}
+	controlled, err := a.orch.ControlSecretRotationSchedule(ctx, tenantID, id, action, "operator_request")
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusOK, toSecretRotationScheduleResponse(controlled), nil
+}
+
 type secretVisibilitySourceCounts struct {
 	Repository int
 	ThirdParty int
@@ -1333,6 +1433,7 @@ func toSecretRotationScheduleResponse(s store.SecretRotationSchedule) secretRota
 		ID: s.ID, TenantID: s.TenantID, Name: s.Name, Provider: s.Provider, Key: s.Key,
 		OldRef: s.OldRef, IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled,
 		NextRunAt: s.NextRunAt, LastRunID: s.LastRunID, LastRunAt: s.LastRunAt,
+		RetiredAt:     s.RetiredAt,
 		LastRunStatus: s.LastRunStatus, LastNewRef: s.LastNewRef,
 		LastError: store.CanonicalSecretRotationScheduleError(s.LastRunStatus, s.LastError),
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,

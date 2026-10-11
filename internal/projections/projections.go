@@ -217,6 +217,9 @@ const (
 	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
 	EventComplianceReportRunRecorded              = "compliance.report_run.recorded"
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
+	EventSecretRotationSchedulePaused             = "secret.rotation_schedule.paused"
+	EventSecretRotationScheduleResumed            = "secret.rotation_schedule.resumed"
+	EventSecretRotationScheduleRetired            = "secret.rotation_schedule.retired"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
 	EventNotificationRead                         = "notification.read"
 	EventNotificationChannelUpserted              = "notification.channel.upserted"
@@ -2352,6 +2355,15 @@ type SecretRotationScheduleUpserted struct {
 	NextRunAt       time.Time `json:"next_run_at,omitempty"`
 }
 
+// SecretRotationScheduleControlled changes future eligibility without
+// rewriting the immutable due edge or predecessor of an in-flight command.
+// ReasonCode is a closed audit class, never free-form operator text.
+type SecretRotationScheduleControlled struct {
+	ID         string `json:"id"`
+	Action     string `json:"action"`
+	ReasonCode string `json:"reason_code"`
+}
+
 // SecretRotationScheduleRanEventSchemaVersion adds the exact immutable due-edge
 // tuple. Version 1 used event wall time as cadence authority and remains readable
 // only for pre-command-table history.
@@ -3780,6 +3792,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventComplianceReportScheduleUpserted:         {1: true},
 	EventComplianceReportRunRecorded:              {1: true},
 	EventSecretRotationScheduleUpserted:           {1: true},
+	EventSecretRotationSchedulePaused:             {1: true},
+	EventSecretRotationScheduleResumed:            {1: true},
+	EventSecretRotationScheduleRetired:            {1: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},
@@ -5706,6 +5721,22 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ConfigEventSequence: e.Sequence, Enabled: pl.Enabled, NextRunAt: nextRunAt,
 			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
+	case EventSecretRotationSchedulePaused, EventSecretRotationScheduleResumed, EventSecretRotationScheduleRetired:
+		var pl SecretRotationScheduleControlled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		expectedAction := map[string]string{
+			EventSecretRotationSchedulePaused:  "pause",
+			EventSecretRotationScheduleResumed: "resume",
+			EventSecretRotationScheduleRetired: "retire",
+		}[e.Type]
+		if pl.ID == "" || pl.Action != expectedAction ||
+			pl.ReasonCode != "operator_request" {
+			return fmt.Errorf("projections: %s requires id, matching action, and operator-request reason", e.Type)
+		}
+		return p.store.ApplySecretRotationScheduleControlTx(ctx, tx, e.TenantID,
+			pl.ID, pl.Action, e.Sequence, e.Time)
 	case EventSecretRotationScheduleRan:
 		var pl SecretRotationScheduleRan
 		if err := decode(e, &pl); err != nil {

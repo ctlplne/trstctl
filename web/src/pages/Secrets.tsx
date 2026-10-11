@@ -48,7 +48,6 @@ import {
   formatCommandArgv,
   parseSecretRotationPartialReceipt,
   RevealPanel,
-  RotationHealthBadges,
   SecretApprovalQueue,
   Snippet,
   mergeMeta,
@@ -73,6 +72,9 @@ import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
 import { AWSHoneyTokenWorkflow } from "./secrets/AWSHoneyTokenWorkflow";
 
 const SecretImport = lazy(() => import("@/components/secrets/SecretImport").then((module) => ({ default: module.SecretImport })));
+const SecretRotationScheduleTable = lazy(() =>
+  import("./secrets/SecretRotationScheduleTableParts").then((module) => ({ default: module.SecretRotationScheduleTable })),
+);
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
@@ -615,40 +617,6 @@ export function Secrets() {
       },
     ],
     [ownerByID, revealBusy, secretMenuName, t],
-  );
-
-  const scheduleColumns = useMemo<Array<DataGridColumn<SecretRotationSchedule>>>(
-    () => [
-      { id: "name", header: "Name", sortable: true, cell: (item) => <span className="font-medium">{item.name}</span> },
-      {
-        id: "key",
-        header: "Key",
-        cell: (item) => (
-          <span className="block max-w-44 truncate font-mono text-xs" title={item.key}>
-            {item.key}
-          </span>
-        ),
-      },
-      { id: "interval", header: "Interval", cell: (item) => formatRotationInterval(item.interval_seconds) },
-      {
-        id: "enabled",
-        header: "Enabled",
-        cell: (item) => (
-          <StatusBadge
-            vocabulary="lifecycle"
-            value={item.enabled ? "enabled" : "disabled"}
-            label={item.enabled ? "Enabled" : "Disabled"}
-            tone={item.enabled ? "success" : "neutral"}
-          />
-        ),
-      },
-      { id: "last-run", header: "Last run", cell: (item) => <StatusBadge vocabulary="lifecycle" value={item.last_run_status || "never"} /> },
-      { id: "next-run", header: "Next run", cell: (item) => formatDate(item.next_run_at) },
-      // S-C19: say "this has not rotated" instead of making the operator do
-      // date arithmetic against the next-run column.
-      { id: "rotation-health", header: "Health", cell: (item) => <RotationHealthBadges schedule={item} /> },
-    ],
-    [],
   );
 
   function queueSecretApproval(action: SecretApprovalAction, name: string, err: unknown): boolean {
@@ -1831,15 +1799,15 @@ export function Secrets() {
                   </div>
                 )}
                 {rotationSchedules && (
-                  <DataGrid
-                    ariaLabel="Scheduled secret rotations"
-                    rows={rotationSchedules}
-                    columns={scheduleColumns}
-                    getRowId={(item) => item.id}
-                    state={rotationSchedules.length === 0 ? "empty" : "ready"}
-                    stateTitle="No rotation schedules"
-                    stateMessage={t("secrets.rotation.scheduleStateMessage")}
-                  />
+                  <Suspense fallback={<SecretsWorkflowFallback />}>
+                    <SecretRotationScheduleTable
+                      schedules={rotationSchedules}
+                      canWrite={canAdminMethods}
+                      onUpdated={(updated) => setRotationSchedules((current) => current?.map((item) => (item.id === updated.id ? updated : item)) ?? null)}
+                      onRefresh={refreshRotationSchedules}
+                      onNotice={setNotice}
+                    />
+                  </Suspense>
                 )}
                 {dueDeferred.length > 0 && (
                   <div
@@ -3034,12 +3002,4 @@ export function Secrets() {
       )}
     </section>
   );
-}
-
-function formatRotationInterval(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "-";
-  if (seconds % 86400 === 0) return `${seconds / 86400}d`;
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
-  if (seconds % 60 === 0) return `${seconds / 60}m`;
-  return `${seconds}s`;
 }

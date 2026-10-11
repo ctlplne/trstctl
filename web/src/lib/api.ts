@@ -1947,6 +1947,10 @@ export interface Api {
   runSecretRotation(input: SecretRotationRequest): Promise<SecretRotation>;
   createSecretRotationSchedule(input: SecretRotationScheduleRequest): Promise<SecretRotationSchedule>;
   secretRotationSchedules(options?: { limit?: number; cursor?: string }): Promise<SecretRotationScheduleList>;
+  getSecretRotationSchedule(id: string): Promise<SecretRotationSchedule>;
+  pauseSecretRotationSchedule(id: string): Promise<SecretRotationSchedule>;
+  resumeSecretRotationSchedule(id: string): Promise<SecretRotationSchedule>;
+  retireSecretRotationSchedule(id: string): Promise<SecretRotationSchedule>;
   runDueSecretRotations(): Promise<SecretRotationDueRun>;
   aiStatus(): Promise<AIStatus>;
   aiQuery(input: AIQueryRequest): Promise<AIAnswer>;
@@ -2597,6 +2601,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   runSecretRotation: (input) => mutate<SecretRotation>("POST", "/api/v1/secrets/rotations", input),
   createSecretRotationSchedule: (input) => mutate<SecretRotationSchedule>("POST", "/api/v1/secrets/rotation-schedules", input),
   secretRotationSchedules: (options) => req<SecretRotationScheduleList>(`/api/v1/secrets/rotation-schedules${pageQueryString(options)}`),
+  getSecretRotationSchedule: (id) => req<SecretRotationSchedule>(`/api/v1/secrets/rotation-schedules/${encodeURIComponent(id)}`),
+  pauseSecretRotationSchedule: (id) => mutate<SecretRotationSchedule>("POST", `/api/v1/secrets/rotation-schedules/${encodeURIComponent(id)}/pause`),
+  resumeSecretRotationSchedule: (id) => mutate<SecretRotationSchedule>("POST", `/api/v1/secrets/rotation-schedules/${encodeURIComponent(id)}/resume`),
+  retireSecretRotationSchedule: (id) => mutate<SecretRotationSchedule>("POST", `/api/v1/secrets/rotation-schedules/${encodeURIComponent(id)}/retire`),
   runDueSecretRotations: () => mutate<SecretRotationDueRun>("POST", "/api/v1/secrets/rotation-schedules/run-due"),
   aiStatus: () => req<AIStatus>("/api/v1/ai/status"),
   aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
