@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sync"
+	"fmt"
 	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -22,7 +22,9 @@ var (
 	// ErrIntuneChallengeNoNonce is returned for a signed challenge that carries no
 	// nonce. Replay protection is keyed on the nonce, so a challenge without one
 	// cannot be consumed once — it would be reusable forever.
-	ErrIntuneChallengeNoNonce = errors.New("mdm: Intune challenge carries no nonce, so it cannot be single-use")
+	ErrIntuneChallengeNoNonce               = errors.New("mdm: Intune challenge carries no nonce, so it cannot be single-use")
+	ErrIntuneChallengeNoExpiry              = errors.New("mdm: Intune challenge carries no expiry, so its replay fence cannot expire")
+	ErrIntuneChallengeNonceStoreUnavailable = errors.New("mdm: durable Intune challenge nonce fence unavailable")
 )
 
 // IntuneChallengeRequest is the tenant-bound SCEP challenge decision input. The
@@ -44,10 +46,12 @@ type IntuneChallengeValidator struct {
 	clock            func() time.Time
 	clockSkew        time.Duration
 	log              *events.Log
-
-	mu     sync.Mutex
-	replay map[string]time.Time
+	consumeNonce     IntuneNonceConsumer
 }
+
+// IntuneNonceConsumer is a durable tenant-scoped atomic uniqueness fence.
+// A false claim means another request already consumed this signed nonce.
+type IntuneNonceConsumer func(context.Context, string, string, time.Time) (bool, error)
 
 type IntuneOption func(*IntuneChallengeValidator)
 
@@ -87,12 +91,15 @@ func WithIntuneEventLog(log *events.Log) IntuneOption {
 	return func(v *IntuneChallengeValidator) { v.log = log }
 }
 
+func WithIntuneNonceConsumer(consume IntuneNonceConsumer) IntuneOption {
+	return func(v *IntuneChallengeValidator) { v.consumeNonce = consume }
+}
+
 func NewIntuneChallengeValidator(tenantID string, trustAnchorsDER [][]byte, opts ...IntuneOption) *IntuneChallengeValidator {
 	v := &IntuneChallengeValidator{
 		tenantID:        tenantID,
 		trustAnchorsDER: cloneDERSet(trustAnchorsDER),
 		clock:           time.Now,
-		replay:          make(map[string]time.Time),
 	}
 	for _, opt := range opts {
 		opt(v)
@@ -120,8 +127,12 @@ func (v *IntuneChallengeValidator) ValidateProfile(ctx context.Context, req Intu
 		v.emit(ctx, req, "deny", err.Error(), "")
 		return "", err
 	}
-	if err := v.consumeOnce(req.TenantID, claim.Nonce, claim.ExpiresAt, now); err != nil {
-		v.emitEvent(ctx, "mdm.intune_scep_challenge.replay_rejected", req, "deny", err.Error(), claim.Nonce)
+	if err := v.consumeOnce(ctx, req.TenantID, claim.Nonce, claim.ExpiresAt); err != nil {
+		if errors.Is(err, ErrIntuneChallengeReplay) {
+			v.emitEvent(ctx, "mdm.intune_scep_challenge.replay_rejected", req, "deny", err.Error(), claim.Nonce)
+		} else {
+			v.emit(ctx, req, "deny", err.Error(), claim.Nonce)
+		}
 		return "", err
 	}
 	v.emit(ctx, req, "allow", "", claim.Nonce)
@@ -188,7 +199,7 @@ func (v *IntuneChallengeValidator) now() time.Time {
 	return time.Now().UTC()
 }
 
-func (v *IntuneChallengeValidator) consumeOnce(tenantID, nonce string, expiresAt, now time.Time) error {
+func (v *IntuneChallengeValidator) consumeOnce(ctx context.Context, tenantID, nonce string, expiresAt time.Time) error {
 	// An absent nonce used to return nil — success — which quietly turned this
 	// function into a no-op. The payload field is `nonce,omitempty` and nothing
 	// upstream requires it, so a properly signed challenge with no nonce was
@@ -199,21 +210,23 @@ func (v *IntuneChallengeValidator) consumeOnce(tenantID, nonce string, expiresAt
 	if nonce == "" {
 		return ErrIntuneChallengeNoNonce
 	}
-	key := tenantID + "\x00" + nonce
 	if expiresAt.IsZero() {
-		expiresAt = now.Add(5 * time.Minute)
+		return ErrIntuneChallengeNoExpiry
 	}
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	for k, exp := range v.replay {
-		if !now.Before(exp) {
-			delete(v.replay, k)
-		}
+	if v.consumeNonce == nil {
+		return ErrIntuneChallengeNonceStoreUnavailable
 	}
-	if exp, ok := v.replay[key]; ok && now.Before(exp) {
+	tolerance := v.clockSkew
+	if tolerance < 0 {
+		tolerance = -tolerance
+	}
+	claimed, err := v.consumeNonce(ctx, tenantID, nonce, expiresAt.Add(tolerance))
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrIntuneChallengeNonceStoreUnavailable, err)
+	}
+	if !claimed {
 		return ErrIntuneChallengeReplay
 	}
-	v.replay[key] = expiresAt
 	return nil
 }
 

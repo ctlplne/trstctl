@@ -57,7 +57,7 @@ func TestC11FeatureDocsReflectParitySurfaces(t *testing.T) {
 		needles []string
 	}{
 		{"features/acme-and-dns.md", []string{"trust_authenticated", "account-keyed order/hour limiter", "GET /directory", "**Served**"}},
-		{"features/enrollment-protocols.md", []string{"EST `/serverkeygen`", "RFC 9266", "tls-server-end-point", "per-profile PathID", "mTLS sibling route", "Intune JWS challenge", "single-use replay cache", "per-device rate limiter", "per-profile SCEP RA"}},
+		{"features/enrollment-protocols.md", []string{"EST `/serverkeygen`", "RFC 9266", "tls-server-end-point", "per-profile PathID", "mTLS sibling route", "Intune JWS challenge", "durable tenant-scoped single-use nonce fences", "per-device rate limiter", "per-profile SCEP RA"}},
 		{"features/issuance-and-cas.md", []string{"RFC 5280 named revocation reason", "/api/v1/certificates/bulk-revoke", "OCSP nonce", "ETag", "If-None-Match", "Vault PKI", "GlobalSign", "Entrust", "shell CA"}},
 		{"features/deployment-connectors.md", []string{"Caddy", "Traefik", "Envoy", "Postfix", "Dovecot"}},
 		{"features/discovery-and-inventory.md", []string{"/api/v1/discovery/findings/{id}/claim", "/api/v1/discovery/findings/{id}/dismiss", "investigating", "AWS Secrets Manager", "GCP Secret Manager", "reserved-IP"}},

@@ -564,6 +564,7 @@ func (s *Server) buildSCEPChallengeProfileValidator(cfg config.SCEPIntuneChallen
 		mdmchallenge.WithIntuneAudience(cfg.ExpectedAudience),
 		mdmchallenge.WithIntuneClockSkewTolerance(time.Duration(cfg.ClockSkewSeconds)*time.Second),
 		mdmchallenge.WithIntuneEventLog(s.log),
+		mdmchallenge.WithIntuneNonceConsumer(s.store.ConsumeMDMSCEPNonce),
 		mdmchallenge.WithIntuneTrustConfigResolver(s.mdmSCEPIntuneTrustConfigResolver(keyWrapper)),
 	)
 	return func(ctx context.Context, req scep.ChallengeRequest) (string, error) {

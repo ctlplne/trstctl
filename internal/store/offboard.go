@@ -257,6 +257,7 @@ var TenantScopedTables = []string{
 	// I5: the MDM device join. It names the tenant's own devices and leaves
 	// with the tenant.
 	"mdm_device_correlations",
+	"mdm_scep_nonce_fences",
 	"mdm_scep_policies",
 	"audit_checkpoints",
 	"notification_channels",

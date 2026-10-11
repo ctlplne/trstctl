@@ -44,6 +44,7 @@ func TestIntuneChallengeRejectsUntrustedSigner(t *testing.T) {
 
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 	)
 	csrDER := newIntuneCSR(t, "device-1", []string{"device-1.example.test"})
 

@@ -50,6 +50,7 @@ func TestNoncelessChallengeIsRejectedRatherThanReplayable(t *testing.T) {
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
 		mdmchallenge.WithIntuneAudience("https://ca.example.test/scep"),
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 	)
 	req := mdmchallenge.IntuneChallengeRequest{
 		TenantID: "tenant-a", Challenge: nonceless, CSRDER: csrDER,
@@ -97,6 +98,7 @@ func TestNoncedChallengeStillValidatesExactlyOnce(t *testing.T) {
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
 		mdmchallenge.WithIntuneAudience("https://ca.example.test/scep"),
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 	)
 	req := mdmchallenge.IntuneChallengeRequest{
 		TenantID: "tenant-a", Challenge: challenge, CSRDER: csrDER,

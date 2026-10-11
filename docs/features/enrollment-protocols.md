@@ -245,9 +245,10 @@ against the tenant policy's referenced public trust anchor, checks its audience,
 time window, subject and SAN binding, and consumes its nonce before issuing.
 
 For Microsoft Intune, trstctl validates the Intune JWS challenge against policy-backed
-trust anchors, checks tenant and CSR subject/SAN binding, and consumes the nonce
-through a single-use replay cache for the token TTL, so a captured challenge can't be
-replayed during one server process lifetime. The gate wires into the served SCEP
+trust anchors, checks tenant and CSR subject/SAN binding, requires an expiry and
+nonce, and atomically consumes the tenant-scoped nonce in PostgreSQL. The
+single-use fence survives process restarts and concurrent control planes; if the
+database cannot reserve it, enrollment fails closed. The gate wires into the served SCEP
 server's challenge hook. When a policy sets `expected_audience`, a JWS without
 that exact `aud` is refused. After validation, the verified policy's
 `scep_profile` is used for signer-backed issuance; the deployment's default
@@ -351,7 +352,7 @@ Be precise about what's mounted in the running server today:
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
 | SCEP per-profile RA and rate limits | **Served when configured** — per-profile SCEP RA cert/key plus per-device rate limiter |
 | CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped, client-anchor authenticated, subject-bound by default; safe qualification is served by API, CLI, and console |
-| MDM challenge (F56) | **Served** — policy management (API/CLI/UI), challenge rotation, Intune JWS validation, tenant/CSR binding, single-use replay cache, and live trust-anchor resolution via `trust_anchor_refs` from the served secret store |
+| MDM challenge (F56) | **Served** — policy management (API/CLI/UI), challenge rotation, Intune JWS validation, tenant/CSR binding, durable tenant-scoped single-use nonce fences, and live trust-anchor resolution via `trust_anchor_refs` from the served secret store |
 
 The protocol servers each expose a `Handler()` and mount on the control-plane TLS
 listener at startup, behind the same issuance seam the API mint uses — backed by the

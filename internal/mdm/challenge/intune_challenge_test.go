@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,6 +43,7 @@ func TestIntuneChallengeValidatesTenantAndCSRClaims(t *testing.T) {
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
 		mdmchallenge.WithIntuneAudience("https://ca.example.test/scep"),
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 	)
 	if err := validator.Validate(context.Background(), mdmchallenge.IntuneChallengeRequest{
 		TenantID:  "tenant-a",
@@ -79,6 +81,7 @@ func TestIntuneChallengeReturnsProfileOfVerifiedPolicy(t *testing.T) {
 	})
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", nil,
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 		mdmchallenge.WithIntuneTrustConfigResolver(func(context.Context, mdmchallenge.IntuneChallengeRequest) ([]mdmchallenge.IntuneTrustConfig, error) {
 			return []mdmchallenge.IntuneTrustConfig{{TrustAnchorsDER: [][]byte{trustDER}, ExpectedAudience: "https://mdm.example.test/scep", ProfileName: "scep-intune-mobile-7d"}}, nil
 		}),
@@ -103,6 +106,7 @@ func TestIntuneChallengeReturnsProfileOfVerifiedPolicy(t *testing.T) {
 	}
 	ambiguous := mdmchallenge.NewIntuneChallengeValidator("tenant-a", nil,
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 		mdmchallenge.WithIntuneTrustConfigResolver(func(context.Context, mdmchallenge.IntuneChallengeRequest) ([]mdmchallenge.IntuneTrustConfig, error) {
 			return []mdmchallenge.IntuneTrustConfig{
 				{TrustAnchorsDER: [][]byte{trustDER}, ExpectedAudience: "https://mdm.example.test/scep", ProfileName: "mobile-a"},
@@ -130,6 +134,7 @@ func TestIntuneChallengeRejectsMissingInvalidAndMismatchedClaims(t *testing.T) {
 	}
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 	)
 	csrDER := newIntuneCSR(t, "device-1", []string{"device-1.example.test"})
 	for _, req := range []mdmchallenge.IntuneChallengeRequest{
@@ -168,6 +173,7 @@ func TestIntuneChallengeReplayRejectedAndAudited(t *testing.T) {
 	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
 		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
 		mdmchallenge.WithIntuneEventLog(log),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()),
 	)
 	challenge := signedIntuneChallenge(t, signer, map[string]any{
 		"iat":         now.Add(-time.Minute).Unix(),
@@ -197,6 +203,41 @@ func TestIntuneChallengeReplayRejectedAndAudited(t *testing.T) {
 	})
 	if err := validator.Validate(context.Background(), mdmchallenge.IntuneChallengeRequest{TenantID: "tenant-a", Challenge: distinct, CSRDER: csrDER}); err != nil {
 		t.Fatalf("distinct challenge rejected: %v", err)
+	}
+}
+
+func TestIntuneChallengeFailsClosedWithoutDurableFenceOrExpiry(t *testing.T) {
+	now := time.Unix(1_900_000_000, 0).UTC()
+	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(signer.Destroy)
+	trustDER, err := crypto.SelfSignedCACert(signer, "Intune Connector", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrDER := newIntuneCSR(t, "device-1", nil)
+	request := mdmchallenge.IntuneChallengeRequest{
+		TenantID: "tenant-a", CSRDER: csrDER,
+		Challenge: signedIntuneChallenge(t, signer, map[string]any{
+			"iat": now.Add(-time.Minute).Unix(), "exp": now.Add(time.Minute).Unix(),
+			"nonce": "unfenced", "device_name": "device-1",
+		}),
+	}
+	unfenced := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }))
+	if err := unfenced.Validate(context.Background(), request); !errors.Is(err, mdmchallenge.ErrIntuneChallengeNonceStoreUnavailable) {
+		t.Fatalf("missing durable fence = %v", err)
+	}
+	request.Challenge = signedIntuneChallenge(t, signer, map[string]any{
+		"iat": now.Add(-time.Minute).Unix(), "nonce": "no-expiry", "device_name": "device-1",
+	})
+	withFence := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneNonceConsumer(testIntuneNonceConsumer()))
+	if err := withFence.Validate(context.Background(), request); !errors.Is(err, mdmchallenge.ErrIntuneChallengeNoExpiry) {
+		t.Fatalf("unbounded JWS lifetime = %v", err)
 	}
 }
 
@@ -235,6 +276,21 @@ func signedIntuneChallenge(t *testing.T, signer crypto.DigestSigner, payload map
 		t.Fatal(err)
 	}
 	return signingInput + "." + enc(sig)
+}
+
+func testIntuneNonceConsumer() mdmchallenge.IntuneNonceConsumer {
+	var mu sync.Mutex
+	seen := map[string]struct{}{}
+	return func(_ context.Context, tenantID, nonce string, _ time.Time) (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		key := tenantID + "\x00" + nonce
+		if _, exists := seen[key]; exists {
+			return false, nil
+		}
+		seen[key] = struct{}{}
+		return true, nil
+	}
 }
 
 func openMDMEventLog(t *testing.T) *events.Log {
