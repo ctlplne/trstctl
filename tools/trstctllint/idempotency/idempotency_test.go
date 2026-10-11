@@ -77,6 +77,7 @@ func (a *API) routes() []route {
 		{handler: a.goodVaultCompat, mutation: true},
 		{handler: a.goodVaultMutationHelper, mutation: true},
 		{handler: a.goodVaultStockCLIHelper, mutation: true},
+		{handler: a.goodVaultLifecycleHelper, mutation: true},
 		{handler: a.goodSCIMCompat, mutation: true},
 		{handler: a.goodScheduleAuthority, mutation: true},
 		{handler: a.badScheduleFixedInput, mutation: true},
@@ -108,6 +109,12 @@ func (a *API) goodVaultMutationHelper(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) goodVaultStockCLIHelper(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey, ok := vaultStockCLIKey(w, r, []byte("fixture"))
+	if !ok { return }
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) goodVaultLifecycleHelper(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey, ok := a.vaultLifecycleKey(w, r, []byte("fixture"), "mount", false)
 	if !ok { return }
 	a.mutate(w, r, idempotencyKey, nil)
 }
@@ -190,6 +197,12 @@ func vaultStockCLIKey(w http.ResponseWriter, r *http.Request, body []byte) (stri
 	_ = w
 	_ = body
 	return "vault:token-keyed-method-path-body-digest", true
+}
+
+func (a *API) vaultLifecycleKey(w http.ResponseWriter, r *http.Request, body []byte, name string, policy bool) (string, bool) {
+	_ = name
+	_ = policy
+	return vaultStockCLIKey(w, r, body)
 }
 
 func scimIdempotencyKey(r *http.Request, body []byte) string {
