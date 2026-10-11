@@ -108,8 +108,11 @@ against its rules, and hands back a signed certificate.
    > enrollment path is served and uses enabled policy `secret://` public trust
    > anchors at validation time; `protocols.scep.intune_challenge` remains a
    > bootstrap fallback. A local SCEP client and JWS signer do not prove Microsoft
-   > Intune installation or Jamf integration. The `hmac-dynamic` policy choice is
-   > not yet a served enrollment path; do not select it for live devices.
+   > Intune installation or Jamf integration. Enabled `hmac-dynamic` and Jamf
+   > policies are blocked by policy preview and create/update because the served
+   > SCEP gate cannot validate them. They may be staged disabled, but they cannot
+   > authorize live enrollment until a tenant-bound validator and durable replay
+   > fence are implemented.
 
 ## Where next
 

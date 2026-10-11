@@ -1186,8 +1186,11 @@ never live in the API process. What you can do end to end against the running bi
   evidence, CLI commands, and Protocols UI telemetry. Live SCEP validator trust
   anchors resolve enabled policy `secret://` references per decision;
   `protocols.scep.intune_challenge` is a bootstrap fallback. The selectable
-  `hmac-dynamic` mode still lacks a served policy resolver and must not be used
-  for live enrollment until that path is implemented end to end.
+  `hmac-dynamic` and Jamf modes still lack a served policy resolver. Enabled
+  policies in those modes are now rejected by preview and create/update; disabled
+  policies can be staged but do not authorize enrollment. A tenant-bound
+  validator, durable replay fence, credential configuration path, stock client
+  replay, and cold recovery remain required before enabling these modes.
 - Revocation hardening: RFC 5280 named revocation reasons, bulk revoke routes,
   delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching,
   and CRL ETag / `If-None-Match` caching. CT precertificate/final-certificate

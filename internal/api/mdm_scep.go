@@ -142,6 +142,12 @@ func (a *API) mdmSCEPPolicyPlan(req mdmSCEPPolicyRequest, operation, policyID st
 	if a.store == nil || a.log == nil {
 		blockers = append(blockers, "The event log and tenant-scoped policy store must be attached before this policy can be saved.")
 	}
+	// The served SCEP resolver currently authenticates only Intune JWS policies.
+	// A stored policy for another mode or provider would never be selected by the
+	// protocol gate, so an enabled one must not be described as ready or saved.
+	if !mdmSCEPModeServed(req) {
+		blockers = append(blockers, "This provider and challenge mode are not served by the SCEP enrollment gate; keep the policy disabled until a tenant-bound validator and durable replay fence are available.")
+	}
 	refs := map[string]string{}
 	_ = json.Unmarshal(req.TrustAnchorRefs, &refs)
 	refKeys := make([]string, 0, len(refs))
@@ -168,6 +174,17 @@ func (a *API) mdmSCEPPolicyPlan(req mdmSCEPPolicyRequest, operation, policyID st
 		},
 		SecretDataHandling: "Only reference field names are returned. Secret reference values, challenge material, certificates, and private keys are never returned by this preview.",
 	}
+}
+
+func mdmSCEPModeServed(req mdmSCEPPolicyRequest) bool {
+	return req.Enabled == nil || !*req.Enabled || (req.Provider == "intune" && req.ChallengeMode == "intune-jws")
+}
+
+func mdmSCEPPolicyBlockStatus(req mdmSCEPPolicyRequest) int {
+	if !mdmSCEPModeServed(req) {
+		return http.StatusConflict
+	}
+	return http.StatusServiceUnavailable
 }
 
 func (a *API) previewMDMSCEPChallengeRotation(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +238,7 @@ func (a *API) createMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		plan := a.mdmSCEPPolicyPlan(req, "create", "")
 		if !plan.Ready {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(plan.Blockers, " "))
+			return 0, nil, errStatus(mdmSCEPPolicyBlockStatus(req), strings.Join(plan.Blockers, " "))
 		}
 		id := googleuuid.NewString()
 		if err := a.emitMDMSCEPPolicy(ctx, tenantID, id, req, 1); err != nil {
@@ -278,7 +295,7 @@ func (a *API) updateMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		plan := a.mdmSCEPPolicyPlan(req, "update", id)
 		if !plan.Ready {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(plan.Blockers, " "))
+			return 0, nil, errStatus(mdmSCEPPolicyBlockStatus(req), strings.Join(plan.Blockers, " "))
 		}
 		if err := a.emitMDMSCEPPolicy(ctx, tenantID, id, req, existing.RotationVersion); err != nil {
 			return 0, nil, err

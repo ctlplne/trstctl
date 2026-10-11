@@ -408,6 +408,44 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 	}
 }
 
+// An enabled policy must be refused when the served SCEP gate cannot select it.
+func TestServedMDMSCEPUnsupportedChallengePolicyIsNotReady(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{
+		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+	}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "MDM SCEP unavailable HMAC tenant")
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	for _, tc := range []struct{ provider, mode string }{
+		{"jamf", "hmac-dynamic"}, {"intune", "hmac-dynamic"}, {"jamf", "intune-jws"},
+	} {
+		req := map[string]any{
+			"name": "unserved-policy", "provider": tc.provider, "scep_profile": "mobile-scep",
+			"scep_endpoint": "/scep/pkiclient.exe", "challenge_mode": tc.mode,
+			"enabled": true, "trust_anchor_refs": map[string]string{"hmac_key_ref": "secret://mdm/jamf/missing"},
+		}
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/preview", tok, req)
+		if status != http.StatusOK {
+			t.Fatalf("%s/%s preview status=%d body=%s", tc.provider, tc.mode, status, body)
+		}
+		var preview struct {
+			Ready      bool     `json:"ready"`
+			EffectFree bool     `json:"effect_free"`
+			Blockers   []string `json:"blockers"`
+		}
+		if err := json.Unmarshal(body, &preview); err != nil || preview.Ready || !preview.EffectFree || len(preview.Blockers) == 0 {
+			t.Fatalf("%s/%s advertised ready: %+v err=%v body=%s", tc.provider, tc.mode, preview, err, body)
+		}
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, req)
+		if status != http.StatusConflict {
+			t.Fatalf("%s/%s unserved policy was saved: status=%d body=%s", tc.provider, tc.mode, status, body)
+		}
+	}
+	policies, err := h.store.ListMDMSCEPPolicies(t.Context(), h.tenant)
+	if err != nil || len(policies) != 0 || h.hasEvent(t, projections.EventMDMSCEPPolicyUpserted) {
+		t.Fatalf("blocked policy mutated state: count=%d event=%t err=%v", len(policies), h.hasEvent(t, projections.EventMDMSCEPPolicyUpserted), err)
+	}
+}
+
 // TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010 proves the residual F56 gap is
 // closed on the served path: a tenant stores an Intune trust anchor through the served
 // secret lifecycle, references it from MDM SCEP policy CRUD, and the already-running

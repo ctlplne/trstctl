@@ -2919,7 +2919,7 @@ func componentSchemas() map[string]*Schema {
 	mdmSCEPPolicyReq := object(map[string]*Schema{
 		"name": str(), "provider": {Type: "string", Enum: []string{"intune", "jamf"}},
 		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
-		"challenge_mode":    {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}},
+		"challenge_mode":    {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}, Description: "Only intune-jws with the intune provider can be enabled on the served SCEP gate. Other modes may be staged disabled; enabled previews and writes are blocked."},
 		"trust_anchor_refs": {Type: "object"}, "profile_guidance": {Type: "object"},
 		"enabled": {Type: "boolean"},
 	}, "name", "provider", "scep_profile", "scep_endpoint")
