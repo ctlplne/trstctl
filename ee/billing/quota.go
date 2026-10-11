@@ -55,8 +55,15 @@ func NewQuotaChecker(store Store, count TenantCounter, _ time.Duration) *QuotaCh
 }
 
 func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource string) error {
+	return q.AllowCreateCount(ctx, tenantID, resource, 1)
+}
+
+func (q *QuotaChecker) AllowCreateCount(ctx context.Context, tenantID, resource string, amount int) error {
 	if q == nil || q.store == nil || tenantID == "" || resource == "" {
 		return fmt.Errorf("%w: billing quota admission is not configured", usage.ErrQuotaUnavailable)
+	}
+	if amount <= 0 || amount > 100 {
+		return fmt.Errorf("%w: invalid batch creation amount", usage.ErrQuotaUnavailable)
 	}
 	quota, err := q.store.QuotaFor(ctx, tenantID)
 	if err != nil {
@@ -71,7 +78,7 @@ func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource strin
 		return fmt.Errorf("%w: billing count tenant resources: %w", usage.ErrQuotaUnavailable, err)
 	}
 	current := counts[resource]
-	if current >= int64(*limit) {
+	if current > int64(*limit)-int64(amount) {
 		return &QuotaError{Code: CodeQuotaExhausted, TenantID: tenantID, Resource: resource, Current: current, Limit: *limit}
 	}
 	return nil

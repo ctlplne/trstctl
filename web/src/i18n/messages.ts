@@ -3072,22 +3072,70 @@ export const messages = {
     defaultMessage: "Schedule configuration must be re-saved",
     description: "Secret rotation scheduler deferred reason for a pre-evidence schedule.",
   },
-  "secrets.import.unavailableTitle": {
+  "secrets.import.title": {
     defaultMessage: "Bulk secret import",
-    description: "Disabled bulk-import disclosure: heading.",
+    description: "Atomic application-secret import heading.",
   },
-  "secrets.import.unavailableDescription": {
-    defaultMessage: "Unavailable until atomic event-sourced batch commands are implemented",
-    description: "Disabled bulk-import disclosure: short availability reason.",
+  "secrets.import.description": {
+    defaultMessage: "Import up to 100 new secrets together",
+    description: "Atomic application-secret import short description.",
   },
-  "secrets.import.unavailableBody": {
+  "secrets.import.body": {
     defaultMessage:
-      "Bulk import is disabled so a batch can never bypass the immutable event log or half-land. Create each secret with its own idempotency key instead.",
-    description: "Disabled bulk-import disclosure: safety rationale and supported alternative.",
+      "Choose a private JSON file with prefix and values. Review the names before importing; values stay off this screen and the result contains metadata only.",
+    description: "Atomic import file contract and secret-handling explanation.",
   },
-  "secrets.import.unavailableAction": {
-    defaultMessage: "Import unavailable",
-    description: "Disabled bulk-import disclosure: disabled action label.",
+  "secrets.import.chooseFile": {
+    defaultMessage: "Choose JSON import file",
+    description: "Atomic import file input label.",
+  },
+  "secrets.import.invalidFile": {
+    defaultMessage: "Use a JSON object with an optional prefix and a values object of secret names and string values.",
+    description: "Atomic import malformed-file error.",
+  },
+  "secrets.import.duplicateKey": {
+    defaultMessage: "The import file repeats a JSON field or secret name. Remove the duplicate before reviewing it.",
+    description: "Exact file review refuses duplicate object keys at any depth.",
+  },
+  "secrets.import.invalidValues": {
+    defaultMessage: "Provide 1 to 100 named, nonempty string values.",
+    description: "Atomic import value count and shape error.",
+  },
+  "secrets.import.invalidNames": {
+    defaultMessage: "Secret names must be relative paths without empty or dot segments, up to 512 characters.",
+    description: "Atomic import name validation error.",
+  },
+  "secrets.import.fileTooLarge": {
+    defaultMessage: "The import file must be at most 1 MiB.",
+    description: "Atomic import file size error.",
+  },
+  "secrets.import.review": {
+    defaultMessage: "Review {count} secret names from {file}",
+    description: "Effect-free local review heading. Values are deliberately hidden.",
+  },
+  "secrets.import.atomicWarning": {
+    defaultMessage: "All names must be new. One collision refuses the whole batch; no partial import is accepted.",
+    description: "Atomic import collision and all-or-none behavior.",
+  },
+  "secrets.import.execute": {
+    defaultMessage: "Import reviewed secrets",
+    description: "Atomic import mutation button.",
+  },
+  "secrets.import.importing": {
+    defaultMessage: "Importing…",
+    description: "Atomic import pending state.",
+  },
+  "secrets.import.completed": {
+    defaultMessage: "Imported {count} secrets",
+    description: "Atomic import receipt heading.",
+  },
+  "secrets.import.completedOne": {
+    defaultMessage: "Imported 1 secret",
+    description: "Singular atomic import receipt heading.",
+  },
+  "secrets.import.itemVersion": {
+    defaultMessage: "{name} · version {version}",
+    description: "One metadata-only imported-secret receipt item.",
   },
   "secrets.tabs.scanning": {
     defaultMessage: "Find leaked secrets in code",

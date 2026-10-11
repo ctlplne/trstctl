@@ -1227,6 +1227,8 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"secret_shares",
 		"approved_target_event_fences",
 		"application_secret_mutation_fences",
+		"application_secret_import_batches",
+		"application_secret_import_name_fences",
 		"application_secret_tenant_epochs",
 		// AUD-106: the fair-scan cursor is one bounded operational row per
 		// tenant. Restore it with the exact due-edge commands so a recovered
@@ -1247,6 +1249,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"secret_store",
 		"secret_store_versions",
 		"application_secret_mutation_receipts",
+		"application_secret_import_receipts",
 		"ssh_keys",
 		"tenant_branding",
 		"tenant_silos",

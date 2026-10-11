@@ -296,8 +296,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// decision and issuance evidence after the recent list rolls over.
 	// U6 adds a separate reviewed PAM session request before activation.
 	// PCAS first use adds registration, request status, succession, and chain readback.
-	if len(out) != 494 {
-		t.Fatalf("CLI commands = %d, want 494", len(out))
+	if len(out) != 495 {
+		t.Fatalf("CLI commands = %d, want 495", len(out))
 	}
 	return out
 }

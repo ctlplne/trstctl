@@ -10,6 +10,7 @@ package usage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -89,6 +90,14 @@ type QuotaChecker interface {
 	AllowCreate(ctx context.Context, tenantID, resource string) error
 }
 
+// BatchQuotaChecker admits the complete cardinality of an atomic create while
+// the caller holds CreationFencer. A checker without this method cannot safely
+// approve multi-row creation by repeating a single-row check against unchanged
+// stock, so core fails that case closed.
+type BatchQuotaChecker interface {
+	AllowCreateCount(ctx context.Context, tenantID, resource string, amount int) error
+}
+
 // CreationFencer serializes a resource's quota check and its committed
 // creation across control-plane replicas. The callback must re-read whether
 // the resource already exists, then call AllowCreate only for a new resource.
@@ -114,7 +123,8 @@ func (nopRecorder) Record(string, string, int64) {}
 
 type allowAllQuota struct{}
 
-func (allowAllQuota) AllowCreate(context.Context, string, string) error { return nil }
+func (allowAllQuota) AllowCreate(context.Context, string, string) error           { return nil }
+func (allowAllQuota) AllowCreateCount(context.Context, string, string, int) error { return nil }
 
 var (
 	mu     sync.RWMutex
@@ -163,6 +173,22 @@ func AllowCreate(ctx context.Context, tenantID, resource string) error {
 	q := quota
 	mu.RUnlock()
 	return q.AllowCreate(ctx, tenantID, resource)
+}
+
+func AllowCreateCount(ctx context.Context, tenantID, resource string, amount int) error {
+	if amount <= 0 {
+		return fmt.Errorf("%w: batch creation amount must be positive", ErrQuotaUnavailable)
+	}
+	mu.RLock()
+	q := quota
+	mu.RUnlock()
+	if checker, ok := q.(BatchQuotaChecker); ok {
+		return checker.AllowCreateCount(ctx, tenantID, resource, amount)
+	}
+	if amount == 1 {
+		return q.AllowCreate(ctx, tenantID, resource)
+	}
+	return fmt.Errorf("%w: batch quota checker is not configured", ErrQuotaUnavailable)
 }
 
 func WithCreationFence(ctx context.Context, tenantID, resource string, fn func(context.Context) error) error {

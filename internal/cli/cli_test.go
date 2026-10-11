@@ -1705,6 +1705,25 @@ func TestDeveloperSecretAccessPreviewCommandSendsBodyWithoutIdempotencyKey(t *te
 	}
 }
 
+func TestSecretBatchImportCommandSendsOneBodyAndOneIdempotencyKey(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusCreated,
+		`{"batch_id":"11111111-1111-1111-1111-111111111111","count":2,"items":[{"name":"app/a","version":1},{"name":"app/b","version":1}]}`,
+		&captured)
+	body := `{"prefix":"app","values":{"a":"fixture-one","b":"fixture-two"}}`
+	code, stdout, stderr := run(t, []string{"secrets", "store", "import", "-f", "-"},
+		cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"count": 2`) ||
+		strings.Contains(stdout, "fixture-one") {
+		t.Fatalf("import CLI result exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/secrets/store/import" ||
+		captured.Header.Get("Idempotency-Key") == "" || !sameJSON(captured.Body, []byte(body)) {
+		t.Fatalf("import CLI request method=%s path=%s key=%q body=%s",
+			captured.Method, captured.Path, captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+}
+
 func TestSecretRotationScheduleCommandsSendPathsAndIdempotencyKeys(t *testing.T) {
 	var createCap capture
 	srv := mockServer(t, 201, `{"id":"11111111-1111-1111-1111-111111111111","name":"reporting-hourly","provider":"connector:ci","key":"db/reporting","old_ref":"version:1","interval_seconds":3600,"enabled":true,"next_run_at":"2026-07-01T00:00:00Z","last_run_status":"","created_at":"2026-07-01T00:00:00Z","updated_at":"2026-07-01T00:00:00Z"}`, &createCap)

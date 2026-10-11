@@ -87,13 +87,15 @@ value, while `GET /api/v1/secrets/store/{name}?resolve=true` expands references 
 tenant/permission scope instead. Cycles like `a -> b -> a` return a structured `409`
 with the cycle path; missing references return a normal `404`.
 
-Bulk application-secret import is deliberately unavailable. The compatibility route
-`POST /api/v1/secrets/store/import` returns `501 Not Implemented` and writes nothing;
-its OpenAPI operation is deprecated and marked `x-trstctl-availability: unavailable`.
-An atomic batch command must fence, append, project, and receipt every name together
-before this can be enabled without bypassing the immutable event log. Until then,
-preview and then create each secret through the two native-store routes, using a
-distinct idempotency key for each create mutation.
+`POST /api/v1/secrets/store/import` accepts `{"prefix":"optional/path","values":
+{"name":"value"}}` for 1–100 new secrets. Its one event holds tenant/name-bound
+sealed values, not plaintext. Per-name fences serialize concurrent single-secret
+and batch mutations; projection commits every version-1 row and one metadata-only
+batch receipt in one PostgreSQL transaction. An exact `Idempotency-Key` retry
+returns the same receipt. Any existing or reserved name returns `409` before
+publishing a partial batch. The CLI command is `trstctl-cli secrets store import
+-f import.json`; the console reviews names before execution and never displays
+values. Keep the input file private and remove it after use.
 
 The served store seals through a versioned binary container, its KEK loaded into
 locked, zeroizable memory at startup, never a raw byte slice on the heap. An older
@@ -188,10 +190,9 @@ debug commands printing the full environment.
 
 Developers can read with `trstctl-cli secrets store get NAME --resolve=true` for the
 same opt-in resolve/cycle-detect behavior, scoped to the caller's tenant and RBAC.
-There is no bulk-import CLI command while the compatibility route is safely
-unavailable: OpenAPI exposes only its `501` response and the portal shows a disabled
-**Import unavailable** control with the safe alternative. Scripts must create each
-secret as its own event-sourced request and use a separate idempotency key.
+For multiple new names, `trstctl-cli secrets store import -f import.json` sends one
+atomic request and prints the metadata receipt. The file contains secret values;
+use a private file, or `-f -` for standard input, and do not log its content.
 
 ### Dynamic secrets (F65) and PKI-as-a-secrets-engine (F67)
 
@@ -1086,8 +1087,9 @@ Approvers call `POST /api/v1/secrets/store/approvals/{name}` with `{"action":"ro
 The console renders the native store at `/secrets` and separate task-focused workspaces
 for machine access, one-time sharing, engines, scanning, and delivery. Transit lives in
 the **Encryption and signing** task at `/secrets/engines`; the exact console/API
-boundary is listed above. Import stays disabled because its compatibility route returns
-`501` without writing. See [The web console](../web-console.md).
+boundary is listed above. **Bulk secret import** reviews the selected JSON file's
+names, executes one batch, and displays its metadata receipt. See
+[The web console](../web-console.md).
 
 ## Use it
 

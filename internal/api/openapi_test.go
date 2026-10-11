@@ -268,18 +268,18 @@ func TestOpenAPISpecCoversRoutes(t *testing.T) {
 	}
 }
 
-func TestApplicationSecretImportContractIsExplicitlyUnavailable(t *testing.T) {
+func TestApplicationSecretImportContractIsAtomicAndServed(t *testing.T) {
 	doc := fetchSpec(t)
 	op := doc["paths"].(map[string]any)["/api/v1/secrets/store/import"].(map[string]any)["post"].(map[string]any)
-	if op["deprecated"] != true || op["x-trstctl-availability"] != "unavailable" {
-		t.Fatalf("secret import availability = deprecated:%v state:%v, want explicit unavailable", op["deprecated"], op["x-trstctl-availability"])
-	}
-	if reason, _ := op["x-trstctl-unavailable-reason"].(string); !strings.Contains(reason, "Event-sourced atomic batch import") {
-		t.Fatalf("secret import unavailable reason = %q", reason)
+	if op["deprecated"] == true || op["x-trstctl-availability"] == "unavailable" {
+		t.Fatalf("secret import remains marked unavailable: %v", op)
 	}
 	responses := op["responses"].(map[string]any)
-	if responses["501"] == nil || responses["201"] != nil {
-		t.Fatalf("secret import responses = %v, want 501 and no success response", responses)
+	if responses["201"] == nil || responses["501"] != nil {
+		t.Fatalf("secret import responses = %v, want 201 and no 501", responses)
+	}
+	if !hasRequiredHeaderParam(op, "Idempotency-Key") {
+		t.Fatal("batch import omits required idempotency key")
 	}
 }
 

@@ -41,3 +41,21 @@ func TestQuotaAdmissionSeesNewCapImmediatelyAndFailsClosedOnCountError(t *testin
 		t.Fatal("missing resource counter silently reported zero resources")
 	}
 }
+
+func TestAtomicBatchQuotaChecksWholeCardinality(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemStore()
+	cap := 5
+	if err := store.SetQuota(ctx, Quota{TenantID: "tenant-a", MaxSecretsStored: &cap}); err != nil {
+		t.Fatal(err)
+	}
+	checker := NewQuotaChecker(store, func(context.Context, string) (TenantCounts, error) {
+		return TenantCounts{usage.MeterSecretsStored: 3}, nil
+	}, time.Minute)
+	if err := checker.AllowCreateCount(ctx, "tenant-a", usage.MeterSecretsStored, 2); err != nil {
+		t.Fatalf("exact remaining capacity rejected: %v", err)
+	}
+	if err := checker.AllowCreateCount(ctx, "tenant-a", usage.MeterSecretsStored, 3); !errors.Is(err, usage.ErrQuotaExhausted) {
+		t.Fatalf("batch exceeding cap was admitted: %v", err)
+	}
+}

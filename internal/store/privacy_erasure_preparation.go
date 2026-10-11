@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -21,8 +22,9 @@ import (
 )
 
 const (
-	PrivacyRecoveryFenceApplicationSecret = "application_secret"
-	PrivacyRecoveryFenceApprovedTarget    = "approved_target"
+	PrivacyRecoveryFenceApplicationSecret       = "application_secret"
+	PrivacyRecoveryFenceApplicationSecretImport = "application_secret_import"
+	PrivacyRecoveryFenceApprovedTarget          = "approved_target"
 
 	PrivacyRecoveryFenceDeleted       = "deleted"
 	PrivacyRecoveryFencePseudonymized = "pseudonymized"
@@ -100,7 +102,7 @@ type PrivacyRecoveryFenceDisposition struct {
 	Disposition string `json:"disposition"`
 }
 
-// ValidatePrivacyRecoveryFenceDispositionsV3 accepts only the two recovery
+// ValidatePrivacyRecoveryFenceDispositionsV3 accepts only the listed recovery
 // receiver classes, their two closed dispositions, and UUID event identities.
 // No payload, semantic digest, subject spelling, or arbitrary map key can enter
 // canonical privacy history through this evidence field.
@@ -113,6 +115,7 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 	seen := make(map[string]struct{}, len(fences))
 	for _, fence := range fences {
 		if fence.Kind != PrivacyRecoveryFenceApplicationSecret &&
+			fence.Kind != PrivacyRecoveryFenceApplicationSecretImport &&
 			fence.Kind != PrivacyRecoveryFenceApprovedTarget {
 			return fmt.Errorf("store: privacy recovery fence kind %q is unsupported", fence.Kind)
 		}
@@ -362,11 +365,16 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
+		importFences, err := s.prepareApplicationSecretImportRecoveryFencesTx(
+			ctx, tx, tenantID, subject, expectedRef)
+		if err != nil {
+			return err
+		}
 		approvedFences, err := s.prepareApprovedTargetRecoveryFencesTx(ctx, tx, tenantID, subject)
 		if err != nil {
 			return err
 		}
-		recoveryFences := append(applicationFences, approvedFences...)
+		recoveryFences := append(append(applicationFences, importFences...), approvedFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -378,6 +386,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		}
 		selected.Counts["application_secret_mutation_fences"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceApplicationSecret)
+		selected.Counts["application_secret_import_batches"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceApplicationSecretImport)
 		selected.Counts["approved_target_event_fences"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceApprovedTarget)
 		scheduler, err := s.PrepareSecretRotationSchedulePrivacyErasureTx(
@@ -871,6 +881,135 @@ func (s *Store) prepareApplicationSecretRecoveryFencesTx(
 		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
 			Kind: PrivacyRecoveryFenceApplicationSecret, EventID: row.eventID,
 			Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
+// A pending batch is independent append-recovery authority. If privacy erasure
+// removes an AAD-bound name, the old complete command must never be appended
+// after the history cutover. An already-appended event is rewritten to the v2
+// pruned form and can project the unaffected names without this reservation.
+func (s *Store) prepareApplicationSecretImportRecoveryFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject, subjectRef string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingBatch struct {
+		eventID, digest, actorRef string
+		payload, actor            []byte
+	}
+	rows, err := tx.Query(ctx, `SELECT event_id::text, command_payload,
+		payload_sha256, actor, actor_subject_ref
+		FROM application_secret_import_batches
+		WHERE tenant_id = $1 ORDER BY event_id FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingBatch
+	for rows.Next() {
+		var batch pendingBatch
+		if err := rows.Scan(&batch.eventID, &batch.payload, &batch.digest,
+			&batch.actor, &batch.actorRef); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, batch)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, batch := range pending {
+		if !json.Valid(batch.payload) || crypto.SHA256Hex(batch.payload) != batch.digest {
+			return nil, fmt.Errorf("store: application-secret import batch %s payload is invalid", batch.eventID)
+		}
+		var command struct {
+			Items []struct {
+				Name string `json:"name"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(batch.payload, &command); err != nil {
+			return nil, err
+		}
+		fenceRows, err := tx.Query(ctx, `SELECT secret_name
+			FROM application_secret_import_name_fences
+			WHERE tenant_id = $1 AND event_id = $2 ORDER BY secret_name`, tenantID, batch.eventID)
+		if err != nil {
+			return nil, err
+		}
+		var names []string
+		for fenceRows.Next() {
+			var name string
+			if err := fenceRows.Scan(&name); err != nil {
+				fenceRows.Close()
+				return nil, err
+			}
+			names = append(names, name)
+		}
+		if err := fenceRows.Err(); err != nil {
+			fenceRows.Close()
+			return nil, err
+		}
+		fenceRows.Close()
+		payloadNames := make([]string, 0, len(command.Items))
+		for _, item := range command.Items {
+			payloadNames = append(payloadNames, item.Name)
+		}
+		if len(names) == 0 || !slices.Equal(names, payloadNames) {
+			return nil, fmt.Errorf("%w: application-secret import recovery names differ", ErrIdempotencyConflict)
+		}
+		rewritten, version, dataChanged, err := events.PseudonymizeEventDataForSubjectVersioned(
+			batch.payload, tenantID, subject, "secret.batch_imported", 1)
+		if err != nil {
+			return nil, err
+		}
+		actor, actorChanged, err := pseudonymizeApplicationSecretRecoveryActor(
+			batch.actor, tenantID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !dataChanged && !actorChanged && batch.actorRef != subjectRef {
+			continue
+		}
+		if version != 1 {
+			tag, err := tx.Exec(ctx, `DELETE FROM application_secret_import_batches
+				WHERE tenant_id = $1 AND event_id = $2`, tenantID, batch.eventID)
+			if err != nil {
+				return nil, err
+			}
+			if tag.RowsAffected() != 1 {
+				return nil, ErrIdempotencyConflict
+			}
+			dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+				Kind:    PrivacyRecoveryFenceApplicationSecretImport,
+				EventID: batch.eventID, Disposition: PrivacyRecoveryFenceDeleted,
+			})
+			continue
+		}
+		actorJSON, ok := actor.(string)
+		if !ok {
+			return nil, errors.New("store: application-secret import recovery actor is unavailable")
+		}
+		var rewrittenActor events.Actor
+		if err := json.Unmarshal([]byte(actorJSON), &rewrittenActor); err != nil {
+			return nil, err
+		}
+		nextActorRef := privacy.SubjectRef(tenantID, rewrittenActor.Subject)
+		tag, err := tx.Exec(ctx, `UPDATE application_secret_import_batches
+			SET command_payload = $3, payload_sha256 = $4,
+			    actor = $5::jsonb, actor_subject_ref = $6
+			WHERE tenant_id = $1 AND event_id = $2`,
+			tenantID, batch.eventID, rewritten, crypto.SHA256Hex(rewritten), actorJSON, nextActorRef)
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind:    PrivacyRecoveryFenceApplicationSecretImport,
+			EventID: batch.eventID, Disposition: PrivacyRecoveryFencePseudonymized,
 		})
 	}
 	return dispositions, nil

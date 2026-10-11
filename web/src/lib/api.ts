@@ -441,6 +441,8 @@ import type {
   ScaleOrchestrationPlan,
   SecretAccessPreview,
   SecretAccessPreviewRequest,
+  SecretImportRequest,
+  SecretImportResponse,
   SecretApproval as GenSecretApproval,
   SecretApprovalRequest as GenSecretApprovalRequest,
   SecretMeta,
@@ -1160,6 +1162,8 @@ export type {
   ScaleOrchestrationPlan,
   SecretAccessPreview,
   SecretAccessPreviewRequest,
+  SecretImportRequest,
+  SecretImportResponse,
   SecretMeta,
   SecretMetaList,
   SecretStoreCreatePreview,
@@ -2003,6 +2007,7 @@ export interface Api {
   previewSecretAccess(input: SecretAccessPreviewRequest): Promise<SecretAccessPreview>;
   previewSecretCreate(input: SecretCreateRequest): Promise<SecretStoreCreatePreview>;
   createSecret(input: SecretCreateRequest): Promise<SecretMeta>;
+  importSecrets(input: SecretImportRequest, idempotencyKey: string): Promise<SecretImportResponse>;
   getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
   /** Read one secret as the granted workload credential, without falling back
    * to the browser's human session cookie. The caller must discard the value. */
@@ -2663,6 +2668,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewSecretAccess: (input) => postRead<SecretAccessPreview>("/api/v1/secrets/access/preview", input),
   previewSecretCreate: (input) => postRead<SecretStoreCreatePreview>("/api/v1/secrets/store/preview", input),
   createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
+  importSecrets: (input, idempotencyKey) => mutate<SecretImportResponse>("POST", "/api/v1/secrets/store/import", input, idempotencyKey),
   getSecret: (name, options) => {
     const qs = new URLSearchParams();
     if (options?.resolve) qs.set("resolve", "true");

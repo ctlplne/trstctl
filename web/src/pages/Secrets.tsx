@@ -14,7 +14,7 @@ import { useCan } from "@/components/rbac";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
+import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory } from "@/components/secrets";
 import { formatDateTime as formatDate } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
@@ -72,6 +72,7 @@ import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
 import { AWSHoneyTokenWorkflow } from "./secrets/AWSHoneyTokenWorkflow";
 
+const SecretImport = lazy(() => import("@/components/secrets/SecretImport").then((module) => ({ default: module.SecretImport })));
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
@@ -1433,7 +1434,6 @@ export function Secrets() {
                 <ReferenceResolver />
                 <EnvDiffPanel secrets={items} />
               </div>
-              <SecretImport />
             </div>
           </details>
 
@@ -1446,6 +1446,10 @@ export function Secrets() {
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.native.store.returns.names.and.version.6f88143feb")}</p>
               </div>
             </div>
+
+            <Suspense fallback={<SecretsWorkflowFallback />}>
+              <SecretImport onImported={() => void load()} />
+            </Suspense>
 
             {createOpen && (
               <NativeSecretCreateForm
@@ -2405,7 +2409,13 @@ export function Secrets() {
               </div>
             )}
 
-            <SecretImport reason={reviewedAccess?.plan.bulk_import.reason} safePath={reviewedAccess?.plan.bulk_import.safe_path} />
+            <Suspense fallback={<SecretsWorkflowFallback />}>
+              <SecretImport
+                reason={reviewedAccess?.plan.bulk_import.reason}
+                safePath={reviewedAccess?.plan.bulk_import.safe_path}
+                onImported={() => void load()}
+              />
+            </Suspense>
           </section>
         </div>
       )}

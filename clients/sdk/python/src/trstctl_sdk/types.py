@@ -10349,6 +10349,16 @@ SecretImportRequest = TypedDict(
     total=False,
 )
 
+SecretImportResponse = TypedDict(
+    'SecretImportResponse',
+    {
+        'batch_id': str,
+        'count': int,
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 SecretMeta = TypedDict(
     'SecretMeta',
     {

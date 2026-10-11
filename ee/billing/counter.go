@@ -66,6 +66,17 @@ func storeTenantCounter(s *corestore.Store, includePending bool) TenantCounter {
 				return err
 			}
 			out[usage.MeterSecretsStored] += reserved
+			if err := tx.QueryRow(ctx, `SELECT count(*)
+				FROM application_secret_import_name_fences AS f
+				WHERE f.tenant_id = $1
+				  AND NOT EXISTS (
+				    SELECT 1 FROM secret_store AS materialized
+				     WHERE materialized.tenant_id = f.tenant_id
+				       AND materialized.name = f.secret_name)`,
+				tenantID).Scan(&reserved); err != nil {
+				return err
+			}
+			out[usage.MeterSecretsStored] += reserved
 			return nil
 		})
 		if err != nil {

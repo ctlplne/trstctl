@@ -732,6 +732,11 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 	if err != nil {
 		return 0, err
 	}
+	if count, importErr := a.reconcileApplicationSecretImportBatches(ctx, tenants); importErr != nil {
+		return reconciled, importErr
+	} else {
+		reconciled += count
+	}
 	for _, tenant := range tenants {
 		if err := a.secrets.be.Store.WithApplicationSecretMutationPrivacyBarrier(
 			ctx, tenant.TenantID, func(context.Context) error { return nil }); err != nil {

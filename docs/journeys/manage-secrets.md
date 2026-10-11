@@ -21,9 +21,9 @@ tamper-evident log. This is for a developer or platform engineer who wants their
 services to stop hard-coding secrets.
 
 > **In the console:** the `/secrets` workspace presents the same store as a folder
-> tree with a reference resolver, an environment diff, version history, a disabled
-> bulk-import disclosure, and a transit (encrypt / decrypt / HMAC) sub-console. The
-> import route returns `501` without writing. See [The web console](../web-console.md).
+> tree with a reference resolver, an environment diff, version history, an
+> atomic bulk-import review, and a transit (encrypt / decrypt / HMAC) sub-console.
+> See [The web console](../web-console.md).
 
 ## Before you start
 
@@ -148,9 +148,16 @@ today (see [Current limitations](../limitations.md) and
    the stock CLI omits it, trstctl derives a replay key from method, path, and body so
    retries do not mint duplicates.
 
-3. Create a small tree one secret at a time, then resolve references deliberately.
-   Bulk import is currently unavailable: `/api/v1/secrets/store/import` returns `501`
-   without writing because an atomic event-sourced batch command is not implemented.
+3. Create a small tree one secret at a time, or import up to 100 new names in one
+   atomic command. Save a private JSON file such as
+   `{"prefix":"app","values":{"db/user":"alice","db/password":"..."}}`, then run
+   `trstctl-cli secrets store import -f import.json` or use the **Bulk secret import**
+   review on `/secrets`. The JSON file contains real values: keep it private and
+   delete it when no longer needed. The receipt lists names, versions and one batch
+   ID, never values. If any name already exists or is reserved, the entire batch
+   returns `409` and no name is imported. For direct HTTP use, send the same JSON
+   to `POST /api/v1/secrets/store/import` with an `Idempotency-Key` header; an exact
+   retry returns the original receipt.
    References use `${secret.path}` and expand only when the caller asks for
    `resolve=true`, so a normal read does not fan out across hidden dependencies.
 

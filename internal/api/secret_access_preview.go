@@ -248,9 +248,9 @@ func (a *API) previewSecretAccess(w http.ResponseWriter, r *http.Request) {
 		APIRequest: secretAccessAPIRequest{Method: http.MethodGet, Path: secretAccessStorePath(req.Name, req.Resolve)},
 		TypeScript: secretAccessTypeScript(req),
 		BulkImport: secretAccessBulkImport{
-			Available: false,
-			Reason:    "Atomic event-sourced bulk import is not implemented, so the compatibility route fails closed with 501 and the CLI exposes no import command.",
-			SafePath:  "Create each secret with its own idempotency key, review the resulting metadata, then automate the same individual operation.",
+			Available: true,
+			Reason:    "Atomic batch import reserves each name, appends one sealed event, and returns a secret-free receipt for every item.",
+			SafePath:  "Review names and values locally, then use trstctl secrets store import -f <private-file> with one Idempotency-Key. Existing names fail the whole batch.",
 		},
 		DataHandling: "Preview opens the value only in transient wipeable server memory. The plan contains names, version, commands, and policy metadata only; it never returns, logs, persists, or sends the secret value.",
 	})

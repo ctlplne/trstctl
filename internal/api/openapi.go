@@ -5522,11 +5522,14 @@ func componentSchemas() map[string]*Schema {
 		"value": str(),
 	}, "value")
 	secretImportReq := object(map[string]*Schema{
-		"prefix": str(), "values": {Type: "object"},
+		"prefix": str(), "values": {Type: "object", AdditionalProperties: str()},
 	}, "values")
 	secretMeta := object(map[string]*Schema{
 		"name": str(), "owner_id": uuid(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "name", "version")
+	secretImportResp := object(map[string]*Schema{
+		"batch_id": uuid(), "count": {Type: "integer"}, "items": {Type: "array", Items: ref("SecretMeta")},
+	}, "batch_id", "count", "items")
 	dynamicLeaseReq := object(map[string]*Schema{
 		"provider": str(), "role": str(), "ttl_seconds": {Type: "integer"}, "preview_fingerprint": str(),
 	}, "provider", "role", "ttl_seconds")
@@ -7024,6 +7027,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretAccessPreview":                      secretAccessPreview,
 		"SecretRotateRequest":                      secretRotateReq,
 		"SecretImportRequest":                      secretImportReq,
+		"SecretImportResponse":                     secretImportResp,
 		"SecretRecoverRequest":                     secretRecoverReq,
 		"SecretMeta":                               secretMeta,
 		"MachineAuthMethod": object(map[string]*Schema{

@@ -98,8 +98,11 @@ var RecoveredFromPostgresBackup = []string{
 	// state. They survive approval read-model rebuilds so the same target event is
 	// re-consumed without rotating or deleting the secret twice.
 	"application_secret_mutation_fences",
+	"application_secret_import_batches",
+	"application_secret_import_name_fences",
 	"application_secret_tenant_epochs",
 	"application_secret_mutation_receipts",
+	"application_secret_import_receipts",
 	// One bounded row per tenant retains the UUID-ring position and live-replica
 	// lease for fair scheduled-rotation scans. It is operational PostgreSQL
 	// authority, not an event-derived schedule projection.

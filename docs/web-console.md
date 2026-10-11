@@ -451,9 +451,9 @@ and exact CLI, HTTP, and TypeScript examples. The examples are copyable only aft
 that server review and never contain a real value. The separate access test executes
 the served read, compares its name and version with the plan, and renders only a
 value-free receipt. Changed inputs or a changed version invalidate the review;
-ordinary access failures keep an explicit retry path. Bulk import remains visibly
-disabled because its compatibility API safely returns `501` until an atomic
-event-sourced batch command exists.
+ordinary access failures keep an explicit retry path. **Bulk secret import** accepts
+a private JSON file, shows names without values for review, then displays the
+atomic batch's metadata receipt. One name collision refuses the whole import.
 
 ### What could be affected (`/graph`)
 

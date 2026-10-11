@@ -6410,10 +6410,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Bulk application-secret import is unavailable (fails closed without writing)
-         * @deprecated
-         */
+        /** Atomically import up to 100 application secrets from one event */
         post: operations["importSecrets"];
         delete?: never;
         options?: never;
@@ -15135,7 +15132,15 @@ export interface components {
         };
         SecretImportRequest: {
             prefix?: string;
-            values: Record<string, never>;
+            values: {
+                [key: string]: string;
+            };
+        };
+        SecretImportResponse: {
+            /** Format: uuid */
+            batch_id: string;
+            count: number;
+            items: components["schemas"]["SecretMeta"][];
         };
         SecretMeta: {
             /** Format: date-time */
@@ -34557,13 +34562,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Event-sourced atomic batch import is not implemented; use one idempotent create request per secret. */
-            501: {
+            /** @description success */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/json": components["schemas"]["SecretImportResponse"];
                 };
             };
             /** @description client error */

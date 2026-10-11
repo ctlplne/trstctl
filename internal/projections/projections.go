@@ -3963,6 +3963,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 	if handled, err := p.applyApplicationSecretTx(ctx, tx, e); handled {
 		return err
 	}
+	if handled, err := p.applyApplicationSecretBatchImportTx(ctx, tx, e); handled {
+		return err
+	}
 	if handled, err := p.applySecretIntegrationTx(ctx, tx, e); handled {
 		return err
 	}

@@ -20,6 +20,7 @@ import (
 )
 
 const privacyCodeSigningCommandedEvent = "codesign.commanded"
+const privacyApplicationSecretBatchImportedEvent = "secret.batch_imported"
 
 const (
 	// ApplicationSecretPrivacyDispositionSchemaVersion is a privacy-only event
@@ -545,6 +546,9 @@ func PseudonymizeEventDataForSubjectVersioned(
 			data, tenantID, subject, eventType, schemaVersion,
 		)
 	}
+	if eventType == privacyApplicationSecretBatchImportedEvent {
+		return pseudonymizeApplicationSecretBatchImportData(data, tenantID, subject, schemaVersion)
+	}
 	if eventType == privacyCodeSigningCommandedEvent {
 		next, changed, err = pseudonymizeCodeSigningCommandData(
 			data, tenantID, subject, schemaVersion,
@@ -554,6 +558,71 @@ func PseudonymizeEventDataForSubjectVersioned(
 	next, changed, err = applyRegisteredPrivacyEventPolicy(
 		data, tenantID, subject, eventType, schemaVersion,
 	)
+	return next, schemaVersion, changed, err
+}
+
+func pseudonymizeApplicationSecretBatchImportData(data []byte, tenantID, subject string, schemaVersion int) ([]byte, int, bool, error) {
+	const tombstoneVersion = 2
+	if schemaVersion != DefaultSchemaVersion && schemaVersion != tombstoneVersion {
+		return nil, schemaVersion, false, errors.New("events: unsupported application-secret batch import privacy schema")
+	}
+	if err := validatePrivacyJSONUniqueKeys(data); err != nil {
+		return nil, schemaVersion, false, err
+	}
+	if err := validateRegisteredPrivacyEventPayload(data, privacyApplicationSecretBatchImportedEvent, schemaVersion); err != nil {
+		return nil, schemaVersion, false, err
+	}
+	var coordinates struct {
+		TenantEpoch          string `json:"tenant_epoch"`
+		IdempotencyKeyDigest string `json:"idempotency_key_sha256"`
+		RequestBinding       string `json:"request_binding_hmac_sha256"`
+		CommandEvidence      string `json:"command_evidence"`
+		Surface              string `json:"surface"`
+		Items                []struct {
+			Name   string `json:"name"`
+			Sealed []byte `json:"sealed"`
+		} `json:"items"`
+		PrivacyDisposition         string `json:"privacy_disposition,omitempty"`
+		PrivacySubjectRef          string `json:"privacy_subject_ref,omitempty"`
+		PrivacySourceSchemaVersion int    `json:"privacy_source_schema_version,omitempty"`
+		PrivacyRemovedCount        int    `json:"privacy_removed_count,omitempty"`
+	}
+	if err := json.Unmarshal(data, &coordinates); err != nil {
+		return nil, schemaVersion, false, err
+	}
+	if len(coordinates.Items) == 0 && schemaVersion == DefaultSchemaVersion {
+		return nil, schemaVersion, false, errors.New("events: application-secret batch import has no names")
+	}
+	retained := coordinates.Items[:0]
+	removed := 0
+	for _, item := range coordinates.Items {
+		if item.Name == "" {
+			return nil, schemaVersion, false, errors.New("events: application-secret batch import has an empty name")
+		}
+		if _, changed := replaceSubjectTokens(item.Name, subject, ""); changed {
+			removed++
+			continue
+		}
+		retained = append(retained, item)
+	}
+	if removed > 0 {
+		coordinates.Items = retained
+		coordinates.PrivacyDisposition = "name_items_pruned"
+		coordinates.PrivacySubjectRef = privacyref.SubjectRef(tenantID, subject)
+		coordinates.PrivacySourceSchemaVersion = DefaultSchemaVersion
+		coordinates.PrivacyRemovedCount += removed
+		next, err := json.Marshal(coordinates)
+		if err != nil {
+			return nil, schemaVersion, false, err
+		}
+		if err := validateRegisteredPrivacyEventPayload(next,
+			privacyApplicationSecretBatchImportedEvent, tombstoneVersion); err != nil {
+			return nil, schemaVersion, false, err
+		}
+		return next, tombstoneVersion, true, nil
+	}
+	next, changed, err := applyRegisteredPrivacyEventPolicy(data, tenantID, subject,
+		privacyApplicationSecretBatchImportedEvent, schemaVersion)
 	return next, schemaVersion, changed, err
 }
 

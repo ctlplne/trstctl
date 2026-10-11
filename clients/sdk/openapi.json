@@ -30874,11 +30874,37 @@
             "type": "string"
           },
           "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
             "type": "object"
           }
         },
         "required": [
           "values"
+        ],
+        "type": "object"
+      },
+      "SecretImportResponse": {
+        "properties": {
+          "batch_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretMeta"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch_id",
+          "count",
+          "items"
         ],
         "type": "object"
       },
@@ -61537,7 +61563,6 @@
     },
     "/api/v1/secrets/store/import": {
       "post": {
-        "deprecated": true,
         "operationId": "importSecrets",
         "parameters": [
           {
@@ -61561,6 +61586,16 @@
           "required": true
         },
         "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretImportResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -61570,16 +61605,6 @@
               }
             },
             "description": "client error"
-          },
-          "501": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret."
           },
           "5XX": {
             "content": {
@@ -61600,10 +61625,8 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Bulk application-secret import is unavailable (fails closed without writing)",
-        "x-trstctl-availability": "unavailable",
-        "x-trstctl-permission": "secrets:write",
-        "x-trstctl-unavailable-reason": "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret."
+        "summary": "Atomically import up to 100 application secrets from one event",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/store/preview": {

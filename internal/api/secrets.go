@@ -1161,10 +1161,6 @@ type secretVisibilitySourceCounts struct {
 	Cloud      int
 }
 
-// importSecrets reserves the compatibility route but fails closed. The former
-// implementation wrote the derived secret table directly; serving that behavior
-// would violate AN-2 until an atomic batch event/fence/receipt schema exists.
-//
 //trstctl:mutation
 func (a *API) importSecrets(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
@@ -1172,22 +1168,7 @@ func (a *API) importSecrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		req, err := decodeSecretImportRequest(r)
-		if err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		defer wipeSecretImportRequest(&req)
-		if len(req.Values) == 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "values must contain at least one secret")
-		}
-		// The legacy bulk path wrote secret_store directly, so a successful response
-		// could not be rebuilt from immutable history (AN-2). Keep the route honest and
-		// fail closed until a future batch-command schema can atomically fence, append,
-		// project, and receipt every imported name.
-		return 0, nil, errStatus(http.StatusNotImplemented,
-			"bulk secret import is unavailable until event-sourced atomic batch import is configured")
-	})
+	a.importSecretsEventSourced(w, r, idempotencyKey)
 }
 
 func decodeSecretImportRequest(r *http.Request) (req secretImportRequest, err error) {

@@ -3408,10 +3408,9 @@ when off, requiring a KEK when on):
   version), and `POST /api/v1/secrets/store/recover/{name}` (point-in-time
   recovery). Values are sealed at rest under the KEK. `trstctl-cli run --secret
   ENV=path -- <cmd>` wraps the same read path, injecting values only into the
-  child process environment. Bulk import is not served: the retained compatibility
-  route `POST /api/v1/secrets/store/import` returns `501` without writing, the web
-  console shows a disabled disclosure, and the CLI exposes no import command until
-  an atomic event-sourced batch command exists.
+  child process environment. Bulk import uses one event, per-name reservations,
+  and an atomic sealed-row/receipt projection for 1–100 new names. It is served
+  through API, CLI and console; existing or reserved names reject the whole batch.
 - The Vault/OpenBao compatibility shim backs the common migration paths
   `GET /v1/auth/token/lookup-self`, KV mount-discovery preflight for
   `secret/`, `POST/PUT/GET /v1/secret/data/{path}`, and

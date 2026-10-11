@@ -15625,6 +15625,7 @@
             "api_surface": [
                 "previewSecretCreate",
                 "createSecret",
+                "importSecrets",
                 "listSecrets",
                 "getSecret",
                 "getSecretVersion",
@@ -15636,6 +15637,7 @@
             "cli_surface": [
                 "secrets store preview",
                 "secrets store put",
+                "secrets store import",
                 "secrets store list",
                 "secrets store get",
                 "secrets store history",

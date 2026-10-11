@@ -7531,6 +7531,12 @@ export interface SecretImportRequest {
   values: Record<string, unknown>;
 }
 
+export interface SecretImportResponse {
+  batch_id: string;
+  count: number;
+  items: SecretMeta[];
+}
+
 export interface SecretMeta {
   created_at?: string;
   name: string;

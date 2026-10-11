@@ -717,6 +717,7 @@ public final class OpenApiSchemas {
       "SecretApprovalRequest",
       "SecretCreateRequest",
       "SecretImportRequest",
+      "SecretImportResponse",
       "SecretMeta",
       "SecretMetaList",
       "SecretRecoverRequest",

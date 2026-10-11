@@ -592,16 +592,29 @@ func TestServedSecretStoreReferencesAndImport(t *testing.T) {
 				"api/url":   "https://svc.internal?token=${secret.imported/api/token}",
 			},
 		})
-	if status != http.StatusNotImplemented {
-		t.Fatalf("unsafe direct-write import status=%d body=%s, want fail-closed 501", status, body)
+	if status != http.StatusCreated {
+		t.Fatalf("atomic import status=%d body=%s, want 201", status, body)
 	}
 	if strings.Contains(string(body), "tok-1") {
 		t.Fatalf("import reply leaked imported secret material: %s", body)
 	}
+	var imported struct {
+		BatchID string `json:"batch_id"`
+		Count   int    `json:"count"`
+		Items   []struct {
+			Name    string `json:"name"`
+			Version int    `json:"version"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &imported); err != nil || imported.BatchID == "" || imported.Count != 2 ||
+		len(imported.Items) != 2 || imported.Items[0].Name != "imported/api/token" ||
+		imported.Items[1].Name != "imported/api/url" {
+		t.Fatalf("incomplete secret-free import receipt: %v %s", err, body)
+	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/imported/api/url?resolve=true", tok, nil)
-	if status != http.StatusNotFound {
-		t.Fatalf("fail-closed import wrote secret rows: status=%d body=%s", status, body)
+	if status != http.StatusOK || !strings.Contains(string(body), "tok-1") {
+		t.Fatalf("imported reference was not resolved: status=%d body=%s", status, body)
 	}
 
 	for _, seed := range []struct {

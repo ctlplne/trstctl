@@ -407,6 +407,19 @@ func (s *Store) claimApplicationSecretMutationFenceUnbarriered(
 	}
 	var canonical ApplicationSecretMutationFence
 	err := s.WithTenant(ctx, candidate.TenantID, func(tx pgx.Tx) error {
+		if err := lockApplicationSecretImportNameTx(ctx, tx, candidate.TenantID, candidate.Name); err != nil {
+			return err
+		}
+		var importReserved bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM application_secret_import_name_fences
+			                WHERE tenant_id = $1 AND secret_name = $2)`,
+			candidate.TenantID, candidate.Name).Scan(&importReserved); err != nil {
+			return err
+		}
+		if importReserved {
+			return fmt.Errorf("%w: application-secret name is reserved by a batch import", ErrApplicationSecretMutationInFlight)
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO application_secret_mutation_fences
 			       (tenant_id, secret_name, operation, event_id, event_type,

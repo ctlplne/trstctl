@@ -22,6 +22,14 @@ func TestDecodeSecretImportRequestWipesPartialValuesOnEveryDecodeError(t *testin
 			name: "second JSON document",
 			body: `{"values":{"decoded-first":"must-be-wiped"}} {}`,
 		},
+		{
+			name: "duplicate secret name",
+			body: `{"values":{"decoded-first":"must-be-wiped","decoded-first":"must-not-replace"}}`,
+		},
+		{
+			name: "duplicate values field",
+			body: `{"values":{"decoded-first":"must-be-wiped"},"values":{"second":"must-not-replace"}}`,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

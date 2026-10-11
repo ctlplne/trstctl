@@ -7,6 +7,7 @@ import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { AppQueryProvider } from "@/lib/query";
 import { Secrets } from "@/pages/Secrets";
+import { SecretImport } from "@/components/secrets/SecretImport";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -14,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     previewSecretAccess: vi.fn(),
     previewSecretCreate: vi.fn(),
     createSecret: vi.fn(),
+    importSecrets: vi.fn(),
     getSecret: vi.fn(),
     getSecretWithToken: vi.fn(),
     recoverSecret: vi.fn(),
@@ -258,9 +260,9 @@ function primeSecretsMocks() {
     typescript:
       'const secret = await client.secrets.get("app/db/password", { resolve: false });\nprocess.env["DB_PASSWORD"] = secret.value; // memory only; never log or persist',
     bulk_import: {
-      available: false,
-      reason: "Atomic event-sourced bulk import is not implemented, so the compatibility route fails closed with 501.",
-      safe_path: "Create each secret with its own idempotency key.",
+      available: true,
+      reason: "The batch commits every new name or none of them.",
+      safe_path: "Choose a private JSON file and review the names before importing.",
     },
     secret_data_handling: "The plan contains metadata only and never returns the secret value.",
   });
@@ -1150,6 +1152,70 @@ function unvaultedSecretPostureFixture() {
   };
 }
 
+describe("atomic secret import", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reviews names without rendering values, sends one batch key, and shows only the receipt", async () => {
+    const user = userEvent.setup();
+    apiMock.importSecrets.mockResolvedValue({
+      batch_id: "123e4567-e89b-42d3-a456-426614174000",
+      count: 2,
+      items: [
+        { name: "qa/alpha", version: 1, created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z" },
+        { name: "qa/beta", version: 1, created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z" },
+      ],
+    });
+    render(<SecretImport />);
+    const value = "SECRET-VALUE-NEVER-IN-DOM";
+    const file = new File([JSON.stringify({ prefix: "qa", values: { alpha: value, beta: "other" } })], "import.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => JSON.stringify({ prefix: "qa", values: { alpha: value, beta: "other" } }) });
+    await user.upload(screen.getByLabelText("Choose JSON import file"), file);
+    expect(await screen.findByText("qa/alpha")).toBeInTheDocument();
+    expect(screen.getByText("qa/beta")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(value);
+    await user.click(screen.getByRole("button", { name: "Import reviewed secrets" }));
+    await waitFor(() => expect(apiMock.importSecrets).toHaveBeenCalledTimes(1));
+    expect(apiMock.importSecrets.mock.calls[0]?.[0]).toEqual({ prefix: "qa", values: { alpha: value, beta: "other" } });
+    expect(apiMock.importSecrets.mock.calls[0]?.[1]).toEqual(expect.any(String));
+    expect(await screen.findByText("Imported 2 secrets")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(value);
+  });
+
+  it("refuses a file whose duplicate name would change the reviewed batch", async () => {
+    const user = userEvent.setup();
+    render(<SecretImport />);
+    const raw = '{"prefix":"qa","values":{"same":"first","same":"second"}}';
+    const file = new File([raw], "duplicates.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => raw });
+    await user.upload(screen.getByLabelText("Choose JSON import file"), file);
+    expect(await screen.findByRole("alert")).toHaveTextContent("repeats a JSON field or secret name");
+    expect(screen.queryByRole("button", { name: "Import reviewed secrets" })).not.toBeInTheDocument();
+    expect(apiMock.importSecrets).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed batch with the same key and unchanged reviewed values", async () => {
+    const user = userEvent.setup();
+    apiMock.importSecrets
+      .mockRejectedValueOnce(new Error("temporary connection loss"))
+      .mockResolvedValueOnce({ batch_id: "123e4567-e89b-42d3-a456-426614174001", count: 1, items: [{ name: "qa/retry", version: 1 }] });
+    render(<SecretImport />);
+    const raw = '{"prefix":"qa","values":{"retry":"private-retry-value"}}';
+    const file = new File([raw], "retry.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => raw });
+    await user.upload(screen.getByLabelText("Choose JSON import file"), file);
+    const button = await screen.findByRole("button", { name: "Import reviewed secrets" });
+    await user.click(button);
+    expect(await screen.findByRole("alert")).toHaveTextContent("temporary connection loss");
+    await user.click(button);
+    expect(await screen.findByText("Imported 1 secret")).toBeInTheDocument();
+    expect(apiMock.importSecrets).toHaveBeenCalledTimes(2);
+    expect(apiMock.importSecrets.mock.calls[0]?.[1]).toEqual(apiMock.importSecrets.mock.calls[1]?.[1]);
+    expect(document.body).not.toHaveTextContent("private-retry-value");
+  });
+});
+
 describe("secrets surface", () => {
   beforeEach(() => primeSecretsMocks());
 
@@ -1835,7 +1901,8 @@ describe("secrets surface", () => {
 
     const reviewForm = within(await screen.findByRole("form", { name: "Review developer secret access" }));
     expect(screen.queryByText(/trstctl run --secret/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import unavailable" })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "Bulk secret import" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Choose JSON import file")).toBeEnabled();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 
     await user.click(reviewForm.getByRole("button", { name: "Review access plan" }));
