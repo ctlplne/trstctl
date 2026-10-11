@@ -222,6 +222,9 @@ export type SecretApprovalQueueItem = {
   id: string;
   name: string;
   action: SecretApprovalAction;
+  requestId: string;
+  intentDigest: string;
+  idempotencyKey: string;
   openedAt: string;
   status: "pending" | "approved" | "completed";
   approvals?: number;

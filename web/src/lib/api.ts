@@ -2018,8 +2018,8 @@ export interface Api {
   getSecretWithToken(name: string, token: string): Promise<SecretValue>;
   getSecretVersion(name: string, version: number): Promise<SecretValue>;
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
-  rotateSecret(name: string, input: SecretRotateRequest): Promise<SecretMeta>;
-  deleteSecret(name: string): Promise<void>;
+  rotateSecret(name: string, input: SecretRotateRequest, idempotencyKey?: string): Promise<SecretMeta>;
+  deleteSecret(name: string, idempotencyKey?: string): Promise<void>;
   approveSecretChange(name: string, input: SecretApprovalRequest): Promise<SecretApproval>;
   secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
@@ -2691,8 +2691,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getSecretVersion: (name, version) =>
     req<SecretValue>(`/api/v1/secrets/store/history/${encodeURIComponent(name)}?version=${encodeURIComponent(String(version))}`),
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
-  rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
-  deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  rotateSecret: (name, input, idempotencyKey) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input, idempotencyKey),
+  deleteSecret: (name, idempotencyKey) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`, undefined, idempotencyKey),
   approveSecretChange: (name, input) => mutate<SecretApproval>("POST", `/api/v1/secrets/store/approvals/${encodeURIComponent(name)}`, input),
   secretRepositoryScanning: () => req<SecretRepositoryScanPosture>("/api/v1/secrets/scans/repositories"),
   receiveSecretRepositoryWebhook: (provider, input) =>

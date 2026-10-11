@@ -62,6 +62,7 @@ import {
   type SecretRotationDueEvidence,
 } from "./secrets/SecretsPageParts";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { newIdempotencyKey } from "@/lib/apiTransport";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
@@ -619,9 +620,13 @@ export function Secrets() {
     [ownerByID, revealBusy, secretMenuName, t],
   );
 
-  function queueSecretApproval(action: SecretApprovalAction, name: string, err: unknown): boolean {
+  function queueSecretApproval(action: SecretApprovalAction, name: string, idempotencyKey: string, err: unknown): boolean {
     const message = apiProblemMessage(err, t("secrets.approvals.requiredFallback"));
     if (!(err instanceof ApiError) || err.status !== 403 || !/dual control/i.test(message)) return false;
+    // The approval is bound to one AN-5 command. A name/action match could
+    // select another pending request after an edit or a previous retry.
+    const match = /request_id=([0-9a-f-]{36}) intent_digest=(sha256:[0-9a-f]{64})/i.exec(message);
+    if (!match) return false;
     const id = secretApprovalQueueID(action, name);
     setApprovalQueue((current) => {
       const existing = current.find((item) => item.id === id);
@@ -631,6 +636,9 @@ export function Secrets() {
           id,
           name,
           action,
+          requestId: match[1],
+          intentDigest: match[2],
+          idempotencyKey,
           openedAt: existing?.openedAt ?? new Date().toISOString(),
           status: "pending",
           error: message,
@@ -659,7 +667,12 @@ export function Secrets() {
       const requests = await api.approvalRequests();
       const exactRequest = requests.find(
         (request) =>
-          request.resource_kind === "secret" && request.resource_id === `secret:${item.name}` && request.action === item.action && request.status === "pending",
+          request.id === item.requestId &&
+          request.intent_digest === item.intentDigest &&
+          request.resource_kind === "secret" &&
+          request.resource_id === `secret:${item.name}` &&
+          request.action === item.action &&
+          request.status === "pending",
       );
       if (!exactRequest) throw new Error(t("source.no.pending.approvals.261de9be5f"));
       const approval = await api.approveSecretChange(item.name, {
@@ -689,7 +702,7 @@ export function Secrets() {
         if (rotateName !== item.name || rotateValue.trim() === "") {
           throw new Error(t("secrets.approvals.rotateRetryNeedsForm", { name: item.name }));
         }
-        const meta = await api.rotateSecret(item.name, { value: rotateValue });
+        const meta = await api.rotateSecret(item.name, { value: rotateValue }, item.idempotencyKey);
         setItems((current) => mergeMeta(current, [meta]));
         setRotateName("");
         setRotateValue("");
@@ -702,7 +715,7 @@ export function Secrets() {
         if (deleteName !== item.name || deleteConfirm !== item.name) {
           throw new Error(t("secrets.approvals.deleteRetryNeedsForm", { name: item.name }));
         }
-        await api.deleteSecret(item.name);
+        await api.deleteSecret(item.name, item.idempotencyKey);
         setItems((current) => current.filter((secret) => secret.name !== item.name));
         setDeleteName("");
         setDeleteConfirm("");
@@ -713,7 +726,7 @@ export function Secrets() {
       }
       throw new Error(t("secrets.approvals.recoverRetryUnsupported"));
     } catch (err) {
-      if (!queueSecretApproval(item.action, item.name, err)) {
+      if (!queueSecretApproval(item.action, item.name, item.idempotencyKey, err)) {
         updateApprovalQueueItem(item.id, { error: apiProblemMessage(err, t("secrets.approvals.retryFailed")) });
       }
     } finally {
@@ -803,14 +816,15 @@ export function Secrets() {
     setNotice(null);
     setRotateBusy(true);
     const pendingName = rotateName;
+    const idempotencyKey = newIdempotencyKey();
     try {
-      const meta = await api.rotateSecret(pendingName, { value: rotateValue });
+      const meta = await api.rotateSecret(pendingName, { value: rotateValue }, idempotencyKey);
       setItems((current) => mergeMeta(current, [meta]));
       setRotateName("");
       setRotateValue("");
       setNotice(`Secret ${meta.name} rotated to version ${meta.version}. The replacement value was not rendered.`);
     } catch (err) {
-      if (queueSecretApproval("rotate", pendingName, err)) {
+      if (queueSecretApproval("rotate", pendingName, idempotencyKey, err)) {
         setRotateError(t("secrets.approvals.rotatePending"));
       } else {
         setRotateError(apiProblemMessage(err, "Could not rotate secret"));
@@ -826,14 +840,15 @@ export function Secrets() {
     setNotice(null);
     setDeleteBusy(true);
     const pendingName = deleteName;
+    const idempotencyKey = newIdempotencyKey();
     try {
-      await api.deleteSecret(pendingName);
+      await api.deleteSecret(pendingName, idempotencyKey);
       setItems((current) => current.filter((item) => item.name !== pendingName));
       setNotice(`Secret ${pendingName} deleted from the native store.`);
       setDeleteName("");
       setDeleteConfirm("");
     } catch (err) {
-      if (queueSecretApproval("delete", pendingName, err)) {
+      if (queueSecretApproval("delete", pendingName, idempotencyKey, err)) {
         setDeleteError(t("secrets.approvals.deletePending"));
       } else {
         setDeleteError(apiProblemMessage(err, "Could not delete secret"));

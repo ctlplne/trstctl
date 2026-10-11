@@ -1569,6 +1569,14 @@ describe("secrets contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("PUT");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-rotate");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+
+    mockFetch(200, JSON.stringify({ name: "app/db/password", version: 4 }));
+    await api.rotateSecret("app/db/password", { value: "new-value" }, "exact-approved-command");
+    expect(sentHeaders()["Idempotency-Key"]).toBe("exact-approved-command");
+
+    mockFetch(204, "");
+    await api.deleteSecret("app/db/password", "exact-approved-delete");
+    expect(sentHeaders()["Idempotency-Key"]).toBe("exact-approved-delete");
   });
 
   it("verifies a secret read with only the workload bearer credential", async () => {

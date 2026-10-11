@@ -1546,11 +1546,7 @@ describe("secrets surface", () => {
     const rotateForm = within(screen.getByRole("form", { name: "Rotate secret" }));
     await user.type(rotateForm.getByLabelText("Replacement value"), "rotated-secret");
     await user.click(rotateForm.getByRole("button", { name: /rotate secret/i }));
-    await waitFor(() =>
-      expect(apiMock.rotateSecret).toHaveBeenCalledWith("app/db/password", {
-        value: "rotated-secret",
-      }),
-    );
+    await waitFor(() => expect(apiMock.rotateSecret).toHaveBeenCalledWith("app/db/password", { value: "rotated-secret" }, expect.any(String)));
     expect(await screen.findByText(/rotated to version 4/i)).toBeInTheDocument();
     expect(screen.queryByText("rotated-secret")).not.toBeInTheDocument();
 
@@ -1560,7 +1556,7 @@ describe("secrets surface", () => {
     const deleteForm = within(screen.getByRole("form", { name: "Delete secret" }));
     await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
     await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));
-    await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenCalledWith("app/db/password"));
+    await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenCalledWith("app/db/password", expect.any(String)));
     expect(await screen.findByText(/deleted from the native store/i)).toBeInTheDocument();
 
     expect(storageSpy).not.toHaveBeenCalled();
@@ -1779,14 +1775,28 @@ describe("secrets surface", () => {
 
   it("queues denied secret changes for distinct approval and retry completion", async () => {
     const user = userEvent.setup();
+    const rotateID = "019fec49-6641-7131-ae7f-17f7ea4b5e01";
+    const deleteID = "019fec49-6641-7131-ae7f-17f7ea4b5e02";
+    const rotateDigest = `sha256:${"a".repeat(64)}`;
+    const deleteDigest = `sha256:${"b".repeat(64)}`;
     apiMock.rotateSecret
       .mockRejectedValueOnce(
-        new ApiError(403, JSON.stringify({ detail: "dual control: this action has not been approved by the required number of distinct approvers" })),
+        new ApiError(
+          403,
+          JSON.stringify({
+            detail: `dual control: approval_required:secret:app/db/password request_id=${rotateID} intent_digest=${rotateDigest}: awaits 2 distinct approvals`,
+          }),
+        ),
       )
       .mockResolvedValueOnce({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
     apiMock.deleteSecret
       .mockRejectedValueOnce(
-        new ApiError(403, JSON.stringify({ detail: "dual control: this action has not been approved by the required number of distinct approvers" })),
+        new ApiError(
+          403,
+          JSON.stringify({
+            detail: `dual control: approval_required:secret:app/db/password request_id=${deleteID} intent_digest=${deleteDigest}: awaits 2 distinct approvals`,
+          }),
+        ),
       )
       .mockResolvedValueOnce(undefined);
     apiMock.approveSecretChange
@@ -1794,8 +1804,24 @@ describe("secrets surface", () => {
       .mockResolvedValueOnce({ resource: "secret:app/db/password", action: "delete", approver: "carol", approvals: 2 });
     apiMock.approvalRequests.mockResolvedValue([
       {
-        id: "019fec49-6641-7131-ae7f-17f7ea4b5e01",
-        intent_digest: "sha256:secret-rotate",
+        id: "019fec49-6641-7131-ae7f-17f7ea4b5e00",
+        intent_digest: `sha256:${"c".repeat(64)}`,
+        resource_id: "secret:app/db/password",
+        resource_name: "app/db/password",
+        resource_kind: "secret",
+        action: "rotate",
+        requester: "alice",
+        target_version: "secret:3",
+        evidence_refs: [],
+        approval_count: 0,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-19T09:00:00Z",
+        expires_at: "2026-06-19T11:00:00Z",
+      },
+      {
+        id: rotateID,
+        intent_digest: rotateDigest,
         resource_id: "secret:app/db/password",
         resource_name: "app/db/password",
         resource_kind: "secret",
@@ -1810,8 +1836,8 @@ describe("secrets surface", () => {
         expires_at: "2026-06-19T11:00:00Z",
       },
       {
-        id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
-        intent_digest: "sha256:secret-delete",
+        id: deleteID,
+        intent_digest: deleteDigest,
         resource_id: "secret:app/db/password",
         resource_name: "app/db/password",
         resource_kind: "secret",
@@ -1837,11 +1863,7 @@ describe("secrets surface", () => {
     await user.type(rotateForm.getByLabelText("Replacement value"), "approval-rotate-value");
     await user.click(rotateForm.getByRole("button", { name: /rotate secret/i }));
 
-    await waitFor(() =>
-      expect(apiMock.rotateSecret).toHaveBeenNthCalledWith(1, "app/db/password", {
-        value: "approval-rotate-value",
-      }),
-    );
+    await waitFor(() => expect(apiMock.rotateSecret).toHaveBeenNthCalledWith(1, "app/db/password", { value: "approval-rotate-value" }, expect.any(String)));
     expect(await screen.findByText("Rotation is waiting for secret-change approval.")).toBeInTheDocument();
     expect(screen.getByText("Rotate/update - app/db/password")).toBeInTheDocument();
 
@@ -1850,8 +1872,8 @@ describe("secrets surface", () => {
     await waitFor(() =>
       expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(1, "app/db/password", {
         action: "rotate",
-        request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e01",
-        intent_digest: "sha256:secret-rotate",
+        request_id: rotateID,
+        intent_digest: rotateDigest,
       }),
     );
     expect(await screen.findByText(/bob approved Rotate\/update for app\/db\/password/i)).toBeInTheDocument();
@@ -1859,9 +1881,7 @@ describe("secrets surface", () => {
     approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
     await user.click(within(approvalList).getByRole("button", { name: /retry rotate\/update for app\/db\/password/i }));
     await waitFor(() => expect(apiMock.rotateSecret).toHaveBeenCalledTimes(2));
-    expect(apiMock.rotateSecret).toHaveBeenLastCalledWith("app/db/password", {
-      value: "approval-rotate-value",
-    });
+    expect(apiMock.rotateSecret).toHaveBeenLastCalledWith("app/db/password", { value: "approval-rotate-value" }, apiMock.rotateSecret.mock.calls[0][2]);
     expect(await screen.findByText(/rotated to version 4 after approval/i)).toBeInTheDocument();
     expect(screen.queryByDisplayValue("approval-rotate-value")).not.toBeInTheDocument();
 
@@ -1872,7 +1892,7 @@ describe("secrets surface", () => {
     await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
     await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));
 
-    await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenNthCalledWith(1, "app/db/password"));
+    await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenNthCalledWith(1, "app/db/password", expect.any(String)));
     expect(await screen.findByText("Delete is waiting for secret-change approval.")).toBeInTheDocument();
     expect(screen.getByText("Delete - app/db/password")).toBeInTheDocument();
 
@@ -1881,8 +1901,8 @@ describe("secrets surface", () => {
     await waitFor(() =>
       expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(2, "app/db/password", {
         action: "delete",
-        request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
-        intent_digest: "sha256:secret-delete",
+        request_id: deleteID,
+        intent_digest: deleteDigest,
       }),
     );
     expect(await screen.findByText(/carol approved Delete for app\/db\/password/i)).toBeInTheDocument();
@@ -1890,7 +1910,7 @@ describe("secrets surface", () => {
     approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
     await user.click(within(approvalList).getByRole("button", { name: /retry delete for app\/db\/password/i }));
     await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenCalledTimes(2));
-    expect(apiMock.deleteSecret).toHaveBeenLastCalledWith("app/db/password");
+    expect(apiMock.deleteSecret).toHaveBeenLastCalledWith("app/db/password", apiMock.deleteSecret.mock.calls[0][1]);
     expect(await screen.findByText(/deleted after approval/i)).toBeInTheDocument();
   });
 

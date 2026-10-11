@@ -192,33 +192,40 @@ today (see [Current limitations](../limitations.md) and
    [Secrets](../features/secrets.md).
 
    ```sh
-   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X PUT https://localhost:8443/api/v1/secrets/store/db/password \
+   ROTATE_KEY="$(uuidgen)" # keep this key until this exact change completes
+   curl -sSi --cacert "$TRSTCTL_CA_FILE" -X PUT https://localhost:8443/api/v1/secrets/store/db/password \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
+     -H "Idempotency-Key: $ROTATE_KEY" \
      -H 'Content-Type: application/json' \
      -d '{"value":"r0tat3d"}'
    ```
 
    -> if approvals are disabled, a new native-store version is recorded. If approvals
-   are enabled, the requester gets `403` and approvers continue:
+   are enabled, the requester gets `403` containing an exact `request_id` and
+   `intent_digest`. The first `curl` shows the expected `403` body. Record those
+   two fields without recording the secret value.
+   Each approver signs in independently, checks that exact request in
+   `GET /api/v1/approval-requests?status=pending`, then submits both bindings:
 
    ```sh
    curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/store/approvals/db/password \
      -H "Authorization: Bearer $APPROVER_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
-     -d '{"action":"rotate"}'
+     -d '{"action":"rotate","request_id":"<request_id from 403>","intent_digest":"<intent_digest from 403>"}'
 
    cat > approval.json <<'JSON'
-   {"action":"rotate"}
+   {"action":"rotate","request_id":"<request_id from 403>","intent_digest":"<intent_digest from 403>"}
    JSON
    trstctl-cli --idempotency-key approve-db-password secrets approvals approve db/password -f approval.json
    ```
 
    -> the response shows `resource:"secret:db/password"` and the distinct approval
-   count. After quorum, the original requester retries the `PUT` with a fresh
-   `Idempotency-Key` and the rotate succeeds. The requester cannot approve their own
-   request.
+   count. After quorum, the original requester retries the identical `PUT` body
+   with the **same** `$ROTATE_KEY`; a fresh key opens a different request. The
+   requester cannot approve their own request. The console's Retry action keeps
+   the original key while its page stays open; the separate Approvals page is
+   where other signed-in custodians review the durable request.
 
    Beyond in-store version rotation, first review the exact effect-free plan with
    `secrets rotations preview`. It reads metadata only, performs no writes, contacts
