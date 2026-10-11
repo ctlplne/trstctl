@@ -21,7 +21,7 @@ import (
 func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 	ctx := context.Background()
 	storeDir := t.TempDir()
-	log, err := events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true})
+	log, err := events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 		if err := log.Close(); err != nil {
 			t.Fatal(err)
 		}
-		log, err = events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true})
+		log, err = events.Open(ctx, configpkg.NATS{Mode: configpkg.NATSEmbedded, StoreDir: storeDir, SyncAlways: true}, events.WithRequiredPrivacyEventPolicies())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,6 +94,19 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 	if got := count(vaultMountEnabledEventType); got != 1 {
 		t.Fatalf("mount enables after retry = %d, want 1", got)
 	}
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.ReplayTenantTypesThrough(ctx, vaultCompleteTenantA, 1, head,
+		[]string{vaultMountEnabledEventType}, func(ev events.Event) error {
+			if ev.SchemaVersion != 2 {
+				t.Fatalf("new mount event schema version = %d, want 2", ev.SchemaVersion)
+			}
+			return nil
+		}); err != nil {
+		t.Fatal(err)
+	}
 	request(http.MethodDelete, mount, nil, http.StatusNoContent)
 	request(http.MethodDelete, mount, nil, http.StatusNoContent)
 	if got := count(vaultMountDisabledEventType); got != 1 {
@@ -140,5 +153,28 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 	request(http.MethodPut, policy, definition, http.StatusNoContent)
 	if got := count(vaultPolicyPutEventType); got != 2 {
 		t.Fatalf("policy puts after cold re-create = %d, want 2", got)
+	}
+}
+
+func TestVaultMountProjectionRejectsMismatchedEventSchema(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		version int
+		data    string
+	}{
+		{"v1-with-new-namespace", 1, `{"path":"qa","type":"kv","namespace_version":1}`},
+		{"v2-without-namespace", 2, `{"path":"qa","type":"kv"}`},
+		{"future-schema", 3, `{"path":"qa","type":"kv","namespace_version":1}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := vaultCompatSnapshot{mounts: map[string]vaultCompatMount{}, mountEpochs: map[string]string{}}
+			err := foldVaultCompatEvent(&state, vaultCompleteTenantA, events.Event{
+				ID: "source-event", Type: vaultMountEnabledEventType, TenantID: vaultCompleteTenantA,
+				SchemaVersion: tc.version, Data: []byte(tc.data),
+			})
+			if err == nil || len(state.mounts) != 0 {
+				t.Fatalf("schema mismatch accepted: err=%v mounts=%v", err, state.mounts)
+			}
+		})
 	}
 }

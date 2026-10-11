@@ -507,6 +507,18 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("vault.compat.policy.put", catalogPrivacyRule("/name", token), catalogPrivacyRule("/policy", clear)),
 	}
 	catalog = append(catalog, productionPrivacyEventPolicy{
+		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "vault.compat.mount.enabled", SchemaVersion: 2},
+		Policy: catalogPrivacyPolicy(catalogPrivacyPayloadShape(
+			`{"path":"","type":"","description":"","options":{"key":""},"namespace_version":1}`,
+			catalogPrivacyShapeOptions{
+				Optional: []string{"/description", "/options"}, DynamicObject: []string{"/options"},
+				Nullable: []string{"/options"},
+			}),
+			catalogPrivacyRule("/path", token), catalogPrivacyRule("/type", opaque),
+			catalogPrivacyRule("/description", clear), catalogPrivacyRule("/options", jsonID),
+			catalogPrivacyRule("/namespace_version", opaque)),
+	})
+	catalog = append(catalog, productionPrivacyEventPolicy{
 		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "endpoint.containment.requested", SchemaVersion: 2},
 		Policy: catalogPrivacyPolicy(endpointContainmentRequestedV2PrivacyPayloadShape(),
 			catalogPrivacyRule("/target_id", opaque), catalogPrivacyRule("/target_revision", opaque),

@@ -156,9 +156,24 @@ func foldVaultCompatEvent(state *vaultCompatSnapshot, tenantID string, ev events
 		if mount.Path == "" || mount.Type == "" {
 			return errors.New("vault mount-enabled event is missing path or type")
 		}
+		switch ev.SchemaVersion {
+		case 1:
+			if mount.NamespaceVersion != 0 {
+				return errors.New("vault v1 mount event has a namespace version")
+			}
+		case 2:
+			if mount.NamespaceVersion != 1 {
+				return errors.New("vault v2 mount event lacks its namespace version")
+			}
+		default:
+			return fmt.Errorf("unsupported vault mount event schema version %d", ev.SchemaVersion)
+		}
 		state.mounts[mount.Path] = mount
 		state.mountEpochs[mount.Path] = ev.ID
 	case vaultMountDisabledEventType:
+		if ev.SchemaVersion != 1 {
+			return fmt.Errorf("unsupported vault mount-disabled event schema version %d", ev.SchemaVersion)
+		}
 		var mount vaultCompatMount
 		if err := json.Unmarshal(ev.Data, &mount); err != nil {
 			return fmt.Errorf("vault mount-disabled event: %w", err)
@@ -200,7 +215,13 @@ func (s *vaultCompatState) append(ctx context.Context, tenantID, eventType strin
 	if err != nil {
 		return events.Event{}, err
 	}
-	return s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: data})
+	event := events.Event{Type: eventType, TenantID: tenantID, Data: data}
+	if eventType == vaultMountEnabledEventType {
+		if mount, ok := payload.(vaultCompatMount); ok && mount.NamespaceVersion > 0 {
+			event.SchemaVersion = 2
+		}
+	}
+	return s.log.Append(ctx, event)
 }
 
 func normalizeVaultMountPath(raw string) (string, error) {

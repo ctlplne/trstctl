@@ -230,6 +230,9 @@ func (a *API) vaultDisableMount(w http.ResponseWriter, r *http.Request) {
 		if !exists {
 			return 0, nil, errStatus(http.StatusNotFound, "no such mount")
 		}
+		// The v1 disable event records only public mount metadata. Its namespace
+		// was already closed by this event and is never needed for replay.
+		mount.NamespaceVersion = 0
 		if _, err := a.vaultCompat.append(ctx, tenantID, vaultMountDisabledEventType, mount); err != nil {
 			return 0, nil, err
 		}
