@@ -141,6 +141,17 @@ since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept
 `Idempotency-Key`. For the stock CLI's KV put and PKI issue/sign commands,
 trstctl derives a token-keyed digest of method, path, and body when the header is
 absent, so an exact retry cannot mint a duplicate certificate or secret version.
+For transit writes, pass the CLI's `-header` option explicitly. Use a fresh key
+for each distinct mutation and reuse that key when retrying the same request:
+
+```bash
+idem="$(openssl rand -hex 16)"
+vault write -header="Idempotency-Key=$idem" transit/keys/payments type=aes256-gcm96
+```
+
+The same header option applies to transit encrypt, decrypt, rewrap, HMAC, sign,
+and verify. The stock CLI sends these `vault write` calls with HTTP `PUT`; the
+compatibility API serves both `POST` and `PUT` for the listed transit paths.
 Vault transit `verify/{name}` accepts a signature only when its public key belongs
 to a retained version of that named key in the current tenant. Rotation keeps
 older signatures verifiable under the same name, while another name or tenant

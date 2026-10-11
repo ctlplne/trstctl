@@ -112,7 +112,8 @@ func vaultMountResponse(mount vaultCompatMount) map[string]any {
 	}
 }
 
-// A stock Vault CLI has no custom Idempotency-Key flag. Bind its synthetic key
+// Stock Vault CLI calls normally omit Idempotency-Key (although -header can
+// send one). Bind that fallback's synthetic key
 // to the last event for this exact mount or policy name. A fresh lifecycle
 // after disable/delete gets a new key; an immediate retry observes the current
 // state and returns success without appending a second event. Explicit caller
