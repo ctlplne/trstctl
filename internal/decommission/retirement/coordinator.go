@@ -171,14 +171,16 @@ func (c *Coordinator) Request(ctx context.Context, tenantID, keyID string, reque
 func (c *Coordinator) snapshot(ctx context.Context, tenantID string) (uint64, []eventspec.Event, error) {
 	var head uint64
 	var tenantEvents []eventspec.Event
-	err := c.log.Replay(ctx, 1, func(ev events.Event) error {
-		if ev.Sequence > head {
-			head = ev.Sequence
+	err := c.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		var err error
+		head, err = c.log.LastSequence(readCtx)
+		if err != nil || head == 0 {
+			return err
 		}
-		if ev.TenantID == tenantID {
+		return c.log.ReplayTenantThrough(readCtx, tenantID, 1, head, func(ev events.Event) error {
 			tenantEvents = append(tenantEvents, ev)
-		}
-		return nil
+			return nil
+		})
 	})
 	if err != nil {
 		return 0, nil, fmt.Errorf("vdec retirement: snapshot event head: %w", err)

@@ -223,11 +223,15 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, Archiv
 		out    []Record
 	)
 	err = s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := s.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
 		// The retention checkpoint is only a query floor, not permission to skip
 		// safety inspection. Scan the complete retained tenant prefix first, on the
 		// same pinned generation as the eventual filtered result.
 		var scopeOrdinal uint64
-		if err := s.log.Replay(readCtx, 0, func(e events.Event) error {
+		if err := s.log.ReplayTenantThrough(readCtx, q.TenantID, 1, head, func(e events.Event) error {
 			if e.TenantID != q.TenantID {
 				return nil
 			}
@@ -264,7 +268,7 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, Archiv
 		}
 		redactor := privacy.Redactor{TenantID: q.TenantID, Refs: refs}
 		out = []Record{}
-		return s.log.Replay(readCtx, from, func(e events.Event) error {
+		return s.log.ReplayTenantThrough(readCtx, q.TenantID, from, head, func(e events.Event) error {
 			if e.TenantID != q.TenantID { // AN-1: tenant floor before any public cursor advances.
 				return nil
 			}

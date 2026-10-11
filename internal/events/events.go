@@ -135,6 +135,9 @@ type Log struct {
 	// projection itself is a separate file-backed JetStream stream and survives
 	// process crashes; cross-replica writes use per-subject compare-and-swap.
 	idIndexMu sync.Mutex
+	// tenantIndexMu serializes this process's source-ordered tenant index
+	// catch-up. The index stream's last-sequence CAS orders other replicas.
+	tenantIndexMu sync.Mutex
 	// backupRestoreAuthorizer is installed only by the recovery composition. Its
 	// locked deployment key verifies an opaque capability bound to one
 	// HMAC-verified artifact cut/digest and its exact staged history source before
@@ -277,6 +280,10 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 	if err := l.warmEventIDIndex(ctx); err != nil && !errors.Is(err, ErrBackupRestoreIncomplete) {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: rebuild event identity index: %w", err)
+	}
+	if err := l.warmTenantIndex(ctx); err != nil && !errors.Is(err, ErrBackupRestoreIncomplete) {
+		shutdown(srv, nc)
+		return nil, fmt.Errorf("events: rebuild tenant event index: %w", err)
 	}
 	return l, nil
 }

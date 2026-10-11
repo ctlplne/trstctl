@@ -336,5 +336,7 @@ func (l *Log) discardEventIDIndexesAtCutover(ctx context.Context, sourceName str
 	if err := l.deleteEventIDIndexesExcept(ctx, sourceName, ""); err != nil {
 		return err
 	}
-	return nil
+	l.tenantIndexMu.Lock()
+	defer l.tenantIndexMu.Unlock()
+	return l.deleteTenantIndexesExcept(ctx, sourceName, "")
 }

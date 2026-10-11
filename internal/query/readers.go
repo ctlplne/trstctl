@@ -134,26 +134,32 @@ func (e *Engine) readLog(ctx context.Context, tenant string, eq map[Field]string
 	}
 	want, filter := eq[FieldLogType]
 	var tenantOffset uint64
-	err := e.log.Replay(ctx, 0, func(ev events.Event) error {
-		// Tenant floor in-process: the event log is not RLS-backed, so the engine
-		// drops any event not belonging to the caller's tenant. Combined with the
-		// Postgres RLS floor on the other surfaces, no cross-tenant row is reachable.
-		if ev.TenantID != tenant {
+	err := e.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := e.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		return e.log.ReplayTenantThrough(readCtx, tenant, 1, head, func(ev events.Event) error {
+			// Tenant floor in-process: the event log is not RLS-backed, so the engine
+			// drops any event not belonging to the caller's tenant. Combined with the
+			// Postgres RLS floor on the other surfaces, no cross-tenant row is reachable.
+			if ev.TenantID != tenant {
+				return nil
+			}
+			tenantOffset++
+			if tenantOffset > *offset {
+				*offset = tenantOffset // AN-2: tenant-local high-water mark observed.
+			}
+			if filter && ev.Type != want {
+				return nil
+			}
+			if !add(Row{Surface: SurfaceLog, Columns: map[string]string{
+				"id": ev.ID, "type": ev.Type, "tenant_id": ev.TenantID,
+			}}) {
+				return errEnough
+			}
 			return nil
-		}
-		tenantOffset++
-		if tenantOffset > *offset {
-			*offset = tenantOffset // AN-2: tenant-local high-water mark observed.
-		}
-		if filter && ev.Type != want {
-			return nil
-		}
-		if !add(Row{Surface: SurfaceLog, Columns: map[string]string{
-			"id": ev.ID, "type": ev.Type, "tenant_id": ev.TenantID,
-		}}) {
-			return errEnough
-		}
-		return nil
+		})
 	})
 	if errors.Is(err, errEnough) {
 		return nil
