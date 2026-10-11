@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type migrationReceiptClaim struct {
@@ -191,6 +192,8 @@ func validateMigrationClaimBinding(binding migration.MemberBinding, agentID stri
 		switch {
 		case intent.IssuingAuthorityID != binding.IssuingAuthorityID:
 			return errors.New("server: renewal claim drifted from the migration issuing authority")
+		case !sameMigrationIssuance(intent.Issuance, binding.Issuance):
+			return errors.New("server: renewal claim drifted from the migration issuance profile")
 		case intent.RequiredAgentID != binding.RequiredAgentID:
 			return errors.New("server: renewal claim drifted from the migration agent binding")
 		case intent.TargetID != binding.TargetID || intent.Revision != binding.TargetRevision:
@@ -218,6 +221,15 @@ func validateMigrationClaimBinding(binding migration.MemberBinding, agentID stri
 		return errors.New("server: migration receipt has no typed claim")
 	}
 	return nil
+}
+
+func sameMigrationIssuance(actual *store.OperationApprovalIssuanceBinding, expected *migration.IssuanceBinding) bool {
+	if actual == nil || expected == nil {
+		return actual == nil && expected == nil
+	}
+	return actual.ProfileName == expected.ProfileName && actual.ProfileID == expected.ProfileID &&
+		actual.ProfileVersion == expected.ProfileVersion && actual.ProfileSpecDigest == expected.ProfileSpecDigest &&
+		actual.RequestedTTLSeconds == expected.RequestedTTLSeconds && actual.EffectiveTTLSeconds == expected.EffectiveTTLSeconds
 }
 
 func cleanFingerprint(value string) string {

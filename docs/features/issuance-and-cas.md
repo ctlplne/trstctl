@@ -324,6 +324,10 @@ routes below that run. The current executable boundary is internally issued,
 DNS-only X.509 identities deployed by enabled host-agent connectors with a configured
 verification listener. Unsupported membership is rejected before any trust job is
 published.
+The run pins each identity's active certificate-profile revision and effective
+validity into the immutable member and successor job. The current fleet runner
+does not collect distinct issuance approvals, so it refuses an approval-required
+profile before Start. A profile label alone never authorizes signing.
 
 ### Profiles and the registration-authority split (F53)
 

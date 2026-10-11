@@ -105,6 +105,11 @@ next wave starts. A failed proof gate restores the current unrevoked wave; compl
 waves with revoked predecessors are not rolled back to those credentials. A
 control-plane restart resumes the run from its recorded wave; it never revokes a
 predecessor whose successor has not passed these proofs.
+Each member retains the identity's exact issuance-profile revision and validity
+in its run and host renewal job. Check the identity profile before Start: a
+profile that requires separate issuance approval cannot be used by this fleet
+runner until that exact approval is available; Start refuses it before trust or
+signing work.
 
 Before starting, run `trstctl-cli incidents fleet-reissuance preview -f
 compromised-issuer.json`. The effect-free result names missing exact trust

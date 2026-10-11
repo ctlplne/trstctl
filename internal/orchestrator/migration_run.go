@@ -275,21 +275,22 @@ func (o *Orchestrator) applyMigrationEventTx(ctx context.Context, tx pgx.Tx, ev 
 }
 
 type migrationEndpointRenewIntent struct {
-	IssuingAuthorityID       string          `json:"issuing_authority_id"`
-	Connector                string          `json:"connector"`
-	Target                   string          `json:"target"`
-	TargetID                 string          `json:"target_id"`
-	Revision                 string          `json:"target_revision"`
-	IdentityID               string          `json:"identity_id"`
-	TargetConfig             json.RawMessage `json:"target_config"`
-	VerifyAddress            string          `json:"verify_address"`
-	VerifyServerName         string          `json:"verify_server_name,omitempty"`
-	SubjectCommonName        string          `json:"subject_common_name"`
-	SubjectDNSNames          []string        `json:"subject_dns_names"`
-	PredecessorCertificateID string          `json:"predecessor_certificate_id"`
-	MigrationRunID           string          `json:"migration_run_id"`
-	MigrationWaveID          string          `json:"migration_wave_id"`
-	RequiredAgentID          string          `json:"required_agent_id"`
+	IssuingAuthorityID       string                     `json:"issuing_authority_id"`
+	Issuance                 *migration.IssuanceBinding `json:"issuance,omitempty"`
+	Connector                string                     `json:"connector"`
+	Target                   string                     `json:"target"`
+	TargetID                 string                     `json:"target_id"`
+	Revision                 string                     `json:"target_revision"`
+	IdentityID               string                     `json:"identity_id"`
+	TargetConfig             json.RawMessage            `json:"target_config"`
+	VerifyAddress            string                     `json:"verify_address"`
+	VerifyServerName         string                     `json:"verify_server_name,omitempty"`
+	SubjectCommonName        string                     `json:"subject_common_name"`
+	SubjectDNSNames          []string                   `json:"subject_dns_names"`
+	PredecessorCertificateID string                     `json:"predecessor_certificate_id"`
+	MigrationRunID           string                     `json:"migration_run_id"`
+	MigrationWaveID          string                     `json:"migration_wave_id"`
+	RequiredAgentID          string                     `json:"required_agent_id"`
 }
 
 // IncidentPredecessorRevocationIntent contains only immutable public identity.
@@ -332,6 +333,7 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		destination = relay.KindEndpointRenew
 		payload, err = json.Marshal(migrationEndpointRenewIntent{
 			IssuingAuthorityID: b.IssuingAuthorityID,
+			Issuance:           b.Issuance,
 			Connector:          b.Connector, Target: b.Target, TargetID: b.TargetID,
 			Revision: b.TargetRevision, IdentityID: action.IdentityID, TargetConfig: b.TargetConfig,
 			VerifyAddress: b.VerifyAddress, VerifyServerName: b.VerifyServerName,

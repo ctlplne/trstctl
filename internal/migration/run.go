@@ -137,22 +137,23 @@ func RecordSuccessorIssued(in Run, waveID, identityID, fingerprint string) (Run,
 // AnchorPEM and certificate metadata are public; private-key material has no
 // field in this contract.
 type MemberBinding struct {
-	IssuingAuthorityID       string          `json:"issuing_authority_id"`
-	TargetID                 string          `json:"target_id"`
-	TargetRevision           string          `json:"target_revision"`
-	Connector                string          `json:"connector"`
-	Target                   string          `json:"target"`
-	TargetConfig             json.RawMessage `json:"target_config"`
-	RequiredAgentID          string          `json:"required_agent_id"`
-	TrustAnchorPath          string          `json:"trust_anchor_path"`
-	TrustAnchorPEM           []byte          `json:"trust_anchor_pem"`
-	TrustAnchorFingerprint   string          `json:"trust_anchor_fingerprint"`
-	VerifyAddress            string          `json:"verify_address"`
-	VerifyServerName         string          `json:"verify_server_name,omitempty"`
-	SubjectCommonName        string          `json:"subject_common_name"`
-	SubjectDNSNames          []string        `json:"subject_dns_names"`
-	PredecessorCertificateID string          `json:"predecessor_certificate_id"`
-	PredecessorFingerprint   string          `json:"predecessor_fingerprint"`
+	IssuingAuthorityID       string           `json:"issuing_authority_id"`
+	Issuance                 *IssuanceBinding `json:"issuance,omitempty"`
+	TargetID                 string           `json:"target_id"`
+	TargetRevision           string           `json:"target_revision"`
+	Connector                string           `json:"connector"`
+	Target                   string           `json:"target"`
+	TargetConfig             json.RawMessage  `json:"target_config"`
+	RequiredAgentID          string           `json:"required_agent_id"`
+	TrustAnchorPath          string           `json:"trust_anchor_path"`
+	TrustAnchorPEM           []byte           `json:"trust_anchor_pem"`
+	TrustAnchorFingerprint   string           `json:"trust_anchor_fingerprint"`
+	VerifyAddress            string           `json:"verify_address"`
+	VerifyServerName         string           `json:"verify_server_name,omitempty"`
+	SubjectCommonName        string           `json:"subject_common_name"`
+	SubjectDNSNames          []string         `json:"subject_dns_names"`
+	PredecessorCertificateID string           `json:"predecessor_certificate_id"`
+	PredecessorFingerprint   string           `json:"predecessor_fingerprint"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
 	// response requires it; a generic migration may leave it empty.
 	PredecessorCAID string `json:"predecessor_ca_id,omitempty"`
@@ -160,6 +161,18 @@ type MemberBinding struct {
 	// validation accepts only an explicit non-production value.
 	Environment          string `json:"environment,omitempty"`
 	SuccessorFingerprint string `json:"successor_fingerprint,omitempty"`
+}
+
+// IssuanceBinding freezes the certificate profile and lifetime reviewed when
+// the run starts. It has the same wire shape as the store's issuance binding,
+// while keeping the event-sourced migration aggregate independent of storage.
+type IssuanceBinding struct {
+	ProfileName         string `json:"profile_name,omitempty"`
+	ProfileID           string `json:"profile_id,omitempty"`
+	ProfileVersion      int    `json:"profile_version,omitempty"`
+	ProfileSpecDigest   string `json:"profile_spec_digest,omitempty"`
+	RequestedTTLSeconds int64  `json:"requested_ttl_seconds"`
+	EffectiveTTLSeconds int64  `json:"effective_ttl_seconds"`
 }
 
 // RunMember carries gate state beside the immutable command authority that
@@ -577,6 +590,14 @@ func ValidateExecutableRun(run Run) error {
 		}
 		for _, member := range wave.Members {
 			b := member.Binding
+			if b.Issuance != nil {
+				issued := b.Issuance
+				if issued.RequestedTTLSeconds <= 0 || issued.EffectiveTTLSeconds <= 0 ||
+					issued.EffectiveTTLSeconds > issued.RequestedTTLSeconds ||
+					(issued.ProfileName != "" && (issued.ProfileID == "" || issued.ProfileVersion <= 0 || issued.ProfileSpecDigest == "")) {
+					return fmt.Errorf("migration: member %s has an incomplete immutable issuance profile", member.IdentityID)
+				}
+			}
 			if strings.TrimSpace(b.IssuingAuthorityID) == "" || strings.TrimSpace(b.TargetID) == "" || strings.TrimSpace(b.TargetRevision) == "" ||
 				strings.TrimSpace(b.Connector) == "" || strings.TrimSpace(b.Target) == "" ||
 				strings.TrimSpace(b.RequiredAgentID) == "" || strings.TrimSpace(b.TrustAnchorPath) == "" ||

@@ -144,8 +144,10 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	if err := d.checkAgentCSRRequestBinding(ctx, tenantID, jobID, issuanceSlot, idemKey, intent); err != nil {
 		return nil, err
 	}
-
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+		if err := d.authorizeAgentCSRMigrationBinding(ctx, tenantID, job.RequiredAgentID, intent); err != nil {
+			return nil, err
+		}
 		// One exact claimed CSR is one signing operation. Transport retries
 		// must preserve its serial/time/signature even if recording the result
 		// fails. A new claim can generate a new key only through the existing
@@ -219,6 +221,45 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
+}
+
+// Check the retained migration authority before the signer sees a CSR. Receipt
+// validation alone is too late: a drifted job could otherwise mint an orphan
+// certificate and only then fail to join the incident run.
+func (d *issuanceDispatcher) authorizeAgentCSRMigrationBinding(
+	ctx context.Context, tenantID, agentID string, intent RelayDeployIntent,
+) error {
+	if strings.TrimSpace(intent.MigrationRunID) == "" {
+		return nil
+	}
+	record, err := d.store.GetMigrationRun(ctx, tenantID, intent.MigrationRunID)
+	if err != nil {
+		return status.Errorf(codes.FailedPrecondition, "load migration authority: %v", err)
+	}
+	if record.Run.Status != migration.RunRunning && record.Run.Status != migration.RunPaused {
+		return status.Error(codes.PermissionDenied, "migration is no longer issuing successors")
+	}
+	for _, wave := range record.Run.Waves {
+		if wave.ID != intent.MigrationWaveID {
+			continue
+		}
+		if !wave.Started || wave.Phase != migration.PhaseVerifyingLive {
+			return status.Error(codes.PermissionDenied, "migration wave has not passed signed trust distribution")
+		}
+		member, found := migration.Member(record.Run, intent.MigrationWaveID, intent.IdentityID)
+		if !found || member.TrustVerdict != migration.VerdictVerified {
+			return status.Error(codes.PermissionDenied, "migration member has no signed trust verdict")
+		}
+		claim := migrationReceiptClaim{
+			runID: intent.MigrationRunID, waveID: intent.MigrationWaveID,
+			identityID: intent.IdentityID, stage: migration.StageSuccessor, renew: &intent,
+		}
+		if err := validateMigrationClaimBinding(member.Binding, agentID, claim); err != nil {
+			return status.Errorf(codes.PermissionDenied, "migration signing authority drifted: %v", err)
+		}
+		return nil
+	}
+	return status.Error(codes.PermissionDenied, "migration renewal names no started wave")
 }
 
 // Keep retryable pending work distinct from a permanent validity refusal at

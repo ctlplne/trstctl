@@ -286,6 +286,20 @@ func (a *API) buildMigrationMember(
 	if ident.Status != string(orchestrator.StateDeployed) {
 		return migration.RunMember{}, errors.New("migration members must already be deployed")
 	}
+	profileRequirement, err := a.orch.ProfileApprovalRequirement(ctx, tenantID, identityID)
+	if err != nil {
+		return migration.RunMember{}, err
+	}
+	if profileRequirement.ProfileName == "" && a.gate.Profile != "" {
+		profileRequirement, err = a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
+		if err != nil {
+			return migration.RunMember{}, err
+		}
+	}
+	if profileRequirement.RequiresApproval {
+		return migration.RunMember{}, errors.New("migration member profile requires distinct issuance approval; this run cannot start without an exact approved issuance binding")
+	}
+	issuance := profileRequirement.IssuanceBinding()
 	targetID := targetIDFromIdentityAttrs(ident.Attributes)
 	if targetID == "" {
 		return migration.RunMember{}, errors.New("migration member has no deployment target binding")
@@ -320,7 +334,12 @@ func (a *API) buildMigrationMember(
 	}
 	return migration.RunMember{IdentityID: identityID, Binding: migration.MemberBinding{
 		IssuingAuthorityID: authorityID,
-		TargetID:           target.ID, TargetRevision: target.RevisionID, Connector: target.Type,
+		Issuance: &migration.IssuanceBinding{
+			ProfileName: issuance.ProfileName, ProfileID: issuance.ProfileID,
+			ProfileVersion: issuance.ProfileVersion, ProfileSpecDigest: issuance.ProfileSpecDigest,
+			RequestedTTLSeconds: issuance.RequestedTTLSeconds, EffectiveTTLSeconds: issuance.EffectiveTTLSeconds,
+		},
+		TargetID: target.ID, TargetRevision: target.RevisionID, Connector: target.Type,
 		Target: routed, TargetConfig: append(json.RawMessage(nil), target.Config...), RequiredAgentID: agentID,
 		TrustAnchorPath: anchorPath, TrustAnchorPEM: append([]byte(nil), anchorPEM...),
 		TrustAnchorFingerprint: cleanMigrationFingerprint(anchorFingerprint),

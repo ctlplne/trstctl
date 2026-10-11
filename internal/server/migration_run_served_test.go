@@ -51,8 +51,9 @@ func (c *servedHostRelayChannel) SignJobCSR(ctx context.Context, jobID int64, at
 // listener is handshaked after both deploy and rollback.
 func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	ctx := context.Background()
-	h := newRoleHarness(t, []string{mtls.AgentRoleHost},
-		agentrelay.KindTrustDistribute, agentrelay.KindEndpointRenew, agentrelay.KindConnectorRollback)
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost},
+		[]string{agentrelay.KindTrustDistribute, agentrelay.KindEndpointRenew, agentrelay.KindConnectorRollback},
+		func(d *Deps) { d.DefaultProfile = "migration-acme-only-default" })
 	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{
 		AgentID: h.agent, Version: "aud40-test", Status: "active",
 	}); err != nil {
@@ -120,8 +121,25 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, item := range []struct {
+		name, protocol string
+	}{
+		{"migration-acme-only-default", "acme"},
+		{"migration-api", "api"},
+	} {
+		spec, err := json.Marshal(map[string]any{
+			"name": item.name, "max_validity": "720h", "allowed_protocols": []string{item.protocol},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.srv.orch.CreateProfile(ctx, h.tenant, item.name, spec); err != nil {
+			t.Fatalf("create %s profile: %v", item.name, err)
+		}
+	}
 	attrs, err := json.Marshal(map[string]string{
 		"deployment_target_id": target.ID, "connector": target.Type, "target": target.Name,
+		"profile_name": "migration-api",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -146,6 +164,10 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
 	}
 	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
+	// The predecessor was installed while API issuance was the served default.
+	// Change that default after deployment; the migration must preserve the
+	// identity's explicit API profile rather than inheriting an ACME-only one.
+	h.srv.obHandler.(*issuanceDispatcher).defaultProfile = "migration-api"
 	if err := h.srv.orch.Transition(ctx, h.tenant, identityID, orchestrator.StateIssued, "issue migration predecessor"); err != nil {
 		t.Fatal(err)
 	}
@@ -153,6 +175,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		t.Fatalf("dispatch migration predecessor: dispatched=%v err=%v", dispatched, err)
 	}
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified)
+	h.srv.obHandler.(*issuanceDispatcher).defaultProfile = "migration-acme-only-default"
 	secret.Wipe(oldCert)
 	secret.Wipe(oldKey)
 	oldCert, err = fixture.ReadFile("listener.crt")
@@ -218,6 +241,11 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	if started.Status != migration.RunRunning || started.Waves[0].Phase != migration.PhaseVerifyingTrust {
 		t.Fatalf("started run = %+v", started)
 	}
+	issuance := started.Waves[0].Members[0].Binding.Issuance
+	if issuance == nil || issuance.ProfileName != "migration-api" || issuance.ProfileID == "" ||
+		issuance.ProfileVersion != 1 || issuance.ProfileSpecDigest == "" {
+		t.Fatalf("migration lost identity profile revision before queued issuance: %+v", issuance)
+	}
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 0)
 
@@ -255,6 +283,11 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	assertMigrationStatusAUD40(t, h, started.ID, migration.RunRunning, migration.PhaseVerifyingTrust)
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 0)
+	rebuilt, err := h.store.GetMigrationRun(ctx, h.tenant, started.ID)
+	if err != nil || rebuilt.Run.Waves[0].Members[0].Binding.Issuance == nil ||
+		*rebuilt.Run.Waves[0].Members[0].Binding.Issuance != *issuance {
+		t.Fatalf("projection rebuild lost exact issuance profile: %+v err=%v", rebuilt.Run, err)
+	}
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
 	registerServedTenantID(t, h.servedHarness, tenantB, "Migration isolation customer")
@@ -272,6 +305,30 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	}
 	assertMigrationStatusAUD40(t, h, started.ID, migration.RunRunning, migration.PhaseVerifyingLive)
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 1)
+	var renewalPayload []byte
+	if err := h.store.SystemPool().QueryRow(ctx,
+		`SELECT payload FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		h.tenant, "migration:"+started.ID+":canary:"+identityID+":issue_successor").Scan(&renewalPayload); err != nil {
+		t.Fatal(err)
+	}
+	var renewal RelayDeployIntent
+	if err := json.Unmarshal(renewalPayload, &renewal); err != nil || !sameMigrationIssuance(renewal.Issuance, issuance) {
+		t.Fatalf("queued successor lost reviewed profile revision: %+v err=%v", renewal.Issuance, err)
+	}
+	tampered := renewal
+	tampered.Issuance = nil
+	if err := validateMigrationClaimBinding(started.Waves[0].Members[0].Binding,
+		agentRowID(h.tenant, h.agent), migrationReceiptClaim{renew: &tampered}); err == nil {
+		t.Fatal("renewal receipt accepted a job with its issuance profile removed")
+	}
+	if err := h.srv.obHandler.(*issuanceDispatcher).authorizeAgentCSRMigrationBinding(ctx, h.tenant,
+		agentRowID(h.tenant, h.agent), tampered); err == nil {
+		t.Fatal("signer preflight accepted a job with its issuance profile removed")
+	}
+	if err := h.srv.obHandler.(*issuanceDispatcher).authorizeAgentCSRMigrationBinding(ctx, h.tenant,
+		agentRowID(h.tenant, h.agent), renewal); err != nil {
+		t.Fatalf("signer preflight rejected immutable successor job: %v", err)
+	}
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified) // signer + deploy + live probe
 	assertHostRenewCustodyReceiptAUD25(t, channel)
 	assertMigrationStatusAUD40(t, h, started.ID, migration.RunComplete, migration.PhaseComplete)
