@@ -77,6 +77,10 @@ export function CACrossSignPanel({ authorities }: { authorities: CAAuthority[] }
     enabled: validCeremonyID && ceremony.data?.status === "completed",
     retry: false,
   });
+  // A completed ceremony can be opened by ID after a reload, without the
+  // effect-free review state that existed only in the previous browser page.
+  const completed = ceremony.data?.status === "completed";
+  const visibleStep = completed ? 2 : step;
   const matching = reviewed && ceremony.data?.purpose === `cross-sign:${reviewed.issuerID}:${reviewed.targetSHA}`;
   const targetField = register("targetID");
   const pemField = register("targetPEM");
@@ -198,15 +202,15 @@ export function CACrossSignPanel({ authorities }: { authorities: CAAuthority[] }
         </CardContent>
       </Card>
       <StepShell
-        currentIndex={step}
+        currentIndex={visibleStep}
         steps={steps}
         progressLabel={t("caHierarchy.crossSign.progress")}
-        onPrevious={step > 0 ? () => setStep(step - 1) : undefined}
-        onNext={step === 0 ? () => void review() : step === 1 ? () => void enterCeremony() : undefined}
-        nextDisabled={busy || (step === 1 && (!current || Boolean(ceremonyID && !matching)))}
-        nextLabel={step === 0 ? t("caHierarchy.crossSign.review") : ceremonyID ? t("caHierarchy.crossSign.continue") : t("caHierarchy.crossSign.start")}
+        onPrevious={visibleStep > 0 && !completed ? () => setStep(visibleStep - 1) : undefined}
+        onNext={visibleStep === 0 ? () => void review() : visibleStep === 1 ? () => void enterCeremony() : undefined}
+        nextDisabled={busy || (visibleStep === 1 && (!current || Boolean(ceremonyID && !matching)))}
+        nextLabel={visibleStep === 0 ? t("caHierarchy.crossSign.review") : ceremonyID ? t("caHierarchy.crossSign.continue") : t("caHierarchy.crossSign.start")}
       >
-        {step === 0 && (
+        {visibleStep === 0 && (
           <div className="grid gap-4">
             <Field
               label={t("caHierarchy.crossSign.issuer")}
@@ -275,7 +279,7 @@ export function CACrossSignPanel({ authorities }: { authorities: CAAuthority[] }
             </Field>
           </div>
         )}
-        {step === 1 && reviewed && (
+        {visibleStep === 1 && reviewed && (
           <div className="grid gap-3 text-sm">
             <strong>{t("caHierarchy.crossSign.reviewed")}</strong>
             <p>
@@ -296,7 +300,7 @@ export function CACrossSignPanel({ authorities }: { authorities: CAAuthority[] }
             {ceremonyID && ceremony.data && !matching && <ErrorState title={t("caHierarchy.crossSign.purposeMismatch")}>{ceremony.data.purpose}</ErrorState>}
           </div>
         )}
-        {step === 2 && (
+        {visibleStep === 2 && (
           <div className="grid gap-3 text-sm">
             {reviewed && (
               <p>

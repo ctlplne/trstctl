@@ -50,6 +50,8 @@ it("recovers a public cross-certificate after reload and never offers unapproved
   await user.click(screen.getByRole("button", { name: "Refresh ceremony and receipt" }));
   await waitFor(() => expect(apiMock.getCACrossSignReceipt).toHaveBeenCalledWith(id));
   expect(screen.getByRole("textbox", { name: "Public cross-certificate PEM" })).toHaveValue("-----BEGIN CERTIFICATE-----\nAQID\n-----END CERTIFICATE-----\n");
+  expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Review exact cross-sign plan" })).not.toBeInTheDocument();
   expect(apiMock.crossSignCAAuthority).not.toHaveBeenCalled();
 });
 
