@@ -491,7 +491,12 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, "secret path is required")
 		return
 	}
-	idempotencyKey, ok := vaultStockCLIKey(w, r, body)
+	var idempotencyKey string
+	if mount := r.PathValue("mount"); mount != "" {
+		idempotencyKey, ok = a.vaultLifecycleKey(w, r, body, mount, false)
+	} else {
+		idempotencyKey, ok = vaultStockCLIKey(w, r, body)
+	}
 	if !ok {
 		return
 	}

@@ -139,7 +139,7 @@ func (a *API) vaultLifecycleKey(w http.ResponseWriter, r *http.Request, body []b
 	if !ok {
 		return "", false
 	}
-	return fmt.Sprintf("%s-e%d", key, epoch), true
+	return fmt.Sprintf("%s-e%s", key, epoch), true
 }
 
 //trstctl:mutation
@@ -182,7 +182,7 @@ func (a *API) vaultEnableMount(w http.ResponseWriter, r *http.Request) {
 		default:
 			return 0, nil, errStatus(http.StatusBadRequest, "mount type must be kv, pki, or transit")
 		}
-		mount := vaultCompatMount{Path: path, Type: req.Type, Description: strings.TrimSpace(req.Description), Options: req.Options}
+		mount := vaultCompatMount{Path: path, Type: req.Type, Description: strings.TrimSpace(req.Description), Options: req.Options, NamespaceVersion: 1}
 		state, err := a.vaultCompat.snapshot(ctx, tenantID)
 		if err != nil {
 			return 0, nil, err
@@ -224,7 +224,7 @@ func (a *API) vaultDisableMount(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		mount, exists := state.mounts[path]
-		if !exists && r.Header.Get("Idempotency-Key") == "" && state.mountEpochs[path] != 0 {
+		if !exists && r.Header.Get("Idempotency-Key") == "" && state.mountEpochs[path] != "" {
 			return http.StatusNoContent, nil, nil
 		}
 		if !exists {
@@ -261,21 +261,61 @@ func (a *API) resolveVaultMount(r *http.Request, want string) error {
 }
 
 func (a *API) vaultMountedKVRead(w http.ResponseWriter, r *http.Request) {
-	if err := a.resolveVaultMount(r, "kv"); err != nil {
+	name, err := a.vaultMountedKVStoreName(r)
+	if err != nil {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
 	}
-	r.SetPathValue("name", strings.Trim(r.PathValue("mount"), "/")+"/"+strings.Trim(r.PathValue("name"), "/"))
+	r.SetPathValue("name", name)
 	a.vaultKVRead(w, r)
 }
 
 func (a *API) vaultMountedKVWrite(w http.ResponseWriter, r *http.Request) {
-	if err := a.resolveVaultMount(r, "kv"); err != nil {
+	name, err := a.vaultMountedKVStoreName(r)
+	if err != nil {
 		writeVaultError(w, vaultHTTPStatus(err), err.Error())
 		return
 	}
-	r.SetPathValue("name", strings.Trim(r.PathValue("mount"), "/")+"/"+strings.Trim(r.PathValue("name"), "/"))
+	r.SetPathValue("name", name)
 	a.vaultKVWrite(w, r)
+}
+
+// Mount disable is a namespace boundary, not a temporary route toggle. A
+// re-enabled path receives a new immutable event ID, so its KV mapping cannot
+// reveal any value written under the predecessor. Legacy active mounts keep
+// their original mapping until the operator disables them.
+func (a *API) vaultMountedKVStoreName(r *http.Request) (string, error) {
+	if err := a.resolveVaultMount(r, "kv"); err != nil {
+		return "", err
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		return "", errStatus(http.StatusForbidden, "permission denied")
+	}
+	state, err := a.vaultCompat.snapshot(r.Context(), tenantID)
+	if err != nil {
+		return "", err
+	}
+	mountName := strings.Trim(r.PathValue("mount"), "/")
+	mount, ok := state.mounts[mountName]
+	if !ok || mount.Type != "kv" {
+		return "", errStatus(http.StatusNotFound, "no handler for route")
+	}
+	name := strings.Trim(r.PathValue("name"), "/")
+	if name == "" {
+		return "", errStatus(http.StatusBadRequest, "secret path is required")
+	}
+	return vaultKVStoreNameForGeneration(mount, state.mountEpochs[mountName], name)
+}
+
+func vaultKVStoreNameForGeneration(mount vaultCompatMount, epoch string, name string) (string, error) {
+	if mount.NamespaceVersion == 0 {
+		return mount.Path + "/" + name, nil
+	}
+	if epoch == "" {
+		return "", errors.New("vault mount generation is unavailable")
+	}
+	return fmt.Sprintf("vault-compat/%s/%s/%s", mount.Path, epoch, name), nil
 }
 
 func (a *API) vaultMountedPKIIssue(w http.ResponseWriter, r *http.Request) {
@@ -438,7 +478,7 @@ func (a *API) vaultDeletePolicy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		if _, exists := state.policies[name]; !exists && r.Header.Get("Idempotency-Key") == "" && state.policyEpochs[name] != 0 {
+		if _, exists := state.policies[name]; !exists && r.Header.Get("Idempotency-Key") == "" && state.policyEpochs[name] != "" {
 			return http.StatusNoContent, nil, nil
 		}
 		if _, exists := state.policies[name]; !exists {

@@ -26,10 +26,10 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
-	newHandler := func() http.Handler {
+	newHandler := func() *API {
 		return New(nil, orchestrator.NewMemoryIdempotency(), nil, WithInsecureHeaderResolver(), WithEventLog(log))
 	}
-	coldRestart := func() http.Handler {
+	coldRestart := func() *API {
 		t.Helper()
 		if err := log.Close(); err != nil {
 			t.Fatal(err)
@@ -83,6 +83,14 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 	configuration := map[string]any{"type": "kv", "options": map[string]string{"version": "2"}}
 	request(http.MethodPost, mount, configuration, http.StatusNoContent)
 	request(http.MethodPost, mount, configuration, http.StatusNoContent)
+	first, err := handler.vaultCompat.snapshot(ctx, vaultCompleteTenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstName, err := vaultKVStoreNameForGeneration(first.mounts["qa-stock-lifecycle"], first.mountEpochs["qa-stock-lifecycle"], "retained-check")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := count(vaultMountEnabledEventType); got != 1 {
 		t.Fatalf("mount enables after retry = %d, want 1", got)
 	}
@@ -93,6 +101,18 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 	}
 	handler = coldRestart()
 	request(http.MethodPost, mount, configuration, http.StatusNoContent)
+	second, err := handler.vaultCompat.snapshot(ctx, vaultCompleteTenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondName, err := vaultKVStoreNameForGeneration(second.mounts["qa-stock-lifecycle"], second.mountEpochs["qa-stock-lifecycle"], "retained-check")
+	if err != nil || firstName == secondName {
+		t.Fatalf("re-enabled mount reused predecessor's KV name: first=%q second=%q err=%v", firstName, secondName, err)
+	}
+	legacyName, err := vaultKVStoreNameForGeneration(vaultCompatMount{Path: "legacy", Type: "kv"}, "", "retained-check")
+	if err != nil || legacyName != "legacy/retained-check" {
+		t.Fatalf("legacy active mount mapping = %q, %v", legacyName, err)
+	}
 	if got := count(vaultMountEnabledEventType); got != 2 {
 		t.Fatalf("mount enables after cold re-enable = %d, want 2", got)
 	}
@@ -109,6 +129,14 @@ func TestVaultStockCLIMountAndPolicyLifecycle(t *testing.T) {
 		t.Fatalf("policy deletes after retry = %d, want 1", got)
 	}
 	handler = coldRestart()
+	replayedMount, err := handler.vaultCompat.snapshot(ctx, vaultCompleteTenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayedName, err := vaultKVStoreNameForGeneration(replayedMount.mounts["qa-stock-lifecycle"], replayedMount.mountEpochs["qa-stock-lifecycle"], "retained-check")
+	if err != nil || replayedName != secondName {
+		t.Fatalf("cold mount namespace changed: before=%q after=%q err=%v", secondName, replayedName, err)
+	}
 	request(http.MethodPut, policy, definition, http.StatusNoContent)
 	if got := count(vaultPolicyPutEventType); got != 2 {
 		t.Fatalf("policy puts after cold re-create = %d, want 2", got)

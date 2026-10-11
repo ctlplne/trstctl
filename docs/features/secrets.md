@@ -145,6 +145,11 @@ The stock CLI's `vault secrets enable/disable` and `vault policy write/delete`
 commands also work without a custom header: the fallback is bound to the last
 event for that exact mount or policy, so a retry does not append twice and a
 later delete/recreate cycle is a fresh operation.
+Disabling a tenant-authored KV mount closes that namespace. Re-enabling the
+same path starts an empty namespace, so previously written values cannot
+reappear through the Vault-compatible route. The sealed predecessor remains
+subject to the native secret store's retention and erasure policy; mount disable
+is not a physical-erasure receipt.
 An identical request from the same token replays its original result; force a fresh
 issue with a different explicit `Idempotency-Key`, or use the native
 `/api/v1/secrets/pki` route. Transit mutations require an explicit
