@@ -287,6 +287,15 @@ func TestEveryTruncatedReadModelTableIsRestoredBySnapshots(t *testing.T) {
 	}
 }
 
+func TestCACrossSignReceiptSnapshotVersionRejectsOlderPayloads(t *testing.T) {
+	if !containsRecoveryTable(snapshotTables, "ca_cross_sign_receipts") {
+		t.Fatal("cross-sign receipts are truncated but missing from snapshot restore")
+	}
+	if SnapshotFormatVersion < 53 {
+		t.Fatalf("SnapshotFormatVersion = %d; version 52 omits public cross-sign receipts", SnapshotFormatVersion)
+	}
+}
+
 func TestDiscoverySegmentsAreRebuiltAndSnapshotSafe(t *testing.T) {
 	const table = "discovery_segments"
 	if !containsRecoveryTable(ReadModelTables, table) {
