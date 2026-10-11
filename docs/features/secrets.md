@@ -312,6 +312,14 @@ leaf key from wipeable memory. That mode is deprecated: its
 and its idempotent replay returns the original sealed response without generating a
 second key. The console defaults to CSR mode; Vault/OpenBao uses `pki/sign` for the
 same custody model and retains `pki/issue` only as the legacy equivalent.
+Native issuance returns `certificate_id` alongside the serial and public PEM.
+The event projects that exact leaf into tenant certificate inventory, records its
+subject-key origin, and queues its initial signed CRL publication. Use
+`POST /api/v1/certificates/bulk-revoke` with `certificate_ids: [certificate_id]`
+and a named RFC 5280 reason; then check the certificate row and signed CRL or
+OCSP response. That mutation requires `certs:issue` and `identities:write` in
+addition to `secrets:write` used for issuance. The console keeps a link to the
+exact revocation selection after its one-time certificate reveal is dismissed.
 
 The console does not jump from those inputs straight to signing. Its three-step
 journey is **Configure certificate → Review exact plan → Verify result**. The review

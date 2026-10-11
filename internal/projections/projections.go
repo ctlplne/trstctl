@@ -1541,6 +1541,11 @@ type AccessChangeRequestDecided struct {
 // CAIssuedCertificateEvidenceSchemaVersion declares retained public leaf proof.
 const CAIssuedCertificateEvidenceSchemaVersion = 2
 
+// CASecretInventorySchemaVersion binds a PKI-secret mint to one public
+// inventory row, its subject-key custody, and the same responder serial.
+// Historical v1/v2 events keep their responder-only replay contract.
+const CASecretInventorySchemaVersion = 3
+
 // CAEndEntityInventorySchemaVersion makes one managed leaf event the authority
 // for both inventory and the CA responder serial. Older responder-only events
 // retain their original projection contract during replay.
@@ -1575,6 +1580,12 @@ type CAIssuedCertificate struct {
 	Source         string    `json:"source,omitempty"`
 	CertificateDER []byte    `json:"certificate_der,omitempty"`
 	Fingerprint    string    `json:"fingerprint,omitempty"`
+}
+
+type CASecretCertificateInventoried struct {
+	CAIssuedCertificate
+	IssuerCertificateDER []byte `json:"issuer_certificate_der"`
+	KeyOrigin            string `json:"key_origin"`
 }
 
 // CACertificateRevoked is a responder-only revocation event. Reason is kept for
@@ -3711,7 +3722,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRevoked:                       {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
 	EventCertificateSuperseded:                    {1: true},
-	EventCAIssuedCertificate:                      {1: true, CAIssuedCertificateEvidenceSchemaVersion: true},
+	EventCAIssuedCertificate:                      {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CASecretInventorySchemaVersion: true},
 	EventCACertificateRevoked:                     {1: true},
 	EventCACeremonyStarted:                        {1: true},
 	EventCACeremonyApproved:                       {1: true},
@@ -4538,6 +4549,42 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.SetCertificateSupersededTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.RenewedAt)
 	case EventCAIssuedCertificate:
+		if schemaVersionOf(e) == CASecretInventorySchemaVersion {
+			var pl CASecretCertificateInventoried
+			if err := decode(e, &pl); err != nil {
+				return err
+			}
+			info, err := certinfo.Inspect(pl.CertificateDER)
+			if err != nil {
+				return fmt.Errorf("projections: PKI secret public leaf: %w", err)
+			}
+			if e.ID == "" || pl.CAID == "" || pl.Source != "pkisecret" || info.IsCA ||
+				pl.Serial != info.SerialNumber || pl.Fingerprint != info.SHA256Fingerprint ||
+				(pl.KeyOrigin != string(custody.OriginRequester) && pl.KeyOrigin != string(custody.OriginControlPlane)) ||
+				cryptoboundary.VerifyLeafSignedByCA(pl.CertificateDER, pl.IssuerCertificateDER) != nil {
+				return errors.New("projections: PKI secret inventory differs from exact issuer and custody evidence")
+			}
+			notBefore, notAfter := info.NotBefore, info.NotAfter
+			if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
+				ID: SecretPKIInventoryID(e), TenantID: e.TenantID, CAID: pl.CAID,
+				Subject: info.Subject, SANs: certificateInfoSANs(info), Issuer: info.Issuer,
+				Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+				NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued",
+				CertificateDER: pl.CertificateDER,
+				CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pl.CertificateDER}),
+				KeyOrigin:      pl.KeyOrigin, CreatedAt: e.Time,
+			}); err != nil {
+				return err
+			}
+			issuedAt := pl.IssuedAt
+			if issuedAt.IsZero() {
+				issuedAt = e.Time
+			}
+			if err := p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt); err != nil {
+				return err
+			}
+			return p.store.EnsureCertificateCRLPublicationTx(ctx, tx, e.TenantID, e.ID, pl.CAID)
+		}
 		var pl CAIssuedCertificate
 		if err := decode(e, &pl); err != nil {
 			return err

@@ -374,7 +374,8 @@ today (see [Current limitations](../limitations.md) and
 9. Hand an application a short-lived certificate while its private key stays where it
    will run. Generate the CSR beside the workload, then send only that public request
    to the separate signing service. The issued serial is recorded on the revocation
-   pipeline so a revoked certificate stops validating. See [Secrets](../features/secrets.md).
+   pipeline and the public leaf is projected into certificate inventory. See
+   [Secrets](../features/secrets.md).
 
    In the console, open **Secrets → Engines → Certificate request**. The three-step
    journey first configures custody/name/lifetime, then asks the server to review the
@@ -394,6 +395,15 @@ today (see [Current limitations](../limitations.md) and
    -> you get back a short-lived certificate and no private key; `payments.key` never
    left the workload environment. Supplying `common_name` instead is the deprecated
    key-returning mode and creates an `issuance.server_side_keygen` Audit receipt first.
+   Keep the returned `certificate_id`: it identifies the exact inventory row for
+   `POST /api/v1/certificates/bulk-revoke`. The console links to that row in
+   **Certificates → Revocation** even after the one-time certificate reveal closes.
+   To revoke through the CLI, write
+   `{"certificate_ids":["<certificate_id>"],"reason":"keyCompromise"}` to a
+   local JSON file and run
+   `trstctl-cli --idempotency-key payments-pki-revoke-1 certificates bulk-revoke -f revoke.json`.
+   Use a token with `certs:issue` and `identities:write`, then read the certificate
+   and signed CRL or OCSP response to confirm issuer revocation.
    The preview returns `request_fingerprint`; automation may copy it into
    `preview_fingerprint` in the issue request so any changed CA, custody input,
    profile, principal, tenant, or TTL fails closed and requires a new review.

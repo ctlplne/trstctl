@@ -211,17 +211,17 @@ func (a *API) previewPKISecret(w http.ResponseWriter, r *http.Request) {
 		RequiredPermission: "secrets:write", RequestFingerprint: fingerprint, VaultPath: pkiSecretVaultPath(req),
 		Prerequisites: prerequisites, Blockers: blockers, PreviewWrites: []string{}, PreviewExternalEffects: []string{},
 		ExecuteWrites: []string{
-			"record the issued serial on the tenant revocation pipeline",
+			"record the public leaf in certificate inventory and the tenant revocation pipeline",
 			"append plaintext-free pkisecret.issued audit evidence",
 		},
 		ExecuteExternalEffects: []string{"ask the configured issuing-CA signer to sign exactly one certificate"},
 		RecoverySteps: []string{
 			"Cancel before execution to leave the CA, event log, and certificate inventory unchanged.",
-			"After execution, revoke the exact issued serial through the certificate revocation workflow.",
+			"After execution, use the returned certificate_id to review or revoke the exact leaf in Certificates → Revocation.",
 		},
 		VerificationSteps: []string{
 			"Verify the returned certificate common name, public key, issuer, and lifetime match this plan.",
-			"Confirm the issued serial appears in tenant-scoped audit and revocation tracking.",
+			"Confirm certificate_id and serial identify the same leaf in tenant-scoped inventory and revocation tracking.",
 		},
 		CLIArgv:      []string{"trstctl", "secrets", "pki", "-f", requestFile},
 		DataHandling: "Preview parses only public CSR/subject data in transient memory. It never generates, receives, returns, logs, persists, signs with, or sends a subject private key; legacy execution returns a generated key once and is explicitly deprecated.",

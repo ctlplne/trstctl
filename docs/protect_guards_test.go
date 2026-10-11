@@ -2061,7 +2061,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"EventIdentityUndeployed: {LifecycleCompletedSideEffectEventSchemaVersion: true}",
 		"EventIdentityRetired: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true}",
 		"EventCertificateRecorded: {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true, CertificateObservationEventSchemaVersion: true}",
-		"EventCAIssuedCertificate: {1: true, CAIssuedCertificateEvidenceSchemaVersion: true}",
+		"EventCAIssuedCertificate: {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CASecretInventorySchemaVersion: true}",
 		"EventCAEndEntityIssued: {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CAEndEntityInventorySchemaVersion: true}",
 		"EventDiscoverySourceUpserted: {1: true}",
 		"EventDiscoveryScheduleUpserted: {1: true}",

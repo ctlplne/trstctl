@@ -8514,6 +8514,7 @@ PKISecret = TypedDict(
     'PKISecret',
     {
         'certificate': str,
+        'certificate_id': str,
         'common_name': str,
         'private_key': str,
         'serial': str,

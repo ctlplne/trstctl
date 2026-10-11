@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
 )
 
@@ -118,6 +119,27 @@ func TestServedPKISecretCSRFirstAndLegacyEvidence(t *testing.T) {
 		"/api/v1/secrets/pki", token, legacyKey, legacyRequest)
 	if status != http.StatusCreated || !bytes.Equal(restartedBody, legacyBody) {
 		t.Fatalf("post-restart idempotent replay = %d body_equal=%t", status, bytes.Equal(restartedBody, legacyBody))
+	}
+	var legacyResponse struct {
+		Certificate string `json:"certificate"`
+	}
+	if err := json.Unmarshal(legacyBody, &legacyResponse); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		pem, origin string
+	}{
+		{csrResponse.Certificate, "requester"},
+		{legacyResponse.Certificate, "control_plane"},
+	} {
+		info, err := certinfo.Inspect([]byte(item.pem))
+		if err != nil {
+			t.Fatal(err)
+		}
+		inventory, err := restartedHarness.store.GetCertificateByFingerprint(t.Context(), h.tenant, info.SHA256Fingerprint)
+		if err != nil || inventory.KeyOrigin != item.origin || inventory.IssuanceEventID == "" {
+			t.Fatalf("cold restarted PKI inventory missing exact custody: %+v, %v", inventory, err)
+		}
 	}
 	if got := eventCount(t, h.log, h.tenant, "issuance.server_side_keygen"); got != 1 {
 		t.Fatalf("post-restart replay changed deprecation count to %d", got)

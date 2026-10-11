@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
@@ -252,10 +253,11 @@ type pkiSecretRequest struct {
 // mode, its matching control-plane-generated private key. CSR-first responses omit
 // PrivateKey entirely because that key exists only at the requester (AUD-24/B1).
 type pkiSecretResponse struct {
-	Serial      string          `json:"serial"`
-	CommonName  string          `json:"common_name"`
-	Certificate secretJSONBytes `json:"certificate"`           // leaf cert PEM
-	PrivateKey  secretJSONBytes `json:"private_key,omitempty"` // legacy leaf private key PEM (PKCS#8)
+	CertificateID string          `json:"certificate_id"`
+	Serial        string          `json:"serial"`
+	CommonName    string          `json:"common_name"`
+	Certificate   secretJSONBytes `json:"certificate"`           // leaf cert PEM
+	PrivateKey    secretJSONBytes `json:"private_key,omitempty"` // legacy leaf private key PEM (PKCS#8)
 }
 
 // issuePKISecret issues a short-lived certificate + key as a dynamic secret (F67),
@@ -342,8 +344,23 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
 		}
 		certPEM, keyPEM := splitCertKeyPEM(cred.Secret)
+		public, err := certinfo.Inspect(certPEM)
+		if err != nil {
+			secret.Wipe(cred.Secret)
+			return 0, nil, fmt.Errorf("api: inspect issued PKI certificate: %w", err)
+		}
+		inventory, err := a.secrets.be.Store.GetCertificateByFingerprint(ctx, tenantID, public.SHA256Fingerprint)
+		if err != nil {
+			secret.Wipe(cred.Secret)
+			return 0, nil, fmt.Errorf("api: issued PKI certificate has no exact inventory readback: %w", err)
+		}
+		if inventory.Serial != cred.BackendRef || inventory.IssuanceEventID == "" {
+			secret.Wipe(cred.Secret)
+			return 0, nil, errors.New("api: issued PKI certificate inventory differs from issuance evidence")
+		}
 		resp := pkiSecretResponse{
-			Serial: cred.BackendRef, CommonName: req.CommonName,
+			CertificateID: inventory.ID,
+			Serial:        cred.BackendRef, CommonName: req.CommonName,
 			Certificate: secretJSONBytes(certPEM), PrivateKey: secretJSONBytes(keyPEM),
 		}
 		secret.Wipe(cred.Secret) // cert/key PEM bytes now live only in resp until JSON encoding finishes

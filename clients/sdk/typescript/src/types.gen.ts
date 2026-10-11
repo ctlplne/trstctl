@@ -13709,6 +13709,8 @@ export interface components {
         };
         PKISecret: {
             certificate: string;
+            /** Format: uuid */
+            certificate_id: string;
             common_name: string;
             private_key?: string;
             serial: string;

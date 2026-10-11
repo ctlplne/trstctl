@@ -25350,6 +25350,10 @@
           "certificate": {
             "type": "string"
           },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "common_name": {
             "type": "string"
           },
@@ -25361,6 +25365,7 @@
           }
         },
         "required": [
+          "certificate_id",
           "serial",
           "common_name",
           "certificate"

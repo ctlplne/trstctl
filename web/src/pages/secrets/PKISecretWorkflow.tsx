@@ -45,6 +45,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
   const [issueBusy, setIssueBusy] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
   const [bundle, setBundle] = useState<PKISecret | null>(null);
+  const [issuedRecord, setIssuedRecord] = useState<{ id: string; serial: string } | null>(null);
 
   const request = useMemo(() => requestFor(mode, commonName, csr, ttl), [mode, commonName, csr, ttl]);
   const currentRequestKey = requestKey(request);
@@ -54,6 +55,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
     if (review) setReviewStale(true);
     setReview(null);
     setBundle(null);
+    setIssuedRecord(null);
     setIssueError(null);
     setReviewError(null);
     setStep(0);
@@ -66,6 +68,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
     setReviewError(null);
     setIssueError(null);
     setBundle(null);
+    setIssuedRecord(null);
     try {
       const plan = await api.previewPKISecret(request);
       setReview({ requestKey: requestKey(request), plan });
@@ -90,6 +93,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
     try {
       const issued = await api.issuePKISecret({ ...request, preview_fingerprint: reviewedPlan.request_fingerprint });
       setBundle(issued);
+      setIssuedRecord({ id: issued.certificate_id, serial: issued.serial });
       setStep(2);
     } catch (error) {
       setIssueError(apiProblemMessage(error, t("secrets.pki.issueFailed")));
@@ -101,6 +105,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
   function startAgain() {
     setReview(null);
     setBundle(null);
+    setIssuedRecord(null);
     setIssueError(null);
     setReviewError(null);
     setReviewStale(false);
@@ -127,7 +132,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
       id: "verify",
       label: t("secrets.pki.verifyStep"),
       description: t("secrets.pki.verifyStepHelp"),
-      progressState: bundle ? ("done" as const) : ("pending" as const),
+      progressState: issuedRecord ? ("done" as const) : ("pending" as const),
     },
   ];
 
@@ -306,22 +311,27 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
           </section>
         )}
 
-        {step === 2 && bundle && (
+        {step === 2 && issuedRecord && (
           <section aria-label={t("secrets.pki.verifyLabel")} className="grid gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold">{t("secrets.pki.issued")}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{t("secrets.pki.verifyResult", { serial: bundle.serial })}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("secrets.pki.verifyResult", { serial: issuedRecord.serial })}</p>
               </div>
               <StatusBadge value="issued" label={t("secrets.pki.issuedBadge")} tone="success" />
             </div>
-            <RevealPanel
-              title={translateNow("source.pki.bundle.value1.18184942ea", { value1: bundle.serial })}
-              onDismiss={() => setBundle(null)}
-              value={bundle.private_key ? `${bundle.certificate}\n${bundle.private_key}` : bundle.certificate}
-            >
-              {bundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
-            </RevealPanel>
+            {bundle && (
+              <RevealPanel
+                title={translateNow("source.pki.bundle.value1.18184942ea", { value1: bundle.serial })}
+                onDismiss={() => setBundle(null)}
+                value={bundle.private_key ? `${bundle.certificate}\n${bundle.private_key}` : bundle.certificate}
+              >
+                {bundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
+              </RevealPanel>
+            )}
+            <Link className="w-fit text-sm text-brand-accent underline" to={`/certificates?tab=crlct&certificate_id=${encodeURIComponent(issuedRecord.id)}`}>
+              {t("secrets.pki.exactRevocation")}
+            </Link>
             <PlanList title={t("secrets.pki.verification")} items={reviewedPlan?.verification_steps ?? []} />
           </section>
         )}

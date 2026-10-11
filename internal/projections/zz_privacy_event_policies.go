@@ -1721,6 +1721,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	return map[privacyEventPolicyKey]events.PrivacyPayloadShape{
 		{EventCAIssuedCertificate, CAIssuedCertificateEvidenceSchemaVersion}: privacyPayloadShape[privacyCAIssuedEvidenceV2](),
+		{EventCAIssuedCertificate, CASecretInventorySchemaVersion}:           privacyPayloadShape[CASecretCertificateInventoried](),
 		{EventCAEndEntityIssued, CAIssuedCertificateEvidenceSchemaVersion}: events.PrivacyPayloadShapeOneOf(
 			privacyPayloadShape[privacyCAIssuedEvidenceV2](),
 			privacyPayloadShape[privacyHierarchyLeafIssuedV2](),

@@ -5069,6 +5069,10 @@ export const messages = {
   "secrets.pki.issued": { defaultMessage: "Certificate issued", description: "F67 success heading." },
   "secrets.pki.issuedBadge": { defaultMessage: "Issued", description: "F67 issued status badge." },
   "secrets.pki.verifyResult": { defaultMessage: "Serial {serial} is the exact result of the reviewed plan.", description: "F67 success receipt summary." },
+  "secrets.pki.exactRevocation": {
+    defaultMessage: "Review or revoke this exact certificate",
+    description: "Link from a newly issued PKI secret to its selected inventory row in the revocation console.",
+  },
   "secrets.pki.startAgain": { defaultMessage: "Issue another certificate", description: "F67 restart action." },
   "request.wizard.profile.label": {
     defaultMessage: "Choose certificate rule",

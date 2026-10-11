@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -58,9 +59,10 @@ func secretScannerFromDeps(d Deps) secretScanner {
 
 // secretRevocationSink is the store-backed pkisecret.RevocationSink (GAP-005): it
 // records issued/revoked dynamic-secret serials as events projected into the SAME
-// ca_issued_certs table the served OCSP responder / CRL endpoint read (AN-1), so
-// a revoked dynamic-secret certificate actually stops validating, exactly like a
-// revoked protocol/API leaf. It is the seam pkisecret's WithRevocationSink expects.
+// ca_issued_certs table the served OCSP responder / CRL endpoint read (AN-1).
+// Public issuance also projects one exact certificate inventory row and the
+// first CRL publication intent, so ordinary operators can revoke by ID.
+// It is the seam pkisecret's WithRevocationSink expects.
 type secretRevocationSink struct {
 	store *store.Store
 	log   *events.Log
@@ -179,40 +181,57 @@ func secretSyncAAD(tenantID, target, id, key string) []byte {
 // RecordIssued notes that the CA issued a serial so OCSP can answer "good" rather
 // than "unknown" and a later revoke has a row to flip (idempotent in the store).
 func (s *secretRevocationSink) RecordIssued(ctx context.Context, tenantID, caID, serial string) error {
-	return s.RecordIssuedCertificate(ctx, tenantID, caID, serial, nil)
+	return s.appendIssuedSerial(ctx, tenantID, caID, serial)
 }
 
 // RecordIssuedCertificate persists only public material, never a subject key.
-func (s *secretRevocationSink) RecordIssuedCertificate(ctx context.Context, tenantID, caID, serial string, der []byte) error {
-	fingerprint := ""
-	if len(der) != 0 {
-		info, err := certinfo.Inspect(der)
-		if err != nil {
-			return fmt.Errorf("server: inspect PKI issuance evidence: %w", err)
-		}
-		if info.SerialNumber != serial || info.IsCA {
-			return errors.New("server: PKI issuance evidence does not match leaf serial")
-		}
-		fingerprint = info.SHA256Fingerprint
+func (s *secretRevocationSink) RecordIssuedCertificate(ctx context.Context, tenantID, caID, serial string, der, issuerDER []byte, origin custody.KeyOrigin) error {
+	if origin != custody.OriginRequester && origin != custody.OriginControlPlane {
+		return errors.New("server: PKI issuance requires an exact subject-key origin")
+	}
+	if len(der) == 0 {
+		return errors.New("server: PKI issuance requires the public certificate")
+	}
+	if crypto.VerifyLeafSignedByCA(der, issuerDER) != nil {
+		return errors.New("server: PKI issuance public leaf is not signed by its recorded CA")
+	}
+	info, err := certinfo.Inspect(der)
+	if err != nil {
+		return fmt.Errorf("server: inspect PKI issuance evidence: %w", err)
+	}
+	if info.SerialNumber != serial || info.IsCA {
+		return errors.New("server: PKI issuance evidence does not match leaf serial")
 	}
 	issuedAt := time.Now().UTC()
 	if s.log == nil {
 		return errors.New("server: secret revocation sink requires an event log")
 	}
-	payload, err := json.Marshal(projections.CAIssuedCertificate{
-		CAID: caID, Serial: serial, IssuedAt: issuedAt, Source: "pkisecret",
-		CertificateDER: der, Fingerprint: fingerprint,
+	payload, err := json.Marshal(projections.CASecretCertificateInventoried{
+		CAIssuedCertificate: projections.CAIssuedCertificate{
+			CAID: caID, Serial: serial, IssuedAt: issuedAt, Source: "pkisecret",
+			CertificateDER: der, Fingerprint: info.SHA256Fingerprint,
+		},
+		KeyOrigin:            string(origin),
+		IssuerCertificateDER: issuerDER,
 	})
 	if err != nil {
 		return err
 	}
-	schemaVersion := 1
-	if len(der) != 0 {
-		schemaVersion = projections.CAIssuedCertificateEvidenceSchemaVersion
-	}
 	return s.appendAndProject(ctx, events.Event{
-		Type: projections.EventCAIssuedCertificate, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload,
+		Type: projections.EventCAIssuedCertificate, TenantID: tenantID,
+		SchemaVersion: projections.CASecretInventorySchemaVersion, Data: payload,
 	})
+}
+
+func (s *secretRevocationSink) appendIssuedSerial(ctx context.Context, tenantID, caID, serial string) error {
+	if s.log == nil {
+		return errors.New("server: secret revocation sink requires an event log")
+	}
+	payload, err := json.Marshal(projections.CAIssuedCertificate{CAID: caID, Serial: serial, IssuedAt: time.Now().UTC(), Source: "pkisecret"})
+	if err != nil {
+		return err
+	}
+	return s.appendAndProject(ctx, events.Event{Type: projections.EventCAIssuedCertificate, TenantID: tenantID, Data: payload})
 }
 
 // Revoke records the serial revoked on the served revocation pipeline (reflected in

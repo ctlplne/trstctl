@@ -6258,8 +6258,8 @@ func componentSchemas() map[string]*Schema {
 		"request_fingerprint", "vault_path", "prerequisites", "blockers", "preview_writes", "preview_external_effects",
 		"execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	pkiSecret := object(map[string]*Schema{
-		"serial": str(), "common_name": str(), "certificate": str(), "private_key": str(),
-	}, "serial", "common_name", "certificate")
+		"certificate_id": uuid(), "serial": str(), "common_name": str(), "certificate": str(), "private_key": str(),
+	}, "certificate_id", "serial", "common_name", "certificate")
 	machineLoginReq := object(map[string]*Schema{
 		"method": str(), "credential": str(),
 		"preview_fingerprint": {Type: "string", Description: "Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed."},

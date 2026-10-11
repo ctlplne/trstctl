@@ -3507,8 +3507,14 @@ when off, requiring a KEK when on):
   mutually exclusive `common_name` mode still returns a usable certificate and
   private key for compatibility, but is deprecated and fails before key generation
   unless its `issuance.server_side_keygen` receipt is durable. Both modes use the
-  issuing CA in the out-of-process signer and record the serial on the served
-  revocation pipeline so a revoked dynamic-secret cert stops validating.
+  issuing CA in the out-of-process signer. New issuance events project the exact
+  public leaf, subject-key custody, and responder serial together, returning the
+  inventory `certificate_id` for normal exact revocation. Historical version-2
+  responder-only PKI-secret events retain serial and public leaf evidence, while
+  version-1 events retain only a serial. Neither acquires an inferred inventory
+  ID on replay. Upgrades therefore do not yet make those older leaves available
+  to the inventory revocation workflow. This compatibility gap remains open;
+  missing historical subject-key custody is never guessed.
 - Secret sharing (F60) backs effect-free, value-free `POST
   /api/v1/secrets/shares/preview`, reviewed idempotent creation at
   `POST /api/v1/secrets/shares`, and atomic `.../redeem`. The server-keyed review

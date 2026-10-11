@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/pkisecret"
 )
@@ -17,12 +18,14 @@ type publicIssuanceSink struct {
 	*recordingSink
 	der    []byte
 	serial string
+	origin custody.KeyOrigin
 	fail   error
 }
 
-func (s *publicIssuanceSink) RecordIssuedCertificate(_ context.Context, _, _, serial string, der []byte) error {
+func (s *publicIssuanceSink) RecordIssuedCertificate(_ context.Context, _, _, serial string, der, _ []byte, origin custody.KeyOrigin) error {
 	s.der = append([]byte(nil), der...)
 	s.serial = serial
+	s.origin = origin
 	return s.fail
 }
 
@@ -68,6 +71,9 @@ func TestPKIIssuanceRequiresPublicEvidenceBeforeReturningCredential(t *testing.T
 			}
 			if actual.SHA256Fingerprint != recorded.SHA256Fingerprint || actual.SerialNumber != sink.serial || cred.BackendRef != sink.serial {
 				t.Error("recorded public evidence differs from returned credential")
+			}
+			if sink.origin != custody.OriginControlPlane {
+				t.Errorf("generated subject key origin = %q, want control_plane", sink.origin)
 			}
 		})
 	}

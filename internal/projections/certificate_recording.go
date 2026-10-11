@@ -71,6 +71,18 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 		return store.Certificate{}, false, err
 	}
 	switch e.Type {
+	case EventCAIssuedCertificate:
+		if schemaVersionOf(e) != CASecretInventorySchemaVersion {
+			return store.Certificate{}, false, nil
+		}
+		var p CASecretCertificateInventoried
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return store.Certificate{}, true, err
+		}
+		return store.Certificate{Fingerprint: p.Fingerprint, Source: "issued",
+			CertificateDER: p.CertificateDER,
+			CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.CertificateDER}),
+			KeyOrigin:      p.KeyOrigin}, true, nil
 	case EventCAEndEntityIssued:
 		if schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion {
 			managed, err := LegacyManagedCALeafEvidence(e)
@@ -127,6 +139,13 @@ func LegacyManagedCAInventoryID(e events.Event) string {
 		[]byte("managed-ca-legacy-inventory\x00"+e.TenantID+"\x00"+e.ID)).String()
 }
 
+// SecretPKIInventoryID is stable across replay of the exact issuance event.
+// It never derives identity from a tenant-supplied name or a collidable serial.
+func SecretPKIInventoryID(e events.Event) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID,
+		[]byte("secret-pki-inventory\x00"+e.TenantID+"\x00"+e.ID)).String()
+}
+
 // ApplyTx takes the fingerprint fence before any approval row/fence lock. Both
 // inline and tail projectors follow this order. An older already-projected
 // recording cannot overwrite current import provenance or an immutable origin.
@@ -150,7 +169,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err != nil {
 			return err
 		}
-		if e.Type == EventCAIssuedCertificate ||
+		if (e.Type == EventCAIssuedCertificate && schemaVersionOf(e) != CASecretInventorySchemaVersion) ||
 			(e.Type == EventCAEndEntityIssued && (schemaVersionOf(e) == 1 ||
 				(schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion && !managed))) {
 			return p.store.WithResponderIssuanceReceiptTx(ctx, tx, e, func() error {
@@ -217,6 +236,7 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 	}
 	issued := material.Source == "issued" && len(material.CertificateDER) > 0 && len(material.CertificatePEM) > 0 &&
 		((e.Type == EventCertificateRecorded && strings.HasPrefix(material.IssuanceIdempotencyKey, "issue:transition:")) ||
+			(e.Type == EventCAIssuedCertificate && schemaVersionOf(e) == CASecretInventorySchemaVersion) ||
 			(e.Type == EventCAEndEntityIssued && (schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion ||
 				schemaVersionOf(e) == CAEndEntityInventorySchemaVersion)))
 	return p.store.ApplyCertificateRecordingHeadTx(ctx, tx, e.TenantID, material.Fingerprint, e.ID, e.Sequence, issued)
@@ -233,7 +253,7 @@ func CertificateMetadataEvent(e events.Event) (bool, error) {
 		return false, err
 	}
 	switch e.Type {
-	case EventCertificateRecorded, EventCAEndEntityIssued, EventEdgeIssuanceReconciled,
+	case EventCertificateRecorded, EventCAEndEntityIssued, EventCAIssuedCertificate, EventEdgeIssuanceReconciled,
 		EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
 		EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,
 		EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
@@ -243,6 +263,9 @@ func CertificateMetadataEvent(e events.Event) (bool, error) {
 				return LegacyManagedCALeafEvidence(e)
 			}
 			return schemaVersionOf(e) == CAEndEntityInventorySchemaVersion, nil
+		}
+		if e.Type == EventCAIssuedCertificate {
+			return schemaVersionOf(e) == CASecretInventorySchemaVersion, nil
 		}
 		return true, nil
 	case EventOwnershipAssigned:

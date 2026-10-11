@@ -83,3 +83,43 @@ func TestManagedCAInventoryEventHasClosedPublicEvidenceSchema(t *testing.T) {
 		t.Fatal("managed CA inventory event accepted an undeclared private key field")
 	}
 }
+
+func TestPKISecretInventoryEventHasClosedPublicEvidenceSchema(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	payload, err := json.Marshal(CASecretCertificateInventoried{
+		CAIssuedCertificate: CAIssuedCertificate{
+			CAID: "issuer", Serial: "12", IssuedAt: time.Now().UTC(), Source: "pkisecret",
+			CertificateDER: []byte{1, 2, 3}, Fingerprint: "public-fingerprint",
+		},
+		IssuerCertificateDER: []byte{4, 5, 6}, KeyOrigin: "requester",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := events.Event{ID: "secret-pki-v3", TenantID: "11111111-1111-4111-8111-111111111111",
+		Type: EventCAIssuedCertificate, SchemaVersion: CASecretInventorySchemaVersion, Data: payload}
+	if _, err := log.Append(t.Context(), event); err != nil {
+		t.Fatalf("public PKI secret inventory event rejected: %v", err)
+	}
+	event.ID, event.SchemaVersion = "secret-pki-old-version", CAIssuedCertificateEvidenceSchemaVersion
+	if _, err := log.Append(t.Context(), event); err == nil {
+		t.Fatal("historical responder schema accepted inventory custody fields")
+	}
+	var expanded map[string]any
+	if err := json.Unmarshal(payload, &expanded); err != nil {
+		t.Fatal(err)
+	}
+	expanded["private_key"] = "must never enter the event log"
+	event.ID, event.SchemaVersion = "secret-pki-private-key", CASecretInventorySchemaVersion
+	event.Data, err = json.Marshal(expanded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(t.Context(), event); err == nil {
+		t.Fatal("PKI secret inventory event accepted undeclared key material")
+	}
+}

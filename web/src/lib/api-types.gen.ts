@@ -6186,6 +6186,7 @@ export interface PAMTargetRequest {
 
 export interface PKISecret {
   certificate: string;
+  certificate_id: string;
   common_name: string;
   private_key?: string;
   serial: string;

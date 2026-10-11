@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/dynsecret"
 )
 
@@ -70,7 +71,7 @@ type RevocationSink interface {
 // served sink implements this in addition to serial-only revocation support.
 // A recording error prevents returning a credential with unrecorded issuance.
 type PublicIssuanceSink interface {
-	RecordIssuedCertificate(ctx context.Context, tenantID, caID, serial string, certificateDER []byte) error
+	RecordIssuedCertificate(ctx context.Context, tenantID, caID, serial string, certificateDER, issuerDER []byte, keyOrigin custody.KeyOrigin) error
 }
 
 // reasonCessationOfOperation is the RFC 5280 CRLReason used for a leased
@@ -140,7 +141,7 @@ func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateReques
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
-	cred, err := p.signAndRecord(ctx, plan.CommonName, csr, plan.EffectiveTTL)
+	cred, err := p.signAndRecord(ctx, plan.CommonName, csr, plan.EffectiveTTL, custody.OriginControlPlane)
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
@@ -170,7 +171,7 @@ func (p *PKIProvider) GenerateFromCSR(ctx context.Context, csrDER []byte, ttl ti
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
-	return p.signAndRecord(ctx, plan.CommonName, csrDER, plan.EffectiveTTL)
+	return p.signAndRecord(ctx, plan.CommonName, csrDER, plan.EffectiveTTL, custody.OriginRequester)
 }
 
 // PlanGenerated applies the exact legacy server-keygen profile rules without
@@ -293,7 +294,7 @@ func (p *PKIProvider) constrainTTL(ttl time.Duration) time.Duration {
 	return ttl
 }
 
-func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byte, ttl time.Duration) (dynsecret.Credential, error) {
+func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byte, ttl time.Duration, keyOrigin custody.KeyOrigin) (dynsecret.Credential, error) {
 	certDER, err := crypto.SignLeafFromCSR(p.caCertDER, p.caSigner, csrDER, ttl)
 	if err != nil {
 		return dynsecret.Credential{}, fmt.Errorf("pkisecret: sign cert: %w", err)
@@ -311,7 +312,7 @@ func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byt
 	serial := issuedInfo.SerialNumber
 	if p.sink != nil {
 		if recorder, ok := p.sink.(PublicIssuanceSink); ok {
-			err = recorder.RecordIssuedCertificate(ctx, p.tenantID, p.caID, serial, certDER)
+			err = recorder.RecordIssuedCertificate(ctx, p.tenantID, p.caID, serial, certDER, p.caCertDER, keyOrigin)
 		} else {
 			err = p.sink.RecordIssued(ctx, p.tenantID, p.caID, serial)
 		}
