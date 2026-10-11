@@ -303,8 +303,17 @@ ceremony rules, then activate it behind the predecessor's stable issue URL.
    `cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony and collect its *m*
    approvals as above. Submit the ceremony id and target certificate to
    `POST /api/v1/ca/authorities/{issuer-id}/cross-sign`, refused until quorum and
-   exact target-certificate match. Verify the returned certificate independently
-   against the issuer before distributing the new chain.
+   exact target-certificate match. Recover the same public result later with
+   `GET /api/v1/ca/cross-signs/{ceremony-id}` or
+   `trstctl-cli ca cross-signs get <ceremony-id>`; that indexed receipt is built
+   from the immutable result event and survives a control-plane restart. Existing
+   cross-signs from before the receipt projection are recovered by one indexed
+   event-ID lookup on first read. The
+   console's **CA hierarchy → Lifecycle → Cross-sign a CA** panel can preview,
+   open, resume, and execute the same ceremony. Verify the returned certificate
+   independently against the issuer before distributing the new chain.
+   Older in-process hierarchy events that recorded only the issuer and ceremony
+   have no public certificate to recover; their receipt lookup remains 404.
 6. Retire the old key per your policy (and per the
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).

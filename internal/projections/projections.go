@@ -4875,7 +4875,49 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.MarkCAAuthorityHorizonAlertedTx(ctx, tx, e.TenantID,
 			pl.CAAuthorityID, pl.HorizonMonths, e.Time)
-	case EventCACrossSigned, EventBreakglassIssued, EventBreakglassCARotated, EventBreakglassCACrossSigned:
+	case EventCACrossSigned:
+		var pl privacyCACrossSignedV1
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		// The older in-process hierarchy emitted only ca_id and ceremony_id.
+		// It contains no recoverable public certificate; preserve its ceremony
+		// projection without inventing a receipt. Served result IDs must carry
+		// the complete DER payload and never take this compatibility path.
+		if len(pl.TargetCertificateDER) == 0 && len(pl.CrossCertificateDER) == 0 && pl.TargetSHA256 == "" &&
+			!strings.HasPrefix(e.ID, "ca-cross-sign-") && !strings.HasPrefix(e.ID, "ca-offline-cross-sign-") {
+			if pl.CAID == "" || pl.CeremonyID == "" {
+				return fmt.Errorf("projections: legacy CA cross-sign identity is incomplete")
+			}
+			return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, pl.CeremonyID, e.Time)
+		}
+		if pl.CAID == "" || pl.CeremonyID == "" ||
+			len(pl.TargetCertificateDER) == 0 || len(pl.CrossCertificateDER) == 0 ||
+			pl.TargetSHA256 != cryptoboundary.SHA256Hex(pl.TargetCertificateDER) {
+			return fmt.Errorf("projections: invalid CA cross-sign receipt")
+		}
+		issuerPEM, err := p.store.CAAuthorityCertificateTx(ctx, tx, e.TenantID, pl.CAID)
+		if err != nil {
+			return fmt.Errorf("projections: cross-sign issuer: %w", err)
+		}
+		issuerBlock, _ := pem.Decode(issuerPEM)
+		if issuerBlock == nil || issuerBlock.Type != "CERTIFICATE" {
+			return fmt.Errorf("projections: cross-sign issuer certificate is invalid")
+		}
+		if err := cryptoboundary.VerifyCrossSignedCA(issuerBlock.Bytes, pl.TargetCertificateDER, pl.CrossCertificateDER); err != nil {
+			return fmt.Errorf("projections: cross-sign certificate: %w", err)
+		}
+		if err := p.store.ApplyCACrossSignReceiptTx(ctx, tx, store.CACrossSignReceipt{
+			TenantID: e.TenantID, CeremonyID: pl.CeremonyID,
+			IssuerAuthorityID: pl.CAID, TargetSHA256: pl.TargetSHA256,
+			TargetCertificateDER: pl.TargetCertificateDER,
+			CrossCertificateDER:  pl.CrossCertificateDER,
+			Imported:             pl.OfflineRoot, CompletedAt: e.Time,
+		}); err != nil {
+			return err
+		}
+		return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, pl.CeremonyID, e.Time)
+	case EventBreakglassIssued, EventBreakglassCARotated, EventBreakglassCACrossSigned:
 		var pl BreakglassCeremonyCompleted
 		if err := decode(e, &pl); err != nil {
 			return err

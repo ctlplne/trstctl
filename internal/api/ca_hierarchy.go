@@ -43,6 +43,7 @@ type CAHierarchyService interface {
 	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
 	RekeyAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRekeyRequest) (CAAuthorityRotation, error)
 	CrossSignAuthority(ctx context.Context, tenantID, caID string, req CACrossSignRequest) (CACrossSign, error)
+	GetCrossSignReceipt(ctx context.Context, tenantID, ceremonyID string) (CACrossSign, error)
 	ImportOfflineRootCrossSign(ctx context.Context, tenantID, caID string, req CAOfflineCrossSignImportRequest) (CACrossSign, error)
 	RekeyOfflineRoot(ctx context.Context, tenantID, caID string, req CAOfflineRootRekeyRequest) (CAOfflineRootRekey, error)
 }
@@ -74,7 +75,7 @@ type CACeremonyStartRequest struct {
 	Reason                     string `json:"reason,omitempty"`
 	SignerHandle               string `json:"signer_handle,omitempty"`
 	Threshold                  int    `json:"threshold"`
-	Spec                       CASpec `json:"spec"`
+	Spec                       CASpec `json:"spec,omitempty"`
 }
 
 // CACeremonyPlanAuthority is the non-secret identity of one existing authority
@@ -695,6 +696,29 @@ func (a *API) crossSignCAAuthority(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, result, nil
 	})
+}
+
+func (a *API) getCACrossSignReceipt(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.caHierarchy == nil {
+		a.writeError(w, ErrCAHierarchyUnavailable)
+		return
+	}
+	receipt, err := a.caHierarchy.GetCrossSignReceipt(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principal, ok := r.Context().Value(principalCtxKey).(authz.Principal)
+	if !ok || !principal.Can(authz.IssuersRead, authz.Scope{TenantID: tenantID, Issuer: receipt.IssuerAuthorityID}) {
+		a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires issuers:read on cross-sign issuer"))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, receipt)
 }
 
 //trstctl:mutation

@@ -464,7 +464,7 @@ func componentSchemas() map[string]*Schema {
 		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(),
 		"target_certificate_pem": str(), "cross_certificate_pem": str(), "reverse_cross_certificate_pem": str(),
 		"reason": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
-	}, "operation", "threshold", "spec")
+	}, "operation", "threshold")
 	caCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
 		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),

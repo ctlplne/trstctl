@@ -1798,7 +1798,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		),
 		{EventCAAuthorityRotated, 1}:                                               privacyPayloadShape[CAAuthorityRotated](),
 		{EventCAAuthorityRekeyed, 1}:                                               privacyPayloadShape[CAAuthorityRekeyed](),
-		{EventCACrossSigned, 1}:                                                    privacyPayloadShape[privacyCACrossSignedV1](),
+		{EventCACrossSigned, 1}:                                                    caCrossSignedPrivacyShape(),
 		{EventBreakglassIssued, 1}:                                                 privacyPayloadShape[BreakglassCeremonyCompleted](),
 		{EventBreakglassCARotated, 1}:                                              privacyPayloadShape[BreakglassCeremonyCompleted](),
 		{EventBreakglassCACrossSigned, 1}:                                          privacyPayloadShape[BreakglassCeremonyCompleted](),

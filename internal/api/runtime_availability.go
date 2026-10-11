@@ -36,7 +36,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "createCACeremony", "getCACeremony", "approveCACeremony",
 		"listCAAuthorities", "createRootCA", "importOfflineRootCA", "importExistingCA", "createIntermediateCA",
 		"createOfflineIntermediateCSR", "importOfflineIntermediateCA", "issueIntermediateCAFromCSR", "issueHierarchyLeaf",
-		"rotateCAAuthority", "rekeyCAAuthority", "crossSignCAAuthority", "importOfflineRootCrossSign", "rekeyOfflineRoot":
+		"rotateCAAuthority", "rekeyCAAuthority", "crossSignCAAuthority", "getCACrossSignReceipt", "importOfflineRootCrossSign", "rekeyOfflineRoot":
 		return runtimeDependency(a.caHierarchy != nil,
 			"The native CA hierarchy service is not configured in this deployment.")
 	case "listCADiscoveryInventory":

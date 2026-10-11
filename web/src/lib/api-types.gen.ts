@@ -1594,7 +1594,7 @@ export interface CACeremonyStartRequest {
   reason?: string;
   reverse_cross_certificate_pem?: string;
   signer_handle?: string;
-  spec: CASpec;
+  spec?: CASpec;
   target_certificate_pem?: string;
   threshold: number;
 }

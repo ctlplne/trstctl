@@ -6575,8 +6575,7 @@
         },
         "required": [
           "operation",
-          "threshold",
-          "spec"
+          "threshold"
         ],
         "type": "object"
       },
@@ -41295,6 +41294,64 @@
         ],
         "summary": "Cancel a pending CA key ceremony with an audit reason",
         "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/cross-signs/{id}": {
+      "get": {
+        "operationId": "getCACrossSignReceipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CACrossSign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the event-projected public cross-certificate by ceremony ID",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/ca/discovery": {

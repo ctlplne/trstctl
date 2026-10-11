@@ -233,6 +233,10 @@ tamper-evident log. Cross-signing uses a purpose-bound
 `cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony: the signer-backed route
 signs inside the signer, while offline-root routes verify validity, key usage, EKU,
 DNS, path length, subject/public key, and both chain directions first. The full
+public cross-certificate is recoverable by ceremony ID from the event-projected
+`GET /api/v1/ca/cross-signs/{id}` receipt after a restart. The CA hierarchy
+console exposes effect-free review, quorum readback, execution, and that receipt.
+The full
 operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 

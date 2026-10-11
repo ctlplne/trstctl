@@ -2305,7 +2305,8 @@ than sending an operator looking for a credential that was never there.
   the authority profile, lifetime, and reason; mints fresh CA key/certificate
   material, records `ca.authority.rekeyed`, keeps
   the stable issue URL live), and cross-signing at
-  `/api/v1/ca/authorities/{id}/cross-sign`. Offline-root re-key
+  `/api/v1/ca/authorities/{id}/cross-sign`, with durable public certificate
+  readback at `/api/v1/ca/cross-signs/{ceremony-id}`. Offline-root re-key
   (`/api/v1/ca/authorities/{id}/offline-rekey`) and cross-certificate
   verify/import (`/api/v1/ca/authorities/{id}/offline-cross-signs`) never accept
   a private key: operators produce the successor and both cross-certificates on

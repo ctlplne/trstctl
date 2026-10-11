@@ -766,6 +766,7 @@ trstctl-cli ca authorities rekey <ca-authority-id> -f ca-rekey.json
 # Cross-sign one exact public target CA after a cross_sign_ca ceremony reaches quorum.
 printf '{"ceremony_id":"<cross-sign-ceremony-id>","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"}' > ca-cross-sign.json
 trstctl-cli ca authorities cross-sign <issuer-authority-id> -f ca-cross-sign.json
+trstctl-cli ca cross-signs get <cross-sign-ceremony-id>
 
 # Import an offline-root successor and both public cross-certificates. The private
 # root keys never enter these files or trstctl.

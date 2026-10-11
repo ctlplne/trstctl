@@ -21,6 +21,16 @@ func TestCACrossSignedEventHasClosedOnlineAndOfflinePrivacyShapes(t *testing.T) 
 		"target_certificate_der": "AQID", "cross_certificate_der": "BAUG",
 		"target_sha256": "target-digest",
 	}
+	// Historic hierarchy events contain only these identities. Replaying them
+	// must remain possible, while their absent certificate cannot create a
+	// public readback receipt.
+	legacy := events.Event{ID: "legacy-ca-cross-sign-privacy",
+		TenantID: "11111111-1111-4111-8111-111111111111",
+		Type:     EventCACrossSigned, SchemaVersion: 1,
+		Data: []byte(`{"ca_id":"issuer-1","ceremony_id":"ceremony-1"}`)}
+	if _, err := log.Append(t.Context(), legacy); err != nil {
+		t.Fatalf("historic CA cross-sign shape was refused: %v", err)
+	}
 	for _, tc := range []struct {
 		name    string
 		offline bool

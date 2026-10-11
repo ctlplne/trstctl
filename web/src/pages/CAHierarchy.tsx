@@ -44,6 +44,7 @@ import {
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
 import { KeyValue, LabeledInput, LabeledSelect } from "./cahierarchy/CAHierarchyFormParts";
 import { CARekeyPanel } from "./cahierarchy/CAHierarchyRekeyParts";
+import { CACrossSignPanel } from "./cahierarchy/CAHierarchyCrossSignParts";
 import {
   api,
   ApiError,
@@ -1053,6 +1054,9 @@ export function CAHierarchy() {
           onStartCeremony={() => void startCARekeyCeremony()}
           onTTLChange={setRekeyTTLDays}
         />
+      </div>
+      <div className={tab === "lifecycle" ? undefined : "hidden"}>
+        <CACrossSignPanel authorities={authorities} />
       </div>
 
       {probe && (
@@ -2823,7 +2827,7 @@ function externalCAIssuePath(inventory: CADiscovery | null, caID: string): strin
   return item?.issuance_path || `/api/v1/external-cas/${encodeURIComponent(caID)}/issue`;
 }
 
-function offlineFormSpec(form: OfflineCAForm): CACeremonyStartRequest["spec"] {
+function offlineFormSpec(form: OfflineCAForm): NonNullable<CACeremonyStartRequest["spec"]> {
   const permitted = splitTokenList(form.dnsDomains);
   return {
     common_name: form.commonName.trim(),
@@ -2838,7 +2842,7 @@ function shortSerial(serial: string): string {
   return serial.length > 18 ? `${serial.slice(0, 18)}…` : serial;
 }
 
-function parseSpecJSON(value: string): CACeremonyStartRequest["spec"] | string {
+function parseSpecJSON(value: string): NonNullable<CACeremonyStartRequest["spec"]> | string {
   const trimmed = value.trim();
   if (trimmed === "") return "Spec JSON is required.";
   let parsed: unknown;
@@ -2850,7 +2854,7 @@ function parseSpecJSON(value: string): CACeremonyStartRequest["spec"] | string {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return "Spec must be a JSON object.";
   }
-  return parsed as CACeremonyStartRequest["spec"];
+  return parsed as NonNullable<CACeremonyStartRequest["spec"]>;
 }
 
 function positiveInteger(value: string, fallback: number): number {

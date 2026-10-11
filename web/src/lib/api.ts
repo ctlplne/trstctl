@@ -136,6 +136,8 @@ import type {
   CAAuthorityRotation,
   CAAuthorityRotationPlanPreview,
   CAAuthorityRotationRequest,
+  CACrossSign,
+  CACrossSignRequest,
   CACeremonyPlanPreview,
   CACeremonyStartRequest,
   CACreateIntermediateRequest,
@@ -913,6 +915,8 @@ export type {
   CAAuthorityRotation,
   CAAuthorityRotationPlanPreview,
   CAAuthorityRotationRequest,
+  CACrossSign,
+  CACrossSignRequest,
   CACeremonyPlanPreview,
   CACeremonyStartRequest,
   CACreateIntermediateRequest,
@@ -1804,6 +1808,8 @@ export interface Api {
   previewCAAuthorityRotation(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotationPlanPreview>;
   rotateCAAuthority(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotation>;
   rekeyCAAuthority(id: string, input: CAAuthorityRekeyRequest): Promise<CAAuthorityRotation>;
+  crossSignCAAuthority(id: string, input: CACrossSignRequest): Promise<CACrossSign>;
+  getCACrossSignReceipt(ceremonyId: string): Promise<CACrossSign>;
   managedKeyCustody(): Promise<ManagedKeyCustodyPlan>;
   listManagedKeys(options?: { limit?: number; cursor?: string }): Promise<ManagedKeyRecordList>;
   getManagedKey(provider: string, keyId: string): Promise<ManagedKeyRecord>;
@@ -2447,6 +2453,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewCAAuthorityRotation: (id, input) => postRead<CAAuthorityRotationPlanPreview>(`/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate/preview`, input),
   rotateCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate`, input),
   rekeyCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rekey`, input),
+  crossSignCAAuthority: (id, input) => mutate<CACrossSign>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/cross-sign`, input),
+  getCACrossSignReceipt: (ceremonyId) => req<CACrossSign>(`/api/v1/ca/cross-signs/${encodeURIComponent(ceremonyId)}`),
   managedKeyCustody: () => req<ManagedKeyCustodyPlan>("/api/v1/managed-keys/custody"),
   listManagedKeys: (options) => {
     const query = new URLSearchParams();

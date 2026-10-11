@@ -3,6 +3,7 @@
 package projections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -485,11 +486,12 @@ func appendVersionedJSONEvent(t *testing.T, log *events.Log, typ, tenantID strin
 func TestCrossSignRequiresQuorum(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	m := hierarchy.NewManager(s, openLog(t))
+	log := openLog(t)
+	m := hierarchy.NewManager(s, log)
 
 	// Two independent roots: one is our signing CA, the other is the foreign CA we
 	// will cross-sign.
-	signerSpec := hierarchy.CASpec{CommonName: "Signer Root CA", TTL: 10 * 365 * 24 * time.Hour}
+	signerSpec := hierarchy.CASpec{CommonName: "Signer Root CA", TTL: 10 * 365 * 24 * time.Hour, MaxPathLen: 1}
 	signer, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(signerSpec), 1, 1), signerSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot signer: %v", err)
@@ -525,6 +527,53 @@ func TestCrossSignRequiresQuorum(t *testing.T) {
 	}
 	if !info.IsCA {
 		t.Error("a cross-certificate must be a CA certificate")
+	}
+	legacy, err := log.Append(ctx, events.Event{
+		ID: "legacy-cross-sign-receipt-" + short, Type: projections.EventCACrossSigned,
+		TenantID: tenantA, SchemaVersion: 1,
+		Data: []byte(fmt.Sprintf(`{"ca_id":%q,"ceremony_id":%q}`, signer.ID, short)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Apply(ctx, legacy); err != nil {
+		t.Fatalf("legacy cross-sign replay: %v", err)
+	}
+	if _, err := s.GetCACrossSignReceipt(ctx, tenantA, short); !store.IsNotFound(err) {
+		t.Fatalf("legacy event without public DER invented receipt: %v", err)
+	}
+
+	// The served result event builds an indexed public receipt. A fresh projector
+	// after a crash must recover the same bytes without another signer call.
+	crossDER := firstCertDER(t, string(crossPEM))
+	payload, err := json.Marshal(map[string]any{
+		"ca_id": signer.ID, "ceremony_id": short,
+		"target_certificate_der": foreignDER, "cross_certificate_der": crossDER,
+		"target_sha256": crypto.SHA256Hex(foreignDER),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := log.Append(ctx, events.Event{
+		ID: "ca-cross-sign-receipt-" + short, Type: projections.EventCACrossSigned,
+		TenantID: tenantA, SchemaVersion: 1, Data: payload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Apply(ctx, event); err != nil {
+		t.Fatalf("project receipt: %v", err)
+	}
+	if err := projections.New(s).Apply(ctx, event); err != nil {
+		t.Fatalf("cold replay receipt: %v", err)
+	}
+	rec, err := s.GetCACrossSignReceipt(ctx, tenantA, short)
+	if err != nil || rec.IssuerAuthorityID != signer.ID ||
+		!bytes.Equal(rec.CrossCertificateDER, crossDER) || rec.TargetSHA256 != crypto.SHA256Hex(foreignDER) {
+		t.Fatalf("cross-sign receipt = %+v, %v", rec, err)
+	}
+	if _, err := s.GetCACrossSignReceipt(ctx, tenantB, short); !store.IsNotFound(err) {
+		t.Fatalf("cross-tenant receipt lookup = %v", err)
 	}
 }
 
