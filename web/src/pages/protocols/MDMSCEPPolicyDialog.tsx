@@ -78,7 +78,15 @@ function requestFrom(values: PolicyForm): MDMSCEPPolicyRequest {
   };
 }
 
-export function MDMSCEPPolicyDialog({ onClose, onSaved, policy }: { onClose: () => void; onSaved: (saved: MDMSCEPPolicy) => void; policy?: MDMSCEPPolicy }) {
+export function MDMSCEPPolicyDialog({
+  onClose,
+  onSaved,
+  policy,
+}: {
+  onClose: () => void;
+  onSaved: (saved: MDMSCEPPolicy, created: boolean) => void;
+  policy?: MDMSCEPPolicy;
+}) {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [preview, setPreview] = useState<MDMSCEPPolicyPreview | null>(null);
@@ -146,7 +154,7 @@ export function MDMSCEPPolicyDialog({ onClose, onSaved, policy }: { onClose: () 
     try {
       const input = requestFrom(values);
       const saved = policy ? await api.updateMDMSCEPPolicy(policy.id, input) : await api.createMDMSCEPPolicy(input);
-      onSaved(saved);
+      onSaved(saved, !policy);
     } catch (error) {
       setSaveError(apiProblemMessage(error, t("protocols.mdm.form.saveFailed")));
     } finally {

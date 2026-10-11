@@ -407,10 +407,10 @@ export function Protocols() {
     );
   }
 
-  function handleSCEPPolicySaved(updated: MDMSCEPPolicy) {
+  function handleSCEPPolicySaved(updated: MDMSCEPPolicy, created: boolean) {
     replaceSCEPPolicy(updated);
     setSCEPPolicyEditor(null);
-    toast({ kind: "success", title: t("parity.scepPolicyUpdated_3a2953"), description: updated.name });
+    toast({ kind: "success", title: t(created ? "protocols.mdm.form.created" : "parity.scepPolicyUpdated_3a2953"), description: updated.name });
   }
 
   function handleSCEPPolicyDeleted(policy: MDMSCEPPolicy) {
@@ -1245,9 +1245,9 @@ export function Protocols() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setSCEPRotatePolicy(policy)}
-                                aria-label={translateNow("source.rotate.challenge.for.value1.c7c084eaeb", { value1: policy.name })}
+                                aria-label={t("protocols.mdm.rotation.recordFor", { name: policy.name })}
                               >
-                                {t("parity.rotateChallenge_99fc02")}
+                                {t("protocols.mdm.rotation.recordAction")}
                               </Button>
                               <Button
                                 type="button"
@@ -1515,10 +1515,10 @@ function MDMSCEPRotateChallengeDialog({
       panelClassName="relative w-full max-w-xl rounded-panel border border-border bg-card p-4 text-sm shadow-elevation2"
     >
       <h2 id="scep-rotate-title" className="text-title font-semibold">
-        {translateNow("source.rotate.scep.challenge.for.3553645d3e")} {policy.name}?
+        {t("protocols.mdm.rotation.recordTitle", { name: policy.name })}
       </h2>
       <p id="scep-rotate-desc" className="mt-1 text-muted-foreground">
-        {t("parity.rotationMintsFreshChallengeMaterialAnd_0aec47")}
+        {t("protocols.mdm.rotation.description")}
       </p>
       <p className="mt-2 text-caption text-muted-foreground">
         {translateNow("source.current.rotation.version.ede128c23f")} {policy.rotation_version}
@@ -1566,7 +1566,7 @@ function MDMSCEPRotateChallengeDialog({
           disabled={busy || previewing || !preview?.ready || !preview.effect_free}
           onClick={() => void confirmRotate()}
         >
-          {t("parity.rotateChallenge_99fc02")}
+          {t("protocols.mdm.rotation.recordAction")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
           {translateNow("source.cancel.19766ed6cc")}

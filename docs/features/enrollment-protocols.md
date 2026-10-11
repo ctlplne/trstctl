@@ -282,11 +282,15 @@ anchor changes take effect without restarting the handler; the static
 
 If policy setup is blocked, fix the named prerequisite and run the preview again;
 no partial policy exists to clean up. If a save is interrupted, retry with the same
-idempotency key. If challenge rotation fails, the current challenge version remains
-the only active version; keep the dialog open, review the refreshed plan, and retry.
-After rotation, use the device trace to distinguish a challenge refusal from an
-offline device. Repair the named refusal, or bring an offline device online and
-trigger an MDM check-in. Do not weaken challenge, tenant, CSR, or replay validation
+idempotency key. The rotation endpoint records a version and audit timestamp; it
+does not mint an MDM challenge or rotate the MDM's signing key. Rotate that key in
+the MDM, update the policy's trust-anchor reference, and refresh the device
+profile. An old signed challenge can remain valid until its expiry if its signing
+anchor is still trusted. If the version write fails, keep the dialog open, review
+the refreshed plan, and retry. After rotation, use the device trace to distinguish
+a challenge refusal from an offline device. Repair the named refusal, or bring an
+offline device online and trigger an MDM check-in. Do not weaken challenge, tenant,
+CSR, or replay validation
 to make enrollment appear green.
 
 The device-correlation surface is evidence-backed end to end. The SCEP handler

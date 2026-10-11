@@ -21260,14 +21260,22 @@ export const messages = {
       "Queue connector delivery for a credential reference. Static and dynamic-lease providers are refused before effects until their complete phase chains are durable. No secret values pass through this form.",
     description: "CLI-parity console flow copy.",
   },
-  "parity.rotateChallenge_99fc02": {
-    defaultMessage: "Rotate challenge",
-    description: "CLI-parity console flow copy.",
+  "protocols.mdm.rotation.recordAction": {
+    defaultMessage: "Record rotation",
+    description: "MDM challenge rotation records evidence after the external MDM key is rotated.",
   },
-  "parity.rotationMintsFreshChallengeMaterialAnd_0aec47": {
+  "protocols.mdm.rotation.recordFor": {
+    defaultMessage: "Record challenge rotation for {name}",
+    description: "Accessible name for one MDM policy's rotation evidence action.",
+  },
+  "protocols.mdm.rotation.recordTitle": {
+    defaultMessage: "Record SCEP challenge rotation for {name}?",
+    description: "Review heading for one MDM policy's rotation evidence action.",
+  },
+  "protocols.mdm.rotation.description": {
     defaultMessage:
-      "Rotation mints fresh challenge material and records rotation evidence — the rotation version increments and the rotation timestamp is persisted for audit. Profiles distributing the previous challenge stop validating for new enrollments.",
-    description: "CLI-parity console flow copy.",
+      "Record a new challenge rotation version and audit timestamp after rotating the signing material in your MDM and updating its trust reference. trstctl does not mint MDM challenges; an old signed challenge may remain valid until its expiry unless the old signing anchor is removed.",
+    description: "Exact effect and remaining acceptance window for MDM challenge rotation.",
   },
   "parity.rotationRuns_5ec15c": {
     defaultMessage: "Rotation runs",
@@ -21308,6 +21316,10 @@ export const messages = {
   "parity.scepPolicyUpdated_3a2953": {
     defaultMessage: "SCEP policy updated",
     description: "CLI-parity console flow copy.",
+  },
+  "protocols.mdm.form.created": {
+    defaultMessage: "SCEP policy created",
+    description: "Success toast after creating an MDM SCEP enrollment policy.",
   },
   "parity.scheduleName_fb63dc": {
     defaultMessage: "Schedule name",
@@ -26087,10 +26099,6 @@ export const messages = {
     defaultMessage: "Rotate first",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
-  "source.rotate.scep.challenge.for.3553645d3e": {
-    defaultMessage: "Rotate SCEP challenge for",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
   "source.rotate.secret.4405518d27": {
     defaultMessage: "Rotate secret",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -27771,10 +27779,6 @@ export const messages = {
   "source.root.ca.create.failed.6cab086b1e": {
     defaultMessage: "Root CA create failed",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1809.",
-  },
-  "source.rotate.challenge.for.value1.c7c084eaeb": {
-    defaultMessage: "Rotate challenge for {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:599.",
   },
   "source.rotation.run.value1.e6b35404aa": {
     defaultMessage: "Rotation run {value1}",
