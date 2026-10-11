@@ -50,6 +50,13 @@ evidence remains visible.
      succeeds, attach its job/event ids to the incident and acknowledge or
      narrowly silence the old dead-letter alert series; do not make the gauge
      disappear by editing history.
+     A delivered predecessor with more than one possible receiver start also
+     remains a target-order barrier: an expired older worker may still finish
+     after a newer command. New configured HTTP deliveries do not count a refused
+     TCP dial as a receiver start, but this cannot retroactively prove which
+     historical starts were harmless. Keep an affected target fenced until a
+     provider-specific authenticated reconciliation can prove and fence prior
+     operations; do not reset its start count from logs or a matching value alone.
    - **Effect no longer wanted (target decommissioned, tenant offboarded) →
      sweep.** Record the decision in the incident/audit trail, then delete the
      exact rows by id. Never bulk-delete by status alone; the row ids in the

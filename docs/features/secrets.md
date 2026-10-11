@@ -627,7 +627,12 @@ event receipt, and startup compares retained history with SQL before workers run
 Immediately before receiver I/O, the worker records a monotonic command-global
 start token under the same tenant+job terminal-choice lock. A failed event is safe
 only when durable authority proves no generation could have changed the receiver;
-an ordinary timeout or expired worker remains `effect_possible`, keeps its FIFO
+configured HTTP targets now place that token after a successful TCP dial but before
+any request bytes. A refused dial therefore leaves zero possible receiver starts,
+so a later successful retry can release the next command in target order. A TLS
+failure after connect, a request timeout, or a lost response still counts as a
+possible effect; the worker cannot infer that the receiver made no change.
+An ordinary timeout or expired worker remains `effect_possible`, keeps its FIFO
 barrier, and is retried with the same receiver idempotency key until delivery is
 proved. The one exception is a typed local no-network result owned by the first and
 still-only start token. Its closed error and event attempt count are frozen before

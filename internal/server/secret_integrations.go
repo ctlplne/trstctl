@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -676,6 +678,15 @@ type configuredSyncPusher struct {
 	push        func(context.Context, string, []byte) error
 }
 
+type secretSyncReceiverBoundaryKey struct{}
+
+func (p *configuredSyncPusher) PushWithReceiverBoundary(ctx context.Context, key string, value []byte, begin func(context.Context) error) error {
+	if begin == nil {
+		return errors.New("server: secret-sync receiver begin callback is required")
+	}
+	return p.Push(context.WithValue(ctx, secretSyncReceiverBoundaryKey{}, begin), key, value)
+}
+
 func (p *configuredSyncPusher) Push(ctx context.Context, key string, value []byte) error {
 	if p.push == nil {
 		return errors.New("server: secret-sync pusher is not assembled")
@@ -717,7 +728,10 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 		}
 		return nil, err
 	}
-	client, err := secretIntegrationHTTPClient(p.cfg.Endpoint, p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback, p.cfg.PrivateEgressCIDRs, p.guard)
+	begin, _ := ctx.Value(secretSyncReceiverBoundaryKey{}).(func(context.Context) error)
+	client, err := secretIntegrationHTTPClientWithTLSAndBoundary(
+		p.cfg.Endpoint, p.cfg.AllowPrivate, p.cfg.AllowInsecureLoopback,
+		p.cfg.PrivateEgressCIDRs, nil, "", p.guard, begin)
 	if err != nil {
 		return err
 	}
@@ -1220,6 +1234,11 @@ func secretIntegrationHTTPClient(endpoint string, allowPrivate, allowInsecureLoo
 }
 
 func secretIntegrationHTTPClientWithTLS(endpoint string, allowPrivate, allowInsecureLoopback bool, privateCIDRs []string, caPEM []byte, serverName string, guard *egress.Guard) (*http.Client, error) {
+	return secretIntegrationHTTPClientWithTLSAndBoundary(endpoint, allowPrivate, allowInsecureLoopback,
+		privateCIDRs, caPEM, serverName, guard, nil)
+}
+
+func secretIntegrationHTTPClientWithTLSAndBoundary(endpoint string, allowPrivate, allowInsecureLoopback bool, privateCIDRs []string, caPEM []byte, serverName string, guard *egress.Guard, begin func(context.Context) error) (*http.Client, error) {
 	if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(endpoint, allowInsecureLoopback); err != nil {
 		return nil, err
 	}
@@ -1248,6 +1267,31 @@ func secretIntegrationHTTPClientWithTLS(endpoint string, allowPrivate, allowInse
 		copy := base.Clone()
 		copy.TLSClientConfig = pinned.TLSClientConfig
 		client.Transport = copy
+	}
+	if begin != nil {
+		base, ok := client.Transport.(*http.Transport)
+		if !ok || base.DialContext == nil || !base.DisableKeepAlives {
+			return nil, errors.New("server: receiver boundary requires a dedicated non-reusing HTTP transport")
+		}
+		transport := base.Clone()
+		dial := transport.DialContext
+		var once sync.Once
+		var beginErr error
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			connection, err := dial(ctx, network, address)
+			if err != nil {
+				// No connected socket exists and no receiver request bytes can
+				// have been sent. Keep the durable receiver-start count at zero.
+				return nil, err
+			}
+			once.Do(func() { beginErr = begin(ctx) })
+			if beginErr != nil {
+				_ = connection.Close()
+				return nil, beginErr
+			}
+			return connection, nil
+		}
+		client.Transport = transport
 	}
 	clone := *client
 	clone.Transport = guard.WrapTransport(client.Transport)

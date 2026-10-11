@@ -8,9 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -388,6 +393,135 @@ func queueAUD109SecretSync(
 	return job, orchestrator.Message{
 		ID: record.ID, TenantID: tenantID, Destination: record.Destination,
 		IdempotencyKey: record.IdempotencyKey, Payload: record.Payload, Attempts: 1,
+	}
+}
+
+func TestSecretSyncConnectionRefusalDoesNotFenceRecoveredSuccess(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111179"
+	ctx := context.Background()
+	st, log, kek := newAUD109SecretSyncFixture(t, tenantID)
+	first, firstMessage := queueAUD109SecretSync(t, st, log, kek, tenantID,
+		"dial-refusal-first", "TOKEN_FIRST")
+	second, secondMessage := queueAUD109SecretSync(t, st, log, kek, tenantID,
+		"dial-refusal-second", "TOKEN_SECOND")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	target := secretsync.NewTarget("ci", newConfiguredSyncPusher(
+		config.SecretSyncTargetConfig{TenantID: tenantID, ID: "ci", Type: "generic-ci-json",
+			Endpoint: "http://" + address, Provider: "ci", AllowInsecureLoopback: true},
+		integrationCredentialResolver{}, nil, st, log, nil))
+	dispatcher := &secretIntegrationOutboxDispatcher{store: st, log: log, kek: kek,
+		syncTargets: SecretSyncTargetRegistry{tenantID: {"ci": target}}}
+	if handled, err := dispatcher.Deliver(ctx, firstMessage); !handled || err == nil {
+		t.Fatalf("closed receiver delivered=(%t,%v), want a retryable connection error", handled, err)
+	}
+	before, err := st.SecretSyncReceiverAuthority(ctx, tenantID, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.ReceiverIOStarts != 0 || before.EffectState != store.SecretSyncReceiverNoEffect {
+		t.Fatalf("dial refusal receiver authority=%+v, want no receiver-I/O start", before)
+	}
+	if handled, err := dispatcher.Deliver(ctx, secondMessage); !handled || !orchestrator.IsDeliveryDeferred(err) {
+		t.Fatalf("successor before predecessor delivered=(%t,%v), want FIFO deferral", handled, err)
+	}
+
+	listener, err = net.Listen("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received atomic.Int64
+	receiver := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() { _ = r.Body.Close() }()
+		if r.Method != http.MethodPost || r.URL.Path != "/secrets" {
+			http.NotFound(w, r)
+			return
+		}
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		received.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	})}
+	go func() { _ = receiver.Serve(listener) }()
+	t.Cleanup(func() { _ = receiver.Close() })
+	for _, item := range []struct {
+		job     store.SecretSyncJob
+		message orchestrator.Message
+	}{
+		{first, firstMessage}, {second, secondMessage},
+	} {
+		if handled, err := dispatcher.Deliver(ctx, item.message); !handled || err != nil {
+			t.Fatalf("recovered delivery %s=(%t,%v)", item.job.ID, handled, err)
+		}
+		authority, err := st.SecretSyncReceiverAuthority(ctx, tenantID, item.job.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if authority.ReceiverIOStarts != 1 || authority.JobStatus != store.SecretSyncJobDelivered {
+			t.Fatalf("recovered receiver authority %s=%+v, want one start and delivered", item.job.ID, authority)
+		}
+	}
+	if received.Load() != 2 {
+		t.Fatalf("receiver calls=%d, want one per ordered command", received.Load())
+	}
+}
+
+func TestSecretSyncReceiverBoundaryPrecedesRequestBytes(t *testing.T) {
+	var accepted atomic.Int64
+	var authorityReady atomic.Bool
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !authorityReady.Load() {
+			t.Error("receiver saw request before durable begin completed")
+		}
+		accepted.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+	refused := errors.New("test receiver authority refused")
+	client, err := secretIntegrationHTTPClientWithTLSAndBoundary(
+		receiver.URL, false, true, nil, nil, "", nil,
+		func(context.Context) error { return refused })
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, receiver.URL+"/secrets", strings.NewReader("disposable"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response, err := client.Do(request); !errors.Is(err, refused) {
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		t.Fatalf("refused begin returned (%v,%v), want refusal before any request", response, err)
+	}
+	if accepted.Load() != 0 {
+		t.Fatalf("receiver saw %d requests after refused begin", accepted.Load())
+	}
+	client, err = secretIntegrationHTTPClientWithTLSAndBoundary(
+		receiver.URL, false, true, nil, nil, "", nil,
+		func(context.Context) error { authorityReady.Store(true); return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err = http.NewRequest(http.MethodPost, receiver.URL+"/secrets", strings.NewReader("disposable"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusNoContent || accepted.Load() != 1 {
+		t.Fatalf("authorized response=%d accepted=%d, want 204 and one request", response.StatusCode, accepted.Load())
 	}
 }
 

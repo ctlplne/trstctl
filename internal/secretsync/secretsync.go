@@ -49,6 +49,15 @@ type Pusher interface {
 	Push(ctx context.Context, key string, value []byte) error
 }
 
+// ReceiverBoundaryPusher can commit the command's receiver-start authority
+// after a transport connects but before it may send request bytes. A refused
+// connection therefore never counts as a possible receiver write. Pushers that
+// cannot offer this boundary keep the conservative pre-call authority path.
+type ReceiverBoundaryPusher interface {
+	Pusher
+	PushWithReceiverBoundary(ctx context.Context, key string, value []byte, begin func(context.Context) error) error
+}
+
 // Target is a named sync destination (a Pusher with a name).
 type Target struct {
 	name   string
@@ -79,6 +88,29 @@ func (t *Target) DeliverOperation(ctx context.Context, operationID, key string, 
 		return errors.New("secretsync: durable delivery operation id is required")
 	}
 	return t.Deliver(WithOperationID(ctx, operationID), key, value)
+}
+
+// HasReceiverBoundary reports whether a target can place the durable start
+// immediately before its first receiver request rather than before local setup.
+func (t *Target) HasReceiverBoundary() bool {
+	if t == nil {
+		return false
+	}
+	_, ok := t.pusher.(ReceiverBoundaryPusher)
+	return ok
+}
+
+// DeliverOperationAtReceiverBoundary preserves the same stable operation ID as
+// DeliverOperation. The caller must supply a durable, fail-closed begin callback.
+func (t *Target) DeliverOperationAtReceiverBoundary(ctx context.Context, operationID, key string, value []byte, begin func(context.Context) error) error {
+	if t == nil || operationID == "" || begin == nil {
+		return errors.New("secretsync: receiver-bound delivery requires target, operation id, and begin callback")
+	}
+	pusher, ok := t.pusher.(ReceiverBoundaryPusher)
+	if !ok {
+		return errors.New("secretsync: target cannot place receiver authority at the transport boundary")
+	}
+	return pusher.PushWithReceiverBoundary(WithOperationID(ctx, operationID), key, value, begin)
 }
 
 // ProviderCatalogEntry describes one built-in sync integration. It is metadata only:

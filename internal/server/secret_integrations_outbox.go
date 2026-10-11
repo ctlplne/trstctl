@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -62,6 +63,8 @@ type secretIntegrationOutboxDispatcher struct {
 	// outbox errors remain the closed AN-8-safe values below.
 	afterDynamicSecretDelivery func(error)
 }
+
+var errSecretSyncReceiverNoDelivery = errors.New("server: secret-sync command completed without receiver delivery")
 
 func queueSecretSyncEvent(ctx context.Context, st *store.Store, log *events.Log, kek seal.KeyWrapper, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte, tenantCrypto tenantseal.Access) error {
 	if st == nil || log == nil || kek == nil {
@@ -890,23 +893,11 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 			return err
 		}
 	}
-	receiverToken, proceed, err := d.beginSecretSyncReceiverIO(ctx, m, projected)
-	if err != nil {
-		return err
-	}
-	if !proceed {
-		return nil
-	}
-	if err := target.DeliverOperation(ctx, payload.ID, payload.Key, locked.Bytes()); err != nil {
-		if errors.Is(err, cloudauth.ErrOfflineDisabled) {
-			provider := cloudauth.OfflineProvider(err)
-			if provider == "" {
-				provider = "Cloud"
-			}
-			return d.terminalizeSecretSyncFailure(ctx, m, projected, err,
-				provider+" workload identity disabled by air-gap policy", receiverToken, false)
+	if err := d.deliverSecretSyncReceiver(ctx, m, projected, payload, targetID, target, locked.Bytes()); err != nil {
+		if errors.Is(err, errSecretSyncReceiverNoDelivery) {
+			return nil
 		}
-		return fmt.Errorf("server: deliver secret-sync job %s to %s: %w", payload.ID, targetID, err)
+		return err
 	}
 	if d.afterSecretSyncDelivery != nil {
 		if err := d.afterSecretSyncDelivery(ctx, payload); err != nil {
@@ -917,6 +908,72 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 		ID: payload.ID, TenantEpoch: projected.TenantEpoch, Attempts: attempts,
 	}); err != nil {
 		return err
+	}
+	return nil
+}
+
+// deliverSecretSyncReceiver keeps the receiver-start CAS and the external call
+// adjacent. No SQL or history lock spans the request. A configured HTTP pusher
+// commits the CAS after dial and before request bytes; a direct pusher uses the
+// conservative pre-call path.
+func (d *secretIntegrationOutboxDispatcher) deliverSecretSyncReceiver(
+	ctx context.Context, m orchestrator.Message, projected store.SecretSyncJob,
+	payload secretSyncOutboxPayload, targetID string, target *secretsync.Target, value []byte,
+) error {
+	var receiverToken atomic.Int64
+	var beginCalled atomic.Bool
+	var deliveryErr error
+	if target.HasReceiverBoundary() {
+		// Each configured HTTP target owns a fresh, non-reusing transport. Its
+		// dial hook commits this authority only after a socket connects and
+		// before the transport can send request bytes. A refused dial has no
+		// possible receiver effect and cannot poison the next target order.
+		deliveryErr = target.DeliverOperationAtReceiverBoundary(ctx, payload.ID, payload.Key,
+			value, func(beginCtx context.Context) error {
+				beginCalled.Store(true)
+				token, proceed, err := d.beginSecretSyncReceiverIO(beginCtx, m, projected)
+				receiverToken.Store(token)
+				if err != nil {
+					return err
+				}
+				if !proceed {
+					return errSecretSyncReceiverNoDelivery
+				}
+				return nil
+			})
+		if errors.Is(deliveryErr, errSecretSyncReceiverNoDelivery) {
+			return errSecretSyncReceiverNoDelivery
+		}
+		if deliveryErr != nil && !beginCalled.Load() && !errors.Is(deliveryErr, cloudauth.ErrOfflineDisabled) {
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: secret-sync target stopped before receiver connection: %w", deliveryErr))
+		}
+		if deliveryErr == nil && receiverToken.Load() == 0 {
+			return errors.New("server: configured secret-sync target returned success without receiver-start authority")
+		}
+	} else {
+		token, proceed, err := d.beginSecretSyncReceiverIO(ctx, m, projected)
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			return errSecretSyncReceiverNoDelivery
+		}
+		receiverToken.Store(token)
+		deliveryErr = target.DeliverOperation(ctx, payload.ID, payload.Key, value)
+	}
+	if err := deliveryErr; err != nil {
+		if errors.Is(err, cloudauth.ErrOfflineDisabled) {
+			provider := cloudauth.OfflineProvider(err)
+			if provider == "" {
+				provider = "Cloud"
+			}
+			if terminalErr := d.terminalizeSecretSyncFailure(ctx, m, projected, err,
+				provider+" workload identity disabled by air-gap policy", receiverToken.Load(), false); terminalErr != nil {
+				return terminalErr
+			}
+			return errSecretSyncReceiverNoDelivery
+		}
+		return fmt.Errorf("server: deliver secret-sync job %s to %s: %w", payload.ID, targetID, err)
 	}
 	return nil
 }
@@ -1003,11 +1060,13 @@ var errSecretSyncTerminalRetained = errors.New("server: retained secret-sync ter
 
 var errSecretSyncTenantOffboardRetained = errors.New("server: retained tenant offboard won before secret-sync receiver I/O")
 
-// beginSecretSyncReceiverIO is the last operation before Target.DeliverOperation.
-// The fixed history read is outermost. Begin then takes lifecycle, terminal-choice,
-// tenant, epoch, and receiver-row locks in one short SQL transaction. The returned
-// token is committed before this function returns, so Target.DeliverOperation never
-// runs while a database connection or history lock is held.
+// beginSecretSyncReceiverIO is the last authority step before receiver request
+// bytes: configured HTTP targets call it after a successful socket dial, while
+// direct/embedded pushers call it before DeliverOperation. The fixed history
+// read is outermost. Begin then takes lifecycle, terminal-choice, tenant, epoch,
+// and receiver-row locks in one short SQL transaction. The token is committed
+// before the transport can send a request, and no SQL/history lock spans that
+// request.
 func (d *secretIntegrationOutboxDispatcher) beginSecretSyncReceiverIO(
 	ctx context.Context,
 	m orchestrator.Message,
