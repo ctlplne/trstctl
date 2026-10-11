@@ -60,6 +60,63 @@ func TestIntuneChallengeValidatesTenantAndCSRClaims(t *testing.T) {
 	}
 }
 
+func TestIntuneChallengeReturnsProfileOfVerifiedPolicy(t *testing.T) {
+	now := time.Unix(1_900_000_000, 0).UTC()
+	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(signer.Destroy)
+	trustDER, err := crypto.SelfSignedCACert(signer, "MDM Profile Signer", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrDER := newIntuneCSR(t, "device-profile-1", nil)
+	challenge := signedIntuneChallenge(t, signer, map[string]any{
+		"aud": "https://mdm.example.test/scep", "iat": now.Add(-time.Minute).Unix(),
+		"exp": now.Add(time.Minute).Unix(), "nonce": "profile-nonce",
+		"device_name": "device-profile-1",
+	})
+	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", nil,
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneTrustConfigResolver(func(context.Context, mdmchallenge.IntuneChallengeRequest) ([]mdmchallenge.IntuneTrustConfig, error) {
+			return []mdmchallenge.IntuneTrustConfig{{TrustAnchorsDER: [][]byte{trustDER}, ExpectedAudience: "https://mdm.example.test/scep", ProfileName: "scep-intune-mobile-7d"}}, nil
+		}),
+	)
+	profile, err := validator.ValidateProfile(context.Background(), mdmchallenge.IntuneChallengeRequest{
+		TenantID: "tenant-a", Challenge: challenge, CSRDER: csrDER,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile != "scep-intune-mobile-7d" {
+		t.Fatalf("profile = %q", profile)
+	}
+	missingAudience := signedIntuneChallenge(t, signer, map[string]any{
+		"iat": now.Add(-time.Minute).Unix(), "exp": now.Add(time.Minute).Unix(),
+		"nonce": "missing-audience-nonce", "device_name": "device-profile-1",
+	})
+	if _, err := validator.ValidateProfile(context.Background(), mdmchallenge.IntuneChallengeRequest{
+		TenantID: "tenant-a", Challenge: missingAudience, CSRDER: csrDER,
+	}); !errors.Is(err, crypto.ErrIntuneChallengeWrongAudience) {
+		t.Fatalf("missing required audience = %v, want ErrIntuneChallengeWrongAudience", err)
+	}
+	ambiguous := mdmchallenge.NewIntuneChallengeValidator("tenant-a", nil,
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneTrustConfigResolver(func(context.Context, mdmchallenge.IntuneChallengeRequest) ([]mdmchallenge.IntuneTrustConfig, error) {
+			return []mdmchallenge.IntuneTrustConfig{
+				{TrustAnchorsDER: [][]byte{trustDER}, ExpectedAudience: "https://mdm.example.test/scep", ProfileName: "mobile-a"},
+				{TrustAnchorsDER: [][]byte{trustDER}, ExpectedAudience: "https://mdm.example.test/scep", ProfileName: "mobile-b"},
+			}, nil
+		}),
+	)
+	if _, err := ambiguous.ValidateProfile(context.Background(), mdmchallenge.IntuneChallengeRequest{
+		TenantID: "tenant-a", Challenge: challenge, CSRDER: csrDER,
+	}); !errors.Is(err, mdmchallenge.ErrIntuneChallengeAmbiguousProfile) {
+		t.Fatalf("ambiguous matching policies = %v, want refusal", err)
+	}
+}
+
 func TestIntuneChallengeRejectsMissingInvalidAndMismatchedClaims(t *testing.T) {
 	now := time.Unix(1_900_000_000, 0).UTC()
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
@@ -121,6 +178,9 @@ func TestIntuneChallengeReplayRejectedAndAudited(t *testing.T) {
 	req := mdmchallenge.IntuneChallengeRequest{TenantID: "tenant-a", Challenge: challenge, CSRDER: csrDER, TransactionID: "txn-replay"}
 	if err := validator.Validate(context.Background(), req); err != nil {
 		t.Fatalf("first challenge use rejected: %v", err)
+	}
+	if !mdmEventExists(t, log, "mdm.intune_scep_challenge", "tenant-a") {
+		t.Fatal("accepted challenge did not emit a tenant-scoped decision event")
 	}
 	if err := validator.Validate(context.Background(), req); !errors.Is(err, mdmchallenge.ErrIntuneChallengeReplay) {
 		t.Fatalf("replayed challenge error = %v, want ErrIntuneChallengeReplay", err)

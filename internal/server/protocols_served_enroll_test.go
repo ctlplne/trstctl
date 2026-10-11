@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
@@ -468,6 +469,29 @@ func TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010(t *testing.T) {
 	replyDER, _ := readAllClose(resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("policy-anchor SCEP status %d: %s", resp.StatusCode, replyDER)
+	}
+	selectedPolicyProfile := false
+	if err := h.log.Replay(context.Background(), 0, func(event events.Event) error {
+		if event.TenantID != servedTestTenant || event.Type != "protocol.scep.enroll" {
+			return nil
+		}
+		var audit struct {
+			Decision      string `json:"decision"`
+			TransactionID string `json:"transaction_id"`
+			Profile       string `json:"profile"`
+		}
+		if err := json.Unmarshal(event.Data, &audit); err != nil {
+			return err
+		}
+		if audit.Decision == "allow" && audit.TransactionID == "trace-010-policy-anchor" && audit.Profile == "mobile-scep" {
+			selectedPolicyProfile = true
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !selectedPolicyProfile {
+		t.Fatal("served SCEP issued without auditing the authenticated MDM policy profile")
 	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/mdm/scep/status", tok, nil)

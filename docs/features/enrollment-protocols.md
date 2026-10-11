@@ -237,19 +237,21 @@ server-owned blockers protect both console and direct API mutation.
 
 ### Intune / MDM enrollment (F56)
 
-When a mobile-device-management platform (Microsoft Intune, JAMF) pushes a SCEP
-profile to a managed phone, you want only MDM-provisioned devices to enroll, not
-anyone who can reach the SCEP endpoint. trstctl's MDM integration issues a stateless,
-HMAC-signed challenge token the MDM embeds in the device's SCEP profile
-`challengePassword`; the SCEP server validates it (constant-time MAC check, expiry)
-before issuing, fail-closed on any defect. The HMAC key is the only shared secret — no
-database lookup on the hot path — and is held in wipeable `[]byte` memory, zeroed
-after use, never a copyable string.
+When a mobile-device-management platform pushes a SCEP profile to a managed
+device, only that MDM's provisioned devices should enroll. The served Intune path
+expects a JWS challenge in the CSR's `challengePassword`. The MDM signs it;
+trstctl does not issue that challenge. The SCEP server verifies the signature
+against the tenant policy's referenced public trust anchor, checks its audience,
+time window, subject and SAN binding, and consumes its nonce before issuing.
 
 For Microsoft Intune, trstctl validates the Intune JWS challenge against policy-backed
 trust anchors, checks tenant and CSR subject/SAN binding, and consumes the nonce
 through a single-use replay cache for the token TTL, so a captured challenge can't be
-replayed. The gate wires into the served SCEP server's challenge hook.
+replayed during one server process lifetime. The gate wires into the served SCEP
+server's challenge hook. When a policy sets `expected_audience`, a JWS without
+that exact `aud` is refused. After validation, the verified policy's
+`scep_profile` is used for signer-backed issuance; the deployment's default
+profile is not substituted for a policy-backed enrollment.
 
 The **Protocols → Intune / MDM SCEP policies** section handles the first policy as
 well as later edits. Its three short steps ask: which MDM and certificate profile,

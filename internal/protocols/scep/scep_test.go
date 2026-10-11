@@ -52,6 +52,16 @@ func (e realEnroller) Enroll(_ context.Context, csrDER []byte, _, _, _ string) (
 	return crypto.SignLeafFromCSR(e.ca.certDER, e.ca.signer, csrDER, time.Hour)
 }
 
+type profileRecordingEnroller struct {
+	realEnroller
+	profile *string
+}
+
+func (e profileRecordingEnroller) Enroll(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) ([]byte, error) {
+	*e.profile = profileName
+	return e.realEnroller.Enroll(ctx, csrDER, profileName, protocol, idempotencyKey)
+}
+
 // scepClient builds a self-signed cert + CSR for a fresh RSA key (the device side).
 func newClient(t *testing.T) (certDER, keyPKCS8, csrDER []byte) {
 	t.Helper()
@@ -117,6 +127,36 @@ func TestSCEPEnrollRoundTrip(t *testing.T) {
 	}
 	if err := crypto.VerifyLeafSignedByCA(issued, ca.certDER); err != nil {
 		t.Errorf("issued certificate is not signed by the CA: %v", err)
+	}
+}
+
+func TestSCEPVerifiedChallengeSelectsEnrollmentProfile(t *testing.T) {
+	ca := newRSACA(t)
+	var selected string
+	srv := scep.New(scep.Config{
+		Enroller:   profileRecordingEnroller{realEnroller: realEnroller{ca: ca}, profile: &selected},
+		CAChainDER: [][]byte{ca.certDER}, RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8,
+		ProfileName: "acme-only-default",
+		ChallengeProfileValidator: func(_ context.Context, req scep.ChallengeRequest) (string, error) {
+			if req.Challenge != "signed-mdm-challenge" {
+				return "", errors.New("untrusted challenge")
+			}
+			return "scep-intune-mobile-7d", nil
+		},
+	})
+	clientCert, clientKey, csrDER := newClientWithTemplate(t, crypto.CertificateRequestTemplate{CommonName: "device-profile-1", ChallengePassword: []byte("signed-mdm-challenge")})
+	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCert, clientKey, ca.certDER, "txn-profile-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/scep?operation=PKIOperation", bytes.NewReader(reqDER))
+	resp := httptest.NewRecorder()
+	srv.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("PKIOperation status %d: %s", resp.Code, resp.Body.String())
+	}
+	if selected != "scep-intune-mobile-7d" {
+		t.Fatalf("enroller profile = %q, want policy profile", selected)
 	}
 }
 

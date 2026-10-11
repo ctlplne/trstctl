@@ -127,7 +127,7 @@ func ValidateIntuneSCEPChallenge(raw string, csrDER []byte, opts IntuneChallenge
 	if !claim.ExpiresAt.IsZero() && !now.Add(-tolerance).Before(claim.ExpiresAt) {
 		return IntuneChallengeClaim{}, fmt.Errorf("%w: exp=%s", ErrIntuneChallengeExpired, claim.ExpiresAt.Format(time.RFC3339))
 	}
-	if opts.ExpectedAudience != "" && claim.Audience != "" && claim.Audience != opts.ExpectedAudience {
+	if opts.ExpectedAudience != "" && claim.Audience != opts.ExpectedAudience {
 		return IntuneChallengeClaim{}, fmt.Errorf("%w: claim=%q expected=%q", ErrIntuneChallengeWrongAudience, claim.Audience, opts.ExpectedAudience)
 	}
 	if err := intuneClaimMatchesCSR(claim, csrDER); err != nil {

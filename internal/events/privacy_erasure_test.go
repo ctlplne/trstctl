@@ -496,6 +496,21 @@ func TestCoreProductionPrivacyCatalogCoversCertificateExpiring(t *testing.T) {
 	}
 }
 
+func TestCoreProductionPrivacyCatalogCoversIntuneChallengeDecisions(t *testing.T) {
+	for _, eventType := range []string{"mdm.intune_scep_challenge", "mdm.intune_scep_challenge.replay_rejected"} {
+		if !HasPrivacyEventPolicy(eventType, DefaultSchemaVersion) {
+			t.Fatalf("%s has no closed privacy policy; the served challenge audit will be dropped", eventType)
+		}
+		payload := []byte(`{"decision":"allow","transaction_id":"txn-1","nonce":"nonce-1"}`)
+		if err := validateRegisteredPrivacyEventPayload(payload, eventType, DefaultSchemaVersion); err != nil {
+			t.Fatalf("%s rejects its live payload: %v", eventType, err)
+		}
+		if err := validateRegisteredPrivacyEventPayload([]byte(`{"decision":"allow","transaction_id":"txn-1","nonce":"nonce-1","challenge":"must-not-appear"}`), eventType, DefaultSchemaVersion); err == nil {
+			t.Fatalf("%s accepted raw challenge material", eventType)
+		}
+	}
+}
+
 func TestCoreProductionPrivacyCatalogCoversCAHorizonAlert(t *testing.T) {
 	const eventType = "ca.authority.horizon_alerted"
 	if !HasPrivacyEventPolicy(eventType, DefaultSchemaVersion) {

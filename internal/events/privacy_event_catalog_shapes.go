@@ -323,7 +323,7 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"caller":"","tool":"","method":"","path":"","status":1}`), true
 	case "mcp.tool.write":
 		return shape(`{"caller":"","tool":"","authority_id":"","serial":"","reason":""}`), true
-	case "mdm.intune_scep_challenge.replay_rejected":
+	case "mdm.intune_scep_challenge", "mdm.intune_scep_challenge.replay_rejected":
 		return shape(`{"decision":"","reason":"","transaction_id":"","nonce":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/transaction_id", "/nonce"}}), true
 	case "policy.abac.decision":

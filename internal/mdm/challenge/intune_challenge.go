@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	ErrIntuneChallengeTenant = errors.New("mdm: Intune challenge tenant mismatch")
-	ErrIntuneChallengeReplay = errors.New("mdm: Intune challenge replay")
-	ErrIntuneChallengeTrust  = errors.New("mdm: Intune challenge trust anchors unavailable")
+	ErrIntuneChallengeTenant           = errors.New("mdm: Intune challenge tenant mismatch")
+	ErrIntuneChallengeReplay           = errors.New("mdm: Intune challenge replay")
+	ErrIntuneChallengeTrust            = errors.New("mdm: Intune challenge trust anchors unavailable")
+	ErrIntuneChallengeAmbiguousProfile = errors.New("mdm: Intune challenge matches multiple enrollment profiles")
 	// ErrIntuneChallengeNoNonce is returned for a signed challenge that carries no
 	// nonce. Replay protection is keyed on the nonce, so a challenge without one
 	// cannot be consumed once — it would be reusable forever.
@@ -56,6 +57,9 @@ type IntuneOption func(*IntuneChallengeValidator)
 type IntuneTrustConfig struct {
 	TrustAnchorsDER  [][]byte
 	ExpectedAudience string
+	// ProfileName is the certificate profile bound to this verified MDM policy.
+	// The caller must not substitute a deployment-wide default after validation.
+	ProfileName string
 }
 
 // IntuneTrustConfigResolver resolves live trust configurations for a tenant-bound
@@ -97,31 +101,39 @@ func NewIntuneChallengeValidator(tenantID string, trustAnchorsDER [][]byte, opts
 }
 
 func (v *IntuneChallengeValidator) Validate(ctx context.Context, req IntuneChallengeRequest) error {
+	_, err := v.ValidateProfile(ctx, req)
+	return err
+}
+
+// ValidateProfile consumes one valid challenge and returns the profile of the
+// policy whose trust anchor and audience authenticated it. Empty means the
+// configured static bootstrap anchor, which uses the SCEP endpoint default.
+func (v *IntuneChallengeValidator) ValidateProfile(ctx context.Context, req IntuneChallengeRequest) (string, error) {
 	if req.TenantID == "" || req.TenantID != v.tenantID {
 		err := ErrIntuneChallengeTenant
 		v.emit(ctx, req, "deny", err.Error(), "")
-		return err
+		return "", err
 	}
 	now := v.now()
-	claim, err := v.validateAgainstTrustConfigs(ctx, req, now)
+	claim, profile, err := v.validateAgainstTrustConfigs(ctx, req, now)
 	if err != nil {
 		v.emit(ctx, req, "deny", err.Error(), "")
-		return err
+		return "", err
 	}
 	if err := v.consumeOnce(req.TenantID, claim.Nonce, claim.ExpiresAt, now); err != nil {
 		v.emitEvent(ctx, "mdm.intune_scep_challenge.replay_rejected", req, "deny", err.Error(), claim.Nonce)
-		return err
+		return "", err
 	}
 	v.emit(ctx, req, "allow", "", claim.Nonce)
-	return nil
+	return profile, nil
 }
 
-func (v *IntuneChallengeValidator) validateAgainstTrustConfigs(ctx context.Context, req IntuneChallengeRequest, now time.Time) (crypto.IntuneChallengeClaim, error) {
+func (v *IntuneChallengeValidator) validateAgainstTrustConfigs(ctx context.Context, req IntuneChallengeRequest, now time.Time) (crypto.IntuneChallengeClaim, string, error) {
 	configs := make([]IntuneTrustConfig, 0, 2)
 	if v.trustConfigs != nil {
 		dynamic, err := v.trustConfigs(ctx, req)
 		if err != nil {
-			return crypto.IntuneChallengeClaim{}, err
+			return crypto.IntuneChallengeClaim{}, "", err
 		}
 		configs = append(configs, dynamic...)
 	}
@@ -129,6 +141,9 @@ func (v *IntuneChallengeValidator) validateAgainstTrustConfigs(ctx context.Conte
 		configs = append(configs, IntuneTrustConfig{TrustAnchorsDER: v.trustAnchorsDER, ExpectedAudience: v.expectedAudience})
 	}
 	var last error
+	var matched bool
+	var matchedClaim crypto.IntuneChallengeClaim
+	var matchedProfile string
 	for _, cfg := range configs {
 		if len(cfg.TrustAnchorsDER) == 0 {
 			continue
@@ -144,14 +159,26 @@ func (v *IntuneChallengeValidator) validateAgainstTrustConfigs(ctx context.Conte
 			ClockSkewTolerance: v.clockSkew,
 		})
 		if err == nil {
-			return claim, nil
+			if matched && cfg.ProfileName == "" {
+				// Static anchors are a bootstrap fallback, never a way to
+				// override an already verified tenant policy.
+				continue
+			}
+			if matched && matchedProfile != cfg.ProfileName {
+				return crypto.IntuneChallengeClaim{}, "", ErrIntuneChallengeAmbiguousProfile
+			}
+			matched, matchedClaim, matchedProfile = true, claim, cfg.ProfileName
+			continue
 		}
 		last = err
 	}
-	if last != nil {
-		return crypto.IntuneChallengeClaim{}, last
+	if matched {
+		return matchedClaim, matchedProfile, nil
 	}
-	return crypto.IntuneChallengeClaim{}, ErrIntuneChallengeTrust
+	if last != nil {
+		return crypto.IntuneChallengeClaim{}, "", last
+	}
+	return crypto.IntuneChallengeClaim{}, "", ErrIntuneChallengeTrust
 }
 
 func (v *IntuneChallengeValidator) now() time.Time {

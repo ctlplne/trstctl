@@ -371,7 +371,7 @@ func destroyACMEEABKeyCopies(keys []acme.ExternalAccountBindingKey) {
 
 func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, raCertDER, raKeyPKCS8 []byte, pool *bulkhead.Pool, keyWrapper sealKeyWrapper) (http.Handler, string, error) {
 	tenantID := firstNonEmpty(cfg.SCEP.TenantID, tenantFallback)
-	challengeValidator, err := s.buildSCEPChallengeValidator(cfg.SCEPIntuneChallenge, tenantID, keyWrapper)
+	challengeValidator, err := s.buildSCEPChallengeProfileValidator(cfg.SCEPIntuneChallenge, tenantID, keyWrapper)
 	if err != nil {
 		return nil, "", err
 	}
@@ -381,14 +381,14 @@ func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, is
 	// client can also build the chain. The issued leaf is still signed by the
 	// signer via the Enroller and verifies against the issuing CA.
 	scepSrv := scep.New(scep.Config{
-		Enroller:           enrollerAdapter{tenantID: tenantID, issuer: issuer},
-		ProfileName:        s.defaultProfile,
-		CAChainDER:         [][]byte{raCertDER, s.caCertDER},
-		RACertDER:          raCertDER,
-		RAKeyPKCS8:         raKeyPKCS8,
-		Pool:               pool,
-		Log:                s.log,
-		ChallengeValidator: challengeValidator,
+		Enroller:                  enrollerAdapter{tenantID: tenantID, issuer: issuer},
+		ProfileName:               s.defaultProfile,
+		CAChainDER:                [][]byte{raCertDER, s.caCertDER},
+		RACertDER:                 raCertDER,
+		RAKeyPKCS8:                raKeyPKCS8,
+		Pool:                      pool,
+		Log:                       s.log,
+		ChallengeProfileValidator: challengeValidator,
 		FailureDiagnosis: func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
 			if s.api == nil {
 				return
@@ -548,7 +548,7 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, tenantID string, keyWrapper sealKeyWrapper) (scep.ChallengeValidator, error) {
+func (s *Server) buildSCEPChallengeProfileValidator(cfg config.SCEPIntuneChallenge, tenantID string, keyWrapper sealKeyWrapper) (scep.ChallengeProfileValidator, error) {
 	trust := make([][]byte, 0, len(cfg.TrustAnchorsDER)+len(cfg.TrustAnchorFiles))
 	for _, der := range cfg.TrustAnchorsDER {
 		trust = append(trust, append([]byte(nil), der...))
@@ -566,8 +566,8 @@ func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, ten
 		mdmchallenge.WithIntuneEventLog(s.log),
 		mdmchallenge.WithIntuneTrustConfigResolver(s.mdmSCEPIntuneTrustConfigResolver(keyWrapper)),
 	)
-	return func(ctx context.Context, req scep.ChallengeRequest) error {
-		return validator.Validate(ctx, mdmchallenge.IntuneChallengeRequest{
+	return func(ctx context.Context, req scep.ChallengeRequest) (string, error) {
+		return validator.ValidateProfile(ctx, mdmchallenge.IntuneChallengeRequest{
 			TenantID:      req.TenantID,
 			Challenge:     req.Challenge,
 			CSRDER:        req.CSRDER,
@@ -604,6 +604,7 @@ func (s *Server) mdmSCEPIntuneTrustConfigResolver(keyWrapper sealKeyWrapper) mdm
 			configs = append(configs, mdmchallenge.IntuneTrustConfig{
 				TrustAnchorsDER:  anchors,
 				ExpectedAudience: policy.ExpectedAudience,
+				ProfileName:      policy.SCEPProfile,
 			})
 		}
 		return configs, nil

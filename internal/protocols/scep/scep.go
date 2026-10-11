@@ -67,22 +67,27 @@ type ChallengeRequest struct {
 // ChallengeValidator validates a SCEP challengePassword before issuance.
 type ChallengeValidator func(context.Context, ChallengeRequest) error
 
+// ChallengeProfileValidator authenticates a challenge and selects the issuing
+// profile bound to its verified MDM policy. An empty result uses ProfileName.
+type ChallengeProfileValidator func(context.Context, ChallengeRequest) (string, error)
+
 // Server is the RFC 8894 SCEP endpoint set (GetCACaps, GetCACert, PKIOperation), served
 // under /scep. The S15.0 assembly mounts Handler() in the live control plane.
 type Server struct {
-	enroller      Enroller
-	caChain       [][]byte // CA chain (DER) for GetCACert
-	raCertDER     []byte   // RA/CA cert for CMS decrypt + reply signing
-	raKeyPKCS8    []byte   // RA/CA RSA key (PKCS#8) — loaded from the sealed server RA identity
-	profile       string
-	pool          *bulkhead.Pool
-	log           *events.Log
-	challenge     ChallengeValidator // optional MDM challenge-password validator (S8.5)
-	deviceLimit   int
-	deviceWindow  time.Duration
-	deviceLimiter *deviceWindowCounter
-	onFailure     func(context.Context, enrollmentdiag.Diagnosis)
-	mux           *http.ServeMux
+	enroller         Enroller
+	caChain          [][]byte // CA chain (DER) for GetCACert
+	raCertDER        []byte   // RA/CA cert for CMS decrypt + reply signing
+	raKeyPKCS8       []byte   // RA/CA RSA key (PKCS#8) — loaded from the sealed server RA identity
+	profile          string
+	pool             *bulkhead.Pool
+	log              *events.Log
+	challenge        ChallengeValidator // optional MDM challenge-password validator (S8.5)
+	challengeProfile ChallengeProfileValidator
+	deviceLimit      int
+	deviceWindow     time.Duration
+	deviceLimiter    *deviceWindowCounter
+	onFailure        func(context.Context, enrollmentdiag.Diagnosis)
+	mux              *http.ServeMux
 }
 
 // Config wires a Server. RACertDER/RAKeyPKCS8 are the RSA key pair SCEP uses for CMS
@@ -101,6 +106,9 @@ type Config struct {
 	// ChallengeValidator, when set, validates the SCEP challengePassword (from the CSR)
 	// before issuance — the Intune/JAMF MDM gate (S8.5). nil means no challenge required.
 	ChallengeValidator ChallengeValidator
+	// ChallengeProfileValidator selects the profile from the verified challenge.
+	// Served policy-backed SCEP uses this instead of a global default profile.
+	ChallengeProfileValidator ChallengeProfileValidator
 	// MaxEnrollmentsPerDevice caps enrollments per tenant/profile/device subject in
 	// DeviceRateLimitWindow. Zero disables the limiter; served deployments should
 	// use a non-zero cap for MDM-backed profiles so one device cannot flood issuance.
@@ -116,7 +124,8 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caChain: cfg.CAChainDER, raCertDER: cfg.RACertDER,
 		raKeyPKCS8: cfg.RAKeyPKCS8, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
-		challenge: cfg.ChallengeValidator, deviceLimit: cfg.MaxEnrollmentsPerDevice,
+		challenge: cfg.ChallengeValidator, challengeProfile: cfg.ChallengeProfileValidator,
+		deviceLimit:  cfg.MaxEnrollmentsPerDevice,
 		deviceWindow: cfg.DeviceRateLimitWindow, deviceLimiter: newDeviceWindowCounter(nil), onFailure: cfg.FailureDiagnosis,
 	}
 	mux := http.NewServeMux()
@@ -203,23 +212,39 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	identityRef := scepIdentityRef(req.CSRDER, deviceSerial)
+	profile := s.profile
 	baseEvidence := AttemptEvidence{
-		TransactionID: req.TransactionID, DeviceSerial: deviceSerial, Profile: s.profile,
+		TransactionID: req.TransactionID, DeviceSerial: deviceSerial, Profile: profile,
+	}
+	if s.challengeProfile != nil {
+		// The request fact predates challenge validation, so it cannot claim
+		// the policy profile until the challenge has authenticated it.
+		baseEvidence.Profile = ""
 	}
 	requestEvidence := baseEvidence
 	requestEvidence.Outcome = "ok"
 	requestEvidence.Detail = "The SCEP request was parsed and bound to this transaction and device serial."
 	s.emitAttempt(r.Context(), EventRequestObserved, requestEvidence)
-	if s.challenge != nil {
+	if s.challenge != nil || s.challengeProfile != nil {
 		pw, _ := crypto.ChallengePasswordFromCSR(req.CSRDER)
-		cerr := s.challenge(r.Context(), ChallengeRequest{
+		challengeReq := ChallengeRequest{
 			TenantID:      tenantFromCtx(r.Context()),
 			Challenge:     pw,
 			CSRDER:        req.CSRDER,
 			TransactionID: req.TransactionID,
-		})
+		}
+		var cerr error
+		if s.challengeProfile != nil {
+			var selected string
+			selected, cerr = s.challengeProfile(r.Context(), challengeReq)
+			if selected != "" {
+				profile = selected
+			}
+		} else {
+			cerr = s.challenge(r.Context(), challengeReq)
+		}
 		if cerr != nil {
-			s.audit(r.Context(), "deny", "challenge rejected", req.TransactionID)
+			s.auditProfile(r.Context(), "deny", "challenge rejected", req.TransactionID, baseEvidence.Profile)
 			failed := baseEvidence
 			failed.Outcome = "failed"
 			failed.Detail = "Challenge validation rejected the request; verify the MDM challenge trust, audience, expiry, and one-time nonce."
@@ -229,10 +254,11 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "scep: challenge rejected", http.StatusForbidden)
 			return
 		}
+		baseEvidence.Profile = profile
 	}
-	allowed, err := s.allowDeviceEnrollment(r.Context(), req.CSRDER)
+	allowed, err := s.allowDeviceEnrollment(r.Context(), req.CSRDER, profile)
 	if err != nil {
-		s.audit(r.Context(), "deny", "invalid csr", req.TransactionID)
+		s.auditProfile(r.Context(), "deny", "invalid csr", req.TransactionID, profile)
 		failed := baseEvidence
 		failed.Outcome = "failed"
 		failed.Detail = "The certificate request did not satisfy the device enrollment checks."
@@ -243,7 +269,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !allowed {
-		s.audit(r.Context(), "shed", "device rate limit", req.TransactionID)
+		s.auditProfile(r.Context(), "shed", "device rate limit", req.TransactionID, profile)
 		failed := baseEvidence
 		failed.Outcome = "failed"
 		failed.Detail = "The per-device SCEP rate limit refused this attempt; wait for the configured window before retrying."
@@ -256,7 +282,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	issuedEvidence := baseEvidence
 	reply, rerr := s.runBounded(r.Context(), func(ctx context.Context) ([]byte, error) {
 		// The transaction id makes a retried enrollment idempotent (AN-5).
-		leaf, err := s.enroller.Enroll(ctx, req.CSRDER, s.profile, "scep", "scep:"+req.TransactionID)
+		leaf, err := s.enroller.Enroll(ctx, req.CSRDER, profile, "scep", "scep:"+req.TransactionID)
 		if err != nil {
 			return nil, err
 		}
@@ -273,7 +299,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case errors.Is(rerr, bulkhead.ErrRejected):
-		s.audit(r.Context(), "shed", "bulkhead full", req.TransactionID)
+		s.auditProfile(r.Context(), "shed", "bulkhead full", req.TransactionID, profile)
 		failed := baseEvidence
 		failed.Outcome = "failed"
 		failed.Detail = "The bounded SCEP worker pool was full; retry this same transaction."
@@ -282,7 +308,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 			"scep:"+req.TransactionID, identityRef)
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 	case rerr != nil:
-		s.audit(r.Context(), "deny", rerr.Error(), req.TransactionID)
+		s.auditProfile(r.Context(), "deny", rerr.Error(), req.TransactionID, profile)
 		failed := baseEvidence
 		failed.Outcome = "failed"
 		failed.Detail = "The signer-backed issuance path refused this request; inspect the profile and signer evidence before retrying."
@@ -291,7 +317,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 			"scep:"+req.TransactionID, identityRef)
 		http.Error(w, "scep: enrollment refused", http.StatusForbidden)
 	default:
-		s.audit(r.Context(), "allow", "", req.TransactionID)
+		s.auditProfile(r.Context(), "allow", "", req.TransactionID, profile)
 		s.emitAttempt(r.Context(), EventIssuanceObserved, issuedEvidence)
 		w.Header().Set("Content-Type", "application/x-pki-message")
 		_, _ = w.Write(reply)
@@ -376,7 +402,7 @@ func (s *Server) runBounded(ctx context.Context, fn func(context.Context) ([]byt
 	return r.der, r.err
 }
 
-func (s *Server) allowDeviceEnrollment(ctx context.Context, csrDER []byte) (bool, error) {
+func (s *Server) allowDeviceEnrollment(ctx context.Context, csrDER []byte, profile string) (bool, error) {
 	if s.deviceLimit <= 0 {
 		return true, nil
 	}
@@ -391,11 +417,15 @@ func (s *Server) allowDeviceEnrollment(ctx context.Context, csrDER []byte) (bool
 	if subject == "" {
 		subject = base64.StdEncoding.EncodeToString(csrDER)
 	}
-	key := tenantFromCtx(ctx) + "|" + s.profile + "|" + subject
+	key := tenantFromCtx(ctx) + "|" + profile + "|" + subject
 	return s.deviceLimiter.Allow(key, s.deviceLimit, s.deviceWindow), nil
 }
 
 func (s *Server) audit(ctx context.Context, decision, reason, txid string) {
+	s.auditProfile(ctx, decision, reason, txid, s.profile)
+}
+
+func (s *Server) auditProfile(ctx context.Context, decision, reason, txid, profile string) {
 	if s.log == nil {
 		return
 	}
@@ -405,7 +435,7 @@ func (s *Server) audit(ctx context.Context, decision, reason, txid string) {
 		Reason        string `json:"reason,omitempty"`
 		TransactionID string `json:"transaction_id,omitempty"`
 		Profile       string `json:"profile,omitempty"`
-	}{"scep-enroll", decision, reason, txid, s.profile})
+	}{"scep-enroll", decision, reason, txid, profile})
 	// CORRECT-004: account for a dropped audit emit (metric + WARN) instead of
 	// swallowing the append error with `_, _ =`.
 	_ = auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
