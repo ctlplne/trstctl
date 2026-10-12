@@ -60,12 +60,47 @@ type ReceiverBoundaryPusher interface {
 
 // Target is a named sync destination (a Pusher with a name).
 type Target struct {
-	name   string
-	pusher Pusher
+	name                    string
+	providerID              string
+	workloadIdentityEnabled bool
+	pusher                  Pusher
 }
 
 // NewTarget wraps a Pusher as a named target.
-func NewTarget(name string, p Pusher) *Target { return &Target{name: name, pusher: p} }
+func NewTarget(name string, p Pusher) *Target {
+	return &Target{name: name, providerID: name, pusher: p}
+}
+
+// NewConfiguredTarget keeps the operator's target ID separate from the provider
+// protocol it actually uses. A target named "ci" can still be an AWS receiver;
+// catalog and workload-identity decisions must never infer its type from its ID.
+func NewConfiguredTarget(name, providerType string, workloadIdentityEnabled bool, p Pusher) *Target {
+	return &Target{
+		name: name, providerID: CatalogProviderID(providerType),
+		workloadIdentityEnabled: workloadIdentityEnabled, pusher: p,
+	}
+}
+
+// CatalogProviderID maps the configuration types onto the public provider
+// catalog IDs. Keep the aliases in one place for API and server callers.
+func CatalogProviderID(providerType string) string {
+	switch providerType {
+	case "generic-ci-json":
+		return "ci"
+	case "kubernetes-secrets":
+		return "kubernetes"
+	case "vercel":
+		return "vercel-netlify"
+	default:
+		return providerType
+	}
+}
+
+// ProviderID identifies the configured wire protocol, not the target's name.
+func (t *Target) ProviderID() string { return t.providerID }
+
+// WorkloadIdentityEnabled reports the operator's explicit per-target opt-in.
+func (t *Target) WorkloadIdentityEnabled() bool { return t.workloadIdentityEnabled }
 
 // Name returns the target name.
 func (t *Target) Name() string { return t.name }
@@ -257,8 +292,9 @@ func NewCITarget(p Pusher) *Target { return NewTarget("ci", p) }
 // NewWebhookTarget syncs secrets to a generic signed webhook.
 func NewWebhookTarget(p Pusher) *Target { return NewTarget("webhook", p) }
 
-// ProviderCatalog returns the built-in sync provider catalog that the served API and
-// UI expose. A provider is usable when the server wires a Target with the same ID.
+// ProviderCatalog returns the built-in sync provider templates exposed by the API
+// and UI. Configured targets have operator-chosen IDs and retain their provider
+// kind separately; a template ID alone does not prove a target is configured.
 func ProviderCatalog() []ProviderCatalogEntry {
 	entries := []ProviderCatalogEntry{
 		{

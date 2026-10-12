@@ -729,6 +729,10 @@ trust source, audience, subject, allowed remote-key prefixes, and a `file:` or
 `ready`, `active`, `disabled`, `offline_disabled`, or `exchange_failed` status; it
 never accepts or stores an inline proof or AWS token. The console under **Secrets**
 serves create, list, edit, delete, expiry, and failure-state workflows.
+The target ID is an operator-chosen name, not a provider type. The target catalog
+reports its configured protocol separately and offers it for this workflow only
+when that target's workload-identity switch is enabled. Source creation refuses
+an unconfigured target, a static-credential target, or a target for another cloud.
 
 Only the bounded secret-sync outbox worker resolves the proof, validates its signature
 and exact issuer/audience/subject/expiry against the tenant's JWT/JWKS trust source,

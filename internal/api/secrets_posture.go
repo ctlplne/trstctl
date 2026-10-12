@@ -562,11 +562,9 @@ func (a *API) secretSyncTargets(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	configured := map[string]bool{}
+	configured := map[string]*secretsync.Target{}
 	if a.secrets != nil {
-		for target := range a.secrets.syncTargets(tenantID) {
-			configured[target] = true
-		}
+		configured = a.secrets.syncTargets(tenantID)
 	}
 	a.writeJSON(w, http.StatusOK, buildSecretSyncTargetCatalog(time.Now().UTC().Format(time.RFC3339), configured))
 }
@@ -726,29 +724,44 @@ func normalizeCloudSecretManagerProvider(provider string) string {
 	}
 }
 
-func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]bool) secretSyncTargetCatalogResponse {
+func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]*secretsync.Target) secretSyncTargetCatalogResponse {
 	if generatedAt == "" {
 		generatedAt = "1970-01-01T00:00:00Z"
 	}
 	entries := secretsync.ProviderCatalog()
-	targets := make([]secretSyncTargetResponse, 0, len(entries))
+	targets := make([]secretSyncTargetResponse, 0, len(entries)+len(configured))
+	byProvider := make(map[string]secretsync.ProviderCatalogEntry, len(entries))
+	for _, entry := range entries {
+		byProvider[entry.ID] = entry
+	}
 	configuredTargets := make([]string, 0, len(configured))
 	for target := range configured {
 		configuredTargets = append(configuredTargets, target)
 	}
 	sort.Strings(configuredTargets)
+	emitted := make(map[string]bool, len(entries)+len(configured))
 	for _, entry := range entries {
-		targets = append(targets, secretSyncTargetResponse{
-			ID:             entry.ID,
-			Name:           entry.Name,
-			Platform:       entry.Platform,
-			Configured:     configured[entry.ID],
-			DeliveryMode:   entry.DeliveryMode,
-			AuthMode:       entry.AuthMode,
-			WireFormat:     entry.WireFormat,
-			SecretHandling: secretSyncTargetSecretHandling,
-			Capabilities:   append([]string(nil), entry.Capabilities...),
-		})
+		target := configured[entry.ID]
+		if target != nil && target.ProviderID() != entry.ID {
+			// The operator reused a template ID for a different provider. Do not
+			// advertise it as the template's protocol; add its real row below.
+			continue
+		}
+		targets = append(targets, secretSyncTargetCatalogRow(entry.ID, entry, target))
+		emitted[entry.ID] = true
+	}
+	for _, id := range configuredTargets {
+		if emitted[id] {
+			continue
+		}
+		target := configured[id]
+		entry, known := byProvider[target.ProviderID()]
+		if !known {
+			entry = secretsync.ProviderCatalogEntry{ID: target.ProviderID(), Name: "Configured target", Platform: target.ProviderID()}
+		}
+		row := secretSyncTargetCatalogRow(id, entry, target)
+		row.Name += " (" + id + ")"
+		targets = append(targets, row)
 	}
 	return secretSyncTargetCatalogResponse{
 		Capability:        "CAP-SECR-03",
@@ -767,6 +780,21 @@ func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]bool
 			"operator must configure endpoint credentials for each active target",
 			"large rollout orchestration and rollback receipts are separate remediation tracks",
 		},
+	}
+}
+
+func secretSyncTargetCatalogRow(id string, entry secretsync.ProviderCatalogEntry, target *secretsync.Target) secretSyncTargetResponse {
+	capabilities := append([]string(nil), entry.Capabilities...)
+	authMode := entry.AuthMode
+	if target != nil && target.WorkloadIdentityEnabled() {
+		capabilities = append(capabilities, "workload-identity")
+		authMode = "short-lived workload identity exchange"
+	}
+	return secretSyncTargetResponse{
+		ID: id, Name: entry.Name, Platform: entry.Platform,
+		Configured: target != nil, DeliveryMode: entry.DeliveryMode,
+		AuthMode: authMode, WireFormat: entry.WireFormat,
+		SecretHandling: secretSyncTargetSecretHandling, Capabilities: capabilities,
 	}
 }
 

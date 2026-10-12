@@ -423,6 +423,10 @@ idempotency key, so a completed scan is recovered rather than run twice. Result 
 show only rule, file, line, and redacted credential-reference metadata, then link to
 the durable discovery run. **Send secrets to systems** (`/secrets/sync`)
 shows configured destinations and refuses a delivery when none is configured.
+Its cloud workload identity wizard lists only tenant targets whose actual cloud
+provider matches and whose workload identity switch is enabled. When none
+qualifies, it names the missing operator configuration instead of offering a
+static-credential target.
 The store's scheduled-rotation panel renders one tick's exact run and deferred-row
 receipt. Deferred rows use only the served `approval_pending`,
 `command_in_flight`, and `command_claimed` states, including schedule ID, due time,

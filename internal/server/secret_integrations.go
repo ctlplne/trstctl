@@ -650,7 +650,11 @@ func secretSyncTargetsFromConfig(
 			registry[entry.TenantID] = map[string]*secretsync.Target{}
 		}
 		pusher := newConfiguredSyncPusher(entry, resolver, guard, st, log, minter)
-		registry[entry.TenantID][entry.ID] = secretsync.NewTarget(entry.ID, pusher)
+		registry[entry.TenantID][entry.ID] = secretsync.NewConfiguredTarget(
+			entry.ID, entry.Type,
+			entry.AWSWorkloadIdentity || entry.GCPWorkloadIdentity || entry.AzureWorkloadIdentity,
+			pusher,
+		)
 	}
 	return registry, minter, nil
 }

@@ -108,7 +108,7 @@ describe("AWS workload identity secret sync", () => {
           name: "AWS Secrets Manager primary",
           platform: "AWS Secrets Manager",
           configured: true,
-          capabilities: ["write"],
+          capabilities: ["write", "workload-identity"],
           auth_mode: "workload_identity",
           delivery_mode: "outbox",
           secret_handling: "byte-native",
@@ -119,7 +119,7 @@ describe("AWS workload identity secret sync", () => {
           name: "GCP Secret Manager primary",
           platform: "GCP Secret Manager",
           configured: true,
-          capabilities: ["write"],
+          capabilities: ["write", "workload-identity"],
           auth_mode: "workload_identity",
           delivery_mode: "outbox",
           secret_handling: "byte-native",
@@ -130,7 +130,7 @@ describe("AWS workload identity secret sync", () => {
           name: "Azure Key Vault primary",
           platform: "Azure Key Vault",
           configured: true,
-          capabilities: ["write"],
+          capabilities: ["write", "workload-identity"],
           auth_mode: "workload_identity",
           delivery_mode: "outbox",
           secret_handling: "byte-native",
@@ -159,6 +159,23 @@ describe("AWS workload identity secret sync", () => {
     expect(await screen.findByRole("heading", { level: 4, name: "No workload identities configured" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 4, name: "Add cloud workload identity" })).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("does not offer a static-credential cloud target for federated source setup", async () => {
+    apiMock.secretSyncTargets.mockResolvedValue({
+      configured_targets: ["ci"],
+      targets: [{ id: "ci", name: "AWS Secrets Manager (ci)", platform: "aws", configured: true, capabilities: ["outbox-delivery"] }],
+    });
+    const user = userEvent.setup();
+    renderPanel();
+    await screen.findByText("Payments delivery");
+    await user.type(screen.getByLabelText("Source name"), "Inert source");
+    await user.type(screen.getByLabelText("AWS role ARN"), "arn:aws:iam::123456789012:role/inert");
+    await user.type(screen.getByLabelText("Token audience"), "trstctl-secrets");
+    await user.type(screen.getByLabelText("Token subject"), "system:serviceaccount:security:inert");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("status")).toHaveTextContent("No target for this cloud has workload identity enabled");
+    expect(screen.getByLabelText("Cloud sync target")).not.toHaveTextContent("AWS Secrets Manager (ci)");
   });
 
   it("creates an explicitly configured source through the three-step workflow", async () => {

@@ -127,7 +127,7 @@ export function SecretSyncWorkloadIdentityPanel() {
   const providerTargets = useMemo(
     () =>
       (targets.data?.targets ?? []).filter(
-        (target) => target.configured && (target.id.toLowerCase().includes(selectedProvider) || target.platform.toLowerCase().includes(selectedProvider)),
+        (target) => target.configured && target.capabilities.includes("workload-identity") && target.platform.toLowerCase().includes(selectedProvider),
       ),
     [selectedProvider, targets.data],
   );
@@ -414,6 +414,11 @@ export function SecretSyncWorkloadIdentityPanel() {
                   </Select>
                 )}
               </Field>
+              {providerTargets.length === 0 ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t("secrets.wif.noFederatedTarget")}
+                </p>
+              ) : null}
               <Field label={t("secrets.wif.prefixes")} description={t("secrets.wif.prefixesHint")} error={form.formState.errors.prefixes?.message}>
                 {(control) => <Textarea {...control} {...form.register("prefixes")} className="min-h-24 font-mono text-xs" />}
               </Field>

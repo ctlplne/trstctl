@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -259,7 +260,24 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 	if trust.Audience != req.Audience {
 		return req, errStatus(http.StatusBadRequest, "audience must exactly match the selected trust source")
 	}
+	if a.secrets == nil {
+		return req, errStatus(http.StatusServiceUnavailable, "secret-sync targets are not configured")
+	}
+	target := a.secrets.syncTargets(tenantID)[req.TargetID]
+	if !secretSyncWorkloadIdentityTargetMatches(target, req.Provider) {
+		return req, errStatus(http.StatusBadRequest, "target_id must name a configured tenant target for this provider with workload identity enabled")
+	}
 	return req, nil
+}
+
+func secretSyncWorkloadIdentityTargetMatches(target *secretsync.Target, provider string) bool {
+	if target == nil || !target.WorkloadIdentityEnabled() {
+		return false
+	}
+	wantProvider := map[string]string{
+		"aws": "aws-secrets-manager", "gcp": "gcp-secret-manager", "azure": "azure-key-vault",
+	}[provider]
+	return wantProvider != "" && target.ProviderID() == wantProvider
 }
 
 func (a *API) emitSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID, id string, req secretSyncWorkloadIdentitySourceRequest) error {

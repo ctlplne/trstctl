@@ -18463,6 +18463,10 @@ export const messages = {
   "secrets.wif.save": { defaultMessage: "Save source", description: "Save workload-identity source action." },
   "secrets.wif.saving": { defaultMessage: "Saving…", description: "Save progress label." },
   "secrets.wif.selectTarget": { defaultMessage: "Select a cloud target", description: "Cloud target selector placeholder." },
+  "secrets.wif.noFederatedTarget": {
+    defaultMessage: "No target for this cloud has workload identity enabled. Ask the operator to configure that target first.",
+    description: "Explains why the workload-identity source wizard cannot select a target.",
+  },
   "secrets.wif.selectTrustSource": {
     defaultMessage: "Select a JWT trust source",
     description: "Trust-source selector placeholder.",
