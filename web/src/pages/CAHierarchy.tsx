@@ -2711,7 +2711,18 @@ function IssuerTable({
               <td className="font-medium">{issuer.name}</td>
               <td>{issuer.kind}</td>
               <td>{issuer.internal ? translateNow("source.internal.3bed2cb3a3") : translateNow("source.external.3c4623849a")}</td>
-              <td>{issuer.chain?.length ? issuer.chain.join(" -> ") : "-"}</td>
+              <td>
+                {issuer.chain?.length ? (
+                  <details className="max-w-md">
+                    <summary className="cursor-pointer text-brand-accent">
+                      {translateNow("source.chain.dae0896cbc")} ({issuer.chain.length})
+                    </summary>
+                    <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all text-xs">{issuer.chain.join("\n")}</pre>
+                  </details>
+                ) : (
+                  "-"
+                )}
+              </td>
               <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
               <td>
                 <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>

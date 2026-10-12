@@ -741,7 +741,11 @@ describe("CA hierarchy and custody surface", () => {
     expect((await screen.findAllByText("Root CA")).length).toBeGreaterThan(0);
     expect(screen.getByText("x509_ca")).toBeInTheDocument();
     expect(screen.getByText("ssh_ca")).toBeInTheDocument();
-    expect(screen.getByText("Root CA -> SSH CA")).toBeInTheDocument();
+    const chain = screen.getByText("Chain (2)").closest("details");
+    expect(chain).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Chain (2)"));
+    expect(chain).toHaveAttribute("open");
+    expect(screen.getByText(/Root CA\s+SSH CA/)).toBeVisible();
     expect(screen.getByText(/BEGIN PUBLIC KEY/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Certificates for Root CA" })).toHaveAttribute("href", "/certificates?issuer=iss-root");
   });
