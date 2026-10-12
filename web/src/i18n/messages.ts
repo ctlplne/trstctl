@@ -24684,6 +24684,60 @@ export const messages = {
     defaultMessage: "— {value1}",
     description: "I5: separates a durable MDM trace-step outcome from its operator-facing detail.",
   },
+  "mdm.poll.empty": {
+    defaultMessage: "No MDM read schedule is configured. Set up a network relay read to observe installed device certificates.",
+    description: "First-use empty state; a SCEP enrollment alone does not prove device installation.",
+  },
+  "mdm.poll.configure": { defaultMessage: "Configure MDM read schedule", description: "Open Intune or Jamf relay-only read setup." },
+  "mdm.poll.help": {
+    defaultMessage:
+      "The network relay reads the MDM at this interval. Use a secret:// reference to an existing bearer; the control plane never receives the bearer or calls the MDM.",
+    description: "Explain the read-only network boundary and credential reference.",
+  },
+  "mdm.poll.provider": { defaultMessage: "MDM provider", description: "Choose Intune or Jamf." },
+  "mdm.poll.intune": { defaultMessage: "Intune", description: "Microsoft MDM provider name." },
+  "mdm.poll.jamf": { defaultMessage: "Jamf", description: "Jamf MDM provider name." },
+  "mdm.poll.baseURL": { defaultMessage: "MDM API base URL", description: "Absolute base URL reached by the network relay." },
+  "mdm.poll.tokenRef": { defaultMessage: "Bearer token secret reference", description: "Reference to the bearer redeemed only by the network relay." },
+  "mdm.poll.tokenRefExample": { defaultMessage: "secret://mdm/provider", description: "Reference example, never an inline bearer." },
+  "mdm.poll.filter": { defaultMessage: "Provider filter or section (optional)", description: "Intune filter or Jamf section selector." },
+  "mdm.poll.interval": { defaultMessage: "Poll interval in seconds", description: "At least 300 seconds between MDM reads." },
+  "mdm.poll.renewalWindow": { defaultMessage: "Renewal warning window in days (0 uses standard)", description: "Optional offline-renewal warning override." },
+  "mdm.poll.enabled": { defaultMessage: "Enable scheduled relay reads", description: "Do not claim a read occurred until the relay reports one." },
+  "mdm.poll.review": { defaultMessage: "Review schedule", description: "Show the exact MDM read configuration before writing it." },
+  "mdm.poll.reviewSummary": {
+    defaultMessage: "The relay reads {provider} every {seconds} seconds.",
+    description: "Exact reviewed provider and poll interval.",
+  },
+  "mdm.poll.reviewFilter": { defaultMessage: "Provider filter or section: {filter}", description: "Exact reviewed MDM filter; dash means unset." },
+  "mdm.poll.reviewWindow": {
+    defaultMessage: "Renewal warning window: {days} days (0 uses standard).",
+    description: "Exact reviewed offline-renewal override.",
+  },
+  "mdm.poll.reviewExecution": {
+    defaultMessage: "Execution: network relay only, read-only.",
+    description: "The MDM network and mutation boundary at review time.",
+  },
+  "mdm.poll.reviewEnabled": {
+    defaultMessage: "Scheduling starts after save; device status stays unobserved until a relay read completes.",
+    description: "Do not call setup proof of device installation.",
+  },
+  "mdm.poll.reviewDisabled": { defaultMessage: "The schedule will be saved disabled; no relay read starts.", description: "Honest disabled schedule review." },
+  "mdm.poll.save": { defaultMessage: "Save reviewed schedule", description: "Commit the exact reviewed MDM read setup." },
+  "mdm.poll.saved": {
+    defaultMessage: "Schedule saved. Check its last run and error before treating device inventory as observed.",
+    description: "Saved configuration is distinct from a completed MDM read.",
+  },
+  "mdm.poll.invalid": {
+    defaultMessage:
+      "Enter an HTTP(S) base URL without embedded credentials, a secret:// bearer reference, an interval of at least 300 seconds, and a renewal window from 0 to 365 days.",
+    description: "Client validation matching relay schedule input bounds.",
+  },
+  "mdm.poll.unconfirmed": {
+    defaultMessage: "The server did not confirm the exact relay schedule. Check the saved schedule before retrying.",
+    description: "Prevent false success on an unexpected mutation receipt.",
+  },
+  "mdm.poll.edit": { defaultMessage: "Edit schedule", description: "Load one existing provider schedule into the form." },
   "source.issuance.requests.heading.i3req00001": {
     defaultMessage: "Issuance requests",
     description: "I3: heading for the request queue with its real lifecycle.",

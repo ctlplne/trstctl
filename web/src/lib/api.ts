@@ -41,6 +41,8 @@ import type {
   IssuanceRequestIssuerList,
   MDMDeviceList,
   MDMDeviceTrace,
+  MDMPollSchedule,
+  MDMPollScheduleInput,
   MDMPollScheduleList,
   TicketIntakeSchedule,
   AgentUpgradeCampaign,
@@ -621,7 +623,7 @@ export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } 
 export type { CMDBReconcileSchedule } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
 export type { TicketIntakeSchedule } from "./api-types.gen";
-export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
+export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollSchedule, MDMPollScheduleInput, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
 export type { ACMEDNS01CAAPolicyEvidence, ACMEDNS01CAAPolicyRecord } from "./api-types.gen";
 export type {
@@ -1646,6 +1648,8 @@ export interface Api {
   mdmDevices(): Promise<MDMDeviceList>;
   /** I5/AUD-45: relay-only Intune/Jamf schedules, including waiting/failure state. */
   mdmPollSchedules(): Promise<MDMPollScheduleList>;
+  /** I5: configure a tenant-scoped read-only relay poll; the bearer remains a secret reference. */
+  putMDMPollSchedule(input: MDMPollScheduleInput): Promise<MDMPollSchedule>;
   /** I5: evidence-backed requested/issued/installed/renewing trace for one device. */
   mdmDeviceTrace(mdm: string, id: string): Promise<MDMDeviceTrace>;
   /** A5: staged rollout state, ring assignment, and the fleet version histogram. */
@@ -2192,6 +2196,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),
+  putMDMPollSchedule: (input) => mutate<MDMPollSchedule>("PUT", "/api/v1/mdm/poll-schedule", input),
   mdmDeviceTrace: (mdm, id) => req<MDMDeviceTrace>(`/api/v1/mdm/${encodeURIComponent(mdm)}/devices/${encodeURIComponent(id)}/trace`),
   agentUpgradeCampaign: () => req<AgentUpgradeCampaign>("/api/v1/agents/upgrade-campaign"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),

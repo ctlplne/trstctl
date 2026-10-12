@@ -315,6 +315,18 @@ keeps missing evidence `unknown`. A later SCEP transaction is renewal evidence;
 an offline device inside the renewal window with no later attempt gets actionable
 check-in guidance instead of a made-up failure or success.
 
+For first use, open **How machines request credentials → Set up and operate methods → MDM device correlation**. The
+schedule form remains visible when no devices or schedules exist. Choose Intune
+or Jamf, enter the relay-reachable MDM API base URL and a `secret://` reference
+to an existing bearer, choose an interval of at least 300 seconds, and review
+the exact provider and cadence before saving. The same tenant-scoped operation
+is `trstctl-cli mdm poll-schedule set --body-file schedule.json`; the readback is
+`trstctl-cli mdm poll-schedule show` or `GET /api/v1/mdm/poll-schedule`.
+`certs:write` is required to save; read-only operators can still inspect the
+schedule, last run and last error. A saved schedule is configuration, not a
+completed relay read or proof that any certificate was installed. Check the last
+run and each device trace before treating the MDM estate as observed.
+
 ## Use it
 
 A device using a standard EST client enrolls like this:
