@@ -803,6 +803,24 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText("0 open / 1 accepted")).toBeInTheDocument();
   });
 
+  it("shows a terminal fleet run as one completed batch rather than the next batch index", async () => {
+    apiMock.fleetReissuanceRuns.mockResolvedValue({
+      items: [
+        {
+          ...fleetRun,
+          status: "executed",
+          phase: "fleet_reissued_verified_and_predecessors_revoked",
+          batch_count: 1,
+          next_batch_index: 2,
+          batches: [{ ...fleetRun.batches[0], status: "verified" }],
+        },
+      ],
+    });
+    renderIncidents("/incidents?tab=fleet");
+    expect(await screen.findByText("Batches 1/1")).toBeInTheDocument();
+    expect(screen.queryByText("Batches 2/1")).not.toBeInTheDocument();
+  });
+
   it("runs fleet reissuance actions and keeps break-glass in help", async () => {
     apiMock.graphBlastRadius.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "graph projection is rebuilding" })));
     const user = userEvent.setup();
@@ -816,7 +834,7 @@ describe("incident response served execution surface", () => {
     expect(screen.getByRole("table", { name: "Fleet reissuance runs" })).toBeInTheDocument();
     expect(screen.getByText("66666666-6666-6666-6666-666666666666")).toBeInTheDocument();
     expect(screen.getByText("2 affected")).toBeInTheDocument();
-    expect(screen.getByText("Batches 1/2")).toBeInTheDocument();
+    expect(screen.getByText("Batches 0/2")).toBeInTheDocument();
     expect(screen.getByText(/1 trust stores across 1 hosts/)).toBeInTheDocument();
     expect(screen.getByText(/1 Candidate CA fingerprint · Not verified/)).toBeInTheDocument();
     const fleetPanel = document.getElementById("incidents-panel-fleet");

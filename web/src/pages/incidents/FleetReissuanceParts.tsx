@@ -611,7 +611,10 @@ export function FleetReissuanceTable({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {translateNow("source.batches.56a8df948f")}{" "}
-                  {translateNow("source.value1.value2.7d8908f134", { value1: run.next_batch_index, value2: run.batch_count })}
+                  {translateNow("source.value1.value2.7d8908f134", {
+                    value1: Math.max(0, Math.min(run.batch_count, run.next_batch_index - 1)),
+                    value2: run.batch_count,
+                  })}
                 </p>
                 <p className="text-xs text-muted-foreground">{run.health_gates.map((gate) => `${gate.name}:${gate.status}`).join(", ")}</p>
               </td>
