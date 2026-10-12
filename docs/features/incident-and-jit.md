@@ -147,6 +147,11 @@ Incident execution and fleet run lists return newest-created records first. Thei
 opaque cursors preserve that order across pages even when an older run changes
 status. The console's situation summary compares the latest records from both
 lists before offering recovery guidance.
+In the console's Fleet & break-glass run table, Export downloads
+`trstctl-fleet-evidence-<run-id>.json` with the compact signed JWS, rollback
+references, failed targets, run ID, and export time. The page also shows the
+export result; operators can verify the saved JWS offline and retain the file
+with their incident record.
 
 `POST /api/v1/incidents/fleet-reissuance-runs/preview` accepts the exact Start
 body without an idempotency key. It checks the current issuer, exact certificate/SPKI

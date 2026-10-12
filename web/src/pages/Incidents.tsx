@@ -54,6 +54,24 @@ const defaultExecution: IncidentExecutionRequest = {
   delivery_rollback_ref: "",
 };
 
+function downloadFleetEvidence(evidence: FleetReissuanceEvidence, requestedRunID: string) {
+  if (evidence.run_id !== requestedRunID || evidence.evidence_bundle_format !== "jws" || !evidence.evidence_bundle) {
+    throw new Error("The exported evidence does not match this signed fleet run.");
+  }
+  const blob = new Blob([JSON.stringify(evidence, null, 2) + "\n"], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  try {
+    link.href = url;
+    link.download = `trstctl-fleet-evidence-${requestedRunID.replace(/[^a-zA-Z0-9-]/g, "_").slice(0, 80)}.json`;
+    document.body.appendChild(link);
+    link.click();
+  } finally {
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
+
 const defaultServiceNowTicket: ServiceNowTicketRequest = {
   instance_url: "",
   table: "incident",
@@ -614,6 +632,7 @@ export function Incidents() {
     try {
       if (kind === "evidence") {
         const evidence = await api.exportFleetReissuanceEvidence(run.id);
+        downloadFleetEvidence(evidence, run.id);
         setFleetEvidence(evidence);
         return;
       }

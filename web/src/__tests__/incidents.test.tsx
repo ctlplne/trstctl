@@ -890,9 +890,46 @@ describe("incident response served execution surface", () => {
       }),
     );
     expect(await screen.findByText("Fleet evidence exported")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Export fleet run 66666666 evidence" }));
-    await waitFor(() => expect(apiMock.exportFleetReissuanceEvidence).toHaveBeenCalledWith(fleetRun.id));
-    await waitFor(() => expect(screen.getAllByText("fleet.audit.bundle").length).toBeGreaterThan(0));
+    class DownloadURL extends URL {
+      static createObjectURL = vi.fn((blob: Blob) => {
+        void blob;
+        return "blob:fleet-evidence";
+      });
+      static revokeObjectURL = vi.fn();
+    }
+    vi.stubGlobal("URL", DownloadURL);
+    let downloadedName = "";
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloadedName = this.download;
+    });
+    try {
+      await user.click(screen.getByRole("button", { name: "Export fleet run 66666666 evidence" }));
+      await waitFor(() => expect(apiMock.exportFleetReissuanceEvidence).toHaveBeenCalledWith(fleetRun.id));
+      await waitFor(() => expect(screen.getAllByText("fleet.audit.bundle").length).toBeGreaterThan(0));
+      expect(downloadedName).toBe(`trstctl-fleet-evidence-${fleetRun.id}.json`);
+      const exported = DownloadURL.createObjectURL.mock.calls[0]?.[0];
+      expect(exported).toBeInstanceOf(Blob);
+      const exportedText = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(exported!);
+      });
+      expect(JSON.parse(exportedText)).toMatchObject({ run_id: fleetRun.id, evidence_bundle: "fleet.audit.bundle" });
+      apiMock.exportFleetReissuanceEvidence.mockResolvedValueOnce({
+        run_id: "another-run",
+        evidence_bundle_format: "jws",
+        evidence_bundle: "different.audit.bundle",
+        rollback_refs: [],
+        exported_at: fleetRun.updated_at,
+      });
+      await user.click(screen.getByRole("button", { name: "Export fleet run 66666666 evidence" }));
+      expect(await screen.findByText(/does not match this signed fleet run/)).toBeInTheDocument();
+      expect(DownloadURL.createObjectURL).toHaveBeenCalledTimes(1);
+    } finally {
+      anchorClick.mockRestore();
+      vi.unstubAllGlobals();
+    }
     expect(screen.queryByRole("heading", { name: "Break-glass procedures" })).not.toBeInTheDocument();
 
     const opener = screen.getByRole("button", { name: "Break-glass help" });
