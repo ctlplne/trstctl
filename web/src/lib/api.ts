@@ -116,8 +116,12 @@ import type {
   AuditFeedRequest,
   AuditEvent as GenAuditEvent,
   AuditEventList,
+  BreakglassAuthorityReceipt,
+  BreakglassAuthorityReceiptList,
   BreakglassBundle,
   BreakglassCeremony,
+  BreakglassCrossSign,
+  BreakglassCrossSignRequest,
   BreakglassIssueExecutionRequest,
   BreakglassIssueIntentRequest,
   BreakglassIssuePlanPreview,
@@ -127,6 +131,9 @@ import type {
   BreakglassIssueResponse,
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
+  BreakglassRotation,
+  BreakglassRotationIntent,
+  BreakglassRotationRequest,
   BrokerAgentIdentity as GenBrokerAgentIdentity,
   BrokerAgentIdentityHistory,
   BrokerAgentIdentityHistoryList,
@@ -904,8 +911,12 @@ export type {
   AuditFeedList,
   AuditFeedPreview,
   AuditFeedRequest,
+  BreakglassAuthorityReceipt,
+  BreakglassAuthorityReceiptList,
   BreakglassBundle,
   BreakglassCeremony,
+  BreakglassCrossSign,
+  BreakglassCrossSignRequest,
   BreakglassIssueExecutionRequest,
   BreakglassIssueIntentRequest,
   BreakglassIssuePlanPreview,
@@ -915,6 +926,9 @@ export type {
   BreakglassIssueResponse,
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
+  BreakglassRotation,
+  BreakglassRotationIntent,
+  BreakglassRotationRequest,
   BulkRevokeRequest,
   BulkRevokeResult,
   CAAuthority,
@@ -1797,6 +1811,12 @@ export interface Api {
   breakglassIssue(input: BreakglassIssueExecutionRequest): Promise<BreakglassIssueResponse>;
   breakglassIssues(options?: { limit?: number; cursor?: string }): Promise<BreakglassIssueReceiptList>;
   getBreakglassIssue(ceremonyId: string): Promise<BreakglassIssueReceipt>;
+  startBreakglassRotationCeremony(input: BreakglassRotationIntent): Promise<BreakglassCeremony>;
+  rotateBreakglass(input: BreakglassRotationRequest): Promise<BreakglassRotation>;
+  startBreakglassCrossSignCeremony(input: BreakglassCrossSignRequest): Promise<BreakglassCeremony>;
+  crossSignBreakglass(input: BreakglassCrossSignRequest): Promise<BreakglassCrossSign>;
+  breakglassAuthorityReceipts(options?: { limit?: number; cursor?: string }): Promise<BreakglassAuthorityReceiptList>;
+  getBreakglassAuthorityReceipt(ceremonyId: string): Promise<BreakglassAuthorityReceipt>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
   previewCode(input: CodeSigningRequest): Promise<CodeSigningPreview>;
   previewCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningPreview>;
@@ -2443,6 +2463,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   breakglassIssue: (input) => mutate<BreakglassIssueResponse>("POST", "/api/v1/breakglass/issue", input),
   breakglassIssues: (options) => req<BreakglassIssueReceiptList>(`/api/v1/breakglass/issues${pageQueryString(options)}`),
   getBreakglassIssue: (ceremonyId) => req<BreakglassIssueReceipt>(`/api/v1/breakglass/issues/${encodeURIComponent(ceremonyId)}`),
+  startBreakglassRotationCeremony: (input) => mutate<BreakglassCeremony>("POST", "/api/v1/breakglass/rotation-ceremonies", input),
+  rotateBreakglass: (input) => mutate<BreakglassRotation>("POST", "/api/v1/breakglass/rotate", input),
+  startBreakglassCrossSignCeremony: (input) => mutate<BreakglassCeremony>("POST", "/api/v1/breakglass/cross-sign-ceremonies", input),
+  crossSignBreakglass: (input) => mutate<BreakglassCrossSign>("POST", "/api/v1/breakglass/cross-sign", input),
+  breakglassAuthorityReceipts: (options) => req<BreakglassAuthorityReceiptList>(`/api/v1/breakglass/authority-receipts${pageQueryString(options)}`),
+  getBreakglassAuthorityReceipt: (ceremonyId) => req<BreakglassAuthorityReceipt>(`/api/v1/breakglass/authority-receipts/${encodeURIComponent(ceremonyId)}`),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   previewCode: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/preview", input),
   previewCodeKeyless: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/keyless/preview", input),

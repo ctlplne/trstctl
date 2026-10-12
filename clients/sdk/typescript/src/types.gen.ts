@@ -1000,6 +1000,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/breakglass/authority-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bounded event-projected emergency CA rotation and cross-sign receipts without certificate bodies */
+        get: operations["listBreakglassAuthorityReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/breakglass/authority-receipts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recover the exact public rotation or cross-sign result by ceremony ID after a lost response or restart */
+        get: operations["getBreakglassAuthorityReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/breakglass/cross-sign": {
         parameters: {
             query?: never;
@@ -8516,6 +8550,26 @@ export interface components {
             logo_data_uri?: string;
             product_name: string;
             token_overrides?: Record<string, never>;
+        };
+        BreakglassAuthorityReceipt: {
+            /** Format: uuid */
+            ceremony_id: string;
+            /** Format: date-time */
+            completed_at: string;
+            cross_sign?: components["schemas"]["BreakglassCrossSign"];
+            /** Format: int64 */
+            event_sequence: number;
+            /** @enum {string} */
+            kind: "rotation" | "cross_sign";
+            request_digest: string;
+            rotation?: components["schemas"]["BreakglassRotation"];
+            subject: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        BreakglassAuthorityReceiptList: {
+            items: components["schemas"]["BreakglassAuthorityReceipt"][];
+            next_cursor: string;
         };
         BreakglassBundle: {
             approvals: string[];
@@ -19227,6 +19281,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Brand"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listBreakglassAuthorityReceipts: {
+        parameters: {
+            query?: {
+                /** @description maximum receipts (1-100, default 20) */
+                limit?: number;
+                /** @description opaque source-sequence cursor from previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassAuthorityReceiptList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBreakglassAuthorityReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassAuthorityReceipt"];
                 };
             };
             /** @description client error */

@@ -1668,6 +1668,31 @@ Brand = TypedDict(
     total=False,
 )
 
+BreakglassAuthorityReceipt = TypedDict(
+    'BreakglassAuthorityReceipt',
+    {
+        'ceremony_id': str,
+        'completed_at': str,
+        'cross_sign': dict[str, Any],
+        'event_sequence': int,
+        'kind': str,
+        'request_digest': str,
+        'rotation': dict[str, Any],
+        'subject': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+BreakglassAuthorityReceiptList = TypedDict(
+    'BreakglassAuthorityReceiptList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 BreakglassBundle = TypedDict(
     'BreakglassBundle',
     {

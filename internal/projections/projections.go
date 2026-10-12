@@ -4930,14 +4930,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, rec.CeremonyID, e.Time)
 	case EventBreakglassCARotated, EventBreakglassCACrossSigned:
-		var pl BreakglassCeremonyCompleted
-		if err := decode(e, &pl); err != nil {
+		rec, err := breakglassAuthorityReceiptFromEvent(e)
+		if err != nil {
 			return err
 		}
-		if pl.CeremonyID == "" {
-			return fmt.Errorf("projections: %s requires ceremony_id", e.Type)
+		if err := p.store.ApplyBreakglassAuthorityReceiptTx(ctx, tx, rec); err != nil {
+			return err
 		}
-		return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, pl.CeremonyID, e.Time)
+		return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, rec.CeremonyID, e.Time)
 	case EventCRLPublished:
 		var pl CRLPublished
 		if err := decode(e, &pl); err != nil {
@@ -7894,6 +7894,9 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			}
 			if err := p.backfillBreakglassIssueReceipts(readCtx, log, replayHead); err != nil {
 				return fmt.Errorf("projections: backfill online break-glass issue receipts: %w", err)
+			}
+			if err := p.backfillBreakglassAuthorityReceipts(readCtx, log, replayHead); err != nil {
+				return fmt.Errorf("projections: backfill break-glass authority receipts: %w", err)
 			}
 			if err := p.backfillCertificateIssuanceReceipts(readCtx, log, replayHead); err != nil {
 				return fmt.Errorf("projections: backfill retained issuance facts: %w", err)

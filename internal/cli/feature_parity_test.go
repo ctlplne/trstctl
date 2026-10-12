@@ -297,9 +297,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// U6 adds a separate reviewed PAM session request before activation.
 	// PCAS first use adds registration, request status, succession, and chain readback.
 	// F37 adds one exact schedule read and three event-sourced lifecycle controls.
-	// F34 adds matching headless recovery list and exact signed-bundle get commands.
-	if len(out) != 504 {
-		t.Fatalf("CLI commands = %d, want 504", len(out))
+	// F34 adds matching headless recovery list and exact get commands for issues and CA results.
+	if len(out) != 506 {
+		t.Fatalf("CLI commands = %d, want 506", len(out))
 	}
 	return out
 }

@@ -263,7 +263,7 @@ describe("DESIGN-002 answer-first API playground", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Try a safe request" })).toBeInTheDocument();
     expect(screen.getByText("Changes data — confirmation required", { exact: true })).toBeInTheDocument();
     expect(screen.getAllByText("createIdentity", { exact: true }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("checkbox", { name: /I reviewed this exact mutation request/ })).not.toBeChecked();
+    expect(await screen.findByRole("checkbox", { name: /I reviewed this exact mutation request/ })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Run request" })).toBeDisabled();
     expect(apiMock.createAPIToken).not.toHaveBeenCalled();
   });

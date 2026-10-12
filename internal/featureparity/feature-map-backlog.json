@@ -14488,6 +14488,8 @@
                 "rotateBreakglass",
                 "startBreakglassCrossSignCeremony",
                 "crossSignBreakglass",
+                "listBreakglassAuthorityReceipts",
+                "getBreakglassAuthorityReceipt",
                 "reconcileBreakglass"
             ],
             "api_na": "",
@@ -14501,6 +14503,8 @@
                 "breakglass rotate",
                 "breakglass cross-sign-ceremony",
                 "breakglass cross-sign",
+                "breakglass authority-receipts list",
+                "breakglass authority-receipts get",
                 "breakglass reconcile"
             ],
             "cli_na": "",

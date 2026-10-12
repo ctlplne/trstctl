@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1500 annotated sites across 26 rules. Each row is
+1503 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -404,7 +404,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:406` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (241 sites)
+### G115 — CWE-190 Integer overflow or wraparound (244 sites)
 
 | Location | Reason |
 |---|---|
@@ -552,6 +552,9 @@ not this file.
 | `internal/store/audit_feed.go:419` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_feed.go:420` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_retention_scope.go:22` | PostgreSQL advisory keys are signed bit patterns. |
+| `internal/store/breakglass_authority_receipt.go:36` | MaxInt64 checked above. |
+| `internal/store/breakglass_authority_receipt.go:85` | MaxInt64 checked above. |
+| `internal/store/breakglass_authority_receipt.go:128` | MaxInt64 checked above. |
 | `internal/store/breakglass_issue_receipt.go:35` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:93` | MaxInt64 bound above rejects narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:136` | MaxInt64 bound above rejects narrowing (CWE-190). |
@@ -608,8 +611,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:248` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:344` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:368` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:508` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:523` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:510` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:525` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:76` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

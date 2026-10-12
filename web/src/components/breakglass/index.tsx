@@ -27,6 +27,7 @@ import { useCapabilityExecution } from "@/lib/capabilities";
 import { invalidateAppQueryKeys, useHasAppQueryProvider } from "@/lib/query";
 
 import { BreakglassIssueHistory } from "./BreakglassIssueHistory";
+import { BreakglassAuthorityMaintenance } from "./BreakglassAuthorityMaintenance";
 
 type IssueForm = { request_id: string; subject: string; csr_der: string; reason: string; ttl_seconds: number };
 
@@ -319,6 +320,7 @@ export function BreakGlassReconcile() {
         </StepShell>
         {onlineError ? <ErrorState title={t("breakglass.issue.errorTitle")}>{onlineError}</ErrorState> : null}
         {hasQueryProvider ? <BreakglassIssueHistory latestCeremonyID={issueResult ? (ceremony?.id ?? null) : null} /> : null}
+        {hasQueryProvider ? <BreakglassAuthorityMaintenance /> : null}
         <OfflineReconciliation action={reconcileAction} />
       </div>
     </SectionCard>

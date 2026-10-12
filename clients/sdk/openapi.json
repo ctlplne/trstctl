@@ -4950,6 +4950,73 @@
         ],
         "type": "object"
       },
+      "BreakglassAuthorityReceipt": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cross_sign": {
+            "$ref": "#/components/schemas/BreakglassCrossSign"
+          },
+          "event_sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "rotation",
+              "cross_sign"
+            ],
+            "type": "string"
+          },
+          "request_digest": {
+            "type": "string"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/BreakglassRotation"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "ceremony_id",
+          "kind",
+          "subject",
+          "request_digest",
+          "event_sequence",
+          "completed_at"
+        ],
+        "type": "object"
+      },
+      "BreakglassAuthorityReceiptList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BreakglassAuthorityReceipt"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
       "BreakglassBundle": {
         "properties": {
           "approvals": {
@@ -39232,6 +39299,131 @@
         },
         "summary": "Resolve the white-label brand for this host; presentation only, unauthenticated so the login screen can be branded",
         "x-trstctl-public-rationale": "public presentation only: the brand decides what the LOGIN page looks like, so a surface requiring a session could never brand the one screen a customer sees before they have one. The response carries product name, logo, login message and email strings — no tenant data, no credential material, and nothing about the tenant beyond how to render it. Resolving by Host is a lookup an unauthenticated caller can already perform by visiting that host."
+      }
+    },
+    "/api/v1/breakglass/authority-receipts": {
+      "get": {
+        "operationId": "listBreakglassAuthorityReceipts",
+        "parameters": [
+          {
+            "description": "maximum receipts (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque source-sequence cursor from previous page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassAuthorityReceiptList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List bounded event-projected emergency CA rotation and cross-sign receipts without certificate bodies",
+        "x-trstctl-permission": "issuers:read",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/breakglass/authority-receipts/{id}": {
+      "get": {
+        "operationId": "getBreakglassAuthorityReceipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassAuthorityReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Recover the exact public rotation or cross-sign result by ceremony ID after a lost response or restart",
+        "x-trstctl-permission": "issuers:read",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/breakglass/cross-sign": {

@@ -127,6 +127,8 @@ public final class OpenApiSchemas {
       "AuditTimestampToken",
       "AuditVerificationKeySet",
       "Brand",
+      "BreakglassAuthorityReceipt",
+      "BreakglassAuthorityReceiptList",
       "BreakglassBundle",
       "BreakglassCeremony",
       "BreakglassCrossSign",

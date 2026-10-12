@@ -95,7 +95,7 @@ func newStore(t *testing.T) *store.Store {
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          acme_upstream_authorizations, acme_upstream_ari,
 		          agents, agent_bootstrap_tokens, agent_job_receipts, agent_job_attempt_bindings, agent_job_credential_redemptions, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
-		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals, ca_cross_sign_receipts, breakglass_issue_receipts,
+		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals, ca_cross_sign_receipts, breakglass_issue_receipts, breakglass_authority_receipts,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          discovery_findings, notification_channels, notification_reads, notification_threshold_deliveries,
 		          notification_test_operations, notification_delivery_receipts, discovery_runs, discovery_schedules, discovery_sources,
@@ -221,6 +221,12 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 			tenantID, uuid(tenantID, 11)); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `INSERT INTO breakglass_authority_receipts
+			(tenant_id,ceremony_id,kind,subject,request_digest,result,event_sequence,completed_at)
+			VALUES ($1,$2,'rotation','qa-successor','digest-2','{"ceremony_id":"qa"}'::jsonb,8,now())`,
+			tenantID, uuid(tenantID, 12)); err != nil {
+			return err
+		}
 		_, err := tx.Exec(ctx,
 			`INSERT INTO secret_rotation_schedule_ticks
 			        (tenant_id, idempotency_key, request_binding, due_through,
@@ -243,7 +249,7 @@ func countTenantRows(t *testing.T, s *store.Store, tenantID string) int {
 	t.Helper()
 	ctx := context.Background()
 	total := 0
-	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "secret_rotation_schedule_ticks", "secret_rotation_schedule_scan_cursors", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_cross_sign_receipts", "breakglass_issue_receipts", "ca_issued_certs", "kubernetes_controller_posture"}
+	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "secret_rotation_schedule_ticks", "secret_rotation_schedule_scan_cursors", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_cross_sign_receipts", "breakglass_issue_receipts", "breakglass_authority_receipts", "ca_issued_certs", "kubernetes_controller_posture"}
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, tbl := range tables {
 			var n int
@@ -294,7 +300,7 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 		t.Errorf("attestation reports residue after erase: %v", att.Residue)
 	}
 	// Every seeded table must have a recorded delete count (the deletion proof).
-	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "secret_rotation_schedule_ticks", "secret_rotation_schedule_scan_cursors", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_cross_sign_receipts", "breakglass_issue_receipts", "ca_issued_certs", "kubernetes_controller_posture", "tenants"} {
+	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "secret_rotation_schedule_ticks", "secret_rotation_schedule_scan_cursors", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_cross_sign_receipts", "breakglass_issue_receipts", "breakglass_authority_receipts", "ca_issued_certs", "kubernetes_controller_posture", "tenants"} {
 		if _, ok := att.Deleted[tbl]; !ok {
 			t.Errorf("attestation missing a delete count for %s", tbl)
 		}

@@ -187,7 +187,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		d.BreakglassReconciler = runtime
 	})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "online-breakglass-commander", []string{
-		string(authz.CertsIssue), string(authz.AuditRead), string(authz.IssuersWrite),
+		string(authz.CertsIssue), string(authz.AuditRead), string(authz.IssuersRead), string(authz.IssuersWrite),
 	})
 	op1 := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "op1", []string{string(authz.IssuersWrite)})
 	op2 := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "op2", []string{string(authz.IssuersWrite)})
@@ -444,6 +444,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	if err := json.Unmarshal(body, &rotation); err != nil || rotation.CeremonyID != ceremony.ID || rotation.ActiveSignerHandle == rotation.PreviousSignerHandle {
 		t.Fatalf("decode exact emergency rotation: %+v err=%v", rotation, err)
 	}
+	rotationCeremonyID := ceremony.ID
 	previousDER, err := oneCertificateDER(rotation.PreviousCertificatePEM)
 	if err != nil {
 		t.Fatal(err)
@@ -492,6 +493,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	if err := json.Unmarshal(body, &cross); err != nil || cross.CeremonyID != ceremony.ID || cross.IssuerSignerHandle != rotation.ActiveSignerHandle {
 		t.Fatalf("decode exact emergency cross-sign: %+v err=%v", cross, err)
 	}
+	crossCeremonyID := ceremony.ID
 	crossDER, err := oneCertificateDER(cross.CertificatePEM)
 	if err != nil || crypto.VerifyCrossSignedCA(activeDER, target.CertificateDER, crossDER) != nil {
 		t.Fatalf("emergency cross-sign has no valid target trust path: %v", err)
@@ -499,6 +501,58 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/cross-sign", token, "trace-006-cross-distinct-retry", crossIntent)
 	if code != http.StatusConflict {
 		t.Fatalf("distinct-key retry of consumed cross-sign = %d body=%s; want 409", code, body)
+	}
+	for _, item := range []struct {
+		id   string
+		kind string
+	}{
+		{rotationCeremonyID, "rotation"}, {crossCeremonyID, "cross_sign"},
+	} {
+		code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/authority-receipts/"+item.id, token, "", nil)
+		if code != http.StatusOK {
+			t.Fatalf("recover %s authority result = %d body=%s; want 200", item.kind, code, body)
+		}
+		var receipt struct {
+			Kind     string                   `json:"kind"`
+			Rotation *api.BreakglassRotation  `json:"rotation"`
+			Cross    *api.BreakglassCrossSign `json:"cross_sign"`
+		}
+		if err := json.Unmarshal(body, &receipt); err != nil || receipt.Kind != item.kind ||
+			(item.kind == "rotation" && (receipt.Rotation == nil || receipt.Rotation.ActiveCertificatePEM != rotation.ActiveCertificatePEM)) ||
+			(item.kind == "cross_sign" && (receipt.Cross == nil || receipt.Cross.CertificatePEM != cross.CertificatePEM)) {
+			t.Fatalf("recovered %s result changed or omitted its exact certificate: %+v err=%v", item.kind, receipt, err)
+		}
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/authority-receipts?limit=1", token, "", nil)
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"kind":"cross_sign"`)) || bytes.Contains(body, []byte(`"certificate_pem"`)) {
+		t.Fatalf("bounded authority receipt list = %d body=%s; want newest summary without certificate", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/authority-receipts/"+rotationCeremonyID, op1, "", nil)
+	if code != http.StatusForbidden {
+		t.Fatalf("write-only custodian readback = %d body=%s; want 403", code, body)
+	}
+	// An N-1 deployment may have the signed events but not the new SQL rows.
+	// Indexed catch-up must reconstruct both public results without a signer
+	// call, and repeating the pass must preserve their exact certificates.
+	if _, err := h.store.SystemPool().Exec(t.Context(), `DELETE FROM breakglass_authority_receipts WHERE tenant_id=$1`, h.tenant); err != nil {
+		t.Fatalf("simulate missing historical authority receipts: %v", err)
+	}
+	if _, err := h.store.SystemPool().Exec(t.Context(), `UPDATE projection_checkpoint SET breakglass_authority_checked_through=NULL WHERE id=1`); err != nil {
+		t.Fatalf("reset authority receipt backfill cursor: %v", err)
+	}
+	for pass := 1; pass <= 2; pass++ {
+		if err := projector.ProjectCatchUp(t.Context(), h.log); err != nil {
+			t.Fatalf("rebuild historical emergency CA receipts, pass %d: %v", pass, err)
+		}
+		for _, item := range []string{rotationCeremonyID, crossCeremonyID} {
+			code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/authority-receipts/"+item, token, "", nil)
+			var recovered api.BreakglassAuthorityReceipt
+			if code != http.StatusOK || json.Unmarshal(body, &recovered) != nil ||
+				(item == rotationCeremonyID && (recovered.Rotation == nil || recovered.Rotation.ActiveCertificatePEM != rotation.ActiveCertificatePEM)) ||
+				(item == crossCeremonyID && (recovered.CrossSign == nil || recovered.CrossSign.CertificatePEM != cross.CertificatePEM)) {
+				t.Fatalf("historical authority result pass %d = %d body=%s", pass, code, body)
+			}
+		}
 	}
 }
 

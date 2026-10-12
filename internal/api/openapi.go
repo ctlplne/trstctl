@@ -1054,6 +1054,14 @@ func componentSchemas() map[string]*Schema {
 	breakglassCrossSign := object(map[string]*Schema{
 		"issuer_signer_handle": str(), "target_sha256": str(), "certificate_pem": str(), "ceremony_id": uuid(),
 	}, "issuer_signer_handle", "target_sha256", "certificate_pem", "ceremony_id")
+	breakglassAuthorityReceipt := object(map[string]*Schema{
+		"tenant_id": uuid(), "ceremony_id": uuid(), "kind": {Type: "string", Enum: []string{"rotation", "cross_sign"}},
+		"subject": str(), "request_digest": str(), "event_sequence": {Type: "integer", Format: "int64"}, "completed_at": timestamp(),
+		"rotation": ref("BreakglassRotation"), "cross_sign": ref("BreakglassCrossSign"),
+	}, "tenant_id", "ceremony_id", "kind", "subject", "request_digest", "event_sequence", "completed_at")
+	breakglassAuthorityReceiptList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("BreakglassAuthorityReceipt")}, "next_cursor": str(),
+	}, "items", "next_cursor")
 
 	list := func(item string) *Schema {
 		return object(map[string]*Schema{
@@ -7045,6 +7053,8 @@ func componentSchemas() map[string]*Schema {
 		"BreakglassRotation":                       breakglassRotation,
 		"BreakglassCrossSignRequest":               breakglassCrossSignReq,
 		"BreakglassCrossSign":                      breakglassCrossSign,
+		"BreakglassAuthorityReceipt":               breakglassAuthorityReceipt,
+		"BreakglassAuthorityReceiptList":           breakglassAuthorityReceiptList,
 		"BreakglassReconcileRequest":               breakglassReconcileReq,
 		"BreakglassReconcileResponse":              breakglassReconcileResp,
 		"SecretCreateRequest":                      secretCreateReq,

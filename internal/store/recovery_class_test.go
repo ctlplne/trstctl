@@ -306,6 +306,16 @@ func TestBreakglassIssueReceiptSnapshotVersionRejectsOlderPayloads(t *testing.T)
 	}
 }
 
+func TestBreakglassAuthorityReceiptSnapshotVersionRejectsOlderPayloads(t *testing.T) {
+	if !containsRecoveryTable(ReadModelTables, "breakglass_authority_receipts") ||
+		!containsRecoveryTable(snapshotTables, "breakglass_authority_receipts") {
+		t.Fatal("emergency authority public results must rebuild from events and restore from snapshots")
+	}
+	if SnapshotFormatVersion < 55 {
+		t.Fatalf("SnapshotFormatVersion = %d; version 54 omits emergency authority receipts", SnapshotFormatVersion)
+	}
+}
+
 func TestDiscoverySegmentsAreRebuiltAndSnapshotSafe(t *testing.T) {
 	const table = "discovery_segments"
 	if !containsRecoveryTable(ReadModelTables, table) {

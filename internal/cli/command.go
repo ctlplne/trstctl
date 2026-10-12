@@ -336,6 +336,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"breakglass", "rotate"}, Method: "POST", Path: "/api/v1/breakglass/rotate", Body: bodyFile, Summary: "Rotate and bidirectionally cross-sign the break-glass CA"},
 	{Name: []string{"breakglass", "cross-sign-ceremony"}, Method: "POST", Path: "/api/v1/breakglass/cross-sign-ceremonies", Body: bodyFile, Summary: "Start an exact target-bound break-glass cross-sign ceremony"},
 	{Name: []string{"breakglass", "cross-sign"}, Method: "POST", Path: "/api/v1/breakglass/cross-sign", Body: bodyFile, Summary: "Cross-sign a CA with the active break-glass signer"},
+	{Name: []string{"breakglass", "authority-receipts", "list"}, Method: "GET", Path: "/api/v1/breakglass/authority-receipts", Query: []string{"limit", "cursor"}, Summary: "List bounded emergency CA rotation and cross-sign receipts"},
+	{Name: []string{"breakglass", "authority-receipts", "get"}, Method: "GET", Path: "/api/v1/breakglass/authority-receipts/{id}", Summary: "Recover an exact public emergency CA result by ceremony ID"},
 	{Name: []string{"breakglass", "reconcile"}, Method: "POST", Path: "/api/v1/breakglass/reconcile", Body: bodyFile, Summary: "Reconcile signed offline break-glass bundles into audit"},
 
 	{Name: []string{"editions", "status"}, Method: "GET", Path: "/api/v1/editions", Summary: "Show edition, license, and FIPS posture"},

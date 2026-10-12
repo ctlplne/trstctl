@@ -362,6 +362,15 @@ The same configured authority supports ceremony-bound CA rotation at
 `POST /api/v1/breakglass/cross-sign`. Rotation creates a fresh signer-held key,
 preserves the predecessor policy lane, emits new-by-previous and previous-by-new
 cross-certificates for overlap/rollback, and replays the active handle after restart.
+Both results are public-certificate-only receipts. If a response is lost, an
+operator with `issuers:read` can list recent receipt summaries with
+`GET /api/v1/breakglass/authority-receipts?limit=20` and recover the exact
+rotation or cross-sign result with
+`GET /api/v1/breakglass/authority-receipts/{ceremony_id}`. The list omits
+certificate bodies; the exact response includes the same PEM certificates and
+request digest returned by the mutation. The matching CLI commands are
+`trstctl-cli breakglass authority-receipts list` and
+`trstctl-cli breakglass authority-receipts get <ceremony-id>`.
 
 ### In the console
 
@@ -378,7 +387,14 @@ quorum readiness without exposing the operator roster, opens the request-bound c
 waits for independently authenticated approvals, executes only after quorum, and gives the
 operator a verification checklist. Its advanced recovery panel folds offline-issued,
 quorum-approved bundles back into the event log (`/api/v1/breakglass/reconcile`). The
-self-service approvals inbox at
+emergency CA maintenance section opens rotation and cross-sign ceremonies for an
+exact reason/lifetime or target public CA certificate. The console shows the
+approval digest, refreshes the independently authenticated quorum, and disables
+execution if the reviewed fields change. An operator can resume a pending
+ceremony after a browser restart with its ID and the original fields. The
+bounded result history recovers public certificates and the request digest after
+a lost response or cold restart; signer private keys never enter the console.
+The self-service approvals inbox at
 `/approvals` blocks self-approval of your own request. See
 [The web console](../web-console.md).
 

@@ -1210,6 +1210,23 @@ export interface Brand {
   token_overrides?: Record<string, unknown>;
 }
 
+export interface BreakglassAuthorityReceipt {
+  ceremony_id: string;
+  completed_at: string;
+  cross_sign?: BreakglassCrossSign;
+  event_sequence: number;
+  kind: "rotation" | "cross_sign";
+  request_digest: string;
+  rotation?: BreakglassRotation;
+  subject: string;
+  tenant_id: string;
+}
+
+export interface BreakglassAuthorityReceiptList {
+  items: BreakglassAuthorityReceipt[];
+  next_cursor: string;
+}
+
 export interface BreakglassBundle {
   approvals: string[];
   cert_der: string;
