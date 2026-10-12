@@ -750,6 +750,21 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByRole("link", { name: "Certificates for Root CA" })).toHaveAttribute("href", "/certificates?issuer=iss-root");
   });
 
+  it("counts PEM certificates when an issuer stores its chain in one array entry", async () => {
+    apiMock.issuers.mockResolvedValue([
+      {
+        id: "iss-root",
+        name: "Root CA",
+        kind: "x509_ca",
+        internal: true,
+        chain: ["-----BEGIN CERTIFICATE-----one-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----two-----END CERTIFICATE-----"],
+        public_key: "",
+      },
+    ]);
+    renderCAHierarchy("/ca-hierarchy?tab=authorities");
+    expect(await screen.findByText("Chain (2)")).toBeInTheDocument();
+  });
+
   it("renders public and private direct CA discovery inventory", async () => {
     const user = userEvent.setup();
     renderCAHierarchy();

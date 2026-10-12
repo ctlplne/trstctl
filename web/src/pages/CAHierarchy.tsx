@@ -2676,6 +2676,7 @@ function IssuerTable({
   probe: ProbeState | null;
   onTestConnection: (issuer: Issuer) => void;
 }) {
+  const chainCertificateCount = (chain: string[]) => chain.reduce((count, entry) => count + (entry.match(/-----BEGIN CERTIFICATE-----/g)?.length || 1), 0);
   // Resolve an issuer to its row in the served capability census.
   //
   // Three genuinely different answers, and collapsing any two of them would
@@ -2715,7 +2716,7 @@ function IssuerTable({
                 {issuer.chain?.length ? (
                   <details className="max-w-md">
                     <summary className="cursor-pointer text-brand-accent">
-                      {translateNow("source.chain.dae0896cbc")} ({issuer.chain.length})
+                      {translateNow("source.chain.dae0896cbc")} ({chainCertificateCount(issuer.chain)})
                     </summary>
                     <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all text-xs">{issuer.chain.join("\n")}</pre>
                   </details>
