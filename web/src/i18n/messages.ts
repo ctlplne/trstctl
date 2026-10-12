@@ -7335,7 +7335,7 @@ export const messages = {
   "breakglass.history.signed": { defaultMessage: "Signed bundle for {subject}", description: "Recovered emergency issue subject." },
   "breakglass.history.ceremony": { defaultMessage: "Ceremony {id}", description: "Recovered emergency issue ceremony identifier." },
   "breakglass.history.issued": { defaultMessage: "Issued {time}", description: "Recovered emergency issue timestamp." },
-  "breakglass.history.sequence": { defaultMessage: "Audit event sequence {sequence}", description: "Recovered emergency issue source event sequence." },
+  "breakglass.history.sequence": { defaultMessage: "Event log sequence {sequence}", description: "Recovered emergency issue source event sequence." },
   "breakglass.history.downloadBundle": { defaultMessage: "Download signed bundle", description: "Download event-retained emergency issue bundle." },
   "breakglass.history.downloadCertificate": { defaultMessage: "Download certificate", description: "Download public emergency certificate in PEM format." },
   "breakglass.history.privateKey": {
