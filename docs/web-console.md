@@ -612,8 +612,8 @@ remain UTC.
   until that provider is restored. The issuer catalog has
   schema-driven config forms for built-in and upstream issuer types, sensitive-field
   masking, and per-issuer **Test connection** actions.
-  The issuer table shows each chain's certificate count; expand **Chain** on a
-  row to inspect the full public PEM without turning the roster into a PEM dump.
+  The issuer table shows each chain's certificate count; open **Chain** on a row
+  to inspect the full public PEM in a readable dialog.
 
 See [Incident response & JIT](features/incident-and-jit.md) and
 [Code signing & timestamping](features/code-signing-and-timestamping.md).

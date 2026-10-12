@@ -2676,6 +2676,7 @@ function IssuerTable({
   probe: ProbeState | null;
   onTestConnection: (issuer: Issuer) => void;
 }) {
+  const [chainIssuer, setChainIssuer] = useState<Issuer | null>(null);
   const chainCertificateCount = (chain: string[]) => chain.reduce((count, entry) => count + (entry.match(/-----BEGIN CERTIFICATE-----/g)?.length || 1), 0);
   // Resolve an issuer to its row in the served capability census.
   //
@@ -2690,106 +2691,125 @@ function IssuerTable({
     return (capabilities?.issuers ?? []).find((c) => c.issuer === upstream.type);
   };
   return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[60rem]">
-        <caption className="sr-only">{translateNow("source.issuer.list.477db22fd7")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{translateNow("source.name.dcd1d5223f")}</th>
-            <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
-            <th scope="col">{translateNow("source.internal.2ea1842b44")}</th>
-            <th scope="col">{translateNow("source.chain.dae0896cbc")}</th>
-            <th scope="col">{translateNow("source.public.key.4ee252fb73")}</th>
-            <th scope="col">{translateNow("source.certificates.16f637921e")}</th>
-            <th scope="col">{translateNow("source.revocation.r2cap00001")}</th>
-            <th scope="col">{translateNow("source.domain.validation.b7dv000001")}</th>
-            <th scope="col">{translateNow("source.connection.639a40e82b")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {issuers.map((issuer) => (
-            <tr key={issuer.id} className="align-top">
-              <td className="font-medium">{issuer.name}</td>
-              <td>{issuer.kind}</td>
-              <td>{issuer.internal ? translateNow("source.internal.3bed2cb3a3") : translateNow("source.external.3c4623849a")}</td>
-              <td>
-                {issuer.chain?.length ? (
-                  <details className="max-w-md">
-                    <summary className="cursor-pointer text-brand-accent">
+    <>
+      <div className="ui-panel overflow-x-auto">
+        <table className="ui-table min-w-[60rem]">
+          <caption className="sr-only">{translateNow("source.issuer.list.477db22fd7")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{translateNow("source.name.dcd1d5223f")}</th>
+              <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
+              <th scope="col">{translateNow("source.internal.2ea1842b44")}</th>
+              <th scope="col">{translateNow("source.chain.dae0896cbc")}</th>
+              <th scope="col">{translateNow("source.public.key.4ee252fb73")}</th>
+              <th scope="col">{translateNow("source.certificates.16f637921e")}</th>
+              <th scope="col">{translateNow("source.revocation.r2cap00001")}</th>
+              <th scope="col">{translateNow("source.domain.validation.b7dv000001")}</th>
+              <th scope="col">{translateNow("source.connection.639a40e82b")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {issuers.map((issuer) => (
+              <tr key={issuer.id} className="align-top">
+                <td className="font-medium">{issuer.name}</td>
+                <td>{issuer.kind}</td>
+                <td>{issuer.internal ? translateNow("source.internal.3bed2cb3a3") : translateNow("source.external.3c4623849a")}</td>
+                <td>
+                  {issuer.chain?.length ? (
+                    <button type="button" className="text-brand-accent underline-offset-2 hover:underline" onClick={() => setChainIssuer(issuer)}>
                       {translateNow("source.chain.dae0896cbc")} ({chainCertificateCount(issuer.chain)})
-                    </summary>
-                    <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all text-xs">{issuer.chain.join("\n")}</pre>
-                  </details>
-                ) : (
-                  "-"
-                )}
-              </td>
-              <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
-              <td>
-                <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
-                  {translateNow("source.certificates.for.143f183f89")} {issuer.name}
-                </a>
-              </td>
-              {/* R2: whether trstctl can revoke THROUGH this authority, from
+                    </button>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
+                <td>
+                  <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
+                    {translateNow("source.certificates.for.143f183f89")} {issuer.name}
+                  </a>
+                </td>
+                {/* R2: whether trstctl can revoke THROUGH this authority, from
                   the served capability matrix. An operator holding a compromised
                   key needs to know before they reach for the button, not after
                   a revocation that went nowhere. */}
-              <td className="max-w-[22rem] text-sm">
-                {(() => {
-                  const cap = capabilityFor(issuer);
-                  if (cap === "internal") {
-                    return <span className="text-status-success">{translateNow("source.revoke.internal.r2cap00005")}</span>;
-                  }
-                  if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
-                  return cap.revoke ? (
-                    <span className="font-medium text-status-success">{translateNow("source.revoke.supported.r2cap00002")}</span>
-                  ) : (
-                    <>
-                      <span className="text-status-warning">{translateNow("source.revoke.elsewhere.r2cap00003")}</span>
-                      {cap.revoke_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.revoke_note}</span> : null}
-                    </>
-                  );
-                })()}
-              </td>
-              {/* B7: whether trstctl can satisfy this authority's domain
+                <td className="max-w-[22rem] text-sm">
+                  {(() => {
+                    const cap = capabilityFor(issuer);
+                    if (cap === "internal") {
+                      return <span className="text-status-success">{translateNow("source.revoke.internal.r2cap00005")}</span>;
+                    }
+                    if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
+                    return cap.revoke ? (
+                      <span className="font-medium text-status-success">{translateNow("source.revoke.supported.r2cap00002")}</span>
+                    ) : (
+                      <>
+                        <span className="text-status-warning">{translateNow("source.revoke.elsewhere.r2cap00003")}</span>
+                        {cap.revoke_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.revoke_note}</span> : null}
+                      </>
+                    );
+                  })()}
+                </td>
+                {/* B7: whether trstctl can satisfy this authority's domain
                   validation with nobody in the loop. As the CA/Browser Forum
                   compresses the validation-reuse window, an authority that
                   reads "manual" here needs a person every cycle, and the
                   number of cycles per year is going up. */}
-              <td className="max-w-[22rem] text-sm">
-                {(() => {
-                  const cap = capabilityFor(issuer);
-                  if (cap === "internal") {
-                    return <span className="text-muted-foreground">{translateNow("source.dv.internal.b7dv000004")}</span>;
-                  }
-                  if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
-                  return cap.unattended_dv ? (
-                    <span className="font-medium text-status-success">{translateNow("source.unattended.b7dv000002")}</span>
-                  ) : (
-                    <>
-                      <span className="text-status-warning">{translateNow("source.manual.step.b7dv000003")}</span>
-                      {cap.unattended_dv_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.unattended_dv_note}</span> : null}
-                    </>
-                  );
-                })()}
-              </td>
-              <td>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={probe?.issuerID === issuer.id && probe.status === "pending"}
-                  onClick={() => onTestConnection(issuer)}
-                  aria-label={translateNow("source.test.connection.value1.3b3d22ad35", { value1: issuer.name })}
-                >
-                  {translateNow("source.test.532eaabd95")}
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                <td className="max-w-[22rem] text-sm">
+                  {(() => {
+                    const cap = capabilityFor(issuer);
+                    if (cap === "internal") {
+                      return <span className="text-muted-foreground">{translateNow("source.dv.internal.b7dv000004")}</span>;
+                    }
+                    if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
+                    return cap.unattended_dv ? (
+                      <span className="font-medium text-status-success">{translateNow("source.unattended.b7dv000002")}</span>
+                    ) : (
+                      <>
+                        <span className="text-status-warning">{translateNow("source.manual.step.b7dv000003")}</span>
+                        {cap.unattended_dv_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.unattended_dv_note}</span> : null}
+                      </>
+                    );
+                  })()}
+                </td>
+                <td>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={probe?.issuerID === issuer.id && probe.status === "pending"}
+                    onClick={() => onTestConnection(issuer)}
+                    aria-label={translateNow("source.test.connection.value1.3b3d22ad35", { value1: issuer.name })}
+                  >
+                    {translateNow("source.test.532eaabd95")}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Dialog
+        open={chainIssuer !== null}
+        onClose={() => setChainIssuer(null)}
+        titleId="issuer-chain-title"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayClassName="absolute inset-0 bg-black/55"
+        panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <h2 id="issuer-chain-title" className="text-title font-semibold">
+            {translateNow("source.chain.dae0896cbc")} — {chainIssuer?.name}
+          </h2>
+          <Button type="button" variant="ghost" size="icon" onClick={() => setChainIssuer(null)} aria-label={translateNow("source.close.7d9eb7acb1")}>
+            <X className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </header>
+        <pre className="m-5 max-h-[65vh] overflow-auto whitespace-pre rounded-control border border-border bg-background p-4 font-mono text-xs">
+          {chainIssuer?.chain?.join("\n")}
+        </pre>
+      </Dialog>
+    </>
   );
 }
 
