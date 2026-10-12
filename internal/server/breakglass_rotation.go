@@ -91,6 +91,9 @@ type configuredBreakglassRuntime struct {
 	activeCertDER []byte
 	activeSigner  *signing.RemoteSigner
 	verifiers     []breakglassVerifier
+	// issueAfterAppend is a test seam for a transaction abort after the signer
+	// and event log have durably committed an emergency certificate.
+	issueAfterAppend func() error
 }
 
 func (r *configuredBreakglassRuntime) BreakglassConfiguration() api.BreakglassConfiguration {
@@ -192,6 +195,8 @@ func (r *configuredBreakglassRuntime) IssueBreakglass(ctx context.Context, tenan
 	defer r.mu.Unlock()
 	purpose := breakglass.IssuePurpose(tenantID, req, ttl)
 	var bundle breakglass.Bundle
+	var canonicalEvent events.Event
+	var appendAttempted bool
 	err := r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		approvers, err := r.consumeAndVerifyCeremony(ctx, tx, req.CeremonyID, purpose)
 		if err != nil {
@@ -218,33 +223,71 @@ func (r *configuredBreakglassRuntime) IssueBreakglass(ctx context.Context, tenan
 		if err != nil {
 			return err
 		}
+		appendAttempted = true
 		event, err := r.log.Append(ctx, events.Event{ID: "breakglass-issued-" + req.CeremonyID, Type: projections.EventBreakglassIssued, TenantID: tenantID, Data: data})
 		if err != nil {
 			return err
 		}
-		var canonical breakglassIssuedEvent
-		if err := json.Unmarshal(event.Data, &canonical); err != nil {
-			return err
+		canonicalEvent = event
+		if r.issueAfterAppend != nil {
+			if err := r.issueAfterAppend(); err != nil {
+				return err
+			}
 		}
-		if canonical.CeremonyID != req.CeremonyID || canonical.RequestDigest != strings.TrimPrefix(purpose, "breakglass-issue:") ||
-			canonical.RequestID != req.ID || canonical.Subject != req.Subject || canonical.Reason != req.Reason ||
-			canonical.Bundle.RequestID != req.ID || canonical.Bundle.Subject != req.Subject || canonical.Bundle.Reason != req.Reason ||
-			!canonical.IssuedAt.Equal(canonical.Bundle.IssuedAt) || canonical.Approvals != len(canonical.Bundle.Approvals) {
-			return errors.New("breakglass: canonical issue event does not match the consumed exact request")
-		}
-		if err := (breakglass.Quorum{Threshold: r.threshold, Operators: r.operators}).Verify(canonical.Bundle.Approvals); err != nil {
-			return err
-		}
-		if err := breakglass.Verify(canonical.Bundle, r.activeCertDER, r.activeSigner.Public().DER); err != nil {
-			return err
-		}
-		bundle = canonical.Bundle
-		return projections.New(r.store).ApplyTx(ctx, tx, event)
+		var errValidation error
+		bundle, errValidation = r.validatedIssueBundle(event, tenantID, req, purpose)
+		return errValidation
 	})
 	if err != nil {
+		if !appendAttempted {
+			return breakglass.Bundle{}, 0, err
+		}
+		if canonicalEvent.ID == "" {
+			var found bool
+			var lookupErr error
+			canonicalEvent, found, lookupErr = r.log.EventByID(ctx, "breakglass-issued-"+req.CeremonyID)
+			if lookupErr != nil {
+				return breakglass.Bundle{}, 0, fmt.Errorf("breakglass: exact emergency issue outcome unresolved after event append: %w (identity lookup: %v)", err, lookupErr)
+			}
+			if !found {
+				return breakglass.Bundle{}, 0, err
+			}
+		}
+		bundle, err = r.validatedIssueBundle(canonicalEvent, tenantID, req, purpose)
+		if err != nil {
+			return breakglass.Bundle{}, 0, err
+		}
+	}
+	// The event log is durable before the SQL projection. Apply outside the
+	// ceremony-row transaction so the request and background projector acquire
+	// receipt and ceremony locks in the same order.
+	if err := projections.New(r.store).Apply(ctx, canonicalEvent); err != nil {
 		return breakglass.Bundle{}, 0, err
 	}
 	return bundle, 1, nil
+}
+
+func (r *configuredBreakglassRuntime) validatedIssueBundle(event events.Event, tenantID string, req breakglass.EmergencyRequest, purpose string) (breakglass.Bundle, error) {
+	if event.ID != "breakglass-issued-"+req.CeremonyID || event.Type != projections.EventBreakglassIssued || event.TenantID != tenantID || event.Sequence == 0 {
+		return breakglass.Bundle{}, errors.New("breakglass: canonical issue event has the wrong identity, scope, or source sequence")
+	}
+	var canonical breakglassIssuedEvent
+	if err := json.Unmarshal(event.Data, &canonical); err != nil {
+		return breakglass.Bundle{}, err
+	}
+	if canonical.CeremonyID != req.CeremonyID || canonical.RequestDigest != strings.TrimPrefix(purpose, "breakglass-issue:") ||
+		canonical.RequestID != req.ID || canonical.Subject != req.Subject || canonical.Reason != req.Reason ||
+		canonical.Bundle.RequestID != req.ID || canonical.Bundle.Subject != req.Subject || canonical.Bundle.Reason != req.Reason ||
+		!canonical.IssuedAt.Equal(canonical.Bundle.IssuedAt) || canonical.Approvals != len(canonical.Bundle.Approvals) {
+		return breakglass.Bundle{}, errors.New("breakglass: canonical issue event does not match the consumed exact request")
+	}
+	if err := (breakglass.Quorum{Threshold: r.threshold, Operators: r.operators}).Verify(canonical.Bundle.Approvals); err != nil {
+		return breakglass.Bundle{}, err
+	}
+	if err := breakglass.Verify(canonical.Bundle, r.activeCertDER, r.activeSigner.Public().DER); err != nil {
+		return breakglass.Bundle{}, err
+	}
+	return canonical.Bundle, nil
 }
 
 func (r *configuredBreakglassRuntime) RotateBreakglass(ctx context.Context, tenantID string, req api.BreakglassRotationRequest) (api.BreakglassRotation, error) {

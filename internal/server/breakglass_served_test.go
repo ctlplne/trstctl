@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -149,6 +150,7 @@ func TestServedBreakglassPreviewExplainsUnconfiguredCustody(t *testing.T) {
 // hash-chained audit log before responding.
 func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testing.T) {
 	var caDER, pubDER []byte
+	var onlineRuntime *configuredBreakglassRuntime
 	auditKey, err := jose.GenerateRSASigningKey("trace-006-breakglass-audit")
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
@@ -175,6 +177,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		if err != nil {
 			t.Fatalf("assemble online break-glass runtime: %v", err)
 		}
+		onlineRuntime = runtime
 		d.AuditSigningKey = auditKey
 		d.BreakglassCACertDER = caDER
 		d.BreakglassPublicKeyDER = pubDER
@@ -277,7 +280,9 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		}
 	}
 	request["ceremony_id"] = ceremony.ID
+	onlineRuntime.issueAfterAppend = func() error { return errors.New("injected transaction abort after durable emergency issue") }
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-issue", request)
+	onlineRuntime.issueAfterAppend = nil
 	if code != http.StatusCreated {
 		t.Fatalf("online break-glass issue = %d body=%s; want 201", code, body)
 	}
@@ -297,6 +302,10 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	}
 	if err := breakglass.Verify(issued.Bundle, caDER, pubDER); err != nil {
 		t.Fatalf("served online bundle does not verify: %v", err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-issue-distinct-retry", request)
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("new-key retry of consumed emergency ceremony = %d body=%s; want 422", code, body)
 	}
 	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues?limit=1", token, "", nil)
 	if code != http.StatusOK {
