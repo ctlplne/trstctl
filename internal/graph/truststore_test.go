@@ -123,7 +123,9 @@ func TestManagedIssuerIndexUsesRealCertificateAndCrossSignIdentityAUD43(t *testi
 		t.Fatal(err)
 	}
 	defer other.Destroy()
-	signer, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "Cross Signer", TTL: time.Hour})
+	// A cross-signer must be permitted to issue one subordinate CA. A root
+	// with the default path-length-zero limit cannot sign this target.
+	signer, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "Cross Signer", MaxPathLen: 1, TTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}

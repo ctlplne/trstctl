@@ -1145,7 +1145,8 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 		t.Fatalf("create managed CA fixture: %v", err)
 	}
 	t.Cleanup(managedCA.Destroy)
-	crossSigner, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "cross-signer.test", TTL: time.Hour})
+	// The signing CA must allow one subordinate CA for a valid cross-sign.
+	crossSigner, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "cross-signer.test", MaxPathLen: 1, TTL: time.Hour})
 	if err != nil {
 		t.Fatalf("create cross-signing CA fixture: %v", err)
 	}
