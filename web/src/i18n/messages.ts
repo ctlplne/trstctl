@@ -17985,15 +17985,6 @@ export const messages = {
     defaultMessage: "Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.",
     description: "Description for the Code and CI secret scanning bridge panel.",
   },
-  "secrets.scan.triageLibraryOnlyTitle": {
-    defaultMessage: "Scan finding review is not available yet",
-    description: "Unavailable-state title for scan finding triage workflows that are not served yet.",
-  },
-  "secrets.scan.triageLibraryOnlyBody": {
-    defaultMessage:
-      "Repository events and scans can create redacted findings here. Use the discovery workflow to review them until scan-specific actions are added.",
-    description: "Unavailable-state body for scan finding triage workflows that are not served yet.",
-  },
   "secrets.scan.mode": {
     defaultMessage: "Mode",
     description: "Label for selecting workspace or Git-history secret-scan mode.",
@@ -18692,6 +18683,44 @@ export const messages = {
     defaultMessage: "{provider} scan queued as run {run}",
     description: "Success status after CAP-SCAN-04 ingest is accepted.",
   },
+  "secrets.thirdPartyScan.resultTitle": { defaultMessage: "Third-party scan result", description: "Heading for a reopened artifact scan run." },
+  "secrets.thirdPartyScan.resultHelp": {
+    defaultMessage: "Open a run by ID to check its outcome and review redacted findings. The artifact and any matched values stay outside the console.",
+    description: "Artifact scan result guidance.",
+  },
+  "secrets.thirdPartyScan.runId": { defaultMessage: "Run ID", description: "Label for artifact scan run lookup." },
+  "secrets.thirdPartyScan.openRun": { defaultMessage: "Open run", description: "Open an artifact scan run by ID." },
+  "secrets.thirdPartyScan.refreshRun": { defaultMessage: "Refresh result", description: "Refresh an artifact scan outcome." },
+  "secrets.thirdPartyScan.invalidRunId": { defaultMessage: "Enter a valid run ID.", description: "Artifact scan lookup validation error." },
+  "secrets.thirdPartyScan.mismatchedRun": {
+    defaultMessage: "The returned run ID did not match the requested run.",
+    description: "Artifact scan mismatched readback error.",
+  },
+  "secrets.thirdPartyScan.loadingRun": { defaultMessage: "Loading scan run…", description: "Artifact scan run loading status." },
+  "secrets.thirdPartyScan.loadError": { defaultMessage: "Could not load the scan run.", description: "Artifact scan run read failure." },
+  "secrets.thirdPartyScan.status": { defaultMessage: "Status", description: "Artifact scan run status label." },
+  "secrets.thirdPartyScan.statusQueued": { defaultMessage: "Queued", description: "Queued artifact scan status." },
+  "secrets.thirdPartyScan.statusRunning": { defaultMessage: "Running", description: "Running artifact scan status." },
+  "secrets.thirdPartyScan.statusSucceeded": { defaultMessage: "Succeeded", description: "Succeeded artifact scan status." },
+  "secrets.thirdPartyScan.statusPartial": { defaultMessage: "Partially completed", description: "Partial artifact scan status." },
+  "secrets.thirdPartyScan.statusFailed": { defaultMessage: "Failed", description: "Failed artifact scan status." },
+  "secrets.thirdPartyScan.pendingHelp": {
+    defaultMessage: "The outbox worker has not finished this scan. Refresh to check again.",
+    description: "Pending artifact scan guidance.",
+  },
+  "secrets.thirdPartyScan.loadingFindings": { defaultMessage: "Loading redacted findings…", description: "Artifact scan findings loading status." },
+  "secrets.thirdPartyScan.findingsError": { defaultMessage: "Could not load the scan findings.", description: "Artifact scan findings read failure." },
+  "secrets.thirdPartyScan.findingCount": { defaultMessage: "{count} redacted findings in this run", description: "Artifact scan finding count." },
+  "secrets.thirdPartyScan.firstFindings": {
+    defaultMessage: "Showing the first {count} redacted findings; open Discovery for the full run.",
+    description: "Artifact scan paginated findings count.",
+  },
+  "secrets.thirdPartyScan.unmanaged": { defaultMessage: "unmanaged", description: "Default artifact scan finding triage state." },
+  "secrets.thirdPartyScan.runFailed": {
+    defaultMessage: "The scan did not finish. Check the scanner and artifact path, then retry with a new request.",
+    description: "Artifact scan failure guidance.",
+  },
+  "secrets.thirdPartyScan.reviewFindings": { defaultMessage: "Review scan findings", description: "Link to discovery triage filtered by artifact scan run." },
   "workloads.attested.description": {
     defaultMessage:
       "An attested SVID is a short-lived certificate for a workload. Review the proof method and lifetime first; trstctl verifies the proof only when you explicitly issue.",

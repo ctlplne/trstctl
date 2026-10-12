@@ -320,23 +320,23 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 //      secrets, transit/KMIP, secret-sync) — disclosed at the right served state ----
 
 // TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs pins TRACE-005. The web
-// console honestly labels the not-yet-served secrets surfaces as library-only/
-// unavailable, labels dynamic leases and ephemeral API keys as served, and
+// console reads third-party scan runs and redacted findings through Discovery,
+// labels dynamic leases and ephemeral API keys as served, and
 // limitations.md discloses secret-sync and transit/KMIP at their current served
 // state. This binds the in-product disclosure to the web source and the docs
 // disclosure to the code reality.
 func TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs(t *testing.T) {
-	// In-product disclosure: the Secrets page must label the not-yet-served slices.
+	// In-product disclosure: the Secrets page must link its served scan result to
+	// the exact Discovery run, rather than retaining the old library-only claim.
 	secretsPage := strings.ToLower(strings.Join([]string{
 		read(t, "../web/src/pages/Secrets.tsx"),
 		read(t, "../web/src/pages/secrets/SecretScanningWorkflow.tsx"),
+		read(t, "../web/src/pages/secrets/ThirdPartyScanResult.tsx"),
 		read(t, "../web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx"),
 	}, "\n"))
-	for _, m := range []string{
-		"secret-scanning triage is library-only",
-	} {
+	for _, m := range []string{"getdiscoveryrun", "discoveryfindings", "run_id=", "reviewfindings"} {
 		if !strings.Contains(secretsPage, m) {
-			t.Errorf("the assembled Secrets workflow must keep the honest library-only label for the secrets-expansion surfaces (missing %q) — TRACE-005", m)
+			t.Errorf("the assembled Secrets workflow must read the exact scan result and link to triage (missing %q) — TRACE-005", m)
 		}
 	}
 	if !containsAll(secretsPage, []string{"ephemeral api-key issuance is served", "post /api/v1/ephemeral/api-keys", "trstctl-cli ephemeral api-keys issue", "api_token.revoked"}) {
@@ -345,8 +345,7 @@ func TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs(t *testing.T) {
 	if !containsAll(secretsPage, []string{"dynamic secret leases are served", "post /api/v1/secrets/leases", "secrets:read"}) {
 		t.Error("web/src/pages/Secrets.tsx must disclose dynamic-secret leases as served now that F65 has API/CLI routes — TRACE-005")
 	}
-	// It must use the UnavailableState primitive (the honest "not served yet" UI), not
-	// silently present these as working.
+	// Other unserved slices still use the UnavailableState primitive.
 	if !strings.Contains(read(t, "../web/src/pages/Secrets.tsx"), "UnavailableState") {
 		t.Error("web/src/pages/Secrets.tsx no longer uses UnavailableState for the unserved secrets surfaces; the TRACE-005 in-product disclosure has no anchor — revisit this reality test")
 	}

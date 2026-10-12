@@ -66,6 +66,8 @@ const { apiMock } = vi.hoisted(() => ({
     secretRepositoryScanning: vi.fn(),
     thirdPartySecretScanning: vi.fn(),
     ingestThirdPartySecretScan: vi.fn(),
+    getDiscoveryRun: vi.fn(),
+    discoveryFindings: vi.fn(),
     cloudSecretManagers: vi.fn(),
     secretSyncTargets: vi.fn(),
     kubernetesSecretOperator: vi.fn(),
@@ -713,6 +715,14 @@ function primeSecretsMocks() {
     scanner: "gitleaks v8.27.2",
     discovery_run_path: "/api/v1/discovery/runs/66666666-6666-6666-6666-666666666666",
   });
+  apiMock.getDiscoveryRun.mockResolvedValue({
+    id: "66666666-6666-6666-6666-666666666666",
+    source_id: "secret-third-party:slack:acme-slack",
+    status: "succeeded",
+    discovered: 0,
+    error: "third-party secret scan completed with no findings",
+  });
+  apiMock.discoveryFindings.mockResolvedValue({ items: [] });
   apiMock.cloudSecretManagers.mockResolvedValue(cloudSecretManagerFixture());
   apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
   apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
@@ -2024,6 +2034,9 @@ describe("secrets surface", () => {
       }),
     );
     expect(await screen.findByText(/slack scan queued as run 66666666-6666-6666-6666-666666666666/i)).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.getDiscoveryRun).toHaveBeenCalledWith("66666666-6666-6666-6666-666666666666"));
+    expect(await screen.findByText("Succeeded")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review scan findings" })).toHaveAttribute("href", "/discovery?run_id=66666666-6666-6666-6666-666666666666");
     const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
     await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
     await user.click(scanForm.getByRole("button", { name: /review scan/i }));
@@ -2075,6 +2088,30 @@ describe("secrets surface", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("reopens a third-party scan by URL after a fresh mount and shows only redacted finding fields", async () => {
+    const runID = "77777777-7777-4777-8777-777777777777";
+    apiMock.getDiscoveryRun.mockResolvedValue({ id: runID, status: "succeeded", discovered: 1 });
+    apiMock.discoveryFindings.mockResolvedValue({
+      items: [
+        {
+          id: "finding-1",
+          run_id: runID,
+          kind: "leaked_secret",
+          ref: "rule=generic-api-key file=export.jsonl line=1 credential_ref=redacted",
+          triage_status: "unmanaged",
+          metadata: { secret_value: "MUST_NOT_APPEAR" },
+        },
+      ],
+    });
+    renderSecrets(`/secrets/scanning?third_party_run=${runID}`);
+    await waitFor(() => expect(apiMock.getDiscoveryRun).toHaveBeenCalledWith(runID));
+    await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenCalledWith({ runId: runID, limit: 50 }));
+    expect(await screen.findByText("Succeeded")).toBeInTheDocument();
+    expect(screen.getByText(/credential_ref=redacted/)).toBeInTheDocument();
+    expect(screen.queryByText("MUST_NOT_APPEAR")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review scan findings", hidden: true })).toHaveAttribute("href", `/discovery?run_id=${runID}`);
   });
 
   it("keeps the failed F39 run visible and retries the exact reviewed request with one idempotency key", async () => {

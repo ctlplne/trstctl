@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Eye, Loader2, RotateCcw, ScanSearch } from "lucide-react";
-import { Link } from "react-router-dom";
-import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
+import { Link, useSearchParams } from "react-router-dom";
+import { ErrorState } from "@/components/StatePrimitives";
 import { StepShell } from "@/components/wizard/StepShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,8 @@ import {
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { RepositoryScanPosture, ThirdPartyScanPosture, defaultThirdPartyProviders } from "./SecretsPageParts";
 
+const ThirdPartyScanResult = lazy(() => import("./ThirdPartyScanResult").then((module) => ({ default: module.ThirdPartyScanResult })));
+
 const scanDefaults = { path: "", mode: "workspace" as "workspace" | "git_history", customRulesPath: "" };
 type ScanFormValues = typeof scanDefaults;
 
@@ -43,6 +45,7 @@ export function SecretScanningWorkflow({
   loadingBlocked: boolean;
 }) {
   const { t } = useTranslation();
+  const [, setSearchParams] = useSearchParams();
   const [step, setStep] = useState(0);
   const [plan, setPlan] = useState<SecretScanPreview | null>(null);
   const [result, setResult] = useState<SecretScan | null>(null);
@@ -162,6 +165,11 @@ export function SecretScanningWorkflow({
         ...(thirdPartyEvent.trim() ? { event: thirdPartyEvent.trim() } : {}),
       });
       setThirdPartyReceipt(receipt);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("third_party_run", receipt.run_id);
+        return next;
+      });
     } catch (failure) {
       setThirdPartyError(apiProblemMessage(failure, t("secrets.thirdPartyScan.errorTitle")));
     } finally {
@@ -377,7 +385,7 @@ export function SecretScanningWorkflow({
       </StepShell>
 
       <Card>
-        {/* TRACE-005 source anchor: secret-scanning triage is library-only; scan automation and redacted discovery handoff are served. */}
+        {/* Third-party scan results are read through the exact discovery run and redacted findings. */}
         <CardHeader>
           <CardTitle>{t("secrets.scan.automationHeading")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("secrets.scan.automationHelp")}</p>
@@ -450,7 +458,9 @@ export function SecretScanningWorkflow({
                   {t("secrets.thirdPartyScan.accepted", { provider: thirdPartyReceipt.provider, run: thirdPartyReceipt.run_id })}
                 </p>
               )}
-              <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
+              <Suspense fallback={null}>
+                <ThirdPartyScanResult />
+              </Suspense>
             </div>
           </details>
         </CardContent>

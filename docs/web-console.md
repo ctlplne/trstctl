@@ -421,7 +421,14 @@ path, mode, scanner, and optional rules before any process starts. A failed or
 interrupted run stays visible and **Retry reviewed scan** reuses the same in-memory
 idempotency key, so a completed scan is recovered rather than run twice. Result rows
 show only rule, file, line, and redacted credential-reference metadata, then link to
-the durable discovery run. **Send secrets to systems** (`/secrets/sync`)
+the durable discovery run. For third-party CI, registry, Slack, and Jira exports,
+expand **Scanner setup and exact evidence** and queue an artifact scan. The
+receipt opens the exact discovery run on this page; a saved
+`/secrets/scanning?third_party_run=<run-id>` URL reopens
+it after restart. The result shows terminal status and redacted findings, with a
+link to that run's full Discovery triage. The control plane must have the scanner
+binary and access to the operator-owned artifact under a configured scan root.
+**Send secrets to systems** (`/secrets/sync`)
 shows configured destinations and refuses a delivery when none is configured.
 Its cloud workload identity wizard lists only tenant targets whose actual cloud
 provider matches and whose workload identity switch is enabled. When none

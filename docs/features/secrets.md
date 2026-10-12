@@ -1095,6 +1095,17 @@ trstctl-cli --idempotency-key third-party-scan-1 \
   secrets scans third-party ingest slack -f third-party-scan.json
 ```
 
+In the console, open **Find leaked secrets in code**, expand **Scanner setup and
+exact evidence**, and queue the same provider, source reference, artifact path, and
+optional event. The receipt includes a discovery run ID. The page opens that run
+automatically; after a restart, paste its ID into **Third-party scan result** or
+open `/secrets/scanning?third_party_run=<run-id>`. Refresh until the outbox run is
+terminal. The page shows the run status and the first 50 redacted findings, then
+links to **Discovery** filtered to that exact run for the full finding list and
+triage. Neither the artifact contents nor scanner matches appear in the console.
+The artifact path must be readable by the running control plane, inside an
+operator-configured scan root, and the pinned Gitleaks binary must be installed.
+
 **Secret sharing** is a review-first, one-time delivery journey. `POST
 /api/v1/secrets/shares/preview` accepts only `ttl_seconds`: the value never enters the
 preview request. It returns the normalized lifetime, permission, exact execution

@@ -3166,6 +3166,10 @@ than sending an operator looking for a credential that was never there.
   The contract intentionally accepts an operator-owned `artifact_path`; raw
   logs, registry metadata, chat exports, and issue exports stay outside trstctl
   storage — discovery stores only redacted rule/file/line/provider metadata.
+  The console queues an artifact, reopens the exact discovery run by ID after a
+  restart, shows its terminal state and redacted findings, and links to the full
+  filtered Discovery triage. This is an operator workflow over the local export;
+  it does not collect native provider events.
   Native provider API polling, provider signature verification, artifact
   retention automation, and provider-native annotations remain architecture
   shortfalls.
