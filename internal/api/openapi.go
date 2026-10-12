@@ -1024,6 +1024,14 @@ func componentSchemas() map[string]*Schema {
 		"reconciled":       {Type: "integer"},
 		"audit_event_type": str(),
 	}, "bundle", "reconciled", "audit_event_type")
+	breakglassIssueReceipt := object(map[string]*Schema{
+		"tenant_id": uuid(), "ceremony_id": uuid(), "request_id": str(), "subject": str(),
+		"request_digest": str(), "bundle": ref("BreakglassBundle"),
+		"event_sequence": {Type: "integer", Format: "int64"}, "issued_at": timestamp(),
+	}, "tenant_id", "ceremony_id", "request_id", "subject", "request_digest", "event_sequence", "issued_at")
+	breakglassIssueReceiptList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("BreakglassIssueReceipt")}, "next_cursor": str(),
+	}, "items", "next_cursor")
 	breakglassCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
 		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),
@@ -7029,6 +7037,8 @@ func componentSchemas() map[string]*Schema {
 		"BreakglassPrerequisite":                   breakglassPrerequisite,
 		"BreakglassIssuePlanPreview":               breakglassIssuePlanPreview,
 		"BreakglassIssueResponse":                  breakglassIssueResp,
+		"BreakglassIssueReceipt":                   breakglassIssueReceipt,
+		"BreakglassIssueReceiptList":               breakglassIssueReceiptList,
 		"BreakglassCeremony":                       breakglassCeremony,
 		"BreakglassRotationIntent":                 breakglassRotationIntent,
 		"BreakglassRotationRequest":                breakglassRotationReq,

@@ -1773,6 +1773,30 @@ BreakglassIssuePlanPreview = TypedDict(
     total=False,
 )
 
+BreakglassIssueReceipt = TypedDict(
+    'BreakglassIssueReceipt',
+    {
+        'bundle': dict[str, Any],
+        'ceremony_id': str,
+        'event_sequence': int,
+        'issued_at': str,
+        'request_digest': str,
+        'request_id': str,
+        'subject': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+BreakglassIssueReceiptList = TypedDict(
+    'BreakglassIssueReceiptList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 BreakglassIssueRequest = TypedDict(
     'BreakglassIssueRequest',
     {

@@ -5269,6 +5269,66 @@
         ],
         "type": "object"
       },
+      "BreakglassIssueReceipt": {
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/BreakglassBundle"
+          },
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "event_sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "request_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "ceremony_id",
+          "request_id",
+          "subject",
+          "request_digest",
+          "event_sequence",
+          "issued_at"
+        ],
+        "type": "object"
+      },
+      "BreakglassIssueReceiptList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BreakglassIssueReceipt"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
       "BreakglassIssueRequest": {
         "properties": {
           "approvals": {
@@ -39501,6 +39561,131 @@
         ],
         "summary": "Validate and explain an exact online break-glass request without opening a ceremony or calling the signer",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/breakglass/issues": {
+      "get": {
+        "operationId": "listBreakglassIssues",
+        "parameters": [
+          {
+            "description": "maximum receipts (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque source-sequence cursor from previous page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassIssueReceiptList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List bounded event-projected online emergency issue receipts without signed bundles",
+        "x-trstctl-permission": "certs:issue",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/breakglass/issues/{id}": {
+      "get": {
+        "operationId": "getBreakglassIssue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassIssueReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Recover the exact signed emergency bundle by ceremony ID after a lost response or restart",
+        "x-trstctl-permission": "certs:issue",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/breakglass/reconcile": {

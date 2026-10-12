@@ -268,8 +268,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// An exact, tenant-scoped issuance-request read makes older decisions usable
 	// after they leave the recent list; F33 owns the added operation.
 	// F37 adds one exact schedule read and three event-sourced lifecycle controls.
-	if len(out) != 484 {
-		t.Fatalf("OpenAPI operationIds = %d, want 484", len(out))
+	// F34 adds bounded list and exact signed-bundle readback after a lost issue response.
+	if len(out) != 486 {
+		t.Fatalf("OpenAPI operationIds = %d, want 486", len(out))
 	}
 	return out
 }

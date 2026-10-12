@@ -3,17 +3,23 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import type { CapabilityView } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
+import { AppQueryProvider } from "@/lib/query";
 
-const { previewBreakglassIssue, startBreakglassIssueCeremony, breakglassIssue, breakglassReconcile } = vi.hoisted(() => ({
+const { previewBreakglassIssue, startBreakglassIssueCeremony, breakglassIssue, breakglassReconcile, breakglassIssues, getBreakglassIssue } = vi.hoisted(() => ({
   previewBreakglassIssue: vi.fn(),
   startBreakglassIssueCeremony: vi.fn(),
   breakglassIssue: vi.fn(),
   breakglassReconcile: vi.fn(),
+  breakglassIssues: vi.fn(),
+  getBreakglassIssue: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, previewBreakglassIssue, startBreakglassIssueCeremony, breakglassIssue, breakglassReconcile } };
+  return {
+    ...actual,
+    api: { ...actual.api, previewBreakglassIssue, startBreakglassIssueCeremony, breakglassIssue, breakglassReconcile, breakglassIssues, getBreakglassIssue },
+  };
 });
 
 const unavailableDetail = "This operation is not mounted because its runtime dependency is not configured.";
@@ -56,10 +62,13 @@ const unavailableRuntime: CapabilityView = {
 
 describe("break-glass runtime truth", () => {
   it("keeps valid-looking emergency requests disabled when the exact operations are unavailable", () => {
+    breakglassIssues.mockResolvedValue({ items: [], next_cursor: "" });
     render(
-      <CapabilityFixtureProvider view={unavailableRuntime}>
-        <BreakGlassReconcile />
-      </CapabilityFixtureProvider>,
+      <AppQueryProvider>
+        <CapabilityFixtureProvider view={unavailableRuntime}>
+          <BreakGlassReconcile />
+        </CapabilityFixtureProvider>
+      </AppQueryProvider>,
     );
 
     fireEvent.change(screen.getByLabelText("Request ID"), { target: { value: "bg-1" } });
@@ -74,5 +83,41 @@ describe("break-glass runtime truth", () => {
     expect(startBreakglassIssueCeremony).not.toHaveBeenCalled();
     expect(breakglassIssue).not.toHaveBeenCalled();
     expect(breakglassReconcile).not.toHaveBeenCalled();
+  });
+
+  it("recovers a prior signed issue from the durable list after a fresh component mount", async () => {
+    const record = {
+      tenant_id: "tenant-1",
+      ceremony_id: "ceremony-1",
+      request_id: "incident-1",
+      subject: "recovery.test",
+      request_digest: "digest-1",
+      event_sequence: 42,
+      issued_at: "2026-10-12T12:00:00Z",
+    };
+    breakglassIssues.mockResolvedValue({ items: [record], next_cursor: "" });
+    getBreakglassIssue.mockResolvedValue({
+      ...record,
+      bundle: {
+        request_id: "incident-1",
+        subject: "recovery.test",
+        cert_der: "AQID",
+        reason: "outage",
+        approvals: ["a", "b"],
+        issued_at: record.issued_at,
+        signature: "BAUG",
+      },
+    });
+    render(
+      <AppQueryProvider>
+        <CapabilityFixtureProvider view={unavailableRuntime}>
+          <BreakGlassReconcile />
+        </CapabilityFixtureProvider>
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByRole("button", { name: /recovery.test · incident-1/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Download signed bundle" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download certificate" })).toBeInTheDocument();
+    expect(getBreakglassIssue).toHaveBeenCalledWith("ceremony-1");
   });
 });

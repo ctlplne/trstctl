@@ -296,6 +296,16 @@ func TestCACrossSignReceiptSnapshotVersionRejectsOlderPayloads(t *testing.T) {
 	}
 }
 
+func TestBreakglassIssueReceiptSnapshotVersionRejectsOlderPayloads(t *testing.T) {
+	if !containsRecoveryTable(ReadModelTables, "breakglass_issue_receipts") ||
+		!containsRecoveryTable(snapshotTables, "breakglass_issue_receipts") {
+		t.Fatal("online emergency signed bundles must rebuild from events and restore from snapshots")
+	}
+	if SnapshotFormatVersion < 54 {
+		t.Fatalf("SnapshotFormatVersion = %d; version 53 omits online emergency issue receipts", SnapshotFormatVersion)
+	}
+}
+
 func TestDiscoverySegmentsAreRebuiltAndSnapshotSafe(t *testing.T) {
 	const table = "discovery_segments"
 	if !containsRecoveryTable(ReadModelTables, table) {

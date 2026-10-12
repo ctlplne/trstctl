@@ -330,6 +330,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"breakglass", "issue-preview"}, Method: "POST", Path: "/api/v1/breakglass/issue-ceremonies/preview", Body: bodyFile, ReadOnly: true, Summary: "Review emergency request and deployment quorum readiness without effects"},
 	{Name: []string{"breakglass", "issue-ceremony"}, Method: "POST", Path: "/api/v1/breakglass/issue-ceremonies", Body: bodyFile, Summary: "Start an exact-request-bound online break-glass ceremony"},
 	{Name: []string{"breakglass", "issue"}, Method: "POST", Path: "/api/v1/breakglass/issue", Body: bodyFile, Summary: "Issue and audit a ceremony-approved online break-glass certificate"},
+	{Name: []string{"breakglass", "issues", "list"}, Method: "GET", Path: "/api/v1/breakglass/issues", Query: []string{"limit", "cursor"}, Summary: "List recent online emergency certificate receipts without bundles"},
+	{Name: []string{"breakglass", "issues", "get"}, Method: "GET", Path: "/api/v1/breakglass/issues/{id}", Summary: "Recover the signed online emergency bundle by ceremony ID"},
 	{Name: []string{"breakglass", "rotation-ceremony"}, Method: "POST", Path: "/api/v1/breakglass/rotation-ceremonies", Body: bodyFile, Summary: "Start an exact break-glass CA rotation ceremony"},
 	{Name: []string{"breakglass", "rotate"}, Method: "POST", Path: "/api/v1/breakglass/rotate", Body: bodyFile, Summary: "Rotate and bidirectionally cross-sign the break-glass CA"},
 	{Name: []string{"breakglass", "cross-sign-ceremony"}, Method: "POST", Path: "/api/v1/breakglass/cross-sign-ceremonies", Body: bodyFile, Summary: "Start an exact target-bound break-glass cross-sign ceremony"},

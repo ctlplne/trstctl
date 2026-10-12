@@ -24,6 +24,9 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilityExecution } from "@/lib/capabilities";
+import { invalidateAppQueryKeys, useHasAppQueryProvider } from "@/lib/query";
+
+import { BreakglassIssueHistory } from "./BreakglassIssueHistory";
 
 type IssueForm = { request_id: string; subject: string; csr_der: string; reason: string; ttl_seconds: number };
 
@@ -50,6 +53,7 @@ export function BreakGlassReconcile() {
   const ceremonyAction = useCapabilityExecution("F34", "startBreakglassIssueCeremony");
   const issueAction = useCapabilityExecution("F34", "issueBreakglass");
   const reconcileAction = useCapabilityExecution("F34", "reconcileBreakglass");
+  const hasQueryProvider = useHasAppQueryProvider();
   const [step, setStep] = useState(0);
   const [review, setReview] = useState<{ requestKey: string; plan: BreakglassIssuePlanPreview } | null>(null);
   const [ceremony, setCeremony] = useState<BreakglassCeremony | null>(null);
@@ -147,6 +151,7 @@ export function BreakGlassReconcile() {
     setOnlineError(null);
     try {
       setIssueResult(await api.breakglassIssue({ ...currentRequest, ceremony_id: ceremony.id }));
+      invalidateAppQueryKeys([["breakglass-issues"]]);
       setStep(3);
     } catch (error) {
       setOnlineError(apiProblemMessage(error, t("breakglass.issue.errorTitle")));
@@ -313,6 +318,7 @@ export function BreakGlassReconcile() {
           ) : null}
         </StepShell>
         {onlineError ? <ErrorState title={t("breakglass.issue.errorTitle")}>{onlineError}</ErrorState> : null}
+        {hasQueryProvider ? <BreakglassIssueHistory latestCeremonyID={issueResult ? (ceremony?.id ?? null) : null} /> : null}
         <OfflineReconciliation action={reconcileAction} />
       </div>
     </SectionCard>

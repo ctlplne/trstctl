@@ -234,6 +234,7 @@ var TenantScopedTables = []string{
 	"machine_sessions",
 	"machine_auth_method_overrides",
 	"ca_cross_sign_receipts",
+	"breakglass_issue_receipts",
 	"ca_authorities",
 	"ca_issued_certs",
 	"ca_crls",

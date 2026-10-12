@@ -7316,6 +7316,32 @@ export const messages = {
   "breakglass.issue.execute": { defaultMessage: "Issue emergency certificate", description: "Action that executes an approved break-glass request." },
   "breakglass.issue.audit": { defaultMessage: "Audit evidence: {event}", description: "Break-glass audit event confirmation." },
   "breakglass.startAgain": { defaultMessage: "Start another emergency request", description: "Reset action after break-glass issuance." },
+  "breakglass.history.title": { defaultMessage: "Issued emergency certificates", description: "Durable online break-glass issue history title." },
+  "breakglass.history.help": {
+    defaultMessage:
+      "Recover a signed bundle after a lost response or browser restart. The certificate and signature are retained; its subject private key remains with the requester.",
+    description: "Emergency issue recovery scope.",
+  },
+  "breakglass.history.failed": { defaultMessage: "Emergency issue history is unavailable", description: "Emergency issue list failure title." },
+  "breakglass.history.loading": { defaultMessage: "Loading issued certificates…", description: "Emergency issue list loading status." },
+  "breakglass.history.empty": {
+    defaultMessage: "No online emergency certificates have been issued for this tenant.",
+    description: "Empty emergency issue list.",
+  },
+  "breakglass.history.previous": { defaultMessage: "Previous issues", description: "Emergency issue history previous page." },
+  "breakglass.history.more": { defaultMessage: "Older issues", description: "Emergency issue history next page." },
+  "breakglass.history.refresh": { defaultMessage: "Refresh issues", description: "Emergency issue history refresh action." },
+  "breakglass.history.readFailed": { defaultMessage: "Signed bundle could not be recovered", description: "Emergency issue detail read failure." },
+  "breakglass.history.signed": { defaultMessage: "Signed bundle for {subject}", description: "Recovered emergency issue subject." },
+  "breakglass.history.ceremony": { defaultMessage: "Ceremony {id}", description: "Recovered emergency issue ceremony identifier." },
+  "breakglass.history.issued": { defaultMessage: "Issued {time}", description: "Recovered emergency issue timestamp." },
+  "breakglass.history.sequence": { defaultMessage: "Audit event sequence {sequence}", description: "Recovered emergency issue source event sequence." },
+  "breakglass.history.downloadBundle": { defaultMessage: "Download signed bundle", description: "Download event-retained emergency issue bundle." },
+  "breakglass.history.downloadCertificate": { defaultMessage: "Download certificate", description: "Download public emergency certificate in PEM format." },
+  "breakglass.history.privateKey": {
+    defaultMessage: "The private key is not stored here. Use the key that created the original CSR.",
+    description: "Emergency issue subject-key custody reminder.",
+  },
   "breakglass.reconcile.title": { defaultMessage: "Recover offline-issued certificates", description: "Offline break-glass reconciliation panel title." },
   "breakglass.reconcile.description": {
     defaultMessage: "When the control plane returns, verify signed offline bundles and add them to the same tenant audit chain.",

@@ -1085,6 +1085,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/breakglass/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bounded event-projected online emergency issue receipts without signed bundles */
+        get: operations["listBreakglassIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/breakglass/issues/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recover the exact signed emergency bundle by ceremony ID after a lost response or restart */
+        get: operations["getBreakglassIssue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/breakglass/reconcile": {
         parameters: {
             query?: never;
@@ -8565,6 +8599,24 @@ export interface components {
             required_permission: string;
             subject: string;
             verification_steps: string[];
+        };
+        BreakglassIssueReceipt: {
+            bundle?: components["schemas"]["BreakglassBundle"];
+            /** Format: uuid */
+            ceremony_id: string;
+            /** Format: int64 */
+            event_sequence: number;
+            /** Format: date-time */
+            issued_at: string;
+            request_digest: string;
+            request_id: string;
+            subject: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        BreakglassIssueReceiptList: {
+            items: components["schemas"]["BreakglassIssueReceipt"][];
+            next_cursor: string;
         };
         BreakglassIssueRequest: {
             approvals: string[];
@@ -19397,6 +19449,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BreakglassIssuePlanPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listBreakglassIssues: {
+        parameters: {
+            query?: {
+                /** @description maximum receipts (1-100, default 20) */
+                limit?: number;
+                /** @description opaque source-sequence cursor from previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassIssueReceiptList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBreakglassIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassIssueReceipt"];
                 };
             };
             /** @description client error */

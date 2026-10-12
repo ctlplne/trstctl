@@ -54,6 +54,14 @@ func TestSnapshotCaptureIncludesEveryRestoreTableAndTenantRows(t *testing.T) {
 			ReportID: posture.ReportID, ObservedAt: at, EventSequence: 7,
 		}
 		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			if err := s.ApplyBreakglassIssueReceiptTx(ctx, tx, store.BreakglassIssueReceipt{
+				TenantID: tenantID, CeremonyID: uuid(tenantID, 9104), RequestID: "snapshot-emergency",
+				Subject: "recovery.test", RequestDigest: "snapshot-digest",
+				Bundle:        json.RawMessage(`{"request_id":"snapshot-emergency","cert_der":"AQID","signature":"BAUG"}`),
+				EventSequence: 42, IssuedAt: at,
+			}); err != nil {
+				return err
+			}
 			if err := s.ApplyNotificationRoutingPolicyUpsertedTx(ctx, tx, policy); err != nil {
 				return err
 			}
@@ -71,7 +79,10 @@ SELECT 'kubernetes_controller_posture', to_jsonb(t.*)
 FROM kubernetes_controller_posture t WHERE tenant_id = $1
 UNION ALL
 SELECT 'kubernetes_certificate_provenance', to_jsonb(t.*)
-FROM kubernetes_certificate_provenance t WHERE tenant_id = $1`, tenantID)
+FROM kubernetes_certificate_provenance t WHERE tenant_id = $1
+UNION ALL
+SELECT 'breakglass_issue_receipts', to_jsonb(t.*)
+FROM breakglass_issue_receipts t WHERE tenant_id = $1`, tenantID)
 			if err != nil {
 				return err
 			}
@@ -95,8 +106,8 @@ FROM kubernetes_certificate_provenance t WHERE tenant_id = $1`, tenantID)
 		}); err != nil {
 			t.Fatalf("seed tenant-scoped capture fixtures: %v", err)
 		}
-		if len(expected[tenantID]) != 3 {
-			t.Fatalf("fixture inventory for %s = %d, want three nonempty tables", tenantID, len(expected[tenantID]))
+		if len(expected[tenantID]) != 4 {
+			t.Fatalf("fixture inventory for %s = %d, want four nonempty tables", tenantID, len(expected[tenantID]))
 		}
 	}
 	if count, err := s.WriteReadModelSnapshots(ctx); err != nil || count != 2 {

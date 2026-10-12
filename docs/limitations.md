@@ -1144,7 +1144,11 @@ never live in the API process. What you can do end to end against the running bi
   request carries no approver names. Only authenticated immutable
   `ca.ceremony.approved` event actors in the configured roster count toward quorum,
   and the ceremony is consumed once with `breakglass.issued`. Break-glass recovery
-  reconciliation remains served at `POST /api/v1/breakglass/reconcile`, where signed
+  readback at `GET /api/v1/breakglass/issues` and
+  `GET /api/v1/breakglass/issues/{id}` returns bounded tenant receipts and the
+  exact signed online bundle to callers with `certs:issue`. A lost response does
+  not require reissuance; trstctl does not retain the CSR subject private key.
+  Offline break-glass reconciliation remains served at `POST /api/v1/breakglass/reconcile`, where signed
   offline bundles are verified and recorded as `breakglass.issued` audit events.
 - Real X.509 issuance: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and

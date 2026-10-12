@@ -416,6 +416,14 @@ tenant, a distinct operator-subject roster, threshold at least two — see
 3. Add only `ceremony_id` to the exact approved intent and run
    `trstctl-cli breakglass issue -f issue.json`. Any changed CSR/reason/TTL,
    sub-quorum, wrong tenant, or reused ceremony fails closed.
+   If the HTTP response or browser is lost, run `trstctl-cli breakglass issues
+   list` and `trstctl-cli breakglass issues get <ceremony-id>` with a tenant
+   credential that has `certs:issue`. The latter returns the exact signed bundle
+   projected from `breakglass.issued`; it does not reissue a certificate. The
+   Incidents console offers the same readback and bundle/certificate downloads.
+   Keep the subject private key that generated the CSR: it is never recoverable
+   from trstctl. Verify the recovered bundle against the deployment-pinned
+   emergency CA and match its certificate public key to the original CSR.
 4. Rotate with the same two-phase pattern: `breakglass rotation-ceremony`,
    approvals, then `breakglass rotate`. Independently validate the returned
    new-by-previous and previous-by-new cross-certificates and retain both

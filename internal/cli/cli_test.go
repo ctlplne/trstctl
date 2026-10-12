@@ -1379,6 +1379,21 @@ func TestBreakglassIssueCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestBreakglassIssueRecoveryCommandsReadExactTenantReceipt(t *testing.T) {
+	var listCap capture
+	listSrv := mockServer(t, http.StatusOK, `{"items":[{"ceremony_id":"11111111-1111-4111-8111-111111111111"}],"next_cursor":""}`, &listCap)
+	code, output, errOutput := run(t, []string{"breakglass", "issues", "list", "--limit", "20"}, cli.Env{Server: listSrv.URL, HTTPClient: listSrv.Client()}, "")
+	if code != 0 || errOutput != "" || !strings.Contains(output, `"ceremony_id"`) || listCap.Method != http.MethodGet || listCap.Path != "/api/v1/breakglass/issues" || listCap.Query != "limit=20" || listCap.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("recovery list = code=%d output=%q err=%q request=%s %s?%s", code, output, errOutput, listCap.Method, listCap.Path, listCap.Query)
+	}
+	var getCap capture
+	getSrv := mockServer(t, http.StatusOK, `{"ceremony_id":"11111111-1111-4111-8111-111111111111","bundle":{"signature":"AQ=="}}`, &getCap)
+	code, output, errOutput = run(t, []string{"breakglass", "issues", "get", "11111111-1111-4111-8111-111111111111"}, cli.Env{Server: getSrv.URL, HTTPClient: getSrv.Client()}, "")
+	if code != 0 || errOutput != "" || !strings.Contains(output, `"signature"`) || getCap.Method != http.MethodGet || getCap.Path != "/api/v1/breakglass/issues/11111111-1111-4111-8111-111111111111" || getCap.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("recovery get = code=%d output=%q err=%q request=%s %s", code, output, errOutput, getCap.Method, getCap.Path)
+	}
+}
+
 func TestBreakglassIssuePreviewCommandIsEffectFreePOST(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"capability":"F34","operation":"issue_breakglass","ready":true,"effect_free":true}`, &cap)

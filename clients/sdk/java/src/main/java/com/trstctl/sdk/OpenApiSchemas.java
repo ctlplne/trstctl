@@ -134,6 +134,8 @@ public final class OpenApiSchemas {
       "BreakglassIssueExecutionRequest",
       "BreakglassIssueIntentRequest",
       "BreakglassIssuePlanPreview",
+      "BreakglassIssueReceipt",
+      "BreakglassIssueReceiptList",
       "BreakglassIssueRequest",
       "BreakglassIssueResponse",
       "BreakglassPrerequisite",

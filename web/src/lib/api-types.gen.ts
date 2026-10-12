@@ -1287,6 +1287,22 @@ export interface BreakglassIssuePlanPreview {
   verification_steps: string[];
 }
 
+export interface BreakglassIssueReceipt {
+  bundle?: BreakglassBundle;
+  ceremony_id: string;
+  event_sequence: number;
+  issued_at: string;
+  request_digest: string;
+  request_id: string;
+  subject: string;
+  tenant_id: string;
+}
+
+export interface BreakglassIssueReceiptList {
+  items: BreakglassIssueReceipt[];
+  next_cursor: string;
+}
+
 export interface BreakglassIssueRequest {
   approvals: string[];
   csr_der: string;

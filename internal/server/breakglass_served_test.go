@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -296,6 +297,78 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	}
 	if err := breakglass.Verify(issued.Bundle, caDER, pubDER); err != nil {
 		t.Fatalf("served online bundle does not verify: %v", err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues?limit=1", token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("list durable emergency issues = %d body=%s", code, body)
+	}
+	var listed struct {
+		Items []struct {
+			CeremonyID string          `json:"ceremony_id"`
+			Bundle     json.RawMessage `json:"bundle"`
+		} `json:"items"`
+		NextCursor string `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(body, &listed); err != nil || len(listed.Items) != 1 || listed.Items[0].CeremonyID != ceremony.ID || len(listed.Items[0].Bundle) != 0 {
+		t.Fatalf("bounded issue list disclosed a bundle or lost the ceremony: %+v err=%v body=%s", listed, err, body)
+	}
+	if listed.NextCursor == "" {
+		t.Fatal("full issue page has no stable keyset cursor")
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues?limit=1&cursor="+listed.NextCursor, token, "", nil)
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"items":[]`)) {
+		t.Fatalf("issue list after source-sequence cursor = %d body=%s", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues?cursor=bad", token, "", nil)
+	if code != http.StatusBadRequest {
+		t.Fatalf("malformed issue cursor = %d body=%s; want 400", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues/"+ceremony.ID, token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("recover signed emergency bundle = %d body=%s", code, body)
+	}
+	var recovered struct {
+		Bundle        breakglass.Bundle `json:"bundle"`
+		CeremonyID    string            `json:"ceremony_id"`
+		EventSequence uint64            `json:"event_sequence"`
+	}
+	if err := json.Unmarshal(body, &recovered); err != nil || recovered.CeremonyID != ceremony.ID || recovered.EventSequence == 0 || !bytes.Equal(recovered.Bundle.CertDER, issued.Bundle.CertDER) || !bytes.Equal(recovered.Bundle.Signature, issued.Bundle.Signature) {
+		t.Fatalf("readback differs from signed issued result: %+v err=%v", recovered, err)
+	}
+	if err := breakglass.Verify(recovered.Bundle, caDER, pubDER); err != nil {
+		t.Fatalf("recovered signed bundle does not verify: %v", err)
+	}
+	// Simulate an N-1 warm upgrade: the historical issue predates the new SQL
+	// receipt, while its immutable event and ceremony remain. Typed catch-up
+	// must repopulate the exact bundle and safely replay a partially completed
+	// pass without asking the signer to issue again.
+	if _, err := h.store.SystemPool().Exec(t.Context(), `DELETE FROM breakglass_issue_receipts
+		WHERE tenant_id=$1 AND ceremony_id=$2`, h.tenant, ceremony.ID); err != nil {
+		t.Fatalf("simulate old missing receipt: %v", err)
+	}
+	if _, err := h.store.SystemPool().Exec(t.Context(), `UPDATE projection_checkpoint
+		SET breakglass_issue_checked_through=NULL WHERE id=1`); err != nil {
+		t.Fatalf("reset backfill cursor: %v", err)
+	}
+	projector := projections.New(h.store)
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := projector.ProjectCatchUp(t.Context(), h.log); err != nil {
+			t.Fatalf("recover retained online issue attempt %d: %v", attempt+1, err)
+		}
+		code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues/"+ceremony.ID, token, "", nil)
+		if code != http.StatusOK {
+			t.Fatalf("read recovered issue after pass %d = %d body=%s", attempt+1, code, body)
+		}
+		var replayed struct {
+			Bundle breakglass.Bundle `json:"bundle"`
+		}
+		if err := json.Unmarshal(body, &replayed); err != nil || !bytes.Equal(replayed.Bundle.CertDER, issued.Bundle.CertDER) || !bytes.Equal(replayed.Bundle.Signature, issued.Bundle.Signature) {
+			t.Fatalf("warm recovery pass %d changed signed issue: %+v err=%v", attempt+1, replayed, err)
+		}
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/breakglass/issues/"+ceremony.ID, op1, "", nil)
+	if code != http.StatusForbidden {
+		t.Fatalf("non-issuer readback = %d body=%s; want 403", code, body)
 	}
 	if !h.hasEvent(t, "breakglass.issued") {
 		t.Fatal("online break-glass issue did not append breakglass.issued")

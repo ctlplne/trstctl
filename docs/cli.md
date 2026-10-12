@@ -782,6 +782,8 @@ trstctl-cli breakglass issue-ceremony -f breakglass-issue-intent.json
 trstctl-cli ca ceremonies approve <breakglass-ceremony-id> # distinct operator token A
 trstctl-cli ca ceremonies approve <breakglass-ceremony-id> # distinct operator token B
 trstctl-cli breakglass issue -f breakglass-issue.json
+trstctl-cli breakglass issues list --limit 20
+trstctl-cli breakglass issues get <breakglass-ceremony-id> # exact signed readback after lost response
 
 # Rotation and target cross-signing use the same ceremony -> approvals -> execute pattern.
 trstctl-cli breakglass rotation-ceremony -f breakglass-rotation-intent.json

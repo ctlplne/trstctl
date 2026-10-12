@@ -121,6 +121,8 @@ import type {
   BreakglassIssueExecutionRequest,
   BreakglassIssueIntentRequest,
   BreakglassIssuePlanPreview,
+  BreakglassIssueReceipt,
+  BreakglassIssueReceiptList,
   BreakglassIssueRequest,
   BreakglassIssueResponse,
   BreakglassReconcileRequest,
@@ -907,6 +909,8 @@ export type {
   BreakglassIssueExecutionRequest,
   BreakglassIssueIntentRequest,
   BreakglassIssuePlanPreview,
+  BreakglassIssueReceipt,
+  BreakglassIssueReceiptList,
   BreakglassIssueRequest,
   BreakglassIssueResponse,
   BreakglassReconcileRequest,
@@ -1791,6 +1795,8 @@ export interface Api {
   previewBreakglassIssue(input: BreakglassIssueIntentRequest): Promise<BreakglassIssuePlanPreview>;
   startBreakglassIssueCeremony(input: BreakglassIssueIntentRequest): Promise<BreakglassCeremony>;
   breakglassIssue(input: BreakglassIssueExecutionRequest): Promise<BreakglassIssueResponse>;
+  breakglassIssues(options?: { limit?: number; cursor?: string }): Promise<BreakglassIssueReceiptList>;
+  getBreakglassIssue(ceremonyId: string): Promise<BreakglassIssueReceipt>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
   previewCode(input: CodeSigningRequest): Promise<CodeSigningPreview>;
   previewCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningPreview>;
@@ -2435,6 +2441,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewBreakglassIssue: (input) => postRead<BreakglassIssuePlanPreview>("/api/v1/breakglass/issue-ceremonies/preview", input),
   startBreakglassIssueCeremony: (input) => mutate<BreakglassCeremony>("POST", "/api/v1/breakglass/issue-ceremonies", input),
   breakglassIssue: (input) => mutate<BreakglassIssueResponse>("POST", "/api/v1/breakglass/issue", input),
+  breakglassIssues: (options) => req<BreakglassIssueReceiptList>(`/api/v1/breakglass/issues${pageQueryString(options)}`),
+  getBreakglassIssue: (ceremonyId) => req<BreakglassIssueReceipt>(`/api/v1/breakglass/issues/${encodeURIComponent(ceremonyId)}`),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   previewCode: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/preview", input),
   previewCodeKeyless: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/keyless/preview", input),

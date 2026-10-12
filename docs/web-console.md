@@ -597,7 +597,10 @@ remain UTC.
   replacement-before-revoke → automated revoke/rotate/right-size playbooks →
   Splunk/Jira/Slack/ServiceNow dispatch → evidence, plus break-glass online m-of-n
   issue (`/api/v1/breakglass/issue`) and offline-quorum reconcile
-  (`/api/v1/breakglass/reconcile`). Its Overview also lists tenant-scoped
+  (`/api/v1/breakglass/reconcile`). The issued-certificate history reads
+  tenant-scoped event-projected receipts and lets an operator download the
+  original signed bundle and public certificate after a browser restart; the
+  CSR subject private key remains outside trstctl. Its Overview also lists tenant-scoped
   receiver-command quarantines from
   `/api/v1/incidents/outbox-reconciliation-conflicts`: source sequence, old outbox
   row, lanes, agent demands, and SHA-256 command identities are visible, while the
