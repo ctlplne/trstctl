@@ -61,6 +61,9 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
+	if job.Destination == agentJobKindMDMSync && (job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network")) {
+		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+	}
 	if job.Destination == "connector.deploy" || job.Destination == "connector.test" || job.Destination == agentJobKindEndpointRenew || job.Destination == orchestrator.DestinationConnectorRollback {
 		// Legacy rows may predate the role column. Decode only public routing
 		// metadata, and refuse host credentials before resolving any secrets.

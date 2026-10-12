@@ -289,9 +289,10 @@ func CorrelateBySerial(devices []Device, bySerial map[string]string) (matched []
 // their own tests. TokenRef is a secret:// REFERENCE the relay redeems per
 // attempt.
 type SyncIntent struct {
-	MDM            string   `json:"mdm"`
-	BaseURL        string   `json:"base_url"`
-	Filter         string   `json:"filter,omitempty"`
-	TokenRef       string   `json:"token_ref"`
-	SCEPProfileIDs []string `json:"scep_profile_ids,omitempty"`
+	MDM             string   `json:"mdm"`
+	RequiredAgentID string   `json:"required_agent_id"`
+	BaseURL         string   `json:"base_url"`
+	Filter          string   `json:"filter,omitempty"`
+	TokenRef        string   `json:"token_ref"`
+	SCEPProfileIDs  []string `json:"scep_profile_ids,omitempty"`
 }

@@ -19102,6 +19102,10 @@
           "renewal_window_days": {
             "type": "integer"
           },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "token_ref": {
             "type": "string"
           }
@@ -19143,6 +19147,10 @@
           },
           "renewal_window_days": {
             "type": "integer"
+          },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
           },
           "token_ref": {
             "type": "string"

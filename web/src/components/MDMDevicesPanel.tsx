@@ -2,7 +2,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { api, type MDMDeviceList, type MDMDeviceTrace, type MDMPollSchedule, type MDMPollScheduleInput, type MDMPollScheduleList } from "@/lib/api";
+import { api, type Agent, type MDMDeviceList, type MDMDeviceTrace, type MDMPollSchedule, type MDMPollScheduleInput, type MDMPollScheduleList } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { translateNow } from "@/i18n/I18nProvider";
@@ -20,36 +20,44 @@ function readMDMPollSchedules(): Promise<MDMPollScheduleList> {
   return optionalApiCall<MDMPollScheduleList>("mdmPollSchedules", { items: [], guidance: "" });
 }
 
-const scheduleSchema = z.object({
-  mdm: z.enum(["intune", "jamf"]),
-  base_url: z
-    .string()
-    .trim()
-    .url({ error: translateNow("mdm.poll.invalid") })
-    .refine((value) => {
-      const url = new URL(value);
-      return ["http:", "https:"].includes(url.protocol) && !!url.hostname && !url.username && !url.password;
-    }, translateNow("mdm.poll.invalid")),
-  token_ref: z
-    .string()
-    .trim()
-    .regex(/^secret:\/\/.+$/, translateNow("mdm.poll.invalid")),
-  filter: z.string().trim(),
-  interval_seconds: z
-    .string()
-    .regex(/^\d+$/, translateNow("mdm.poll.invalid"))
-    .refine((value) => Number(value) >= 300, translateNow("mdm.poll.invalid")),
-  renewal_window_days: z
-    .string()
-    .regex(/^\d+$/, translateNow("mdm.poll.invalid"))
-    .refine((value) => Number(value) <= 365, translateNow("mdm.poll.invalid")),
-  enabled: z.boolean(),
-});
+const scheduleSchema = z
+  .object({
+    mdm: z.enum(["intune", "jamf"]),
+    base_url: z
+      .string()
+      .trim()
+      .url({ error: translateNow("mdm.poll.invalid") })
+      .refine((value) => {
+        const url = new URL(value);
+        return ["http:", "https:"].includes(url.protocol) && !!url.hostname && !url.username && !url.password;
+      }, translateNow("mdm.poll.invalid")),
+    token_ref: z
+      .string()
+      .trim()
+      .regex(/^secret:\/\/.+$/, translateNow("mdm.poll.invalid")),
+    required_agent_id: z.string().trim(),
+    filter: z.string().trim(),
+    interval_seconds: z
+      .string()
+      .regex(/^\d+$/, translateNow("mdm.poll.invalid"))
+      .refine((value) => Number(value) >= 300, translateNow("mdm.poll.invalid")),
+    renewal_window_days: z
+      .string()
+      .regex(/^\d+$/, translateNow("mdm.poll.invalid"))
+      .refine((value) => Number(value) <= 365, translateNow("mdm.poll.invalid")),
+    enabled: z.boolean(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.enabled && !value.required_agent_id) {
+      ctx.addIssue({ code: "custom", path: ["required_agent_id"], message: translateNow("mdm.poll.relayRequired") });
+    }
+  });
 type ScheduleForm = z.infer<typeof scheduleSchema>;
 const emptySchedule: ScheduleForm = {
   mdm: "intune",
   base_url: "",
   token_ref: "",
+  required_agent_id: "",
   filter: "",
   interval_seconds: "3600",
   renewal_window_days: "0",
@@ -71,6 +79,7 @@ export function MDMDevicesPanel() {
   const scheduleMDM = useWatch({ control: form.control, name: "mdm" });
   const devices = useApiQuery(["mdm-devices"], readMDMDevices);
   const schedules = useApiQuery(["mdm-poll-schedules"], readMDMPollSchedules);
+  const agents = useApiQuery<Agent[]>(["mdm-network-relays"], () => api.agents());
   const [selected, setSelected] = useState<{ mdm: string; id: string } | null>(null);
   const [reviewed, setReviewed] = useState<MDMPollScheduleInput | null>(null);
   const [saving, setSaving] = useState(false);
@@ -81,6 +90,7 @@ export function MDMDevicesPanel() {
   });
   const items = devices.data?.items ?? [];
   const scheduleItems = schedules.data?.items ?? [];
+  const networkRelays = (agents.data ?? []).filter((agent) => agent.status !== "offboarded" && agent.roles.includes("network"));
 
   function selectScheduleProvider(mdm: "intune" | "jamf", selectedSchedule?: MDMPollSchedule) {
     const schedule = selectedSchedule ?? scheduleItems.find((item) => item.mdm === mdm);
@@ -88,6 +98,7 @@ export function MDMDevicesPanel() {
       mdm,
       base_url: schedule?.base_url ?? "",
       token_ref: schedule?.token_ref ?? "",
+      required_agent_id: schedule?.required_agent_id ?? "",
       filter: schedule?.filter ?? "",
       interval_seconds: String(schedule?.interval_seconds ?? 3600),
       renewal_window_days: String(schedule?.renewal_window_days ?? 0),
@@ -111,6 +122,7 @@ export function MDMDevicesPanel() {
       mdm: values.mdm,
       base_url: url.toString().replace(/\/$/, ""),
       token_ref: values.token_ref,
+      required_agent_id: values.required_agent_id,
       filter: values.filter,
       interval_seconds: Number(values.interval_seconds),
       renewal_window_days: Number(values.renewal_window_days),
@@ -132,6 +144,7 @@ export function MDMDevicesPanel() {
         result.execution !== "relay" ||
         result.base_url !== reviewed.base_url ||
         result.token_ref !== reviewed.token_ref ||
+        (result.required_agent_id ?? "") !== (reviewed.required_agent_id ?? "") ||
         (result.filter ?? "") !== reviewed.filter ||
         result.interval_seconds !== reviewed.interval_seconds ||
         (result.renewal_window_days ?? 0) !== reviewed.renewal_window_days ||
@@ -175,6 +188,10 @@ export function MDMDevicesPanel() {
                 {translateNow(schedule.enabled ? "protocols.ari.schedulerEnabled" : "protocols.ari.schedulerDisabled")}
                 {" · "}
                 {schedule.execution ?? "—"}
+                {" · "}
+                {schedule.required_agent_id
+                  ? ((agents.data ?? []).find((agent) => agent.id === schedule.required_agent_id)?.name ?? schedule.required_agent_id)
+                  : translateNow("mdm.poll.relayUnbound")}
                 {" · "}
                 {translateNow("discovery.monitoring.columnLastRun")}: {schedule.last_run_at?.slice(0, 16).replace("T", " ") ?? "—"}
                 {schedule.last_error ? <span className="mt-1 block text-risk-critical">{schedule.last_error}</span> : null}
@@ -237,6 +254,29 @@ export function MDMDevicesPanel() {
                     {form.formState.errors.token_ref ? <span className="text-risk-critical">{form.formState.errors.token_ref.message}</span> : null}
                   </label>
                   <label className="grid gap-1 text-sm">
+                    <span>{translateNow("mdm.poll.relay")}</span>
+                    <select
+                      className="rounded-control border border-border bg-background p-2"
+                      {...form.register("required_agent_id", { onChange: () => setReviewed(null) })}
+                    >
+                      <option value="">{translateNow("mdm.poll.relayChoose")}</option>
+                      {networkRelays.map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name} · {agent.id}
+                          {agent.presence?.state === "online" ? null : <span> · {translateNow("mdm.poll.relayOffline")}</span>}
+                        </option>
+                      ))}
+                    </select>
+                    {form.formState.errors.required_agent_id ? (
+                      <span className="text-risk-critical">{form.formState.errors.required_agent_id.message}</span>
+                    ) : null}
+                    {agents.error ? (
+                      <span role="alert" className="text-risk-critical">
+                        {agents.error}
+                      </span>
+                    ) : null}
+                  </label>
+                  <label className="grid gap-1 text-sm">
                     <span>{translateNow("mdm.poll.filter")}</span>
                     <input
                       className="rounded-control border border-border bg-background p-2"
@@ -293,6 +333,12 @@ export function MDMDevicesPanel() {
                   <p>{translateNow("mdm.poll.reviewFilter", { filter: reviewed.filter || "—" })}</p>
                   <p>{translateNow("mdm.poll.reviewWindow", { days: reviewed.renewal_window_days ?? 0 })}</p>
                   <p>{translateNow("mdm.poll.reviewExecution")}</p>
+                  <p>
+                    {translateNow("mdm.poll.reviewRelay", {
+                      relay: networkRelays.find((agent) => agent.id === reviewed.required_agent_id)?.name ?? reviewed.required_agent_id ?? "—",
+                      id: reviewed.required_agent_id ?? "—",
+                    })}
+                  </p>
                   <p>{translateNow(reviewed.enabled ? "mdm.poll.reviewEnabled" : "mdm.poll.reviewDisabled")}</p>
                   <button
                     type="button"

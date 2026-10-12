@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/mdm"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/scep"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -44,11 +45,81 @@ func mustJSON(t *testing.T, value any) string {
 	return string(encoded)
 }
 
-func mdmJobPayload(t *testing.T, provider string) []byte {
+func mdmJobPayload(t *testing.T, tenantID, provider string) []byte {
 	t.Helper()
 	return []byte(mustJSON(t, mdm.SyncIntent{
 		MDM: provider, BaseURL: "https://mdm.internal.example", TokenRef: servedMDMSecretRef,
+		RequiredAgentID: agentRowID(tenantID, "relay-1"),
 	}))
+}
+
+func seedMDMTestRelay(t *testing.T, h *servedHarness) string {
+	t.Helper()
+	id := agentRowID(h.tenant, "relay-1")
+	now := time.Now().UTC()
+	if err := h.store.UpsertAgent(t.Context(), store.Agent{ID: id, TenantID: h.tenant, Name: "relay-1", Status: "active", Roles: []string{"network"}, LastSeenAt: &now}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestMDMSchedulePinsOneEnrolledNetworkRelay(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	seedMDMTestRelay(t, h)
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:write", "certs:read")
+	body := map[string]any{
+		"mdm": "jamf", "base_url": "https://mdm.example.test", "token_ref": servedMDMSecretRef,
+		"interval_seconds": 600, "enabled": true, "execution": "relay",
+	}
+	status, _ := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok, "mdm-unbound-denied", body)
+	if status != http.StatusBadRequest {
+		t.Fatalf("enabled schedule without exact relay = %d; want 400 before any bearer can enter an unbound job", status)
+	}
+	const relayID = "44444444-4444-4444-8444-44444444a101"
+	now := time.Now().UTC()
+	if err := h.store.UpsertAgent(t.Context(), store.Agent{ID: relayID, TenantID: h.tenant, Name: "mdm-network-relay", Status: "active", Roles: []string{"network"}, LastSeenAt: &now}); err != nil {
+		t.Fatal(err)
+	}
+	body["required_agent_id"] = relayID
+	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok, "mdm-pinned-relay", body)
+	if status != http.StatusOK || !bytes.Contains(out, []byte(relayID)) {
+		t.Fatalf("pinned relay schedule = %d %s", status, out)
+	}
+	schedule, found, err := h.store.GetMDMPollSchedule(t.Context(), h.tenant, mdm.MDMJamf)
+	if err != nil || !found || schedule.RequiredAgentID != relayID {
+		t.Fatalf("stored exact relay = %+v, found=%v, err=%v", schedule, found, err)
+	}
+	h.srv.dispatchMDMSyncJob(t.Context(), h.tenant, schedule)
+	err = h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		var got string
+		if err := tx.QueryRow(t.Context(), `SELECT coalesce(required_agent_id::text, '') FROM outbox WHERE tenant_id=$1 AND destination='mdm.sync' ORDER BY id DESC LIMIT 1`, h.tenant).Scan(&got); err != nil {
+			return err
+		}
+		if got != relayID {
+			t.Errorf("mdm.sync routed to %q; want only %q", got, relayID)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "different-network-relay", "mdm-wrong-relay",
+		[]byte(mustJSON(t, mdm.SyncIntent{MDM: mdm.MDMJamf, TokenRef: servedMDMSecretRef, RequiredAgentID: relayID})),
+		mustJSON(t, MDMSyncReport{ObservedAt: time.Now().UTC(), MDM: mdm.MDMJamf})); err == nil {
+		t.Fatal("a second same-tenant network relay completed the bound MDM read")
+	}
+	// Replaying an older configuration event must not re-enable a role-only
+	// schedule after the schema upgrade.
+	if err := h.srv.orch.ConfigureMDMPollSchedule(t.Context(), h.tenant, projections.MDMPollConfigured{
+		MDM: mdm.MDMIntune, BaseURL: "https://mdm.example.test", TokenRef: servedMDMSecretRef,
+		IntervalSeconds: 600, Enabled: true, Execution: "relay",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	legacy, found, err := h.store.GetMDMPollSchedule(t.Context(), h.tenant, mdm.MDMIntune)
+	if err != nil || !found || legacy.Enabled || legacy.RequiredAgentID != "" || !strings.Contains(legacy.LastError, "select one enrolled network relay") {
+		t.Fatalf("legacy event replay re-enabled an unbound MDM read: %+v found=%v err=%v", legacy, found, err)
+	}
 }
 
 func TestServedMDMPollerProvesExactIntuneCertificateInstallation(t *testing.T) {
@@ -87,6 +158,7 @@ func TestServedMDMPollerProvesExactIntuneCertificateInstallation(t *testing.T) {
 	t.Setenv("TRSTCTL_TEST_GRAPH_TOKEN", "graph-test-token")
 
 	h := newOperatingServedHarness(t, config.Protocols{})
+	seedMDMTestRelay(t, h)
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "issuers:read", "issuers:write", string(authz.PrivateEgress))
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, map[string]any{
 		"name": "Intune exact readback", "provider": "intune", "scep_profile": "profile-9",
@@ -121,7 +193,7 @@ func TestServedMDMPollerProvesExactIntuneCertificateInstallation(t *testing.T) {
 	status, body = secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
 		"mdm-exact-report", map[string]any{
 			"mdm": "intune", "base_url": intune.URL, "token_ref": servedMDMSecretRef,
-			"interval_seconds": 3600, "enabled": true, "execution": "relay",
+			"interval_seconds": 3600, "enabled": true, "execution": "relay", "required_agent_id": agentRowID(h.tenant, "relay-1"),
 		})
 	if status != http.StatusOK {
 		t.Fatalf("configure schedule: %d %s", status, body)
@@ -130,7 +202,7 @@ func TestServedMDMPollerProvesExactIntuneCertificateInstallation(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("load schedule: found=%v err=%v", found, err)
 	}
-	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-exact-report", mdmJobPayload(t, mdm.MDMIntune), mustJSON(t, MDMSyncReport{
+	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-exact-report", mdmJobPayload(t, h.tenant, mdm.MDMIntune), mustJSON(t, MDMSyncReport{
 		ObservedAt: time.Now().UTC(), MDM: mdm.MDMIntune, Devices: []mdm.Device{
 			{MDM: mdm.MDMIntune, MDMDeviceID: "dev-exact", Name: "laptop-exact", SerialNumber: "SER-EXACT", InstallObserved: true,
 				Certificates: []mdm.CertificateObservation{{MDMDeviceID: "dev-exact", PolicyID: "profile-9", SerialNumber: "00A7", Status: "Active"}}, ObservedAt: time.Now().UTC()},
@@ -199,6 +271,7 @@ func TestServedMDMPollerProvesJamfCertificateInstallationAndFailure(t *testing.T
 	t.Setenv("TRSTCTL_TEST_GRAPH_TOKEN", "jamf-test-token")
 
 	h := newOperatingServedHarness(t, config.Protocols{})
+	seedMDMTestRelay(t, h)
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", string(authz.PrivateEgress))
 	for _, fact := range []struct {
 		serial, transaction, certificate string
@@ -211,7 +284,7 @@ func TestServedMDMPollerProvesJamfCertificateInstallationAndFailure(t *testing.T
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
 		"mdm-jamf-exact", map[string]any{
 			"mdm": "jamf", "base_url": jamf.URL, "token_ref": servedMDMSecretRef,
-			"interval_seconds": 3600, "enabled": true, "execution": "relay",
+			"interval_seconds": 3600, "enabled": true, "execution": "relay", "required_agent_id": agentRowID(h.tenant, "relay-1"),
 		})
 	if status != http.StatusOK {
 		t.Fatalf("configure Jamf schedule: %d %s", status, body)
@@ -220,7 +293,7 @@ func TestServedMDMPollerProvesJamfCertificateInstallationAndFailure(t *testing.T
 	if err != nil || !found {
 		t.Fatalf("load Jamf schedule: found=%v err=%v", found, err)
 	}
-	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-jamf-exact", mdmJobPayload(t, mdm.MDMJamf), mustJSON(t, MDMSyncReport{
+	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-jamf-exact", mdmJobPayload(t, h.tenant, mdm.MDMJamf), mustJSON(t, MDMSyncReport{
 		ObservedAt: time.Now().UTC(), MDM: mdm.MDMJamf, Devices: []mdm.Device{
 			{MDM: mdm.MDMJamf, MDMDeviceID: "jamf-active", Name: "mac-active", SerialNumber: "MAC-ACTIVE", InstallObserved: true,
 				Certificates: []mdm.CertificateObservation{{MDMDeviceID: "jamf-active", SerialNumber: "00C7", Status: "ACTIVE"}}, ObservedAt: time.Now().UTC()},
@@ -317,6 +390,7 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 	t.Setenv("TRSTCTL_TEST_GRAPH_TOKEN", "graph-test-token")
 
 	h := newOperatingServedHarness(t, config.Protocols{})
+	seedMDMTestRelay(t, h)
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "owners:write", "owners:read",
 		"issuers:read", "issuers:write", string(authz.PrivateEgress))
 	status, out := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, map[string]any{
@@ -347,7 +421,7 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 	status, out = secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
 		"mdm-sched-bad", map[string]any{
 			"mdm": "intune", "base_url": intune.URL, "token_ref": servedMDMTokenRef,
-			"interval_seconds": 3600, "enabled": true, "execution": "relay",
+			"interval_seconds": 3600, "enabled": true, "execution": "relay", "required_agent_id": agentRowID(h.tenant, "relay-1"),
 		})
 	if status != http.StatusBadRequest || !strings.Contains(string(out), "secret://") {
 		t.Fatalf("relay execution with an env: ref = %d %s", status, out)
@@ -356,7 +430,7 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 	status, out = secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
 		"mdm-sched-1", map[string]any{
 			"mdm": "intune", "base_url": intune.URL, "token_ref": servedMDMSecretRef,
-			"interval_seconds": 3600, "enabled": true, "execution": "relay",
+			"interval_seconds": 3600, "enabled": true, "execution": "relay", "required_agent_id": agentRowID(h.tenant, "relay-1"),
 		})
 	if status != http.StatusOK {
 		t.Fatalf("configure schedule: %d %s", status, out)
@@ -366,7 +440,7 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 		t.Fatalf("schedule not persisted: found=%v err=%v", found, err)
 	}
 
-	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-sched-1", mdmJobPayload(t, mdm.MDMIntune), mustJSON(t, MDMSyncReport{
+	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-sched-1", mdmJobPayload(t, h.tenant, mdm.MDMIntune), mustJSON(t, MDMSyncReport{
 		ObservedAt: time.Now().UTC(), MDM: mdm.MDMIntune, Devices: []mdm.Device{
 			{MDM: mdm.MDMIntune, MDMDeviceID: "dev-1", Name: "laptop-1", SerialNumber: "SER-ENROLLED"},
 			{MDM: mdm.MDMIntune, MDMDeviceID: "dev-2", Name: "laptop-2", SerialNumber: "SER-UNKNOWN"},
@@ -427,12 +501,13 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 
 func TestServedMDMRelayModeDispatchesOneJobAndIngestsTheReport(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
+	seedMDMTestRelay(t, h)
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
 		"mdm-relay-1", map[string]any{
 			"mdm": "jamf", "base_url": "https://jamf.internal.example", "token_ref": servedMDMSecretRef,
-			"interval_seconds": 3600, "enabled": true, "execution": "relay",
+			"interval_seconds": 3600, "enabled": true, "execution": "relay", "required_agent_id": agentRowID(h.tenant, "relay-1"),
 		})
 	if status != http.StatusOK {
 		t.Fatalf("configure relay schedule: %d %s", status, out)
@@ -456,7 +531,7 @@ func TestServedMDMRelayModeDispatchesOneJobAndIngestsTheReport(t *testing.T) {
 		t.Fatalf("dispatch produced %d jobs with role %q, want one network-stamped job", jobs, role)
 	}
 	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "provider-mismatch",
-		mdmJobPayload(t, mdm.MDMJamf), mustJSON(t, MDMSyncReport{ObservedAt: time.Now().UTC(), MDM: mdm.MDMIntune})); err == nil {
+		mdmJobPayload(t, h.tenant, mdm.MDMJamf), mustJSON(t, MDMSyncReport{ObservedAt: time.Now().UTC(), MDM: mdm.MDMIntune})); err == nil {
 		t.Fatal("an Intune report was accepted for a durable Jamf job intent")
 	}
 
@@ -484,7 +559,7 @@ func TestServedMDMRelayModeDispatchesOneJobAndIngestsTheReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "idem-9", mdmJobPayload(t, mdm.MDMJamf), string(report)); err != nil {
+	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "idem-9", mdmJobPayload(t, h.tenant, mdm.MDMJamf), string(report)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -503,13 +578,14 @@ func TestServedMDMRelayModeDispatchesOneJobAndIngestsTheReport(t *testing.T) {
 
 func TestMDMRelayPendingBulkheadIsProviderScoped(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
+	seedMDMTestRelay(t, h)
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 	for _, provider := range []string{mdm.MDMIntune, mdm.MDMJamf} {
 		status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
 			"mdm-provider-bulkhead-"+provider, map[string]any{
 				"mdm": provider, "base_url": "https://" + provider + ".internal.example",
 				"token_ref": servedMDMSecretRef, "interval_seconds": 3600, "enabled": true,
-				"execution": "relay",
+				"execution": "relay", "required_agent_id": agentRowID(h.tenant, "relay-1"),
 			})
 		if status != http.StatusOK {
 			t.Fatalf("configure %s schedule: %d %s", provider, status, body)
@@ -550,8 +626,8 @@ func TestMDMRelayPendingBulkheadIsProviderScoped(t *testing.T) {
 		t.Fatalf("second Intune tick did not stamp only its waiting state: %+v err=%v", intuneWaiting, err)
 	}
 	intuneStamp := *intuneWaiting.LastRunAt
-	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-jamf", "mdm-jamf-result",
-		mdmJobPayload(t, mdm.MDMJamf), mustJSON(t, MDMSyncReport{ObservedAt: time.Now().UTC(), MDM: mdm.MDMJamf})); err != nil {
+	if err := h.srv.recordMDMSync(t.Context(), h.tenant, "relay-1", "mdm-jamf-result",
+		mdmJobPayload(t, h.tenant, mdm.MDMJamf), mustJSON(t, MDMSyncReport{ObservedAt: time.Now().UTC(), MDM: mdm.MDMJamf})); err != nil {
 		t.Fatal(err)
 	}
 	intuneAfterJamf, _, err := h.store.GetMDMPollSchedule(t.Context(), h.tenant, mdm.MDMIntune)

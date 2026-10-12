@@ -12217,6 +12217,8 @@ export interface components {
             /** @enum {string} */
             mdm?: "intune" | "jamf";
             renewal_window_days?: number;
+            /** Format: uuid */
+            required_agent_id?: string;
             token_ref?: string;
         };
         MDMPollScheduleInput: {
@@ -12229,6 +12231,8 @@ export interface components {
             /** @enum {string} */
             mdm: "intune" | "jamf";
             renewal_window_days?: number;
+            /** Format: uuid */
+            required_agent_id?: string;
             token_ref: string;
         };
         MDMPollScheduleList: {

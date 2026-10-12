@@ -5,8 +5,11 @@ package api
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
+
+	googleuuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/mdm"
 	"trstctl.com/trstctl/internal/projections"
@@ -17,9 +20,10 @@ import (
 // the correlation surface a live one instead of a table tests write.
 
 type mdmPollScheduleBody struct {
-	MDM      string `json:"mdm"`
-	BaseURL  string `json:"base_url"`
-	TokenRef string `json:"token_ref"`
+	MDM             string `json:"mdm"`
+	BaseURL         string `json:"base_url"`
+	TokenRef        string `json:"token_ref"`
+	RequiredAgentID string `json:"required_agent_id,omitempty"`
 	// Filter is Intune's $filter or Jamf's section selector; it travels as an
 	// encoded query parameter, never a path segment.
 	Filter          string `json:"filter,omitempty"`
@@ -39,6 +43,7 @@ type mdmPollScheduleResponse struct {
 	MDM                  string   `json:"mdm,omitempty"`
 	BaseURL              string   `json:"base_url,omitempty"`
 	TokenRef             string   `json:"token_ref,omitempty"`
+	RequiredAgentID      string   `json:"required_agent_id,omitempty"`
 	Filter               string   `json:"filter,omitempty"`
 	IntervalSeconds      int      `json:"interval_seconds,omitempty"`
 	Enabled              bool     `json:"enabled"`
@@ -61,7 +66,8 @@ type mdmPollScheduleList struct {
 const mdmPollGuidance = "The poll re-reads the MDM on the tenant's own interval and correlates " +
 	"devices to SCEP-enrolled identities by EXACT serial match. It is read-only by construction. " +
 	"token_ref is a secret:// reference, never the token itself; a network relay redeems it per " +
-	"attempt and the control plane never dials Microsoft Graph or Jamf. No " +
+	"attempt and the control plane never dials Microsoft Graph or Jamf. An enabled schedule binds " +
+	"one exact enrolled network relay, so another same-tenant relay cannot redeem its bearer. No " +
 	"built-in OAuth exchange is performed: the reference must resolve to a bearer the MDM accepts, " +
 	"rotated by the operator's own pipeline."
 
@@ -88,6 +94,32 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"token_ref must be a secret:// reference redeemed by the network relay per attempt")
 		}
+		requiredAgentID := strings.TrimSpace(body.RequiredAgentID)
+		if body.Enabled && requiredAgentID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "required_agent_id must name the exact enrolled network relay before enabling a schedule")
+		}
+		if requiredAgentID != "" {
+			if _, err := googleuuid.Parse(requiredAgentID); err != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, "required_agent_id must be an enrolled agent UUID")
+			}
+			if body.Enabled {
+				readiness, err := a.orch.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, requiredAgentID, "mdm.sync")
+				if err != nil {
+					return 0, nil, err
+				}
+				if !readiness.Ready {
+					return 0, nil, errStatus(http.StatusConflict, readiness.BlockedReason)
+				}
+			} else {
+				agent, err := a.store.GetAgent(ctx, tenantID, requiredAgentID)
+				if err != nil {
+					return 0, nil, err
+				}
+				if agent.Status == "offboarded" || !slices.Contains(agent.Roles, "network") {
+					return 0, nil, errStatus(http.StatusConflict, "required_agent_id must name a non-offboarded network relay")
+				}
+			}
+		}
 		if body.IntervalSeconds < minMDMPollInterval {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"interval_seconds must be at least 300; device check-in state changes on the order of hours")
@@ -108,6 +140,7 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			TenantID: tenantID, MDM: which,
 			BaseURL:         strings.TrimSpace(body.BaseURL),
 			TokenRef:        strings.TrimSpace(body.TokenRef),
+			RequiredAgentID: requiredAgentID,
 			Filter:          strings.TrimSpace(body.Filter),
 			IntervalSeconds: body.IntervalSeconds, Enabled: body.Enabled,
 			AllowPrivateEndpoint: false,
@@ -116,6 +149,7 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := a.orch.ConfigureMDMPollSchedule(ctx, tenantID, projections.MDMPollConfigured{
 			MDM: saved.MDM, BaseURL: saved.BaseURL, TokenRef: saved.TokenRef, Filter: saved.Filter,
+			RequiredAgentID: saved.RequiredAgentID,
 			IntervalSeconds: saved.IntervalSeconds, Enabled: saved.Enabled,
 			AllowPrivate: saved.AllowPrivateEndpoint, PrivateCIDRs: saved.PrivateEgressCIDRs,
 			Execution: saved.Execution, RenewalWindowDays: saved.RenewalWindowDays,
@@ -147,6 +181,7 @@ func (a *API) listMDMPollSchedules(w http.ResponseWriter, r *http.Request) {
 func mdmPollScheduleFrom(s store.MDMPollSchedule, found bool) mdmPollScheduleResponse {
 	out := mdmPollScheduleResponse{
 		Configured: found, MDM: s.MDM, BaseURL: s.BaseURL, TokenRef: s.TokenRef, Filter: s.Filter,
+		RequiredAgentID: s.RequiredAgentID,
 		IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled, Execution: s.Execution,
 		AllowPrivateEndpoint: s.AllowPrivateEndpoint, PrivateEgressCIDRs: s.PrivateEgressCIDRs,
 		RenewalWindowDays: s.RenewalWindowDays, LastError: s.LastError, Guidance: mdmPollGuidance,

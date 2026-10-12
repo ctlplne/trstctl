@@ -149,6 +149,37 @@ func TestServedRedemptionRequiresTheLease(t *testing.T) {
 	assertNoCanaryInEvents(t, ctx, h)
 }
 
+// A legacy MDM job may have been leased before the upgrade migration retired
+// pending rows. Its network-role holder still must never receive the bearer.
+func TestServedMDMUnboundLegacyLeaseCannotRedeemBearer(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, agentJobKindMDMSync)
+	var jobID int64
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `INSERT INTO outbox
+			(tenant_id, destination, payload, idempotency_key, required_agent_role)
+			VALUES ($1, 'mdm.sync', $2, 'legacy-unbound-mdm', 'network') RETURNING id`,
+			h.tenant, []byte(`{"mdm":"jamf","token_ref":"secret://mdm/jamf"}`)).Scan(&jobID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
+		Kinds: []string{agentJobKindMDMSync}, Limit: 1, LeaseSeconds: 120,
+	})
+	if err != nil || len(claimed.Jobs) != 1 || claimed.Jobs[0].JobID != jobID {
+		t.Fatalf("claim legacy MDM lease: jobs=%+v err=%v", claimed.Jobs, err)
+	}
+	result, err := h.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{
+		JobID: jobID, Attempt: claimed.Jobs[0].Attempt,
+	})
+	if status.Code(err) != codes.PermissionDenied || result != nil {
+		t.Fatalf("unbound MDM bearer redemption = %+v, %v; want coarse refusal without material", result, err)
+	}
+	if !h.hasEvent(t, "agent.job.credential.redemption_refused") {
+		t.Fatal("legacy MDM bearer refusal left no audit event")
+	}
+}
+
 // TestServedConnectorTestRedeemsTheExactTargetReference is the production
 // distinction between a deploy and a preview: a deploy opens a sealed
 // certificate/key container, while a zero-write test has no credential payload

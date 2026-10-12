@@ -318,10 +318,17 @@ check-in guidance instead of a made-up failure or success.
 For first use, open **How machines request credentials → Set up and operate methods → MDM device correlation**. The
 schedule form remains visible when no devices or schedules exist. Choose Intune
 or Jamf, enter the relay-reachable MDM API base URL and a `secret://` reference
-to an existing bearer, choose an interval of at least 300 seconds, and review
-the exact provider and cadence before saving. The same tenant-scoped operation
+to an existing bearer, select the exact enrolled network relay that can reach
+that MDM, choose an interval of at least 300 seconds, and review the provider,
+relay ID, and cadence before saving. An enabled schedule requires a fresh
+authenticated heartbeat from that relay. A disabled draft can name an offline
+relay. On upgrade, older enabled schedules without an exact relay are disabled
+until an operator selects one; pending unbound jobs are retired before a bearer
+can be redeemed. The same tenant-scoped operation
 is `trstctl-cli mdm poll-schedule set --body-file schedule.json`; the readback is
 `trstctl-cli mdm poll-schedule show` or `GET /api/v1/mdm/poll-schedule`.
+The JSON body sets `required_agent_id` to the enrolled agent UUID shown in
+`GET /api/v1/agents` or `trstctl-cli agents list`.
 `certs:write` is required to save; read-only operators can still inspect the
 schedule, last run and last error. A saved schedule is configuration, not a
 completed relay read or proof that any certificate was installed. Check the last

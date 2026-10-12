@@ -24820,6 +24820,18 @@ export const messages = {
   "mdm.poll.baseURL": { defaultMessage: "MDM API base URL", description: "Absolute base URL reached by the network relay." },
   "mdm.poll.tokenRef": { defaultMessage: "Bearer token secret reference", description: "Reference to the bearer redeemed only by the network relay." },
   "mdm.poll.tokenRefExample": { defaultMessage: "secret://mdm/provider", description: "Reference example, never an inline bearer." },
+  "mdm.poll.relay": { defaultMessage: "Network relay for this MDM", description: "Bind the MDM bearer to one enrolled network agent." },
+  "mdm.poll.relayChoose": { defaultMessage: "Select one enrolled network relay", description: "No MDM bearer is dispatched without an exact relay." },
+  "mdm.poll.relayRequired": {
+    defaultMessage: "Select a network relay before enabling this schedule.",
+    description: "An unbound MDM bearer is unsafe across network segments.",
+  },
+  "mdm.poll.relayOffline": { defaultMessage: "offline", description: "Selected relay has no fresh authenticated heartbeat." },
+  "mdm.poll.relayUnbound": { defaultMessage: "relay not selected", description: "Legacy schedule disabled until exact relay assignment." },
+  "mdm.poll.reviewRelay": {
+    defaultMessage: "Selected network relay: {relay} ({id})",
+    description: "Show the exact agent identity authorized to redeem the MDM bearer.",
+  },
   "mdm.poll.filter": { defaultMessage: "Provider filter or section (optional)", description: "Intune filter or Jamf section selector." },
   "mdm.poll.interval": { defaultMessage: "Poll interval in seconds", description: "At least 300 seconds between MDM reads." },
   "mdm.poll.renewalWindow": { defaultMessage: "Renewal warning window in days (0 uses standard)", description: "Optional offline-renewal warning override." },

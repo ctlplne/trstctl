@@ -2792,7 +2792,12 @@ than sending an operator looking for a credential that was never there.
   never manufacture success. The sync is RELAY-ONLY: the leader first commits
   a tenant-scoped `mdm.sync` outbox intent, a NETWORK relay claims it over the
   outbound agent channel, and that relay redeems the `secret://` token for one
-  attempt. `env:` references, `control_plane` execution, and the old
+  attempt. Enabled schedules require `required_agent_id` naming one enrolled
+  network relay with a fresh authenticated heartbeat. The outbox claim and
+  credential redemption both enforce that exact agent ID. Upgrades disable
+  older enabled schedules without an ID and retire their pending unbound jobs;
+  the operator selects a relay and re-enables the schedule. `env:` references,
+  `control_plane` execution, and the old
   `allow_private_endpoint`/`private_egress_cidrs` brain-egress grant are
   refused. The fixed endpoint is parsed in place and only a bounded typed,
   signed observation returns. The control plane binds that report to the exact

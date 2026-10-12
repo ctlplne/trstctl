@@ -156,6 +156,11 @@ func (s *Server) correlateMDMRelayDevices(ctx context.Context, tenantID, resultK
 // reason: stacking identical reads behind an unclaimed job has the eventual
 // relay replay a backlog.
 func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched store.MDMPollSchedule) {
+	if strings.TrimSpace(sched.RequiredAgentID) == "" {
+		_ = s.store.MarkMDMPollRun(ctx, tenantID, sched.MDM, time.Now().UTC(),
+			"MDM read disabled: select one exact enrolled network relay before any bearer can be redeemed")
+		return
+	}
 	pending, err := s.store.HasPendingMDMSyncJob(ctx, tenantID, sched.MDM)
 	if err != nil {
 		s.logger.Warn("mdm relay dispatch: pending check failed",
@@ -177,7 +182,8 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 	}
 	payload, err := json.Marshal(mdm.SyncIntent{
 		MDM: sched.MDM, BaseURL: sched.BaseURL, Filter: sched.Filter, TokenRef: sched.TokenRef,
-		SCEPProfileIDs: profileIDs,
+		RequiredAgentID: sched.RequiredAgentID,
+		SCEPProfileIDs:  profileIDs,
 	})
 	if err != nil {
 		return
@@ -190,6 +196,7 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 			IdempotencyKey:    key,
 			Payload:           payload,
 			RequiredAgentRole: mtls.AgentRoleNetwork,
+			RequiredAgentID:   sched.RequiredAgentID,
 		})
 		return err
 	})
@@ -211,6 +218,9 @@ func (s *Server) recordMDMSync(ctx context.Context, tenantID, agentName, idempot
 	var intent mdm.SyncIntent
 	if err := json.Unmarshal(jobPayload, &intent); err != nil {
 		return fmt.Errorf("server: decode durable MDM sync intent: %w", err)
+	}
+	if intent.RequiredAgentID == "" || intent.RequiredAgentID != agentRowID(tenantID, agentName) {
+		return fmt.Errorf("server: MDM result requires the exact selected network relay")
 	}
 	if len(reportJSON) > maxStructuredSyncReportBytes {
 		return fmt.Errorf("server: MDM relay report exceeds the %d-byte bound", maxStructuredSyncReportBytes)

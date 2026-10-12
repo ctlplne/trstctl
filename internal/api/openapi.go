@@ -4881,7 +4881,7 @@ func componentSchemas() map[string]*Schema {
 	mdmPollScheduleSchema := object(map[string]*Schema{
 		"configured": {Type: "boolean"},
 		"mdm":        {Type: "string", Enum: []string{"intune", "jamf"}},
-		"base_url":   str(), "token_ref": str(), "filter": str(),
+		"base_url":   str(), "token_ref": str(), "required_agent_id": uuid(), "filter": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
@@ -4889,7 +4889,7 @@ func componentSchemas() map[string]*Schema {
 	}, "configured", "enabled", "guidance")
 	mdmPollScheduleInput := object(map[string]*Schema{
 		"mdm":      {Type: "string", Enum: []string{"intune", "jamf"}},
-		"base_url": str(), "token_ref": str(), "filter": str(),
+		"base_url": str(), "token_ref": str(), "required_agent_id": uuid(), "filter": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},

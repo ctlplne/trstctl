@@ -4634,6 +4634,7 @@ export interface MDMPollSchedule {
   last_run_at?: string;
   mdm?: "intune" | "jamf";
   renewal_window_days?: number;
+  required_agent_id?: string;
   token_ref?: string;
 }
 
@@ -4645,6 +4646,7 @@ export interface MDMPollScheduleInput {
   interval_seconds: number;
   mdm: "intune" | "jamf";
   renewal_window_days?: number;
+  required_agent_id?: string;
   token_ref: string;
 }
 

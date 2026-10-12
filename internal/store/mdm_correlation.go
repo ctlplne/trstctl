@@ -120,6 +120,8 @@ type MDMPollSchedule struct {
 	MDM      string
 	BaseURL  string
 	TokenRef string
+	// RequiredAgentID binds the bearer to one enrolled network relay.
+	RequiredAgentID string
 	// Filter is Intune's $filter or Jamf's section selector, encoded as a
 	// query parameter by the endpoint builders — never a path segment.
 	Filter          string
@@ -151,11 +153,11 @@ func (s *Store) GetMDMPollSchedule(ctx context.Context, tenantID, mdm string) (M
 		row := tx.QueryRow(ctx,
 			`SELECT tenant_id::text, mdm, base_url, token_ref, filter, interval_seconds, enabled,
 			        allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
-			        coalesce(execution, ''), coalesce(renewal_window_days, 0), last_run_at, last_error
+			        coalesce(execution, ''), coalesce(renewal_window_days, 0), coalesce(required_agent_id::text, ''), last_run_at, last_error
 			   FROM mdm_poll_schedules WHERE tenant_id = $1 AND mdm = $2`, tenantID, mdm)
 		switch err := row.Scan(&out.TenantID, &out.MDM, &out.BaseURL, &out.TokenRef, &out.Filter,
 			&out.IntervalSeconds, &out.Enabled, &out.AllowPrivateEndpoint, &out.PrivateEgressCIDRs,
-			&out.Execution, &out.RenewalWindowDays,
+			&out.Execution, &out.RenewalWindowDays, &out.RequiredAgentID,
 			&out.LastRunAt, &out.LastError); {
 		case err == nil:
 			found = true
@@ -176,7 +178,7 @@ func (s *Store) ListMDMPollSchedules(ctx context.Context, tenantID string) ([]MD
 		rows, err := tx.Query(ctx,
 			`SELECT tenant_id::text, mdm, base_url, token_ref, filter, interval_seconds, enabled,
 			        allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
-			        coalesce(execution, ''), coalesce(renewal_window_days, 0), last_run_at, last_error
+			        coalesce(execution, ''), coalesce(renewal_window_days, 0), coalesce(required_agent_id::text, ''), last_run_at, last_error
 			   FROM mdm_poll_schedules WHERE tenant_id = $1 ORDER BY mdm`, tenantID)
 		if err != nil {
 			return err
@@ -186,7 +188,7 @@ func (s *Store) ListMDMPollSchedules(ctx context.Context, tenantID string) ([]MD
 			var sch MDMPollSchedule
 			if err := rows.Scan(&sch.TenantID, &sch.MDM, &sch.BaseURL, &sch.TokenRef, &sch.Filter,
 				&sch.IntervalSeconds, &sch.Enabled, &sch.AllowPrivateEndpoint, &sch.PrivateEgressCIDRs,
-				&sch.Execution, &sch.RenewalWindowDays,
+				&sch.Execution, &sch.RenewalWindowDays, &sch.RequiredAgentID,
 				&sch.LastRunAt, &sch.LastError); err != nil {
 				return err
 			}
@@ -248,12 +250,14 @@ func (s *Store) MarkMDMPollRun(ctx context.Context, tenantID, mdm string, at tim
 	})
 }
 
-// ApplyMDMPollConfiguredTx projects mdm.poll.configured (I5). last_run_at and
-// last_error are the scheduler's observations and are deliberately untouched.
+// ApplyMDMPollConfiguredTx projects mdm.poll.configured (I5). Scheduler
+// observations survive replay. A legacy enabled event without an exact relay
+// is projected disabled, and changing the selected relay clears a stale error.
 func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in MDMPollSchedule) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO mdm_poll_schedules (tenant_id, mdm, base_url, token_ref, filter, interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, execution, renewal_window_days)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, ''), nullif($11, 0))
+		`INSERT INTO mdm_poll_schedules (tenant_id, mdm, base_url, token_ref, filter, interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, execution, renewal_window_days, required_agent_id, last_error)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7 AND $12 <> '', $8, $9, nullif($10, ''), nullif($11, 0), nullif($12, '')::uuid,
+		         CASE WHEN $7 AND $12 = '' THEN 'Disabled during exact-relay upgrade: select one enrolled network relay and re-enable.' ELSE '' END)
 		 ON CONFLICT (tenant_id, mdm) DO UPDATE SET
 		   base_url = EXCLUDED.base_url, token_ref = EXCLUDED.token_ref,
 		   filter = EXCLUDED.filter, interval_seconds = EXCLUDED.interval_seconds,
@@ -261,9 +265,15 @@ func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantI
 		   allow_private_endpoint = EXCLUDED.allow_private_endpoint,
 		   private_egress_cidrs = EXCLUDED.private_egress_cidrs,
 		   execution = EXCLUDED.execution,
-		   renewal_window_days = EXCLUDED.renewal_window_days, updated_at = now()`,
+		   renewal_window_days = EXCLUDED.renewal_window_days,
+		   required_agent_id = EXCLUDED.required_agent_id,
+		   last_error = CASE
+		     WHEN EXCLUDED.required_agent_id IS NULL AND EXCLUDED.enabled = false AND $7 THEN EXCLUDED.last_error
+		     WHEN mdm_poll_schedules.required_agent_id IS DISTINCT FROM EXCLUDED.required_agent_id THEN ''
+		     ELSE mdm_poll_schedules.last_error END,
+		   updated_at = now()`,
 		tenantID, in.MDM, in.BaseURL, in.TokenRef, in.Filter, in.IntervalSeconds,
-		in.Enabled, false, nil, "relay", in.RenewalWindowDays)
+		in.Enabled, false, nil, "relay", in.RenewalWindowDays, in.RequiredAgentID)
 	return err
 }
 

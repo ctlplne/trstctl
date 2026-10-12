@@ -559,6 +559,7 @@ type MDMPollConfigured struct {
 	MDM               string   `json:"mdm"`
 	BaseURL           string   `json:"base_url"`
 	TokenRef          string   `json:"token_ref"`
+	RequiredAgentID   string   `json:"required_agent_id,omitempty"`
 	Filter            string   `json:"filter,omitempty"`
 	IntervalSeconds   int      `json:"interval_seconds"`
 	Enabled           bool     `json:"enabled"`
@@ -4316,6 +4317,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyMDMPollConfiguredTx(ctx, tx, e.TenantID, store.MDMPollSchedule{
 			MDM: pl.MDM, BaseURL: pl.BaseURL, TokenRef: pl.TokenRef, Filter: pl.Filter,
+			RequiredAgentID: pl.RequiredAgentID,
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
 			Execution: pl.Execution, RenewalWindowDays: pl.RenewalWindowDays,
