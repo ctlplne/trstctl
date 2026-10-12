@@ -266,13 +266,14 @@ type PostureReportResponse struct {
 }
 
 type CheckpointResponse struct {
-	IdentityID     string          `json:"identity_id"`
-	Epoch          uint64          `json:"epoch"`
-	LogTreeSize    uint64          `json:"log_tree_size"`
-	LogRoot        []byte          `json:"log_root"`
-	Signature      []byte          `json:"signature"`
-	CheckpointJSON json.RawMessage `json:"checkpoint"`
-	IssuedAt       time.Time       `json:"issued_at"`
+	IdentityID      string          `json:"identity_id"`
+	Epoch           uint64          `json:"epoch"`
+	LogTreeSize     uint64          `json:"log_tree_size"`
+	LogRoot         []byte          `json:"log_root"`
+	Signature       []byte          `json:"signature"`
+	SignerPublicDER []byte          `json:"signer_public_der,omitempty"`
+	CheckpointJSON  json.RawMessage `json:"checkpoint"`
+	IssuedAt        time.Time       `json:"issued_at"`
 }
 
 // FederationBridgeResponse is one imported federation bridge: which foreign
@@ -1176,14 +1177,28 @@ func schemas() map[string]*api.Schema {
 			"rewrap_complete":         api.BooleanSchema(),
 		}, "identity_id", "predecessor_epoch", "threshold", "status"),
 		"PCASCheckpoint": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":   api.StringSchema(),
-			"epoch":         api.IntegerSchema(),
-			"log_tree_size": api.IntegerSchema(),
-			"log_root":      api.StringSchema(),
-			"signature":     api.StringSchema(),
-			"checkpoint":    api.StringSchema(),
-			"issued_at":     api.TimestampSchema(),
+			"identity_id":       api.StringSchema(),
+			"epoch":             api.IntegerSchema(),
+			"log_tree_size":     api.IntegerSchema(),
+			"log_root":          api.StringSchema(),
+			"signature":         api.StringSchema(),
+			"signer_public_der": {Type: "string", Format: "byte", Description: "Public key captured when this checkpoint was minted; pin independently before trusting the signature. Absent on historical records without the key."},
+			"checkpoint":        api.SchemaRef("PCASSignedEpochCheckpoint"),
+			"issued_at":         api.TimestampSchema(),
 		}, "identity_id", "epoch", "signature"),
+		"PCASSignedEpochCheckpoint": api.ObjectSchema(map[string]*api.Schema{
+			"DeploymentScope": api.StringSchema(),
+			"IdentityID":      api.StringSchema(),
+			"TenantID":        api.StringSchema(),
+			"Epoch":           api.IntegerSchema(),
+			"Algorithm":       api.StringSchema(),
+			"PublicKeyDER":    {Type: "string", Format: "byte"},
+			"LogTreeSize":     api.IntegerSchema(),
+			"LogRootHash":     {Type: "string", Format: "byte"},
+			"IssuedAt":        api.IntegerSchema(),
+			"Signature":       {Type: "string", Format: "byte"},
+			"SignerPublicDER": {Type: "string", Format: "byte", Description: "Captured at mint time; verify with a separately pinned signer key."},
+		}, "DeploymentScope", "IdentityID", "TenantID", "Epoch", "Algorithm", "PublicKeyDER", "LogTreeSize", "LogRootHash", "IssuedAt", "Signature"),
 		"PCASPostureReport": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":               api.StringSchema(),
 			"tenant_id":                 api.StringSchema(),

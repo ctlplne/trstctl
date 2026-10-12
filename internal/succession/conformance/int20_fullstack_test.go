@@ -3,6 +3,7 @@
 package conformance
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -501,12 +502,18 @@ func (st *int20Stack) checkpointAndPostureVerify(t *testing.T, identityID string
 	if err := json.Unmarshal(cp.CheckpointJSON, &signed); err != nil {
 		t.Fatalf("decode checkpoint: %v", err)
 	}
+	if len(cp.SignerPublicDER) == 0 || !bytes.Equal(cp.SignerPublicDER, signed.SignerPublicDER) {
+		t.Fatal("checkpoint readback lost the persisted signer public key")
+	}
 	cpSigner, err := st.signer.SignerForHandleWithPurpose(st.ctx, "int20-checkpoint", signing.PurposeGeneric)
 	if err != nil {
 		t.Fatalf("checkpoint signer: %v", err)
 	}
-	if err := succession.VerifyEpochCheckpoint(cpSigner.Public().DER, signed); err != nil {
+	if err := succession.VerifyEpochCheckpoint(cp.SignerPublicDER, signed); err != nil {
 		t.Fatalf("verify checkpoint: %v", err)
+	}
+	if !bytes.Equal(cp.SignerPublicDER, cpSigner.Public().DER) {
+		t.Fatal("served signer key differs from the independently inspected signer key")
 	}
 	posture, found, err := st.svc.PostureReport(st.ctx, st.tenantID, identityID)
 	if err != nil || !found {

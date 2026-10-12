@@ -35,6 +35,11 @@ func TestPCASOperatorCommandsPreserveBodyTenantAndStatusURL(t *testing.T) {
 				t.Errorf("chain identity query = %q", r.URL.Query().Get("identity_id"))
 			}
 			_, _ = io.WriteString(w, `{"identity_id":"spiffe://example/workload","count":0,"records":[]}`)
+		case "/api/v1/pcas/checkpoints":
+			if r.Method != http.MethodGet || r.URL.Query().Get("identity_id") != "spiffe://example/workload" {
+				t.Errorf("checkpoint request %s %s", r.Method, r.URL.String())
+			}
+			_, _ = io.WriteString(w, `{"identity_id":"spiffe://example/workload","epoch":1,"signer_public_der":"AQID"}`)
 		default:
 			t.Errorf("unexpected PCAS route %s", r.URL.Path)
 		}
@@ -54,7 +59,10 @@ func TestPCASOperatorCommandsPreserveBodyTenantAndStatusURL(t *testing.T) {
 	if code, _, stderr := run(t, []string{"pcas", "chain", "get", "--identity_id", "spiffe://example/workload"}, env, ""); code != 0 || stderr != "" {
 		t.Fatalf("chain command code=%d stderr=%q", code, stderr)
 	}
-	if calls != 3 {
-		t.Fatalf("network calls=%d, want three authenticated operator calls", calls)
+	if code, stdout, stderr := run(t, []string{"pcas", "checkpoints", "get", "--identity_id", "spiffe://example/workload"}, env, ""); code != 0 || !strings.Contains(stdout, `"signer_public_der": "AQID"`) || stderr != "" {
+		t.Fatalf("checkpoint command code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if calls != 4 {
+		t.Fatalf("network calls=%d, want four authenticated operator calls", calls)
 	}
 }

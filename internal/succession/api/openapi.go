@@ -56,6 +56,18 @@ func OpenAPISpec() map[string]any {
 				},
 			}
 		}
+		if rt.ResponseSchema != "" {
+			op["responses"] = map[string]any{
+				rt.SuccessCode: map[string]any{
+					"description": "success",
+					"content": map[string]any{
+						"application/json": map[string]any{
+							"schema": map[string]any{"$ref": "#/components/schemas/" + rt.ResponseSchema},
+						},
+					},
+				},
+			}
+		}
 		entry, _ := paths[rt.Path].(map[string]any)
 		if entry == nil {
 			entry = map[string]any{}
@@ -68,7 +80,7 @@ func OpenAPISpec() map[string]any {
 		"info": map[string]any{
 			"title":       "trstctl PCAS API",
 			"version":     "v1",
-			"description": "Proof-Carrying Algorithm Succession external surface (ee/, LicenseRef-trstctl-EE).",
+			"description": "Proof-Carrying Algorithm Succession external surface (BUSL-1.1 core).",
 		},
 		"paths":      paths,
 		"components": map[string]any{"schemas": schemas()},

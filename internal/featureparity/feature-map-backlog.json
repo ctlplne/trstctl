@@ -11556,7 +11556,8 @@
                 "pcas genesis register",
                 "pcas requests status",
                 "pcas succession request",
-                "pcas chain get"
+                "pcas chain get",
+                "pcas checkpoints get"
             ],
             "facet_evidence": {
                 "served": {
@@ -11582,11 +11583,12 @@
                     "evidence": [
                         "Profiles guided builder exposes RSA/ECDSA/Ed25519 profile-selection choices in the MPL core.",
                         "Posture at /posture shows CBOM algorithm inventory, disallowed/quantum-vulnerable state, and remediation handoff.",
-                        "Posture shows reviewed core PQC migration, PCAS genesis registration, request progress, and signed-chain readback."
+                        "Posture shows reviewed core PQC migration, PCAS genesis registration, request progress, signed-chain readback, and a checkpoint signer fingerprint for out-of-band pinning."
                     ],
                     "refs": [
                         "web/src/pages/Profiles.tsx",
                         "web/src/pages/Posture.tsx",
+                        "web/src/pages/posture/PCASSuccessionWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
@@ -11598,7 +11600,7 @@
                         "CLI command: profiles get-version",
                         "CLI command: cbom scan",
                         "CLI command: cbom assets",
-                        "CLI commands: pcas genesis register, pcas requests status, pcas succession request, pcas chain get"
+                        "CLI commands: pcas genesis register, pcas requests status, pcas succession request, pcas chain get, pcas checkpoints get"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -11613,7 +11615,7 @@
                         "OpenAPI operationId: getProfileVersion",
                         "OpenAPI operationId: startCBOMScan",
                         "OpenAPI operationId: listCBOMAssets",
-                        "Core attached operationIds: registerPCASGenesis, getPCASRequestStatus, requestSuccession, getSuccessionChain"
+                        "Core attached operationIds: registerPCASGenesis, getPCASRequestStatus, requestSuccession, getSuccessionChain, getPCASCheckpoint"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -11628,6 +11630,7 @@
                         "internal/server/cbom_served_test.go proves CBOM migration targets and progress.",
                         "internal/pqcmigration tests prove core host-agent migration and rollback.",
                         "TestOperatorGenesisThenSuccessionThroughOutbox proves signer-backed first-use PCAS succession and offline verification.",
+                        "TestINT20_FullStackPCASUserJourneys verifies the checkpoint's durable public key against a separately inspected signer key.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],

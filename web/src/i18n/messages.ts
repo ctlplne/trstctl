@@ -2324,6 +2324,17 @@ export const messages = {
   "pcas.genesisAlgorithm": { defaultMessage: "First-key algorithm", description: "PCAS genesis algorithm field." },
   "pcas.reviewGenesis": { defaultMessage: "Review first-key registration", description: "PCAS review button." },
   "pcas.readChain": { defaultMessage: "Read existing chain", description: "PCAS chain readback button." },
+  "pcas.readCheckpoint": { defaultMessage: "Read signed checkpoint", description: "PCAS checkpoint readback button." },
+  "pcas.checkpointTitle": { defaultMessage: "Latest signed epoch checkpoint", description: "PCAS checkpoint readback heading." },
+  "pcas.checkpointTreeSize": { defaultMessage: "Log entries", description: "PCAS checkpoint transparency log tree size." },
+  "pcas.checkpointLogRoot": { defaultMessage: "Log root (base64)", description: "PCAS checkpoint bound transparency log root." },
+  "pcas.checkpointIssued": { defaultMessage: "Issued at", description: "PCAS checkpoint issuance time." },
+  "pcas.checkpointSignerFingerprint": { defaultMessage: "Checkpoint signer public key SHA-256", description: "PCAS checkpoint key fingerprint." },
+  "pcas.checkpointLegacy": { defaultMessage: "Unavailable for this older checkpoint", description: "PCAS historical checkpoint without persisted signer key." },
+  "pcas.checkpointPinning": {
+    defaultMessage: "Compare this fingerprint with an independently pinned checkpoint signer key. A key returned by this page alone is not trusted proof.",
+    description: "PCAS checkpoint trust boundary.",
+  },
   "pcas.genesisReview": { defaultMessage: "Review the exact genesis", description: "PCAS genesis review heading." },
   "pcas.genesisEffect": {
     defaultMessage:
@@ -2355,6 +2366,10 @@ export const messages = {
   "pcas.startSuccession": { defaultMessage: "Queue signed succession", description: "PCAS succession mutation button." },
   "pcas.error.reviewChanged": { defaultMessage: "The form changed after review. Review the exact values again.", description: "PCAS stale review error." },
   "pcas.error.read": { defaultMessage: "Could not read the PCAS request or chain.", description: "PCAS read fallback error." },
+  "pcas.error.checkpoint": {
+    defaultMessage: "Could not read the signed checkpoint. Check that checkpoint generation is enabled and try again.",
+    description: "PCAS checkpoint read fallback error.",
+  },
   "pcas.error.register": { defaultMessage: "Could not register the first key.", description: "PCAS registration fallback error." },
   "pcas.error.succession": { defaultMessage: "Could not queue succession.", description: "PCAS succession fallback error." },
   "pqc.readiness.migrated": {

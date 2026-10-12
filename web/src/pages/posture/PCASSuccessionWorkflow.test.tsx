@@ -5,7 +5,7 @@ import { IntlProvider } from "@/i18n/I18nProvider";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 
 const { pcasMock } = vi.hoisted(() => ({
-  pcasMock: { registerGenesis: vi.fn(), requestSuccession: vi.fn(), requestStatus: vi.fn(), chain: vi.fn() },
+  pcasMock: { registerGenesis: vi.fn(), requestSuccession: vi.fn(), requestStatus: vi.fn(), chain: vi.fn(), checkpoint: vi.fn() },
 }));
 
 vi.mock("@/lib/pcasApi", () => ({ pcasApi: pcasMock }));
@@ -56,5 +56,30 @@ describe("PCAS first-use console", () => {
     expect(await screen.findByText("Signed first-key anchor")).toBeInTheDocument();
     expect(screen.getByText(/Delivery state: delivered/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review succession" })).toBeInTheDocument();
+  });
+
+  it("shows the checkpoint signer fingerprint and exact log head", async () => {
+    const user = userEvent.setup();
+    pcasMock.checkpoint.mockResolvedValue({
+      identity_id: "spiffe://example.test/workload/api",
+      epoch: 1,
+      log_tree_size: 3,
+      log_root: "AQID",
+      signer_public_der: "AQID",
+      issued_at: "2026-10-12T00:00:00Z",
+      checkpoint: {},
+      signature: "AQID",
+    });
+    render(
+      <IntlProvider>
+        <PCASSuccessionWorkflow />
+      </IntlProvider>,
+    );
+    await user.type(screen.getByLabelText("Stable identity ID"), "spiffe://example.test/workload/api");
+    await user.click(screen.getByRole("button", { name: "Read signed checkpoint" }));
+    expect(await screen.findByText("Latest signed epoch checkpoint")).toBeInTheDocument();
+    expect(screen.getByText(/Log entries: 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Log root \(base64\):/)).toHaveTextContent("AQID");
+    expect(screen.getByText(/Compare this fingerprint/)).toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@
 package succession
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 
@@ -38,6 +39,9 @@ func TestCheckpoint_VerifyFromCheckpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !bytes.Equal(cp.SignerPublicDER, signer.Public().DER) {
+		t.Fatal("checkpoint did not retain its signer public key at mint time")
+	}
 	if err := VerifyEpochCheckpoint(signer.Public().DER, cp); err != nil {
 		t.Fatalf("checkpoint signature: %v", err)
 	}
@@ -48,6 +52,16 @@ func TestCheckpoint_VerifyFromCheckpoint(t *testing.T) {
 	other := checkpointSigner(t)
 	if err := VerifyEpochCheckpoint(other.Public().DER, cp); err == nil {
 		t.Fatal("checkpoint verified under the wrong key")
+	}
+	tamperedKey := cp
+	tamperedKey.SignerPublicDER = other.Public().DER
+	if err := VerifyEpochCheckpoint(signer.Public().DER, tamperedKey); err == nil {
+		t.Fatal("checkpoint with substituted signer metadata was accepted")
+	}
+	legacy := cp
+	legacy.SignerPublicDER = nil
+	if err := VerifyEpochCheckpoint(signer.Public().DER, legacy); err != nil {
+		t.Fatalf("legacy checkpoint cannot be checked with an external pinned key: %v", err)
 	}
 }
 

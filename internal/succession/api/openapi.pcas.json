@@ -84,7 +84,7 @@
         "type": "object",
         "properties": {
           "checkpoint": {
-            "type": "string"
+            "$ref": "#/components/schemas/PCASSignedEpochCheckpoint"
           },
           "epoch": {
             "type": "integer"
@@ -104,6 +104,11 @@
           },
           "signature": {
             "type": "string"
+          },
+          "signer_public_der": {
+            "type": "string",
+            "format": "byte",
+            "description": "Public key captured when this checkpoint was minted; pin independently before trusting the signature. Absent on historical records without the key."
           }
         },
         "required": [
@@ -770,6 +775,61 @@
           "checked_at"
         ]
       },
+      "PCASSignedEpochCheckpoint": {
+        "type": "object",
+        "properties": {
+          "Algorithm": {
+            "type": "string"
+          },
+          "DeploymentScope": {
+            "type": "string"
+          },
+          "Epoch": {
+            "type": "integer"
+          },
+          "IdentityID": {
+            "type": "string"
+          },
+          "IssuedAt": {
+            "type": "integer"
+          },
+          "LogRootHash": {
+            "type": "string",
+            "format": "byte"
+          },
+          "LogTreeSize": {
+            "type": "integer"
+          },
+          "PublicKeyDER": {
+            "type": "string",
+            "format": "byte"
+          },
+          "Signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "SignerPublicDER": {
+            "type": "string",
+            "format": "byte",
+            "description": "Captured at mint time; verify with a separately pinned signer key."
+          },
+          "TenantID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "DeploymentScope",
+          "IdentityID",
+          "TenantID",
+          "Epoch",
+          "Algorithm",
+          "PublicKeyDER",
+          "LogTreeSize",
+          "LogRootHash",
+          "IssuedAt",
+          "Signature"
+        ]
+      },
       "PCASSuccessionAck": {
         "type": "object",
         "properties": {
@@ -887,7 +947,7 @@
     }
   },
   "info": {
-    "description": "Proof-Carrying Algorithm Succession external surface (ee/, LicenseRef-trstctl-EE).",
+    "description": "Proof-Carrying Algorithm Succession external surface (BUSL-1.1 core).",
     "title": "trstctl PCAS API",
     "version": "v1"
   },
@@ -919,6 +979,13 @@
         },
         "responses": {
           "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASAck"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -941,6 +1008,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASSuccessionChain"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -963,6 +1037,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASCheckpoint"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -995,6 +1076,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASDelegationScope"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1027,6 +1115,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASDelegationScope"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1038,6 +1133,13 @@
         "operationId": "listPCASFederationBridges",
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASFederationBridgeList"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1070,6 +1172,13 @@
         },
         "responses": {
           "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASAsyncRequest"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1102,6 +1211,13 @@
         },
         "responses": {
           "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASAsyncRequest"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1134,6 +1250,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASIssuerAuthority"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1166,6 +1289,13 @@
         },
         "responses": {
           "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASIssuedLeaf"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1198,6 +1328,13 @@
         },
         "responses": {
           "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASAsyncRequest"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1209,6 +1346,13 @@
         "operationId": "listPCASMisissuance",
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASMisissuanceList"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1231,6 +1375,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASPostureReport"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1263,6 +1414,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRecoveryPolicy"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1295,6 +1453,13 @@
         },
         "responses": {
           "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASAsyncRequest"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1306,6 +1471,13 @@
         "operationId": "getPCASRequestStatus",
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRequestStatus"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1337,6 +1509,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRetirementPolicy"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1369,6 +1548,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRetirementPolicy"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1400,6 +1586,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRewrapStatus"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1432,6 +1625,13 @@
         },
         "responses": {
           "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASIssuedLeaf"
+                }
+              }
+            },
             "description": "success"
           }
         },
@@ -1464,6 +1664,13 @@
         },
         "responses": {
           "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASSuccessionAck"
+                }
+              }
+            },
             "description": "success"
           }
         },

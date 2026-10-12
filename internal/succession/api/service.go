@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -530,10 +531,26 @@ func (s *service) LatestCheckpoint(ctx context.Context, tenantID, identityID str
 	if err != nil || !found {
 		return CheckpointResponse{}, found, err
 	}
+	resp, err := checkpointResponse(cp)
+	return resp, err == nil, err
+}
+
+func checkpointResponse(cp pcasstore.EpochCheckpoint) (CheckpointResponse, error) {
+	var signed succession.SignedEpochCheckpoint
+	if err := json.Unmarshal(cp.CheckpointJSON, &signed); err != nil {
+		return CheckpointResponse{}, fmt.Errorf("decode stored PCAS checkpoint: %w", err)
+	}
+	if signed.IdentityID != cp.IdentityID || signed.Epoch != cp.Epoch ||
+		signed.LogTreeSize != cp.LogTreeSize ||
+		!bytes.Equal(signed.LogRootHash, cp.LogRoot) ||
+		!bytes.Equal(signed.Signature, cp.Signature) {
+		return CheckpointResponse{}, errors.New("stored PCAS checkpoint disagrees with its read model")
+	}
 	return CheckpointResponse{
 		IdentityID: cp.IdentityID, Epoch: cp.Epoch, LogTreeSize: cp.LogTreeSize, LogRoot: cp.LogRoot,
-		Signature: cp.Signature, CheckpointJSON: cp.CheckpointJSON, IssuedAt: cp.IssuedAt,
-	}, true, nil
+		Signature: cp.Signature, SignerPublicDER: signed.SignerPublicDER,
+		CheckpointJSON: cp.CheckpointJSON, IssuedAt: cp.IssuedAt,
+	}, nil
 }
 
 func (s *service) PostureReport(ctx context.Context, tenantID, identityID string) (PostureReportResponse, bool, error) {

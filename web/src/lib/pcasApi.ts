@@ -50,9 +50,21 @@ export interface PCASChain {
   count: number;
 }
 
+export interface PCASCheckpoint {
+  identity_id: string;
+  epoch: number;
+  log_tree_size: number;
+  log_root: string;
+  signature: string;
+  signer_public_der?: string;
+  checkpoint: Record<string, unknown>;
+  issued_at: string;
+}
+
 export const pcasApi = {
   registerGenesis: (body: PCASGenesisRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/genesis", body),
   requestSuccession: (body: PCASSuccessionRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/successions", body),
   requestStatus: (requestId: string) => req<PCASRequestStatus>(`/api/v1/pcas/requests/${encodeURIComponent(requestId)}`),
   chain: (identityId: string) => req<PCASChain>(`/api/v1/pcas/chain?identity_id=${encodeURIComponent(identityId)}`),
+  checkpoint: (identityId: string) => req<PCASCheckpoint>(`/api/v1/pcas/checkpoints?identity_id=${encodeURIComponent(identityId)}`),
 };

@@ -1576,9 +1576,10 @@ included.
 The related `TRSTCTL_PCAS_*` variable surface (settings covering delegation,
 recovery, federation, KEM, checkpoints, monitors, and retirement for
 patent-covered credential algorithm succession) is off by default. PCAS is part
-of the core build and does not require an Enterprise or Provider license. These
-settings are documented with the rest of the PCAS material in
-[PCAS operations](runbooks/pcas-operations.md) rather than duplicated here.
+of the core build and does not require an Enterprise or Provider license. The
+[PCAS operations](runbooks/pcas-operations.md) runbook documents first use and
+the checkpoint worker's exact startup settings. Other optional PCAS workers
+require configured trust and custody inputs before a positive operator journey.
 
 ## Conditional managed-key adapters (six served providers)
 

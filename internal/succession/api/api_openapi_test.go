@@ -49,6 +49,20 @@ func TestOpenAPI_Golden(t *testing.T) {
 			t.Fatalf("path %q missing from the PCAS OpenAPI document", p)
 		}
 	}
+	checkpointRoute := paths["/api/v1/pcas/checkpoints"].(map[string]any)["get"].(map[string]any)
+	response := checkpointRoute["responses"].(map[string]any)["200"].(map[string]any)
+	content := response["content"].(map[string]any)["application/json"].(map[string]any)
+	if got := content["schema"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASCheckpoint" {
+		t.Fatalf("checkpoint response schema = %v", got)
+	}
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	checkpoint := schemas["PCASCheckpoint"].(map[string]any)["properties"].(map[string]any)
+	if _, ok := checkpoint["signer_public_der"]; !ok {
+		t.Fatal("checkpoint signer public key absent from published schema")
+	}
+	if got := checkpoint["checkpoint"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASSignedEpochCheckpoint" {
+		t.Fatalf("nested signed checkpoint schema = %v", got)
+	}
 	for _, rt := range succapi.Routes(nil) {
 		if !rt.Mutation {
 			continue

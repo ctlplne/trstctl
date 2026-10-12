@@ -27,6 +27,10 @@ type SignedEpochCheckpoint struct {
 	LogRootHash     []byte
 	IssuedAt        int64
 	Signature       []byte
+	// SignerPublicDER is captured when this checkpoint is minted. It is not a
+	// trust anchor: relying parties must compare it with a separately pinned key.
+	// Old checkpoints omit it rather than inventing a historical signer key.
+	SignerPublicDER []byte `json:",omitempty"`
 }
 
 func (c SignedEpochCheckpoint) encode() []byte {
@@ -46,6 +50,7 @@ func (c SignedEpochCheckpoint) encode() []byte {
 
 // SignEpochCheckpoint signs c with the signer's checkpoint key.
 func SignEpochCheckpoint(signer crypto.Signer, c SignedEpochCheckpoint) (SignedEpochCheckpoint, error) {
+	c.SignerPublicDER = append([]byte(nil), signer.Public().DER...)
 	sig, err := signer.Sign(c.encode(), crypto.SignOptions{Hash: crypto.SHA256})
 	if err != nil {
 		return SignedEpochCheckpoint{}, err
@@ -59,6 +64,9 @@ func SignEpochCheckpoint(signer crypto.Signer, c SignedEpochCheckpoint) (SignedE
 func VerifyEpochCheckpoint(signerPubDER []byte, c SignedEpochCheckpoint) error {
 	if len(c.Signature) == 0 {
 		return errors.New("succession: epoch checkpoint is unsigned")
+	}
+	if len(c.SignerPublicDER) != 0 && !bytes.Equal(c.SignerPublicDER, signerPubDER) {
+		return errors.New("succession: checkpoint signer does not match the pinned key")
 	}
 	return crypto.VerifyMessage(signerPubDER, c.encode(), c.Signature)
 }

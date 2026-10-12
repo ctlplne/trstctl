@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { pcasApi, type PCASAcceptedRequest, type PCASChain, type PCASRequestStatus } from "@/lib/pcasApi";
+import { pcasApi, type PCASAcceptedRequest, type PCASChain, type PCASCheckpoint, type PCASRequestStatus } from "@/lib/pcasApi";
 
 const genesisAlgorithms = ["ECDSA-P256", "ECDSA-P384", "Ed25519"];
 const successorAlgorithms = ["ECDSA-P384", "ECDSA-P521", "ML-DSA-65"];
@@ -27,7 +27,9 @@ export function PCASSuccessionWorkflow() {
   const [requestIdentityID, setRequestIdentityID] = useState("");
   const [requestStatus, setRequestStatus] = useState<PCASRequestStatus | null>(null);
   const [chain, setChain] = useState<PCASChain | null>(null);
+  const [checkpoint, setCheckpoint] = useState<PCASCheckpoint | null>(null);
   const [rootFingerprint, setRootFingerprint] = useState("");
+  const [checkpointFingerprint, setCheckpointFingerprint] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +65,21 @@ export function PCASSuccessionWorkflow() {
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("pcas.error.read"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadCheckpoint() {
+    if (!identityID.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await pcasApi.checkpoint(identityID.trim());
+      setCheckpoint(next);
+      setCheckpointFingerprint(next.signer_public_der ? await publicKeySHA256(next.signer_public_der) : "");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("pcas.error.checkpoint"));
     } finally {
       setBusy(false);
     }
@@ -191,6 +208,9 @@ export function PCASSuccessionWorkflow() {
         <Button type="button" variant="outline" disabled={busy || !identityID.trim()} onClick={() => void loadChain()}>
           {t("pcas.readChain")}
         </Button>
+        <Button type="button" variant="outline" disabled={busy || !identityID.trim()} onClick={() => void loadCheckpoint()}>
+          {t("pcas.readCheckpoint")}
+        </Button>
       </div>
       {reviewed === "genesis" ? (
         <div className="grid gap-2 rounded-panel border border-border bg-background p-3 text-sm">
@@ -229,6 +249,24 @@ export function PCASSuccessionWorkflow() {
             {t("pcas.chainCount")}: {chain.count}
           </p>
           <p className="text-muted-foreground">{t("pcas.verifyOffline")}</p>
+        </div>
+      ) : null}
+      {checkpoint?.identity_id === identityID.trim() ? (
+        <div className="grid gap-3 rounded-panel border border-border bg-background p-3 text-sm">
+          <h3 className="font-semibold">{t("pcas.checkpointTitle")}</h3>
+          <p>
+            {t("pcas.epoch")}: {checkpoint.epoch} · {t("pcas.checkpointTreeSize")}: {checkpoint.log_tree_size}
+          </p>
+          <p>
+            {t("pcas.checkpointLogRoot")}: <code className="break-all">{checkpoint.log_root}</code>
+          </p>
+          <p>
+            {t("pcas.checkpointIssued")}: {checkpoint.issued_at}
+          </p>
+          <p>
+            {t("pcas.checkpointSignerFingerprint")}: <code className="break-all">{checkpointFingerprint || t("pcas.checkpointLegacy")}</code>
+          </p>
+          <p className="text-muted-foreground">{t("pcas.checkpointPinning")}</p>
         </div>
       ) : null}
       {chain?.genesis ? (

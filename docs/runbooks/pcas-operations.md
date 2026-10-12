@@ -6,6 +6,22 @@ current. The control plane records a tenant-scoped request, the outbox drains it
 and the isolated signer mints or zeroizes key material. Private keys stay in the
 signer process.
 
+To serve signed epoch checkpoints, set these control-plane settings before
+startup while keeping the isolated signer and its persistent key store attached:
+
+```text
+TRSTCTL_PCAS_CHECKPOINTS_ENABLED=true
+TRSTCTL_PCAS_CHECKPOINTS_INTERVAL=1m
+TRSTCTL_PCAS_CHECKPOINTS_SIGNING_KEY_HANDLE=pcas-checkpoint-signer
+TRSTCTL_PCAS_CHECKPOINTS_SIGNING_ALGORITHM=ECDSA-P256
+```
+
+Choose a deployment-specific stable handle and keep it through restarts. The
+worker provisions that signer-held key if it does not already exist. Store its
+public-key fingerprint through an independent trusted channel before using it
+as a relying-party pin. PCAS and this worker are in the core build and need no
+commercial license.
+
 ## First use: register, verify, then succeed an identity
 
 Use a tenant principal with `keys:write` to register the immutable starting
@@ -23,6 +39,19 @@ trstctl pcas genesis register -f /secure/operator-genesis.json
 trstctl pcas requests status REQUEST_ID
 trstctl pcas chain get --identity_id spiffe://example.test/workload/api
 ```
+
+If checkpoint generation is enabled, read the latest epoch checkpoint with
+`trstctl pcas checkpoints get --identity_id spiffe://example.test/workload/api`
+or the Posture console's **Read signed checkpoint** action. The response keeps
+the checkpoint signer's public DER captured when that checkpoint was minted,
+alongside the signed identity, epoch, successor public key and transparency log
+head. Compare the SHA-256 fingerprint of that DER with a checkpoint-signer key
+obtained and pinned through a separate trusted channel; then verify the
+checkpoint signature. A key returned in the same response is not a trust
+anchor by itself. Older checkpoints without a captured signer key leave
+`signer_public_der` absent; verify them only if the historical key is available
+from a separately trusted record. Do not substitute the current signer key for
+an older checkpoint after rotation.
 
 Save the returned trust-root public key fingerprint in an independently
 controlled trust store before distributing the chain. A fresh client must not
