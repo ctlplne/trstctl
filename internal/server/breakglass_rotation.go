@@ -93,7 +93,9 @@ type configuredBreakglassRuntime struct {
 	verifiers     []breakglassVerifier
 	// issueAfterAppend is a test seam for a transaction abort after the signer
 	// and event log have durably committed an emergency certificate.
-	issueAfterAppend func() error
+	issueAfterAppend     func() error
+	rotationAfterAppend  func() error
+	crossSignAfterAppend func() error
 }
 
 func (r *configuredBreakglassRuntime) BreakglassConfiguration() api.BreakglassConfiguration {
@@ -302,7 +304,8 @@ func (r *configuredBreakglassRuntime) RotateBreakglass(ctx context.Context, tena
 	newHandle := r.baseHandle + "-rotation-" + req.CeremonyID
 	var canonical breakglassRotationEvent
 	var nextSigner *signing.RemoteSigner
-	var signerCreated, eventAppended bool
+	var signerCreated, appendAttempted bool
+	var canonicalEvent events.Event
 	err := r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		approvers, err := r.consumeAndVerifyCeremony(ctx, tx, req.CeremonyID, purpose)
 		if err != nil {
@@ -339,28 +342,58 @@ func (r *configuredBreakglassRuntime) RotateBreakglass(ctx context.Context, tena
 		if err != nil {
 			return err
 		}
+		appendAttempted = true
 		event, err := r.log.Append(ctx, events.Event{ID: "breakglass-rotation-" + req.CeremonyID, Type: projections.EventBreakglassCARotated, TenantID: tenantID, Data: raw})
-		if event.ID != "" {
-			eventAppended = true
-		}
 		if err != nil {
 			return err
 		}
-		if err := json.Unmarshal(event.Data, &canonical); err != nil {
-			return err
+		canonicalEvent = event
+		if r.rotationAfterAppend != nil {
+			if err := r.rotationAfterAppend(); err != nil {
+				return err
+			}
 		}
-		if canonical.CeremonyID != req.CeremonyID || canonical.ActiveSignerHandle != newHandle {
-			return errors.New("breakglass: canonical rotation event does not match the consumed ceremony or successor handle")
-		}
-		if err := r.validateRotationEvent(ctx, canonical, r.activeHandle, r.activeCertDER, nextSigner); err != nil {
-			return err
-		}
-		return projections.New(r.store).ApplyTx(ctx, tx, event)
+		return nil
 	})
+	if err != nil && appendAttempted {
+		if canonicalEvent.ID == "" {
+			var found bool
+			canonicalEvent, found, err = r.log.EventByID(ctx, "breakglass-rotation-"+req.CeremonyID)
+			if err != nil || !found {
+				return api.BreakglassRotation{}, errors.New("breakglass: rotation append outcome is unknown; inspect the exact event before retrying")
+			}
+		}
+		err = nil
+	}
 	if err != nil {
-		if signerCreated && !eventAppended && nextSigner != nil {
+		if signerCreated && !appendAttempted && nextSigner != nil {
 			_ = nextSigner.Destroy(ctx)
 		}
+		return api.BreakglassRotation{}, err
+	}
+	if canonicalEvent.ID != "breakglass-rotation-"+req.CeremonyID || canonicalEvent.Type != projections.EventBreakglassCARotated ||
+		canonicalEvent.TenantID != tenantID || canonicalEvent.Sequence == 0 {
+		return api.BreakglassRotation{}, errors.New("breakglass: canonical rotation event has the wrong identity, scope, or source sequence")
+	}
+	if nextSigner == nil {
+		return api.BreakglassRotation{}, errors.New("breakglass: canonical rotation signer was not bound")
+	}
+	if err := json.Unmarshal(canonicalEvent.Data, &canonical); err != nil {
+		return api.BreakglassRotation{}, err
+	}
+	if canonical.CeremonyID != req.CeremonyID || canonical.ActiveSignerHandle != newHandle ||
+		canonical.PreviousSignerHandle != r.activeHandle || !bytes.Equal(canonical.PreviousCertificateDER, r.activeCertDER) ||
+		canonical.Reason != reason || canonical.TTLSeconds != req.TTLSeconds ||
+		canonical.RequestDigest != strings.TrimPrefix(purpose, "breakglass-rotate:") {
+		return api.BreakglassRotation{}, errors.New("breakglass: canonical rotation event does not match the consumed exact request")
+	}
+	if err := r.validateRotationEvent(ctx, canonical, r.activeHandle, r.activeCertDER, nextSigner); err != nil {
+		return api.BreakglassRotation{}, err
+	}
+	// The immutable event is durable before projection. Apply it after the
+	// ceremony transaction so request and background workers acquire locks in
+	// the same event-first order.
+	if err := projections.New(r.store).Apply(ctx, canonicalEvent); err != nil {
 		return api.BreakglassRotation{}, err
 	}
 	r.activeHandle = canonical.ActiveSignerHandle
@@ -382,6 +415,8 @@ func (r *configuredBreakglassRuntime) CrossSignBreakglass(ctx context.Context, t
 	defer r.mu.Unlock()
 	purpose := breakglass.CrossSignPurpose(tenantID, r.activeHandle, targetDER)
 	var canonical breakglassCrossSignEvent
+	var canonicalEvent events.Event
+	var appendAttempted bool
 	err = r.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		approvers, err := r.consumeAndVerifyCeremony(ctx, tx, req.CeremonyID, purpose)
 		if err != nil {
@@ -400,29 +435,49 @@ func (r *configuredBreakglassRuntime) CrossSignBreakglass(ctx context.Context, t
 		if err != nil {
 			return err
 		}
+		appendAttempted = true
 		event, err := r.log.Append(ctx, events.Event{ID: "breakglass-cross-sign-" + req.CeremonyID, Type: projections.EventBreakglassCACrossSigned, TenantID: tenantID, Data: raw})
 		if err != nil {
 			return err
 		}
-		if err := json.Unmarshal(event.Data, &canonical); err != nil {
-			return err
+		canonicalEvent = event
+		if r.crossSignAfterAppend != nil {
+			return r.crossSignAfterAppend()
 		}
-		if canonical.CeremonyID != req.CeremonyID || canonical.IssuerSignerHandle != r.activeHandle ||
-			!bytes.Equal(canonical.IssuerCertificateDER, r.activeCertDER) || !bytes.Equal(canonical.TargetCertificateDER, targetDER) {
-			return errors.New("breakglass: canonical cross-sign event does not match the consumed request")
-		}
-		if canonical.RequestDigest != strings.TrimPrefix(purpose, "breakglass-cross-sign:") {
-			return errors.New("breakglass: canonical cross-sign event has the wrong exact request digest")
-		}
-		if err := (breakglass.Quorum{Threshold: r.threshold, Operators: r.operators}).Verify(canonical.Approvers); err != nil {
-			return err
-		}
-		if err := crypto.VerifyCrossSignedCA(canonical.IssuerCertificateDER, canonical.TargetCertificateDER, canonical.CrossCertificateDER); err != nil {
-			return err
-		}
-		return projections.New(r.store).ApplyTx(ctx, tx, event)
+		return nil
 	})
+	if err != nil && appendAttempted {
+		if canonicalEvent.ID == "" {
+			var found bool
+			canonicalEvent, found, err = r.log.EventByID(ctx, "breakglass-cross-sign-"+req.CeremonyID)
+			if err != nil || !found {
+				return api.BreakglassCrossSign{}, errors.New("breakglass: cross-sign append outcome is unknown; inspect the exact event before retrying")
+			}
+		}
+		err = nil
+	}
 	if err != nil {
+		return api.BreakglassCrossSign{}, err
+	}
+	if canonicalEvent.ID != "breakglass-cross-sign-"+req.CeremonyID || canonicalEvent.Type != projections.EventBreakglassCACrossSigned ||
+		canonicalEvent.TenantID != tenantID || canonicalEvent.Sequence == 0 {
+		return api.BreakglassCrossSign{}, errors.New("breakglass: canonical cross-sign event has the wrong identity, scope, or source sequence")
+	}
+	if err := json.Unmarshal(canonicalEvent.Data, &canonical); err != nil {
+		return api.BreakglassCrossSign{}, err
+	}
+	if canonical.CeremonyID != req.CeremonyID || canonical.IssuerSignerHandle != r.activeHandle ||
+		!bytes.Equal(canonical.IssuerCertificateDER, r.activeCertDER) || !bytes.Equal(canonical.TargetCertificateDER, targetDER) ||
+		canonical.RequestDigest != strings.TrimPrefix(purpose, "breakglass-cross-sign:") {
+		return api.BreakglassCrossSign{}, errors.New("breakglass: canonical cross-sign event does not match the consumed exact request")
+	}
+	if err := (breakglass.Quorum{Threshold: r.threshold, Operators: r.operators}).Verify(canonical.Approvers); err != nil {
+		return api.BreakglassCrossSign{}, err
+	}
+	if err := crypto.VerifyCrossSignedCA(canonical.IssuerCertificateDER, canonical.TargetCertificateDER, canonical.CrossCertificateDER); err != nil {
+		return api.BreakglassCrossSign{}, err
+	}
+	if err := projections.New(r.store).Apply(ctx, canonicalEvent); err != nil {
 		return api.BreakglassCrossSign{}, err
 	}
 	return api.BreakglassCrossSign{

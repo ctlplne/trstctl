@@ -163,7 +163,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 			t.Fatalf("create persisted break-glass signer: %v", err)
 		}
 		issued, err := crypto.SelfSignedHierarchyCA(signer, crypto.HierarchyCAProfile{
-			CommonName: "Served Breakglass CA", MaxPathLen: 0, TTL: 24 * time.Hour,
+			CommonName: "Served Breakglass CA", MaxPathLen: 1, TTL: 24 * time.Hour,
 		})
 		if err != nil {
 			t.Fatalf("create signer-backed break-glass CA: %v", err)
@@ -187,7 +187,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		d.BreakglassReconciler = runtime
 	})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "online-breakglass-commander", []string{
-		string(authz.CertsIssue), string(authz.AuditRead),
+		string(authz.CertsIssue), string(authz.AuditRead), string(authz.IssuersWrite),
 	})
 	op1 := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "op1", []string{string(authz.IssuersWrite)})
 	op2 := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "op2", []string{string(authz.IssuersWrite)})
@@ -420,6 +420,85 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-subquorum", subquorum)
 	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("quorum not met")) {
 		t.Fatalf("sub-quorum online break-glass issue = %d body=%s; want 422 quorum not met", code, body)
+	}
+
+	rotationIntent := map[string]any{"reason": "replace the emergency CA after incident recovery", "ttl_seconds": 43200}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/rotation-ceremonies", token, "trace-006-rotation-ceremony", rotationIntent)
+	if code != http.StatusCreated || json.Unmarshal(body, &ceremony) != nil {
+		t.Fatalf("start rotation ceremony = %d body=%s", code, body)
+	}
+	for i, approvalToken := range []string{op1, op2} {
+		code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+ceremony.ID+"/approvals", approvalToken, fmt.Sprintf("trace-006-rotation-approval-%d", i), nil)
+		if code != http.StatusOK {
+			t.Fatalf("rotation approval %d = %d body=%s", i, code, body)
+		}
+	}
+	rotationIntent["ceremony_id"] = ceremony.ID
+	onlineRuntime.rotationAfterAppend = func() error { return errors.New("injected transaction abort after durable emergency rotation") }
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/rotate", token, "trace-006-rotation", rotationIntent)
+	onlineRuntime.rotationAfterAppend = nil
+	if code != http.StatusCreated {
+		t.Fatalf("durable emergency rotation after transaction abort = %d body=%s; want 201", code, body)
+	}
+	var rotation api.BreakglassRotation
+	if err := json.Unmarshal(body, &rotation); err != nil || rotation.CeremonyID != ceremony.ID || rotation.ActiveSignerHandle == rotation.PreviousSignerHandle {
+		t.Fatalf("decode exact emergency rotation: %+v err=%v", rotation, err)
+	}
+	previousDER, err := oneCertificateDER(rotation.PreviousCertificatePEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeDER, err := oneCertificateDER(rotation.ActiveCertificatePEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newByOldDER, err := oneCertificateDER(rotation.NewSignedByPreviousPEM)
+	if err != nil || crypto.VerifyCrossSignedCA(previousDER, activeDER, newByOldDER) != nil {
+		t.Fatalf("rotated CA lacks a valid predecessor trust path: %v", err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/rotate", token, "trace-006-rotation-distinct-retry", rotationIntent)
+	if code != http.StatusConflict {
+		t.Fatalf("distinct-key retry of consumed rotation = %d body=%s; want 409", code, body)
+	}
+
+	targetKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(targetKey.Destroy)
+	target, err := crypto.SelfSignedHierarchyCA(targetKey, crypto.HierarchyCAProfile{CommonName: "Recovery peer CA", MaxPathLen: 0, TTL: 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	crossIntent := map[string]any{"certificate_pem": certificatePEM(target.CertificateDER)}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/cross-sign-ceremonies", token, "trace-006-cross-ceremony", crossIntent)
+	if code != http.StatusCreated || json.Unmarshal(body, &ceremony) != nil {
+		t.Fatalf("start cross-sign ceremony = %d body=%s", code, body)
+	}
+	for i, approvalToken := range []string{op1, op2} {
+		code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+ceremony.ID+"/approvals", approvalToken, fmt.Sprintf("trace-006-cross-approval-%d", i), nil)
+		if code != http.StatusOK {
+			t.Fatalf("cross-sign approval %d = %d body=%s", i, code, body)
+		}
+	}
+	crossIntent["ceremony_id"] = ceremony.ID
+	onlineRuntime.crossSignAfterAppend = func() error { return errors.New("injected transaction abort after durable emergency cross-sign") }
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/cross-sign", token, "trace-006-cross-sign", crossIntent)
+	onlineRuntime.crossSignAfterAppend = nil
+	if code != http.StatusCreated {
+		t.Fatalf("durable emergency cross-sign after transaction abort = %d body=%s; want 201", code, body)
+	}
+	var cross api.BreakglassCrossSign
+	if err := json.Unmarshal(body, &cross); err != nil || cross.CeremonyID != ceremony.ID || cross.IssuerSignerHandle != rotation.ActiveSignerHandle {
+		t.Fatalf("decode exact emergency cross-sign: %+v err=%v", cross, err)
+	}
+	crossDER, err := oneCertificateDER(cross.CertificatePEM)
+	if err != nil || crypto.VerifyCrossSignedCA(activeDER, target.CertificateDER, crossDER) != nil {
+		t.Fatalf("emergency cross-sign has no valid target trust path: %v", err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/cross-sign", token, "trace-006-cross-distinct-retry", crossIntent)
+	if code != http.StatusConflict {
+		t.Fatalf("distinct-key retry of consumed cross-sign = %d body=%s; want 409", code, body)
 	}
 }
 
