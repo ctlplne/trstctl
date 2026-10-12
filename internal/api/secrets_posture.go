@@ -580,11 +580,9 @@ func (a *API) cloudSecretManagers(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	configuredSync := map[string]bool{}
+	configuredSync := map[string]*secretsync.Target{}
 	if a.secrets != nil {
-		for target := range a.secrets.syncTargets(tenantID) {
-			configuredSync[target] = true
-		}
+		configuredSync = a.secrets.syncTargets(tenantID)
 	}
 	a.writeJSON(w, http.StatusOK, buildCloudSecretManagerIntegration(time.Now().UTC().Format(time.RFC3339), discoveryCounts, configuredSync))
 }
@@ -610,11 +608,9 @@ func (a *API) unvaultedSecrets(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	configuredSync := map[string]bool{}
+	configuredSync := map[string]*secretsync.Target{}
 	if a.secrets != nil {
-		for target := range a.secrets.syncTargets(tenantID) {
-			configuredSync[target] = true
-		}
+		configuredSync = a.secrets.syncTargets(tenantID)
 	}
 	a.writeJSON(w, http.StatusOK, buildUnvaultedSecretPosture(time.Now().UTC().Format(time.RFC3339), sources, discoveryCounts, configuredSync, leakedFindings))
 }
@@ -862,7 +858,24 @@ func cloudSecretManagerProviderSpecs() []cloudSecretManagerProviderSpec {
 	}
 }
 
-func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[string]int, configuredSync map[string]bool) cloudSecretManagerIntegrationResponse {
+func configuredSyncTargetForProvider(configured map[string]*secretsync.Target, providerID, preferredID string) string {
+	if target := configured[preferredID]; target != nil && target.ProviderID() == providerID {
+		return preferredID
+	}
+	ids := make([]string, 0, len(configured))
+	for id, target := range configured {
+		if target != nil && target.ProviderID() == providerID {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
+func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[string]int, configuredSync map[string]*secretsync.Target) cloudSecretManagerIntegrationResponse {
 	if generatedAt == "" {
 		generatedAt = "1970-01-01T00:00:00Z"
 	}
@@ -870,17 +883,28 @@ func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[
 	providers := make([]cloudSecretManagerProviderResponse, 0, len(specs))
 	configuredProviders := make([]string, 0, len(specs))
 	configuredSyncTargets := make([]string, 0, len(configuredSync))
+	cloudSyncProviders := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		if spec.SyncSupported {
+			cloudSyncProviders[spec.ID] = true
+		}
+	}
 	summary := cloudSecretManagerSummaryResponse{TotalProviders: len(specs)}
-	for target := range configuredSync {
-		if target != "" {
-			configuredSyncTargets = append(configuredSyncTargets, target)
+	for id, target := range configuredSync {
+		if id != "" && target != nil && cloudSyncProviders[target.ProviderID()] {
+			configuredSyncTargets = append(configuredSyncTargets, id)
 		}
 	}
 	sort.Strings(configuredSyncTargets)
 	for _, spec := range specs {
 		discoveryCount := discoveryCounts[spec.ID]
 		discoveryConfigured := discoveryCount > 0
-		syncConfigured := spec.SyncTargetID != "" && configuredSync[spec.SyncTargetID]
+		actualSyncTargetID := configuredSyncTargetForProvider(configuredSync, spec.ID, spec.SyncTargetID)
+		syncConfigured := actualSyncTargetID != ""
+		syncTargetID := spec.SyncTargetID
+		if syncConfigured {
+			syncTargetID = actualSyncTargetID
+		}
 		if spec.DiscoverySupported {
 			summary.DiscoverySupported++
 		}
@@ -908,7 +932,7 @@ func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[
 			DiscoveryReadOps:     append([]string(nil), spec.DiscoveryReadOps...),
 			SyncSupported:        spec.SyncSupported,
 			SyncConfigured:       syncConfigured,
-			SyncTargetID:         spec.SyncTargetID,
+			SyncTargetID:         syncTargetID,
 			SyncWriteOperation:   spec.SyncWriteOperation,
 			SecretHandling:       "secret values are read into []byte for certificate inspection or delivery only, then wiped; responses expose metadata only",
 			Capabilities:         append([]string(nil), spec.Capabilities...),
@@ -953,7 +977,7 @@ func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[
 	}
 }
 
-func buildUnvaultedSecretPosture(generatedAt string, sourceCounts secretVisibilitySourceCounts, discoveryCounts map[string]int, configuredSync map[string]bool, leakedFindings int) unvaultedSecretPostureResponse {
+func buildUnvaultedSecretPosture(generatedAt string, sourceCounts secretVisibilitySourceCounts, discoveryCounts map[string]int, configuredSync map[string]*secretsync.Target, leakedFindings int) unvaultedSecretPostureResponse {
 	if generatedAt == "" {
 		generatedAt = "1970-01-01T00:00:00Z"
 	}
@@ -1001,7 +1025,7 @@ func buildUnvaultedSecretPosture(generatedAt string, sourceCounts secretVisibili
 	for _, spec := range cloudSecretManagerProviderSpecs() {
 		discoveryCount := discoveryCounts[spec.ID]
 		discoveryConfigured := discoveryCount > 0
-		syncConfigured := spec.SyncTargetID != "" && configuredSync[spec.SyncTargetID]
+		syncConfigured := configuredSyncTargetForProvider(configuredSync, spec.ID, spec.SyncTargetID) != ""
 		if discoveryConfigured {
 			configuredVaults = append(configuredVaults, spec.ID)
 			summary.VaultProvidersVisible++

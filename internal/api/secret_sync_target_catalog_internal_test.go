@@ -62,6 +62,31 @@ func TestSecretSyncWorkloadIdentityTargetRequiresExactConfiguredOptIn(t *testing
 	}
 }
 
+func TestCloudSecretManagerPostureUsesConfiguredProviderType(t *testing.T) {
+	targets := map[string]*secretsync.Target{
+		"ci":       secretsync.NewConfiguredTarget("ci", "aws-secrets-manager", false, nil),
+		"qa-other": secretsync.NewConfiguredTarget("qa-other", "generic-ci-json", false, nil),
+	}
+	cloud := buildCloudSecretManagerIntegration("2026-10-12T00:00:00Z", map[string]int{"aws-secrets-manager": 1}, targets)
+	if cloud.Summary.SyncConfigured != 1 || cloud.Summary.FullyConfigured != 1 {
+		t.Fatalf("custom AWS target omitted from cloud coverage: %+v", cloud.Summary)
+	}
+	if len(cloud.ConfiguredSyncTargets) != 1 || cloud.ConfiguredSyncTargets[0] != "ci" {
+		t.Fatalf("non-cloud target leaked into cloud target list: %+v", cloud.ConfiguredSyncTargets)
+	}
+	for _, provider := range cloud.Providers {
+		if provider.ID == "aws-secrets-manager" && (!provider.SyncConfigured || provider.SyncTargetID != "ci") {
+			t.Fatalf("AWS provider did not expose actual configured target ID: %+v", provider)
+		}
+	}
+	unvaulted := buildUnvaultedSecretPosture("2026-10-12T00:00:00Z", secretVisibilitySourceCounts{}, nil, targets, 0)
+	for _, provider := range unvaulted.VaultProviders {
+		if provider.ID == "aws-secrets-manager" && !provider.SyncConfigured {
+			t.Fatalf("AWS augmentation target omitted from unvaulted posture: %+v", provider)
+		}
+	}
+}
+
 func hasCapability(capabilities []string, want string) bool {
 	for _, capability := range capabilities {
 		if capability == want {

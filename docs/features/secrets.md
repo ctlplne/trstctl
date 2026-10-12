@@ -733,6 +733,10 @@ The target ID is an operator-chosen name, not a provider type. The target catalo
 reports its configured protocol separately and offers it for this workflow only
 when that target's workload-identity switch is enabled. Source creation refuses
 an unconfigured target, a static-credential target, or a target for another cloud.
+The cloud-manager coverage and unvaulted-secret posture also count configured
+targets by their provider type. A custom target ID appears as the actual sync
+target in the coverage response; the built-in ID remains the example when that
+provider has no configured target.
 
 Only the bounded secret-sync outbox worker resolves the proof, validates its signature
 and exact issuer/audience/subject/expiry against the tenant's JWT/JWKS trust source,
