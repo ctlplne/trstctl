@@ -101,8 +101,10 @@ ServiceNow state sync.
 
 ### Fleet re-issuance for CA compromise (F32)
 
-If an X.509 CA is compromised, every active identity issued by its catalog entry must be
-replaced, and every exact trust consumer must be visible before the first estate effect.
+If an X.509 CA is compromised, every active identity whose current certificate is
+signed by that issuer must be replaced, and every exact trust consumer must be
+visible before the first estate effect. Historical identity-to-issuer links do not
+expand the current blast radius after a completed migration.
 trstctl freezes the compromised issuer, signer-backed replacement authority, exact
 certificate/SPKI `TRUSTS` stores and hosts, ordered cohorts, exact enrolled agents,
 deployment-target revisions, predecessor certificate/revocation authority, and rollback
@@ -137,7 +139,13 @@ requires `incidents:game-day`, and H2 refuses any member whose frozen owner/targ
 environment is not explicitly non-production. It is therefore a safety boundary, not a
 display label. `non_production` is accepted as an explicit non-production
 environment spelling for both the accountable owner and target; `production` still
-fails the game-day gate. Terminal success or rollback is mirrored to
+fails the game-day gate. Preview and Start verify that each current active
+predecessor was cryptographically signed by the named compromised issuer's exact
+CA certificate, not merely another authority beneath a shared parent. After a
+successful replacement, the historical identity-to-issuer graph
+edge may remain for audit, but it cannot authorize a second migration of the
+replacement certificate; the repeated plan returns a non-ready preview and
+Start returns conflict without effects. Terminal success or rollback is mirrored to
 `incident.fleet_reissuance.recorded` only with a compact-JWS audit export that verifies
 offline. Pause/resume and restart retain the same H2 cursor and immutable bindings. The
 legacy `POST /api/v1/incidents/executions` mutation now returns conflict with this H2

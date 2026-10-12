@@ -235,10 +235,12 @@ func (s *Store) ListIdentities(ctx context.Context, tenantID string) ([]Identity
 	return out, err
 }
 
-// ListRevocableIdentitiesByIssuer returns every active identity issued by issuerID
-// that a compromise run is allowed to replace and revoke. The issuer predicate is
-// part of the tenant-scoped SQL denominator (AN-1): a fleet incident never trusts
-// a caller-supplied identity list as the blast radius.
+// ListRevocableIdentitiesByIssuer returns active identity candidates with a
+// historical issuer edge. A compromise run must also verify that each current
+// active certificate was signed by that issuer's exact CA certificate before
+// including the identity in the live blast radius. The issuer predicate is
+// tenant-scoped under RLS (AN-1); a fleet incident never trusts a caller-supplied
+// identity list as the denominator.
 func (s *Store) ListRevocableIdentitiesByIssuer(ctx context.Context, tenantID, issuerID string) ([]Identity, error) {
 	var out []Identity
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

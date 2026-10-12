@@ -169,6 +169,46 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), success.predecessor.Serial); err != nil || !found || !ledger.Revoked() {
 		t.Fatalf("verified predecessor was not revoked in responder ledger = %+v found=%v err=%v", ledger, found, err)
 	}
+	// The identity keeps its original issuer graph edge for audit after the
+	// replacement is deployed. A repeated plan must not mistake its new active
+	// certificate for another predecessor under the compromised issuer.
+	previewStatus, previewBody = secretsReq(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs/preview", gameDayToken, gameDayBody)
+	if previewStatus != http.StatusOK || !bytes.Contains(previewBody, []byte(`"ready":false`)) ||
+		!bytes.Contains(previewBody, []byte("current active certificate is not signed by the compromised issuer")) {
+		t.Fatalf("completed cohort repeat preview = %d %s, want non-ready exact-issuer fence", previewStatus, previewBody)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs", gameDayToken, "aud41-repeat-completed-cohort", gameDayBody)
+	if statusCode != http.StatusConflict || !bytes.Contains(body, []byte("current active certificate is not signed by the compromised issuer")) {
+		t.Fatalf("completed cohort repeat start = %d %s, want 409 without effects", statusCode, body)
+	}
+	// A partly completed fleet must still be able to preview the remaining
+	// member. The old graph edge is history; the signed active leaf determines
+	// the current blast radius. This fixture shares the issuer only during the
+	// preview, then restores its separate failure cohort below.
+	failureIdentity, err := h.store.GetIdentity(ctx, h.tenant, failure.identityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalIssuerID := *failureIdentity.IssuerID
+	sharedIssuerID := success.issuer.ID
+	failureIdentity.IssuerID = &sharedIssuerID
+	if err := h.store.UpsertIdentity(ctx, failureIdentity); err != nil {
+		t.Fatal(err)
+	}
+	remainingBody := failure.startBody(replacementAuthority.ID, migration.IncidentModeLive)
+	remainingBody["issuer_id"] = sharedIssuerID
+	previewStatus, previewBody = secretsReq(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs/preview", ordinaryToken, remainingBody)
+	if previewStatus != http.StatusOK || !bytes.Contains(previewBody, []byte(`"ready":true`)) ||
+		!bytes.Contains(previewBody, []byte(failure.identityID)) || bytes.Contains(previewBody, []byte(success.identityID)) {
+		t.Fatalf("partly completed fleet preview = %d %s, want only remaining signed predecessor", previewStatus, previewBody)
+	}
+	failureIdentity.IssuerID = &originalIssuerID
+	if err := h.store.UpsertIdentity(ctx, failureIdentity); err != nil {
+		t.Fatal(err)
+	}
 	crl, found, err := h.store.LatestCRL(ctx, h.tenant, IssuingCAID())
 	if err != nil || !found {
 		t.Fatalf("predecessor CA CRL publication = found %v err %v", found, err)

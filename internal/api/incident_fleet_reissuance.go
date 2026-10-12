@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -29,6 +30,8 @@ type fleetReissuanceRequest struct {
 	Cohorts                []migrationStartWave   `json:"cohorts"`
 	RollbackRef            string                 `json:"rollback_ref"`
 }
+
+var errIncidentPredecessorIssuerMismatch = errors.New("current active certificate is not signed by the compromised issuer")
 
 type fleetReissuanceActionRequest struct {
 	Reason      string `json:"reason"`
@@ -259,8 +262,16 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 	if req.Mode == migration.IncidentModeGameDay && !principal.Can(authz.IncidentsGameDay, authz.Scope{TenantID: tenantID}) {
 		return plan, errStatus(http.StatusForbidden, "forbidden: incident rehearsal requires "+string(authz.IncidentsGameDay))
 	}
-	if _, err := a.store.GetIssuer(ctx, tenantID, req.IssuerID); err != nil {
+	compromisedIssuer, err := a.store.GetIssuer(ctx, tenantID, req.IssuerID)
+	if err != nil {
 		return plan, err
+	}
+	if compromisedIssuer.Kind != store.IssuerX509CA || len(compromisedIssuer.Chain) == 0 {
+		return plan, errStatus(http.StatusConflict, "compromised issuer has no X.509 CA chain")
+	}
+	compromisedCADER, err := certinfo.LeafDER([]byte(compromisedIssuer.Chain[0]))
+	if err != nil {
+		return plan, errStatus(http.StatusConflict, "compromised issuer has an invalid public CA certificate")
 	}
 	g, err := graph.Build(ctx, a.store, tenantID)
 	if err != nil {
@@ -281,15 +292,31 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 	if plan.Reason == "" {
 		plan.Reason = "verified compromised issuer fleet reissuance"
 	}
-	affected, err := a.store.ListRevocableIdentitiesByIssuer(ctx, tenantID, req.IssuerID)
+	candidates, err := a.store.ListRevocableIdentitiesByIssuer(ctx, tenantID, req.IssuerID)
 	if err != nil {
 		return plan, err
 	}
-	if len(affected) == 0 {
-		return plan, errStatus(http.StatusConflict, "fleet reissuance requires at least one issued, deployed, or renewing identity for the issuer")
-	}
-	for _, identity := range affected {
+	for _, identity := range candidates {
+		active, err := a.store.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
+		if err != nil {
+			return plan, err
+		}
+		if len(active) > 1 {
+			return plan, errStatus(http.StatusConflict, "incident identity has more than one active internally issued certificate")
+		}
+		if len(active) == 0 {
+			continue
+		}
+		if _, err := certinfo.Inspect(active[0].CertificateDER); err != nil {
+			return plan, errStatus(http.StatusConflict, "incident active certificate cannot be parsed")
+		}
+		if crypto.VerifyLeafSignedByCA(active[0].CertificateDER, compromisedCADER) != nil {
+			continue // A historical issuer edge cannot expand the live blast radius.
+		}
 		plan.AffectedIdentityIDs = append(plan.AffectedIdentityIDs, identity.ID)
+	}
+	if len(plan.AffectedIdentityIDs) == 0 {
+		return plan, errStatus(http.StatusConflict, errIncidentPredecessorIssuerMismatch.Error())
 	}
 	plan.GraphImpact, err = json.Marshal(g.BlastRadius(issuerNodeID))
 	if err != nil {
@@ -301,7 +328,10 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 	if err != nil {
 		return plan, errStatus(http.StatusBadRequest, err.Error())
 	}
-	if err := a.bindIncidentMigrationMembers(ctx, tenantID, plan.ExactTrustHosts, &plan.Run); err != nil {
+	if err := a.bindIncidentMigrationMembers(ctx, tenantID, plan.ExactTrustHosts, compromisedCADER, &plan.Run); err != nil {
+		if errors.Is(err, errIncidentPredecessorIssuerMismatch) {
+			return plan, errStatus(http.StatusConflict, err.Error())
+		}
 		return plan, errStatus(http.StatusBadRequest, err.Error())
 	}
 	plan.Run.Incident = &migration.IncidentPlan{
@@ -616,7 +646,7 @@ func graphNodeNames(nodes []graph.Node) []string {
 // not require for an ordinary CA rollover: the exact old revocation authority,
 // the H1-observed host that owns the trust relationship, and the frozen
 // environment used by the game-day production fence.
-func (a *API) bindIncidentMigrationMembers(ctx context.Context, tenantID string, exactHosts []string, run *migration.Run) error {
+func (a *API) bindIncidentMigrationMembers(ctx context.Context, tenantID string, exactHosts []string, compromisedCADER []byte, run *migration.Run) error {
 	if a.store == nil || run == nil {
 		return errors.New("incident migration execution is not configured")
 	}
@@ -634,6 +664,14 @@ func (a *API) bindIncidentMigrationMembers(ctx context.Context, tenantID string,
 			cert, err := a.store.GetCertificate(ctx, tenantID, member.Binding.PredecessorCertificateID)
 			if err != nil {
 				return errors.New("incident predecessor certificate is no longer inventoried")
+			}
+			// The identity's issuer edge is historical after an H2 migration.
+			// Check the active certificate's signature against the reviewed
+			// issuer CA (the first certificate, not a shared parent in its
+			// chain), or a second run could revoke a replacement signed by a
+			// different authority while calling it a compromised predecessor.
+			if crypto.VerifyLeafSignedByCA(cert.CertificateDER, compromisedCADER) != nil {
+				return errIncidentPredecessorIssuerMismatch
 			}
 			caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial)
 			if err != nil {
