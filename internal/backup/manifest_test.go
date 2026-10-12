@@ -151,6 +151,19 @@ func TestPrivacyErasureOperationsSurviveLogReadModelRebuild(t *testing.T) {
 	}
 }
 
+func TestMDMSCEPNonceFenceIsIndependentPostgresRecoveryAuthority(t *testing.T) {
+	const table = "mdm_scep_nonce_fences"
+	class, ok := backup.Classify(table)
+	if !ok || class != backup.ClassPostgresBackup {
+		t.Fatalf("single-use challenge fence recovery class = %q, present=%t; want PostgreSQL backup", class, ok)
+	}
+	for _, rebuilt := range store.ReadModelTables {
+		if rebuilt == table {
+			t.Fatal("event replay cannot reconstruct which MDM challenge nonce was consumed")
+		}
+	}
+}
+
 func TestPrivacyErasurePreparationsAreDurablePostgresRecoveryAuthority(t *testing.T) {
 	const table = "privacy_subject_erasure_preparations"
 	class, ok := backup.Classify(table)

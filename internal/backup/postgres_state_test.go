@@ -82,6 +82,28 @@ func TestPostgresStateRestoreOrderReturnsErrors(t *testing.T) {
 	}
 }
 
+func TestMDMSCEPNonceFenceIsCapturedAndRestoredAsOneUseAuthority(t *testing.T) {
+	const table = "mdm_scep_nonce_fences"
+	contained := func(tables []string) bool {
+		for _, candidate := range tables {
+			if candidate == table {
+				return true
+			}
+		}
+		return false
+	}
+	if !contained(postgresStateTables()) {
+		t.Fatal("PostgreSQL artifact would omit consumed MDM challenge nonces")
+	}
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contained(order) {
+		t.Fatal("restore would omit consumed MDM challenge nonces")
+	}
+}
+
 func TestDecodePostgresJSONByteaRequiresExactHexFormAUD109(t *testing.T) {
 	got, err := decodePostgresJSONBytea(json.RawMessage(`"\\x7b7d"`))
 	if err != nil || !bytes.Equal(got, []byte(`{}`)) {

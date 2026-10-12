@@ -76,6 +76,11 @@ var RecoveredFromPostgresBackup = []string{
 	"deployment_targets",
 	"federation_peer_checkpoints",
 	"idempotency_keys",
+	// A consumed Intune-style SCEP JWS nonce is a single-use security receiver.
+	// No event contains the complete spent set, so log replay cannot rebuild
+	// it. Restoring the exact tenant-scoped hashes prevents a challenge from
+	// becoming usable again after disaster recovery.
+	"mdm_scep_nonce_fences",
 	"issuance_approval_requests",
 	"issuance_approvals",
 	"outbox",

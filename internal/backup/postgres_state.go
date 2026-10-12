@@ -1214,6 +1214,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"deployment_targets",
 		"federation_peer_checkpoints",
 		"idempotency_keys",
+		// The signed MDM challenge's spent set must be present before SCEP
+		// enrollment accepts traffic on the recovered control plane.
+		"mdm_scep_nonce_fences",
 		"issuance_approval_requests",
 		"issuance_approvals",
 		"outbox",

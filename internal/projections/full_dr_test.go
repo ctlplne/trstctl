@@ -141,6 +141,14 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 			t.Errorf("%s restored rows = %d, want %d", table, dstCounts[table], srcCounts[table])
 		}
 	}
+	// A restored row must still enforce one-use enrollment. Equal row counts
+	// alone would miss a bad hash, wrong tenant, or lost uniqueness authority.
+	if claimed, err := dst.ConsumeMDMSCEPNonce(ctx, tenantA, "full-dr-spent-mdm-scep-nonce", time.Now().UTC().Add(time.Hour)); err != nil || claimed {
+		t.Fatalf("restored spent MDM SCEP nonce was reusable: claimed=%t err=%v", claimed, err)
+	}
+	if claimed, err := dst.ConsumeMDMSCEPNonce(ctx, tenantB, "full-dr-spent-mdm-scep-nonce", time.Now().UTC().Add(time.Hour)); err != nil || !claimed {
+		t.Fatalf("other tenant could not independently claim MDM SCEP nonce: claimed=%t err=%v", claimed, err)
+	}
 	restoredCursor, err := dst.GetSecretRotationScheduleScanCursor(ctx, tenantA)
 	if err != nil || restoredCursor.AfterScheduleID != "00000000-0000-4000-8000-00000000a106" ||
 		restoredCursor.Generation != 500 || restoredCursor.LeaseToken != "" {
@@ -676,6 +684,11 @@ func seedRecoveredFromPostgresTables(
 			        (tenant_id, key, status, request_binding, result, completed_at)
 			  VALUES ($1, $2, 'completed', $3, $4, $5)`,
 				[]any{tenantA, rotationTickKey, rotationTickBinding, []byte(`{"ok":true}`), now}},
+			// A signed enrollment JWS already consumed this nonce. The event log
+			// cannot reconstruct it, so full DR must keep the exact spent hash.
+			{`INSERT INTO mdm_scep_nonce_fences (tenant_id, nonce_sha256, valid_until)
+			  VALUES ($1, $2, $3)`,
+				[]any{tenantA, crypto.SHA256Hex([]byte("full-dr-spent-mdm-scep-nonce")), now.Add(time.Hour)}},
 			{`INSERT INTO issuance_approval_requests (tenant_id, resource, action, requester, required) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "requester", 2}},
 			{`INSERT INTO issuance_approvals (tenant_id, resource, action, approver, approved_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "approver-1", now}},
 			{`INSERT INTO notification_routing_policies (id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)`, []any{"00000000-0000-0000-0000-00000000a012", tenantA, "expiry-default", `{"critical":["pagerduty","slack"],"low":["email"]}`, `["email"]`, now, now}},
