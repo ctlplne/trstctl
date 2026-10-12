@@ -3748,7 +3748,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCAAuthorityRekeyed:                       {1: true},
 	EventCAAuthorityHorizonAlerted:                {1: true, CAAuthorityHorizonAlertEventSchemaVersion: true},
 	EventCACrossSigned:                            {1: true},
-	EventBreakglassIssued:                         {1: true},
+	EventBreakglassIssued:                         {1: true, BreakglassReconcileEventSchemaVersion: true},
 	EventBreakglassCARotated:                      {1: true},
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},

@@ -68,11 +68,12 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 		t.Fatalf("generate audit key: %v", err)
 	}
 
-	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.BreakglassCACertDER = caDER
 		d.BreakglassPublicKeyDER = pubDER
 	})
+	registerServedTenant(t, h, "Break-glass reconciliation privacy fixture")
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "incident-commander", []string{
 		string(authz.CertsIssue), string(authz.AuditRead),
 	})

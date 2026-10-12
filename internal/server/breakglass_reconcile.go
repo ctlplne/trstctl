@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -92,17 +93,22 @@ func reconcileVerifiedBreakglassBundle(ctx context.Context, tenantID string, bun
 			return err // An identity projection behind the log fails closed.
 		}
 		if found {
-			if prior.TenantID != tenantID || prior.Type != "breakglass.issued" || !bytes.Equal(prior.Data, data) {
+			if prior.TenantID != tenantID || prior.Type != projections.EventBreakglassIssued ||
+				prior.SchemaVersion != projections.BreakglassReconcileEventSchemaVersion || !bytes.Equal(prior.Data, data) {
 				return fmt.Errorf("%w: request_id %q has a different reconciliation event", store.ErrIdempotencyConflict, bundle.RequestID)
 			}
 			return nil
 		}
-		candidate := events.Event{ID: eventID, Type: "breakglass.issued", TenantID: tenantID, Data: data, Time: time.Now().UTC()}
+		candidate := events.Event{
+			ID: eventID, Type: projections.EventBreakglassIssued, TenantID: tenantID,
+			SchemaVersion: projections.BreakglassReconcileEventSchemaVersion, Data: data, Time: time.Now().UTC(),
+		}
 		canonical, err := log.Append(ctx, candidate)
 		if err != nil {
 			return err
 		}
-		if canonical.TenantID != tenantID || canonical.Type != candidate.Type || !bytes.Equal(canonical.Data, data) {
+		if canonical.TenantID != tenantID || canonical.Type != candidate.Type ||
+			canonical.SchemaVersion != candidate.SchemaVersion || !bytes.Equal(canonical.Data, data) {
 			return fmt.Errorf("%w: request_id %q resolved to a different event", store.ErrIdempotencyConflict, bundle.RequestID)
 		}
 		// Append can return an existing canonical message when its NATS

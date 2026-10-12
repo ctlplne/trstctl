@@ -4,6 +4,11 @@ package projections
 
 import "time"
 
+// BreakglassReconcileEventSchemaVersion adds the exact signed-bundle digest to
+// the offline reconciliation audit. Historical v1 offline/online envelopes keep
+// their closed shapes during replay and privacy rewrites.
+const BreakglassReconcileEventSchemaVersion = 2
+
 // The offline reconciler records only verified public facts, while the online
 // issuer retains the signed bundle so an interrupted response can be recovered
 // from the event log. Both formats already use breakglass.issued v1. Keep their
@@ -14,6 +19,15 @@ type privacyBreakglassIssuedOffline struct {
 	Reason    string    `json:"reason"`
 	IssuedAt  time.Time `json:"issued_at"`
 	Approvals int       `json:"approvals"`
+}
+
+type privacyBreakglassIssuedReconciledV2 struct {
+	RequestID    string    `json:"request_id"`
+	Subject      string    `json:"subject"`
+	Reason       string    `json:"reason"`
+	IssuedAt     time.Time `json:"issued_at"`
+	Approvals    int       `json:"approvals"`
+	BundleSHA256 string    `json:"bundle_sha256"`
 }
 
 type privacyBreakglassBundle struct {
