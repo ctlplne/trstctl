@@ -120,3 +120,26 @@ func TestBreakglassReconcilesCleanlyAndRejectsTamper(t *testing.T) {
 		t.Error("reconcile accepted a tampered bundle")
 	}
 }
+
+func TestBreakglassReconcileValidatesWholeBatchBeforeAudit(t *testing.T) {
+	svc, caDER := newService(t)
+	makeBundle := func(id string) Bundle {
+		t.Helper()
+		b, err := svc.IssueOffline(EmergencyRequest{
+			ID: id, Subject: "svc-" + id, CSRDer: emergencyCSR(t),
+			Reason: "outage", Approvals: []string{"op1", "op2"},
+		}, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	valid := makeBundle("first")
+	tampered := makeBundle("second")
+	tampered.Reason = "changed after signature"
+	recorder := &auditsink.Recorder{}
+	n, err := Reconcile(context.Background(), "t1", []Bundle{valid, tampered}, caDER, svc.PublicKeyDER(), recorder)
+	if err == nil || n != 0 || recorder.Count("breakglass.issued") != 0 {
+		t.Fatalf("partial reconciliation of invalid batch: count=%d audit=%d err=%v", n, recorder.Count("breakglass.issued"), err)
+	}
+}

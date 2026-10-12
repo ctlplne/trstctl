@@ -493,7 +493,8 @@ func (r *configuredBreakglassRuntime) ReconcileBreakglass(ctx context.Context, t
 	r.mu.Lock()
 	verifiers := append([]breakglassVerifier(nil), r.verifiers...)
 	r.mu.Unlock()
-	reconciled := 0
+	// Validate the entire request against the pinned active/overlap trust set
+	// before recording the first audit event. A bad tail cannot leave a prefix.
 	for _, bundle := range bundles {
 		verified := false
 		for _, verifier := range verifiers {
@@ -503,8 +504,11 @@ func (r *configuredBreakglassRuntime) ReconcileBreakglass(ctx context.Context, t
 			}
 		}
 		if !verified {
-			return reconciled, fmt.Errorf("%w: bundle %q failed every active/overlap verifier", api.ErrBreakglassInvalidBundle, bundle.RequestID)
+			return 0, fmt.Errorf("%w: bundle %q failed every active/overlap verifier", api.ErrBreakglassInvalidBundle, bundle.RequestID)
 		}
+	}
+	reconciled := 0
+	for _, bundle := range bundles {
 		data, err := json.Marshal(map[string]any{
 			"request_id": bundle.RequestID, "subject": bundle.Subject, "reason": bundle.Reason,
 			"issued_at": bundle.IssuedAt, "approvals": len(bundle.Approvals),

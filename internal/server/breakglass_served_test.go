@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
@@ -22,6 +23,22 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 )
+
+func TestConfiguredBreakglassReconcileValidatesWholeBatchBeforeAudit(t *testing.T) {
+	bundle, caDER, pubDER := servedBreakglassBundle(t)
+	tampered := bundle
+	tampered.Reason = "changed after signature"
+	recorder := &auditsink.Recorder{}
+	runtime := &configuredBreakglassRuntime{
+		tenantID:  "tenant-1",
+		verifiers: []breakglassVerifier{{caDER: caDER, publicDER: pubDER}},
+		auditor:   recorder,
+	}
+	n, err := runtime.ReconcileBreakglass(t.Context(), "tenant-1", []breakglass.Bundle{bundle, tampered})
+	if err == nil || n != 0 || recorder.Count("breakglass.issued") != 0 {
+		t.Fatalf("configured runtime partially reconciled invalid batch: count=%d audit=%d err=%v", n, recorder.Count("breakglass.issued"), err)
+	}
+}
 
 // IAM-06 acceptance: the running control plane serves the recovery-side
 // break-glass procedure. A signed offline emergency bundle is POSTed to the served

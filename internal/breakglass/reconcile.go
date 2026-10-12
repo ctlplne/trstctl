@@ -18,10 +18,14 @@ func Reconcile(ctx context.Context, tenantID string, bundles []Bundle, caCertDER
 	if audit == nil {
 		audit = auditsink.Nop{}
 	}
+	// Refuse an invalid member before emitting any event. A late bad bundle
+	// must not leave an apparently successful prefix of a rejected batch.
 	for _, b := range bundles {
 		if verr := Verify(b, caCertDER, breakglassPubDER); verr != nil {
-			return reconciled, fmt.Errorf("breakglass: reconcile rejected bundle %q: %w", b.RequestID, verr)
+			return 0, fmt.Errorf("breakglass: reconcile rejected bundle %q: %w", b.RequestID, verr)
 		}
+	}
+	for _, b := range bundles {
 		data := []byte(fmt.Sprintf(`{"request_id":%q,"subject":%q,"reason":%q,"issued_at":%q,"approvals":%d}`,
 			b.RequestID, b.Subject, b.Reason, b.IssuedAt.Format(time.RFC3339), len(b.Approvals)))
 		if aerr := audit.Audit(ctx, "breakglass.issued", tenantID, data); aerr != nil {
