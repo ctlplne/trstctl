@@ -121,6 +121,9 @@ func (a *API) updateSecretSyncWorkloadIdentitySource(w http.ResponseWriter, r *h
 	id := r.PathValue("id")
 	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
 		if _, err := a.store.GetSecretSyncWorkloadIdentitySource(ctx, tenantID, id); err != nil {
+			if errors.Is(err, store.ErrSecretSyncWorkloadIdentitySourceNotFound) {
+				return 0, nil, errStatus(http.StatusNotFound, "secret-sync workload identity source not found")
+			}
 			return 0, nil, err
 		}
 		req, err := a.decodeSecretSyncWorkloadIdentitySourceRequest(ctx, tenantID, r)
@@ -143,6 +146,9 @@ func (a *API) deleteSecretSyncWorkloadIdentitySource(w http.ResponseWriter, r *h
 	id := r.PathValue("id")
 	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
 		if _, err := a.store.GetSecretSyncWorkloadIdentitySource(ctx, tenantID, id); err != nil {
+			if errors.Is(err, store.ErrSecretSyncWorkloadIdentitySourceNotFound) {
+				return 0, nil, errStatus(http.StatusNotFound, "secret-sync workload identity source not found")
+			}
 			return 0, nil, err
 		}
 		data, err := json.Marshal(projections.SecretSyncWorkloadIdentitySourceDeleted{ID: id})

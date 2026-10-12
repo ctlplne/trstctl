@@ -369,7 +369,7 @@ not this file.
 | `internal/store/privacy_erasure_preparation.go:156` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
-| `internal/store/secret_sync_workload_identity.go:205` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
+| `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
 | `internal/ticketintake/intake_test.go:103` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/intake_test.go:150` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |

@@ -129,16 +129,14 @@ func (s *Store) ApplySecretSyncWorkloadIdentitySourceStatusTx(ctx context.Contex
 }
 
 func (s *Store) ApplySecretSyncWorkloadIdentitySourceDeletedTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
-	tag, err := tx.Exec(ctx,
+	_, err := tx.Exec(ctx,
 		`DELETE FROM secret_sync_workload_identity_sources WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrSecretSyncWorkloadIdentitySourceNotFound
-	}
-	return nil
+	// The request-side projector and event tail can race to apply this event.
+	// SQL DELETE already converges when its target is absent; surfacing a missing
+	// row here turns a completed operator deletion into a false 500 and breaks
+	// event replay after a crash.
+	return err
 }
 
 func (s *Store) GetSecretSyncWorkloadIdentitySource(ctx context.Context, tenantID, id string) (SecretSyncWorkloadIdentitySource, error) {
