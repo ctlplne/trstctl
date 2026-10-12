@@ -392,7 +392,9 @@ exact reason/lifetime or target public CA certificate. The console shows the
 approval digest, refreshes the independently authenticated quorum, and disables
 execution if the reviewed fields change. An operator can resume a pending
 ceremony after a browser restart with its ID and the original fields. The
-bounded result history recovers public certificates and the request digest after
+rotation lifetime accepts 1 through 315,360,000 seconds in both the console and
+API, so an operator can choose the same long-lived CA successor through either path.
+The bounded result history recovers public certificates and the request digest after
 a lost response or cold restart; signer private keys never enter the console.
 The self-service approvals inbox at
 `/approvals` blocks self-approval of your own request. See

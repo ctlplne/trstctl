@@ -7386,7 +7386,10 @@ export const messages = {
   "breakglass.authority.executeRotation": { defaultMessage: "Rotate approved CA", description: "Execute approved emergency CA rotation." },
   "breakglass.authority.executeCross": { defaultMessage: "Cross-sign approved target", description: "Execute approved emergency CA cross-sign." },
   "breakglass.authority.reasonRequired": { defaultMessage: "Enter the CA rotation reason.", description: "Emergency CA rotation validation error." },
-  "breakglass.authority.ttlInvalid": { defaultMessage: "Enter a lifetime from 1 to 86,400 seconds.", description: "Emergency CA lifetime validation error." },
+  "breakglass.authority.ttlInvalid": {
+    defaultMessage: "Enter a lifetime from 1 to 315,360,000 seconds (10 years).",
+    description: "Emergency CA lifetime validation error.",
+  },
   "breakglass.authority.certificateInvalid": {
     defaultMessage: "Paste a complete public CA certificate in PEM form.",
     description: "Emergency CA target certificate validation error.",

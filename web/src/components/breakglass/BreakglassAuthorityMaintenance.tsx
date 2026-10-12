@@ -45,7 +45,7 @@ function AuthorityProcedure({ kind, onCompleted }: { kind: AuthorityKind; onComp
     .superRefine((values, ctx) => {
       if (kind === "rotation") {
         if (!values.reason.trim()) ctx.addIssue({ code: "custom", path: ["reason"], message: t("breakglass.authority.reasonRequired") });
-        if (!Number.isInteger(values.ttl_seconds) || values.ttl_seconds < 1 || values.ttl_seconds > 86400) {
+        if (!Number.isInteger(values.ttl_seconds) || values.ttl_seconds < 1 || values.ttl_seconds > 315360000) {
           ctx.addIssue({ code: "custom", path: ["ttl_seconds"], message: t("breakglass.authority.ttlInvalid") });
         }
       } else if (!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----$/.test(values.certificate_pem.trim())) {
@@ -159,7 +159,7 @@ function AuthorityProcedure({ kind, onCompleted }: { kind: AuthorityKind; onComp
               {(field) => <Input {...field} {...register("reason")} />}
             </Field>
             <Field label={t("breakglass.authority.rotationTTL")} error={errors.ttl_seconds?.message} required>
-              {(field) => <Input {...field} type="number" min="1" max="86400" {...register("ttl_seconds", { valueAsNumber: true })} />}
+              {(field) => <Input {...field} type="number" min="1" max="315360000" {...register("ttl_seconds", { valueAsNumber: true })} />}
             </Field>
           </div>
         ) : (

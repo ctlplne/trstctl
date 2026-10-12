@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import type { CapabilityView } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
@@ -248,5 +248,45 @@ describe("break-glass runtime truth", () => {
     fireEvent.change(screen.getByLabelText("CA rotation reason"), { target: { value: "different incident" } });
     expect(screen.getByRole("button", { name: "Rotate approved CA" })).toBeDisabled();
     expect(rotateBreakglass).not.toHaveBeenCalled();
+  });
+
+  it("accepts a year-long CA successor lifetime that the API supports", async () => {
+    breakglassIssues.mockResolvedValue({ items: [], next_cursor: "" });
+    breakglassAuthorityReceipts.mockResolvedValue({ items: [], next_cursor: "" });
+    startBreakglassRotationCeremony.mockResolvedValue({
+      id: "year-long-ceremony",
+      tenant_id: "tenant-1",
+      purpose: "sha256:year-long-request",
+      status: "pending",
+      approvals: 0,
+      threshold: 2,
+      created_at: "2026-10-12T12:00:00Z",
+    });
+    const view: CapabilityView = {
+      ...unavailableRuntime,
+      items: [
+        {
+          ...unavailableRuntime.items[0],
+          actions: { ...unavailableRuntime.items[0].actions, allowed: ["startBreakglassRotationCeremony"] },
+        },
+      ],
+    };
+    render(
+      <AppQueryProvider>
+        <CapabilityFixtureProvider view={view}>
+          <BreakGlassReconcile />
+        </CapabilityFixtureProvider>
+      </AppQueryProvider>,
+    );
+    fireEvent.click(screen.getByText("Rotate emergency CA"));
+    fireEvent.change(screen.getByLabelText("CA rotation reason"), { target: { value: "annual emergency authority re-key" } });
+    fireEvent.change(screen.getByLabelText("CA lifetime (seconds)"), { target: { value: "31536000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open CA rotation ceremony" }));
+    await waitFor(() =>
+      expect(startBreakglassRotationCeremony).toHaveBeenCalledWith({
+        reason: "annual emergency authority re-key",
+        ttl_seconds: 31536000,
+      }),
+    );
   });
 });
