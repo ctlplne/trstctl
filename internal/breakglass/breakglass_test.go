@@ -3,11 +3,9 @@
 package breakglass
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -93,7 +91,7 @@ func TestBreakglassTamperDetected(t *testing.T) {
 	}
 }
 
-func TestBreakglassReconcilesCleanlyAndRejectsTamper(t *testing.T) {
+func TestBreakglassVerifyBatchAcceptsSignedBundlesAndRejectsTamper(t *testing.T) {
 	svc, caDER := newService(t)
 	mk := func(id string) Bundle {
 		b, err := svc.IssueOffline(EmergencyRequest{
@@ -105,23 +103,18 @@ func TestBreakglassReconcilesCleanlyAndRejectsTamper(t *testing.T) {
 		return b
 	}
 	good := []Bundle{mk("e1"), mk("e2")}
-	rec := &auditsink.Recorder{}
-	n, err := Reconcile(context.Background(), "t1", good, caDER, svc.PublicKeyDER(), rec)
-	if err != nil {
-		t.Fatalf("Reconcile: %v", err)
-	}
-	if n != 2 || rec.Count("breakglass.issued") != 2 {
-		t.Errorf("reconciled=%d audited=%d, want 2/2", n, rec.Count("breakglass.issued"))
+	if err := VerifyBatch(good, caDER, svc.PublicKeyDER()); err != nil {
+		t.Fatalf("verify signed bundle batch: %v", err)
 	}
 
 	bad := mk("e3")
 	bad.Subject = "rewritten"
-	if _, err := Reconcile(context.Background(), "t1", []Bundle{bad}, caDER, svc.PublicKeyDER(), &auditsink.Recorder{}); err == nil {
-		t.Error("reconcile accepted a tampered bundle")
+	if err := VerifyBatch([]Bundle{bad}, caDER, svc.PublicKeyDER()); err == nil {
+		t.Error("batch verifier accepted a tampered bundle")
 	}
 }
 
-func TestBreakglassReconcileValidatesWholeBatchBeforeAudit(t *testing.T) {
+func TestBreakglassVerifyBatchRejectsTamperedTail(t *testing.T) {
 	svc, caDER := newService(t)
 	makeBundle := func(id string) Bundle {
 		t.Helper()
@@ -137,9 +130,7 @@ func TestBreakglassReconcileValidatesWholeBatchBeforeAudit(t *testing.T) {
 	valid := makeBundle("first")
 	tampered := makeBundle("second")
 	tampered.Reason = "changed after signature"
-	recorder := &auditsink.Recorder{}
-	n, err := Reconcile(context.Background(), "t1", []Bundle{valid, tampered}, caDER, svc.PublicKeyDER(), recorder)
-	if err == nil || n != 0 || recorder.Count("breakglass.issued") != 0 {
-		t.Fatalf("partial reconciliation of invalid batch: count=%d audit=%d err=%v", n, recorder.Count("breakglass.issued"), err)
+	if err := VerifyBatch([]Bundle{valid, tampered}, caDER, svc.PublicKeyDER()); err == nil {
+		t.Fatal("batch verifier accepted a tampered tail")
 	}
 }

@@ -9,34 +9,51 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestConfiguredBreakglassReconcileValidatesWholeBatchBeforeAudit(t *testing.T) {
 	bundle, caDER, pubDER := servedBreakglassBundle(t)
 	tampered := bundle
 	tampered.Reason = "changed after signature"
-	recorder := &auditsink.Recorder{}
 	runtime := &configuredBreakglassRuntime{
 		tenantID:  "tenant-1",
 		verifiers: []breakglassVerifier{{caDER: caDER, publicDER: pubDER}},
-		auditor:   recorder,
 	}
 	n, err := runtime.ReconcileBreakglass(t.Context(), "tenant-1", []breakglass.Bundle{bundle, tampered})
-	if err == nil || n != 0 || recorder.Count("breakglass.issued") != 0 {
-		t.Fatalf("configured runtime partially reconciled invalid batch: count=%d audit=%d err=%v", n, recorder.Count("breakglass.issued"), err)
+	if err == nil || n != 0 {
+		t.Fatalf("configured runtime partially reconciled invalid batch: count=%d err=%v", n, err)
+	}
+}
+
+func TestConfiguredBreakglassReconcileSkipsExactSignedRetry(t *testing.T) {
+	bundle, caDER, pubDER := servedBreakglassBundle(t)
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
+	runtime := &configuredBreakglassRuntime{
+		tenantID: h.tenant, store: h.store, log: h.log,
+		verifiers: []breakglassVerifier{{caDER: caDER, publicDER: pubDER}},
+	}
+	first, err := runtime.ReconcileBreakglass(t.Context(), h.tenant, []breakglass.Bundle{bundle})
+	if err != nil || first != 1 {
+		t.Fatalf("configured first import: count=%d err=%v", first, err)
+	}
+	second, err := runtime.ReconcileBreakglass(t.Context(), h.tenant, []breakglass.Bundle{bundle})
+	if err != nil || second != 0 {
+		t.Fatalf("configured exact retry: count=%d err=%v", second, err)
 	}
 }
 
@@ -76,6 +93,18 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 		t.Fatal("breakglass.issued was not appended to the event log")
 	}
 
+	// The HTTP idempotency key covers one request only. Re-importing the same
+	// signed bundle with another key must not append a second issuance record.
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token, "iam-06-breakglass-reconcile-again", map[string]any{
+		"bundles": []breakglass.Bundle{bundle},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("break-glass reconcile replay = %d body=%s; want 200", code, body)
+	}
+	if err := json.Unmarshal(body, &reconcileResp); err != nil || reconcileResp.Reconciled != 0 {
+		t.Fatalf("reconcile replay should append zero new events: count=%d err=%v body=%s", reconcileResp.Reconciled, err, body)
+	}
+
 	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/audit/events?type=breakglass.issued", token, "", nil)
 	if code != http.StatusOK {
 		t.Fatalf("audit search = %d body=%s; want 200", code, body)
@@ -96,6 +125,168 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 	}
 	if _, err := audit.VerifyChain(auditResp.Events); err != nil {
 		t.Fatalf("break-glass audit record is not chain-verifiable: %v", err)
+	}
+}
+
+func TestServedBreakglassReconcileRejectsConflictingSignedRequestID(t *testing.T) {
+	svc, caDER, pubDER := servedBreakglassService(t)
+	issue := func() breakglass.Bundle {
+		t.Helper()
+		bundle, err := svc.IssueOffline(breakglass.EmergencyRequest{
+			ID: "iam-06-same-request", Subject: "recovery.svc.example.test",
+			CSRDer: servedBreakglassCSR(t, "recovery.svc.example.test"),
+			Reason: "offline incident recovery", Approvals: []string{"op1", "op2"},
+		}, 30*time.Minute)
+		if err != nil {
+			t.Fatalf("issue signed offline bundle: %v", err)
+		}
+		return bundle
+	}
+	first, second := issue(), issue()
+	if bytes.Equal(first.CertDER, second.CertDER) {
+		t.Fatal("test setup produced identical signed certificates")
+	}
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.BreakglassCACertDER = caDER
+		d.BreakglassPublicKeyDER = pubDER
+	})
+	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "incident-commander", []string{
+		string(authz.CertsIssue), string(authz.AuditRead),
+	})
+	before, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head: %v", err)
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token, "iam-06-conflicting-batch", map[string]any{
+		"bundles": []breakglass.Bundle{first, second},
+	})
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("conflicting signed batch = %d body=%s; want 422", code, body)
+	}
+	after, err := h.log.LastSequence(t.Context())
+	if err != nil || after != before {
+		t.Fatalf("rejected batch changed event head: before=%d after=%d err=%v", before, after, err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token, "iam-06-first-signed-bundle", map[string]any{
+		"bundles": []breakglass.Bundle{first},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("first signed bundle = %d body=%s; want 200", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token, "iam-06-conflicting-signed-bundle", map[string]any{
+		"bundles": []breakglass.Bundle{second},
+	})
+	if code != http.StatusConflict {
+		t.Fatalf("different signed bundle with same request ID = %d body=%s; want 409", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/audit/events?type=breakglass.issued", token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("audit search = %d body=%s; want 200", code, body)
+	}
+	var auditResp struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(body, &auditResp); err != nil || auditResp.Count != 1 {
+		t.Fatalf("conflicting signed bundle changed audit count: count=%d err=%v body=%s", auditResp.Count, err, body)
+	}
+}
+
+func TestBreakglassReconcileSerializesConcurrentStoreClients(t *testing.T) {
+	bundle, caDER, pubDER := servedBreakglassBundle(t)
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
+	secondStore, err := store.Open(t.Context(), serverTestPostgresDSN(t))
+	if err != nil {
+		t.Fatalf("open second PostgreSQL client: %v", err)
+	}
+	t.Cleanup(secondStore.Close)
+	reconcilers := []breakglassReconciler{
+		{caCertDER: caDER, publicDER: pubDER, store: h.store, log: h.log},
+		{caCertDER: caDER, publicDER: pubDER, store: secondStore, log: h.log},
+	}
+	before, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head: %v", err)
+	}
+	type result struct {
+		count int
+		err   error
+	}
+	const replicas = 6
+	start := make(chan struct{})
+	results := make(chan result, replicas)
+	for i := range replicas {
+		go func(reconciler breakglassReconciler) {
+			<-start
+			count, reconcileErr := reconciler.ReconcileBreakglass(t.Context(), h.tenant, []breakglass.Bundle{bundle})
+			results <- result{count, reconcileErr}
+		}(reconcilers[i%len(reconcilers)])
+	}
+	close(start)
+	total := 0
+	for range replicas {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("concurrent reconciliation: %v", got.err)
+		}
+		total += got.count
+	}
+	after, err := h.log.LastSequence(t.Context())
+	if err != nil || total != 1 || after != before+1 {
+		t.Fatalf("concurrent replicas appended %d issuance events; before=%d after=%d err=%v", total, before, after, err)
+	}
+}
+
+func TestBreakglassReconcileColdEventLogReplaySkipsSignedBundle(t *testing.T) {
+	svc, caDER, pubDER := servedBreakglassService(t)
+	issue := func(id string) breakglass.Bundle {
+		t.Helper()
+		bundle, err := svc.IssueOffline(breakglass.EmergencyRequest{
+			ID: id, Subject: "recovery.svc.example.test", CSRDer: servedBreakglassCSR(t, "recovery.svc.example.test"),
+			Reason: "offline incident recovery", Approvals: []string{"op1", "op2"},
+		}, 30*time.Minute)
+		if err != nil {
+			t.Fatalf("issue signed offline bundle: %v", err)
+		}
+		return bundle
+	}
+	bundle, nextBundle := issue("iam-06-cold-first"), issue("iam-06-cold-next")
+	st := newServerTestStore(t)
+	storeDir := filepath.Join(t.TempDir(), "nats")
+	openLog := func() *events.Log {
+		t.Helper()
+		log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir})
+		if err != nil {
+			t.Fatalf("open persisted event log: %v", err)
+		}
+		return log
+	}
+	log := openLog()
+	reconciler := breakglassReconciler{caCertDER: caDER, publicDER: pubDER, store: st, log: log}
+	count, err := reconciler.ReconcileBreakglass(t.Context(), servedTestTenant, []breakglass.Bundle{bundle})
+	if err != nil || count != 1 {
+		t.Fatalf("first import: count=%d err=%v", count, err)
+	}
+	before, err := log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before restart: %v", err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatalf("close first event-log process: %v", err)
+	}
+	log = openLog()
+	t.Cleanup(func() { _ = log.Close() })
+	reconciler.log = log
+	count, err = reconciler.ReconcileBreakglass(t.Context(), servedTestTenant, []breakglass.Bundle{bundle, nextBundle})
+	if err != nil || count != 1 {
+		t.Fatalf("cold partial-batch replay: count=%d err=%v", count, err)
+	}
+	after, err := log.LastSequence(t.Context())
+	if err != nil || after != before+1 {
+		t.Fatalf("cold partial-batch replay changed event head incorrectly: before=%d after=%d err=%v", before, after, err)
+	}
+	count, err = reconciler.ReconcileBreakglass(t.Context(), servedTestTenant, []breakglass.Bundle{bundle, nextBundle})
+	if err != nil || count != 0 {
+		t.Fatalf("exact post-restart retry: count=%d err=%v", count, err)
 	}
 }
 

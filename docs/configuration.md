@@ -1133,6 +1133,14 @@ cross-sign ceremony/execution pairs under `/api/v1/breakglass/*-ceremonies`,
 accepts signed offline bundles, verifies them against trust anchors pinned in process
 config, and records verified facts as `breakglass.issued` events in the hash-chained
 audit log. Requests cannot supply their own verifier keys.
+The server verifies every signature in a batch before recording any bundle. It
+uses the tenant and signed `request_id` as a durable event identity, so retrying
+the same bundle with a new `Idempotency-Key`, after a restart, or on another
+replica adds no second issuance event. The response's `reconciled` count is the
+number of newly recorded bundles; an exact retry returns `0`. A different valid
+bundle with an already recorded request ID returns `409`. If an event-log failure
+interrupts a batch after a prefix was recorded, resubmit the original batch:
+the recorded prefix is skipped and the remaining bundles are processed.
 
 `breakglass.enabled` pins reconciliation verifier material. The files may be DER, or
 PEM with `CERTIFICATE` and `PUBLIC KEY` blocks, and startup fails closed when either

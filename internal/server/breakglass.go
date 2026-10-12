@@ -13,17 +13,18 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type breakglassReconciler struct {
 	caCertDER []byte
 	publicDER []byte
-	audit     auditsink.Auditor
+	store     *store.Store
+	log       *events.Log
 }
 
 type breakglassOnlineIssuer struct {
@@ -70,13 +71,14 @@ func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
 		return nil, nil
 	case hasCA != hasPublicKey:
 		return nil, errors.New("server: break-glass reconciliation requires both CA certificate and public key verifier material")
-	case d.Log == nil:
-		return nil, errors.New("server: break-glass reconciliation requires an event log for audit reconciliation")
+	case d.Log == nil || d.Store == nil:
+		return nil, errors.New("server: break-glass reconciliation requires PostgreSQL and an event log for audit reconciliation")
 	}
 	return breakglassReconciler{
 		caCertDER: append([]byte(nil), d.BreakglassCACertDER...),
 		publicDER: append([]byte(nil), d.BreakglassPublicKeyDER...),
-		audit:     audit.NewAuditor(d.Log),
+		store:     d.Store,
+		log:       d.Log,
 	}, nil
 }
 
@@ -97,12 +99,10 @@ func (r breakglassReconciler) ReconcileBreakglass(ctx context.Context, tenantID 
 	if tenantID == "" {
 		return 0, errors.New("server: break-glass reconciliation requires tenant scope")
 	}
-	for _, b := range bundles {
-		if err := breakglass.Verify(b, r.caCertDER, r.publicDER); err != nil {
-			return 0, fmt.Errorf("%w: bundle %q failed verification: %v", api.ErrBreakglassInvalidBundle, b.RequestID, err)
-		}
+	if err := breakglass.VerifyBatch(bundles, r.caCertDER, r.publicDER); err != nil {
+		return 0, fmt.Errorf("%w: %v", api.ErrBreakglassInvalidBundle, err)
 	}
-	return breakglass.Reconcile(ctx, tenantID, bundles, r.caCertDER, r.publicDER, r.audit)
+	return reconcileVerifiedBreakglassBundles(ctx, tenantID, bundles, r.store, r.log)
 }
 
 func (i breakglassOnlineIssuer) IssueBreakglass(ctx context.Context, tenantID string, req breakglass.EmergencyRequest, ttl time.Duration) (breakglass.Bundle, int, error) {

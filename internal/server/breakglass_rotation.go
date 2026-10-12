@@ -20,8 +20,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -84,7 +82,6 @@ type configuredBreakglassRuntime struct {
 	log       *events.Log
 	provider  SignerProvider
 	signAuthz signing.SignTokenProvider
-	auditor   auditsink.Auditor
 
 	activeHandle  string
 	baseHandle    string
@@ -129,7 +126,7 @@ func breakglassRotationFromConfig(ctx context.Context, cfg config.Breakglass, st
 	operators := compactSortedOperators(cfg.Operators)
 	runtime := &configuredBreakglassRuntime{
 		tenantID: strings.TrimSpace(cfg.TenantID), threshold: cfg.Threshold, operators: operators,
-		store: st, log: log, provider: provider, signAuthz: signAuthz, auditor: audit.NewAuditor(log),
+		store: st, log: log, provider: provider, signAuthz: signAuthz,
 		activeHandle: strings.TrimSpace(cfg.SignerHandle), baseHandle: strings.TrimSpace(cfg.SignerHandle), activeCertDER: append([]byte(nil), caCertDER...),
 		activeSigner: signer,
 		verifiers:    []breakglassVerifier{{caDER: append([]byte(nil), caCertDER...), publicDER: append([]byte(nil), publicKeyDER...)}},
@@ -507,21 +504,7 @@ func (r *configuredBreakglassRuntime) ReconcileBreakglass(ctx context.Context, t
 			return 0, fmt.Errorf("%w: bundle %q failed every active/overlap verifier", api.ErrBreakglassInvalidBundle, bundle.RequestID)
 		}
 	}
-	reconciled := 0
-	for _, bundle := range bundles {
-		data, err := json.Marshal(map[string]any{
-			"request_id": bundle.RequestID, "subject": bundle.Subject, "reason": bundle.Reason,
-			"issued_at": bundle.IssuedAt, "approvals": len(bundle.Approvals),
-		})
-		if err != nil {
-			return reconciled, err
-		}
-		if err := r.auditor.Audit(ctx, "breakglass.issued", tenantID, data); err != nil {
-			return reconciled, err
-		}
-		reconciled++
-	}
-	return reconciled, nil
+	return reconcileVerifiedBreakglassBundles(ctx, tenantID, bundles, r.store, r.log)
 }
 
 func (r *configuredBreakglassRuntime) consumeAndVerifyCeremony(ctx context.Context, tx pgx.Tx, ceremonyID, purpose string) ([]string, error) {

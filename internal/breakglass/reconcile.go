@@ -2,36 +2,16 @@
 
 package breakglass
 
-import (
-	"context"
-	"fmt"
-	"time"
+import "fmt"
 
-	"trstctl.com/trstctl/internal/auditsink"
-)
-
-// Reconcile replays emergency bundles into the control plane's audit log on
-// recovery (AN-2). Each verified bundle becomes an audited "breakglass.issued"
-// event; a bundle that fails verification is rejected and stops the batch, so a
-// tampered emergency credential cannot be silently absorbed into the record.
-func Reconcile(ctx context.Context, tenantID string, bundles []Bundle, caCertDER, breakglassPubDER []byte, audit auditsink.Auditor) (reconciled int, err error) {
-	if audit == nil {
-		audit = auditsink.Nop{}
-	}
-	// Refuse an invalid member before emitting any event. A late bad bundle
-	// must not leave an apparently successful prefix of a rejected batch.
+// VerifyBatch checks every bundle before a caller starts reconciliation. Event
+// writes belong to the server's durable, tenant-scoped request-ID fence; a
+// generic audit sink cannot prevent a second import after a retry or restart.
+func VerifyBatch(bundles []Bundle, caCertDER, breakglassPubDER []byte) error {
 	for _, b := range bundles {
-		if verr := Verify(b, caCertDER, breakglassPubDER); verr != nil {
-			return 0, fmt.Errorf("breakglass: reconcile rejected bundle %q: %w", b.RequestID, verr)
+		if err := Verify(b, caCertDER, breakglassPubDER); err != nil {
+			return fmt.Errorf("breakglass: reconcile rejected bundle %q: %w", b.RequestID, err)
 		}
 	}
-	for _, b := range bundles {
-		data := []byte(fmt.Sprintf(`{"request_id":%q,"subject":%q,"reason":%q,"issued_at":%q,"approvals":%d}`,
-			b.RequestID, b.Subject, b.Reason, b.IssuedAt.Format(time.RFC3339), len(b.Approvals)))
-		if aerr := audit.Audit(ctx, "breakglass.issued", tenantID, data); aerr != nil {
-			return reconciled, aerr
-		}
-		reconciled++
-	}
-	return reconciled, nil
+	return nil
 }

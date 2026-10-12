@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // ErrBreakglassInvalidBundle marks a signed emergency bundle that did not verify
@@ -454,6 +455,9 @@ func (a *API) reconcileBreakglass(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, ErrBreakglassInvalidBundle) {
 				return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			}
+			if errors.Is(err, store.ErrIdempotencyConflict) {
+				return 0, nil, errStatus(http.StatusConflict, "break-glass request ID was already reconciled with a different signed bundle")
 			}
 			return 0, nil, err
 		}
