@@ -527,6 +527,99 @@ func TestCertificateHealthExpiryActionExcludesRevokedAndSuperseded(t *testing.T)
 	}
 }
 
+// A JIT credential has an intentionally short TTL and is replaced by another
+// attested request. Its immutable issuance key identifies that contract even if
+// a later discovery observation changes the mutable source label.
+func TestCertificateHealthAndAlertsDoNotTreatJITExpiryAsRenewalWork(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	const tenantID = "88888888-8888-4888-8888-888888888888"
+	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "jit-expiry"}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	notBefore, notAfter := now.Add(-time.Minute), now.Add(10*time.Minute)
+	for _, tc := range []struct{ fingerprint, source, issuanceKey string }{
+		{"managed-leaf", "issued", "issued:managed-leaf"},
+		{"jit-observed-leaf", "ephemeral:k8s_sat", "ephemeral-issue:approval-1"},
+	} {
+		if _, err := st.UpsertCertificate(ctx, store.Certificate{
+			TenantID: tenantID, Subject: "CN=" + tc.fingerprint, Fingerprint: tc.fingerprint,
+			Serial: tc.fingerprint, Issuer: "CN=jit-expiry", KeyAlgorithm: "ECDSA-P256",
+			NotBefore: &notBefore, NotAfter: &notAfter, Source: tc.source,
+			IssuanceIdempotencyKey: tc.issuanceKey,
+		}); err != nil {
+			t.Fatalf("seed %s: %v", tc.fingerprint, err)
+		}
+	}
+	if _, err := st.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantID, Subject: "CN=jit-observed-leaf", Fingerprint: "jit-observed-leaf",
+		Serial: "jit-observed-leaf", Issuer: "CN=jit-expiry", KeyAlgorithm: "ECDSA-P256",
+		NotBefore: &notBefore, NotAfter: &notAfter, Source: "discovery:network",
+	}); err != nil {
+		t.Fatalf("re-observe JIT certificate: %v", err)
+	}
+	snap, err := st.CertificateHealth(ctx, tenantID, now, 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Summary.Active != 2 || snap.Summary.ExpectedEphemeral != 1 || snap.Summary.Expiring7d != 1 || len(snap.Expiring) != 1 ||
+		snap.Expiring[0].Fingerprint != "managed-leaf" {
+		t.Fatalf("JIT inflated actionable expiry: summary=%+v expiring=%+v", snap.Summary, snap.Expiring)
+	}
+	buckets := map[string]int{}
+	for _, bucket := range snap.ExpiryBuckets {
+		buckets[bucket.Name] = bucket.Count
+	}
+	if buckets["expected_ephemeral"] != 1 || buckets["expiring_7d"] != 1 {
+		t.Fatalf("JIT expected-expiry partition = %+v", buckets)
+	}
+	for _, source := range snap.SourceBreakdown {
+		if source.Source == "discovery:network" && (source.Expired != 0 || source.Expiring30d != 0) {
+			t.Fatalf("JIT inflated source-level actionable expiry: %+v", source)
+		}
+	}
+	alerts, err := st.ListAlertableCertificates(ctx, tenantID, now, now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(alerts) != 1 || alerts[0].Fingerprint != "managed-leaf" {
+		t.Fatalf("JIT inflated expiry alerts: %+v", alerts)
+	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return st.MarkCertificateAlertedTx(ctx, tx, tenantID, alerts[0].ID, now)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	alertTenants, err := st.TenantsWithAlertableCertificates(ctx, now, now.Add(time.Hour))
+	if err != nil || len(alertTenants) != 0 {
+		t.Fatalf("JIT alone queued expiry-alert tenant work: %+v, %v", alertTenants, err)
+	}
+	window := now.Add(24 * time.Hour)
+	page, err := st.ListCertificatesPage(ctx, tenantID, store.ZeroUUID, nil, 25, &window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page) != 1 || page[0].Fingerprint != "managed-leaf" {
+		t.Fatalf("JIT appeared in actionable expiry page: %+v", page)
+	}
+	expired, err := st.CertificateHealth(ctx, tenantID, now.Add(20*time.Minute), 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expired.Summary.Expired != 1 || expired.Summary.ExpectedEphemeral != 1 {
+		t.Fatalf("JIT expiry changed actionable expiration: %+v", expired.Summary)
+	}
+	for _, source := range expired.SourceBreakdown {
+		if source.Source == "discovery:network" && source.Expired != 0 {
+			t.Fatalf("expired JIT raised a source-level alarm: %+v", source)
+		}
+	}
+}
+
 func setAuthorityNotAfter(ctx context.Context, st *store.Store, tenantID, id string, notAfter time.Time) error {
 	return st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,

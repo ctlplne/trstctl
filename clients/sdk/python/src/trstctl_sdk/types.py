@@ -2853,6 +2853,7 @@ Certificate = TypedDict(
         'created_at': str,
         'custody_summary': str,
         'deployment_location': str,
+        'expected_ephemeral_expiry': bool,
         'fingerprint': str,
         'id': str,
         'identity_ids': list[str],
@@ -2936,6 +2937,7 @@ CertificateHealthSummary = TypedDict(
     {
         'active': int,
         'discovered_count': int,
+        'expected_ephemeral': int,
         'expired': int,
         'expiring_180d': int,
         'expiring_1y': int,

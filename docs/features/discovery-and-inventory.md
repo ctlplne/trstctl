@@ -62,8 +62,14 @@ expiry bands, source breakdown, and the soonest-expiring certificates. Total and
 source counts preserve revoked and superseded history. Expiry action counts, bands,
 and the soonest-expiring list include only active certificates, so a retired
 predecessor does not raise a new expiry warning. The expiry bands sum to the active
-count. Issued, manually imported, and discovery-fed active certificates all count,
-including one found on a load balancer after a different CA issued it.
+count. A short-lived certificate issued through the approved JIT workflow remains in
+inventory and the separate `expected_ephemeral` band, even after a later discovery
+observation changes its source label. Its planned expiry is excluded from renewal
+alarms, the expiry worklist and alert delivery; request a fresh attested credential
+through **Workloads** instead. The `active` count is the retained lifecycle status,
+so it includes a JIT record until revocation or retirement even after its validity
+window closes. Issued, manually imported, and discovery-fed active certificates all
+count, including one found on a load balancer after a different CA issued it.
 
 ### Find a certificate across the inventory
 

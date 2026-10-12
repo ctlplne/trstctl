@@ -1637,7 +1637,7 @@ function CertificateWorkspace() {
                 <dt className="font-medium text-muted-foreground">{t("certificateCockpit.detail.effectiveOwnership")}</dt>
                 <dd>
                   {(() => {
-                    if (!detail.owner_id) return t("certificateCockpit.owner.missing");
+                    if (!detail.owner_id) return t(detail.expected_ephemeral_expiry ? "certificates.jit.noStandingOwner" : "certificateCockpit.owner.missing");
                     const owner = ownerByID.get(detail.owner_id);
                     return (
                       <span className="grid gap-0.5">
@@ -1691,6 +1691,13 @@ function CertificateWorkspace() {
                           className="text-caption font-medium text-brand-accent hover:underline"
                         >
                           {t("certificates.lifecycle.reviewKubernetes")}
+                        </Link>
+                      );
+                    }
+                    if (detail.status === "active" && detail.expected_ephemeral_expiry) {
+                      return (
+                        <Link to="/workloads#ephemeral-credential-heading" className="text-caption font-medium text-brand-accent hover:underline">
+                          {t("certificates.jit.requestNew")}
                         </Link>
                       );
                     }
@@ -1797,6 +1804,13 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
           </Link>
         );
       }
+      if (c.status === "active" && c.expected_ephemeral_expiry) {
+        return (
+          <Link to="/workloads#ephemeral-credential-heading" className="text-caption font-medium text-brand-accent hover:underline">
+            {translateNow("certificates.jit.requestNew")}
+          </Link>
+        );
+      }
       if (c.status === "active") {
         return (
           <Link to={certificateReplacementPath(c)} className="text-caption font-medium text-brand-accent hover:underline">
@@ -1854,7 +1868,12 @@ function certificateColumns(
       cell: (c) => {
         const owner = c.owner_id ? ownerByID.get(c.owner_id) : undefined;
         const label = certificateTeamLabel(c, ownerByID) || owner?.name || c.owner_id;
-        if (!label) return <span className="text-muted-foreground">{translateNow("certificateCockpit.owner.missing")}</span>;
+        if (!label)
+          return (
+            <span className="text-muted-foreground">
+              {translateNow(c.expected_ephemeral_expiry ? "certificates.jit.noStandingOwner" : "certificateCockpit.owner.missing")}
+            </span>
+          );
         return (
           <span className="grid gap-0.5">
             <span>{label}</span>
@@ -1886,7 +1905,9 @@ function certificateColumns(
       header: "Needs attention",
       className: "whitespace-nowrap align-middle",
       cell: (c) =>
-        c.status === "active" ? (
+        c.status === "active" && c.expected_ephemeral_expiry ? (
+          <span className="text-muted-foreground">{translateNow("certificates.jit.expectedExpiry")}</span>
+        ) : c.status === "active" ? (
           <StatusBadge vocabulary="expiry" value={validityBandForDates(c.not_before, c.not_after)} />
         ) : (
           <StatusBadge vocabulary="certificate" value={c.status} />
@@ -1910,6 +1931,7 @@ function certificateColumns(
 
 function certificateRowActionLabel(certificate: Certificate): string {
   if (certificate.status !== "active") return translateNow("certificates.inventory.review");
+  if (certificate.expected_ephemeral_expiry) return translateNow("certificates.inventory.view");
   const expiry = validityBandForDates(certificate.not_before, certificate.not_after);
   return expiry === "healthy" || expiry === "planned" ? translateNow("certificates.inventory.view") : translateNow("certificates.inventory.review");
 }

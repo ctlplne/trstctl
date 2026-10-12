@@ -13,6 +13,64 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// A JIT leaf may be discovered or even correlated with an existing managed
+// identity. Its short lifetime still requires a new attestation and approval;
+// neither renewal scheduler may silently mint a replacement for it.
+func TestJITCertificateCannotEnterAutomaticRenewalCandidates(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "jit renewal guard"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "jit-guard.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Status = "deployed"
+	if err := s.UpsertIdentity(ctx, identity); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	end := now.Add(10 * time.Minute)
+	jit, err := s.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantA, OwnerID: &owner.ID, Subject: "CN=jit-guard.example.test",
+		SANs: []string{identity.Name}, Issuer: "local", Serial: "jit-guard",
+		Fingerprint: strings.Repeat("e", 64), Source: "ephemeral:k8s_sat",
+		IssuanceIdempotencyKey: "ephemeral-issue:approved-guard",
+		Status:                 "active", NotBefore: &now, NotAfter: &end,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantA, OwnerID: &owner.ID, Subject: jit.Subject,
+		SANs: jit.SANs, Issuer: jit.Issuer, Serial: jit.Serial,
+		Fingerprint: jit.Fingerprint, Source: "discovery:network",
+		Status: "active", NotBefore: &now, NotAfter: &end,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cutoff := now.Add(time.Hour)
+	legacy, err := s.ListExpiringActiveCertificates(ctx, tenantA, cutoff)
+	if err != nil || len(legacy) != 0 {
+		t.Fatalf("JIT entered legacy renewal scan: %+v, %v", legacy, err)
+	}
+	candidates, err := s.ListRenewalIdentityCandidates(ctx, tenantA, cutoff, now)
+	if err != nil || len(candidates) != 0 {
+		t.Fatalf("JIT entered served renewal candidates: %+v, %v", candidates, err)
+	}
+	tenants, err := s.TenantsWithRenewalIdentityCandidates(ctx, cutoff, now)
+	if err != nil || len(tenants) != 0 {
+		t.Fatalf("JIT queued tenant renewal work: %+v, %v", tenants, err)
+	}
+	plan, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(plan) != 0 {
+		t.Fatalf("JIT entered lifecycle automation plan: %+v, %v", plan, err)
+	}
+}
+
 // Same owner and SAN are common during CA replacement. A short-lived successor
 // must not inherit the old CA's later expiry in the operator's automation plan.
 func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {

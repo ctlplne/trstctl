@@ -1620,9 +1620,10 @@ func componentSchemas() map[string]*Schema {
 		"sans":                  {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
 		"fingerprint": str(), "key_algorithm": str(), "not_before": timestamp(), "not_after": timestamp(),
 		"deployment_location": str(), "source": str(), "created_at": timestamp(),
-		"status":            {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
-		"revoked_at":        timestamp(),
-		"revocation_reason": str(),
+		"expected_ephemeral_expiry": {Type: "boolean", Description: "True only for a JIT certificate whose immutable issuance command expects short expiry. Inventory and audit retain it, but it is not actionable renewal or owner-gap work."},
+		"status":                    {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
+		"revoked_at":                timestamp(),
+		"revocation_reason":         str(),
 		// B5: per-certificate key custody. Empty means UNRECORDED, which is a
 		// distinct answer from any observation.
 		"key_origin":       {Type: "string", Enum: []string{"", "requester", "host_agent", "device", "control_plane", "signer"}},
@@ -1660,6 +1661,7 @@ func componentSchemas() map[string]*Schema {
 	certificateHealthSummary := object(map[string]*Schema{
 		"total":                 {Type: "integer"},
 		"active":                {Type: "integer"},
+		"expected_ephemeral":    {Type: "integer"},
 		"revoked":               {Type: "integer"},
 		"superseded":            {Type: "integer"},
 		"expired":               {Type: "integer"},
@@ -1675,7 +1677,7 @@ func componentSchemas() map[string]*Schema {
 		"discovered_count":      {Type: "integer"},
 		"unknown_expiry_count":  {Type: "integer"},
 		"health":                {Type: "string", Enum: []string{"ok", "warning", "critical"}},
-	}, "total", "active", "revoked", "superseded", "expired", "expiring_7d", "expiring_30d", "expiring_90d", "external_source_count", "imported_count", "discovered_count", "unknown_expiry_count", "health")
+	}, "total", "active", "expected_ephemeral", "revoked", "superseded", "expired", "expiring_7d", "expiring_30d", "expiring_90d", "external_source_count", "imported_count", "discovered_count", "unknown_expiry_count", "health")
 	certificateExpiryBucket := object(map[string]*Schema{
 		// Long-horizon bands (H5). "later" keeps its name and its place at the end
 		// of the partition but now means "beyond three years"; the 90-day ceiling
@@ -1683,7 +1685,7 @@ func componentSchemas() map[string]*Schema {
 		"name": {Type: "string", Enum: []string{
 			"expired", "expiring_7d", "expiring_30d", "expiring_90d",
 			"expiring_180d", "expiring_1y", "expiring_2y", "expiring_3y",
-			"later", "unknown",
+			"later", "unknown", "expected_ephemeral",
 		}},
 		"count": {Type: "integer"},
 	}, "name", "count")

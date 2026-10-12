@@ -8321,6 +8321,22 @@ export const messages = {
   },
   "certificateCockpit.automation.unknown": { defaultMessage: "Automation not checked", description: "Unavailable certificate automation evidence." },
   "certificateCockpit.owner.missing": { defaultMessage: "No accountable owner", description: "Certificate has no owner reference." },
+  "certificateCockpit.metric.expectedJIT": {
+    defaultMessage: "Expected JIT expiry",
+    description: "Active certificates issued through the attested JIT path, whose short expiry is intentional and does not create renewal work.",
+  },
+  "certificates.jit.expectedExpiry": {
+    defaultMessage: "JIT · expires as designed",
+    description: "Short-lived JIT certificate inventory band; expiry is expected, not an urgent renewal failure.",
+  },
+  "certificates.jit.requestNew": {
+    defaultMessage: "Request a fresh JIT certificate →",
+    description: "Issue a new independently attested JIT credential after the current one expires.",
+  },
+  "certificates.jit.noStandingOwner": {
+    defaultMessage: "JIT requester; no standing owner record",
+    description: "The attested JIT workflow binds a requester for this short-lived credential, but no long-lived owner record is present.",
+  },
   "certificateCockpit.owner.unreachable": { defaultMessage: "{name}; no alert contact", description: "Certificate owner has no reachable contact." },
   "certificateCockpit.owner.unresolved": { defaultMessage: "Owner reference is unresolved", description: "Certificate owner reference is not in the roster." },
   "certificateCockpit.owner.unchecked": { defaultMessage: "Owner contact not checked", description: "Certificate owner roster was unavailable." },

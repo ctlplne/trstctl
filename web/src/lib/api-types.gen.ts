@@ -2045,6 +2045,7 @@ export interface Certificate {
   created_at?: string;
   custody_summary?: string;
   deployment_location?: string;
+  expected_ephemeral_expiry?: boolean;
   fingerprint: string;
   id: string;
   identity_ids?: string[];
@@ -2080,7 +2081,7 @@ export interface CertificateCustodySummary {
 
 export interface CertificateExpiryBucket {
   count: number;
-  name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "expiring_180d" | "expiring_1y" | "expiring_2y" | "expiring_3y" | "later" | "unknown";
+  name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "expiring_180d" | "expiring_1y" | "expiring_2y" | "expiring_3y" | "later" | "unknown" | "expected_ephemeral";
 }
 
 export interface CertificateHealthDashboard {
@@ -2108,6 +2109,7 @@ export interface CertificateHealthItem {
 export interface CertificateHealthSummary {
   active: number;
   discovered_count: number;
+  expected_ephemeral: number;
   expired: number;
   expiring_180d?: number;
   expiring_1y?: number;

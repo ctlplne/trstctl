@@ -4098,7 +4098,12 @@ This is a deliberate, documented trust boundary, not an accident.
   expiry. Headless operators can use `trstctl-cli ephemeral preview`,
   `ephemeral issue`, and `ephemeral approve`; the approval command requires the
   genuine `approval_request_id` in both the path and body plus its matching
-  `intent_digest`.
+  `intent_digest`. The certificate inventory retains issued JIT leaves and their
+  public custody metadata. The health dashboard separates their intended short
+  expiry into `expected_ephemeral`; it does not send ordinary renewal alerts for
+  them or put them in the expiry action queue. Operators request a new attested
+  credential from Workloads after expiry. This classification follows the retained
+  issuance command even if a discovery scan later changes the source label.
 - Agent ↔ control-plane mTLS gRPC channel: the agent steady-state channel is
   served by the running binary when `agent_channel.enabled` (off by default
   — an upgrade does not silently open an agent port). The control plane

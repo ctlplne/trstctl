@@ -606,6 +606,33 @@ describe("Certificate Lifecycle cockpit", () => {
     vi.useRealTimers();
   });
 
+  it("keeps intentionally expiring JIT credentials in inventory without renewal or owner-gap alarms", async () => {
+    const jit = {
+      id: "jit-cert",
+      tenant_id: "tenant-1",
+      subject: "spiffe://demo.trstctl.local/ephemeral/ns/qa/sa/requester",
+      fingerprint: "jit-fingerprint",
+      status: "active",
+      source: "discovery:network",
+      expected_ephemeral_expiry: true,
+      not_after: "2026-08-24T12:10:00Z",
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [jit] });
+    apiMock.getCertificate.mockResolvedValue(jit);
+    const health = await apiMock.certificateHealth();
+    apiMock.certificateHealth.mockResolvedValue({
+      ...health,
+      summary: { ...health.summary, total: 1, active: 1, expected_ephemeral: 1, expired: 0, expiring_7d: 0, expiring_30d: 0, expiring_90d: 0, health: "ok" },
+    });
+    renderPage();
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(within(cockpit).getByText(/No loaded certificate needs action/)).toBeInTheDocument();
+    expect(within(cockpit).getByText("0", { selector: "[data-metric='owner-gaps']" })).toBeInTheDocument();
+    expect(within(cockpit).queryByText("Manual renewal")).not.toBeInTheDocument();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    expect(within(inventory).getByText(/ephemeral\/ns\/qa\/sa\/requester/)).toBeInTheDocument();
+  });
+
   it("uses exact enrolled-controller provenance for cert-manager renewal without claiming deployment", async () => {
     const certificate = {
       id: "cert-manager-leaf",

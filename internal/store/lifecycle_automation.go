@@ -130,6 +130,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			                     AND prior.identity_id = i.id)
 			                AND c.status = 'active' AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
 			          AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
+		          AND c.issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 			          AND c.status IN ('active', 'superseded')
 			        ORDER BY c.not_after DESC NULLS LAST, c.created_at DESC, c.id
 			        LIMIT 1

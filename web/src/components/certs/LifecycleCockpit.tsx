@@ -175,7 +175,7 @@ function isLiveCertificate(certificate: Certificate): boolean {
 function workArrivalData(certificates: Certificate[], now: number, labelForRange: (start: number, end: number) => string): TimeBarDatum[] {
   const data = Array.from({ length: 6 }, (_, index) => ({ label: labelForRange(index * 15, index * 15 + 14), value: 0, tone: "warning" as const }));
   for (const certificate of certificates) {
-    if (!isLiveCertificate(certificate)) continue;
+    if (!isLiveCertificate(certificate) || certificate.expected_ephemeral_expiry) continue;
     // Bin by exact remaining time, half-open like the served expiring_Nd counts: a
     // certificate in its 30th day is "≤30d" and in the 15–29 bin, never counted
     // again under 30–44 (DP2-012). The rounded-up day count is for display only.
@@ -251,7 +251,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
     if (document.visibilityState === "hidden") return;
     const crossedExpiry = certificates.some((certificate) => {
       const expires = Date.parse(certificate.not_after ?? "");
-      return certificate.status === "active" && expires > previous && expires <= now;
+      return certificate.status === "active" && !certificate.expected_ephemeral_expiry && expires > previous && expires <= now;
     });
     if (crossedExpiry) onExpiryBoundary?.();
   }, [now, certificates, onExpiryBoundary]);
@@ -284,7 +284,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
 
   const allActionRows = props.certificates
     .map((certificate): ActionRow | null => {
-      if (!isLiveCertificate(certificate)) return null;
+      if (!isLiveCertificate(certificate) || certificate.expected_ephemeral_expiry) return null;
       const days = daysUntil(certificate.not_after, now);
       const identity = certificateIdentity(certificate, identities);
       const run = matchingRun(certificate, identity, scopedRuns);
@@ -445,7 +445,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
               ? t("certificateCockpit.snapshot.refreshing")
               : t("certificateCockpit.snapshot.observed", { time: formatDateTime(props.health.generated_at) })}
         </p>
-        <ul className="grid gap-px overflow-hidden rounded-card border border-border bg-border sm:grid-cols-3 xl:grid-cols-6">
+        <ul className="grid gap-px overflow-hidden rounded-card border border-border bg-border sm:grid-cols-3 xl:grid-cols-7">
           <MetricLink
             to="/certificates?expiry=7d"
             label={t("source.expired.424a2551d3")}
@@ -473,6 +473,12 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
             value={props.owners === null ? t("source.not.checked.d3tri00006") : ownerGaps}
             metric="owner-gaps"
             urgent={ownerGaps > 0}
+          />
+          <MetricLink
+            to="/workloads"
+            label={t("certificateCockpit.metric.expectedJIT")}
+            value={props.healthUnavailable ? t("source.not.checked.d3tri00006") : (props.health.summary.expected_ephemeral ?? 0)}
+            metric="expected-jit"
           />
           <MetricLink
             to="/certificates"

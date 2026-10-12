@@ -50,6 +50,7 @@ const meta = {
       summary: {
         total: 2,
         active: 2,
+        expected_ephemeral: 0,
         expired: 1,
         expiring_7d: 2,
         expiring_30d: 2,

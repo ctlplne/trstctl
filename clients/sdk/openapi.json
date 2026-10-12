@@ -8332,6 +8332,10 @@
           "deployment_location": {
             "type": "string"
           },
+          "expected_ephemeral_expiry": {
+            "description": "True only for a JIT certificate whose immutable issuance command expects short expiry. Inventory and audit retain it, but it is not actionable renewal or owner-gap work.",
+            "type": "boolean"
+          },
           "fingerprint": {
             "type": "string"
           },
@@ -8505,7 +8509,8 @@
               "expiring_2y",
               "expiring_3y",
               "later",
-              "unknown"
+              "unknown",
+              "expected_ephemeral"
             ],
             "type": "string"
           }
@@ -8617,6 +8622,9 @@
           "discovered_count": {
             "type": "integer"
           },
+          "expected_ephemeral": {
+            "type": "integer"
+          },
           "expired": {
             "type": "integer"
           },
@@ -8671,6 +8679,7 @@
         "required": [
           "total",
           "active",
+          "expected_ephemeral",
           "revoked",
           "superseded",
           "expired",

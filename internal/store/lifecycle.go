@@ -35,8 +35,9 @@ func (s *Store) MarkCertificateAlertedTx(ctx context.Context, tx pgx.Tx, tenantI
 	return err
 }
 
-// ListExpiringActiveCertificates returns active certificates whose not_after is
-// before the cutoff, oldest expiry first — the renewal scan's input.
+// ListExpiringActiveCertificates returns renewable active certificates whose
+// not_after is before the cutoff, oldest expiry first. JIT issuance needs a new
+// attested approval, so its expected short expiry is never renewal work.
 func (s *Store) ListExpiringActiveCertificates(ctx context.Context, tenantID string, before time.Time) ([]Certificate, error) {
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -44,6 +45,7 @@ func (s *Store) ListExpiringActiveCertificates(ctx context.Context, tenantID str
 			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND status = 'active'
+			    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 			    AND not_after IS NOT NULL AND not_after < $2
 			  ORDER BY not_after`,
 			tenantID, before)
@@ -74,6 +76,7 @@ func (s *Store) ListAlertableCertificates(ctx context.Context, tenantID string, 
 			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND status = 'active' AND alerted_at IS NULL
+			    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 			    AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3
 			  ORDER BY not_after`,
 			tenantID, now, before)
@@ -103,6 +106,7 @@ func (s *Store) TenantsWithAlertableCertificates(ctx context.Context, now, befor
 		`SELECT DISTINCT tenant_id::text
 		   FROM certificates
 		  WHERE status = 'active'
+		    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 		    AND alerted_at IS NULL
 		    AND not_after IS NOT NULL
 		    AND not_after >= $1

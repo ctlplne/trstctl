@@ -731,6 +731,11 @@ The first call returns `state: "awaiting_approval"` and no certificate; the appr
 call returns `state: "issued"` with a certificate whose `not_after` is clamped by the
 TTL policy. Replaying either key returns the same response without opening another
 approval or minting again.
+The certificate stays in inventory for audit, but its short validity is intentional:
+the health dashboard counts it under `expected_ephemeral` instead of renewal work,
+and expiry does not send a standard certificate-renewal alert. A workload obtains
+a fresh JIT certificate by submitting a new attested request and completing its
+separate approval; the old leaf is never extended in place.
 
 The AI-agent broker works the same way once configured:
 

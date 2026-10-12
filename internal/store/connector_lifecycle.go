@@ -869,6 +869,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			        AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
 			        AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
 			    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
+			    AND c.issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 			    AND (c.status = 'active' OR (c.status = 'superseded' AND EXISTS (
 			      SELECT 1 FROM connector_delivery_receipts restored
 			       WHERE restored.tenant_id = $1 AND restored.tenant_id = i.tenant_id
@@ -945,6 +946,7 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 		  WHERE i.kind = 'x509_certificate'
 		    AND i.status IN ('deployed', 'renewal_failed')
 		    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
+		    AND c.issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 		    AND (c.status = 'active' OR (c.status = 'superseded' AND EXISTS (
 		      SELECT 1 FROM connector_delivery_receipts restored
 		       WHERE restored.tenant_id = i.tenant_id

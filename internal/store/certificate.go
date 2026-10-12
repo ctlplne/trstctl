@@ -107,14 +107,17 @@ type CertificateHealthSnapshot struct {
 }
 
 type CertificateHealthSummary struct {
-	Total       int
-	Active      int
-	Revoked     int
-	Superseded  int
-	Expired     int
-	Expiring7d  int
-	Expiring30d int
-	Expiring90d int
+	Total  int
+	Active int
+	// ExpectedEphemeral counts active lifecycle records whose immutable JIT
+	// issuance key marks expiry as the intended outcome, not renewal work.
+	ExpectedEphemeral int
+	Revoked           int
+	Superseded        int
+	Expired           int
+	Expiring7d        int
+	Expiring30d       int
+	Expiring90d       int
 	// Long-horizon counts (H5). The dashboard used to stop at 90 days and call
 	// everything past it "later", which is the right resolution for a leaf and
 	// useless for a CA: a root expiring in 30 months reads identically to one
@@ -216,8 +219,9 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 
 // CertificateHealth returns a bounded estate-wide expiry/health dashboard. All
 // counts are computed from tenant-scoped certificate inventory rows under RLS
-// (AN-1); no source is excluded. Total and lifecycle-status counts retain the
-// history, while expiry action counts and buckets contain only active rows.
+// (AN-1). Total and lifecycle-status counts retain every record. Actionable
+// expiry excludes certificates issued by the JIT approval path because their
+// short TTL is intentional; a separate bucket keeps the active partition whole.
 // Revoked and superseded predecessors remain in inventory, but cannot create
 // new expiry work for an operator.
 func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time.Time, expiringLimit int) (CertificateHealthSnapshot, error) {
@@ -251,6 +255,7 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			{Name: "expiring_3y"},
 			{Name: "later"},
 			{Name: "unknown"},
+			{Name: "expected_ephemeral"},
 		},
 	}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -258,27 +263,29 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			`SELECT
 			    COUNT(*),
 			    COUNT(*) FILTER (WHERE status = 'active'),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key LIKE 'ephemeral-issue:%'),
 			    COUNT(*) FILTER (WHERE status = 'revoked'),
 			    COUNT(*) FILTER (WHERE status = 'superseded'),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after < $2),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $4),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $5),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after < $2),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $4),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $5),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') <> 'issued'),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') IN ('import', 'manual', 'manual-ui')),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') LIKE 'discovery:%'),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NULL),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $6),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $7),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $8),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $9),
-			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $9)
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NULL),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $6),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $7),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $8),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $9),
+			    COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $9)
 			   FROM certificates
 			  WHERE tenant_id = $1`,
 			tenantID, now, soon7, soon30, soon90, soon180, soon1y, soon2y, soon3y).
 			Scan(
 				&snap.Summary.Total,
 				&snap.Summary.Active,
+				&snap.Summary.ExpectedEphemeral,
 				&snap.Summary.Revoked,
 				&snap.Summary.Superseded,
 				&snap.Summary.Expired,
@@ -309,6 +316,7 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 		snap.ExpiryBuckets[6].Count = snap.Summary.Expiring2y - snap.Summary.Expiring1y
 		snap.ExpiryBuckets[7].Count = snap.Summary.Expiring3y - snap.Summary.Expiring2y
 		snap.ExpiryBuckets[9].Count = snap.Summary.UnknownExpiryCount
+		snap.ExpiryBuckets[10].Count = snap.Summary.ExpectedEphemeral
 		for i := 2; i <= 7; i++ {
 			if snap.ExpiryBuckets[i].Count < 0 {
 				snap.ExpiryBuckets[i].Count = 0
@@ -318,8 +326,8 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 		rows, err := tx.Query(ctx,
 			`SELECT COALESCE(NULLIF(source, ''), 'unknown') AS source,
 			        COUNT(*),
-			        COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after < $2),
-			        COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3)
+			        COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after < $2),
+			        COUNT(*) FILTER (WHERE status = 'active' AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3)
 			   FROM certificates
 			  WHERE tenant_id = $1
 			  GROUP BY COALESCE(NULLIF(source, ''), 'unknown')
@@ -344,7 +352,9 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 		expiringRows, err := tx.Query(ctx,
 			`SELECT `+certificateColumns+`
 			   FROM certificates
-			  WHERE tenant_id = $1 AND status = 'active' AND not_after IS NOT NULL AND not_after < $2
+			  WHERE tenant_id = $1 AND status = 'active'
+			    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
+			    AND not_after IS NOT NULL AND not_after < $2
 			  ORDER BY not_after, id LIMIT $3`,
 			tenantID, soon90, expiringLimit)
 		if err != nil {
@@ -366,6 +376,14 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 func certificateSourceExternal(source string) bool {
 	source = strings.TrimSpace(strings.ToLower(source))
 	return source == "" || source != "issued"
+}
+
+// CertificateExpectedEphemeralExpiry follows the issuance command rather than
+// mutable observation source. A later scan must not turn an intentionally
+// expiring JIT credential into renewal work, nor can a user-supplied source
+// label suppress a normal certificate's expiry alarm.
+func CertificateExpectedEphemeralExpiry(c Certificate) bool {
+	return strings.HasPrefix(c.IssuanceIdempotencyKey, "ephemeral-issue:")
 }
 
 // certificateColumns is every column scanCertificate reads, in its order.
@@ -592,6 +610,7 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 				`SELECT `+certificateColumns+`
 				   FROM certificates
 				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2
+				    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 				    AND (not_after, id) > ($3, $4)`+searchClause(6)+`
 				  ORDER BY not_after, id LIMIT $5`,
 				searchArgs(tenantID, *expiringBefore, *afterNotAfter, afterID, limit)...)
@@ -601,7 +620,8 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 			rows, qerr = tx.Query(ctx,
 				`SELECT `+certificateColumns+`
 				   FROM certificates
-				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2`+searchClause(4)+`
+				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2
+				    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'`+searchClause(4)+`
 				  ORDER BY not_after, id LIMIT $3`,
 				searchArgs(tenantID, *expiringBefore, limit)...)
 		default:

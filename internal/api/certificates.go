@@ -34,19 +34,20 @@ type certificateResponse struct {
 	// leaf in cert-manager status, not a claim that a Secret or listener serves it.
 	KubernetesProvenance []store.KubernetesCertificateProvenance `json:"kubernetes_provenance,omitempty"`
 
-	TenantID           string     `json:"tenant_id"`
-	OwnerID            *string    `json:"owner_id"`
-	Subject            string     `json:"subject"`
-	SANs               []string   `json:"sans"`
-	Issuer             string     `json:"issuer"`
-	Serial             string     `json:"serial"`
-	Fingerprint        string     `json:"fingerprint"`
-	KeyAlgorithm       string     `json:"key_algorithm"`
-	NotBefore          *time.Time `json:"not_before"`
-	NotAfter           *time.Time `json:"not_after"`
-	DeploymentLocation string     `json:"deployment_location"`
-	Source             string     `json:"source"`
-	CreatedAt          time.Time  `json:"created_at"`
+	TenantID                string     `json:"tenant_id"`
+	OwnerID                 *string    `json:"owner_id"`
+	Subject                 string     `json:"subject"`
+	SANs                    []string   `json:"sans"`
+	Issuer                  string     `json:"issuer"`
+	Serial                  string     `json:"serial"`
+	Fingerprint             string     `json:"fingerprint"`
+	KeyAlgorithm            string     `json:"key_algorithm"`
+	NotBefore               *time.Time `json:"not_before"`
+	NotAfter                *time.Time `json:"not_after"`
+	DeploymentLocation      string     `json:"deployment_location"`
+	Source                  string     `json:"source"`
+	ExpectedEphemeralExpiry bool       `json:"expected_ephemeral_expiry"`
+	CreatedAt               time.Time  `json:"created_at"`
 	// Lifecycle status (active | superseded | revoked) and revocation metadata, so
 	// the served surface reflects a revoked certificate — a revoked cert is
 	// visibly "revoked", not silently still "active".
@@ -82,6 +83,7 @@ type certificateHealthDashboard struct {
 type certificateHealthSummary struct {
 	Total               int    `json:"total"`
 	Active              int    `json:"active"`
+	ExpectedEphemeral   int    `json:"expected_ephemeral"`
 	Revoked             int    `json:"revoked"`
 	Superseded          int    `json:"superseded"`
 	Expired             int    `json:"expired"`
@@ -134,7 +136,8 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		Issuer: c.Issuer, Serial: c.Serial, Fingerprint: c.Fingerprint, KeyAlgorithm: c.KeyAlgorithm,
 		NotBefore: c.NotBefore, NotAfter: c.NotAfter, DeploymentLocation: c.DeploymentLocation,
 		Source: c.Source, CreatedAt: c.CreatedAt,
-		Status: c.Status, RevokedAt: c.RevokedAt, RevocationReason: certificateRevocationReason(c.RevocationReason),
+		ExpectedEphemeralExpiry: store.CertificateExpectedEphemeralExpiry(c),
+		Status:                  c.Status, RevokedAt: c.RevokedAt, RevocationReason: certificateRevocationReason(c.RevocationReason),
 		KeyOrigin: c.KeyOrigin, KeyStorage: c.KeyStorage,
 		KeyExportable: c.KeyExportable, KeyGeneratedBy: c.KeyGeneratedBy,
 		// The summary is computed rather than stored, so a surface cannot render
@@ -173,6 +176,7 @@ func toCertificateHealthDashboard(s store.CertificateHealthSnapshot) certificate
 	summary := certificateHealthSummary{
 		Total:               s.Summary.Total,
 		Active:              s.Summary.Active,
+		ExpectedEphemeral:   s.Summary.ExpectedEphemeral,
 		Revoked:             s.Summary.Revoked,
 		Superseded:          s.Summary.Superseded,
 		Expired:             s.Summary.Expired,
