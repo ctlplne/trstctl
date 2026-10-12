@@ -70,9 +70,7 @@ describe("MDM device evidence trace", () => {
       mdm: "jamf",
       base_url: "https://jamf.qa.local",
       token_ref: "secret://mdm/jamf",
-      filter: "",
       interval_seconds: 600,
-      renewal_window_days: 0,
       enabled: true,
       execution: "relay",
     });

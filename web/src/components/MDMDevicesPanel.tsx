@@ -132,9 +132,9 @@ export function MDMDevicesPanel() {
         result.execution !== "relay" ||
         result.base_url !== reviewed.base_url ||
         result.token_ref !== reviewed.token_ref ||
-        result.filter !== reviewed.filter ||
+        (result.filter ?? "") !== reviewed.filter ||
         result.interval_seconds !== reviewed.interval_seconds ||
-        result.renewal_window_days !== reviewed.renewal_window_days ||
+        (result.renewal_window_days ?? 0) !== reviewed.renewal_window_days ||
         result.enabled !== reviewed.enabled
       ) {
         throw new Error(translateNow("mdm.poll.unconfirmed"));
