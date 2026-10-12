@@ -145,8 +145,9 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 		t.Fatal("partner lab launcher must default and constrain its isolated Compose project name")
 	}
 	for _, want := range []string{
-		"up -d --no-deps signer", "up -d --no-deps trstctl",
-		"up -d --no-deps localstack-loopback", "run --rm --no-deps lab-runner",
+		"up -d --no-deps $recreate_license_services signer", "up -d --no-deps $recreate_license_services trstctl",
+		"up -d --no-deps $recreate_license_services localstack-loopback", "run --rm --no-deps lab-runner",
+		"up -d --no-deps --force-recreate lab-init", `recreate_license_services="--force-recreate"`,
 		"DOD_CENSUS_OUT=", "make dod-gate", "Connector census evidence:",
 		"TRSTCTL_LAB_RUN_DOD:-1", "live repair loop", "full qualification",
 		"TRSTCTL_LAB_RUN_JOURNEYS:-1", "drive it yourself", `if [ "$run_journeys" -eq 1 ]; then`,
@@ -157,6 +158,13 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 		if !strings.Contains(launcher, want) {
 			t.Errorf("partner lab launcher is missing staged startup %q", want)
 		}
+	}
+	init := strings.Index(launcher, "$compose up -d --no-deps --force-recreate lab-init")
+	wait := strings.Index(launcher, `docker wait "$lab_init_id"`)
+	signer := strings.Index(launcher, "$compose up -d --no-deps $recreate_license_services signer")
+	control := strings.Index(launcher, "$compose up -d --no-deps $recreate_license_services trstctl")
+	if init < 0 || wait <= init || signer <= wait || control <= signer {
+		t.Fatal("licensed partner lab must finish staging before recreating the signer and control plane")
 	}
 	runner := read(t, "lab", "journey-runner.mjs")
 	for _, want := range []string{
@@ -1725,7 +1733,11 @@ func TestPartnerLabLicensedProfileDeliversAnOperatorLicenseTheCustomerWay(t *tes
 	}
 
 	initScript := read(t, "lab", "lab-init.mjs")
-	for _, want := range []string{"TRSTCTL_LAB_LICENSE_IN", "/lab-runtime/license.json", "mode: 0o400", "chownSync(licenseOut, 65532, 65532)"} {
+	for _, want := range []string{
+		"TRSTCTL_LAB_LICENSE_IN", "/lab-runtime/license.json", "mode: 0o400", `flag: "wx"`,
+		"chownSync(stagedLicense, 65532, 65532)", "chmodSync(stagedLicense, 0o400)",
+		"renameSync(stagedLicense, licenseOut)",
+	} {
 		if !strings.Contains(initScript, want) {
 			t.Fatalf("lab-init.mjs must copy the license for the service user (%s missing)", want)
 		}

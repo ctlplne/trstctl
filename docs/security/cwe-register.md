@@ -64,8 +64,8 @@ not this file.
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `cmd/trstctl/main_test.go:622` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/demo/demo_test.go:233` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/demo/demo_test.go:359` | fixture paths name files; no credential value is embedded. |
+| `deploy/demo/demo_test.go:241` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/demo/demo_test.go:367` | fixture paths name files; no credential value is embedded. |
 | `deploy/deploycheck_test.go:1540` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1542` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1562` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
