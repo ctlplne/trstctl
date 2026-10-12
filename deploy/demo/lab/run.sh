@@ -116,10 +116,25 @@ $compose build trstctl demo-seed || exit $?
 # frontdoors-lab copies the edge collector out of the just-built control image.
 # Build it second so a parallel BuildKit solve cannot reuse an older local tag.
 $compose build frontdoors-lab || exit $?
-$compose up -d postgres nats localstack pebble-challtestsrv pebble managedkeys-config oidc-keys lab-init || exit $?
-$compose up -d --no-deps signer || exit $?
-$compose up -d --no-deps localstack-signer-loopback || exit $?
-$compose up -d --no-deps trstctl || exit $?
+$compose up -d postgres nats localstack pebble-challtestsrv pebble managedkeys-config oidc-keys || exit $?
+recreate_license_services=""
+if [ -n "${TRSTCTL_LAB_LICENSE_FILE:-}" ]; then
+  # A completed one-shot container is otherwise reused when only the bytes at
+  # the same bind path change. Stage each renewed license before either process
+  # reads the shared runtime copy, then recreate both processes together.
+  $compose up -d --no-deps --force-recreate lab-init || exit $?
+  recreate_license_services="--force-recreate"
+else
+  $compose up -d --no-deps lab-init || exit $?
+fi
+lab_init_id="$($compose ps -a -q lab-init | head -n 1)"
+if [ -z "$lab_init_id" ] || [ "$(docker wait "$lab_init_id")" != 0 ]; then
+  printf '%s\n' "Partner lab initializer failed; refusing to start the signer or control plane with stale runtime state." >&2
+  exit 1
+fi
+$compose up -d --no-deps $recreate_license_services signer || exit $?
+$compose up -d --no-deps $recreate_license_services localstack-signer-loopback || exit $?
+$compose up -d --no-deps $recreate_license_services trstctl || exit $?
 
 healthy=false
 attempt=0
@@ -147,14 +162,14 @@ if [ -z "$plane_id" ] || [ "$plane_running" != true ] || [ "$plane_networks" -lt
 fi
 
 $compose up -d --no-deps demo-oidc || exit $?
-$compose up -d --no-deps localstack-loopback oidc-loopback pebble-loopback dns-webhook-loopback alert-sink mailpit || exit $?
+$compose up -d --no-deps $recreate_license_services localstack-loopback oidc-loopback pebble-loopback dns-webhook-loopback alert-sink mailpit || exit $?
 $compose run --rm --no-deps demo-seed || exit $?
 if [ -n "$previous_pebble_root" ]; then
   $compose run --rm --no-deps --volume "$previous_pebble_root:/lab-previous-root.crt:ro" lab-bootstrap || exit $?
 else
   $compose run --rm --no-deps lab-bootstrap || exit $?
 fi
-$compose up -d --no-deps frontdoors-lab || exit $?
+$compose up -d --no-deps $recreate_license_services frontdoors-lab || exit $?
 if [ "$run_journeys" -eq 1 ]; then
   $compose run --rm --no-deps lab-runner || live_status=$?
 else

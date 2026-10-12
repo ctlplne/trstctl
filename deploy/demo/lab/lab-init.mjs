@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 
 for (const path of ["/lab-runtime", "/lab-evidence", "/lab-mailpit"]) {
   mkdirSync(path, { recursive: true, mode: 0o700 });
@@ -23,9 +23,15 @@ if (licenseIn) {
     process.exit(2);
   }
   const licenseOut = "/lab-runtime/license.json";
-  writeFileSync(licenseOut, readFileSync(licenseIn), { mode: 0o400 });
-  chownSync(licenseOut, 65532, 65532);
-  chmodSync(licenseOut, 0o400);
+  const stagedLicense = `${licenseOut}.${randomBytes(8).toString("hex")}.tmp`;
+  try {
+    writeFileSync(stagedLicense, readFileSync(licenseIn), { mode: 0o400, flag: "wx" });
+    chownSync(stagedLicense, 65532, 65532);
+    chmodSync(stagedLicense, 0o400);
+    renameSync(stagedLicense, licenseOut);
+  } finally {
+    if (existsSync(stagedLicense)) unlinkSync(stagedLicense);
+  }
   console.log("partner lab: operator license copied into the runtime volume for the control plane and the signer");
 }
 console.log("partner lab runtime directories and file-backed synthetic alert credential are ready");

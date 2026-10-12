@@ -103,6 +103,13 @@ pins the lab's local identity provider for provider-operator sign-in (see
 [Provider operator delegation](#provider-operator-delegation) and the
 [provider journey](journeys/operate-as-a-provider.md)).
 
+For a license renewal in an existing partner lab, point
+`TRSTCTL_LAB_LICENSE_FILE` at the new `0600` file and run the licensed
+`run.sh` command again. The lab initializer copies that file into the shared
+runtime volume before the signer and control plane restart. Restarting only
+those two services leaves the earlier copied license in place; check **Plan
+and license** after the restart for `active` and the expected deployment ID.
+
 ## Buyer Matrix
 
 | Packaging line | Free | Enterprise | Provider / MSP |

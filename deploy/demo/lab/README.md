@@ -154,12 +154,17 @@ the provider plane pins the lab's local identity provider offline so a provider
 operator can sign in at `/provider` with a token from
 `http://127.0.0.1:19081/provider/sign-in`. Delegations are bootstrapped with
 `trstctl provider-grant` inside the control-plane container (docs/editions.md).
+To renew the license, rerun the licensed `run.sh` command with the new `0600`
+file. The lab initializer must recopy it into the runtime volume before the
+signer and control plane restart; restarting those two services alone keeps
+the old copied license. Confirm `active` and the deployment binding at
+`/admin/editions` after startup.
 
 For a local FIPS-capable image, add `TRSTCTL_LAB_GOFIPS140=v1.0.0` and
 `TRSTCTL_LAB_FIPS_REQUIRED=1` to the licensed `run.sh` invocation. The first
 selects the pinned Go module for both binaries in the image; the second makes
 both the control plane and the separate signer refuse startup if their module
-is inactive. `GET /api/v1/editions` reports the live control-plane POST result.
+is inactive. `GET /api/v1/editions` reports the live control-plane posture.
 The product's own CMVP certificate and any external HSM validation remain
 external evidence, as described in `docs/compliance.md`.
 
