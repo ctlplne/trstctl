@@ -133,6 +133,65 @@ func TestProjectionTailHealthExactCheckpointAndRebuildReset(t *testing.T) {
 	}
 }
 
+// A rebuild replaces the history represented by both emergency receipt cursors.
+// The replacement and its rollback must have the same transaction boundary as
+// the read model; a stale cursor from a prior log must never survive a commit.
+func TestProjectionCheckpointReplacementResetsBreakglassReceiptCursorsAtomically(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	_, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint
+		SET applied_seq=133,breakglass_issue_checked_through=133,
+		    breakglass_authority_checked_through=133 WHERE id=1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.SystemPool().Exec(context.Background(), `UPDATE projection_checkpoint
+			SET applied_seq=0,breakglass_issue_checked_through=NULL,
+			    breakglass_authority_checked_through=NULL WHERE id=1`)
+	})
+	read := func() (uint64, uint64) {
+		t.Helper()
+		issue, err := s.BreakglassIssueRecoveryCursor(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		authority, err := s.BreakglassAuthorityRecoveryCursor(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return issue, authority
+	}
+
+	// A crashed rebuild rolls back its reset and keeps the previous proof.
+	tx, err := s.SystemPool().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetProjectionCheckpointTx(ctx, tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if issue, authority := read(); issue != 133 || authority != 133 {
+		t.Fatalf("rolled-back cursors = (%d,%d), want (133,133)", issue, authority)
+	}
+
+	withProjectionCheckpointTx(t, s, func(tx pgx.Tx) error {
+		return s.ResetProjectionCheckpointTx(ctx, tx)
+	})
+	if issue, authority := read(); issue != 0 || authority != 0 {
+		t.Fatalf("committed reset cursors = (%d,%d), want (0,0)", issue, authority)
+	}
+	withProjectionCheckpointTx(t, s, func(tx pgx.Tx) error {
+		return s.SetProjectionCheckpointTx(ctx, tx, 3)
+	})
+	if issue, authority := read(); issue != 3 || authority != 3 {
+		t.Fatalf("rebuilt head cursors = (%d,%d), want (3,3)", issue, authority)
+	}
+}
+
 // TestProjectionTailHealthOldWriterAdvanceNormalizesFailure proves a migrated
 // database remains safe while an older process is still running. That process
 // knows only applied_seq and issues raw SQL; PostgreSQL itself must retain a poison

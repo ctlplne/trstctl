@@ -226,12 +226,17 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 // value on the caller's transaction (SPINE-007). After a full Rebuild re-derives
 // the read model from sequence 0, it advances the watermark to the rebuilt head in
 // the SAME transaction, so the post-rebuild boot resumes catch-up from there
-// rather than re-replaying everything. It is a system write of the single-row
-// table.
+// rather than re-replaying everything. Current-format snapshots contain both
+// break-glass receipt tables, so a complete rebuild or snapshot restore also
+// attests their indexed recovery cursors through this exact head. Warm
+// AdvanceProjectionCheckpoint intentionally does not advance those cursors. It
+// is a system write of the single-row table.
 func (s *Store) SetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE projection_checkpoint
 		    SET applied_seq = $1,
+		        breakglass_issue_checked_through = $1,
+		        breakglass_authority_checked_through = $1,
 		        failed_seq = CASE WHEN failed_seq <= $1 THEN NULL ELSE failed_seq END,
 		        last_error = CASE WHEN failed_seq <= $1 THEN NULL ELSE last_error END,
 		        failed_at = CASE WHEN failed_seq <= $1 THEN NULL ELSE failed_at END,
@@ -246,7 +251,7 @@ func (s *Store) SetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx, seq ui
 // ResetProjectionCheckpointTx sets the read model's high-water mark back to 0 on
 // the caller's transaction (SPINE-007). A full Rebuild (disaster recovery /
 // migration) re-derives the entire read model from sequence 0, so it must clear
-// the watermark and old failure marker in the SAME transaction as the
+// the watermark, receipt cursors, and old failure marker in the SAME transaction as the
 // truncate+replay — otherwise a crash could leave a non-zero watermark over an
 // emptied read model and skip a re-replay. A failed rebuild rolls this reset back,
 // so its poison remains visible. It runs on the rebuild's transaction (the owner
@@ -257,6 +262,8 @@ func (s *Store) ResetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx) erro
 		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
 		        failed_at = NULL, legacy_managed_ca_inventory_checked_through = 0,
 		        external_issuer_checked_through = 0,
+		        breakglass_issue_checked_through = 0,
+		        breakglass_authority_checked_through = 0,
 		        updated_at = now()
 		  WHERE id = 1`)
 	if err != nil {

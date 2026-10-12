@@ -111,6 +111,11 @@ func newStore(t *testing.T) *store.Store {
 			 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint
+		SET applied_seq=0,breakglass_issue_checked_through=NULL,
+		    breakglass_authority_checked_through=NULL WHERE id=1`); err != nil {
+		t.Fatalf("reset shared store projection checkpoint: %v", err)
+	}
 	t.Cleanup(func() { s.Close() })
 	return s
 }

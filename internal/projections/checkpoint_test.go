@@ -76,6 +76,56 @@ func TestProjectCatchUpReplaysOnlyAfterCheckpoint(t *testing.T) {
 	}
 }
 
+func TestRebuildReplacesStaleBreakglassReceiptCursorsBeforeWarmCatchUp(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	p := projections.New(s)
+	registered, err := log.Append(ctx, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("Acme"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint
+		SET applied_seq=133,breakglass_issue_checked_through=133,
+		    breakglass_authority_checked_through=133 WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Rebuild(ctx, log); err != nil {
+		t.Fatalf("rebuild short retained log after stale cursor: %v", err)
+	}
+	for name, read := range map[string]func(context.Context) (uint64, error){
+		"issue": s.BreakglassIssueRecoveryCursor, "authority": s.BreakglassAuthorityRecoveryCursor,
+	} {
+		got, err := read(ctx)
+		if err != nil || got != registered.Sequence {
+			t.Fatalf("%s cursor after rebuild = %d, err=%v, want %d", name, got, err, registered.Sequence)
+		}
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("warm catch-up after rebuilt history: %v", err)
+	}
+	owner, err := log.Append(ctx, events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantA,
+		Data: ownerCreated("00000000-0000-0000-0000-0000000000d1", "after-rebuild"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("warm tail after rebuilt history: %v", err)
+	}
+	for name, read := range map[string]func(context.Context) (uint64, error){
+		"issue": s.BreakglassIssueRecoveryCursor, "authority": s.BreakglassAuthorityRecoveryCursor,
+	} {
+		got, err := read(ctx)
+		if err != nil || got != owner.Sequence {
+			t.Fatalf("%s cursor after warm tail = %d, err=%v, want %d", name, got, err, owner.Sequence)
+		}
+	}
+}
+
 func TestProjectCatchUpAcceptsLegacyProviderAuditPartitionOnlyForProviderEvents(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
