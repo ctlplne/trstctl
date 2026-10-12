@@ -238,69 +238,25 @@ func (c *CA) digestSigner() (*boundarycrypto.LockedSigner, error) {
 // that CA's subject and public key but is signed by this CA, so relying parties
 // that trust this CA also trust the cross-signed one.
 //
-// A cross-certificate is a fully privileged CA certificate, so it must not be
-// issued unconstrained (PKIGOV-004). It carries forward the target's path-length
-// basic constraint and dNSName name constraints, and additionally clamps them to
-// this signing CA's own lane: the cross-cert's permitted DNS domains are the
-// intersection with this CA's name constraints, and its sub-CA depth is the more
-// restrictive of the target's own pathLen and this CA's remaining depth. This
-// prevents a cross-signature from widening the trust the relying party already
-// extended to this CA (e.g. cross-signing a name-unconstrained or deeper CA must
-// not let it issue names or depths this CA may not).
+// A cross-certificate is a fully privileged CA certificate, so this path uses
+// the same boundary signer as served CA cross-signing (PKIGOV-004). It clamps
+// validity, path length, name constraints, and EKUs to both issuer and target,
+// then verifies the produced public certificate before returning it.
 func (c *CA) CrossSign(otherCertDER []byte) ([]byte, error) {
-	other, err := x509.ParseCertificate(otherCertDER)
-	if err != nil {
-		return nil, fmt.Errorf("ca: parse cross-sign target: %w", err)
-	}
-	if !other.IsCA {
-		return nil, fmt.Errorf("ca: cross-sign target %q is not a CA certificate", other.Subject.CommonName)
-	}
-	serial, err := randomSerial()
+	// Use the same constrained signer and public verification contract as the
+	// served/offline CA path. The old in-process implementation copied the
+	// target's expiry even when it outlived this issuer, then emitted a receipt
+	// the projector correctly refused. It also omitted non-DNS constraints.
+	signer, err := c.digestSigner()
 	if err != nil {
 		return nil, err
 	}
-
-	// Path length: cross-signing re-issues a peer CA at the same trust tier, so the
-	// target's own depth is carried — but clamped to this signing CA's remaining
-	// depth so the cross-cert can never grant MORE sub-CA depth than this CA itself
-	// holds. The result is the more restrictive (smaller) of the two whenever both
-	// are set; if the target is unset it is pinned to this CA's depth.
-	pathLen, hasPathLen := crossPathLen(other)
-	if c.maxPathLen >= 0 {
-		if !hasPathLen || c.maxPathLen < pathLen {
-			pathLen, hasPathLen = c.maxPathLen, true
-		}
-	}
-
-	// Name constraints: carry the target's permitted dNSName set, then intersect
-	// with this CA's own permitted set so the cross-cert can never permit a name
-	// this CA itself may not.
-	permitted := intersectDNS(other.PermittedDNSDomains, c.permittedDNS)
-
-	tmpl := &x509.Certificate{
-		SerialNumber:                serial,
-		Subject:                     other.Subject,
-		NotBefore:                   other.NotBefore,
-		NotAfter:                    other.NotAfter,
-		KeyUsage:                    x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid:       true,
-		IsCA:                        true,
-		PermittedDNSDomains:         permitted,
-		PermittedDNSDomainsCritical: len(permitted) > 0,
-	}
-	if hasPathLen {
-		tmpl.MaxPathLen = pathLen
-		tmpl.MaxPathLenZero = pathLen == 0
-	}
-	var crossDER []byte
-	if err := c.key.sign(func(priv *ecdsa.PrivateKey) error {
-		var e error
-		crossDER, e = x509.CreateCertificate(rand.Reader, tmpl, c.cert, other.PublicKey, priv)
-		return e
-	}); err != nil {
+	defer signer.Destroy()
+	issued, err := boundarycrypto.CrossSignHierarchyCA(c.der, signer, otherCertDER)
+	if err != nil {
 		return nil, fmt.Errorf("ca: cross-sign: %w", err)
 	}
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crossDER}), nil
+	return issued.CertificatePEM, nil
 }
 
 // crossPathLen extracts the basic-constraints path-length from a parsed CA

@@ -11,6 +11,8 @@ import (
 	"encoding/pem"
 	"testing"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // leafCSR builds a PKCS#10 CSR for the given common name and DNS SANs.
@@ -41,6 +43,34 @@ func leafFromPEM(t *testing.T, chainPEM []byte) *x509.Certificate {
 		t.Fatal(err)
 	}
 	return cert
+}
+
+func TestLegacyCrossSignRetainsBothCAValidityAndVerifiesAtImport(t *testing.T) {
+	signer, err := NewRoot(CASpec{CommonName: "short-lived cross signer", TTL: 24 * time.Hour, MaxPathLen: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(signer.Destroy)
+	target, err := NewRoot(CASpec{CommonName: "longer-lived cross target", TTL: 48 * time.Hour, MaxPathLen: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(target.Destroy)
+
+	crossPEM, err := signer.CrossSign(target.CertificateDER())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cross := leafFromPEM(t, crossPEM)
+	if cross.NotBefore.Before(signer.cert.NotBefore) || cross.NotBefore.Before(target.cert.NotBefore) ||
+		cross.NotAfter.After(signer.cert.NotAfter) || cross.NotAfter.After(target.cert.NotAfter) {
+		t.Fatalf("cross-sign widened issuer or target validity: issuer=%s..%s target=%s..%s cross=%s..%s",
+			signer.cert.NotBefore, signer.cert.NotAfter, target.cert.NotBefore, target.cert.NotAfter,
+			cross.NotBefore, cross.NotAfter)
+	}
+	if err := boundarycrypto.VerifyCrossSignedCA(signer.CertificateDER(), target.CertificateDER(), cross.Raw); err != nil {
+		t.Fatalf("cross-sign result cannot be imported by its receipt projector: %v", err)
+	}
 }
 
 // TestRootAndIntermediateChainVerifies builds a root → intermediate hierarchy and
@@ -112,7 +142,7 @@ func TestPathLengthExhaustionRejected(t *testing.T) {
 // TestCrossSign signs another root's certificate with this CA, producing a
 // cross-certificate that verifies under this CA's signature.
 func TestCrossSign(t *testing.T) {
-	a, err := NewRoot(CASpec{CommonName: "Root A", TTL: 365 * 24 * time.Hour})
+	a, err := NewRoot(CASpec{CommonName: "Root A", MaxPathLen: 1, TTL: 365 * 24 * time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,6 +169,22 @@ func TestCrossSign(t *testing.T) {
 	aCert := leafFromPEM(t, a.CertificatePEM())
 	if err := cross.CheckSignatureFrom(aCert); err != nil {
 		t.Errorf("cross cert is not signed by Root A: %v", err)
+	}
+}
+
+func TestCrossSignRejectsExhaustedIssuerPathLength(t *testing.T) {
+	a, err := NewRoot(CASpec{CommonName: "Exhausted Root A", MaxPathLen: 0, TTL: 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.Destroy)
+	b, err := NewRoot(CASpec{CommonName: "Root B", MaxPathLen: 0, TTL: 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(b.Destroy)
+	if _, err := a.CrossSign(b.CertificateDER()); err == nil {
+		t.Fatal("issuer with pathLen 0 cross-signed another CA")
 	}
 }
 
