@@ -11,9 +11,52 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestDiscoveryScheduleCreationIgnoresUnrelatedProjectionLag(t *testing.T) {
+	s, log, projector := recordingSpine(t)
+	ctx := t.Context()
+	o := orchestrator.NewOrchestrator(log, s, nil)
+	source, err := o.UpsertDiscoverySource(ctx, tenantA, store.DiscoverySource{
+		ID: "00000000-0000-4000-8000-00000000d231", Kind: "manual", Name: "schedule-unrelated-lag-source",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AdvanceProjectionCheckpoint(ctx, baseline); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 80 {
+		if _, err := log.Append(ctx, events.Event{
+			Type: projections.EventDiscoverySegmentUpserted, TenantID: tenantA,
+			Data: []byte(fmt.Sprintf(`{"id":"00000000-0000-4000-8000-%012d","name":"schedule-unrelated-segment-%d","ranges":[],"staleness_hours":24}`,
+				400000+i, i)),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	created, err := o.UpsertDiscoverySchedule(ctx, tenantA, store.DiscoverySchedule{
+		ID: "00000000-0000-4000-8000-00000000d232", SourceID: source.ID,
+		Name: "new-schedule-despite-unrelated-lag", IntervalSeconds: 300, Enabled: true,
+	})
+	if err != nil || created.ID == "" {
+		t.Fatalf("schedule creation behind unrelated segment events = %+v, err=%v", created, err)
+	}
+	if err := projector.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.GetDiscoveryScheduleByName(ctx, tenantA, created.Name); err != nil || got.ID != created.ID {
+		t.Fatalf("schedule after ordered catch-up = %+v, err=%v", got, err)
+	}
+}
 
 func TestDiscoveryScheduleDistinctCreateCannotAppendSameName(t *testing.T) {
 	s, log, projector := recordingSpine(t)

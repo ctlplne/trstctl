@@ -27,11 +27,16 @@ func TestDiscoverySourceCreationIgnoresUnrelatedProjectionLag(t *testing.T) {
 	if err := s.AdvanceProjectionCheckpoint(ctx, baseline); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := log.Append(ctx, events.Event{
-		Type: projections.EventDiscoverySegmentUpserted, TenantID: tenantA,
-		Data: []byte(`{"id":"00000000-0000-4000-8000-00000000d120","name":"unrelated-segment","ranges":[],"staleness_hours":24}`),
-	}); err != nil {
-		t.Fatal(err)
+	// The stopped tail can trail far behind ordinary unrelated declarations.
+	// A global sequence-gap cap must not turn a fresh source into a 503.
+	for i := range 80 {
+		if _, err := log.Append(ctx, events.Event{
+			Type: projections.EventDiscoverySegmentUpserted, TenantID: tenantA,
+			Data: []byte(fmt.Sprintf(`{"id":"00000000-0000-4000-8000-%012d","name":"unrelated-segment-%d","ranges":[],"staleness_hours":24}`,
+				300000+i, i)),
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	const sourceID = "00000000-0000-4000-8000-00000000d121"
 	created, err := orchestrator.NewOrchestrator(log, s, nil).UpsertDiscoverySource(ctx, tenantA,
@@ -44,6 +49,46 @@ func TestDiscoverySourceCreationIgnoresUnrelatedProjectionLag(t *testing.T) {
 	}
 	if got, err := s.GetDiscoverySourceByName(ctx, tenantA, created.Name); err != nil || got.ID != sourceID {
 		t.Fatalf("source after ordered catch-up = %+v, err=%v", got, err)
+	}
+}
+
+func TestDiscoverySourceMissingUnprojectedEventFailsClosed(t *testing.T) {
+	s, log, _ := recordingSpine(t)
+	ctx := t.Context()
+	baseline, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AdvanceProjectionCheckpoint(ctx, baseline); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := log.Append(ctx, events.Event{
+		Type: projections.EventDiscoverySourceUpserted, TenantID: tenantA,
+		Data: []byte(`{"id":"00000000-0000-4000-8000-00000000d141","kind":"manual","name":"missing-unprojected-source","config":{}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Delete(ctx, missing.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventDiscoverySegmentUpserted, TenantID: tenantA,
+		Data: []byte(`{"id":"00000000-0000-4000-8000-00000000d142","name":"later-unrelated-segment","ranges":[],"staleness_hours":24}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = orchestrator.NewOrchestrator(log, s, nil).UpsertDiscoverySource(ctx, tenantA,
+		store.DiscoverySource{ID: "00000000-0000-4000-8000-00000000d143", Kind: "ct_log", Name: "missing-unprojected-source"})
+	if !errors.Is(err, store.ErrResourceAdmissionBusy) {
+		t.Fatalf("missing source history = %v, want fail-closed admission", err)
+	}
+	if after, err := log.LastSequence(ctx); err != nil || after != head {
+		t.Fatalf("new source appended through missing history: head=%d after=%d err=%v", head, after, err)
 	}
 }
 

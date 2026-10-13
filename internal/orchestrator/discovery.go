@@ -27,13 +27,6 @@ import (
 
 const discoveryRunDestination = "discovery.run"
 
-// An inline projection can be ahead of the ordered tail. A missing source row
-// therefore needs a bounded check of the exact intervening event sequences,
-// rather than treating every unrelated event behind the global checkpoint as a
-// conflicting source. Larger gaps wait for the tail instead of replaying an
-// unbounded event prefix on a request path.
-const discoverySourceIdentityGapLimit = 64
-
 const (
 	maxDiscoveryRunErrorBytes = 1024
 	discoveryRunErrorWithheld = "withheld: discovery error still contained secret-like material after redaction"
@@ -207,12 +200,14 @@ func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID
 	}, nil
 }
 
-// guardUnprojectedDiscoveryIdentity checks only the bounded gap after the
-// ordered relational checkpoint. EventAtSequence is an exact JetStream lookup;
-// this never replays the full log. The resource-creation session lock prevents
-// another writer of the same declaration type from appending before our own.
+// guardUnprojectedDiscoveryIdentity checks the finite source cut after the
+// ordered relational checkpoint using JetStream's event-type subject index.
+// Unrelated events never make a fresh identity look busy. The resource-creation
+// session lock prevents another writer of this declaration type from appending
+// while the absence decision and new append are in flight. A non-contiguous
+// source stream cannot prove absence and is refused before any new event.
 func (o *Orchestrator) guardUnprojectedDiscoveryIdentity(ctx context.Context, tenantID, eventType, name, id string) error {
-	head, err := o.log.LastSequence(ctx)
+	snapshot, err := o.log.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -220,33 +215,38 @@ func (o *Orchestrator) guardUnprojectedDiscoveryIdentity(ctx context.Context, te
 	if err != nil {
 		return err
 	}
-	if applied > head {
+	if applied > snapshot.LastSequence {
 		return errors.New("orchestrator: discovery source projection checkpoint exceeds the event head")
 	}
-	if head-applied > discoverySourceIdentityGapLimit {
+	if snapshot.NumDeleted != 0 || snapshot.Messages != snapshot.LastSequence ||
+		(snapshot.LastSequence > 0 && snapshot.FirstSequence != 1) {
 		return store.ErrResourceAdmissionBusy
 	}
-	for sequence := applied + 1; sequence <= head; sequence++ {
-		event, found, err := o.log.EventAtSequence(ctx, sequence)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return store.ErrResourceAdmissionBusy
-		}
-		if event.TenantID != tenantID || event.Type != eventType {
-			continue
-		}
-		var identity struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal(event.Data, &identity); err != nil {
-			return fmt.Errorf("orchestrator: decode unprojected %s sequence %d: %w", eventType, sequence, err)
-		}
-		if identity.Name == name || (id != "" && identity.ID == id) {
-			return store.ErrResourceAdmissionBusy
-		}
+	if err := o.log.ReplayTenantTypesThrough(ctx, tenantID, applied+1, snapshot.LastSequence,
+		[]string{eventType}, func(event events.Event) error {
+			var identity struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal(event.Data, &identity); err != nil {
+				return fmt.Errorf("orchestrator: decode unprojected %s sequence %d: %w", eventType, event.Sequence, err)
+			}
+			if identity.Name == name || (id != "" && identity.ID == id) {
+				return store.ErrResourceAdmissionBusy
+			}
+			return nil
+		}); err != nil {
+		return err
+	}
+	after, err := o.log.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	if after.Name != snapshot.Name || after.Generation != snapshot.Generation ||
+		after.FirstSequence != snapshot.FirstSequence || after.NumDeleted != snapshot.NumDeleted ||
+		after.LastSequence < snapshot.LastSequence || after.Messages < snapshot.Messages ||
+		after.Messages-snapshot.Messages != after.LastSequence-snapshot.LastSequence {
+		return store.ErrResourceAdmissionBusy
 	}
 	return nil
 }
