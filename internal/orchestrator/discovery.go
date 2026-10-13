@@ -41,6 +41,11 @@ var ErrDiscoveryScheduleNotDue = errors.New("orchestrator: discovery schedule is
 // truthful conflict instead of recording a queued run that cannot start.
 var ErrDiscoveryRelayUnavailable = errors.New("orchestrator: no eligible network relay is enrolled")
 
+// ErrDiscoverySourceIdentityConflict means a tenant-local source name or ID is
+// already bound to a different producer identity. Changing the kind of an
+// existing source would turn old runs into evidence for a different collector.
+var ErrDiscoverySourceIdentityConflict = errors.New("orchestrator: discovery source identity is already bound")
+
 // DiscoveryRelayReadiness is the server-owned answer to "where will this scan
 // run?" Ready means an enrolled, non-offboarded agent has the network role. It
 // does not promise that the agent is connected at this exact millisecond; the
@@ -122,18 +127,34 @@ func (o *Orchestrator) UpsertDiscoverySegment(ctx context.Context, tenantID stri
 func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID string, in store.DiscoverySource) (store.DiscoverySource, error) {
 	name := strings.TrimSpace(in.Name)
 	id := in.ID
+	byName, nameErr := o.store.GetDiscoverySourceByName(ctx, tenantID, name)
+	if nameErr != nil && !errors.Is(nameErr, pgx.ErrNoRows) {
+		return store.DiscoverySource{}, nameErr
+	}
+	if nameErr == nil {
+		if byName.Kind != in.Kind || (id != "" && byName.ID != id) {
+			return store.DiscoverySource{}, ErrDiscoverySourceIdentityConflict
+		}
+	}
 	if id == "" {
-		existing, err := o.store.GetDiscoverySourceByName(ctx, tenantID, name)
 		switch {
-		case err == nil:
-			id = existing.ID
-		case errors.Is(err, pgx.ErrNoRows):
+		case nameErr == nil:
+			id = byName.ID
+		case errors.Is(nameErr, pgx.ErrNoRows):
 			// The stable tenant+name identity also closes the concurrent-create
 			// race: two first writers project the same row instead of colliding
 			// on the tenant-local unique name.
 			id = uuid.NewSHA1(discoverySourceNamespace, []byte(tenantID+"\x00"+name)).String()
 		default:
-			return store.DiscoverySource{}, err
+			return store.DiscoverySource{}, nameErr
+		}
+	} else {
+		byID, idErr := o.store.GetDiscoverySource(ctx, tenantID, id)
+		if idErr != nil && !errors.Is(idErr, pgx.ErrNoRows) {
+			return store.DiscoverySource{}, idErr
+		}
+		if idErr == nil && byID.Kind != in.Kind {
+			return store.DiscoverySource{}, ErrDiscoverySourceIdentityConflict
 		}
 	}
 	cfg := in.Config

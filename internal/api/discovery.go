@@ -176,6 +176,16 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		preview.BlockedReasons = append(preview.BlockedReasons, reservedAgentDiscoveryReason)
 		return preview, nil
 	}
+	if existing, err := a.store.GetDiscoverySourceByName(ctx, tenantID, strings.TrimSpace(req.Name)); err == nil {
+		if existing.Kind != strings.TrimSpace(req.Kind) {
+			preview.Ready = false
+			preview.ChildJobCount = 0
+			preview.BlockedReasons = append(preview.BlockedReasons, "source name is already bound to a different discovery source kind")
+			return preview, nil
+		}
+	} else if !store.IsNotFound(err) {
+		return discoveryPlanPreviewResponse{}, err
+	}
 	if req.Kind == "ct_log" {
 		var raw ctMonitoringSourceConfig
 		if err := json.Unmarshal(cfg, &raw); err != nil {

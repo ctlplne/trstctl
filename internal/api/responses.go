@@ -60,6 +60,8 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrRenewalWorkPending):
 		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()))
+	case errors.Is(err, orchestrator.ErrDiscoverySourceIdentityConflict):
+		a.writeProblem(w, problem.New(http.StatusConflict, "discovery source name or ID belongs to a different source kind or owner"))
 	case errors.Is(err, orchestrator.ErrInvalidTransition):
 		p := problem.New(http.StatusConflict, err.Error())
 		var te *orchestrator.TransitionError

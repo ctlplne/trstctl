@@ -247,7 +247,9 @@ Generic `POST /api/v1/discovery/sources` declarations cannot create the reserved
 through the authenticated inventory channel. The CT monitoring setup also refuses
 an `agent:` name, so a watchlist cannot reserve or replace a host's source. CT
 updates return a conflict if their requested name belongs to another source kind
-or to a different CT source ID; operators must choose an unclaimed name.
+or to a different CT source ID; operators must choose an unclaimed name. A generic
+source declaration cannot change the kind bound to an existing name either; its
+preview reports that ownership conflict before the operator starts the mutation.
 
 The selected-agent panel links to **View discovery runs** and **View discovery
 findings**, so collector claims can be checked against the server's actual evidence.
