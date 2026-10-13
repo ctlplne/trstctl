@@ -520,7 +520,7 @@ func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request)
 		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
 			ID:     sourceID,
 			Kind:   secretscan.ThirdPartySourceKind,
-			Name:   thirdPartySecretScanSourceName(cfg),
+			Name:   thirdPartySecretScanSourceName(cfg, sourceID),
 			Config: body,
 		})
 		if err != nil {
@@ -583,7 +583,7 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
 			ID:     sourceID,
 			Kind:   secretscan.RepositorySourceKind,
-			Name:   secretRepoSourceName(cfg),
+			Name:   secretRepoSourceName(cfg, sourceID),
 			Config: body,
 		})
 		if err != nil {
@@ -863,20 +863,25 @@ func thirdPartySecretScanSourceID(tenantID string, cfg secretscan.ThirdPartyScan
 	return gouuid.NewSHA1(thirdPartySecretScanSourceNamespace, []byte(key)).String()
 }
 
-func secretRepoSourceName(cfg secretscan.RepositoryScanConfig) string {
+func secretRepoSourceName(cfg secretscan.RepositoryScanConfig, sourceID string) string {
 	name := sourcecatalog.SecretRepositorySourcePrefix + cfg.Provider + ":" + cfg.Repository
 	if cfg.Ref != "" {
 		name += ":" + cfg.Ref
 	}
-	return name
+	// The UUID binds every identity component, including delimiters inside
+	// repository/ref. Keep the readable prefix while making the tenant-local
+	// name injective with the deterministic source ID.
+	return name + ":" + sourceID
 }
 
-func thirdPartySecretScanSourceName(cfg secretscan.ThirdPartyScanConfig) string {
+func thirdPartySecretScanSourceName(cfg secretscan.ThirdPartyScanConfig, sourceID string) string {
 	name := sourcecatalog.ThirdPartySecretSourcePrefix + cfg.Provider + ":" + cfg.Source
 	if cfg.Event != "" {
 		name += ":" + cfg.Event
 	}
-	return name
+	// Artifact paths live in the deterministic ID and need not be exposed in
+	// the display name. The full ID suffix separates distinct artifact paths.
+	return name + ":" + sourceID
 }
 
 func firstNonEmptyString(vals ...string) string {

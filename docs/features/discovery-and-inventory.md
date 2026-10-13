@@ -254,6 +254,9 @@ The `secretscan:`, `secret-repo:`, and `secret-third-party:` source names are al
 reserved for their product workflows. Configure those scans through the Secrets
 tool or its dedicated API, not by creating a generic discovery source or CT monitor
 under a product-owned name.
+Repository and third-party scan source names end with their stable source ID. That
+keeps otherwise identical labels separate when a repository/ref contains a colon
+or when two third-party artifacts share a provider, source, and event.
 
 The selected-agent panel links to **View discovery runs** and **View discovery
 findings**, so collector claims can be checked against the server's actual evidence.
