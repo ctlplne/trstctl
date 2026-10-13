@@ -370,7 +370,7 @@ func (a *API) createAPIToken(w http.ResponseWriter, r *http.Request) {
 func (a *API) revokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req apiTokenRevokeRequest
 		if r.Body != nil && r.ContentLength != 0 {
 			if err := decodeJSON(r, &req); err != nil {

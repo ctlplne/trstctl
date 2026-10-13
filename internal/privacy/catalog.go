@@ -73,6 +73,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "access control",
 		},
 		{
+			ID:             "api_token_revocation_commands.pending-actor-reason",
+			Location:       "api_token_revocation_commands.event_actor/event_payload",
+			Category:       "transient API-token revocation actor and free-form reason",
+			Purpose:        "recover the exact first revocation after an ambiguous broker append or SQL projection failure",
+			RetentionClass: "transient:until-revocation-projection",
+			Erasure:        "the exact command must be reconciled before subject erasure; projection removes actor, reason and payload in the same transaction, leaving only opaque denial IDs",
+			Owner:          "access control",
+		},
+		{
 			ID:             "identities.name-attributes",
 			Location:       "identities.name/attributes",
 			Category:       "workload or human-linked identity metadata",

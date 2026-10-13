@@ -34,6 +34,9 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 // PostgreSQL dump in the backup set.
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
+	// First-writer revocation commands and terminal denial tombstones must
+	// survive restores independently of the token read model and event log.
+	"api_token_revocation_commands",
 	// The per-account CloudTrail lookup slot is independent PostgreSQL quota
 	// coordination. Replay cannot reconstruct its next allowed time; restoring
 	// it prevents a recovery from immediately bursting past AWS lookup limits.

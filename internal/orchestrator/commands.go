@@ -2209,8 +2209,24 @@ func (o *Orchestrator) RevokeAPIToken(ctx context.Context, tenantID, tokenID, re
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventAPITokenRevoked, tenantID, payload)
-	return err
+	var eventActor *events.Actor
+	if a, ok := events.ActorFromContext(ctx); ok {
+		eventActor = &a
+	}
+	candidate := store.APITokenRevocationCommand{
+		TenantID: tenantID, TokenID: tokenID,
+		Event: events.Event{
+			ID: uuid.NewString(), Type: projections.EventAPITokenRevoked,
+			TenantID: tenantID, SchemaVersion: events.DefaultSchemaVersion,
+			Time: time.Now().UTC().Truncate(time.Microsecond),
+			Data: payload, Actor: eventActor,
+		},
+	}
+	canonical, created, err := o.store.ClaimAPITokenRevocationCommand(ctx, candidate)
+	if err != nil {
+		return err
+	}
+	return o.reconcileAPITokenRevocation(ctx, canonical, created)
 }
 
 // ExpireAPITokens is the leaseworker entry point for short-lived API keys. It

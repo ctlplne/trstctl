@@ -25,6 +25,8 @@ const (
 	PrivacyRecoveryFenceApplicationSecret       = "application_secret"
 	PrivacyRecoveryFenceApplicationSecretImport = "application_secret_import"
 	PrivacyRecoveryFenceApprovedTarget          = "approved_target"
+	// #nosec G101 -- this is a bounded privacy evidence label, not a credential.
+	PrivacyRecoveryFenceAPITokenRevocation = "api_token_revocation"
 
 	PrivacyRecoveryFenceDeleted       = "deleted"
 	PrivacyRecoveryFencePseudonymized = "pseudonymized"
@@ -116,7 +118,8 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 	for _, fence := range fences {
 		if fence.Kind != PrivacyRecoveryFenceApplicationSecret &&
 			fence.Kind != PrivacyRecoveryFenceApplicationSecretImport &&
-			fence.Kind != PrivacyRecoveryFenceApprovedTarget {
+			fence.Kind != PrivacyRecoveryFenceApprovedTarget &&
+			fence.Kind != PrivacyRecoveryFenceAPITokenRevocation {
 			return fmt.Errorf("store: privacy recovery fence kind %q is unsupported", fence.Kind)
 		}
 		if fence.Disposition != PrivacyRecoveryFenceDeleted &&
@@ -374,7 +377,11 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
-		recoveryFences := append(append(applicationFences, importFences...), approvedFences...)
+		tokenFences, err := s.prepareAPITokenRevocationFencesTx(ctx, tx, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		recoveryFences := append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -390,6 +397,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			recoveryFences, PrivacyRecoveryFenceApplicationSecretImport)
 		selected.Counts["approved_target_event_fences"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceApprovedTarget)
+		selected.Counts["api_token_revocation_commands"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceAPITokenRevocation)
 		scheduler, err := s.PrepareSecretRotationSchedulePrivacyErasureTx(
 			ctx, tx, tenantID, subject, expectedRef,
 			candidate.OperationID, candidate.EventID, resolveSchedulerOuter,
@@ -1010,6 +1019,78 @@ func (s *Store) prepareApplicationSecretImportRecoveryFencesTx(
 		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
 			Kind:    PrivacyRecoveryFenceApplicationSecretImport,
 			EventID: batch.eventID, Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
+// Prepare the same byte-preserving privacy rewrite for a revocation command
+// that survived append/project failure. The later worker can then compare its
+// exact retained event against the rewritten first command.
+func (s *Store) prepareAPITokenRevocationFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingRow struct {
+		tokenID, eventID string
+		actor, payload   []byte
+		digest           string
+	}
+	rows, err := tx.Query(ctx, `SELECT token_id::text, event_id::text,
+		event_actor, event_payload, payload_sha256
+		FROM api_token_revocation_commands
+		WHERE tenant_id = $1 AND status = 'pending'
+		ORDER BY token_id FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var row pendingRow
+		if err := rows.Scan(&row.tokenID, &row.eventID, &row.actor,
+			&row.payload, &row.digest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, row := range pending {
+		if crypto.SHA256Hex(row.payload) != row.digest {
+			return nil, fmt.Errorf("store: API-token revocation command %s payload digest mismatch", row.eventID)
+		}
+		rewrittenPayload, payloadChanged, err := events.PseudonymizeEventDataForSubject(
+			row.payload, tenantID, subject, "api_token.revoked", events.DefaultSchemaVersion)
+		if err != nil {
+			return nil, err
+		}
+		actorValue, _, actorChanged, err := pseudonymizeRecoveryActor(row.actor, tenantID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !payloadChanged && !actorChanged {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE api_token_revocation_commands
+			SET event_actor = $4::jsonb, event_payload = $5,
+			    payload_sha256 = $6, updated_at = now()
+			WHERE tenant_id = $1 AND token_id = $2 AND event_id = $3
+			  AND status = 'pending'`,
+			tenantID, row.tokenID, row.eventID, actorValue, rewrittenPayload,
+			crypto.SHA256Hex(rewrittenPayload))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind: PrivacyRecoveryFenceAPITokenRevocation, EventID: row.eventID,
+			Disposition: PrivacyRecoveryFencePseudonymized,
 		})
 	}
 	return dispositions, nil

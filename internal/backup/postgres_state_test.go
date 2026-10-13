@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -79,6 +80,23 @@ func TestPostgresStateRestoreOrderReturnsErrors(t *testing.T) {
 	missing := append([]string(nil), order[:len(order)-1]...)
 	if err := validatePostgresStateRestoreOrder(missing); err == nil || !strings.Contains(err.Error(), "table manifest") {
 		t.Fatalf("short restore order error = %v, want table manifest mismatch", err)
+	}
+}
+
+func TestAPITokenRevocationCommandBackupAndRestoreOrder(t *testing.T) {
+	const table = "api_token_revocation_commands"
+	if class, found := Classify(table); !found || class != ClassPostgresBackup {
+		t.Fatalf("%s must be independent PostgreSQL backup state: class=%v found=%v", table, class, found)
+	}
+	if !slices.Contains(postgresStateTables(), table) {
+		t.Fatalf("PostgreSQL backup omits %s", table)
+	}
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(order, table) {
+		t.Fatalf("PostgreSQL restore omits %s", table)
 	}
 }
 

@@ -1119,6 +1119,16 @@ func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator) e
 // privacy erasure preparation leaves the affected commands fenced and is
 // logged, not fatal; any other failure stops Build.
 func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchestrator.Orchestrator) error {
+	if healed, err := orch.ReconcilePendingAPITokenRevocations(ctx); err != nil {
+		if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+			return fmt.Errorf("server: reconcile API-token revocation commands: %w", err)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("API-token revocation recovery is blocked by active privacy erasure; bearers remain denied")
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled API-token revocations missed by an append/project crash", slog.Int("healed", healed))
+	}
 	if healed, reconcileErr := a.ReconcileApplicationSecretMutationFences(ctx); reconcileErr != nil {
 		if !errors.Is(reconcileErr, api.ErrApplicationSecretMutationReconcileBlocked) {
 			return fmt.Errorf("server: reconcile application-secret mutation fences: %w", reconcileErr)
@@ -2926,6 +2936,15 @@ func (s *Server) RunApplicationSecretMutationReconciler(ctx context.Context) {
 }
 
 func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
+	if s.orch != nil {
+		if healed, err := s.orch.ReconcilePendingAPITokenRevocations(ctx); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("API-token revocation recovery sweep incomplete", slog.String("error", err.Error()))
+			}
+		} else if healed > 0 && s.logger != nil {
+			s.logger.Warn("reconciled pending API-token revocations", slog.Int("healed", healed))
+		}
+	}
 	healed, err := s.api.ReconcileApplicationSecretMutationFences(ctx)
 	if s.mApplicationSecretReconcileBlocked != nil {
 		s.mApplicationSecretReconcileBlocked.Set(float64(s.api.ApplicationSecretMutationReconcileBlockedCount()))

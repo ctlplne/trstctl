@@ -227,6 +227,7 @@ var TenantScopedTables = []string{
 	"policy_bindings",
 	"tenant_members",
 	"api_tokens",
+	"api_token_revocation_commands",
 	"aws_honey_uses",
 	"aws_honey_scans",
 	"aws_honey_cloudtrail_slots",

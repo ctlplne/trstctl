@@ -198,7 +198,12 @@ func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APIToken
 		//trstctl:system-query — auth runs before any tenant is known; the lookup is keyed by the globally-unique, high-entropy token hash and returns the owning tenant. Cross-tenant by design; runs on the pool, not under RLS (AN-1 exemption).
 		`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
 		        revoked_at, revoked_by, revocation_reason, COALESCE(delegated, false)
-		   FROM api_tokens WHERE token_hash = $1 AND revoked_at IS NULL`, hash).
+		   FROM api_tokens AS t
+		  WHERE t.token_hash = $1 AND t.revoked_at IS NULL
+		    AND NOT EXISTS (
+		      SELECT 1 FROM api_token_revocation_commands AS c
+		       WHERE c.tenant_id = t.tenant_id AND c.token_id = t.id
+		    )`, hash).
 		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.Delegated)
 	return r, err
 }

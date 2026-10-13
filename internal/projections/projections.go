@@ -6560,6 +6560,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time); err != nil {
 			return err
 		}
+		if err := p.store.CompleteAPITokenRevocationCommandTx(ctx, tx, e.TenantID, pl.ID, e); err != nil {
+			return err
+		}
 		// Machine-session bearers reuse the session UUID as their API-token ID.
 		// For ordinary API tokens this tenant-scoped update is simply a no-op.
 		return p.store.ApplyMachineSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, e.Time)

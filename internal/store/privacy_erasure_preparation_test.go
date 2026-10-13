@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -207,6 +208,72 @@ func TestPreparePrivacySubjectErasureAtomicallyClosesProtectedSchedulerLineage(t
 	if err != nil || resolverCalls != 0 || !reflect.DeepEqual(retried, prepared) {
 		t.Fatalf("prepared crash retry = %+v calls=%d err=%v, want exact stored evidence",
 			retried, resolverCalls, err)
+	}
+}
+
+func TestPreparePrivacySubjectErasureRewritesPendingAPITokenRevocation(t *testing.T) {
+	ctx := context.Background()
+	st := newOperationApprovalStore(t)
+	const subject = "qa-revocation-erasure-subject"
+	token, err := st.CreateAPIToken(ctx, store.APITokenRecord{
+		TenantID: tenantA, TokenHash: "qa-privacy-pending-revocation-token",
+		Subject: subject, Scopes: []string{"access:read"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(projections.APITokenRevoked{
+		ID: token.ID, RevokedBy: subject, Reason: "requested by " + subject,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const revocationID = "b10105b8-32b8-4f13-a7c4-60844862650b"
+	_, created, err := st.ClaimAPITokenRevocationCommand(ctx, store.APITokenRevocationCommand{
+		TenantID: tenantA, TokenID: token.ID,
+		Event: events.Event{
+			ID: revocationID, TenantID: tenantA, Type: projections.EventAPITokenRevoked,
+			SchemaVersion: events.DefaultSchemaVersion,
+			Time:          time.Now().UTC().Truncate(time.Microsecond), Data: payload,
+			Actor: &events.Actor{Subject: subject, Roles: []string{"operator"}},
+		},
+	})
+	if err != nil || !created {
+		t.Fatalf("claim pending token revocation: created=%v err=%v", created, err)
+	}
+	candidate := store.PrivacySubjectErasurePreparation{
+		PrivacySubjectErasure: store.PrivacySubjectErasure{
+			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+			RequestedByRef: privacy.SubjectRef(tenantA, "privacy-admin"),
+			Reason:         "verified erasure", ErasedAt: time.Now().UTC(),
+		},
+		OperationID:        "sha256:" + strings.Repeat("1", 64),
+		RequestBinding:     strings.Repeat("2", 64),
+		EventID:            "sha256:" + strings.Repeat("3", 64),
+		RewriteOperationID: "qa-token-revocation-rewrite",
+		TargetGeneration:   "qa-token-revocation-generation",
+		EventActor:         &events.Actor{Subject: privacy.Placeholder(privacy.SubjectRef(tenantA, "privacy-admin"))},
+	}
+	prepared, err := st.PreparePrivacySubjectErasure(ctx, tenantA, subject, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Counts["api_token_revocation_commands"] != 1 ||
+		!slices.Contains(prepared.RecoveryFences, store.PrivacyRecoveryFenceDisposition{
+			Kind:    store.PrivacyRecoveryFenceAPITokenRevocation,
+			EventID: revocationID, Disposition: store.PrivacyRecoveryFencePseudonymized,
+		}) {
+		t.Fatalf("token revocation rewrite evidence missing: %+v", prepared)
+	}
+	pending, err := st.ListPendingAPITokenRevocations(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Event.ID != revocationID ||
+		pending[0].Event.Actor == nil ||
+		pending[0].Event.Actor.Subject != privacy.Placeholder(privacy.SubjectRef(tenantA, subject)) ||
+		bytes.Contains(pending[0].Event.Data, []byte(subject)) {
+		t.Fatalf("pending revocation retained erased subject: %+v", pending)
 	}
 }
 
