@@ -27,6 +27,13 @@ import (
 
 const discoveryRunDestination = "discovery.run"
 
+// An inline projection can be ahead of the ordered tail. A missing source row
+// therefore needs a bounded check of the exact intervening event sequences,
+// rather than treating every unrelated event behind the global checkpoint as a
+// conflicting source. Larger gaps wait for the tail instead of replaying an
+// unbounded event prefix on a request path.
+const discoverySourceIdentityGapLimit = 64
+
 const (
 	maxDiscoveryRunErrorBytes = 1024
 	discoveryRunErrorWithheld = "withheld: discovery error still contained secret-like material after redaction"
@@ -126,11 +133,29 @@ func (o *Orchestrator) UpsertDiscoverySegment(ctx context.Context, tenantID stri
 // the projected source row. Config is metadata/reference JSON only; API validation
 // rejects inline credential values before calling this command.
 func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID string, in store.DiscoverySource) (store.DiscoverySource, error) {
+	var result store.DiscoverySource
+	err := o.store.WithTenantResourceCreation(ctx, tenantID, "discovery-source", func(fenced context.Context) error {
+		var err error
+		result, err = o.upsertDiscoverySourceFenced(fenced, tenantID, in)
+		return err
+	})
+	return result, err
+}
+
+// The tenant-scoped session lock spans the first identity read, source append,
+// and inline projection. A separate replica cannot accept a competing first
+// declaration while the winner has appended but not yet projected its event.
+func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID string, in store.DiscoverySource) (store.DiscoverySource, error) {
 	name := strings.TrimSpace(in.Name)
 	id := in.ID
 	byName, nameErr := o.store.GetDiscoverySourceByName(ctx, tenantID, name)
 	if nameErr != nil && !errors.Is(nameErr, pgx.ErrNoRows) {
 		return store.DiscoverySource{}, nameErr
+	}
+	if errors.Is(nameErr, pgx.ErrNoRows) {
+		if err := o.guardUnprojectedDiscoverySourceIdentity(ctx, tenantID, name, id); err != nil {
+			return store.DiscoverySource{}, err
+		}
 	}
 	if nameErr == nil {
 		if byName.Kind != in.Kind || (id != "" && byName.ID != id) {
@@ -142,9 +167,8 @@ func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID strin
 		case nameErr == nil:
 			id = byName.ID
 		case errors.Is(nameErr, pgx.ErrNoRows):
-			// The stable tenant+name identity also closes the concurrent-create
-			// race: two first writers project the same row instead of colliding
-			// on the tenant-local unique name.
+			// Keep an omitted ID stable across retries, while the session lock
+			// and projection-head check protect the first-writer decision.
 			id = uuid.NewSHA1(discoverySourceNamespace, []byte(tenantID+"\x00"+name)).String()
 		default:
 			return store.DiscoverySource{}, nameErr
@@ -176,6 +200,47 @@ func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID strin
 		ID: id, TenantID: tenantID, Kind: in.Kind, Name: name, Config: cfg,
 		CreatedAt: ev.Time, UpdatedAt: ev.Time,
 	}, nil
+}
+
+// guardUnprojectedDiscoverySourceIdentity checks only the bounded gap after the
+// ordered relational checkpoint. EventAtSequence is an exact JetStream lookup;
+// this never replays the full log. The resource-creation session lock prevents
+// another source writer from appending between this check and our own append.
+func (o *Orchestrator) guardUnprojectedDiscoverySourceIdentity(ctx context.Context, tenantID, name, id string) error {
+	head, err := o.log.LastSequence(ctx)
+	if err != nil {
+		return err
+	}
+	applied, err := o.store.ProjectionCheckpoint(ctx)
+	if err != nil {
+		return err
+	}
+	if applied > head {
+		return errors.New("orchestrator: discovery source projection checkpoint exceeds the event head")
+	}
+	if head-applied > discoverySourceIdentityGapLimit {
+		return store.ErrResourceAdmissionBusy
+	}
+	for sequence := applied + 1; sequence <= head; sequence++ {
+		event, found, err := o.log.EventAtSequence(ctx, sequence)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return store.ErrResourceAdmissionBusy
+		}
+		if event.TenantID != tenantID || event.Type != projections.EventDiscoverySourceUpserted {
+			continue
+		}
+		var source projections.DiscoverySourceUpserted
+		if err := json.Unmarshal(event.Data, &source); err != nil {
+			return fmt.Errorf("orchestrator: decode unprojected discovery source sequence %d: %w", sequence, err)
+		}
+		if source.Name == name || (id != "" && source.ID == id) {
+			return store.ErrResourceAdmissionBusy
+		}
+	}
+	return nil
 }
 
 // UpsertDiscoverySchedule records a source schedule. It refuses an absent source
