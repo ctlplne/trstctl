@@ -251,6 +251,46 @@ func (s *Store) ApplySecretRotationScheduleControlTx(
 	return fmt.Errorf("store: secret rotation schedule control event did not project")
 }
 
+// ApplySecretRotationScheduleControlV2Tx projects the first public state
+// retained by the event, including a successful no-op. A prior append whose SQL
+// transaction failed can otherwise make a later no-op replay to a different
+// state. Due-edge and run fields remain owned by their own events.
+func (s *Store) ApplySecretRotationScheduleControlV2Tx(
+	ctx context.Context, tx pgx.Tx, tenantID, id, action string, enabled bool,
+	retiredAt *time.Time, updatedAt time.Time, sequence uint64,
+) error {
+	if action != "pause" && action != "resume" && action != "retire" || sequence == 0 ||
+		sequence > math.MaxInt64 || updatedAt.IsZero() || enabled != (action == "resume") ||
+		(action == "retire") != (retiredAt != nil) {
+		return errors.New("store: invalid secret rotation schedule control receipt")
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE secret_rotation_schedules
+		    SET enabled = CASE WHEN retired_at IS NOT NULL OR $4::timestamptz IS NOT NULL
+		                       THEN false ELSE $3 END,
+		        retired_at = COALESCE(retired_at, $4::timestamptz),
+		        updated_at = $5::timestamptz,
+		        control_event_sequence = $6
+		  WHERE tenant_id = $1 AND id = $2::uuid AND control_event_sequence < $6`,
+		tenantID, id, enabled, retiredAt, updatedAt.UTC(), int64(sequence)) // #nosec G115 -- checked against MaxInt64 above (CWE-190).
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var retained int64
+	if err := tx.QueryRow(ctx,
+		`SELECT control_event_sequence FROM secret_rotation_schedules WHERE tenant_id = $1 AND id = $2::uuid`,
+		tenantID, id).Scan(&retained); err != nil {
+		return err
+	}
+	if retained >= int64(sequence) { // #nosec G115 -- checked against MaxInt64 above (CWE-190).
+		return nil
+	}
+	return errors.New("store: secret rotation schedule control receipt did not project")
+}
+
 // ApplySecretRotationScheduleRunTx projects a scheduled rotation outcome and
 // advances the next due time. Only explicit outcome states that prove the
 // successor committed promote its reference. In particular, retire_pending means
@@ -1389,6 +1429,23 @@ func (s *Store) GetSecretRotationSchedule(ctx context.Context, tenantID, id stri
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
+	return out, err
+}
+
+// GetSecretRotationScheduleForControlTx locks the exact tenant schedule through
+// the event append and inline projection. Due command claimers also lock this
+// row, so a completed pause cannot race a stale selected due row.
+func (s *Store) GetSecretRotationScheduleForControlTx(
+	ctx context.Context, tx pgx.Tx, tenantID, id string,
+) (SecretRotationSchedule, error) {
+	var out SecretRotationSchedule
+	err := scanSecretRotationSchedule(tx.QueryRow(ctx,
+		`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
+		        enabled, next_run_at, control_event_sequence, retired_at,
+		        last_run_id::text, last_run_at, last_run_status,
+		        last_new_ref, last_error, created_at, updated_at
+		   FROM secret_rotation_schedules
+		  WHERE tenant_id = $1 AND id = $2::uuid FOR UPDATE`, tenantID, id), &out)
 	return out, err
 }
 

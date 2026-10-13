@@ -34,12 +34,6 @@ type privacyConnectorDeliveryRecordedV1 struct {
 	IdempotencyKey   string  `json:"idempotency_key,omitempty"`
 }
 
-type privacyDiscoveryScheduleControlledV1 struct {
-	ID         string `json:"id"`
-	Action     string `json:"action"`
-	ReasonCode string `json:"reason_code"`
-}
-
 // Version-one member events predate explicit provisioning identities. Keep
 // their historical payloads closed instead of silently extending schema one.
 type privacyTenantMemberUpsertedV1 struct {
@@ -1835,8 +1829,11 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventWorkloadAttesterTrustSourceDeleted, 1}:                               privacyPayloadShape[WorkloadAttesterTrustSourceDeleted](),
 		{EventSecretRotationScheduleUpserted, 1}:                                   privacyPayloadShape[SecretRotationScheduleUpserted](),
 		{EventSecretRotationSchedulePaused, 1}:                                     privacyPayloadShape[SecretRotationScheduleControlled](),
+		{EventSecretRotationSchedulePaused, 2}:                                     privacyPayloadShape[SecretRotationScheduleControlledV2](),
 		{EventSecretRotationScheduleResumed, 1}:                                    privacyPayloadShape[SecretRotationScheduleControlled](),
+		{EventSecretRotationScheduleResumed, 2}:                                    privacyPayloadShape[SecretRotationScheduleControlledV2](),
 		{EventSecretRotationScheduleRetired, 1}:                                    privacyPayloadShape[SecretRotationScheduleControlled](),
+		{EventSecretRotationScheduleRetired, 2}:                                    privacyPayloadShape[SecretRotationScheduleControlledV2](),
 		{EventSecretRotationScheduleRan, 1}:                                        privacyPayloadShape[SecretRotationScheduleRan](),
 		{EventNotificationRead, 1}:                                                 privacyPayloadShape[NotificationRead](),
 		{EventNotificationChannelUpserted, 1}:                                      privacyPayloadShape[NotificationChannelUpserted](),

@@ -1176,53 +1176,72 @@ func (a *API) getSecretRotationSchedule(w http.ResponseWriter, r *http.Request) 
 
 //trstctl:mutation
 func (a *API) pauseSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
-	if a.secrets == nil {
-		a.writeProblem(w, secretsDisabledProblem())
-		return
-	}
-	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), "pause")
-	})
+	a.controlSecretRotationScheduleRequest(w, r, "pause", r.Header.Get("Idempotency-Key"))
 }
 
 //trstctl:mutation
 func (a *API) resumeSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
-	if a.secrets == nil {
-		a.writeProblem(w, secretsDisabledProblem())
-		return
-	}
-	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), "resume")
-	})
+	a.controlSecretRotationScheduleRequest(w, r, "resume", r.Header.Get("Idempotency-Key"))
 }
 
 //trstctl:mutation
 func (a *API) retireSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
+	a.controlSecretRotationScheduleRequest(w, r, "retire", r.Header.Get("Idempotency-Key"))
+}
+
+func (a *API) controlSecretRotationScheduleRequest(w http.ResponseWriter, r *http.Request, action, idempotencyKey string) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
 		return
 	}
-	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), "retire")
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, body, err := mutationRequestBinding(r, principal)
+	defer secret.Wipe(body)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.controlSecretRotationSchedule(ctx, tenantID, r.PathValue("id"), action, idempotencyKey, binding)
 	})
 }
 
-func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, action string) (int, any, error) {
+func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, action, idempotencyKey, binding string) (int, any, error) {
+	// A bound retry must resolve its retained first result before any current-
+	// state or connector-readiness check can reject or reverse it.
+	retained, found, err := a.orch.RecoverSecretRotationScheduleControl(ctx, tenantID, id, action, idempotencyKey, binding)
+	if err != nil {
+		return 0, nil, err
+	}
+	if found {
+		return http.StatusOK, toSecretRotationScheduleResponse(retained), nil
+	}
 	schedule, err := a.store.GetSecretRotationSchedule(ctx, tenantID, id)
 	if err != nil {
 		return 0, nil, err
 	}
 	if schedule.RetiredAt != nil {
 		if action == "retire" {
-			return http.StatusOK, toSecretRotationScheduleResponse(schedule), nil
+			// Even a fresh no-op retirement needs an immutable receipt.
+			controlled, err := a.orch.ControlSecretRotationSchedule(ctx, tenantID, id, action, "operator_request", idempotencyKey, binding)
+			if err != nil {
+				return 0, nil, err
+			}
+			return http.StatusOK, toSecretRotationScheduleResponse(controlled), nil
 		}
 		return 0, nil, errStatus(http.StatusConflict, "retired rotation schedules cannot be resumed or paused")
 	}
 	if (action == "pause" && !schedule.Enabled) || (action == "resume" && schedule.Enabled) {
-		return http.StatusOK, toSecretRotationScheduleResponse(schedule), nil
+		// A no-op still commits a command receipt before returning success.
+		controlled, err := a.orch.ControlSecretRotationSchedule(ctx, tenantID, id, action, "operator_request", idempotencyKey, binding)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toSecretRotationScheduleResponse(controlled), nil
 	}
 	if action == "resume" {
 		if !isConnectorSecretRotation(schedule.Provider) {
@@ -1248,7 +1267,7 @@ func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, a
 			return 0, nil, errStatus(http.StatusConflict, "schedule predecessor no longer matches the current secret version")
 		}
 	}
-	controlled, err := a.orch.ControlSecretRotationSchedule(ctx, tenantID, id, action, "operator_request")
+	controlled, err := a.orch.ControlSecretRotationSchedule(ctx, tenantID, id, action, "operator_request", idempotencyKey, binding)
 	if err != nil {
 		return 0, nil, err
 	}

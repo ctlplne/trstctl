@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -2631,4 +2632,171 @@ func rotationTestPGIdent(v string) string {
 
 func rotationTestPGLiteral(v string) string {
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
+}
+
+func TestServedSecretRotationScheduleBoundRetryAfterOppositeControlReturnsOriginalReceipt(t *testing.T) {
+	connector := newRotationCapturePusher()
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
+		},
+	)
+	registerServedTenant(t, h, "served bound secret schedule control tenant")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "rotation/bound-control", "value": "qa-source-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("seed source: status=%d body=%s", status, body)
+	}
+	connector.put("rotation/bound-control", []byte("qa-source-v1"))
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", tok,
+		"bound-control-create", map[string]any{
+			"name": "bound-control", "provider": "connector:ci", "key": "rotation/bound-control",
+			"old_ref": "version:1", "interval_seconds": 3600, "enabled": true,
+			"next_run_at": time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("create schedule: status=%d body=%s", status, body)
+	}
+	var schedule secretRotationScheduleValue
+	if err := json.Unmarshal(body, &schedule); err != nil || schedule.ID == "" {
+		t.Fatalf("decode schedule: %+v err=%v body=%s", schedule, err, body)
+	}
+	path := "/api/v1/secrets/rotation-schedules/" + schedule.ID
+	status, first := secretsReqKey(t, h, http.MethodPost, path+"/pause", tok, "bound-control-pause", nil)
+	if status != http.StatusOK || !bytes.Contains(first, []byte(`"enabled":false`)) {
+		t.Fatalf("first pause: status=%d body=%s", status, first)
+	}
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(t.Context(), `UPDATE idempotency_keys SET status = 'bound', result = NULL, completed_at = NULL
+			WHERE tenant_id = $1 AND key = $2`, h.tenant, "bound-control-pause")
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return errors.New("pause crash fixture missed outer claim")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status, resumed := secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-control-resume", nil)
+	if status != http.StatusOK || !bytes.Contains(resumed, []byte(`"enabled":true`)) {
+		t.Fatalf("opposite resume: status=%d body=%s", status, resumed)
+	}
+	status, mismatch := secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-control-pause", nil)
+	if status != http.StatusConflict {
+		t.Fatalf("same key changed command: status=%d body=%s", status, mismatch)
+	}
+	before, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, retry := secretsReqKey(t, h, http.MethodPost, path+"/pause", tok, "bound-control-pause", nil)
+	if status != http.StatusOK || !bytes.Equal(retry, first) {
+		t.Fatalf("bound pause retry after resume: status=%d body=%s want original=%s", status, retry, first)
+	}
+	if after, err := h.log.LastSequence(t.Context()); err != nil || after != before {
+		t.Fatalf("same-key pause retry appended event: before=%d after=%d err=%v", before, after, err)
+	}
+	status, current := secretsReq(t, h, http.MethodGet, path, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":true`)) {
+		t.Fatalf("old pause retry reversed later resume: status=%d body=%s", status, current)
+	}
+	status, noop := secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-control-noop", nil)
+	if status != http.StatusOK || !bytes.Contains(noop, []byte(`"enabled":true`)) {
+		t.Fatalf("first no-op resume: status=%d body=%s", status, noop)
+	}
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `UPDATE idempotency_keys SET status = 'bound', result = NULL, completed_at = NULL
+			WHERE tenant_id = $1 AND key = $2`, h.tenant, "bound-control-noop")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status, laterPause := secretsReqKey(t, h, http.MethodPost, path+"/pause", tok, "bound-control-later-pause", nil)
+	if status != http.StatusOK || !bytes.Contains(laterPause, []byte(`"enabled":false`)) {
+		t.Fatalf("later pause: status=%d body=%s", status, laterPause)
+	}
+	before, err = h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, retry = secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-control-noop", nil)
+	if status != http.StatusOK || !bytes.Equal(retry, noop) {
+		t.Fatalf("bound no-op retry: status=%d body=%s want original=%s", status, retry, noop)
+	}
+	if after, err := h.log.LastSequence(t.Context()); err != nil || after != before {
+		t.Fatalf("same-key no-op retry appended event: before=%d after=%d err=%v", before, after, err)
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("cold rebuild: %v", err)
+	}
+	status, current = secretsReq(t, h, http.MethodGet, path, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":false`)) {
+		t.Fatalf("cold rebuild reversed later pause: status=%d body=%s", status, current)
+	}
+	if count, err := h.store.WriteReadModelSnapshots(t.Context()); err != nil || count < 1 {
+		t.Fatalf("snapshot control state: count=%d err=%v", count, err)
+	}
+	if err := h.store.RestoreReadModelTx(t.Context(), func(tx pgx.Tx) error {
+		_, err := h.store.RestoreSnapshotsTx(t.Context(), tx)
+		return err
+	}); err != nil {
+		t.Fatalf("restore snapshot: %v", err)
+	}
+	status, current = secretsReq(t, h, http.MethodGet, path, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":false`)) {
+		t.Fatalf("snapshot restore reversed later pause: status=%d body=%s", status, current)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", tok,
+		"bound-control-crash-create", map[string]any{
+			"name": "bound-control-crash", "provider": "connector:ci", "key": "rotation/bound-control",
+			"old_ref": "version:1", "interval_seconds": 3600, "enabled": true,
+			"next_run_at": time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("create crash schedule: status=%d body=%s", status, body)
+	}
+	var crashSchedule secretRotationScheduleValue
+	if err := json.Unmarshal(body, &crashSchedule); err != nil || crashSchedule.ID == "" {
+		t.Fatalf("decode crash schedule: %+v err=%v body=%s", crashSchedule, err, body)
+	}
+	beforeCrash, err := h.store.GetSecretRotationSchedule(t.Context(), h.tenant, crashSchedule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	crashAt := time.Now().UTC().Truncate(time.Microsecond)
+	crashPayload, err := json.Marshal(projections.SecretRotationScheduleControlledV2{
+		ID: crashSchedule.ID, Action: "pause", ReasonCode: "operator_request", Binding: "append-before-sql-crash",
+		Applied: true, Result: projections.SecretRotationScheduleControlResult{
+			ID: crashSchedule.ID, TenantID: h.tenant, Name: beforeCrash.Name,
+			Provider: beforeCrash.Provider, Key: beforeCrash.Key, OldRef: beforeCrash.OldRef,
+			IntervalSeconds: beforeCrash.IntervalSeconds, Enabled: false, NextRunAt: beforeCrash.NextRunAt,
+			CreatedAt: beforeCrash.CreatedAt, UpdatedAt: crashAt,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.log.Append(t.Context(), events.Event{
+		ID: uuid.NewString(), Type: projections.EventSecretRotationSchedulePaused,
+		TenantID: h.tenant, SchemaVersion: 2, Time: crashAt, Data: crashPayload,
+	}); err != nil {
+		t.Fatalf("append pause before simulated SQL crash: %v", err)
+	}
+	crashPath := "/api/v1/secrets/rotation-schedules/" + crashSchedule.ID
+	status, body = secretsReqKey(t, h, http.MethodPost, crashPath+"/resume", tok,
+		"bound-control-after-crash-resume", nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"enabled":true`)) {
+		t.Fatalf("resume after append-before-SQL crash: status=%d body=%s", status, body)
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("cold rebuild after append-before-SQL crash: %v", err)
+	}
+	status, current = secretsReq(t, h, http.MethodGet, crashPath, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":true`)) {
+		t.Fatalf("cold replay reversed successful no-op resume: status=%d body=%s", status, current)
+	}
 }

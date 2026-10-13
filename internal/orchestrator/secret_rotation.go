@@ -3,10 +3,12 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -19,6 +21,8 @@ import (
 	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
 )
+
+var secretRotationScheduleControlNamespace = uuid.MustParse("c3b5e6cb-c391-58db-8223-02e7cd777661")
 
 // SecretRotationScheduleRunID is the stable UUID for one exact tenant schedule
 // due edge. It is independent of whichever authorized HTTP runner happens to
@@ -65,30 +69,164 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 	return o.store.GetSecretRotationSchedule(ctx, tenantID, id)
 }
 
+// RecoverSecretRotationScheduleControl returns the exact first result of a
+// retained command before a receiver checks today's schedule or connector
+// state. It also finishes an append-before-SQL projection that was lost when
+// the first HTTP response disappeared.
+func (o *Orchestrator) RecoverSecretRotationScheduleControl(
+	ctx context.Context, tenantID, id, action, idempotencyKey, binding string,
+) (store.SecretRotationSchedule, bool, error) {
+	eventType, eventID, err := secretRotationScheduleControlIdentity(tenantID, action, idempotencyKey, binding)
+	if err != nil {
+		return store.SecretRotationSchedule{}, false, err
+	}
+	retained, found, err := o.log.EventByID(ctx, eventID)
+	if err != nil || !found {
+		return store.SecretRotationSchedule{}, false, err
+	}
+	receipt, err := decodeSecretRotationScheduleControlReceipt(retained, tenantID, id, action, binding, eventType)
+	if err != nil {
+		return store.SecretRotationSchedule{}, true, err
+	}
+	err = o.withTenantCommand(ctx, tenantID, func(fenced context.Context, tx pgx.Tx) error {
+		current, err := o.store.GetSecretRotationScheduleForControlTx(fenced, tx, tenantID, id)
+		if err != nil {
+			return err
+		}
+		if retained.Sequence > current.ControlEventSequence {
+			return o.proj.ApplyTx(fenced, tx, retained)
+		}
+		return nil
+	})
+	if err != nil {
+		return store.SecretRotationSchedule{}, true, err
+	}
+	return secretRotationScheduleFromControlResult(receipt.Result), true, nil
+}
+
 // ControlSecretRotationSchedule records a future-eligibility decision as an
-// immutable event. The projector preserves the exact in-flight due tuple; a
-// command already claimed before pause or retirement still records its receipt.
+// immutable event. The first public result is retained for applied and no-op
+// commands. The projector preserves the exact in-flight due tuple; a command
+// already claimed before pause or retirement still records its receipt.
 func (o *Orchestrator) ControlSecretRotationSchedule(
-	ctx context.Context, tenantID, id, action, reasonCode string,
+	ctx context.Context, tenantID, id, action, reasonCode, idempotencyKey, binding string,
 ) (store.SecretRotationSchedule, error) {
+	eventType, eventID, err := secretRotationScheduleControlIdentity(tenantID, action, idempotencyKey, binding)
+	if err != nil || reasonCode != "operator_request" {
+		return store.SecretRotationSchedule{}, fmt.Errorf("orchestrator: invalid rotation schedule control action or reason")
+	}
+	var result store.SecretRotationSchedule
+	err = o.withTenantCommand(ctx, tenantID, func(fenced context.Context, tx pgx.Tx) error {
+		current, err := o.store.GetSecretRotationScheduleForControlTx(fenced, tx, tenantID, id)
+		if err != nil {
+			return err
+		}
+		retained, found, err := o.log.EventByID(fenced, eventID)
+		if err != nil {
+			return err
+		}
+		if found {
+			receipt, err := decodeSecretRotationScheduleControlReceipt(retained, tenantID, id, action, binding, eventType)
+			if err != nil {
+				return err
+			}
+			if retained.Sequence > current.ControlEventSequence {
+				if err := o.proj.ApplyTx(fenced, tx, retained); err != nil {
+					return err
+				}
+			}
+			result = secretRotationScheduleFromControlResult(receipt.Result)
+			return nil
+		}
+		if current.RetiredAt != nil && action != "retire" {
+			return errors.New("orchestrator: retired rotation schedule cannot be controlled")
+		}
+		applied := current.RetiredAt == nil && ((action == "pause" && current.Enabled) ||
+			(action == "resume" && !current.Enabled) || action == "retire")
+		at := time.Now().UTC().Truncate(time.Microsecond)
+		result = current
+		if applied {
+			result.Enabled = action == "resume"
+			result.UpdatedAt = at
+			if action == "retire" {
+				result.RetiredAt = &at
+			}
+		}
+		payload, err := json.Marshal(projections.SecretRotationScheduleControlledV2{
+			ID: id, Action: action, ReasonCode: reasonCode, Binding: binding,
+			Applied: applied, Result: secretRotationScheduleControlResult(result),
+		})
+		if err != nil {
+			return err
+		}
+		ev, err := o.log.Append(fenced, events.Event{
+			ID: eventID, Type: eventType, TenantID: tenantID, SchemaVersion: 2, Time: at, Data: payload,
+		})
+		if err != nil {
+			return err
+		}
+		if ev.ID != eventID || ev.Type != eventType || ev.TenantID != tenantID || ev.SchemaVersion != 2 ||
+			!bytes.Equal(ev.Data, payload) {
+			return store.ErrIdempotencyConflict
+		}
+		return o.proj.ApplyTx(fenced, tx, ev)
+	})
+	if err != nil {
+		return store.SecretRotationSchedule{}, err
+	}
+	return result, nil
+}
+
+func secretRotationScheduleControlIdentity(tenantID, action, idempotencyKey, binding string) (string, string, error) {
 	eventType := map[string]string{
 		"pause":  projections.EventSecretRotationSchedulePaused,
 		"resume": projections.EventSecretRotationScheduleResumed,
 		"retire": projections.EventSecretRotationScheduleRetired,
 	}[action]
-	if eventType == "" || reasonCode != "operator_request" {
-		return store.SecretRotationSchedule{}, fmt.Errorf("orchestrator: invalid rotation schedule control action or reason")
+	if tenantID == "" || eventType == "" || idempotencyKey == "" || binding == "" {
+		return "", "", errors.New("orchestrator: rotation schedule control requires a bound tenant command")
 	}
-	payload, err := json.Marshal(projections.SecretRotationScheduleControlled{
-		ID: id, Action: action, ReasonCode: reasonCode,
-	})
-	if err != nil {
-		return store.SecretRotationSchedule{}, err
+	return eventType, uuid.NewSHA1(secretRotationScheduleControlNamespace,
+		[]byte(tenantID+"\x00"+idempotencyKey)).String(), nil
+}
+
+func decodeSecretRotationScheduleControlReceipt(
+	event events.Event, tenantID, id, action, binding, eventType string,
+) (projections.SecretRotationScheduleControlledV2, error) {
+	var receipt projections.SecretRotationScheduleControlledV2
+	if event.TenantID != tenantID || event.Type != eventType || event.SchemaVersion != 2 ||
+		json.Unmarshal(event.Data, &receipt) != nil || receipt.ID != id || receipt.Action != action ||
+		receipt.ReasonCode != "operator_request" || receipt.Binding != binding ||
+		receipt.Result.ID != id || receipt.Result.TenantID != tenantID ||
+		receipt.Result.CreatedAt.IsZero() || receipt.Result.UpdatedAt.IsZero() || receipt.Result.NextRunAt.IsZero() {
+		return receipt, store.ErrIdempotencyConflict
 	}
-	if _, err := o.emit(ctx, eventType, tenantID, payload); err != nil {
-		return store.SecretRotationSchedule{}, err
+	if event.Sequence > math.MaxInt64 {
+		return receipt, errors.New("orchestrator: rotation schedule control sequence exceeds SQL range")
 	}
-	return o.store.GetSecretRotationSchedule(ctx, tenantID, id)
+	return receipt, nil
+}
+
+func secretRotationScheduleControlResult(s store.SecretRotationSchedule) projections.SecretRotationScheduleControlResult {
+	return projections.SecretRotationScheduleControlResult{
+		ID: s.ID, TenantID: s.TenantID, Name: s.Name, Provider: s.Provider, Key: s.Key,
+		OldRef: s.OldRef, IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled,
+		NextRunAt: s.NextRunAt, RetiredAt: s.RetiredAt,
+		LastRunID: s.LastRunID, LastRunAt: s.LastRunAt, LastRunStatus: s.LastRunStatus,
+		LastNewRef: s.LastNewRef, LastError: s.LastError,
+		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+	}
+}
+
+func secretRotationScheduleFromControlResult(r projections.SecretRotationScheduleControlResult) store.SecretRotationSchedule {
+	return store.SecretRotationSchedule{
+		ID: r.ID, TenantID: r.TenantID, Name: r.Name, Provider: r.Provider, Key: r.Key,
+		OldRef: r.OldRef, IntervalSeconds: r.IntervalSeconds, Enabled: r.Enabled,
+		NextRunAt: r.NextRunAt, RetiredAt: r.RetiredAt,
+		LastRunID: r.LastRunID, LastRunAt: r.LastRunAt, LastRunStatus: r.LastRunStatus,
+		LastNewRef: r.LastNewRef, LastError: r.LastError,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
 }
 
 // RecordSecretRotationScheduleRun records the outcome of one due scheduled

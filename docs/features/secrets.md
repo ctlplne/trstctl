@@ -414,7 +414,12 @@ is permanent, keeps the schedule and its receipts visible, and reserves its name
 The immutable `secret.rotation_schedule.paused`, `.resumed`, and `.retired`
 events each carry a matching closed action and operator-request reason code, so
 audit filters for one action cannot silently include the others. Their
-tenant-scoped projection changes only future eligibility. A run already claimed
+current events also retain the authenticated request binding and exact first
+public response, including a successful no-op. If the HTTP result is lost, retry
+the **same** key, caller, route, and body: the original response is returned
+without applying the old decision over a newer operator action. A changed request
+under that key is rejected. The tenant-scoped projection changes only future
+eligibility. A run already claimed
 when an operator pauses or retires can
 finish and record its exact successor and delivery receipt. The console shows a
 separate retired state and reviews this effect before retirement.

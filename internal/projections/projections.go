@@ -2401,6 +2401,39 @@ type SecretRotationScheduleControlled struct {
 	ReasonCode string `json:"reason_code"`
 }
 
+// SecretRotationScheduleControlledV2 retains an authenticated control's exact
+// first public response. A successful no-op also has a receipt; otherwise a
+// lost response retried after another operator action could become a new effect.
+type SecretRotationScheduleControlledV2 struct {
+	ID         string                              `json:"id"`
+	Action     string                              `json:"action"`
+	ReasonCode string                              `json:"reason_code"`
+	Binding    string                              `json:"binding"`
+	Applied    bool                                `json:"applied"`
+	Result     SecretRotationScheduleControlResult `json:"result"`
+}
+
+// The result carries references and run metadata only, never a secret value.
+type SecretRotationScheduleControlResult struct {
+	ID              string     `json:"id"`
+	TenantID        string     `json:"tenant_id"`
+	Name            string     `json:"name"`
+	Provider        string     `json:"provider"`
+	Key             string     `json:"key"`
+	OldRef          string     `json:"old_ref"`
+	IntervalSeconds int        `json:"interval_seconds"`
+	Enabled         bool       `json:"enabled"`
+	NextRunAt       time.Time  `json:"next_run_at"`
+	RetiredAt       *time.Time `json:"retired_at,omitempty"`
+	LastRunID       *string    `json:"last_run_id,omitempty"`
+	LastRunAt       *time.Time `json:"last_run_at,omitempty"`
+	LastRunStatus   string     `json:"last_run_status"`
+	LastNewRef      string     `json:"last_new_ref,omitempty"`
+	LastError       string     `json:"last_error,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 // SecretRotationScheduleRanEventSchemaVersion adds the exact immutable due-edge
 // tuple. Version 1 used event wall time as cadence authority and remains readable
 // only for pre-command-table history.
@@ -3835,9 +3868,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventComplianceReportScheduleUpserted:         {1: true},
 	EventComplianceReportRunRecorded:              {1: true},
 	EventSecretRotationScheduleUpserted:           {1: true},
-	EventSecretRotationSchedulePaused:             {1: true},
-	EventSecretRotationScheduleResumed:            {1: true},
-	EventSecretRotationScheduleRetired:            {1: true},
+	EventSecretRotationSchedulePaused:             {1: true, 2: true},
+	EventSecretRotationScheduleResumed:            {1: true, 2: true},
+	EventSecretRotationScheduleRetired:            {1: true, 2: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},
@@ -5849,17 +5882,31 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
 	case EventSecretRotationSchedulePaused, EventSecretRotationScheduleResumed, EventSecretRotationScheduleRetired:
-		var pl SecretRotationScheduleControlled
-		if err := decode(e, &pl); err != nil {
-			return err
-		}
 		expectedAction := map[string]string{
 			EventSecretRotationSchedulePaused:  "pause",
 			EventSecretRotationScheduleResumed: "resume",
 			EventSecretRotationScheduleRetired: "retire",
 		}[e.Type]
-		if pl.ID == "" || pl.Action != expectedAction ||
-			pl.ReasonCode != "operator_request" {
+		if schemaVersionOf(e) == 2 {
+			var pl SecretRotationScheduleControlledV2
+			if err := decode(e, &pl); err != nil {
+				return err
+			}
+			if pl.ID == "" || pl.Action != expectedAction || pl.ReasonCode != "operator_request" ||
+				pl.Binding == "" || pl.Result.ID != pl.ID || pl.Result.TenantID != e.TenantID ||
+				pl.Result.CreatedAt.IsZero() || pl.Result.UpdatedAt.IsZero() || pl.Result.NextRunAt.IsZero() ||
+				pl.Result.Enabled != (pl.Action == "resume") ||
+				(pl.Action == "retire") != (pl.Result.RetiredAt != nil) {
+				return fmt.Errorf("projections: %s v2 requires a bound exact control receipt", e.Type)
+			}
+			return p.store.ApplySecretRotationScheduleControlV2Tx(ctx, tx, e.TenantID,
+				pl.ID, pl.Action, pl.Result.Enabled, pl.Result.RetiredAt, pl.Result.UpdatedAt, e.Sequence)
+		}
+		var pl SecretRotationScheduleControlled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Action != expectedAction || pl.ReasonCode != "operator_request" {
 			return fmt.Errorf("projections: %s requires id, matching action, and operator-request reason", e.Type)
 		}
 		return p.store.ApplySecretRotationScheduleControlTx(ctx, tx, e.TenantID,
