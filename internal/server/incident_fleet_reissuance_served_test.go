@@ -311,6 +311,7 @@ func newIncidentMigrationFixtureAUD41(
 
 	targetConfig, err := json.Marshal(map[string]any{
 		"executor": "agent", "cert_path": certPath, "key_path": keyPath,
+		"required_agent_id": agentRowID(h.tenant, "role-agent"), "required_agent_role": mtls.AgentRoleHost,
 		"verify_address": verifyAddress, "verify_server_name": dnsName,
 		"environment": environment,
 	})
