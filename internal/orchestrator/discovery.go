@@ -54,6 +54,11 @@ var ErrDiscoveryRelayUnavailable = errors.New("orchestrator: no eligible network
 // existing source would turn old runs into evidence for a different collector.
 var ErrDiscoverySourceIdentityConflict = errors.New("orchestrator: discovery source identity is already bound")
 
+// ErrDiscoveryScheduleIdentityConflict means a tenant-local schedule name or
+// ID already belongs to another declaration. A second event would fail the
+// unique read-model projection and obstruct ordered replay.
+var ErrDiscoveryScheduleIdentityConflict = errors.New("orchestrator: discovery schedule identity is already bound")
+
 // DiscoveryRelayReadiness is the server-owned answer to "where will this scan
 // run?" Ready means an enrolled, non-offboarded agent has the network role. It
 // does not promise that the agent is connected at this exact millisecond; the
@@ -153,7 +158,7 @@ func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID
 		return store.DiscoverySource{}, nameErr
 	}
 	if errors.Is(nameErr, pgx.ErrNoRows) {
-		if err := o.guardUnprojectedDiscoverySourceIdentity(ctx, tenantID, name, id); err != nil {
+		if err := o.guardUnprojectedDiscoveryIdentity(ctx, tenantID, projections.EventDiscoverySourceUpserted, name, id); err != nil {
 			return store.DiscoverySource{}, err
 		}
 	}
@@ -202,11 +207,11 @@ func (o *Orchestrator) upsertDiscoverySourceFenced(ctx context.Context, tenantID
 	}, nil
 }
 
-// guardUnprojectedDiscoverySourceIdentity checks only the bounded gap after the
+// guardUnprojectedDiscoveryIdentity checks only the bounded gap after the
 // ordered relational checkpoint. EventAtSequence is an exact JetStream lookup;
 // this never replays the full log. The resource-creation session lock prevents
-// another source writer from appending between this check and our own append.
-func (o *Orchestrator) guardUnprojectedDiscoverySourceIdentity(ctx context.Context, tenantID, name, id string) error {
+// another writer of the same declaration type from appending before our own.
+func (o *Orchestrator) guardUnprojectedDiscoveryIdentity(ctx context.Context, tenantID, eventType, name, id string) error {
 	head, err := o.log.LastSequence(ctx)
 	if err != nil {
 		return err
@@ -229,14 +234,17 @@ func (o *Orchestrator) guardUnprojectedDiscoverySourceIdentity(ctx context.Conte
 		if !found {
 			return store.ErrResourceAdmissionBusy
 		}
-		if event.TenantID != tenantID || event.Type != projections.EventDiscoverySourceUpserted {
+		if event.TenantID != tenantID || event.Type != eventType {
 			continue
 		}
-		var source projections.DiscoverySourceUpserted
-		if err := json.Unmarshal(event.Data, &source); err != nil {
-			return fmt.Errorf("orchestrator: decode unprojected discovery source sequence %d: %w", sequence, err)
+		var identity struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
 		}
-		if source.Name == name || (id != "" && source.ID == id) {
+		if err := json.Unmarshal(event.Data, &identity); err != nil {
+			return fmt.Errorf("orchestrator: decode unprojected %s sequence %d: %w", eventType, sequence, err)
+		}
+		if identity.Name == name || (id != "" && identity.ID == id) {
 			return store.ErrResourceAdmissionBusy
 		}
 	}
@@ -246,15 +254,46 @@ func (o *Orchestrator) guardUnprojectedDiscoverySourceIdentity(ctx context.Conte
 // UpsertDiscoverySchedule records a source schedule. It refuses an absent source
 // before emitting anything, so the event log never contains a dangling schedule.
 func (o *Orchestrator) UpsertDiscoverySchedule(ctx context.Context, tenantID string, in store.DiscoverySchedule) (store.DiscoverySchedule, error) {
+	var result store.DiscoverySchedule
+	err := o.store.WithTenantResourceCreation(ctx, tenantID, "discovery-schedule", func(fenced context.Context) error {
+		var err error
+		result, err = o.upsertDiscoveryScheduleFenced(fenced, tenantID, in)
+		return err
+	})
+	return result, err
+}
+
+func (o *Orchestrator) upsertDiscoveryScheduleFenced(ctx context.Context, tenantID string, in store.DiscoverySchedule) (store.DiscoverySchedule, error) {
 	if _, err := o.store.GetDiscoverySource(ctx, tenantID, in.SourceID); err != nil {
 		return store.DiscoverySchedule{}, err
+	}
+	name := strings.TrimSpace(in.Name)
+	byName, nameErr := o.store.GetDiscoveryScheduleByName(ctx, tenantID, name)
+	if nameErr != nil && !errors.Is(nameErr, pgx.ErrNoRows) {
+		return store.DiscoverySchedule{}, nameErr
+	}
+	if nameErr == nil && (in.ID == "" || byName.ID != in.ID) {
+		return store.DiscoverySchedule{}, ErrDiscoveryScheduleIdentityConflict
+	}
+	if errors.Is(nameErr, pgx.ErrNoRows) {
+		if err := o.guardUnprojectedDiscoveryIdentity(ctx, tenantID, projections.EventDiscoveryScheduleUpserted, name, in.ID); err != nil {
+			return store.DiscoverySchedule{}, err
+		}
 	}
 	id := in.ID
 	if id == "" {
 		id = uuid.NewString()
+	} else {
+		byID, idErr := o.store.GetDiscoverySchedule(ctx, tenantID, id)
+		if idErr != nil && !errors.Is(idErr, pgx.ErrNoRows) {
+			return store.DiscoverySchedule{}, idErr
+		}
+		if idErr == nil && byID.Name != name {
+			return store.DiscoverySchedule{}, ErrDiscoveryScheduleIdentityConflict
+		}
 	}
 	payload, err := json.Marshal(projections.DiscoveryScheduleUpserted{
-		ID: id, SourceID: in.SourceID, Name: in.Name, IntervalSeconds: in.IntervalSeconds, Enabled: in.Enabled,
+		ID: id, SourceID: in.SourceID, Name: name, IntervalSeconds: in.IntervalSeconds, Enabled: in.Enabled,
 	})
 	if err != nil {
 		return store.DiscoverySchedule{}, err
@@ -264,7 +303,7 @@ func (o *Orchestrator) UpsertDiscoverySchedule(ctx context.Context, tenantID str
 		return store.DiscoverySchedule{}, err
 	}
 	return store.DiscoverySchedule{
-		ID: id, TenantID: tenantID, SourceID: in.SourceID, Name: in.Name,
+		ID: id, TenantID: tenantID, SourceID: in.SourceID, Name: name,
 		IntervalSeconds: in.IntervalSeconds, Enabled: in.Enabled,
 		CreatedAt: ev.Time, UpdatedAt: ev.Time,
 	}, nil

@@ -579,6 +579,11 @@ commands map to `POST|GET /api/v1/discovery/sources`,
 `POST /api/v1/discovery/findings/{id}/dismiss`. The shadow posture command maps to
 `GET /api/v1/nhi/posture/shadow`.
 
+A discovery schedule name belongs to one schedule within a tenant. Retry a
+lost create response with the same `Idempotency-Key` to recover that creation;
+a separate create with the same name returns `409` before another event is
+recorded. Use `GET /api/v1/discovery/schedules` to find the existing schedule.
+
 To see enrolled agents that perform local discovery:
 
 ```sh

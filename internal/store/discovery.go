@@ -808,6 +808,21 @@ func (s *Store) GetDiscoverySchedule(ctx context.Context, tenantID, id string) (
 	return out, err
 }
 
+// GetDiscoveryScheduleByName reads the tenant-local schedule identity before
+// another immutable create event is appended. RLS and the explicit tenant
+// predicate both constrain the lookup (AN-1).
+func (s *Store) GetDiscoveryScheduleByName(ctx context.Context, tenantID, name string) (DiscoverySchedule, error) {
+	var out DiscoverySchedule
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled, created_at, updated_at
+			   FROM discovery_schedules WHERE tenant_id = $1 AND name = $2`, tenantID, name).
+			Scan(&out.ID, &out.TenantID, &out.SourceID, &out.Name, &out.IntervalSeconds,
+				&out.Enabled, &out.CreatedAt, &out.UpdatedAt)
+	})
+	return out, err
+}
+
 // GetDiscoveryRun loads a run in its tenant context.
 func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (DiscoveryRun, error) {
 	var out DiscoveryRun
