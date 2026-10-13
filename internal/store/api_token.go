@@ -68,10 +68,7 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		        scopes = EXCLUDED.scopes,
 		        expires_at = EXCLUDED.expires_at,
 		        created_at = EXCLUDED.created_at,
-		        delegated = EXCLUDED.delegated,
-		        revoked_at = NULL,
-		        revoked_by = '',
-		        revocation_reason = ''`,
+		        delegated = EXCLUDED.delegated`,
 		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt, r.Delegated)
 	return err
 }
