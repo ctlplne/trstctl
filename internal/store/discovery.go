@@ -371,6 +371,39 @@ func (s *Store) ApplyDiscoveryScheduleControlTx(ctx context.Context, tx pgx.Tx,
 	return errors.New("store: discovery schedule control event did not project")
 }
 
+// ApplyDiscoveryScheduleControlV2Tx advances the ordered command fence even
+// when the requested state already holds. A no-op receipt never changes the
+// operator-visible schedule or its updated_at timestamp.
+func (s *Store) ApplyDiscoveryScheduleControlV2Tx(ctx context.Context, tx pgx.Tx,
+	tenantID, id, action string, applied bool, sequence int64, at time.Time) error {
+	if applied {
+		return s.ApplyDiscoveryScheduleControlTx(ctx, tx, tenantID, id, action, sequence, at)
+	}
+	if action != "pause" && action != "resume" && action != "retire" || sequence <= 0 {
+		return errors.New("store: invalid discovery schedule no-op receipt")
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE discovery_schedules SET control_event_sequence = $3
+		  WHERE tenant_id = $1 AND id = $2::uuid AND control_event_sequence < $3`,
+		tenantID, id, sequence)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var retained int64
+	if err := tx.QueryRow(ctx,
+		`SELECT control_event_sequence FROM discovery_schedules WHERE tenant_id = $1 AND id = $2::uuid`,
+		tenantID, id).Scan(&retained); err != nil {
+		return err
+	}
+	if retained >= sequence {
+		return nil
+	}
+	return errors.New("store: discovery schedule no-op receipt did not project")
+}
+
 // ApplyDiscoveryRunQueuedTx projects a discovery.run.queued event.
 func (s *Store) ApplyDiscoveryRunQueuedTx(ctx context.Context, tx pgx.Tx, run DiscoveryRun) error {
 	execution := run.Execution
@@ -858,13 +891,23 @@ func (s *Store) DiscoverySchedulesDue(ctx context.Context, tenantID string, now 
 func (s *Store) GetDiscoverySchedule(ctx context.Context, tenantID, id string) (DiscoverySchedule, error) {
 	var out DiscoverySchedule
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled,
-			        retired_at, config_event_sequence, control_event_sequence, created_at, updated_at
-			   FROM discovery_schedules WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&out.ID, &out.TenantID, &out.SourceID, &out.Name, &out.IntervalSeconds, &out.Enabled,
-				&out.RetiredAt, &out.ConfigEventSequence, &out.ControlEventSequence, &out.CreatedAt, &out.UpdatedAt)
+		var err error
+		out, err = s.GetDiscoveryScheduleTx(ctx, tx, tenantID, id)
+		return err
 	})
+	return out, err
+}
+
+// GetDiscoveryScheduleTx loads the response snapshot while the exact command
+// transaction owns the schedule decision lock.
+func (s *Store) GetDiscoveryScheduleTx(ctx context.Context, tx pgx.Tx, tenantID, id string) (DiscoverySchedule, error) {
+	var out DiscoverySchedule
+	err := tx.QueryRow(ctx,
+		`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled,
+		        retired_at, config_event_sequence, control_event_sequence, created_at, updated_at
+		   FROM discovery_schedules WHERE tenant_id = $1 AND id = $2`, tenantID, id).
+		Scan(&out.ID, &out.TenantID, &out.SourceID, &out.Name, &out.IntervalSeconds, &out.Enabled,
+			&out.RetiredAt, &out.ConfigEventSequence, &out.ControlEventSequence, &out.CreatedAt, &out.UpdatedAt)
 	return out, err
 }
 

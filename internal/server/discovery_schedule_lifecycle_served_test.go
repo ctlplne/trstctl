@@ -120,9 +120,10 @@ func TestServedDiscoveryScheduleCanPauseResumeAndRetire(t *testing.T) {
 	if status != http.StatusOK || !bytes.Equal(body, pausedBody) {
 		t.Fatalf("fresh-key pause no-op: status %d body %s, want %s", status, body, pausedBody)
 	}
-	if after, err := h.log.LastSequence(t.Context()); err != nil || after != before {
-		t.Fatalf("fresh-key pause no-op appended event: before=%d after=%d err=%v", before, after, err)
+	if after, err := h.log.LastSequence(t.Context()); err != nil || after != before+1 {
+		t.Fatalf("fresh-key pause no-op receipt event: before=%d after=%d err=%v", before, after, err)
 	}
+	before++
 	if _, err := h.srv.orch.UpsertDiscoverySchedule(t.Context(), h.tenant, store.DiscoverySchedule{
 		ID: schedule.ID, SourceID: source.ID, Name: "lifecycle-schedule", IntervalSeconds: 300, Enabled: true,
 	}); !errors.Is(err, orchestrator.ErrDiscoveryScheduleInactive) {
@@ -181,6 +182,109 @@ func TestServedDiscoveryScheduleCanPauseResumeAndRetire(t *testing.T) {
 	}
 }
 
+// A durable HTTP claim can remain bound after the event and projection commit.
+// Retrying that exact key must return its first response, even if another key
+// subsequently changed the schedule. The result cache is deliberately removed
+// here to reproduce the receiver-commit / outer-result crash boundary.
+func TestServedDiscoveryScheduleBoundRetryAfterOppositeControlReturnsOriginalReceipt(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	_, scheduleID := createLifecycleSchedule(t, h, tok, "bound-retry")
+	path := "/api/v1/discovery/schedules/" + scheduleID
+
+	status, original := secretsReqKey(t, h, http.MethodPost, path+"/pause", tok, "bound-retry-pause", nil)
+	if status != http.StatusOK {
+		t.Fatalf("first pause: status=%d body=%s", status, original)
+	}
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(t.Context(), `UPDATE idempotency_keys
+		   SET status = 'bound', result = NULL, completed_at = NULL
+		 WHERE tenant_id = $1 AND key = $2`, h.tenant, "bound-retry-pause")
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return errors.New("pause response-cache crash fixture did not find the claim")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status, resumed := secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-retry-resume", nil)
+	if status != http.StatusOK || !bytes.Contains(resumed, []byte(`"enabled":true`)) {
+		t.Fatalf("opposite resume: status=%d body=%s", status, resumed)
+	}
+	status, changed := secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-retry-pause", nil)
+	if status != http.StatusConflict {
+		t.Fatalf("bound pause key reused for resume = (%d, %s), want 409", status, changed)
+	}
+	before, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, replay := secretsReqKey(t, h, http.MethodPost, path+"/pause", tok, "bound-retry-pause", nil)
+	if status != http.StatusOK || !bytes.Equal(replay, original) {
+		t.Fatalf("bound pause retry after opposite control = (%d, %s), want original (200, %s)", status, replay, original)
+	}
+	if after, err := h.log.LastSequence(t.Context()); err != nil || after != before {
+		t.Fatalf("bound pause retry appended a second event: before=%d after=%d err=%v", before, after, err)
+	}
+	status, current := secretsReq(t, h, http.MethodGet, path, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":true`)) {
+		t.Fatalf("bound pause retry changed the later state: status=%d body=%s", status, current)
+	}
+	// A command that was a no-op also needs its own immutable receipt. Without
+	// it, a retry after an opposite control would become a new effect.
+	status, noop := secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-retry-noop", nil)
+	if status != http.StatusOK || !bytes.Contains(noop, []byte(`"enabled":true`)) {
+		t.Fatalf("first resume no-op: status=%d body=%s", status, noop)
+	}
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `UPDATE idempotency_keys
+		   SET status = 'bound', result = NULL, completed_at = NULL
+		 WHERE tenant_id = $1 AND key = $2`, h.tenant, "bound-retry-noop")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status, laterPause := secretsReqKey(t, h, http.MethodPost, path+"/pause", tok, "bound-retry-later-pause", nil)
+	if status != http.StatusOK || !bytes.Contains(laterPause, []byte(`"enabled":false`)) {
+		t.Fatalf("later pause: status=%d body=%s", status, laterPause)
+	}
+	before, err = h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, replay = secretsReqKey(t, h, http.MethodPost, path+"/resume", tok, "bound-retry-noop", nil)
+	if status != http.StatusOK || !bytes.Equal(replay, noop) {
+		t.Fatalf("bound no-op retry = (%d, %s), want original (200, %s)", status, replay, noop)
+	}
+	if after, err := h.log.LastSequence(t.Context()); err != nil || after != before {
+		t.Fatalf("bound no-op retry appended another event: before=%d after=%d err=%v", before, after, err)
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("cold rebuild after bound retries: %v", err)
+	}
+	status, current = secretsReq(t, h, http.MethodGet, path, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":false`)) {
+		t.Fatalf("cold replay reversed later pause: status=%d body=%s", status, current)
+	}
+	if count, err := h.store.WriteReadModelSnapshots(t.Context()); err != nil || count < 1 {
+		t.Fatalf("snapshot bound retry state: count=%d err=%v", count, err)
+	}
+	if err := h.store.RestoreReadModelTx(t.Context(), func(tx pgx.Tx) error {
+		_, err := h.store.RestoreSnapshotsTx(t.Context(), tx)
+		return err
+	}); err != nil {
+		t.Fatalf("restore bound retry snapshot: %v", err)
+	}
+	status, current = secretsReq(t, h, http.MethodGet, path, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":false`)) {
+		t.Fatalf("snapshot restore reversed later pause: status=%d body=%s", status, current)
+	}
+}
+
 func TestServedDiscoverySchedulePauseClosesStaleDueDecision(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
@@ -235,7 +339,7 @@ func TestServedDiscoveryScheduleRetainedPauseBlocksQueueUntilCatchUp(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.srv.orch.ControlDiscoverySchedule(t.Context(), h.tenant, scheduleID, "pause"); err == nil {
+	if _, err := h.srv.orch.ControlDiscoverySchedule(t.Context(), h.tenant, scheduleID, "pause", "lost-pause-recovery", "lost-pause-recovery-binding"); err == nil {
 		t.Fatal("owned SQL fault did not interrupt pause projection")
 	}
 	retained, err := h.log.LastSequence(t.Context())
@@ -255,6 +359,14 @@ func TestServedDiscoveryScheduleRetainedPauseBlocksQueueUntilCatchUp(t *testing.
 		t.Fatalf("refused run changed event head: after=%d err=%v", after, err)
 	}
 	drop()
+	recovered, err := h.srv.orch.ControlDiscoverySchedule(t.Context(), h.tenant, scheduleID,
+		"pause", "lost-pause-recovery", "lost-pause-recovery-binding")
+	if err != nil || recovered.Enabled {
+		t.Fatalf("same-key retry after append-before-SQL fault: schedule=%+v err=%v", recovered, err)
+	}
+	if after, err := h.log.LastSequence(t.Context()); err != nil || after != retained {
+		t.Fatalf("append-before-SQL retry made a second event: before=%d after=%d err=%v", retained, after, err)
+	}
 	if err := h.srv.proj.ProjectCatchUp(t.Context(), h.log); err != nil {
 		t.Fatalf("catch up retained pause: %v", err)
 	}

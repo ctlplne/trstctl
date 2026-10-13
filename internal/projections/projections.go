@@ -2071,6 +2071,30 @@ type DiscoveryScheduleControlled struct {
 	ReasonCode string `json:"reason_code"`
 }
 
+// DiscoveryScheduleControlledV2 retains the exact first response of an
+// authenticated control command. A no-op still has a receipt, so a lost HTTP
+// response cannot make a later retry act on a different schedule state.
+type DiscoveryScheduleControlledV2 struct {
+	ID         string                         `json:"id"`
+	Action     string                         `json:"action"`
+	ReasonCode string                         `json:"reason_code"`
+	Binding    string                         `json:"binding"`
+	Applied    bool                           `json:"applied"`
+	Result     DiscoveryScheduleControlResult `json:"result"`
+}
+
+type DiscoveryScheduleControlResult struct {
+	ID              string     `json:"id"`
+	TenantID        string     `json:"tenant_id"`
+	SourceID        string     `json:"source_id"`
+	Name            string     `json:"name"`
+	IntervalSeconds int        `json:"interval_seconds"`
+	Enabled         bool       `json:"enabled"`
+	RetiredAt       *time.Time `json:"retired_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 // DiscoveryRunQueued is the payload of discovery.run.queued. Network and SSH
 // rows carry the resolved relay command; other source kinds leave those fields
 // empty and execute on the control plane.
@@ -3778,9 +3802,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoverySegmentUpserted:                 {1: true},
 	EventDiscoverySourceUpserted:                  {1: true},
 	EventDiscoveryScheduleUpserted:                {1: true},
-	EventDiscoverySchedulePaused:                  {1: true},
-	EventDiscoveryScheduleResumed:                 {1: true},
-	EventDiscoveryScheduleRetired:                 {1: true},
+	EventDiscoverySchedulePaused:                  {1: true, 2: true},
+	EventDiscoveryScheduleResumed:                 {1: true, 2: true},
+	EventDiscoveryScheduleRetired:                 {1: true, 2: true},
 	EventDiscoveryRunQueued:                       {1: true},
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
@@ -5214,6 +5238,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CreatedAt:           e.Time, UpdatedAt: e.Time,
 		})
 	case EventDiscoverySchedulePaused, EventDiscoveryScheduleResumed, EventDiscoveryScheduleRetired:
+		if e.SchemaVersion == 2 {
+			var pl DiscoveryScheduleControlledV2
+			if err := decode(e, &pl); err != nil {
+				return err
+			}
+			action := map[string]string{
+				EventDiscoverySchedulePaused: "pause", EventDiscoveryScheduleResumed: "resume", EventDiscoveryScheduleRetired: "retire",
+			}[e.Type]
+			if pl.Action != action || pl.ReasonCode != "operator_request" || pl.Binding == "" ||
+				pl.Result.ID != pl.ID || pl.Result.TenantID != e.TenantID || e.Sequence > math.MaxInt64 {
+				return errors.New("projections: invalid discovery schedule control receipt")
+			}
+			return p.store.ApplyDiscoveryScheduleControlV2Tx(ctx, tx, e.TenantID, pl.ID,
+				action, pl.Applied, int64(e.Sequence), e.Time) // #nosec G115 -- sequence was checked against MaxInt64 before conversion.
+		}
 		var pl DiscoveryScheduleControlled
 		if err := decode(e, &pl); err != nil {
 			return err

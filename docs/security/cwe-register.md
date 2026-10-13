@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1516 annotated sites across 26 rules. Each row is
+1518 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -404,7 +404,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (246 sites)
+### G115 — CWE-190 Integer overflow or wraparound (248 sites)
 
 | Location | Reason |
 |---|---|
@@ -482,6 +482,7 @@ not this file.
 | `internal/mdm/challenge/challenge.go:79` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
 | `internal/mdm/challenge/challenge.go:90` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
+| `internal/orchestrator/discovery.go:365` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:389` | a negative stored version is classified as drift before conversion (CWE-190). |
 | `internal/orchestrator/secret_rotation.go:370` | the positive int64 value always fits exactly in uint64 (CWE-190). |
@@ -494,9 +495,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:488` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5213` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5228` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5256` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5237` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5254` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5267` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5295` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |

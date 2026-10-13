@@ -34,6 +34,12 @@ type privacyConnectorDeliveryRecordedV1 struct {
 	IdempotencyKey   string  `json:"idempotency_key,omitempty"`
 }
 
+type privacyDiscoveryScheduleControlledV1 struct {
+	ID         string `json:"id"`
+	Action     string `json:"action"`
+	ReasonCode string `json:"reason_code"`
+}
+
 // Version-one member events predate explicit provisioning identities. Keep
 // their historical payloads closed instead of silently extending schema one.
 type privacyTenantMemberUpsertedV1 struct {
@@ -1800,9 +1806,12 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventProfileCreated, 1}:                                                   privacyPayloadShape[ProfileVersioned](),
 		{EventProfileUpdated, 1}:                                                   privacyPayloadShape[ProfileVersioned](),
 		{EventDiscoveryScheduleUpserted, 1}:                                        privacyPayloadShape[DiscoveryScheduleUpserted](),
-		{EventDiscoverySchedulePaused, 1}:                                          privacyPayloadShape[DiscoveryScheduleControlled](),
-		{EventDiscoveryScheduleResumed, 1}:                                         privacyPayloadShape[DiscoveryScheduleControlled](),
-		{EventDiscoveryScheduleRetired, 1}:                                         privacyPayloadShape[DiscoveryScheduleControlled](),
+		{EventDiscoverySchedulePaused, 1}:                                          privacyPayloadShape[privacyDiscoveryScheduleControlledV1](),
+		{EventDiscoveryScheduleResumed, 1}:                                         privacyPayloadShape[privacyDiscoveryScheduleControlledV1](),
+		{EventDiscoveryScheduleRetired, 1}:                                         privacyPayloadShape[privacyDiscoveryScheduleControlledV1](),
+		{EventDiscoverySchedulePaused, 2}:                                          privacyPayloadShape[DiscoveryScheduleControlledV2](),
+		{EventDiscoveryScheduleResumed, 2}:                                         privacyPayloadShape[DiscoveryScheduleControlledV2](),
+		{EventDiscoveryScheduleRetired, 2}:                                         privacyPayloadShape[DiscoveryScheduleControlledV2](),
 		{EventDiscoveryRunStarted, 1}:                                              privacyPayloadShape[DiscoveryRunStarted](),
 		{EventDiscoveryRunCompleted, 1}:                                            privacyPayloadShape[privacyDiscoveryRunCompletedV1](),
 		{EventDiscoveryRunCompleted, DiscoveryTargetResultsEventSchemaVersion}:     privacyPayloadShape[DiscoveryRunCompleted](),

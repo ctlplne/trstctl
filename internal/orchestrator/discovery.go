@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -71,6 +72,7 @@ var secretScanSourceNamespace = uuid.MustParse("f2a0de71-857b-5a96-83be-0e65a0f2
 var discoverySourceNamespace = uuid.MustParse("c47d7a97-a79c-5a36-a5b4-673b5afbe3cf")
 var discoverySegmentNamespace = uuid.MustParse("5afb44ec-8cfa-5e68-a135-150af6c36e87")
 var discoveryRelayEventNamespace = uuid.MustParse("78899482-854a-5b4d-9276-d8d574bdd340")
+var discoveryScheduleControlNamespace = uuid.MustParse("3a1f15da-3d9c-5c6e-8e08-71e286d8a980")
 
 // DiscoveryRelayEventID turns one durable job key plus one semantic step into
 // an opaque producer identity. Concurrent or crash-retried signed receipts then
@@ -322,7 +324,10 @@ func (o *Orchestrator) upsertDiscoveryScheduleFenced(ctx context.Context, tenant
 // ControlDiscoverySchedule retains a pause, resume, or retirement decision in
 // the event log. The exact per-schedule lock is shared with final run admission
 // so a stale scheduler due-list cannot queue after a completed pause.
-func (o *Orchestrator) ControlDiscoverySchedule(ctx context.Context, tenantID, id, action string) (store.DiscoverySchedule, error) {
+func (o *Orchestrator) ControlDiscoverySchedule(ctx context.Context, tenantID, id, action, idempotencyKey, binding string) (store.DiscoverySchedule, error) {
+	if idempotencyKey == "" || binding == "" {
+		return store.DiscoverySchedule{}, errors.New("orchestrator: discovery schedule control requires a bound idempotency key")
+	}
 	eventType := map[string]string{
 		"pause":  projections.EventDiscoverySchedulePaused,
 		"resume": projections.EventDiscoveryScheduleResumed,
@@ -331,47 +336,106 @@ func (o *Orchestrator) ControlDiscoverySchedule(ctx context.Context, tenantID, i
 	if eventType == "" {
 		return store.DiscoverySchedule{}, errors.New("orchestrator: invalid discovery schedule control action")
 	}
+	eventID := uuid.NewSHA1(discoveryScheduleControlNamespace,
+		[]byte(tenantID+"\x00"+idempotencyKey)).String()
+	var result store.DiscoverySchedule
 	err := o.withTenantCommand(ctx, tenantID, func(fenced context.Context, tx pgx.Tx) error {
 		if err := lockDiscoveryScheduleDecisionTx(fenced, tx, tenantID, id); err != nil {
 			return err
 		}
-		var enabled bool
-		var retiredAt *time.Time
-		var controlSequence int64
-		if err := tx.QueryRow(fenced,
-			`SELECT enabled, retired_at, control_event_sequence FROM discovery_schedules
-			  WHERE tenant_id = $1::uuid AND id = $2::uuid`, tenantID, id).
-			Scan(&enabled, &retiredAt, &controlSequence); err != nil {
+		current, err := o.store.GetDiscoveryScheduleTx(fenced, tx, tenantID, id)
+		if err != nil {
 			return err
 		}
-		if err := o.guardUnprojectedDiscoveryScheduleControl(fenced, tenantID, id, controlSequence); err != nil {
+		retained, found, err := o.log.EventByID(fenced, eventID)
+		if err != nil {
 			return err
 		}
-		if retiredAt != nil {
-			if action == "retire" {
-				return nil
+		if found {
+			var receipt projections.DiscoveryScheduleControlledV2
+			if retained.TenantID != tenantID || retained.Type != eventType || retained.SchemaVersion != 2 ||
+				json.Unmarshal(retained.Data, &receipt) != nil || receipt.ID != id ||
+				receipt.Action != action || receipt.Binding != binding || receipt.ReasonCode != "operator_request" ||
+				receipt.Result.ID != id || receipt.Result.TenantID != tenantID {
+				return store.ErrIdempotencyConflict
 			}
-			return ErrDiscoveryScheduleInactive
-		}
-		if (action == "pause" && !enabled) || (action == "resume" && enabled) {
+			if retained.Sequence > math.MaxInt64 {
+				return errors.New("orchestrator: discovery schedule control sequence exceeds SQL range")
+			}
+			if int64(retained.Sequence) > current.ControlEventSequence { // #nosec G115 -- retained sequence was checked against MaxInt64 before conversion.
+				if err := o.proj.ApplyTx(fenced, tx, retained); err != nil {
+					return err
+				}
+			}
+			result = discoveryScheduleFromControlResult(receipt.Result)
 			return nil
 		}
-		payload, err := json.Marshal(projections.DiscoveryScheduleControlled{
-			ID: id, Action: action, ReasonCode: "operator_request",
+		if err := o.guardUnprojectedDiscoveryScheduleControl(fenced, tenantID, id, current.ControlEventSequence); err != nil {
+			return err
+		}
+		if current.RetiredAt != nil {
+			if action == "retire" {
+				// A fresh retirement key still gets an immutable no-op receipt.
+			} else {
+				return ErrDiscoveryScheduleInactive
+			}
+		}
+		applied := current.RetiredAt == nil && ((action == "pause" && current.Enabled) ||
+			(action == "resume" && !current.Enabled) || action == "retire")
+		at := time.Now().UTC().Truncate(time.Microsecond)
+		result = current
+		result.CreatedAt = result.CreatedAt.UTC()
+		result.UpdatedAt = result.UpdatedAt.UTC()
+		if result.RetiredAt != nil {
+			retired := result.RetiredAt.UTC()
+			result.RetiredAt = &retired
+		}
+		if applied {
+			result.Enabled = action == "resume"
+			result.UpdatedAt = at
+			if action == "retire" {
+				result.RetiredAt = &at
+			}
+		}
+		payload, err := json.Marshal(projections.DiscoveryScheduleControlledV2{
+			ID: id, Action: action, ReasonCode: "operator_request", Binding: binding,
+			Applied: applied, Result: discoveryScheduleControlResult(result),
 		})
 		if err != nil {
 			return err
 		}
-		ev, err := o.log.Append(fenced, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
+		ev, err := o.log.Append(fenced, events.Event{
+			ID: eventID, Type: eventType, TenantID: tenantID, SchemaVersion: 2, Time: at, Data: payload,
+		})
 		if err != nil {
 			return err
+		}
+		if ev.ID != eventID || ev.TenantID != tenantID || ev.Type != eventType || ev.SchemaVersion != 2 ||
+			!bytes.Equal(ev.Data, payload) {
+			return store.ErrIdempotencyConflict
 		}
 		return o.proj.ApplyTx(fenced, tx, ev)
 	})
 	if err != nil {
 		return store.DiscoverySchedule{}, err
 	}
-	return o.store.GetDiscoverySchedule(ctx, tenantID, id)
+	return result, nil
+}
+
+func discoveryScheduleControlResult(s store.DiscoverySchedule) projections.DiscoveryScheduleControlResult {
+	return projections.DiscoveryScheduleControlResult{
+		ID: s.ID, TenantID: s.TenantID, SourceID: s.SourceID, Name: s.Name,
+		IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled, RetiredAt: s.RetiredAt,
+		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+	}
+}
+
+func discoveryScheduleFromControlResult(r projections.DiscoveryScheduleControlResult) store.DiscoverySchedule {
+	return store.DiscoverySchedule{
+		ID: r.ID, TenantID: r.TenantID, SourceID: r.SourceID, Name: r.Name,
+		IntervalSeconds: r.IntervalSeconds, Enabled: r.Enabled, RetiredAt: r.RetiredAt,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
 }
 
 func lockDiscoveryScheduleDecisionTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {

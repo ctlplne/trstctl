@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/cbom/coverage"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/apikey"
@@ -1026,11 +1027,22 @@ func (a *API) retireDiscoverySchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) controlDiscoverySchedule(w http.ResponseWriter, r *http.Request, idempotencyKey, action string) {
-	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, body, err := mutationRequestBinding(r, principal)
+	defer secret.Wipe(body)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		if _, err := googleuuid.Parse(r.PathValue("id")); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, "schedule id must be a valid UUID")
 		}
-		schedule, err := a.orch.ControlDiscoverySchedule(ctx, tenantID, r.PathValue("id"), action)
+		schedule, err := a.orch.ControlDiscoverySchedule(ctx, tenantID, r.PathValue("id"), action, idempotencyKey, binding)
 		if err != nil {
 			return 0, nil, err
 		}
