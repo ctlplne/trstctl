@@ -41,8 +41,17 @@ type discoverySourceRequest struct {
 
 const reservedAgentDiscoveryReason = "agent inventory sources are created by authenticated agent reports, not generic discovery declarations"
 
-func reservedAgentDiscoveryDeclaration(kind, name string) bool {
-	return strings.TrimSpace(kind) == "agent" || strings.HasPrefix(strings.TrimSpace(name), "agent:")
+func reservedProductDiscoveryDeclaration(kind, name string) (string, bool) {
+	if strings.TrimSpace(kind) == "agent" {
+		return reservedAgentDiscoveryReason, true
+	}
+	if namespace, ok := sourcecatalog.ReservedNamespaceForName(name); ok {
+		if namespace.Prefix == sourcecatalog.AgentSourcePrefix {
+			return reservedAgentDiscoveryReason, true
+		}
+		return fmt.Sprintf("%s names are reserved for %s; configure the source through its product workflow", namespace.Prefix, namespace.Producer), true
+	}
+	return "", false
 }
 
 type discoverySourceResponse struct {
@@ -170,10 +179,10 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		SideEffects: false, BlockedReasons: []string{}, AppliedExclusions: []string{},
 		ChildJobCount: 1,
 	}
-	if reservedAgentDiscoveryDeclaration(req.Kind, req.Name) {
+	if reason, reserved := reservedProductDiscoveryDeclaration(req.Kind, req.Name); reserved {
 		preview.Ready = false
 		preview.ChildJobCount = 0
-		preview.BlockedReasons = append(preview.BlockedReasons, reservedAgentDiscoveryReason)
+		preview.BlockedReasons = append(preview.BlockedReasons, reason)
 		return preview, nil
 	}
 	if existing, err := a.store.GetDiscoverySourceByName(ctx, tenantID, strings.TrimSpace(req.Name)); err == nil {
@@ -829,8 +838,8 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		// Agent inventory sources are created by the mTLS receiver under a
 		// deterministic agent: name. Letting a generic tenant declaration claim
 		// that name first would block the real host's source/run projection.
-		if reservedAgentDiscoveryDeclaration(kind, req.Name) {
-			return 0, nil, errStatus(http.StatusBadRequest, reservedAgentDiscoveryReason)
+		if reason, reserved := reservedProductDiscoveryDeclaration(kind, req.Name); reserved {
+			return 0, nil, errStatus(http.StatusBadRequest, reason)
 		}
 		if kind == "network" || kind == "ssh" {
 			intent, resolveErr := segmentscan.Resolve(kind, cfg)

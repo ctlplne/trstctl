@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
+	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -640,7 +641,7 @@ func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agent
 		sourceKind = "agent"
 	}
 	sourceID := uuid.NewSHA1(agentInventorySourceNamespace, []byte(tenantID+"\x00"+agentName+"\x00"+sourceKind)).String()
-	sourceName := "agent:" + agentName + ":" + sourceKind
+	sourceName := sourcecatalog.AgentSourcePrefix + agentName + ":" + sourceKind
 	cfg, err := json.Marshal(map[string]string{"agent": agentName, "source_kind": sourceKind})
 	if err != nil {
 		return store.DiscoveryRun{}, 0, 0, err
@@ -722,7 +723,7 @@ func (o *Orchestrator) RecordSecretScan(ctx context.Context, tenantID, scanner, 
 		scanner = "gitleaks"
 	}
 	sourceID := uuid.NewSHA1(secretScanSourceNamespace, []byte(tenantID+"\x00"+scanner+"\x00"+target)).String()
-	sourceName := "secretscan:" + scanner
+	sourceName := sourcecatalog.SecretScanSourcePrefix + scanner
 	if target != "" {
 		sourceName += ":" + target
 	}

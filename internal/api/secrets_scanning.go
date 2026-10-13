@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -863,7 +864,7 @@ func thirdPartySecretScanSourceID(tenantID string, cfg secretscan.ThirdPartyScan
 }
 
 func secretRepoSourceName(cfg secretscan.RepositoryScanConfig) string {
-	name := "secret-repo:" + cfg.Provider + ":" + cfg.Repository
+	name := sourcecatalog.SecretRepositorySourcePrefix + cfg.Provider + ":" + cfg.Repository
 	if cfg.Ref != "" {
 		name += ":" + cfg.Ref
 	}
@@ -871,7 +872,7 @@ func secretRepoSourceName(cfg secretscan.RepositoryScanConfig) string {
 }
 
 func thirdPartySecretScanSourceName(cfg secretscan.ThirdPartyScanConfig) string {
-	name := "secret-third-party:" + cfg.Provider + ":" + cfg.Source
+	name := sourcecatalog.ThirdPartySecretSourcePrefix + cfg.Provider + ":" + cfg.Source
 	if cfg.Event != "" {
 		name += ":" + cfg.Event
 	}

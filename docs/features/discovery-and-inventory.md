@@ -250,6 +250,10 @@ updates return a conflict if their requested name belongs to another source kind
 or to a different CT source ID; operators must choose an unclaimed name. A generic
 source declaration cannot change the kind bound to an existing name either; its
 preview reports that ownership conflict before the operator starts the mutation.
+The `secretscan:`, `secret-repo:`, and `secret-third-party:` source names are also
+reserved for their product workflows. Configure those scans through the Secrets
+tool or its dedicated API, not by creating a generic discovery source or CT monitor
+under a product-owned name.
 
 The selected-agent panel links to **View discovery runs** and **View discovery
 findings**, so collector claims can be checked against the server's actual evidence.
