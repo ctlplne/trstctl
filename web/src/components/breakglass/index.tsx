@@ -246,6 +246,14 @@ export function BreakGlassReconcile() {
               <dl className="grid gap-3 rounded-control border border-border p-3 text-sm md:grid-cols-2">
                 <ReviewValue label={t("breakglass.request.subject")} value={reviewedPlan.subject} />
                 <ReviewValue label={t("breakglass.request.ttl")} value={`${reviewedPlan.effective_ttl_seconds}s`} />
+                <ReviewValue label={t("breakglass.review.csrCommonName")} value={reviewedPlan.csr_common_name} />
+                <ReviewValue label={t("breakglass.review.csrDNSNames")} value={reviewedPlan.csr_dns_names.join(", ") || t("breakglass.review.none")} />
+                <ReviewValue label={t("breakglass.review.csrIPAddresses")} value={reviewedPlan.csr_ip_addresses.join(", ") || t("breakglass.review.none")} />
+                <ReviewValue
+                  label={t("breakglass.review.csrEmailAddresses")}
+                  value={reviewedPlan.csr_email_addresses.join(", ") || t("breakglass.review.none")}
+                />
+                <ReviewValue label={t("breakglass.review.csrURIs")} value={reviewedPlan.csr_uris.join(", ") || t("breakglass.review.none")} />
                 <ReviewValue label={t("breakglass.review.requestFingerprint")} value={reviewedPlan.request_fingerprint} mono />
                 <ReviewValue label={t("breakglass.review.csrFingerprint")} value={reviewedPlan.csr_sha256} mono />
               </dl>

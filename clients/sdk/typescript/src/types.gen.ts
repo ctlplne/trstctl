@@ -8632,7 +8632,12 @@ export interface components {
             /** @enum {string} */
             capability: "F34";
             configured_operator_count: number;
+            csr_common_name: string;
+            csr_dns_names: string[];
+            csr_email_addresses: string[];
+            csr_ip_addresses: string[];
             csr_sha256: string;
+            csr_uris: string[];
             effect_free: boolean;
             effective_ttl_seconds: number;
             execution_external_effects: string[];

@@ -16,7 +16,7 @@ func TestBreakglassNewValidation(t *testing.T) {
 func TestBreakglassReasonRequired(t *testing.T) {
 	svc, _ := newService(t)
 	if _, err := svc.IssueOffline(EmergencyRequest{
-		ID: "e", Subject: "s", CSRDer: emergencyCSR(t), Approvals: []string{"op1", "op2"},
+		ID: "e", Subject: "s", CSRDer: emergencyCSR(t, "s"), Approvals: []string{"op1", "op2"},
 	}, time.Hour); err == nil {
 		t.Error("emergency issuance without a reason accepted")
 	}

@@ -30,6 +30,11 @@ beforeEach(() => {
     requested_ttl_seconds: 900,
     effective_ttl_seconds: 900,
     csr_sha256: "sha256:csr",
+    csr_common_name: "svc.example",
+    csr_dns_names: ["svc.example", "alternate.svc.example"],
+    csr_ip_addresses: [],
+    csr_email_addresses: [],
+    csr_uris: [],
     request_fingerprint: "sha256:request",
     approval_threshold: 2,
     configured_operator_count: 3,
@@ -96,6 +101,8 @@ describe("U7-2 break-glass console", () => {
     await waitFor(() => expect(apiMock.previewBreakglassIssue).toHaveBeenCalledWith(body));
     expect(await screen.findByText("No state changed during this review.")).toBeInTheDocument();
     expect(screen.getByText("2-person quorum from 3 configured operators")).toBeInTheDocument();
+    expect(screen.getByText("Signed CSR common name")).toBeInTheDocument();
+    expect(screen.getByText("svc.example, alternate.svc.example")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open quorum ceremony" }));
 
     await waitFor(() => expect(apiMock.startBreakglassIssueCeremony).toHaveBeenCalledWith(body));

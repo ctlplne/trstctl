@@ -196,6 +196,11 @@ type BreakglassIssuePlanPreview struct {
 	RequestedTTLSeconds      int                      `json:"requested_ttl_seconds"`
 	EffectiveTTLSeconds      int64                    `json:"effective_ttl_seconds"`
 	CSRSHA256                string                   `json:"csr_sha256"`
+	CSRCommonName            string                   `json:"csr_common_name"`
+	CSRDNSNames              []string                 `json:"csr_dns_names"`
+	CSRIPAddresses           []string                 `json:"csr_ip_addresses"`
+	CSREmailAddresses        []string                 `json:"csr_email_addresses"`
+	CSRURIs                  []string                 `json:"csr_uris"`
 	RequestFingerprint       string                   `json:"request_fingerprint"`
 	ApprovalThreshold        int                      `json:"approval_threshold"`
 	ConfiguredOperatorCount  int                      `json:"configured_operator_count"`
@@ -249,11 +254,19 @@ func (a *API) previewBreakglassIssue(w http.ResponseWriter, r *http.Request) {
 		blockers = append(blockers, "The deployment needs at least two distinct configured operators and a satisfiable approval threshold.")
 	}
 	fingerprint := strings.TrimPrefix(breakglass.IssuePurpose(tenantID, emergency, ttl), "breakglass-issue:")
+	csrInfo, err := breakglass.InspectEmergencyCSR(emergency.Subject, emergency.CSRDer)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
 	preview := BreakglassIssuePlanPreview{
 		Capability: "F34", Operation: "issue_breakglass", Ready: onlineReady && rosterReady, EffectFree: true,
 		RequestID: emergency.ID, Subject: emergency.Subject, Reason: emergency.Reason,
 		RequestedTTLSeconds: req.TTLSeconds, EffectiveTTLSeconds: int64(ttl / time.Second),
 		CSRSHA256: crypto.SHA256Hex(emergency.CSRDer), RequestFingerprint: "sha256:" + fingerprint,
+		CSRCommonName: csrInfo.CommonName, CSRDNSNames: append([]string{}, csrInfo.DNSNames...),
+		CSRIPAddresses: append([]string{}, csrInfo.IPAddresses...), CSREmailAddresses: append([]string{}, csrInfo.EmailAddresses...),
+		CSRURIs:           append([]string{}, csrInfo.URIs...),
 		ApprovalThreshold: configuration.ApprovalThreshold, ConfiguredOperatorCount: configuration.ConfiguredOperatorCount,
 		RequiredPermission: "certs:issue",
 		Prerequisites: []BreakglassPrerequisite{
@@ -488,8 +501,8 @@ func validateBreakglassIssueRequest(req breakglassIssueRequest, requireCeremony 
 	if len(req.CSRDer) == 0 {
 		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "csr_der is required")
 	}
-	if err := crypto.VerifyCertificateRequest(req.CSRDer); err != nil {
-		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "csr_der must be a signed PKCS#10 certificate request")
+	if _, err := breakglass.InspectEmergencyCSR(subject, req.CSRDer); err != nil {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, err.Error())
 	}
 	ttl := time.Duration(req.TTLSeconds) * time.Second
 	if ttl <= 0 {

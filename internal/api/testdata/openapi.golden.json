@@ -5217,8 +5217,35 @@
           "configured_operator_count": {
             "type": "integer"
           },
+          "csr_common_name": {
+            "type": "string"
+          },
+          "csr_dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "csr_email_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "csr_ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "csr_sha256": {
             "type": "string"
+          },
+          "csr_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "effect_free": {
             "type": "boolean"
@@ -5319,6 +5346,11 @@
           "requested_ttl_seconds",
           "effective_ttl_seconds",
           "csr_sha256",
+          "csr_common_name",
+          "csr_dns_names",
+          "csr_ip_addresses",
+          "csr_email_addresses",
+          "csr_uris",
           "request_fingerprint",
           "approval_threshold",
           "configured_operator_count",

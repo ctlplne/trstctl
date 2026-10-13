@@ -5,7 +5,10 @@ package api
 import (
 	"bytes"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestBreakglassLiveOpenAPIRequestsCannotNominateApprovers(t *testing.T) {
@@ -49,6 +52,35 @@ func TestBreakglassLiveOpenAPIRequestsCannotNominateApprovers(t *testing.T) {
 	}
 }
 
+func TestBreakglassIssueRejectsSubjectDifferentFromSignedCSR(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "recovery.qa-breakglass.local",
+		DNSNames:   []string{"recovery.qa-breakglass.local", "alternate.qa-breakglass.local"},
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := breakglassIssueRequest{RequestID: "bg-exact-identity", Subject: "misleading.qa-breakglass.local", CSRDer: csr, Reason: "QA identity binding", TTLSeconds: 900}
+	for _, requireCeremony := range []bool{false, true} {
+		if requireCeremony {
+			req.CeremonyID = "11111111-1111-4111-8111-111111111111"
+		}
+		_, _, err := validateBreakglassIssueRequest(req, requireCeremony)
+		if err == nil || !strings.Contains(err.Error(), "CSR common name") {
+			t.Fatalf("requireCeremony=%v: subject/CSR mismatch was accepted or unexplained: %v", requireCeremony, err)
+		}
+	}
+	req.Subject = "recovery.qa-breakglass.local"
+	if _, _, err := validateBreakglassIssueRequest(req, true); err != nil {
+		t.Fatalf("exact signed common name rejected: %v", err)
+	}
+}
+
 func TestBreakglassIssuePreviewContractExplainsConfigurationAndEffects(t *testing.T) {
 	doc := New(nil, nil, nil).Spec()
 	op := doc.Paths["/api/v1/breakglass/issue-ceremonies/preview"]["post"]
@@ -66,6 +98,7 @@ func TestBreakglassIssuePreviewContractExplainsConfigurationAndEffects(t *testin
 	}
 	for _, field := range []string{
 		"capability", "operation", "ready", "effect_free", "request_fingerprint", "csr_sha256",
+		"csr_common_name", "csr_dns_names", "csr_ip_addresses", "csr_email_addresses", "csr_uris",
 		"approval_threshold", "configured_operator_count", "prerequisites", "blockers",
 		"preview_writes", "preview_external_effects", "preview_signer_calls", "execution_writes",
 		"execution_external_effects", "execution_signer_calls", "recovery_steps", "verification_steps",

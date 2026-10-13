@@ -152,6 +152,20 @@ func New(cfg Config) (*Service, error) {
 // PublicKeyDER returns the break-glass public key callers use to verify bundles.
 func (s *Service) PublicKeyDER() []byte { return s.cfg.CASigner.Public().DER }
 
+// InspectEmergencyCSR validates the identity the issuance service will put in
+// the leaf. The ceremony's human-readable subject must name that same signed
+// common name; the remaining signed SANs are returned for explicit review.
+func InspectEmergencyCSR(subject string, csrDER []byte) (crypto.CSRInfo, error) {
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		return crypto.CSRInfo{}, fmt.Errorf("breakglass: CSR must be a signed PKCS#10 certificate request: %w", err)
+	}
+	if subject == "" || info.CommonName != subject {
+		return crypto.CSRInfo{}, fmt.Errorf("breakglass: CSR common name must exactly match emergency certificate subject")
+	}
+	return info, nil
+}
+
 // IssueOffline enforces the m-of-n quorum, signs a short-lived emergency
 // certificate with the escrow key, and returns a self-verifying signed bundle.
 // Sub-quorum or unauthorized requests are refused (fail-closed).
@@ -160,6 +174,9 @@ func (s *Service) IssueOffline(req EmergencyRequest, ttl time.Duration) (Bundle,
 		return Bundle{}, fmt.Errorf("breakglass: a reason is required for emergency issuance")
 	}
 	if err := s.cfg.Quorum.Verify(req.Approvals); err != nil {
+		return Bundle{}, err
+	}
+	if _, err := InspectEmergencyCSR(req.Subject, req.CSRDer); err != nil {
 		return Bundle{}, err
 	}
 	certDER, err := crypto.SignLeafFromCSR(s.cfg.CACertDER, s.cfg.CASigner, req.CSRDer, ttl)

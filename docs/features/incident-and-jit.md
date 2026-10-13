@@ -338,8 +338,13 @@ first sends the exact CSR/reason/TTL to
 `POST /api/v1/breakglass/issue-ceremonies/preview`. This effect-free check opens no
 ceremony, appends no event, records no idempotency key, calls no signer, and performs
 no external request. It returns the request and CSR fingerprints, effective lifetime,
+the signed CSR common name and every requested DNS, IP, email, and URI identity,
 safe deployment-readiness checklist, configured threshold and roster count (never
 operator names), exact execution effects, recovery steps, and verification steps.
+The supplied emergency subject must exactly equal the signed CSR common name;
+preview, ceremony start, online issue, and the offline issuance service reject a
+mismatch before signing. Custodians must review the full identifier set because
+the certificate carries the CSR's SAN identities, not just its common name.
 The caller then opens the unchanged request as a ceremony at
 `POST /api/v1/breakglass/issue-ceremonies`; distinct configured operators approve it
 with their own authenticated tokens, and the execution body contains only the
