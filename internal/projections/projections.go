@@ -6557,10 +6557,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" {
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
-		if err := p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time); err != nil {
+		// Recovery already owns this command row before it projects the event.
+		// Catch-up replay must take the same lock first; touching api_tokens
+		// first makes the two transactions deadlock on an ordinary revoke.
+		if err := p.store.CompleteAPITokenRevocationCommandTx(ctx, tx, e.TenantID, pl.ID, e); err != nil {
 			return err
 		}
-		if err := p.store.CompleteAPITokenRevocationCommandTx(ctx, tx, e.TenantID, pl.ID, e); err != nil {
+		if err := p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time); err != nil {
 			return err
 		}
 		// Machine-session bearers reuse the session UUID as their API-token ID.
