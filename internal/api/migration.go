@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -307,6 +308,10 @@ func (a *API) buildMigrationMember(
 	target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
 	if err != nil || !target.Enabled || !custody.TargetExecutorIsAgent(target.Config) || !relay.ExecutesOnHost(target.Type) {
 		return migration.RunMember{}, errors.New("migration member target must be an enabled host-agent connector")
+	}
+	assignedAgentID, err := connector.TargetHostAgentID(target.Config)
+	if err != nil || assignedAgentID == "" || assignedAgentID != agentID {
+		return migration.RunMember{}, errors.New("migration member agent_id must match the target's assigned host agent")
 	}
 	agent, err := a.store.GetAgent(ctx, tenantID, agentID)
 	if err != nil || agent.Status != "active" || !sourceKindsContain(agent.Roles, mtls.AgentRoleHost) {

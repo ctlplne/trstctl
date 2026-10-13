@@ -224,7 +224,37 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 			}},
 		}},
 	}
+	// A second enrolled host in this tenant is still the wrong machine for the
+	// immutable deployment target. Reject before any migration action is queued.
+	const otherHostID = "44444444-4444-4444-8444-44444444a040"
+	if err := h.store.UpsertAgent(ctx, store.Agent{
+		ID: otherHostID, TenantID: h.tenant, Name: "other-migration-host",
+		Status: "active", Roles: []string{mtls.AgentRoleHost},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	wrongHostBody := map[string]any{
+		"plan_id": "plan-aud40-wrong-host", "new_authority_id": successorAuthority.ID,
+		"waves": []any{map[string]any{
+			"id": "canary", "ordinal": 1,
+			"members": []any{map[string]any{
+				"identity_id": identityID, "agent_id": otherHostID,
+				"trust_anchor_path": trustPath,
+			}},
+		}},
+	}
 	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs", token, "aud40-start-wrong-host", wrongHostBody)
+	if statusCode != http.StatusBadRequest || !bytes.Contains(body, []byte("assigned host agent")) {
+		t.Fatalf("wrong same-tenant host started migration: %d %s", statusCode, body)
+	}
+	var wrongHostOutbox int
+	if err := h.store.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE tenant_id=$1 AND idempotency_key LIKE 'migration:%' AND required_agent_id=$2`,
+		h.tenant, otherHostID).Scan(&wrongHostOutbox); err != nil || wrongHostOutbox != 0 {
+		t.Fatalf("wrong host migration outbox = %d, err=%v", wrongHostOutbox, err)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
 		"/api/v1/migrations/runs", trustOnlyToken, "aud40-start-forbidden", startBody)
 	if statusCode != http.StatusForbidden {
 		t.Fatalf("start migration without certs:issue = %d %s, want 403", statusCode, body)
@@ -414,7 +444,8 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	})
 	failureConfig, err := json.Marshal(map[string]any{
 		"executor": "agent", "cert_path": certPath, "key_path": keyPath,
-		"verify_address": staticListener.Addr().String(), "verify_server_name": dnsName,
+		"required_agent_id": agentRowID(h.tenant, h.agent),
+		"verify_address":    staticListener.Addr().String(), "verify_server_name": dnsName,
 	})
 	if err != nil {
 		t.Fatal(err)

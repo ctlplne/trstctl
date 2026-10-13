@@ -293,6 +293,12 @@ enter the manifest or control-plane process. When the trust receipt arrives, the
 successor is signed by that exact authority; a later CA rotation does not silently
 reroute an already-reviewed run.
 
+Each `agent_id` must be the active host agent saved as `required_agent_id` on
+that identity's enabled deployment target. Another enrolled host in the same
+tenant is not interchangeable: Start rejects the mismatch before queuing trust
+or successor work. Keep the target assignment and manifest aligned when moving
+a workload to a new host, then submit a fresh reviewed run.
+
 The phase order is fixed: install and read back the public anchor, issue against a
 host-generated CSR, deploy, handshake the configured listener, then release the next
 wave. Agent receipts are signature- and lease-verified before they can move a gate.

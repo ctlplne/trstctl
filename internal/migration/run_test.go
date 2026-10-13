@@ -408,12 +408,35 @@ func TestGameDayRunStructurallyRefusesProductionBindingsAUD41(t *testing.T) {
 func completeBindingAUD40(targetID, predecessorID string) migration.MemberBinding {
 	return migration.MemberBinding{
 		IssuingAuthorityID: "authority", TargetID: targetID, TargetRevision: "revision",
-		Connector: "nginx", Target: targetID, TargetConfig: json.RawMessage(`{"executor":"agent"}`),
+		Connector: "nginx", Target: targetID, TargetConfig: json.RawMessage(`{"executor":"agent","required_agent_id":"agent"}`),
 		RequiredAgentID: "agent", TrustAnchorPath: "/etc/trstctl/next.pem",
 		TrustAnchorPEM: []byte("public"), TrustAnchorFingerprint: "anchor",
 		VerifyAddress: "127.0.0.1:443", SubjectCommonName: targetID + ".test",
 		SubjectDNSNames: []string{targetID + ".test"}, PredecessorCertificateID: predecessorID,
 		PredecessorFingerprint: "predecessor-" + predecessorID,
+	}
+}
+
+func TestExecutableRunRequiresExactTargetHostAssignment(t *testing.T) {
+	binding := completeBindingAUD40("target-a", "predecessor-a")
+	run := migration.Run{ID: "run-exact-host", Waves: []migration.RunWave{{
+		ID: "canary", Ordinal: 1,
+		Members: []migration.RunMember{{IdentityID: "leaf-a", Binding: binding}},
+	}}}
+	if err := migration.ValidateExecutableRunForStart(run); err != nil {
+		t.Fatalf("matching host was refused: %v", err)
+	}
+	for name, config := range map[string]json.RawMessage{
+		"missing":    []byte(`{"executor":"agent"}`),
+		"other":      []byte(`{"executor":"agent","required_agent_id":"other-host"}`),
+		"wrong type": []byte(`{"executor":"agent","required_agent_id":42}`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			run.Waves[0].Members[0].Binding.TargetConfig = config
+			if err := migration.ValidateExecutableRunForStart(run); err == nil {
+				t.Fatal("executable migration accepted a target assigned to a different host")
+			}
+		})
 	}
 }
 

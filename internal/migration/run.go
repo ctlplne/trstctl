@@ -610,6 +610,15 @@ func ValidateExecutableRun(run Run) error {
 			if len(b.TrustAnchorPEM) > maxExecutableAnchorBytes || len(b.TargetConfig) > maxExecutableConfigBytes {
 				return fmt.Errorf("migration: member %s exceeds a bounded public anchor or target configuration", member.IdentityID)
 			}
+			var targetAssignment struct {
+				Executor        string `json:"executor"`
+				RequiredAgentID string `json:"required_agent_id"`
+			}
+			if err := json.Unmarshal(b.TargetConfig, &targetAssignment); err != nil ||
+				!strings.EqualFold(strings.TrimSpace(targetAssignment.Executor), "agent") ||
+				strings.TrimSpace(targetAssignment.RequiredAgentID) != b.RequiredAgentID {
+				return fmt.Errorf("migration: member %s target does not bind its exact host agent", member.IdentityID)
+			}
 			if authorityID == "" {
 				authorityID, anchorFingerprint = b.IssuingAuthorityID, b.TrustAnchorFingerprint
 				anchorPEM = b.TrustAnchorPEM

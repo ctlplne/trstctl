@@ -401,7 +401,7 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:510` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:422` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_run_served_test.go:96` | loopback fixture is closed below (CWE-400) |
-| `internal/server/migration_run_served_test.go:406` | loopback fixture is closed below (CWE-400) |
+| `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
 ### G115 — CWE-190 Integer overflow or wraparound (244 sites)
