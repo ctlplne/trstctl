@@ -922,6 +922,15 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	if a.orch == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent inventory orchestrator is not configured")
 	}
+	// The completed discovery event names an enrolled agent row. Requiring the
+	// first heartbeat makes that foreign-key binding explicit and keeps a report
+	// from becoming authoritative before fleet admission and quota checks.
+	if _, err := a.store.GetAgent(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.FailedPrecondition, "send an authenticated heartbeat before inventory")
+		}
+		return nil, status.Error(codes.Unavailable, "agent registration state is unavailable; retry later")
+	}
 	if req == nil || len(req.Findings) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "inventory report requires at least one finding")
 	}
@@ -978,7 +987,8 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			RiskScore: risk, Metadata: meta,
 		})
 	}
-	run, recorded, rejected, err := a.orch.RecordAgentInventory(ctx, info.TenantID, info.CommonName, sourceKind, findings)
+	run, recorded, rejected, err := a.orch.RecordAgentInventory(ctx, info.TenantID, info.CommonName,
+		agentRowID(info.TenantID, info.CommonName), sourceKind, findings)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "record agent inventory: %v", err)
 	}

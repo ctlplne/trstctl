@@ -475,7 +475,9 @@ never live in the API process. What you can do end to end against the running bi
   reporter sends a metadata-only `service_dependency` finding through the tenant-bound
   `agent.mtls.ReportInventory` channel. Source kind and finding kind must BOTH be
   `service_dependency`; `workload`, `target`, and the target `ref` must be present and
-  agree; and the verified agent certificate stamps the observing host. The immutable
+  agree; and the verified agent certificate stamps the observing host and agent ID.
+  A completed run binds that ID before the graph treats the observation as authority;
+  manual discovery findings cannot forge this edge. The immutable
   discovery event survives restart/rebuild. `graph.Build` joins the exact workload name
   to that tenant's owner row and emits workload -> resource `CONNECTS_TO`; an unknown
   owner or mismatched target fails the graph read rather than silently reporting zero.

@@ -219,20 +219,31 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	if err != nil {
 		return nil, err
 	}
+	agentEvidence := newAgentFindingEvidence(st, tenantID)
 	for _, f := range findings {
-		dependency, err := addServiceDependencyFinding(g, f, ownerByName)
-		if err != nil {
-			return nil, fmt.Errorf("graph: service dependency finding %s: %w", f.ID, err)
+		// A finding's kind and metadata are author-controlled for manual imports.
+		// Only a terminal report bound to the mTLS-authenticated agent may drive
+		// executable trust and dependency edges.
+		if f.Kind == serviceDependencyFindingKind || f.Kind == trustStoreFindingKind {
+			verified, err := agentEvidence.verified(ctx, f)
+			if err != nil {
+				return nil, fmt.Errorf("graph: agent finding %s: %w", f.ID, err)
+			}
+			if verified {
+				dependency, err := addServiceDependencyFinding(g, f, ownerByName)
+				if err != nil {
+					return nil, fmt.Errorf("graph: service dependency finding %s: %w", f.ID, err)
+				}
+				if dependency {
+					continue
+				}
+				if addTrustStoreFinding(g, f, issuerAnchors) {
+					continue
+				}
+			}
 		}
-		if dependency {
-			continue
-		}
-		// H1: a trust-store anchor becomes a relationship rather than another
-		// flat credential row. Handled first so the generic path below does not
-		// also emit a duplicate node for it.
-		if addTrustStoreFinding(g, f, issuerAnchors) {
-			continue
-		}
+		// Imports without authenticated run evidence remain visible as generic
+		// discovery rows, without a host trust or service dependency edge.
 		nid := "disc:" + f.ID
 		g.AddNode(Node{
 			ID:   nid,
@@ -261,6 +272,53 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	}
 
 	return g, nil
+}
+
+// agentFindingEvidence caches the tenant-scoped source/run joins needed for
+// agent authority. Generic discovery metadata remains visible even when this
+// proof is absent, but it cannot drive an executable graph relation.
+type agentFindingEvidence struct {
+	store    *store.Store
+	tenantID string
+	sources  map[string]store.DiscoverySource
+	runs     map[string]store.DiscoveryRun
+}
+
+func newAgentFindingEvidence(st *store.Store, tenantID string) *agentFindingEvidence {
+	return &agentFindingEvidence{store: st, tenantID: tenantID,
+		sources: map[string]store.DiscoverySource{}, runs: map[string]store.DiscoveryRun{}}
+}
+
+func (e *agentFindingEvidence) verified(ctx context.Context, f store.DiscoveryFinding) (bool, error) {
+	var metadata struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(f.Metadata, &metadata); err != nil || metadata.AgentID == "" {
+		return false, nil
+	}
+	source, ok := e.sources[f.SourceID]
+	if !ok {
+		var err error
+		source, err = e.store.GetDiscoverySource(ctx, e.tenantID, f.SourceID)
+		if err != nil {
+			return false, err
+		}
+		e.sources[f.SourceID] = source
+	}
+	if source.Kind != "agent" {
+		return false, nil
+	}
+	run, ok := e.runs[f.RunID]
+	if !ok {
+		var err error
+		run, err = e.store.GetDiscoveryRun(ctx, e.tenantID, f.RunID)
+		if err != nil {
+			return false, err
+		}
+		e.runs[f.RunID] = run
+	}
+	return run.SourceID == f.SourceID && (run.Status == "succeeded" || run.Status == "partial") &&
+		run.ExecutedByAgentID == metadata.AgentID && run.ExecutedByAgentID != "", nil
 }
 
 // addServiceDependencyFinding maps one event-projected agent observation to a

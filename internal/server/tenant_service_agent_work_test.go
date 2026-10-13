@@ -66,6 +66,7 @@ func TestTenantServiceAgentRPCWorkExcludesLifecycleChanges(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	client := transport.NewAgentClient(conn)
+	registerInventoryAgent(t, client)
 	csr := newAgentCSR(t, "tenant-work-agent")
 	for _, lane := range lanes {
 		t.Run(lane, func(t *testing.T) {

@@ -231,11 +231,17 @@ The agent's own discovery sources are `filesystem`, `pkcs11`, `windows-store`,
 `k8s-secret`, `trust-store`, and `private-key` — the read has to happen on the host,
 since only it can see its own files, tokens, Windows store, trust stores, browser
 profiles, or in-cluster Secrets. An enrolled agent sends metadata-only `ReportInventory`
-batches over the same mTLS channel it uses for heartbeat and renewal; the server rejects
+batches over the same mTLS channel it uses for heartbeat and renewal. Its first
+authenticated heartbeat must register the agent before an inventory batch; otherwise
+the RPC asks it to heartbeat first. The server rejects
 inline secret-looking metadata keys, caps batch size, and ingests in the bounded agent
 lane so a noisy fleet cannot starve the API. `GET /api/v1/agents` advertises the
 accepted source kinds for each enrolled endpoint, and the Agents console shows the same
 capability list.
+
+Only a completed inventory run whose recorded executing agent ID matches the
+receiver-stamped finding can create graph trust-store or service-dependency edges.
+Manual imports remain visible as discovery findings but cannot claim agent authority.
 
 The selected-agent panel links to **View discovery runs** and **View discovery
 findings**, so collector claims can be checked against the server's actual evidence.

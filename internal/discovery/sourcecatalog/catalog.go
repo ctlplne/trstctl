@@ -125,7 +125,7 @@ var items = []Capability{
 		Kind: "agent", Label: "Agent inventory", Tool: "Workloads & Machines", Route: "/agents", SetupSurface: SetupContextual,
 		Purpose: "Receive signed, tenant-bound inventory from enrolled agents.", DataHandling: "Configured from the Agents tool. The generic discovery-source wizard cannot create a useful agent source.",
 		Permission: "agents:write", Edition: "core", Execution: "host or network agent", Configuration: []Field{field("agent_id", "Enrolled agent", "agent_ref", true, false, false, "The enrolled agent that signs and reports the observation.")},
-		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/agent.md",
+		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#agent-based-discovery-f3--what-each-host-can-see-from-the-inside",
 	},
 	{
 		Kind: "manual", Label: "Manual evidence import", Tool: "Discover", Route: "/discovery?tab=sources&kind=manual", SetupSurface: SetupContextual,

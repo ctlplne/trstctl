@@ -301,9 +301,9 @@ a workload to a new host, then submit a fresh reviewed run.
 
 The read-only assessment counts trust stores reported by that exact assigned
 agent. A deployment target's display name does not identify a machine. If a
-trust-store finding predates the receiver-stamped agent ID, run inventory again
-from the enrolled host; the historical name-only finding remains visible in the
-graph but cannot make a migration appear ready.
+trust-store finding predates the receiver-stamped agent ID or its authenticated
+completed run, run inventory again from the enrolled host; the historical finding
+remains visible in discovery but cannot make a migration appear ready.
 
 The phase order is fixed: install and read back the public anchor, issue against a
 host-generated CSR, deploy, handshake the configured listener, then release the next

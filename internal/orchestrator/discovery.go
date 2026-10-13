@@ -601,8 +601,19 @@ func mergeDiscoveryFindingMetadata(current, patch json.RawMessage) json.RawMessa
 // happened on the agent host before the report reached the control plane. The source,
 // run, findings, and terminal counts are still immutable discovery events, so replay
 // rebuilds the served inventory exactly.
-func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agentName, sourceKind string, findings []store.DiscoveryFinding) (store.DiscoveryRun, int, int, error) {
+func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agentName, agentID, sourceKind string, findings []store.DiscoveryFinding) (store.DiscoveryRun, int, int, error) {
 	agentName = strings.TrimSpace(agentName)
+	agentID = strings.TrimSpace(agentID)
+	// Validate the durable agent row before emitting the first discovery event.
+	// A missing/mismatched row would otherwise fail the completed-run foreign key
+	// after source, run and findings had already been appended.
+	agent, err := o.store.GetAgent(ctx, tenantID, agentID)
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, fmt.Errorf("orchestrator: inventory agent is not registered: %w", err)
+	}
+	if agent.Name != agentName || agent.Status == "offboarded" {
+		return store.DiscoveryRun{}, 0, 0, errors.New("orchestrator: inventory agent identity is not active or does not match")
+	}
 	sourceKind = strings.TrimSpace(sourceKind)
 	if sourceKind == "" {
 		sourceKind = "agent"
@@ -668,13 +679,14 @@ func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agent
 	}
 	if err := o.CompleteDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
 		ID: runID, Status: status, Targets: len(findings), Discovered: recorded, Rejected: rejected, Error: msg,
+		ExecutedByAgentID: agentID,
 	}); err != nil {
 		return store.DiscoveryRun{}, recorded, rejected, err
 	}
 	return store.DiscoveryRun{
 		ID: runID, TenantID: tenantID, SourceID: sourceID, Status: status,
 		RequestedBy: requestedBy, Targets: len(findings), Discovered: recorded,
-		Rejected: rejected, Error: msg, CreatedAt: ev.Time,
+		Rejected: rejected, Error: msg, CreatedAt: ev.Time, ExecutedByAgentID: agentID,
 	}, recorded, rejected, nil
 }
 

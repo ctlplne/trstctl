@@ -40,6 +40,15 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func registerInventoryAgent(t *testing.T, client *transport.AgentClient) {
+	t.Helper()
+	if _, err := client.Heartbeat(t.Context(), &transport.HeartbeatRequest{
+		Version: "inventory-test", Status: "active",
+	}); err != nil {
+		t.Fatalf("register inventory agent: %v", err)
+	}
+}
+
 // withAgentChannel enables the served agent steady-state mTLS gRPC channel
 // (WIRE-004 / OPS-005) on a served harness. The channel binds an ephemeral port via
 // serveAgentChannel in the test, so AgentChannelAddr is not bound here.
@@ -147,6 +156,7 @@ func TestServedAgentSSHInventoryAuthorizedKeysEndToEnd(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	registerInventoryAgent(t, client)
 	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
 		SourceKind: sshdiscovery.SourceKind,
 		Findings:   wireFindings,
@@ -675,6 +685,7 @@ func TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph(t *testing.T)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	registerInventoryAgent(t, client)
 	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
 		SourceKind: "filesystem",
 		Findings: []transport.InventoryFinding{
@@ -848,20 +859,32 @@ func TestAUD64ServedAgentDependencyFeedsCryptoReadiness(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	client := transport.NewAgentClient(conn)
-	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	report, err := client.ReportInventory(callCtx, &transport.InventoryRequest{
+	request := &transport.InventoryRequest{
 		SourceKind: agentServiceDependencyFindingKind,
 		Findings: []transport.InventoryFinding{{
 			Kind: agentServiceDependencyFindingKind, Ref: "lb-edge", Provenance: "relay:aud64-relay:lb-edge",
 			Metadata: map[string]string{"workload": "checkout-service", "target": "lb-edge", "protocol": "https"},
 		}},
-	})
+	}
+	if _, err := client.ReportInventory(callCtx, request); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("inventory before first heartbeat = %v, want actionable precondition", err)
+	}
+	if h.hasEvent(t, projections.EventDiscoverySourceUpserted) {
+		t.Fatal("unregistered inventory appended a discovery event before agent admission")
+	}
+	registerInventoryAgent(t, client)
+	report, err := client.ReportInventory(callCtx, request)
 	if err != nil {
 		t.Fatalf("report service dependency over mTLS: %v", err)
 	}
 	if report.TenantID != h.tenant || report.Recorded != 1 || report.Rejected != 0 || report.RunID == "" {
 		t.Fatalf("dependency report = %+v", report)
+	}
+	run, err := h.store.GetDiscoveryRun(ctx, h.tenant, report.RunID)
+	if err != nil || run.ExecutedByAgentID != agentRowID(h.tenant, "aud64-relay") {
+		t.Fatalf("completed dependency run lost authenticated agent binding: run=%+v err=%v", run, err)
 	}
 	findings, err := h.store.ListDiscoveryFindingsPage(ctx, h.tenant, report.RunID, store.ZeroUUID, 10)
 	if err != nil {
@@ -1237,6 +1260,7 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	registerInventoryAgent(t, client)
 	reported := trustStoreInventoryFindings(found)
 	reported[0].Metadata["host"] = "different-host"
 	reported[0].Metadata["agent_id"] = "22222222-2222-4222-8222-222222222222"
@@ -1408,6 +1432,7 @@ func TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	registerInventoryAgent(t, client)
 	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
 		SourceKind: agentdiscovery.SourcePrivateKey,
 		Findings:   privateKeyInventoryFindings(found),

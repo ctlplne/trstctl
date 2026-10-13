@@ -378,15 +378,16 @@ func newIncidentMigrationFixtureAUD41(
 		t.Fatal(err)
 	}
 	exactMeta, _ := json.Marshal(map[string]string{
-		"trust_store_kind": "os", "host": h.agent, "platform": "linux",
+		"trust_store_kind": "os", "host": h.agent, "platform": "linux", "agent_id": agentRowID(h.tenant, h.agent),
 		"subject": caInfo.Subject, "spki_sha256": caInfo.SPKISHA256,
 	})
 	candidateHost := "candidate-" + label
 	candidateMeta, _ := json.Marshal(map[string]string{
-		"trust_store_kind": "java", "host": candidateHost, "profile": "subject-only",
+		"trust_store_kind": "java", "host": candidateHost, "profile": "subject-only", "agent_id": agentRowID(h.tenant, h.agent),
 		"subject": caInfo.Subject,
 	})
-	if _, recorded, rejected, err := h.srv.orch.RecordAgentInventory(ctx, h.tenant, h.agent, "trust-store-"+label,
+	if _, recorded, rejected, err := h.srv.orch.RecordAgentInventory(ctx, h.tenant, h.agent,
+		agentRowID(h.tenant, h.agent), "trust-store-"+label,
 		[]store.DiscoveryFinding{
 			{Kind: "trust-store", Ref: "/etc/ssl/certs/" + label, Fingerprint: caInfo.SHA256Fingerprint, Metadata: exactMeta},
 			{Kind: "trust-store", Ref: "/java/cacerts/" + label, Metadata: candidateMeta},
