@@ -261,6 +261,18 @@ func cleanStringSet(in []string) []string {
 }
 
 func (a *API) ctMonitoringSourceID(ctx context.Context, tenantID, requestedID, name string) (string, error) {
+	// The tenant-local source name is an identity, not merely a display label.
+	// Reject a cross-kind collision before appending an immutable declaration;
+	// otherwise an existing source could be converted to CT monitoring, or a
+	// conflicting rename would leave an unprojectable event in the log.
+	byName, nameErr := a.store.GetDiscoverySourceByName(ctx, tenantID, name)
+	if nameErr != nil && !store.IsNotFound(nameErr) {
+		return "", nameErr
+	}
+	nameExists := nameErr == nil
+	if nameExists && byName.Kind != "ct_log" {
+		return "", errStatus(http.StatusConflict, "source name belongs to a different discovery source kind")
+	}
 	if requestedID != "" {
 		if _, err := googleuuid.Parse(requestedID); err != nil {
 			return "", errStatus(http.StatusBadRequest, "source_id must be a UUID")
@@ -272,16 +284,13 @@ func (a *API) ctMonitoringSourceID(ctx context.Context, tenantID, requestedID, n
 		if src.Kind != "ct_log" {
 			return "", errStatus(http.StatusConflict, "source_id is not a ct_log discovery source")
 		}
+		if nameExists && byName.ID != requestedID {
+			return "", errStatus(http.StatusConflict, "source name belongs to a different CT discovery source")
+		}
 		return requestedID, nil
 	}
-	sources, err := a.store.ListDiscoverySourcesPage(ctx, tenantID, store.ZeroUUID, 100)
-	if err != nil {
-		return "", err
-	}
-	for _, src := range sources {
-		if src.Kind == "ct_log" && src.Name == name {
-			return src.ID, nil
-		}
+	if nameExists {
+		return byName.ID, nil
 	}
 	return "", nil
 }

@@ -245,7 +245,9 @@ Manual imports remain visible as discovery findings but cannot claim agent autho
 Generic `POST /api/v1/discovery/sources` declarations cannot create the reserved
 `agent` kind or an `agent:` source name; enrolled reporters create these records
 through the authenticated inventory channel. The CT monitoring setup also refuses
-an `agent:` name, so a watchlist cannot reserve or replace a host's source.
+an `agent:` name, so a watchlist cannot reserve or replace a host's source. CT
+updates return a conflict if their requested name belongs to another source kind
+or to a different CT source ID; operators must choose an unclaimed name.
 
 The selected-agent panel links to **View discovery runs** and **View discovery
 findings**, so collector claims can be checked against the server's actual evidence.
