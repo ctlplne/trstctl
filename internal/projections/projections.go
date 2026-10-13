@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -189,6 +190,9 @@ const (
 	EventDiscoverySegmentUpserted                 = "discovery.segment.upserted"
 	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
+	EventDiscoverySchedulePaused                  = "discovery.schedule.paused"
+	EventDiscoveryScheduleResumed                 = "discovery.schedule.resumed"
+	EventDiscoveryScheduleRetired                 = "discovery.schedule.retired"
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
 	EventDiscoveryRunStarted                      = "discovery.run.started"
 	EventDiscoveryFindingRecorded                 = "discovery.finding.recorded"
@@ -2059,6 +2063,14 @@ type DiscoveryScheduleUpserted struct {
 	Enabled         bool   `json:"enabled"`
 }
 
+// DiscoveryScheduleControlled records an operator's future-run eligibility
+// decision. The event envelope carries the authenticated actor and timestamp.
+type DiscoveryScheduleControlled struct {
+	ID         string `json:"id"`
+	Action     string `json:"action"`
+	ReasonCode string `json:"reason_code"`
+}
+
 // DiscoveryRunQueued is the payload of discovery.run.queued. Network and SSH
 // rows carry the resolved relay command; other source kinds leave those fields
 // empty and execute on the control plane.
@@ -3766,6 +3778,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoverySegmentUpserted:                 {1: true},
 	EventDiscoverySourceUpserted:                  {1: true},
 	EventDiscoveryScheduleUpserted:                {1: true},
+	EventDiscoverySchedulePaused:                  {1: true},
+	EventDiscoveryScheduleResumed:                 {1: true},
+	EventDiscoveryScheduleRetired:                 {1: true},
 	EventDiscoveryRunQueued:                       {1: true},
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
@@ -5189,11 +5204,28 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if e.Sequence > math.MaxInt64 {
+			return errors.New("projections: discovery schedule sequence exceeds SQL range")
+		}
 		return p.store.ApplyDiscoveryScheduleUpsertedTx(ctx, tx, store.DiscoverySchedule{
 			ID: pl.ID, TenantID: e.TenantID, SourceID: pl.SourceID, Name: pl.Name,
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
-			CreatedAt: e.Time, UpdatedAt: e.Time,
+			ConfigEventSequence: int64(e.Sequence), // #nosec G115 -- checked against MaxInt64 above.
+			CreatedAt:           e.Time, UpdatedAt: e.Time,
 		})
+	case EventDiscoverySchedulePaused, EventDiscoveryScheduleResumed, EventDiscoveryScheduleRetired:
+		var pl DiscoveryScheduleControlled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		action := map[string]string{
+			EventDiscoverySchedulePaused: "pause", EventDiscoveryScheduleResumed: "resume", EventDiscoveryScheduleRetired: "retire",
+		}[e.Type]
+		if pl.Action != action || pl.ReasonCode != "operator_request" || e.Sequence > math.MaxInt64 {
+			return errors.New("projections: invalid discovery schedule control authority")
+		}
+		return p.store.ApplyDiscoveryScheduleControlTx(ctx, tx, e.TenantID, pl.ID,
+			action, int64(e.Sequence), e.Time) // #nosec G115 -- checked against MaxInt64 above.
 	case EventDiscoveryRunQueued:
 		var pl DiscoveryRunQueued
 		if err := decode(e, &pl); err != nil {

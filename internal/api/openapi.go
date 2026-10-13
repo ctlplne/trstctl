@@ -1885,7 +1885,7 @@ func componentSchemas() map[string]*Schema {
 	discoverySchedule := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "source_id": uuid(), "name": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
-		"created_at": timestamp(), "updated_at": timestamp(),
+		"retired_at": timestamp(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "source_id", "name", "interval_seconds", "enabled")
 	discoveryScheduleReq := object(map[string]*Schema{
 		"source_id": uuid(), "name": str(), "interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},

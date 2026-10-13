@@ -168,7 +168,9 @@ import (
 // snapshot would skip their creation events after truncating the receipt table.
 // Version 54 retains online break-glass signed bundles across restore.
 // Version 55 retains emergency CA rotation and cross-sign public receipts.
-const SnapshotFormatVersion = 55
+// Version 56 retains discovery schedule retirement and event ordering. A v55
+// snapshot could skip a pause or retirement event while restoring an enabled row.
+const SnapshotFormatVersion = 56
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

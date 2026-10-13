@@ -2942,6 +2942,7 @@ export interface DiscoverySchedule {
   id: string;
   interval_seconds: number;
   name: string;
+  retired_at?: string;
   source_id: string;
   tenant_id: string;
   updated_at?: string;

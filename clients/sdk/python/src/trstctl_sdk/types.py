@@ -4058,6 +4058,7 @@ DiscoverySchedule = TypedDict(
         'id': str,
         'interval_seconds': int,
         'name': str,
+        'retired_at': str,
         'source_id': str,
         'tenant_id': str,
         'updated_at': str,

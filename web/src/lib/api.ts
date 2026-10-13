@@ -1756,6 +1756,10 @@ export interface Api {
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
   discoverySchedules(options?: { limit?: number; cursor?: string }): Promise<DiscoveryScheduleList>;
   createDiscoverySchedule(input: DiscoveryScheduleRequest): Promise<DiscoverySchedule>;
+  getDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
+  pauseDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
+  resumeDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
+  retireDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
   discoveryRuns(options?: { limit?: number; cursor?: string }): Promise<DiscoveryRunList>;
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
@@ -2388,6 +2392,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
   discoverySchedules: (options) => req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),
   createDiscoverySchedule: (input) => mutate<DiscoverySchedule>("POST", "/api/v1/discovery/schedules", input),
+  getDiscoverySchedule: (id) => req<DiscoverySchedule>(`/api/v1/discovery/schedules/${encodeURIComponent(id)}`),
+  pauseDiscoverySchedule: (id) => mutate<DiscoverySchedule>("POST", `/api/v1/discovery/schedules/${encodeURIComponent(id)}/pause`),
+  resumeDiscoverySchedule: (id) => mutate<DiscoverySchedule>("POST", `/api/v1/discovery/schedules/${encodeURIComponent(id)}/resume`),
+  retireDiscoverySchedule: (id) => mutate<DiscoverySchedule>("POST", `/api/v1/discovery/schedules/${encodeURIComponent(id)}/retire`),
   discoveryRuns: (options) => req<DiscoveryRunList>(`/api/v1/discovery/runs${pageQueryString(options)}`),
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),

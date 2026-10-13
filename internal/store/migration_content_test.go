@@ -19,6 +19,65 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// 0265 adds lifecycle authority to historical discovery schedules. The migration
+// must preserve enabled state and source/run identity without inventing an
+// operator decision; the event tail supplies later control facts.
+func testMigration0265DiscoveryScheduleControlStartsUnclaimed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, id::text, source_id::text, name,
+		interval_seconds, enabled, created_at::text, updated_at::text
+		FROM discovery_schedules ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 265, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				sourceID := fmt.Sprintf("26500000-0000-4000-8000-%012d", index+1)
+				scheduleID := fmt.Sprintf("26510000-0000-4000-8000-%012d", index+1)
+				if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name)
+					VALUES ($1, $2) ON CONFLICT (tenant_id) DO NOTHING`,
+					tenantID, fmt.Sprintf("pre-0265-tenant-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO discovery_sources
+					(id, tenant_id, kind, name, config, created_at, updated_at)
+					VALUES ($1::uuid, $2::uuid, 'manual', $3, '{}'::jsonb,
+					'2026-10-12T12:00:00Z'::timestamptz,
+					'2026-10-12T12:00:00Z'::timestamptz)`,
+					sourceID, tenantID, fmt.Sprintf("pre-0265-source-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO discovery_schedules
+					(id, tenant_id, source_id, name, interval_seconds, enabled, created_at, updated_at)
+					VALUES ($1::uuid, $2::uuid, $3::uuid, $4, 3600, $5,
+					'2026-10-12T12:01:00Z'::timestamptz,
+					'2026-10-12T12:01:00Z'::timestamptz)`,
+					scheduleID, tenantID, sourceID, fmt.Sprintf("pre-0265-schedule-%d", index), index == 0); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var noInventedConfig, noInventedControl, noInventedRetirement bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(config_event_sequence = 0),
+				bool_and(control_event_sequence = 0), bool_and(retired_at IS NULL)
+				FROM discovery_schedules WHERE name LIKE 'pre-0265-schedule-%'`).Scan(
+				&rows, &noInventedConfig, &noInventedControl, &noInventedRetirement); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !noInventedConfig || !noInventedControl || !noInventedRetirement {
+				t.Fatalf("0265 invented lifecycle evidence: rows=%d want=%d config=%t control=%t unretired=%t",
+					rows, want, noInventedConfig, noInventedControl, noInventedRetirement)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE discovery_schedules SET control_event_sequence = -1
+				WHERE tenant_id = $1`, tenantA); err == nil {
+				t.Fatal("0265 accepted a negative control sequence")
+			}
+			if _, err := pool.Exec(ctx, `UPDATE discovery_schedules SET retired_at = now()
+				WHERE tenant_id = $1`, tenantA); err == nil {
+				t.Fatal("0265 accepted an enabled retired schedule")
+			}
+		})
+}
+
 // 0258 adds event-control authority to existing schedule projections. Historical
 // enabled/disabled rows must retain their due edge and predecessor; zero means
 // they have no control event, not that a pause or retirement was inferred.
@@ -666,6 +725,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	265: true, // TestMigrationDataContentBackfills/0265_discovery_schedule_control_starts_unclaimed
 	258: true, // TestMigrationDataContentBackfills/0258_secret_schedule_control_starts_unclaimed
 	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
@@ -1728,6 +1788,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0265_discovery_schedule_control_starts_unclaimed", testMigration0265DiscoveryScheduleControlStartsUnclaimed)
 	t.Run("0258_secret_schedule_control_starts_unclaimed", testMigration0258SecretScheduleControlStartsUnclaimed)
 	t.Run("0250_managed_key_custody_starts_unproven", testMigration0250ManagedKeyCustodyStartsUnproven)
 	t.Run("0251_managed_key_deletion_pending_preserves_history", testMigration0251ManagedKeyDeletionPendingPreservesHistory)

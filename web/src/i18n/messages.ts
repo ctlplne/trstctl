@@ -10,6 +10,27 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.schedule.name": { defaultMessage: "Name", description: "Discovery schedule name column." },
+  "discovery.schedule.source": { defaultMessage: "Source", description: "Discovery schedule source column." },
+  "discovery.schedule.interval": { defaultMessage: "Interval", description: "Discovery schedule interval column." },
+  "discovery.schedule.state": { defaultMessage: "State", description: "Discovery schedule lifecycle state column." },
+  "discovery.schedule.updated": { defaultMessage: "Updated", description: "Discovery schedule update time column." },
+  "discovery.schedule.actions": { defaultMessage: "Actions", description: "Discovery schedule lifecycle actions column." },
+  "discovery.schedule.enabled": { defaultMessage: "Enabled", description: "Runnable discovery schedule state." },
+  "discovery.schedule.paused": { defaultMessage: "Paused", description: "Paused discovery schedule state." },
+  "discovery.schedule.retired": { defaultMessage: "Retired", description: "Permanently retired discovery schedule state." },
+  "discovery.schedule.pause": { defaultMessage: "Pause", description: "Stop future runs of a discovery schedule." },
+  "discovery.schedule.resume": { defaultMessage: "Resume", description: "Allow future runs of a paused discovery schedule." },
+  "discovery.schedule.retire": { defaultMessage: "Retire", description: "Permanently stop a discovery schedule." },
+  "discovery.schedule.cancel": { defaultMessage: "Cancel", description: "Dismiss discovery schedule retirement review." },
+  "discovery.schedule.table": { defaultMessage: "Discovery schedules", description: "Accessible discovery schedule table name." },
+  "discovery.schedule.retireTitle": { defaultMessage: "Retire discovery schedule", description: "Permanent retirement review title." },
+  "discovery.schedule.retireDescription": {
+    defaultMessage: "Retire {name}? Its history stays visible, and it cannot run or be resumed.",
+    description: "Explain permanent schedule retirement before confirmation.",
+  },
+  "discovery.schedule.controlComplete": { defaultMessage: "{action} complete for {name}.", description: "Discovery schedule lifecycle result." },
+  "discovery.schedule.controlFailed": { defaultMessage: "Could not change discovery schedule", description: "Discovery schedule lifecycle error." },
   "provider.emergency.open": { defaultMessage: "Emergency access", description: "Open one customer's Provider emergency workflow." },
   "provider.emergency.title": { defaultMessage: "Emergency customer access", description: "Provider emergency workflow title." },
   "provider.emergency.help": {

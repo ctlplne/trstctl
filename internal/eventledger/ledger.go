@@ -58,6 +58,9 @@ const (
 	EventDiscoverySegmentUpserted                 = "discovery.segment.upserted"
 	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
+	EventDiscoverySchedulePaused                  = "discovery.schedule.paused"
+	EventDiscoveryScheduleResumed                 = "discovery.schedule.resumed"
+	EventDiscoveryScheduleRetired                 = "discovery.schedule.retired"
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
 	EventRevocationProbeQueued                    = "revocation.probe.queued"
 	EventRevocationHealthObserved                 = "revocation.health.observed"
@@ -201,6 +204,9 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "declare_segment", "createDiscoverySegment", []string{EventDiscoverySegmentUpserted}},
 	{"F2", "Network discovery", "create_source", "createDiscoverySource", []string{EventDiscoverySourceUpserted}},
 	{"F2", "Network discovery", "create_schedule", "createDiscoverySchedule", []string{EventDiscoveryScheduleUpserted}},
+	{"F2", "Network discovery", "pause_schedule", "pauseDiscoverySchedule", []string{EventDiscoverySchedulePaused}},
+	{"F2", "Network discovery", "resume_schedule", "resumeDiscoverySchedule", []string{EventDiscoveryScheduleResumed}},
+	{"F2", "Network discovery", "retire_schedule", "retireDiscoverySchedule", []string{EventDiscoveryScheduleRetired}},
 	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},
 	{"R1", "Revocation monitoring", "queue_probe", "listRevocationHealth", []string{EventRevocationProbeQueued}},
 	{"R1", "Revocation monitoring", "observe_health", "listRevocationHealth", []string{EventRevocationHealthObserved}},

@@ -37,6 +37,10 @@ const (
 // count or log the loser as a failed delivery.
 var ErrDiscoveryScheduleNotDue = errors.New("orchestrator: discovery schedule is no longer due")
 
+// ErrDiscoveryScheduleInactive refuses a run or resume that would cross an
+// operator's retained pause/retirement decision.
+var ErrDiscoveryScheduleInactive = errors.New("orchestrator: discovery schedule is paused or retired")
+
 // ErrDiscoveryRelayUnavailable means relay-owned work has no enrolled agent that
 // can claim it. Keeping this as a typed admission error lets the API return a
 // truthful conflict instead of recording a queued run that cannot start.
@@ -275,6 +279,12 @@ func (o *Orchestrator) upsertDiscoveryScheduleFenced(ctx context.Context, tenant
 	if nameErr == nil && (in.ID == "" || byName.ID != in.ID) {
 		return store.DiscoverySchedule{}, ErrDiscoveryScheduleIdentityConflict
 	}
+	if nameErr == nil && byName.RetiredAt != nil {
+		return store.DiscoverySchedule{}, ErrDiscoveryScheduleInactive
+	}
+	if nameErr == nil && in.ID != "" && byName.ControlEventSequence > 0 {
+		return store.DiscoverySchedule{}, ErrDiscoveryScheduleInactive
+	}
 	if errors.Is(nameErr, pgx.ErrNoRows) {
 		if err := o.guardUnprojectedDiscoveryIdentity(ctx, tenantID, projections.EventDiscoveryScheduleUpserted, name, in.ID); err != nil {
 			return store.DiscoverySchedule{}, err
@@ -307,6 +317,118 @@ func (o *Orchestrator) upsertDiscoveryScheduleFenced(ctx context.Context, tenant
 		IntervalSeconds: in.IntervalSeconds, Enabled: in.Enabled,
 		CreatedAt: ev.Time, UpdatedAt: ev.Time,
 	}, nil
+}
+
+// ControlDiscoverySchedule retains a pause, resume, or retirement decision in
+// the event log. The exact per-schedule lock is shared with final run admission
+// so a stale scheduler due-list cannot queue after a completed pause.
+func (o *Orchestrator) ControlDiscoverySchedule(ctx context.Context, tenantID, id, action string) (store.DiscoverySchedule, error) {
+	eventType := map[string]string{
+		"pause":  projections.EventDiscoverySchedulePaused,
+		"resume": projections.EventDiscoveryScheduleResumed,
+		"retire": projections.EventDiscoveryScheduleRetired,
+	}[action]
+	if eventType == "" {
+		return store.DiscoverySchedule{}, errors.New("orchestrator: invalid discovery schedule control action")
+	}
+	err := o.withTenantCommand(ctx, tenantID, func(fenced context.Context, tx pgx.Tx) error {
+		if err := lockDiscoveryScheduleDecisionTx(fenced, tx, tenantID, id); err != nil {
+			return err
+		}
+		var enabled bool
+		var retiredAt *time.Time
+		var controlSequence int64
+		if err := tx.QueryRow(fenced,
+			`SELECT enabled, retired_at, control_event_sequence FROM discovery_schedules
+			  WHERE tenant_id = $1::uuid AND id = $2::uuid`, tenantID, id).
+			Scan(&enabled, &retiredAt, &controlSequence); err != nil {
+			return err
+		}
+		if err := o.guardUnprojectedDiscoveryScheduleControl(fenced, tenantID, id, controlSequence); err != nil {
+			return err
+		}
+		if retiredAt != nil {
+			if action == "retire" {
+				return nil
+			}
+			return ErrDiscoveryScheduleInactive
+		}
+		if (action == "pause" && !enabled) || (action == "resume" && enabled) {
+			return nil
+		}
+		payload, err := json.Marshal(projections.DiscoveryScheduleControlled{
+			ID: id, Action: action, ReasonCode: "operator_request",
+		})
+		if err != nil {
+			return err
+		}
+		ev, err := o.log.Append(fenced, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return err
+		}
+		return o.proj.ApplyTx(fenced, tx, ev)
+	})
+	if err != nil {
+		return store.DiscoverySchedule{}, err
+	}
+	return o.store.GetDiscoverySchedule(ctx, tenantID, id)
+}
+
+func lockDiscoveryScheduleDecisionTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"discovery-schedule-due\x1f"+tenantID+"\x1f"+id); err != nil {
+		return fmt.Errorf("orchestrator: lock discovery schedule decision: %w", err)
+	}
+	return nil
+}
+
+// The SQL transaction that projects a control event may roll back after the
+// JetStream append. Final run admission must then fail closed until the ordered
+// tail applies that event. This finite, typed replay uses the retained subject
+// index and ignores unrelated event types and schedules.
+func (o *Orchestrator) guardUnprojectedDiscoveryScheduleControl(ctx context.Context,
+	tenantID, id string, controlSequence int64) error {
+	snapshot, err := o.log.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	applied, err := o.store.ProjectionCheckpoint(ctx)
+	if err != nil {
+		return err
+	}
+	if applied > snapshot.LastSequence || snapshot.NumDeleted != 0 ||
+		snapshot.Messages != snapshot.LastSequence ||
+		(snapshot.LastSequence > 0 && snapshot.FirstSequence != 1) {
+		return store.ErrResourceAdmissionBusy
+	}
+	if err := o.log.ReplayTenantTypesThrough(ctx, tenantID, applied+1, snapshot.LastSequence,
+		[]string{projections.EventDiscoverySchedulePaused, projections.EventDiscoveryScheduleResumed,
+			projections.EventDiscoveryScheduleRetired}, func(event events.Event) error {
+			var payload struct {
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal(event.Data, &payload); err != nil {
+				return fmt.Errorf("orchestrator: decode unprojected discovery schedule control: %w", err)
+			}
+			if payload.ID == id && (controlSequence < 0 || event.Sequence > uint64(controlSequence)) {
+				return store.ErrResourceAdmissionBusy
+			}
+			return nil
+		}); err != nil {
+		return err
+	}
+	after, err := o.log.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	if after.Name != snapshot.Name || after.Generation != snapshot.Generation ||
+		after.FirstSequence != snapshot.FirstSequence || after.NumDeleted != snapshot.NumDeleted ||
+		after.LastSequence < snapshot.LastSequence || after.Messages < snapshot.Messages ||
+		after.Messages-snapshot.Messages != after.LastSequence-snapshot.LastSequence {
+		return store.ErrResourceAdmissionBusy
+	}
+	return nil
 }
 
 // QueueDiscoveryRun records a queued run and its external scan intent together.
@@ -397,24 +519,39 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	}
 	var ev events.Event
 	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
-		if in.OnlyIfDue && in.ScheduleID != nil {
-			if _, err := tx.Exec(ctx,
-				`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-				"discovery-schedule-due\x1f"+tenantID+"\x1f"+*in.ScheduleID); err != nil {
-				return fmt.Errorf("orchestrator: lock discovery schedule due decision: %w", err)
+		if in.ScheduleID != nil {
+			if err := lockDiscoveryScheduleDecisionTx(ctx, tx, tenantID, *in.ScheduleID); err != nil {
+				return err
 			}
+			var enabled bool
+			var retiredAt *time.Time
+			var sourceID string
+			var controlSequence int64
+			if err := tx.QueryRow(ctx,
+				`SELECT enabled, retired_at, source_id::text, control_event_sequence
+				   FROM discovery_schedules WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+				tenantID, *in.ScheduleID).Scan(&enabled, &retiredAt, &sourceID, &controlSequence); err != nil {
+				return err
+			}
+			if err := o.guardUnprojectedDiscoveryScheduleControl(ctx, tenantID, *in.ScheduleID, controlSequence); err != nil {
+				return err
+			}
+			if !enabled || retiredAt != nil || sourceID != in.SourceID {
+				return ErrDiscoveryScheduleInactive
+			}
+		}
+		if in.OnlyIfDue && in.ScheduleID != nil {
 			var due bool
 			if err := tx.QueryRow(ctx,
-				`SELECT NOT EXISTS (
+				`SELECT s.enabled AND s.retired_at IS NULL AND s.source_id = $3::uuid AND NOT EXISTS (
 				   SELECT 1
 				     FROM discovery_runs r
-				     JOIN discovery_schedules s
-				       ON s.tenant_id = r.tenant_id AND s.id = $2::uuid
 				    WHERE r.tenant_id = $1::uuid
 				      AND r.source_id = s.source_id
 				      AND (r.status IN ('queued', 'running')
 				           OR r.created_at > clock_timestamp() - make_interval(secs => GREATEST(s.interval_seconds, 1)))
-				 )`, tenantID, *in.ScheduleID).Scan(&due); err != nil {
+				 ) FROM discovery_schedules s
+				 WHERE s.tenant_id = $1::uuid AND s.id = $2::uuid`, tenantID, *in.ScheduleID, in.SourceID).Scan(&due); err != nil {
 				return fmt.Errorf("orchestrator: recheck discovery schedule due decision: %w", err)
 			}
 			if !due {

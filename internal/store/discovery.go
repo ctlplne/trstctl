@@ -34,14 +34,17 @@ type DiscoverySource struct {
 
 // DiscoverySchedule is a tenant-owned schedule for a discovery source.
 type DiscoverySchedule struct {
-	ID              string
-	TenantID        string
-	SourceID        string
-	Name            string
-	IntervalSeconds int
-	Enabled         bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                   string
+	TenantID             string
+	SourceID             string
+	Name                 string
+	IntervalSeconds      int
+	Enabled              bool
+	RetiredAt            *time.Time
+	ConfigEventSequence  int64
+	ControlEventSequence int64
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 // DiscoveryRun is one queued/executed discovery run.
@@ -299,16 +302,23 @@ func (s *Store) ApplyDiscoveryScheduleUpsertedTx(ctx context.Context, tx pgx.Tx,
 		return err
 	}
 	tag, err := tx.Exec(ctx,
-		`INSERT INTO discovery_schedules (id, tenant_id, source_id, name, interval_seconds, enabled, created_at, updated_at)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO discovery_schedules (id, tenant_id, source_id, name, interval_seconds, enabled,
+		                                  config_event_sequence, created_at, updated_at)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 ON CONFLICT ON CONSTRAINT discovery_schedules_pkey DO UPDATE
 		      SET source_id = EXCLUDED.source_id,
 		          name = EXCLUDED.name,
 		          interval_seconds = EXCLUDED.interval_seconds,
-		          enabled = EXCLUDED.enabled,
-		          updated_at = EXCLUDED.updated_at
-		    WHERE discovery_schedules.tenant_id = EXCLUDED.tenant_id`,
-		sched.ID, sched.TenantID, sched.SourceID, sched.Name, sched.IntervalSeconds, sched.Enabled, sched.CreatedAt, sched.UpdatedAt)
+		          enabled = CASE WHEN discovery_schedules.control_event_sequence > 0
+		                         OR discovery_schedules.retired_at IS NOT NULL
+		                         THEN discovery_schedules.enabled ELSE EXCLUDED.enabled END,
+		          config_event_sequence = GREATEST(discovery_schedules.config_event_sequence, EXCLUDED.config_event_sequence),
+		          updated_at = CASE WHEN discovery_schedules.control_event_sequence > EXCLUDED.config_event_sequence
+		                            THEN discovery_schedules.updated_at ELSE EXCLUDED.updated_at END
+		    WHERE discovery_schedules.tenant_id = EXCLUDED.tenant_id
+		      AND discovery_schedules.config_event_sequence <= EXCLUDED.config_event_sequence`,
+		sched.ID, sched.TenantID, sched.SourceID, sched.Name, sched.IntervalSeconds, sched.Enabled,
+		sched.ConfigEventSequence, sched.CreatedAt, sched.UpdatedAt)
 	if err != nil {
 		return discoveryDeclarationWriteError("schedule", err)
 	}
@@ -316,6 +326,49 @@ func (s *Store) ApplyDiscoveryScheduleUpsertedTx(ctx context.Context, tx pgx.Tx,
 		return discoveryDeclarationWriteError("schedule", pgx.ErrNoRows)
 	}
 	return nil
+}
+
+// ApplyDiscoveryScheduleControlTx projects one retained operator decision.
+// Retirement is permanent; replaying an older control event cannot revive it.
+func (s *Store) ApplyDiscoveryScheduleControlTx(ctx context.Context, tx pgx.Tx,
+	tenantID, id, action string, sequence int64, at time.Time) error {
+	if action != "pause" && action != "resume" && action != "retire" {
+		return fmt.Errorf("store: invalid discovery schedule action %q", action)
+	}
+	if sequence <= 0 {
+		return errors.New("store: discovery schedule control requires event sequence")
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE discovery_schedules
+		    SET enabled = CASE WHEN $3 = 'resume' THEN true ELSE false END,
+		        retired_at = CASE WHEN $3 = 'retire' THEN COALESCE(retired_at, $5::timestamptz)
+		                          ELSE retired_at END,
+		        control_event_sequence = $4,
+		        updated_at = $5::timestamptz
+		  WHERE tenant_id = $1 AND id = $2::uuid
+		    AND control_event_sequence < $4
+		    AND (retired_at IS NULL OR $3 = 'retire')`,
+		tenantID, id, action, sequence, at.UTC())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var retained int64
+	var retiredAt *time.Time
+	if err := tx.QueryRow(ctx,
+		`SELECT control_event_sequence, retired_at FROM discovery_schedules
+		  WHERE tenant_id = $1 AND id = $2::uuid`, tenantID, id).Scan(&retained, &retiredAt); err != nil {
+		return err
+	}
+	if retained >= sequence {
+		return nil
+	}
+	if retiredAt != nil {
+		return errors.New("store: retired discovery schedule cannot be reactivated")
+	}
+	return errors.New("store: discovery schedule control event did not project")
 }
 
 // ApplyDiscoveryRunQueuedTx projects a discovery.run.queued event.
@@ -712,7 +765,8 @@ func (s *Store) ListDiscoverySchedulesPage(ctx context.Context, tenantID, afterI
 	var out []DiscoverySchedule
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled, created_at, updated_at
+			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled,
+			        retired_at, config_event_sequence, control_event_sequence, created_at, updated_at
 			   FROM discovery_schedules
 			  WHERE tenant_id = $1 AND id > $2
 			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
@@ -723,7 +777,8 @@ func (s *Store) ListDiscoverySchedulesPage(ctx context.Context, tenantID, afterI
 		for rows.Next() {
 			var sched DiscoverySchedule
 			if err := rows.Scan(&sched.ID, &sched.TenantID, &sched.SourceID, &sched.Name,
-				&sched.IntervalSeconds, &sched.Enabled, &sched.CreatedAt, &sched.UpdatedAt); err != nil {
+				&sched.IntervalSeconds, &sched.Enabled, &sched.RetiredAt, &sched.ConfigEventSequence,
+				&sched.ControlEventSequence, &sched.CreatedAt, &sched.UpdatedAt); err != nil {
 				return err
 			}
 			out = append(out, sched)
@@ -739,7 +794,8 @@ func (s *Store) ListDiscoverySchedulesPage(ctx context.Context, tenantID, afterI
 func (s *Store) TenantsWithEnabledDiscoverySchedules(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
 		//trstctl:system-query — cross-tenant by design: enumerates which tenants have enabled discovery schedules so the leader-only scheduler can sweep each tenant under its own RLS context (AN-1 exemption).
-		`SELECT DISTINCT tenant_id::text FROM discovery_schedules WHERE enabled ORDER BY tenant_id`)
+		`SELECT DISTINCT tenant_id::text FROM discovery_schedules
+		  WHERE enabled AND retired_at IS NULL ORDER BY tenant_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -767,9 +823,10 @@ func (s *Store) DiscoverySchedulesDue(ctx context.Context, tenantID string, now 
 	var out []DiscoverySchedule
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT s.id::text, s.tenant_id::text, s.source_id::text, s.name, s.interval_seconds, s.enabled, s.created_at, s.updated_at
+			`SELECT s.id::text, s.tenant_id::text, s.source_id::text, s.name, s.interval_seconds, s.enabled,
+			        s.retired_at, s.config_event_sequence, s.control_event_sequence, s.created_at, s.updated_at
 			   FROM discovery_schedules s
-			  WHERE s.tenant_id = $1 AND s.enabled
+			  WHERE s.tenant_id = $1 AND s.enabled AND s.retired_at IS NULL
 			    AND NOT EXISTS (
 			      SELECT 1 FROM discovery_runs r
 			       WHERE r.tenant_id = s.tenant_id
@@ -786,7 +843,8 @@ func (s *Store) DiscoverySchedulesDue(ctx context.Context, tenantID string, now 
 		for rows.Next() {
 			var sched DiscoverySchedule
 			if err := rows.Scan(&sched.ID, &sched.TenantID, &sched.SourceID, &sched.Name,
-				&sched.IntervalSeconds, &sched.Enabled, &sched.CreatedAt, &sched.UpdatedAt); err != nil {
+				&sched.IntervalSeconds, &sched.Enabled, &sched.RetiredAt, &sched.ConfigEventSequence,
+				&sched.ControlEventSequence, &sched.CreatedAt, &sched.UpdatedAt); err != nil {
 				return err
 			}
 			out = append(out, sched)
@@ -801,9 +859,11 @@ func (s *Store) GetDiscoverySchedule(ctx context.Context, tenantID, id string) (
 	var out DiscoverySchedule
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled, created_at, updated_at
+			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled,
+			        retired_at, config_event_sequence, control_event_sequence, created_at, updated_at
 			   FROM discovery_schedules WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&out.ID, &out.TenantID, &out.SourceID, &out.Name, &out.IntervalSeconds, &out.Enabled, &out.CreatedAt, &out.UpdatedAt)
+			Scan(&out.ID, &out.TenantID, &out.SourceID, &out.Name, &out.IntervalSeconds, &out.Enabled,
+				&out.RetiredAt, &out.ConfigEventSequence, &out.ControlEventSequence, &out.CreatedAt, &out.UpdatedAt)
 	})
 	return out, err
 }
@@ -815,10 +875,12 @@ func (s *Store) GetDiscoveryScheduleByName(ctx context.Context, tenantID, name s
 	var out DiscoverySchedule
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled, created_at, updated_at
+			`SELECT id::text, tenant_id::text, source_id::text, name, interval_seconds, enabled,
+			        retired_at, config_event_sequence, control_event_sequence, created_at, updated_at
 			   FROM discovery_schedules WHERE tenant_id = $1 AND name = $2`, tenantID, name).
 			Scan(&out.ID, &out.TenantID, &out.SourceID, &out.Name, &out.IntervalSeconds,
-				&out.Enabled, &out.CreatedAt, &out.UpdatedAt)
+				&out.Enabled, &out.RetiredAt, &out.ConfigEventSequence, &out.ControlEventSequence,
+				&out.CreatedAt, &out.UpdatedAt)
 	})
 	return out, err
 }

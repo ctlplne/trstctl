@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
+import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
 import { SourceSetup } from "./discovery/SourceSetup";
 import { suggestedIdentityName } from "./discovery/identityName";
 import { Button } from "@/components/ui/button";
@@ -1407,7 +1408,13 @@ export function Discovery() {
               {translateNow("source.schedule.a.recurring.scan.once.a.source.ex.e7c14af000")}
             </EmptyState>
           ) : (
-            <ScheduleTable schedules={schedules} sourceByID={sourceByID} />
+            <DiscoveryScheduleTable
+              schedules={schedules}
+              sourceByID={sourceByID}
+              onUpdated={(updated) => setSchedules((current) => current.map((schedule) => (schedule.id === updated.id ? updated : schedule)))}
+              onRefresh={load}
+              onNotice={(message) => setNotice({ kind: "success", message })}
+            />
           )}
         </section>
       )}
@@ -1996,52 +2003,6 @@ function SourceTable({
       getRowId={(source) => source.id}
       showColumnChooser
       viewStorageKey="discovery-sources"
-      toolbar={gridControlsToolbar}
-    />
-  );
-}
-
-function ScheduleTable({ schedules, sourceByID }: { schedules: DiscoverySchedule[]; sourceByID: Map<string, DiscoverySource> }) {
-  const columns: Array<DataGridColumn<DiscoverySchedule>> = [
-    {
-      id: "name",
-      header: "Name",
-      cell: (schedule) => (
-        <div>
-          <div className="font-medium">{schedule.name}</div>
-          <div className="font-mono text-xs text-muted-foreground">{schedule.id}</div>
-        </div>
-      ),
-    },
-    {
-      id: "source",
-      header: "Source",
-      cell: (schedule) => sourceByID.get(schedule.source_id)?.name ?? <span className="font-mono text-xs">{schedule.source_id}</span>,
-    },
-    {
-      id: "interval",
-      header: "Interval",
-      cell: (schedule) => `${schedule.interval_seconds}s`,
-    },
-    {
-      id: "enabled",
-      header: "Enabled",
-      cell: (schedule) => (schedule.enabled ? "yes" : "no"),
-    },
-    {
-      id: "updated",
-      header: "Updated",
-      cell: (schedule) => formatDateTime(schedule.updated_at),
-    },
-  ];
-  return (
-    <DataGrid
-      ariaLabel="Discovery schedules"
-      rows={schedules}
-      columns={columns}
-      getRowId={(schedule) => schedule.id}
-      showColumnChooser
-      viewStorageKey="discovery-schedules"
       toolbar={gridControlsToolbar}
     />
   );

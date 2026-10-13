@@ -384,14 +384,15 @@ type discoveryScheduleRequest struct {
 }
 
 type discoveryScheduleResponse struct {
-	ID              string    `json:"id"`
-	TenantID        string    `json:"tenant_id"`
-	SourceID        string    `json:"source_id"`
-	Name            string    `json:"name"`
-	IntervalSeconds int       `json:"interval_seconds"`
-	Enabled         bool      `json:"enabled"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              string     `json:"id"`
+	TenantID        string     `json:"tenant_id"`
+	SourceID        string     `json:"source_id"`
+	Name            string     `json:"name"`
+	IntervalSeconds int        `json:"interval_seconds"`
+	Enabled         bool       `json:"enabled"`
+	RetiredAt       *time.Time `json:"retired_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type discoveryRunRequest struct {
@@ -988,6 +989,55 @@ func (a *API) listDiscoverySchedules(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
 }
 
+func (a *API) getDiscoverySchedule(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if _, err := googleuuid.Parse(r.PathValue("id")); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "schedule id must be a valid UUID"))
+		return
+	}
+	schedule, err := a.store.GetDiscoverySchedule(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toDiscoveryScheduleResponse(schedule))
+}
+
+//trstctl:mutation
+func (a *API) pauseDiscoverySchedule(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.controlDiscoverySchedule(w, r, idempotencyKey, "pause")
+}
+
+//trstctl:mutation
+func (a *API) resumeDiscoverySchedule(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.controlDiscoverySchedule(w, r, idempotencyKey, "resume")
+}
+
+//trstctl:mutation
+func (a *API) retireDiscoverySchedule(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.controlDiscoverySchedule(w, r, idempotencyKey, "retire")
+}
+
+func (a *API) controlDiscoverySchedule(w http.ResponseWriter, r *http.Request, idempotencyKey, action string) {
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if _, err := googleuuid.Parse(r.PathValue("id")); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "schedule id must be a valid UUID")
+		}
+		schedule, err := a.orch.ControlDiscoverySchedule(ctx, tenantID, r.PathValue("id"), action)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toDiscoveryScheduleResponse(schedule), nil
+	})
+}
+
 //trstctl:mutation
 func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -1541,6 +1591,7 @@ func toDiscoveryScheduleResponse(s store.DiscoverySchedule) discoveryScheduleRes
 	return discoveryScheduleResponse{
 		ID: s.ID, TenantID: s.TenantID, SourceID: s.SourceID, Name: s.Name,
 		IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled,
+		RetiredAt: s.RetiredAt,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }

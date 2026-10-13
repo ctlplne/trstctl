@@ -584,6 +584,18 @@ lost create response with the same `Idempotency-Key` to recover that creation;
 a separate create with the same name returns `409` before another event is
 recorded. Use `GET /api/v1/discovery/schedules` to find the existing schedule.
 
+Open **Discover → Schedules** to pause future scans, resume a paused schedule, or
+retire it permanently after reviewing the exact schedule name. Pausing and retiring
+leave prior runs and findings available. A stale scheduler decision is checked
+again at run admission, so it cannot queue a new scheduled run after pause or
+retirement. Retirement keeps the schedule visible as a tombstone and refuses
+resume; create a new schedule with a new name if monitoring should start again.
+The same controls are available through
+`POST /api/v1/discovery/schedules/{id}/pause`, `/resume`, and `/retire` and the
+`trstctl-cli discovery schedules` commands. `GET` on the schedule ID reads the
+current state, including `retired_at`. Each mutation needs an `Idempotency-Key`;
+retry the same key after a lost response to recover the original result.
+
 To see enrolled agents that perform local discovery:
 
 ```sh
@@ -661,6 +673,7 @@ what it is.
   subcommands for any of them.
 - **Served routes:** `GET|POST /api/v1/certificates`, `GET /api/v1/certificates/{id}`,
   `GET|POST /api/v1/discovery/sources`, `GET /api/v1/discovery/sources/{id}/preflight`, `GET|POST /api/v1/discovery/schedules`,
+  `GET /api/v1/discovery/schedules/{id}`, `POST /api/v1/discovery/schedules/{id}/pause|resume|retire`,
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
   `POST /api/v1/discovery/runs/{id}/retry`,
   `GET /api/v1/discovery/findings`, `POST /api/v1/discovery/findings/{id}/claim`,
@@ -687,7 +700,8 @@ what it is.
   `--inventory-ssh-user-key-globs`, `--inventory-ssh-authorized-keys`,
   `--inventory-ssh-known-hosts`, `--inventory-ssh-sshd-configs`.
 - **Audit events:** `certificate.recorded`, `discovery.source.upserted`,
-  `discovery.schedule.upserted`, `discovery.run.queued`, `discovery.run.started`,
+  `discovery.schedule.upserted`, `discovery.schedule.paused`, `discovery.schedule.resumed`,
+  `discovery.schedule.retired`, `discovery.run.queued`, `discovery.run.started`,
   `discovery.finding.recorded`, `discovery.run.completed`, `secretscan.finding`.
 
 ## See also

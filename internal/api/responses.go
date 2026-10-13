@@ -64,6 +64,8 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		a.writeProblem(w, problem.New(http.StatusConflict, "discovery source name or ID belongs to a different source kind or owner"))
 	case errors.Is(err, orchestrator.ErrDiscoveryScheduleIdentityConflict):
 		a.writeProblem(w, problem.New(http.StatusConflict, "discovery schedule name or ID is already bound"))
+	case errors.Is(err, orchestrator.ErrDiscoveryScheduleInactive):
+		a.writeProblem(w, problem.New(http.StatusConflict, "discovery schedule is paused or retired"))
 	case errors.Is(err, orchestrator.ErrInvalidTransition):
 		p := problem.New(http.StatusConflict, err.Error())
 		var te *orchestrator.TransitionError
