@@ -17,14 +17,16 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
 
 type breakglassReconciler struct {
-	caCertDER []byte
-	publicDER []byte
-	store     *store.Store
-	log       *events.Log
+	caCertDER  []byte
+	publicDER  []byte
+	offlineKit *signing.OfflineBreakglassKit
+	store      *store.Store
+	log        *events.Log
 }
 
 type breakglassOnlineIssuer struct {
@@ -75,10 +77,11 @@ func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
 		return nil, errors.New("server: break-glass reconciliation requires PostgreSQL and an event log for audit reconciliation")
 	}
 	return breakglassReconciler{
-		caCertDER: append([]byte(nil), d.BreakglassCACertDER...),
-		publicDER: append([]byte(nil), d.BreakglassPublicKeyDER...),
-		store:     d.Store,
-		log:       d.Log,
+		caCertDER:  append([]byte(nil), d.BreakglassCACertDER...),
+		publicDER:  append([]byte(nil), d.BreakglassPublicKeyDER...),
+		offlineKit: d.BreakglassOfflineKit,
+		store:      d.Store,
+		log:        d.Log,
 	}, nil
 }
 
@@ -99,8 +102,19 @@ func (r breakglassReconciler) ReconcileBreakglass(ctx context.Context, tenantID 
 	if tenantID == "" {
 		return 0, errors.New("server: break-glass reconciliation requires tenant scope")
 	}
-	if err := breakglass.VerifyBatch(bundles, r.caCertDER, r.publicDER); err != nil {
-		return 0, fmt.Errorf("%w: %v", api.ErrBreakglassInvalidBundle, err)
+	for _, bundle := range bundles {
+		var err error
+		if bundle.Version == 2 {
+			if r.offlineKit == nil || r.offlineKit.Policy.TenantID != tenantID {
+				return 0, fmt.Errorf("%w: no pinned offline kit for tenant", api.ErrBreakglassInvalidBundle)
+			}
+			err = breakglass.VerifyDisconnected(bundle, r.offlineKit.Policy, r.offlineKit.CACertDER, r.offlineKit.PublicKeyDER)
+		} else {
+			err = breakglass.Verify(bundle, r.caCertDER, r.publicDER)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("%w: %v", api.ErrBreakglassInvalidBundle, err)
+		}
 	}
 	return reconcileVerifiedBreakglassBundles(ctx, tenantID, bundles, r.store, r.log)
 }

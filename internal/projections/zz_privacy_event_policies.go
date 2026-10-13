@@ -1789,6 +1789,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 			privacyPayloadShape[privacyBreakglassIssuedOnline](),
 		),
 		{EventBreakglassIssued, BreakglassReconcileEventSchemaVersion}:             privacyPayloadShape[privacyBreakglassIssuedReconciledV2](),
+		{EventBreakglassIssued, BreakglassOfflineEvidenceEventSchemaVersion}:       privacyPayloadShape[privacyBreakglassIssuedReconciledV3](),
 		{EventBreakglassCARotated, 1}:                                              privacyPayloadShape[privacyBreakglassCARotated](),
 		{EventBreakglassCACrossSigned, 1}:                                          privacyPayloadShape[privacyBreakglassCACrossSigned](),
 		{EventCRLPublished, 1}:                                                     privacyPayloadShape[privacyLegacyCRLPublishedV1](),

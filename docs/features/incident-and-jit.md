@@ -356,9 +356,12 @@ signing service, never caller-supplied key material in the API process. The resu
 **self-verifying signed bundle** — anyone can verify it offline (signature + chain to
 the CA), and the served route reconciles it into the hash-chained audit log as
 immutable `breakglass.issued` before responding. If the control plane was unreachable,
-operators can still run the same quorum ceremony offline and later call
-`POST /api/v1/breakglass/reconcile`, which verifies those bundles against
-deployment-pinned break-glass verifier material and records the same audit event. A
+the isolated recovery signer uses a separately provisioned v2 public kit and two
+custodian signatures over one exact CSR, tenant, deployment, reason and TTL. It
+can issue while the API and database are stopped. After recovery, operators call
+`POST /api/v1/breakglass/reconcile`; the server verifies the complete proof
+against the independently pinned kit and records it in a v3 audit event. The
+[disconnected runbook](../runbooks/disconnected-breakglass.md) gives the steps. A
 bundle that fails verification stops the batch, so a forged emergency issuance can't be
 silently absorbed.
 
@@ -722,8 +725,10 @@ notifications use the [notification integrations](policy-and-governance.md).
 - **Break-glass:** ceremony/execution pairs at
   `/api/v1/breakglass/issue-ceremonies` + `/issue`,
   `/api/v1/breakglass/rotation-ceremonies` + `/rotate`, and
-  `/api/v1/breakglass/cross-sign-ceremonies` + `/cross-sign`; `IssueOffline`,
-  `Verify`, and `POST /api/v1/breakglass/reconcile` remain the disconnected path.
+  `/api/v1/breakglass/cross-sign-ceremonies` + `/cross-sign`; the isolated
+  `trstctl-signer` offline kit, signed custodian requests, and
+  `POST /api/v1/breakglass/reconcile` form the disconnected path. The older
+  `IssueOffline` library helper is not an operator signing path.
 - **Events:** `incident.*`, `response.integration.dispatched`, `fleet.*`, `approval.*`, `pam.session.*`,
   `breakglass.issued`.
 

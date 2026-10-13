@@ -629,14 +629,17 @@ type ABAC struct {
 // to a persisted, purpose-constrained signer handle plus an authenticated m-of-n
 // operator roster for served issuance, CA rotation, and cross-signing.
 type Breakglass struct {
-	Enabled       bool     `json:"enabled,omitempty"`
-	OnlineEnabled bool     `json:"online_enabled,omitempty"`
-	CACertFile    string   `json:"ca_cert_file,omitempty"`
-	PublicKeyFile string   `json:"public_key_file,omitempty"`
-	TenantID      string   `json:"tenant_id,omitempty"`
-	SignerHandle  string   `json:"signer_handle,omitempty"`
-	Operators     []string `json:"operators,omitempty"`
-	Threshold     int      `json:"threshold,omitempty"`
+	Enabled          bool     `json:"enabled,omitempty"`
+	OnlineEnabled    bool     `json:"online_enabled,omitempty"`
+	CACertFile       string   `json:"ca_cert_file,omitempty"`
+	PublicKeyFile    string   `json:"public_key_file,omitempty"`
+	OfflineKitFile   string   `json:"offline_kit_file,omitempty"`
+	OfflineKitSHA256 string   `json:"offline_kit_sha256,omitempty"`
+	DeploymentID     string   `json:"deployment_id,omitempty"`
+	TenantID         string   `json:"tenant_id,omitempty"`
+	SignerHandle     string   `json:"signer_handle,omitempty"`
+	Operators        []string `json:"operators,omitempty"`
+	Threshold        int      `json:"threshold,omitempty"`
 }
 
 // TenantMapping binds an OIDC user (by subject, by tenant-claim value, or by IdP
@@ -2482,6 +2485,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ONLINE_ENABLED", &c.Breakglass.OnlineEnabled)
 	setString(getenv, "TRSTCTL_BREAKGLASS_CA_CERT_FILE", &c.Breakglass.CACertFile)
 	setString(getenv, "TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE", &c.Breakglass.PublicKeyFile)
+	setString(getenv, "TRSTCTL_BREAKGLASS_OFFLINE_KIT_FILE", &c.Breakglass.OfflineKitFile)
+	setString(getenv, "TRSTCTL_BREAKGLASS_OFFLINE_KIT_SHA256", &c.Breakglass.OfflineKitSHA256)
+	setString(getenv, "TRSTCTL_BREAKGLASS_DEPLOYMENT_ID", &c.Breakglass.DeploymentID)
 	setString(getenv, "TRSTCTL_BREAKGLASS_TENANT_ID", &c.Breakglass.TenantID)
 	setString(getenv, "TRSTCTL_BREAKGLASS_SIGNER_HANDLE", &c.Breakglass.SignerHandle)
 	setCSV(getenv, "TRSTCTL_BREAKGLASS_OPERATORS", &c.Breakglass.Operators)
@@ -4600,6 +4606,18 @@ func (a ABAC) validate() []error {
 
 func (b Breakglass) validate() []error {
 	var errs []error
+	if b.OfflineKitFile != "" && !b.Enabled {
+		errs = append(errs, errors.New("breakglass.enabled must be true when breakglass.offline_kit_file is set"))
+	}
+	if b.OfflineKitFile != "" && len(strings.TrimSpace(b.OfflineKitSHA256)) != 64 {
+		errs = append(errs, errors.New("breakglass.offline_kit_sha256 must pin the exact public kit when offline_kit_file is set"))
+	}
+	if b.OfflineKitFile == "" && b.OfflineKitSHA256 != "" {
+		errs = append(errs, errors.New("breakglass.offline_kit_file is required with offline_kit_sha256"))
+	}
+	if b.OfflineKitFile != "" && b.DeploymentID == "" {
+		errs = append(errs, errors.New("breakglass.deployment_id is required with offline_kit_file"))
+	}
 	if strings.TrimSpace(b.CACertFile) == "" {
 		errs = append(errs, errors.New("breakglass.ca_cert_file is required when breakglass.enabled is true"))
 	}

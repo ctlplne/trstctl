@@ -5,6 +5,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/lifecycle"
 
@@ -530,18 +532,47 @@ func runBreakglassConfig(
 	st *store.Store,
 	log *events.Log,
 	signer runSigner,
-) ([]byte, []byte, *configuredBreakglassRuntime, error) {
+) ([]byte, []byte, *signing.OfflineBreakglassKit, *configuredBreakglassRuntime, error) {
 	caCertDER, publicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("break-glass verifier material: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("break-glass verifier material: %w", err)
+	}
+	var offlineKit *signing.OfflineBreakglassKit
+	if cfg.Breakglass.OfflineKitFile != "" {
+		raw, err := os.ReadFile(cfg.Breakglass.OfflineKitFile) // #nosec G304 -- operator-configured public recovery kit (CWE-22)
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("break-glass offline kit: %w", err)
+		}
+		if !strings.EqualFold(crypto.SHA256Hex(raw), cfg.Breakglass.OfflineKitSHA256) {
+			return nil, nil, nil, nil, errors.New("break-glass offline kit differs from independently pinned SHA-256")
+		}
+		var kit signing.OfflineBreakglassKit
+		if err := json.Unmarshal(raw, &kit); err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("break-glass offline kit: %w", err)
+		}
+		if err := signing.VerifyOfflineBreakglassKit(kit); err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("break-glass offline kit: %w", err)
+		}
+		if cfg.Breakglass.DeploymentID == "" || kit.Policy.DeploymentID != cfg.Breakglass.DeploymentID ||
+			cfg.Breakglass.TenantID == "" || kit.Policy.TenantID != cfg.Breakglass.TenantID ||
+			(cfg.License.DeploymentID != "" && cfg.License.DeploymentID != kit.Policy.DeploymentID) {
+			return nil, nil, nil, nil, errors.New("break-glass offline kit tenant or deployment differs from this control plane")
+		}
+		offlineKit = &kit
 	}
 	runtime, err := breakglassRotationFromConfig(
 		ctx, cfg.Breakglass, st, log, signer.signer, signer.tokenProvider, caCertDER, publicKeyDER,
 	)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("break-glass online lifecycle: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("break-glass online lifecycle: %w", err)
 	}
-	return caCertDER, publicKeyDER, runtime, nil
+	if runtime != nil && offlineKit != nil {
+		runtime.verifiers = append(runtime.verifiers, breakglassVerifier{
+			caDER: offlineKit.CACertDER, publicDER: offlineKit.PublicKeyDER,
+			offlinePolicy: &offlineKit.Policy,
+		})
+	}
+	return caCertDER, publicKeyDER, offlineKit, runtime, nil
 }
 
 // managedKeyCustodyFromConfig deliberately copies only public runtime posture
@@ -603,7 +634,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	breakglassCACertDER, breakglassPublicKeyDER, breakglassRuntime, err := runBreakglassConfig(ctx, cfg, st, log, signer)
+	breakglassCACertDER, breakglassPublicKeyDER, breakglassOfflineKit, breakglassRuntime, err := runBreakglassConfig(ctx, cfg, st, log, signer)
 	if err != nil {
 		return Deps{}, err
 	}
@@ -664,7 +695,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), HierarchyRevocationBaseURL: cfg.CA.HierarchyRevocationBaseURL, CAHierarchyRequireRevocationPointers: cfg.CA.GovernanceModeValue() == config.GovernanceRegulated, CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
-		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
+		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER, BreakglassOfflineKit: breakglassOfflineKit,
 		BreakglassIssuer: breakglassIssuer, BreakglassCeremonies: breakglassCeremonies,
 		BreakglassRotation: breakglassRotation, BreakglassReconciler: breakglassReconciler,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,

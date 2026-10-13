@@ -4,14 +4,18 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 func TestReadBreakglassVerifierMaterialRejectsTrailingPrivateKey(t *testing.T) {
@@ -23,6 +27,71 @@ func TestReadBreakglassVerifierMaterialRejectsTrailingPrivateKey(t *testing.T) {
 	}
 	if _, err := readPEMOrDERFile(path, "CERTIFICATE"); err == nil {
 		t.Fatal("certificate plus trailing private-key PEM was accepted as verifier material")
+	}
+}
+
+func TestOfflineBreakglassKitRequiresIndependentStartupPin(t *testing.T) {
+	pubA, _, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubB, _, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x33}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrapper.Destroy()
+	dir := t.TempDir()
+	vault, err := signing.NewOfflineBreakglassVault(filepath.Join(dir, "vault"), wrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kit, err := vault.Provision(breakglass.OfflinePolicy{TenantID: "tenant-a", DeploymentID: "lab-a", Epoch: 1,
+		Threshold: 2, MaxTTLSeconds: 900, PermittedDNSSuffixes: []string{"example.test"},
+		Custodians: []breakglass.OfflineCustodian{{ID: "a", PublicKeyDER: pubA}, {ID: "b", PublicKeyDER: pubB}}}, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPath := filepath.Join(dir, "ca.der")
+	pubPath := filepath.Join(dir, "public.der")
+	if err := os.WriteFile(caPath, kit.CACertDER, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pubPath, kit.PublicKeyDER, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	kitPath := filepath.Join(dir, "vault", "offline-kit.json")
+	kitBytes, err := os.ReadFile(kitPath) // #nosec G304 -- test-owned public kit under t.TempDir (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Breakglass: config.Breakglass{Enabled: true, TenantID: "tenant-a", DeploymentID: "lab-a", CACertFile: caPath,
+		PublicKeyFile: pubPath, OfflineKitFile: kitPath, OfflineKitSHA256: crypto.SHA256Hex(kitBytes)}}
+	_, _, loaded, _, err := runBreakglassConfig(context.Background(), cfg, nil, nil, runSigner{})
+	if err != nil || loaded == nil || loaded.Policy.DeploymentID != "lab-a" {
+		t.Fatalf("pinned kit load: kit=%v err=%v", loaded != nil, err)
+	}
+	cfg.Breakglass.DeploymentID = "other-deployment"
+	if _, _, _, _, err := runBreakglassConfig(context.Background(), cfg, nil, nil, runSigner{}); err == nil {
+		t.Fatal("accepted offline kit for another deployment")
+	}
+	cfg.Breakglass.DeploymentID = "lab-a"
+	cfg.License.DeploymentID = "other-deployment"
+	if _, _, _, _, err := runBreakglassConfig(context.Background(), cfg, nil, nil, runSigner{}); err == nil {
+		t.Fatal("accepted offline kit against a conflicting licensed deployment")
+	}
+	cfg.License.DeploymentID = ""
+	cfg.Breakglass.TenantID = "other-tenant"
+	if _, _, _, _, err := runBreakglassConfig(context.Background(), cfg, nil, nil, runSigner{}); err == nil {
+		t.Fatal("accepted offline kit for another tenant")
+	}
+	cfg.Breakglass.TenantID = "tenant-a"
+	cfg.Breakglass.OfflineKitSHA256 = crypto.SHA256Hex([]byte("wrong kit"))
+	if _, _, _, _, err := runBreakglassConfig(context.Background(), cfg, nil, nil, runSigner{}); err == nil {
+		t.Fatal("accepted kit that differs from independent pin")
 	}
 }
 

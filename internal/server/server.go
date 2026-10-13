@@ -284,6 +284,7 @@ type Deps struct {
 	// never trusts verifier material supplied by the caller.
 	BreakglassCACertDER    []byte
 	BreakglassPublicKeyDER []byte
+	BreakglassOfflineKit   *signing.OfflineBreakglassKit
 	// BreakglassIssuer/Ceremonies/Rotation are the production-assembled online
 	// lifecycle. BreakglassOfflineIssuer is retained only for the standalone
 	// offline service adapter; shipped assembly binds the interfaces below to a

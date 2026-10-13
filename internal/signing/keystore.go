@@ -102,6 +102,7 @@ const metaVersion = 3
 
 // flagRequireAuth is bit 0 of the v2 flags byte: the key is dual-control.
 const flagRequireAuth = 1 << 0
+const flagOfflineOnly = 1 << 1
 
 // encodeConstraintMeta frames the usage constraints into a deterministic,
 // non-secret header: magic | version | nPurposes | purposes... | nHashes |
@@ -124,6 +125,9 @@ func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byt
 	var flags byte
 	if kc.requireAuth {
 		flags |= flagRequireAuth
+	}
+	if kc.offlineOnly {
+		flags |= flagOfflineOnly
 	}
 	out = append(out, flags)
 	out = append(out, byte(algorithm)) // #nosec G115 -- enum values and set sizes documented bounded <256 in the framing header (CWE-190)
@@ -189,6 +193,7 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key metadata (flags)")
 		}
 		kc.requireAuth = plaintext[off]&flagRequireAuth != 0
+		kc.offlineOnly = plaintext[off]&flagOfflineOnly != 0
 		off++
 	}
 	alg := signerpb.Algorithm_ALGORITHM_UNSPECIFIED

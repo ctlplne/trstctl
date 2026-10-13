@@ -79,6 +79,22 @@ func reconcileVerifiedBreakglassBundle(ctx context.Context, tenantID string, bun
 	if err != nil {
 		return false, err
 	}
+	schemaVersion := projections.BreakglassReconcileEventSchemaVersion
+	if bundle.Version == 2 {
+		schemaVersion = projections.BreakglassOfflineEvidenceEventSchemaVersion
+		data, err = json.Marshal(struct {
+			RequestID     string            `json:"request_id"`
+			Subject       string            `json:"subject"`
+			Reason        string            `json:"reason"`
+			IssuedAt      string            `json:"issued_at"`
+			Approvals     int               `json:"approvals"`
+			BundleSHA256  string            `json:"bundle_sha256"`
+			OfflineBundle breakglass.Bundle `json:"offline_bundle"`
+		}{bundle.RequestID, bundle.Subject, bundle.Reason, bundle.IssuedAt.Format(time.RFC3339), len(bundle.Approvals), digest, bundle})
+		if err != nil {
+			return false, err
+		}
+	}
 	added := false
 	err = st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		// A tenant-scoped PostgreSQL lock serializes replicas for this signed
@@ -94,14 +110,14 @@ func reconcileVerifiedBreakglassBundle(ctx context.Context, tenantID string, bun
 		}
 		if found {
 			if prior.TenantID != tenantID || prior.Type != projections.EventBreakglassIssued ||
-				prior.SchemaVersion != projections.BreakglassReconcileEventSchemaVersion || !bytes.Equal(prior.Data, data) {
+				prior.SchemaVersion != schemaVersion || !bytes.Equal(prior.Data, data) {
 				return fmt.Errorf("%w: request_id %q has a different reconciliation event", store.ErrIdempotencyConflict, bundle.RequestID)
 			}
 			return nil
 		}
 		candidate := events.Event{
 			ID: eventID, Type: projections.EventBreakglassIssued, TenantID: tenantID,
-			SchemaVersion: projections.BreakglassReconcileEventSchemaVersion, Data: data, Time: time.Now().UTC(),
+			SchemaVersion: schemaVersion, Data: data, Time: time.Now().UTC(),
 		}
 		canonical, err := log.Append(ctx, candidate)
 		if err != nil {

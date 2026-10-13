@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
@@ -54,6 +55,81 @@ func TestConfiguredBreakglassReconcileSkipsExactSignedRetry(t *testing.T) {
 	second, err := runtime.ReconcileBreakglass(t.Context(), h.tenant, []breakglass.Bundle{bundle})
 	if err != nil || second != 0 {
 		t.Fatalf("configured exact retry: count=%d err=%v", second, err)
+	}
+}
+
+func TestServedBreakglassReconcileRequiresPinnedOfflineCustodians(t *testing.T) {
+	pubA, signA, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubB, signB, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := breakglass.OfflinePolicy{TenantID: servedTestTenant, DeploymentID: "served-qa", Epoch: 1,
+		Threshold: 2, MaxTTLSeconds: 900, PermittedDNSSuffixes: []string{"example.test"},
+		Custodians: []breakglass.OfflineCustodian{{ID: "alice", PublicKeyDER: pubA}, {ID: "bob", PublicKeyDER: pubB}}}
+	wrapper, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x58}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrapper.Destroy()
+	vault, err := signing.NewOfflineBreakglassVault(t.TempDir(), wrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kit, err := vault.Provision(policy, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := breakglass.OfflineRequest{ID: "served-offline-1", TenantID: policy.TenantID,
+		DeploymentID: policy.DeploymentID, Epoch: policy.Epoch, Requester: "incident-commander",
+		Subject: "recovery.example.test", CSRDER: servedBreakglassCSR(t, "recovery.example.test"),
+		Reason: "recover served workload", TTLSeconds: 600, ExpiresAt: time.Now().Add(time.Hour).UTC()}
+	message, err := request.CanonicalBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvals := []breakglass.OfflineApproval{{CustodianID: "alice", Signature: signA(message)}, {CustodianID: "bob", Signature: signB(message)}}
+	bundle, _, err := vault.Issue(request, approvals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.BreakglassCACertDER = kit.CACertDER
+		d.BreakglassPublicKeyDER = kit.PublicKeyDER
+		d.BreakglassOfflineKit = &kit
+	})
+	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "incident-commander", []string{
+		string(authz.CertsIssue), string(authz.AuditRead),
+	})
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token,
+		"served-offline-two-custodians", map[string]any{"bundles": []breakglass.Bundle{bundle}})
+	if code != http.StatusOK {
+		t.Fatalf("signed offline bundle = %d %s", code, body)
+	}
+	var response struct {
+		Reconciled int `json:"reconciled"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil || response.Reconciled != 1 {
+		t.Fatalf("first import count=%d err=%v", response.Reconciled, err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token,
+		"served-offline-two-custodians-retry", map[string]any{"bundles": []breakglass.Bundle{bundle}})
+	if code != http.StatusOK {
+		t.Fatalf("exact retry = %d %s", code, body)
+	}
+	if err := json.Unmarshal(body, &response); err != nil || response.Reconciled != 0 {
+		t.Fatalf("retry count=%d err=%v", response.Reconciled, err)
+	}
+	tampered := bundle
+	tampered.OfflineApprovals = append([]breakglass.OfflineApproval(nil), bundle.OfflineApprovals...)
+	tampered.OfflineApprovals[1].Signature = []byte("forged")
+	code, _ = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/reconcile", token,
+		"served-offline-tampered", map[string]any{"bundles": []breakglass.Bundle{tampered}})
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("tampered custodian proof = %d, want 422", code)
 	}
 }
 

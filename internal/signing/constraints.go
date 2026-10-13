@@ -32,6 +32,10 @@ type keyConstraints struct {
 	// the digest so it cannot be replayed onto different bytes. Purpose/hash
 	// constraints still apply in addition. Default false = back-compat.
 	requireAuth bool
+	// offlineOnly keys may be used only by the isolated signer's disconnected
+	// break-glass procedure after it verifies custodian signatures. Generic Sign
+	// must refuse them even when a socket caller knows the handle.
+	offlineOnly bool
 }
 
 // constraintsFromGenerate builds the constraint set declared on a GenerateKey
@@ -70,6 +74,9 @@ func constraintsFromGenerate(req *signerpb.GenerateKeyRequest) (keyConstraints, 
 // UNSPECIFIED requested purpose is itself a violation — the caller must declare
 // what the signature is for.
 func (kc keyConstraints) check(req *signerpb.SignRequest) error {
+	if kc.offlineOnly {
+		return status.Error(codes.FailedPrecondition, "offline recovery key cannot be used through generic Sign")
+	}
 	if len(kc.purposes) > 0 {
 		p := req.GetPurpose()
 		if p == signerpb.KeyPurpose_KEY_PURPOSE_UNSPECIFIED {

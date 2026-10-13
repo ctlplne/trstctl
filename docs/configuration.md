@@ -1133,6 +1133,11 @@ cross-sign ceremony/execution pairs under `/api/v1/breakglass/*-ceremonies`,
 accepts signed offline bundles, verifies them against trust anchors pinned in process
 config, and records verified facts as `breakglass.issued` events in the hash-chained
 audit log. Requests cannot supply their own verifier keys.
+For a genuinely disconnected v2 ceremony, preprovision the isolated signer and
+its two-custodian public kit while the control plane is healthy. The signer can
+issue with the API and PostgreSQL stopped. The deployment pins the exact kit
+SHA-256 in config; recovery checks the signed custodian evidence and stores the
+public proof in the v3 audit event. See the [disconnected break-glass runbook](runbooks/disconnected-breakglass.md).
 The server verifies every signature in a batch before recording any bundle. It
 uses the tenant and signed `request_id` as a durable event identity, so retrying
 the same bundle with a new `Idempotency-Key`, after a restart, or on another
@@ -1155,7 +1160,10 @@ only deployments do not need the online fields.
 | `TRSTCTL_BREAKGLASS_ONLINE_ENABLED` | `false` | Enables signer-backed issue, rotation, and cross-sign routes. Requires `enabled=true` and all custody/quorum fields below. |
 | `TRSTCTL_BREAKGLASS_CA_CERT_FILE` | unset | DER or PEM CA certificate that emergency bundle certificates must chain to. Required when enabled. |
 | `TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE` | unset | DER or PEM public key that verifies the emergency bundle manifest signature. Required when enabled. |
+| `TRSTCTL_BREAKGLASS_OFFLINE_KIT_FILE` | unset | Read-only, public v2 offline kit copied from the isolated recovery signer before an outage. |
+| `TRSTCTL_BREAKGLASS_OFFLINE_KIT_SHA256` | unset | Independent 64-character SHA-256 pin of the exact offline kit file; required when the kit file is configured. |
 | `TRSTCTL_BREAKGLASS_TENANT_ID` | unset | The only tenant allowed to use the online break-glass signer. |
+| `TRSTCTL_BREAKGLASS_DEPLOYMENT_ID` | unset | Required with an offline kit. The kit must name this exact deployment; a licensed deployment must also match its license identity. |
 | `TRSTCTL_BREAKGLASS_SIGNER_HANDLE` | unset | Existing purpose-constrained, dual-control signer handle whose public key must match the configured CA and public-key file. |
 | `TRSTCTL_BREAKGLASS_OPERATORS` | unset | Comma-separated authenticated operator subjects allowed to count toward quorum. |
 | `TRSTCTL_BREAKGLASS_THRESHOLD` | `0` | Required m-of-n threshold; online mode requires at least `2` and no more than the number of distinct configured operators. |
@@ -1167,6 +1175,10 @@ breakglass:
   enabled: true
   ca_cert_file: /etc/trstctl/breakglass-ca.pem
   public_key_file: /etc/trstctl/breakglass-public-key.pem
+  offline_kit_file: /etc/trstctl/offline-kit.json
+  offline_kit_sha256: <sha256-printed-by-offline-init>
+  tenant_id: 10000000-0000-4000-8000-000000000001
+  deployment_id: my-control-plane
 ```
 
 Online lifecycle adds the custody and roster fields:

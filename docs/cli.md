@@ -791,6 +791,11 @@ trstctl-cli breakglass rotate -f breakglass-rotation.json
 trstctl-cli breakglass cross-sign-ceremony -f breakglass-cross-sign-intent.json
 trstctl-cli breakglass cross-sign -f breakglass-cross-sign.json
 
+# When the API/database are down, the separate trstctl-signer binary prepares,
+# approves and issues a v2 offline bundle from its sealed vault. After recovery:
+trstctl-cli breakglass reconcile -f breakglass-reconcile-body.json
+# See runbooks/disconnected-breakglass.md for the exact two-custodian steps.
+
 # List configured upstream CAs and issue through one of them.
 trstctl-cli external-cas list
 cat > upstream-issue.json <<'JSON'

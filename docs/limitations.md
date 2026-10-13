@@ -1148,8 +1148,13 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/breakglass/issues/{id}` returns bounded tenant receipts and the
   exact signed online bundle to callers with `certs:issue`. A lost response does
   not require reissuance; trstctl does not retain the CSR subject private key.
-  Offline break-glass reconciliation remains served at `POST /api/v1/breakglass/reconcile`, where signed
-  offline bundles are verified and recorded as `breakglass.issued` audit events.
+  Offline break-glass reconciliation remains served at `POST /api/v1/breakglass/reconcile`.
+  A disconnected signer uses its sealed, offline-only CA and a pinned public kit;
+  two distinct custodians sign the exact CSR-bound request. Recovery checks their
+  signatures, tenant, deployment, policy epoch and leaf before recording the
+  public proof as a `breakglass.issued` audit event. The
+  [disconnected runbook](runbooks/disconnected-breakglass.md) gives the setup,
+  outage and recovery procedure.
 - Real X.509 issuance: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. Exercised end to end in CI.

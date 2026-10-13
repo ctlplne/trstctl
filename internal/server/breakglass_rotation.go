@@ -30,8 +30,9 @@ import (
 )
 
 type breakglassVerifier struct {
-	caDER     []byte
-	publicDER []byte
+	caDER         []byte
+	publicDER     []byte
+	offlinePolicy *breakglass.OfflinePolicy
 }
 
 type breakglassRotationEvent struct {
@@ -495,7 +496,18 @@ func (r *configuredBreakglassRuntime) ReconcileBreakglass(ctx context.Context, t
 	for _, bundle := range bundles {
 		verified := false
 		for _, verifier := range verifiers {
-			if breakglass.Verify(bundle, verifier.caDER, verifier.publicDER) == nil {
+			var verifyErr error
+			if bundle.Version == 2 {
+				if verifier.offlinePolicy == nil || verifier.offlinePolicy.TenantID != tenantID {
+					continue
+				}
+				verifyErr = breakglass.VerifyDisconnected(bundle, *verifier.offlinePolicy, verifier.caDER, verifier.publicDER)
+			} else if verifier.offlinePolicy == nil {
+				verifyErr = breakglass.Verify(bundle, verifier.caDER, verifier.publicDER)
+			} else {
+				continue
+			}
+			if verifyErr == nil {
 				verified = true
 				break
 			}

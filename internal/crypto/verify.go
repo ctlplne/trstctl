@@ -97,6 +97,20 @@ func ValidatePublicKeyDER(der []byte) error {
 	}
 }
 
+// ValidateEd25519PublicKeyDER checks a custodian roster entry before it becomes
+// an offline trust root. A generic parseable RSA/ECDSA key is not an Ed25519
+// approval key and must fail at enrollment, not during an outage.
+func ValidateEd25519PublicKeyDER(der []byte) error {
+	pub, err := x509.ParsePKIXPublicKey(der)
+	if err != nil {
+		return fmt.Errorf("crypto: parse Ed25519 public key: %w", err)
+	}
+	if _, ok := pub.(ed25519.PublicKey); !ok {
+		return fmt.Errorf("crypto: custodian public key is not Ed25519")
+	}
+	return nil
+}
+
 func VerifyMessage(pubDER, msg, sig []byte) error {
 	pub, err := x509.ParsePKIXPublicKey(pubDER)
 	if err != nil {

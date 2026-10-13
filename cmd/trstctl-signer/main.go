@@ -43,6 +43,23 @@ func main() {
 	managedKeysConfig := flag.String("managed-keys-config", "", "path to signer-local managed-key provider JSON (credentials must be file references, never argv/env)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
 	legacyAuditKey := flag.String("legacy-audit-key", "", "signer-local path to a historical audit PKCS#8 PEM; migrated once into the sealed audit-export handle, then deleted")
+	offlineInitPolicy := flag.String("offline-init-policy", "", "initialize a separate sealed offline recovery authority from a public policy JSON file")
+	offlineCATTL := flag.Duration("offline-ca-ttl", 365*24*time.Hour, "lifetime of a newly initialized offline recovery CA")
+	offlineIssueRequest := flag.String("offline-issue-request", "", "signed offline recovery request JSON; runs one-shot without the control plane")
+	offlineIssueApprovals := flag.String("offline-issue-approvals", "", "JSON list of independently signed custodian approvals")
+	offlineApproveRequest := flag.String("offline-approve-request", "", "request JSON to approve using a custodian key held only by this signer process")
+	offlineApproveKey := flag.String("offline-approve-key", "", "0600 PEM private key for --offline-approve-request")
+	offlineApproveCustodian := flag.String("offline-approve-custodian", "", "enrolled custodian ID for --offline-approve-request")
+	offlineGenerateCustodian := flag.String("offline-generate-custodian", "", "generate a distinct custodian signing key and public roster entry")
+	offlineCustodianPrivateOut := flag.String("offline-custodian-private-out", "", "0600 output path for a new custodian private key")
+	offlineCustodianPublicOut := flag.String("offline-custodian-public-out", "", "output path for a new public custodian roster entry")
+	offlinePrepareKit := flag.String("offline-prepare-kit", "", "public offline kit JSON used to prepare an exact request")
+	offlinePrepareCSR := flag.String("offline-prepare-csr", "", "signed PKCS#10 CSR PEM used in an offline request")
+	offlinePrepareRequester := flag.String("offline-prepare-requester", "", "authenticated requester identity included in offline approval evidence")
+	offlinePrepareSubject := flag.String("offline-prepare-subject", "", "reviewed subject, which must equal the signed CSR common name")
+	offlinePrepareReason := flag.String("offline-prepare-reason", "", "incident reason bound to the offline request")
+	offlinePrepareTTL := flag.Duration("offline-prepare-ttl", 10*time.Minute, "requested offline emergency certificate lifetime")
+	offlineOutput := flag.String("offline-output", "", "0600 output path for an offline bundle or approval")
 	allowInsecureDevNonLinux := flag.Bool("allow-insecure-dev-nonlinux", false, "development-only: allow signer startup on non-Linux where process hardening, UDS peer UID checks, and locked memory are unavailable")
 
 	// Cross-node mTLS transport (AN-4 multi-node mode, SIGNER-005 / design §3,§5.2).
@@ -72,8 +89,9 @@ func main() {
 		return
 	}
 
+	offlineMode := *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" || *offlinePrepareKit != ""
 	useMTLS := *mtlsListen != ""
-	if !useMTLS && *socket == "" {
+	if !offlineMode && !useMTLS && *socket == "" {
 		fmt.Fprintln(os.Stderr, "trstctl-signer: one of --socket (UDS) or --mtls-listen (cross-node mTLS) is required")
 		os.Exit(2)
 	}
@@ -81,6 +99,10 @@ func main() {
 		// A single listener (AN-4): refuse an ambiguous both-transports invocation
 		// rather than silently picking one.
 		fmt.Fprintln(os.Stderr, "trstctl-signer: --socket and --mtls-listen are mutually exclusive (the signer has one listener)")
+		os.Exit(2)
+	}
+	if offlineMode && (*socket != "" || useMTLS) {
+		fmt.Fprintln(os.Stderr, "trstctl-signer: offline one-shot mode cannot serve a signing socket")
 		os.Exit(2)
 	}
 
@@ -98,6 +120,29 @@ func main() {
 	if _, err := crypto.PowerOnSelfTest(*fipsRequired || signerFIPSEnvRequired(os.Getenv("TRSTCTL_FIPS"))); err != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: crypto power-on self-test: %v\n", err)
 		os.Exit(1)
+	}
+	if offlineMode {
+		if *offlinePrepareKit != "" {
+			if *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" {
+				fmt.Fprintln(os.Stderr, "trstctl-signer: choose one offline mode")
+				os.Exit(2)
+			}
+			if err := runOfflinePrepare(*offlinePrepareKit, *offlinePrepareCSR, *offlinePrepareRequester,
+				*offlinePrepareSubject, *offlinePrepareReason, *offlinePrepareTTL, *offlineOutput); err != nil {
+				fmt.Fprintf(os.Stderr, "trstctl-signer: offline preparation: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		if err := runOfflineBreakglass(*offlineInitPolicy, *offlineCATTL, *offlineIssueRequest,
+			*offlineIssueApprovals, *offlineApproveRequest, *offlineApproveKey,
+			*offlineApproveCustodian, *offlineGenerateCustodian, *offlineCustodianPrivateOut,
+			*offlineCustodianPublicOut, *offlineOutput, *keystore, *kekFile,
+			*kmsProvider, *kmsKeyRef, *kmsWrapCommand, *kmsTimeout); err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: offline recovery: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

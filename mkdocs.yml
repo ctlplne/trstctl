@@ -91,6 +91,7 @@ nav:
           - Uninstall: uninstall.md
       - On-call responder:
           - Incident response: runbooks/incident-response.md
+          - Disconnected break-glass: runbooks/disconnected-breakglass.md
           - Outbox dead letters: runbooks/outbox-dead-letters.md
           - Outbox reconciliation conflicts: runbooks/outbox-reconciliation-conflicts.md
           - Signer recovery: runbooks/signer-recovery.md

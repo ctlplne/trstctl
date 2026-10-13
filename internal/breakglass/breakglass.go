@@ -15,9 +15,9 @@ package breakglass
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"time"
 
+	"trstctl.com/trstctl/internal/breakglass/offline"
 	bgquorum "trstctl.com/trstctl/internal/breakglass/quorum"
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -84,35 +84,37 @@ func CrossSignPurpose(tenantID, signerHandle string, targetCertDER []byte) strin
 	return "breakglass-cross-sign:" + crypto.SHA256Hex(payload)
 }
 
-// Bundle is a signed emergency credential produced offline. Its Signature is over
-// a deterministic manifest of its contents, so a reconciler can verify it offline
-// against the break-glass public key.
-type Bundle struct {
-	RequestID string    `json:"request_id"`
-	Subject   string    `json:"subject"`
-	CertDER   []byte    `json:"cert_der"`
-	Reason    string    `json:"reason"`
-	Approvals []string  `json:"approvals"`
-	IssuedAt  time.Time `json:"issued_at"`
-	Signature []byte    `json:"signature"`
+// Bundle is the signer-safe public emergency receipt shared with the online API.
+type Bundle = offline.Bundle
+type OfflinePolicy = offline.OfflinePolicy
+type OfflineCustodian = offline.OfflineCustodian
+type OfflineRequest = offline.OfflineRequest
+type OfflineApproval = offline.OfflineApproval
+
+func manifestBytes(b Bundle) ([]byte, error)      { return offline.ManifestBytes(b) }
+func ValidateOfflinePolicy(p OfflinePolicy) error { return offline.ValidateOfflinePolicy(p) }
+func VerifyOfflineApprovals(p OfflinePolicy, r OfflineRequest, a []OfflineApproval, now time.Time) error {
+	return offline.VerifyOfflineApprovals(p, r, a, now)
 }
 
-type manifest struct {
-	RequestID  string   `json:"request_id"`
-	Subject    string   `json:"subject"`
-	CertSHA256 string   `json:"cert_sha256"`
-	Reason     string   `json:"reason"`
-	Approvals  []string `json:"approvals"`
-	IssuedAt   int64    `json:"issued_at"`
+// IssueDisconnected is the library path for a caller already inside isolated
+// signer custody. The production one-shot signer also journals the full result.
+func (s *Service) IssueDisconnected(policy OfflinePolicy, request OfflineRequest, approvals []OfflineApproval) (Bundle, error) {
+	if policy.TenantID != s.cfg.TenantID {
+		return Bundle{}, fmt.Errorf("breakglass: offline policy tenant differs from signer tenant")
+	}
+	names := make([]string, len(approvals))
+	for i, a := range approvals {
+		names[i] = a.CustodianID
+	}
+	if err := s.cfg.Quorum.Verify(names); err != nil {
+		return Bundle{}, err
+	}
+	return offline.IssueDisconnected(policy, request, approvals, s.cfg.CACertDER, s.cfg.CASigner, s.cfg.Clock().UTC())
 }
 
-func manifestBytes(b Bundle) ([]byte, error) {
-	ap := append([]string(nil), b.Approvals...)
-	sort.Strings(ap)
-	return json.Marshal(manifest{
-		RequestID: b.RequestID, Subject: b.Subject, CertSHA256: crypto.SHA256Hex(b.CertDER),
-		Reason: b.Reason, Approvals: ap, IssuedAt: b.IssuedAt.Unix(),
-	})
+func VerifyDisconnected(b Bundle, policy OfflinePolicy, caDER, pubDER []byte) error {
+	return offline.VerifyDisconnected(b, policy, caDER, pubDER)
 }
 
 // Config configures the offline signing Service.
@@ -156,14 +158,7 @@ func (s *Service) PublicKeyDER() []byte { return s.cfg.CASigner.Public().DER }
 // the leaf. The ceremony's human-readable subject must name that same signed
 // common name; the remaining signed SANs are returned for explicit review.
 func InspectEmergencyCSR(subject string, csrDER []byte) (crypto.CSRInfo, error) {
-	info, err := crypto.InspectCSR(csrDER)
-	if err != nil {
-		return crypto.CSRInfo{}, fmt.Errorf("breakglass: CSR must be a signed PKCS#10 certificate request: %w", err)
-	}
-	if subject == "" || info.CommonName != subject {
-		return crypto.CSRInfo{}, fmt.Errorf("breakglass: CSR common name must exactly match emergency certificate subject")
-	}
-	return info, nil
+	return offline.InspectEmergencyCSR(subject, csrDER)
 }
 
 // IssueOffline enforces the m-of-n quorum, signs a short-lived emergency
@@ -202,15 +197,5 @@ func (s *Service) IssueOffline(req EmergencyRequest, ttl time.Duration) (Bundle,
 // Verify checks a bundle offline: the manifest signature must verify against the
 // break-glass public key, and the embedded certificate must chain to the CA.
 func Verify(b Bundle, caCertDER, breakglassPubDER []byte) error {
-	mb, err := manifestBytes(b)
-	if err != nil {
-		return err
-	}
-	if err := crypto.VerifyMessage(breakglassPubDER, mb, b.Signature); err != nil {
-		return fmt.Errorf("breakglass: bundle manifest signature invalid: %w", err)
-	}
-	if err := crypto.VerifyLeafSignedByCA(b.CertDER, caCertDER); err != nil {
-		return fmt.Errorf("breakglass: bundle certificate does not chain to the CA: %w", err)
-	}
-	return nil
+	return offline.Verify(b, caCertDER, breakglassPubDER)
 }

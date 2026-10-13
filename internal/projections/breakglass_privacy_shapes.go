@@ -2,12 +2,17 @@
 
 package projections
 
-import "time"
+import (
+	"time"
+
+	"trstctl.com/trstctl/internal/breakglass"
+)
 
 // BreakglassReconcileEventSchemaVersion adds the exact signed-bundle digest to
 // the offline reconciliation audit. Historical v1 offline/online envelopes keep
 // their closed shapes during replay and privacy rewrites.
 const BreakglassReconcileEventSchemaVersion = 2
+const BreakglassOfflineEvidenceEventSchemaVersion = 3
 
 // The offline reconciler records only verified public facts, while the online
 // issuer retains the signed bundle so an interrupted response can be recovered
@@ -28,6 +33,19 @@ type privacyBreakglassIssuedReconciledV2 struct {
 	IssuedAt     time.Time `json:"issued_at"`
 	Approvals    int       `json:"approvals"`
 	BundleSHA256 string    `json:"bundle_sha256"`
+}
+
+// V3 retains the complete public offline bundle, including both custodian
+// signatures and the exact CSR, so a cold replay and forensic export can prove
+// the authority decision without relying on a vanished incident laptop.
+type privacyBreakglassIssuedReconciledV3 struct {
+	RequestID     string            `json:"request_id"`
+	Subject       string            `json:"subject"`
+	Reason        string            `json:"reason"`
+	IssuedAt      time.Time         `json:"issued_at"`
+	Approvals     int               `json:"approvals"`
+	BundleSHA256  string            `json:"bundle_sha256"`
+	OfflineBundle breakglass.Bundle `json:"offline_bundle"`
 }
 
 type privacyBreakglassBundle struct {
