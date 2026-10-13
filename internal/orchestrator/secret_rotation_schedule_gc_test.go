@@ -84,7 +84,8 @@ func TestSecretRotationCommandGCPreservesRebuildFenceAndSuccessorProgress(t *tes
 			RequestBinding:  "binding-" + runID,
 			TerminalEventID: orchestrator.SecretRotationScheduleRunEventID(runID),
 		}
-		got, acquired, err := st.ClaimSecretRotationScheduleCommand(ctx, command, leaseToken, time.Minute)
+		got, acquired, err := st.ClaimSecretRotationScheduleCommand(ctx, command, leaseToken, time.Minute,
+			func(context.Context, string, string, uint64) error { return nil })
 		if err != nil || !acquired {
 			t.Fatalf("claim %s: got=%+v acquired=%t err=%v", runID, got, acquired, err)
 		}

@@ -594,6 +594,10 @@ func secretRotationScheduleTerminalStatus(status string) bool {
 	}
 }
 
+// SecretRotationScheduleControlAdmissionGuard checks retained unprojected
+// controls while the schedule row is locked. A nil guard cannot admit a child.
+type SecretRotationScheduleControlAdmissionGuard func(context.Context, string, string, uint64) error
+
 // ClaimSecretRotationScheduleCommand durably binds and leases one exact due
 // edge. The active aggregate tick and its immutable ordinal are locked before
 // the child command. Only a brand-new command then locks the live schedule: an
@@ -606,9 +610,10 @@ func (s *Store) ClaimSecretRotationScheduleCommand(
 	command SecretRotationScheduleCommand,
 	leaseToken string,
 	leaseDuration time.Duration,
+	guard SecretRotationScheduleControlAdmissionGuard,
 ) (SecretRotationScheduleCommand, bool, error) {
 	var out SecretRotationScheduleCommand
-	if leaseToken == "" || leaseDuration <= 0 || command.Provider == "" || command.Key == "" || command.OldRef == "" || command.RequestBinding == "" ||
+	if guard == nil || leaseToken == "" || leaseDuration <= 0 || command.Provider == "" || command.Key == "" || command.OldRef == "" || command.RequestBinding == "" ||
 		command.IntervalSeconds <= 0 || command.ConfigEventSequence == 0 || command.TickIdempotencyKey == "" || command.TickOrdinal <= 0 || command.TickOrdinal > 500 ||
 		command.IdentityVersion != SecretRotationScheduleIdentityVersion ||
 		!validSecretRotationScheduleTenantRegistration(command.TenantRegistrationEventID, command.TenantRegistrationEventSequence) ||
@@ -690,6 +695,9 @@ func (s *Store) ClaimSecretRotationScheduleCommand(
 				if errors.Is(err, pgx.ErrNoRows) {
 					return fmt.Errorf("%w: exact live schedule revision is missing", ErrSecretRotationScheduleCommandConflict)
 				}
+				return err
+			}
+			if err := guard(ctx, command.TenantID, command.ScheduleID, live.ControlEventSequence); err != nil {
 				return err
 			}
 			if live.ConfigEventSequence > command.ConfigEventSequence {
@@ -855,12 +863,13 @@ func lockSecretRotationScheduleForCommandTx(
 	var schedule SecretRotationSchedule
 	err := tx.QueryRow(ctx,
 		`SELECT id::text, tenant_id::text, provider, secret_key, old_ref,
-		        interval_seconds, config_event_sequence, enabled, next_run_at
+		        interval_seconds, config_event_sequence, control_event_sequence, enabled, next_run_at
 		   FROM secret_rotation_schedules
 		  WHERE tenant_id = $1 AND id = $2
 		  FOR UPDATE`, tenantID, scheduleID).Scan(
 		&schedule.ID, &schedule.TenantID, &schedule.Provider, &schedule.Key, &schedule.OldRef,
-		&schedule.IntervalSeconds, &schedule.ConfigEventSequence, &schedule.Enabled, &schedule.NextRunAt)
+		&schedule.IntervalSeconds, &schedule.ConfigEventSequence, &schedule.ControlEventSequence,
+		&schedule.Enabled, &schedule.NextRunAt)
 	return schedule, err
 }
 

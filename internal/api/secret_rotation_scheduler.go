@@ -442,7 +442,8 @@ func (a *API) runSecretRotationSchedule(
 		CommandKey: commandKey, RequestBinding: requestBinding, TerminalEventID: terminalEventID,
 	}
 	claimed, acquired, err := a.store.ClaimSecretRotationScheduleCommand(
-		ctx, command, leaseToken, time.Minute)
+		ctx, command, leaseToken, time.Minute,
+		a.orch.GuardUnprojectedSecretRotationScheduleControl)
 	if err != nil {
 		return secretRotationScheduleRunResponse{}, nil, err
 	}

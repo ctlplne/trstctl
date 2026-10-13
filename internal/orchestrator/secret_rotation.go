@@ -104,6 +104,57 @@ func (o *Orchestrator) RecoverSecretRotationScheduleControl(
 	return secretRotationScheduleFromControlResult(receipt.Result), true, nil
 }
 
+// GuardUnprojectedSecretRotationScheduleControl runs while the schedule row is
+// locked at final command admission. A control event can survive a failed SQL
+// projection; admitting a new due edge or opposite control from that stale row
+// would cross the operator's durable pause or retirement. The typed subject
+// index skips unrelated events and the projection checkpoint bounds the tail.
+func (o *Orchestrator) GuardUnprojectedSecretRotationScheduleControl(
+	ctx context.Context, tenantID, id string, controlSequence uint64,
+) error {
+	snapshot, err := o.log.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	applied, err := o.store.ProjectionCheckpoint(ctx)
+	if err != nil {
+		return err
+	}
+	if applied > snapshot.LastSequence || snapshot.NumDeleted != 0 ||
+		snapshot.Messages != snapshot.LastSequence ||
+		(snapshot.LastSequence > 0 && snapshot.FirstSequence != 1) {
+		return store.ErrResourceAdmissionBusy
+	}
+	if err := o.log.ReplayTenantTypesThrough(ctx, tenantID, applied+1, snapshot.LastSequence,
+		[]string{projections.EventSecretRotationSchedulePaused,
+			projections.EventSecretRotationScheduleResumed,
+			projections.EventSecretRotationScheduleRetired}, func(event events.Event) error {
+			var payload struct {
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal(event.Data, &payload); err != nil {
+				return fmt.Errorf("orchestrator: decode unprojected secret rotation control: %w", err)
+			}
+			if payload.ID == id && event.Sequence > controlSequence {
+				return store.ErrResourceAdmissionBusy
+			}
+			return nil
+		}); err != nil {
+		return err
+	}
+	after, err := o.log.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	if after.Name != snapshot.Name || after.Generation != snapshot.Generation ||
+		after.FirstSequence != snapshot.FirstSequence || after.NumDeleted != snapshot.NumDeleted ||
+		after.LastSequence < snapshot.LastSequence || after.Messages < snapshot.Messages ||
+		after.Messages-snapshot.Messages != after.LastSequence-snapshot.LastSequence {
+		return store.ErrResourceAdmissionBusy
+	}
+	return nil
+}
+
 // ControlSecretRotationSchedule records a future-eligibility decision as an
 // immutable event. The first public result is retained for applied and no-op
 // commands. The projector preserves the exact in-flight due tuple; a command
@@ -137,6 +188,10 @@ func (o *Orchestrator) ControlSecretRotationSchedule(
 			}
 			result = secretRotationScheduleFromControlResult(receipt.Result)
 			return nil
+		}
+		if err := o.GuardUnprojectedSecretRotationScheduleControl(fenced, tenantID, id,
+			current.ControlEventSequence); err != nil {
+			return err
 		}
 		if current.RetiredAt != nil && action != "retire" {
 			return errors.New("orchestrator: retired rotation schedule cannot be controlled")

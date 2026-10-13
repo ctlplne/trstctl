@@ -485,7 +485,7 @@ not this file.
 | `internal/orchestrator/discovery.go:365` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:389` | a negative stored version is classified as drift before conversion (CWE-190). |
-| `internal/orchestrator/secret_rotation.go:508` | the positive int64 value always fits exactly in uint64 (CWE-190). |
+| `internal/orchestrator/secret_rotation.go:563` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |

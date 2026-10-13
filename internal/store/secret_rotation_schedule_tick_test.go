@@ -930,7 +930,7 @@ func TestSecretRotationScheduleCommandLeaseUsesPostgresClockAndExactAggregateTok
 	runID := command.RunID
 	const aggregateToken = "lease-clock"
 	claimed, acquired, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, aggregateToken, 30*time.Second)
+		ctx, command, aggregateToken, 30*time.Second, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !acquired || claimed.LeaseToken != aggregateToken {
 		t.Fatalf("first DB-clock claim=%+v acquired=%t err=%v", claimed, acquired, err)
 	}
@@ -946,7 +946,7 @@ func TestSecretRotationScheduleCommandLeaseUsesPostgresClockAndExactAggregateTok
 		t.Fatalf("command lease was not bounded by PostgreSQL clock: ok=%t err=%v", boundedByDatabaseClock, err)
 	}
 	if contender, acquired, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, "other-aggregate-token", 30*time.Second); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) || acquired {
+		ctx, command, "other-aggregate-token", 30*time.Second, noPendingSecretRotationControlForStoreTest); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) || acquired {
 		t.Fatalf("other aggregate token claim=%+v acquired=%t err=%v, want conflict", contender, acquired, err)
 	}
 	if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
@@ -960,7 +960,7 @@ func TestSecretRotationScheduleCommandLeaseUsesPostgresClockAndExactAggregateTok
 		t.Fatalf("expire command fixture lease: %v", err)
 	}
 	takenOver, acquired, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, aggregateToken, 30*time.Second)
+		ctx, command, aggregateToken, 30*time.Second, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !acquired || takenOver.LeaseToken != aggregateToken {
 		t.Fatalf("expired command lease takeover=%+v acquired=%t err=%v", takenOver, acquired, err)
 	}

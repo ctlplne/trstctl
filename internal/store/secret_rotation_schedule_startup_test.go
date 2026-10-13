@@ -155,7 +155,7 @@ func TestSecretRotationScheduleStartupAuthorityRejectsForgedRegistrationAndComma
 		TerminalEventID:                 orchestrator.SecretRotationScheduleRunEventID(runID),
 	}
 	claimed, acquired, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, childLease, time.Minute)
+		ctx, command, childLease, time.Minute, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !acquired {
 		t.Fatalf("claim linked startup-validation command=%+v acquired=%t err=%v",
 			claimed, acquired, err)

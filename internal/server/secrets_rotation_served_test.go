@@ -2789,14 +2789,19 @@ func TestServedSecretRotationScheduleBoundRetryAfterOppositeControlReturnsOrigin
 	crashPath := "/api/v1/secrets/rotation-schedules/" + crashSchedule.ID
 	status, body = secretsReqKey(t, h, http.MethodPost, crashPath+"/resume", tok,
 		"bound-control-after-crash-resume", nil)
-	if status != http.StatusOK || !bytes.Contains(body, []byte(`"enabled":true`)) {
-		t.Fatalf("resume after append-before-SQL crash: status=%d body=%s", status, body)
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("unprojected pause allowed a new resume: status=%d body=%s", status, body)
 	}
 	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
 		t.Fatalf("cold rebuild after append-before-SQL crash: %v", err)
 	}
+	status, body = secretsReqKey(t, h, http.MethodPost, crashPath+"/resume", tok,
+		"bound-control-after-crash-resume", nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"enabled":true`)) {
+		t.Fatalf("resume after pause projection recovery: status=%d body=%s", status, body)
+	}
 	status, current = secretsReq(t, h, http.MethodGet, crashPath, tok, nil)
 	if status != http.StatusOK || !bytes.Contains(current, []byte(`"enabled":true`)) {
-		t.Fatalf("cold replay reversed successful no-op resume: status=%d body=%s", status, current)
+		t.Fatalf("recovered resume did not restore enabled state: status=%d body=%s", status, current)
 	}
 }

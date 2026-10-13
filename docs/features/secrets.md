@@ -418,10 +418,13 @@ current events also retain the authenticated request binding and exact first
 public response, including a successful no-op. If the HTTP result is lost, retry
 the **same** key, caller, route, and body: the original response is returned
 without applying the old decision over a newer operator action. A changed request
-under that key is rejected. The tenant-scoped projection changes only future
-eligibility. A run already claimed
-when an operator pauses or retires can
-finish and record its exact successor and delivery receipt. The console shows a
+under that key is rejected. If a control event is durable but its SQL projection
+has not caught up, a different-key control or a brand-new due child fails closed.
+The due tick records a terminal `503` with the affected schedule ID and creates
+no child command or provider effect; after projection recovery, run a new tick
+with a fresh key. The tenant-scoped projection changes only future eligibility.
+A run already claimed when an operator pauses or retires can finish and record
+its exact successor and delivery receipt. The console shows a
 separate retired state and reviews this effect before retirement.
 
 The terminal `error` field is a closed, status-specific evidence class, never a

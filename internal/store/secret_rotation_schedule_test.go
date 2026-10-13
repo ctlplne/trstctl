@@ -18,6 +18,10 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func noPendingSecretRotationControlForStoreTest(context.Context, string, string, uint64) error {
+	return nil
+}
+
 const (
 	// Historical tenant.registered IDs were plain UUIDs. Scheduler lifecycle
 	// validation must retain them verbatim; it may not require a newer prefix.
@@ -91,15 +95,19 @@ func TestSecretRotationScheduleCommandClaimBindsExactAggregateChildAndResume(t *
 	})
 	command := claimScheduleCommandForTest(t, s, tenantA, scheduleID, "connector:ci",
 		"app/password", "version:1", dueAt, "overlap")
+	if _, _, err := s.ClaimSecretRotationScheduleCommand(
+		ctx, command, "unguarded-lease", time.Minute, nil); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) {
+		t.Fatalf("unguarded child claim=%v, want fail-closed conflict", err)
+	}
 	runID := command.RunID
 	const aggregateLease = "lease-overlap"
 	recovered, acquired, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, aggregateLease, time.Minute)
+		ctx, command, aggregateLease, time.Minute, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !acquired || recovered.ClaimState != store.SecretRotationScheduleCommandRecovered {
 		t.Fatalf("same aggregate child resume=%+v acquired=%t err=%v", recovered, acquired, err)
 	}
 	if _, _, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, "other-aggregate-lease", time.Minute); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) {
+		ctx, command, "other-aggregate-lease", time.Minute, noPendingSecretRotationControlForStoreTest); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) {
 		t.Fatalf("other aggregate child lease error=%v, want command conflict", err)
 	}
 	if err := s.ReleaseSecretRotationScheduleCommandLease(
@@ -114,14 +122,14 @@ func TestSecretRotationScheduleCommandClaimBindsExactAggregateChildAndResume(t *
 		t.Fatalf("release winner lease: %v", err)
 	}
 	got, resumed, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, command, aggregateLease, time.Minute)
+		ctx, command, aggregateLease, time.Minute, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !resumed || got.RunID != runID || got.CommandKey != command.CommandKey {
 		t.Fatalf("exact replacement claim=%+v acquired=%t err=%v", got, resumed, err)
 	}
 	drifted := command
 	drifted.OldRef = "version:99"
 	if _, _, err := s.ClaimSecretRotationScheduleCommand(
-		ctx, drifted, "drifted-runner", time.Minute); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) {
+		ctx, drifted, "drifted-runner", time.Minute, noPendingSecretRotationControlForStoreTest); !errors.Is(err, store.ErrSecretRotationScheduleCommandConflict) {
 		t.Fatalf("drifted command error=%v, want retained-authority conflict", err)
 	}
 }
@@ -514,7 +522,8 @@ func claimScheduleCommandForTest(
 		CommandKey:     orchestrator.SecretRotationScheduleCommandKey(runID),
 		RequestBinding: "binding-" + suffix, TerminalEventID: orchestrator.SecretRotationScheduleRunEventID(runID),
 	}
-	got, acquired, err := s.ClaimSecretRotationScheduleCommand(ctx, command, commandLease, time.Minute)
+	got, acquired, err := s.ClaimSecretRotationScheduleCommand(ctx, command, commandLease,
+		time.Minute, noPendingSecretRotationControlForStoreTest)
 	if err != nil || !acquired {
 		t.Fatalf("claim schedule command: got=%+v acquired=%t err=%v", got, acquired, err)
 	}
