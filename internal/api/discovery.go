@@ -39,6 +39,12 @@ type discoverySourceRequest struct {
 	Config json.RawMessage `json:"config"`
 }
 
+const reservedAgentDiscoveryReason = "agent inventory sources are created by authenticated agent reports, not generic discovery declarations"
+
+func reservedAgentDiscoveryDeclaration(kind, name string) bool {
+	return strings.TrimSpace(kind) == "agent" || strings.HasPrefix(strings.TrimSpace(name), "agent:")
+}
+
 type discoverySourceResponse struct {
 	ID        string          `json:"id"`
 	TenantID  string          `json:"tenant_id"`
@@ -163,6 +169,12 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		Permission: capability.Permission, DataHandling: capability.DataHandling,
 		SideEffects: false, BlockedReasons: []string{}, AppliedExclusions: []string{},
 		ChildJobCount: 1,
+	}
+	if reservedAgentDiscoveryDeclaration(req.Kind, req.Name) {
+		preview.Ready = false
+		preview.ChildJobCount = 0
+		preview.BlockedReasons = append(preview.BlockedReasons, reservedAgentDiscoveryReason)
+		return preview, nil
 	}
 	if req.Kind == "ct_log" {
 		var raw ctMonitoringSourceConfig
@@ -804,6 +816,12 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		kind := strings.TrimSpace(req.Kind)
+		// Agent inventory sources are created by the mTLS receiver under a
+		// deterministic agent: name. Letting a generic tenant declaration claim
+		// that name first would block the real host's source/run projection.
+		if reservedAgentDiscoveryDeclaration(kind, req.Name) {
+			return 0, nil, errStatus(http.StatusBadRequest, reservedAgentDiscoveryReason)
+		}
 		if kind == "network" || kind == "ssh" {
 			intent, resolveErr := segmentscan.Resolve(kind, cfg)
 			if resolveErr != nil {

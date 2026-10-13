@@ -242,6 +242,10 @@ capability list.
 Only a completed inventory run whose recorded executing agent ID matches the
 receiver-stamped finding can create graph trust-store or service-dependency edges.
 Manual imports remain visible as discovery findings but cannot claim agent authority.
+Generic `POST /api/v1/discovery/sources` declarations cannot create the reserved
+`agent` kind or an `agent:` source name; enrolled reporters create these records
+through the authenticated inventory channel. The CT monitoring setup also refuses
+an `agent:` name, so a watchlist cannot reserve or replace a host's source.
 
 The selected-agent panel links to **View discovery runs** and **View discovery
 findings**, so collector claims can be checked against the server's actual evidence.

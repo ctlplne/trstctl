@@ -124,6 +124,9 @@ func (a *API) updateCTMonitoring(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			name = defaultCTMonitoringName
 		}
+		if reservedAgentDiscoveryDeclaration("ct_log", name) {
+			return 0, nil, errStatus(http.StatusBadRequest, reservedAgentDiscoveryReason)
+		}
 		sourceID, err := a.ctMonitoringSourceID(ctx, tenantID, strings.TrimSpace(req.SourceID), name)
 		if err != nil {
 			return 0, nil, err
