@@ -941,6 +941,10 @@ func (a *API) previewEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	if err := requireEndpointIssuancePermission(r.Context(), tenantID); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	req, err := decodeEndpointBindingRequest(r)
 	if err != nil {
 		a.writeError(w, err)

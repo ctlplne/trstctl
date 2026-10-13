@@ -648,8 +648,10 @@ reload, because that deployment is guaranteed to fail its own TLS proof. The pai
 creates or reuses the target, creates the X.509 identity for an existing owner, pins
 the selected built-in, private, or external issuer, binds the route, and queues the
 normal `ca.issue`/`connector.deploy` intents after issuance authorization succeeds.
-Both enrollment and the destination's **Deploy** action for a requested identity
-require `certs:issue` as well as `connectors:write`. They apply the same policy,
+Endpoint preview and enrollment both require `certs:issue` as well as
+`connectors:write`: a caller who cannot start issuance gets a clear 403 instead
+of a `ready: true` plan they cannot execute. The destination's **Deploy** action
+for a requested identity requires the same permissions. They apply the same policy,
 attribute-based denial, quota, and independent-approval checks as ordinary identity
 issuance.
 

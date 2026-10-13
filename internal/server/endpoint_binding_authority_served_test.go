@@ -82,6 +82,15 @@ func TestEndpointEnrollmentHonorsIssuanceAuthority(t *testing.T) {
 				})["id"])
 				request := map[string]any{"owner_id": owner, "identity_name": "mail.endpoint.test", "target_id": target,
 					"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"}, "reason": "prove issuance authority"}
+				if route == "endpoint enrollment" && scenario == "requester lacks issuance permission" {
+					connectorOnly := seedScopedToken(t, h.store, h.tenant, "connectors:write")
+					code, body := secretsReq(t, h, http.MethodPost,
+						"/api/v1/lifecycle/endpoint-bindings/preview", connectorOnly, request)
+					if code != http.StatusForbidden || bytes.Contains(body, []byte(`"ready":true`)) ||
+						!bytes.Contains(body, []byte("certs:issue")) {
+						t.Fatalf("preview promised a binding this principal cannot start: %d %s", code, body)
+					}
+				}
 				code, body := secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", admin, request)
 				if code != http.StatusOK {
 					t.Fatalf("preview: status=%d body=%s", code, body)
