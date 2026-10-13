@@ -1372,7 +1372,7 @@
       "kind": "agent",
       "label": "Agent inventory",
       "purpose": "Receive signed, tenant-bound inventory from enrolled agents.",
-      "data_handling": "Configured from the Agents tool. The generic discovery-source wizard cannot create a useful agent source.",
+      "data_handling": "Created by authenticated agent reports. The generic discovery-source API and wizard cannot declare this reserved source kind.",
       "tool": "Workloads \u0026 Machines",
       "route": "/agents",
       "setup_surface": "contextual",
@@ -1407,7 +1407,7 @@
         "recover",
         "prove"
       ],
-      "documentation_ref": "docs/features/agent.md"
+      "documentation_ref": "docs/features/discovery-and-inventory.md#agent-based-discovery-f3--what-each-host-can-see-from-the-inside"
     },
     {
       "kind": "manual",

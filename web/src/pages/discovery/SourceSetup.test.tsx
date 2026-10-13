@@ -303,5 +303,9 @@ describe("typed discovery source setup", () => {
     const served = JSON.parse(readFileSync(path, "utf8")) as DiscoveryCapabilityCatalog;
 
     expect(sourceWizardContractProblems(served.items)).toEqual([]);
+    expect(served.items.find((item) => item.kind === "agent")).toMatchObject({
+      route: "/agents",
+      setup_surface: "contextual",
+    });
   });
 });
