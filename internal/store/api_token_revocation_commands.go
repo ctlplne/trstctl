@@ -62,7 +62,7 @@ const apiTokenRevocationCommandColumns = `tenant_id::text, token_id::text,
     event_id::text, event_time, event_actor, event_payload, payload_sha256, status`
 
 // ClaimAPITokenRevocationCommand commits a denial before any event append. The
-// target row lock orders this claim against another revoke or terminal replay.
+// command row lock precedes the target row lock on every recovery/replay path.
 // It deliberately has no FK to api_tokens: rebuild truncates read models.
 func (s *Store) ClaimAPITokenRevocationCommand(ctx context.Context, candidate APITokenRevocationCommand) (APITokenRevocationCommand, bool, error) {
 	var canonical APITokenRevocationCommand
@@ -85,17 +85,8 @@ func (s *Store) ClaimAPITokenRevocationCommand(ctx context.Context, candidate AP
 	err := s.WithPrivacyRecoveryBarrier(ctx, candidate.TenantID,
 		"API-token revocation command privacy barrier", func(barrierCtx context.Context) error {
 			return s.WithTenant(barrierCtx, candidate.TenantID, func(tx pgx.Tx) error {
-				var revokedAt *time.Time
-				if err := tx.QueryRow(barrierCtx,
-					`SELECT revoked_at FROM api_tokens WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
-					candidate.TenantID, candidate.TokenID).Scan(&revokedAt); err != nil {
-					return err
-				}
-				if revokedAt != nil {
-					return ErrIdempotencyConflict
-				}
-				// Serialize both unique identities before ON CONFLICT. The token row
-				// lock covers competing revokes; the event-ID lock also protects a
+				// Serialize both unique identities before ON CONFLICT. The token-ID
+				// arbiter covers competing revokes; the event-ID lock also protects a
 				// malformed/reused producer identity from the second unique index.
 				if err := lockUpsertArbiterTx(barrierCtx, tx,
 					"api_token_revocation_commands", candidate.TenantID, candidate.TokenID); err != nil {
@@ -104,6 +95,26 @@ func (s *Store) ClaimAPITokenRevocationCommand(ctx context.Context, candidate AP
 				if err := lockUpsertArbiterTx(barrierCtx, tx,
 					"api_token_revocation_commands:event", candidate.TenantID, candidate.Event.ID); err != nil {
 					return err
+				}
+				// Recovery and tail replay lock a pending command before api_tokens.
+				// A retry must do the same, including when it will later discover that
+				// the token was revoked, or the two transactions form an ABBA cycle.
+				var existingTokenID string
+				err := tx.QueryRow(barrierCtx,
+					`SELECT token_id::text FROM api_token_revocation_commands
+					 WHERE tenant_id = $1 AND token_id = $2 FOR UPDATE`,
+					candidate.TenantID, candidate.TokenID).Scan(&existingTokenID)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				var revokedAt *time.Time
+				if err := tx.QueryRow(barrierCtx,
+					`SELECT revoked_at FROM api_tokens WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+					candidate.TenantID, candidate.TokenID).Scan(&revokedAt); err != nil {
+					return err
+				}
+				if revokedAt != nil {
+					return ErrIdempotencyConflict
 				}
 				var eventAlreadyClaimed bool
 				if err := tx.QueryRow(barrierCtx,
@@ -115,7 +126,7 @@ func (s *Store) ClaimAPITokenRevocationCommand(ctx context.Context, candidate AP
 				if eventAlreadyClaimed {
 					return ErrIdempotencyConflict
 				}
-				err := tx.QueryRow(barrierCtx,
+				err = tx.QueryRow(barrierCtx,
 					`INSERT INTO api_token_revocation_commands
 				 (tenant_id, token_id, event_id, event_time, event_actor, event_payload, payload_sha256)
 				 VALUES ($1, $2, $3, $4, $5, $6, $7)
