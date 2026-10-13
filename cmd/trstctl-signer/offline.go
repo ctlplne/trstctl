@@ -231,7 +231,8 @@ func runOfflinePrepare(kitPath, csrPath, requester, subject, reason string, ttl 
 	}
 	req := offline.OfflineRequest{ID: hex.EncodeToString(random), TenantID: kit.Policy.TenantID,
 		DeploymentID: kit.Policy.DeploymentID, Epoch: kit.Policy.Epoch, Requester: requester,
-		Subject: subject, CSRDER: csrDER, Reason: reason, TTLSeconds: int64(ttl / time.Second),
+		CAKeySHA256: crypto.SHA256Hex(kit.PublicKeyDER),
+		Subject:     subject, CSRDER: csrDER, Reason: reason, TTLSeconds: int64(ttl / time.Second),
 		ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	encoded, err := json.MarshalIndent(req, "", "  ")
 	if err != nil {

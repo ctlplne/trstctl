@@ -3,6 +3,7 @@
 package offline
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,6 +41,7 @@ type OfflineRequest struct {
 	TenantID     string    `json:"tenant_id"`
 	DeploymentID string    `json:"deployment_id"`
 	Epoch        uint64    `json:"epoch"`
+	CAKeySHA256  string    `json:"ca_public_key_sha256"`
 	Requester    string    `json:"requester"`
 	Subject      string    `json:"subject"`
 	CSRDER       []byte    `json:"csr_der"`
@@ -66,6 +68,7 @@ func (r OfflineRequest) CanonicalBytes() ([]byte, error) {
 		TenantID     string `json:"tenant_id"`
 		DeploymentID string `json:"deployment_id"`
 		Epoch        uint64 `json:"epoch"`
+		CAKeySHA256  string `json:"ca_public_key_sha256"`
 		Requester    string `json:"requester"`
 		Subject      string `json:"subject"`
 		CSRSHA256    string `json:"csr_sha256"`
@@ -73,7 +76,7 @@ func (r OfflineRequest) CanonicalBytes() ([]byte, error) {
 		TTLSeconds   int64  `json:"ttl_seconds"`
 		ExpiresAt    int64  `json:"expires_at_unix_nano"`
 	}{"trstctl.breakglass.offline.request.v2", r.ID, r.TenantID, r.DeploymentID,
-		r.Epoch, r.Requester, r.Subject, crypto.SHA256Hex(r.CSRDER), r.Reason,
+		r.Epoch, r.CAKeySHA256, r.Requester, r.Subject, crypto.SHA256Hex(r.CSRDER), r.Reason,
 		r.TTLSeconds, r.ExpiresAt.UTC().UnixNano()})
 }
 
@@ -90,6 +93,10 @@ func VerifyOfflineApprovals(policy OfflinePolicy, request OfflineRequest, approv
 	if strings.TrimSpace(request.ID) == "" || strings.TrimSpace(request.Requester) == "" ||
 		strings.TrimSpace(request.Reason) == "" || request.TTLSeconds <= 0 || request.TTLSeconds > policy.MaxTTLSeconds {
 		return errors.New("breakglass: offline request identity, reason or lifetime is invalid")
+	}
+	if decoded, err := hex.DecodeString(request.CAKeySHA256); err != nil || len(decoded) != 32 ||
+		request.CAKeySHA256 != strings.ToLower(request.CAKeySHA256) {
+		return errors.New("breakglass: offline request needs a canonical recovery CA public-key fingerprint")
 	}
 	if !request.ExpiresAt.After(now) || request.ExpiresAt.After(now.Add(24*time.Hour)) {
 		return errors.New("breakglass: offline request has expired or exceeds the approval window")

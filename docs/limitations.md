@@ -1151,7 +1151,7 @@ never live in the API process. What you can do end to end against the running bi
   Offline break-glass reconciliation remains served at `POST /api/v1/breakglass/reconcile`.
   A disconnected signer uses its sealed, offline-only CA and a pinned public kit;
   two distinct custodians sign the exact CSR-bound request. Recovery checks their
-  signatures, tenant, deployment, policy epoch and leaf before recording the
+  signatures, tenant, deployment, policy epoch, recovery CA key and leaf before recording the
   public proof as a `breakglass.issued` audit event. The
   [disconnected runbook](runbooks/disconnected-breakglass.md) gives the setup,
   outage and recovery procedure.

@@ -25,7 +25,8 @@ func TestDisconnectedApprovalBindsExactRequestAndDistinctCustodians(t *testing.T
 	}
 	req := OfflineRequest{
 		ID: "emergency-1", TenantID: "tenant-a", DeploymentID: "lab-a", Epoch: 7,
-		Requester: "requester", Subject: "recovery.example.test", CSRDER: emergencyDNSCSR(t, "recovery.example.test"),
+		CAKeySHA256: crypto.SHA256Hex([]byte("test recovery CA public key")),
+		Requester:   "requester", Subject: "recovery.example.test", CSRDER: emergencyDNSCSR(t, "recovery.example.test"),
 		Reason: "restore service", TTLSeconds: 600, ExpiresAt: time.Now().Add(time.Hour).UTC(),
 	}
 	canonical, err := req.CanonicalBytes()
@@ -40,6 +41,7 @@ func TestDisconnectedApprovalBindsExactRequestAndDistinctCustodians(t *testing.T
 		"tenant":     func(r *OfflineRequest) { r.TenantID = "tenant-b" },
 		"deployment": func(r *OfflineRequest) { r.DeploymentID = "lab-b" },
 		"epoch":      func(r *OfflineRequest) { r.Epoch++ },
+		"ca_key":     func(r *OfflineRequest) { r.CAKeySHA256 = crypto.SHA256Hex([]byte("other recovery CA")) },
 		"subject":    func(r *OfflineRequest) { r.Subject = "other.example.test" },
 		"reason":     func(r *OfflineRequest) { r.Reason = "other" },
 		"ttl":        func(r *OfflineRequest) { r.TTLSeconds++ },
@@ -87,7 +89,8 @@ func TestDisconnectedBundleCarriesVerifiableCustodianEvidence(t *testing.T) {
 		Threshold: 2, MaxTTLSeconds: 900, PermittedDNSSuffixes: []string{"example.test"},
 		Custodians: []OfflineCustodian{{ID: "op1", PublicKeyDER: pubA}, {ID: "op2", PublicKeyDER: pubB}}}
 	req := OfflineRequest{ID: "offline-1", TenantID: "t1", DeploymentID: "qa-deployment", Epoch: 1,
-		Requester: "incident-commander", Subject: "recovery.example.test", CSRDER: emergencyDNSCSR(t, "recovery.example.test"),
+		CAKeySHA256: crypto.SHA256Hex(svc.PublicKeyDER()),
+		Requester:   "incident-commander", Subject: "recovery.example.test", CSRDER: emergencyDNSCSR(t, "recovery.example.test"),
 		Reason: "control plane outage", TTLSeconds: 600, ExpiresAt: time.Now().Add(time.Hour).UTC()}
 	message, err := req.CanonicalBytes()
 	if err != nil {

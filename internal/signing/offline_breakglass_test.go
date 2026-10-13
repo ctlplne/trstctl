@@ -73,7 +73,7 @@ func TestOfflineVaultSignerCustodyAndColdReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := offline.OfflineRequest{ID: "operation-1", TenantID: policy.TenantID, DeploymentID: policy.DeploymentID,
-		Epoch: policy.Epoch, Requester: "incident-commander", Subject: "recovery.example.test",
+		Epoch: policy.Epoch, CAKeySHA256: crypto.SHA256Hex(kit.PublicKeyDER), Requester: "incident-commander", Subject: "recovery.example.test",
 		CSRDER: csr, Reason: "restore workload", TTLSeconds: 600, ExpiresAt: time.Now().Add(time.Hour).UTC()}
 	message, err := req.CanonicalBytes()
 	if err != nil {
@@ -89,6 +89,18 @@ func TestOfflineVaultSignerCustodyAndColdReplay(t *testing.T) {
 	}
 	if err := offline.VerifyDisconnected(first, policy, kit.CACertDER, kit.PublicKeyDER); err != nil {
 		t.Fatal(err)
+	}
+	// Replacing a kit while retaining the same roster, policy epoch and request
+	// must not let another CA use approvals obtained for the first CA.
+	other, err := NewOfflineBreakglassVault(t.TempDir(), wrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Provision(policy, 24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := other.Issue(req, approvals); err == nil {
+		t.Fatal("second recovery CA reused approvals signed for the first CA")
 	}
 
 	// A new process opens the same sealed key and journal after the first process
@@ -140,7 +152,8 @@ func TestOfflineVaultResumesExecutingMarkerAfterCrash(t *testing.T) {
 	policy := offline.OfflinePolicy{TenantID: "tenant-a", DeploymentID: "lab-a", Epoch: 1,
 		Threshold: 2, MaxTTLSeconds: 900, PermittedDNSSuffixes: []string{"example.test"},
 		Custodians: []offline.OfflineCustodian{{ID: "alice", PublicKeyDER: pubA}, {ID: "bob", PublicKeyDER: pubB}}}
-	if _, err := vault.Provision(policy, 24*time.Hour); err != nil {
+	kit, err := vault.Provision(policy, 24*time.Hour)
+	if err != nil {
 		t.Fatal(err)
 	}
 	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -155,7 +168,8 @@ func TestOfflineVaultResumesExecutingMarkerAfterCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := offline.OfflineRequest{ID: "crashed-operation", TenantID: policy.TenantID,
-		DeploymentID: policy.DeploymentID, Epoch: policy.Epoch, Requester: "commander",
+		DeploymentID: policy.DeploymentID, Epoch: policy.Epoch,
+		CAKeySHA256: crypto.SHA256Hex(kit.PublicKeyDER), Requester: "commander",
 		Subject: "recovery.example.test", CSRDER: csr, Reason: "recovery",
 		TTLSeconds: 600, ExpiresAt: time.Now().Add(time.Hour).UTC()}
 	message, err := req.CanonicalBytes()

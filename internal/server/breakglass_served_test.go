@@ -84,7 +84,8 @@ func TestServedBreakglassReconcileRequiresPinnedOfflineCustodians(t *testing.T) 
 		t.Fatal(err)
 	}
 	request := breakglass.OfflineRequest{ID: "served-offline-1", TenantID: policy.TenantID,
-		DeploymentID: policy.DeploymentID, Epoch: policy.Epoch, Requester: "incident-commander",
+		DeploymentID: policy.DeploymentID, Epoch: policy.Epoch,
+		CAKeySHA256: crypto.SHA256Hex(kit.PublicKeyDER), Requester: "incident-commander",
 		Subject: "recovery.example.test", CSRDER: servedBreakglassCSR(t, "recovery.example.test"),
 		Reason: "recover served workload", TTLSeconds: 600, ExpiresAt: time.Now().Add(time.Hour).UTC()}
 	message, err := request.CanonicalBytes()

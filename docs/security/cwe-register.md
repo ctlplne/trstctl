@@ -1358,7 +1358,7 @@ not this file.
 | `internal/signing/managedkeys.go:566` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys.go:709` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/signing/offline_breakglass.go:287` | path is the signer-owned offline vault journal or kit (CWE-22) |
+| `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
 | `internal/spireupstream/plugin.go:239` | operator-configured public CA bundle path (CWE-22) |
 | `internal/spireupstream/plugin.go:318` | operator-configured upstream-authority plugin config path (CWE-22) |

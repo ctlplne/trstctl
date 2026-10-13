@@ -182,6 +182,9 @@ func (v *OfflineBreakglassVault) Issue(request offline.OfflineRequest, approvals
 	if err != nil {
 		return offline.Bundle{}, false, err
 	}
+	if request.CAKeySHA256 != crypto.SHA256Hex(kit.PublicKeyDER) {
+		return offline.Bundle{}, false, errors.New("signing: offline request was approved for another recovery CA")
+	}
 	intent, err := json.Marshal(struct {
 		Request   offline.OfflineRequest    `json:"request"`
 		Approvals []offline.OfflineApproval `json:"approvals"`

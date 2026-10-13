@@ -48,7 +48,8 @@ private key with the workload.
    --offline-prepare-reason <incident-reason> --offline-prepare-ttl 10m
    --offline-output <request.json>`. This chooses a random operation ID and a
    one-hour approval deadline. Give the same request file to each custodian.
-3. Each custodian checks the request's tenant, deployment, epoch, reason, TTL,
+3. Each custodian checks the request's tenant, deployment, policy epoch,
+   `ca_public_key_sha256` against their retained public kit, reason, TTL,
    common name and signed SANs, then runs `trstctl-signer
    --offline-approve-request <request.json> --offline-approve-key <their-key.pem>
    --offline-approve-custodian <their-id> --offline-output <their-approval.json>`

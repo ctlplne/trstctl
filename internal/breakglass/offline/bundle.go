@@ -83,6 +83,9 @@ func IssueDisconnected(policy OfflinePolicy, request OfflineRequest, approvals [
 	if caSigner == nil || len(caCertDER) == 0 || policy.TenantID != request.TenantID {
 		return Bundle{}, errors.New("breakglass: offline signer authority is not bound to the request tenant")
 	}
+	if request.CAKeySHA256 != crypto.SHA256Hex(caSigner.Public().DER) {
+		return Bundle{}, errors.New("breakglass: offline request was approved for another recovery CA")
+	}
 	if err := VerifyOfflineApprovals(policy, request, approvals, now); err != nil {
 		return Bundle{}, err
 	}
@@ -113,6 +116,9 @@ func VerifyDisconnected(b Bundle, policy OfflinePolicy, caCertDER, pubDER []byte
 		return errors.New("breakglass: disconnected recovery requires a v2 signed bundle")
 	}
 	r := *b.OfflineRequest
+	if r.CAKeySHA256 != crypto.SHA256Hex(pubDER) {
+		return errors.New("breakglass: offline bundle was approved for another recovery CA")
+	}
 	if b.RequestID != r.ID || b.Subject != r.Subject || b.Reason != r.Reason || len(b.Approvals) != len(b.OfflineApprovals) {
 		return errors.New("breakglass: bundle does not describe its approved request")
 	}
