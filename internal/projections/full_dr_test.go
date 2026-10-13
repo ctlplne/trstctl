@@ -67,6 +67,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		t.Fatalf("active source tenant refused: %v", err)
 	}
 	seedRecoveredFromPostgresTables(t, src, registration.ID, registration.Sequence)
+	// This command is deliberately pending before its event append. Its token
+	// row is still active, so only the independent PostgreSQL fence can deny
+	// the bearer across a full backup/restore cut.
+	srcPending, err := src.ListPendingAPITokenRevocations(ctx, tenantA, 10)
+	if err != nil || len(srcPending) != 1 {
+		t.Fatalf("source pending API-token revocation fence: rows=%d err=%v", len(srcPending), err)
+	}
+	if _, err := src.LookupAPITokenByHash(ctx, "full-dr-api-token-hash"); !store.IsNotFound(err) {
+		t.Fatalf("source pending API-token revocation admitted bearer: %v", err)
+	}
 	assertFullDRRemoteDeliveryRetained(t, src)
 	if err := src.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
 		t.Fatalf("suspended source tenant admitted: %v", err)
@@ -133,6 +143,19 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		t.Errorf("certificates after full restore = %v, want %v", got, srcCerts)
 	}
 	dstCounts := recoveredTableCounts(t, dst)
+	dstPending, err := dst.ListPendingAPITokenRevocations(ctx, tenantA, 10)
+	if err != nil || len(dstPending) != 1 ||
+		dstPending[0].TokenID != srcPending[0].TokenID ||
+		dstPending[0].Event.ID != srcPending[0].Event.ID ||
+		!bytes.Equal(dstPending[0].Event.Data, srcPending[0].Event.Data) {
+		t.Fatalf("restored pending API-token revocation fence: source=%+v destination=%+v err=%v", srcPending, dstPending, err)
+	}
+	if token, err := dst.GetAPIToken(ctx, tenantA, srcPending[0].TokenID); err != nil || token.RevokedAt != nil {
+		t.Fatalf("restored token read model should remain active while command is pending: row=%+v err=%v", token, err)
+	}
+	if _, err := dst.LookupAPITokenByHash(ctx, "full-dr-api-token-hash"); !store.IsNotFound(err) {
+		t.Fatalf("restored pending API-token revocation admitted bearer: %v", err)
+	}
 	if destination, found, err := dst.AgentJobAttemptBinding(ctx, tenantA, "b9445160-dbc6-48fa-9c13-f078943486a9", 4242, 1); err != nil || !found || destination != "connector.deploy" {
 		t.Fatalf("restored original agent recipient cannot authorize its exact completion: destination=%q found=%v err=%v", destination, found, err)
 	}
@@ -803,6 +826,26 @@ func seedRecoveredFromPostgresTables(
 	})
 	if err != nil {
 		t.Fatalf("seed independent PostgreSQL tables: %v", err)
+	}
+	// A crash can leave this first-writer command durable before publication.
+	// Seed it through the production claim rather than inserting a synthetic
+	// row, so the DR fixture exercises the same lock and payload validation.
+	payload, err := json.Marshal(projections.APITokenRevoked{
+		ID: "00000000-0000-0000-0000-00000000a001", Reason: "full DR pending command", RevokedBy: "full-dr-admin",
+	})
+	if err != nil {
+		t.Fatalf("marshal pending API-token revocation: %v", err)
+	}
+	command := store.APITokenRevocationCommand{
+		TenantID: tenantA, TokenID: "00000000-0000-0000-0000-00000000a001",
+		Event: events.Event{
+			ID: "00000000-0000-0000-0000-00000000a020", Type: projections.EventAPITokenRevoked,
+			TenantID: tenantA, SchemaVersion: events.DefaultSchemaVersion,
+			Time: now.Truncate(time.Microsecond), Data: payload,
+		},
+	}
+	if _, created, err := st.ClaimAPITokenRevocationCommand(ctx, command); err != nil || !created {
+		t.Fatalf("seed pending API-token revocation command: created=%t err=%v", created, err)
 	}
 	// AUD-58 moved Provider workforce identities and grants into one fixed,
 	// FORCE-RLS authority partition. They are not customer-owned rows, so seed
