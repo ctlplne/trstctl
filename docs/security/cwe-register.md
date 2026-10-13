@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1512 annotated sites across 26 rules. Each row is
+1514 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1034,7 +1034,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (418 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (420 sites)
 
 | Location | Reason |
 |---|---|
@@ -1366,6 +1366,8 @@ not this file.
 | `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/store/store_isolation_test.go:333` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:379` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/succession/minter/spentstore.go:70` | signer-owned custody directory selected at signer startup (CWE-22). |
+| `internal/succession/minter/spentstore.go:113` | claim path is signer-owned custody dir plus a fixed SHA-256 hex nonce digest (CWE-22). |
 | `internal/supportbundle/supportbundle.go:438` | operator-invoked support bundle collecting its configured files (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:97` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:101` | test reads its own fixture/tempdir path (CWE-22) |
