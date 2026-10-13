@@ -626,7 +626,7 @@ func TestMigrationPrivacyRewritePreservesExecutableRunAndActionBindingAUD40(t *t
 					IssuingAuthorityID: "40400000-0000-4000-8000-000000000042",
 					TargetID:           "40400000-0000-4000-8000-000000000043", TargetRevision: "revision-a",
 					Connector: "nginx", Target: subject,
-					TargetConfig:    json.RawMessage(`{"owner":"alice"}`),
+					TargetConfig:    json.RawMessage(`{"executor":"agent","required_agent_id":"40400000-0000-4000-8000-000000000044","owner":"alice"}`),
 					RequiredAgentID: "40400000-0000-4000-8000-000000000044",
 					TrustAnchorPath: "/etc/" + subject + "/root.pem", TrustAnchorPEM: []byte("public-ca"),
 					TrustAnchorFingerprint: "aaaaaaaa", VerifyAddress: "127.0.0.1:443",

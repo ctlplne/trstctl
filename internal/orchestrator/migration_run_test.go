@@ -31,7 +31,7 @@ func TestMigrationRunEventProjectsQueuesRecoversAndIsolatesAUD40(t *testing.T) {
 			Binding: migration.MemberBinding{
 				IssuingAuthorityID: "40400000-0000-4000-8000-000000000043",
 				TargetID:           "target-a", TargetRevision: "revision-a", Connector: "nginx", Target: "edge-a",
-				TargetConfig: json.RawMessage(`{"executor":"agent"}`), RequiredAgentID: agentID,
+				TargetConfig: json.RawMessage(`{"executor":"agent","required_agent_id":"` + agentID + `"}`), RequiredAgentID: agentID,
 				TrustAnchorPath: "/etc/trstctl/next-root.pem", TrustAnchorPEM: []byte("public-ca-pem"),
 				TrustAnchorFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				VerifyAddress:          "127.0.0.1:443", SubjectCommonName: "edge.example.test",
@@ -118,7 +118,7 @@ func TestMigrationRunDifferentReceiptCatchesUpAppendWonProjectionLostAUD40(t *te
 			Binding: migration.MemberBinding{
 				IssuingAuthorityID: "40400000-0000-4000-8000-000000000053",
 				TargetID:           "target-a", TargetRevision: "revision-a", Connector: "nginx", Target: "edge-a",
-				TargetConfig: json.RawMessage(`{"executor":"agent"}`), RequiredAgentID: "40400000-0000-4000-8000-000000000051",
+				TargetConfig: json.RawMessage(`{"executor":"agent","required_agent_id":"40400000-0000-4000-8000-000000000051"}`), RequiredAgentID: "40400000-0000-4000-8000-000000000051",
 				TrustAnchorPath: "/etc/trstctl/next-root.pem", TrustAnchorPEM: []byte("public-ca-pem"),
 				TrustAnchorFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				VerifyAddress:          "127.0.0.1:443", SubjectCommonName: "edge.example.test",

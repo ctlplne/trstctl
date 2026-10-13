@@ -101,7 +101,7 @@ func TestServedSuspendedMigrationRecoveryPreservesIntentWithoutService(t *testin
 	ctx := t.Context()
 	runID, agentID := uuid.NewString(), uuid.NewString()
 	run, actions, err := migration.StartRun(migration.Run{ID: runID, Waves: []migration.RunWave{{ID: "canary", Ordinal: 1, Members: []migration.RunMember{{IdentityID: "owned-identity", Binding: migration.MemberBinding{
-		IssuingAuthorityID: uuid.NewString(), TargetID: "owned-target", TargetRevision: "original", Connector: "nginx", Target: "owned-edge", TargetConfig: json.RawMessage(`{"executor":"agent"}`), RequiredAgentID: agentID,
+		IssuingAuthorityID: uuid.NewString(), TargetID: "owned-target", TargetRevision: "original", Connector: "nginx", Target: "owned-edge", TargetConfig: json.RawMessage(`{"executor":"agent","required_agent_id":"` + agentID + `"}`), RequiredAgentID: agentID,
 		TrustAnchorPath: "/owned/anchor.pem", TrustAnchorPEM: []byte("public fixture CA"), TrustAnchorFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		VerifyAddress: "127.0.0.1:443", SubjectCommonName: "owned.example.test", SubjectDNSNames: []string{"owned.example.test"}, PredecessorCertificateID: uuid.NewString(), PredecessorFingerprint: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	}}}}}})
