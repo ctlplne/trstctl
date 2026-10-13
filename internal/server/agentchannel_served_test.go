@@ -877,6 +877,9 @@ func TestAUD64ServedAgentDependencyFeedsCryptoReadiness(t *testing.T) {
 	if persistedMetadata["host"] != "aud64-relay" {
 		t.Fatalf("persisted observing host = %q, want verified mTLS peer aud64-relay", persistedMetadata["host"])
 	}
+	if persistedMetadata["agent_id"] != agentRowID(h.tenant, "aud64-relay") {
+		t.Fatalf("persisted agent ID = %q, want verified mTLS peer ID", persistedMetadata["agent_id"])
+	}
 
 	tok := seedScopedToken(t, h.store, h.tenant, "graph:read")
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/graph/crypto-readiness", tok, nil)

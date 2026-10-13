@@ -52,6 +52,13 @@ func TestObservationParsersFailClosed(t *testing.T) {
 	if _, err := ParseMap(map[string]string{"workload": "checkout", "target": "lb", "credential": "secret"}, "lb"); err == nil {
 		t.Fatal("unknown pre-JSON metadata field was accepted")
 	}
+	if _, err := ParseMap(map[string]string{"workload": "checkout", "target": "lb", "agent_id": "spoofed"}, "lb"); err == nil {
+		t.Fatal("the caller cannot assert receiver-owned agent_id")
+	}
+	got, err := ParseJSON(json.RawMessage(`{"workload":"checkout","target":"lb","agent_id":"11111111-1111-4111-8111-111111111111"}`), "lb")
+	if err != nil || got.AgentID != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("receiver-enriched observation not replayable: %+v, %v", got, err)
+	}
 }
 
 func FuzzParseJSON(f *testing.F) {

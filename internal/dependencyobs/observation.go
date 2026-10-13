@@ -27,6 +27,9 @@ type Observation struct {
 	Target   string `json:"target"`
 	Protocol string `json:"protocol,omitempty"`
 	Host     string `json:"host,omitempty"`
+	// AgentID is added only by the mTLS receiver after ParseMap accepts the
+	// caller's fields. Graph replay must understand this trusted enrichment.
+	AgentID string `json:"agent_id,omitempty"`
 }
 
 // ParseMap validates the agent's pre-JSON metadata. Unknown fields fail closed:
@@ -72,6 +75,7 @@ func validate(observation Observation, ref string) (Observation, error) {
 	observation.Target = strings.TrimSpace(observation.Target)
 	observation.Protocol = strings.TrimSpace(observation.Protocol)
 	observation.Host = strings.TrimSpace(observation.Host)
+	observation.AgentID = strings.TrimSpace(observation.AgentID)
 	ref = strings.TrimSpace(ref)
 	if observation.Workload == "" || observation.Target == "" || ref == "" {
 		return Observation{}, fmt.Errorf("workload, target, and ref are required")
@@ -81,6 +85,7 @@ func validate(observation Observation, ref string) (Observation, error) {
 		"target":   observation.Target,
 		"protocol": observation.Protocol,
 		"host":     observation.Host,
+		"agent_id": observation.AgentID,
 		"ref":      ref,
 	} {
 		if !utf8.ValidString(value) || len(value) > maxFieldBytes {
