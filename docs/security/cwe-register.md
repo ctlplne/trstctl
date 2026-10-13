@@ -491,7 +491,7 @@ not this file.
 | `internal/perf/live.go:875` | page size is positive and small (CWE-190) |
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
-| `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
+| `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:488` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/projections.go:5224` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |

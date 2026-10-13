@@ -29,6 +29,7 @@ const (
 	aud64SourceID        = "64000000-0000-4000-8000-000000000006"
 	aud64RunID           = "64000000-0000-4000-8000-000000000007"
 	aud64FindingID       = "64000000-0000-4000-8000-000000000008"
+	aud64AgentID         = "64000000-0000-4000-8000-000000000009"
 )
 
 func aud64Event(t *testing.T, tenantID, eventType string, sequence int, payload any) events.Event {
@@ -58,6 +59,7 @@ func aud64AuthorityEvents(t *testing.T, tenantID string, foreign bool) []events.
 	sourceID := aud64SourceID
 	runID := aud64RunID
 	findingID := aud64FindingID
+	agentID := aud64AgentID
 	if foreign {
 		prefix = "foreign-"
 		paymentsOwnerID = "65000000-0000-4000-8000-000000000001"
@@ -68,9 +70,11 @@ func aud64AuthorityEvents(t *testing.T, tenantID string, foreign bool) []events.
 		sourceID = "65000000-0000-4000-8000-000000000006"
 		runID = "65000000-0000-4000-8000-000000000007"
 		findingID = "65000000-0000-4000-8000-000000000008"
+		agentID = "65000000-0000-4000-8000-000000000009"
 	}
 	paymentsName := prefix + "payments-team"
 	checkoutName := prefix + "checkout-service"
+	agentName := prefix + "relay-a"
 	return []events.Event{
 		aud64Event(t, tenantID, projections.EventOwnerCreated, 1, projections.OwnerCreated{
 			ID: paymentsOwnerID, Kind: "service", Name: paymentsName,
@@ -89,16 +93,26 @@ func aud64AuthorityEvents(t *testing.T, tenantID string, foreign bool) []events.
 			ID: assetID, Kind: "public-key", Location: "lb-edge", Algorithm: "RSA", KeyBits: 1024,
 			Strength: "weak", QuantumVulnerable: true, OutOfPolicy: true,
 		}),
-		aud64Event(t, tenantID, projections.EventDiscoverySourceUpserted, 6, projections.DiscoverySourceUpserted{
-			ID: sourceID, Kind: "agent", Name: prefix + "agent:relay-a:service_dependency", Config: json.RawMessage(`{"source_kind":"service_dependency"}`),
+		// The production receiver heartbeats before recording signed inventory.
+		// Without this tenant-bound identity, a generic import cannot authorize
+		// a workload dependency just by writing agent-like metadata.
+		aud64Event(t, tenantID, projections.EventAgentHeartbeat, 6, projections.AgentHeartbeat{
+			ID: agentID, Agent: agentName, Version: "qa", Status: "online",
 		}),
-		aud64Event(t, tenantID, projections.EventDiscoveryRunQueued, 7, projections.DiscoveryRunQueued{
-			ID: runID, SourceID: sourceID, RequestedBy: prefix + "agent:relay-a",
+		aud64Event(t, tenantID, projections.EventDiscoverySourceUpserted, 7, projections.DiscoverySourceUpserted{
+			ID: sourceID, Kind: "agent", Name: "agent:" + agentName + ":service_dependency", Config: json.RawMessage(`{"source_kind":"service_dependency"}`),
 		}),
-		aud64Event(t, tenantID, projections.EventDiscoveryFindingRecorded, 8, projections.DiscoveryFindingRecorded{
+		aud64Event(t, tenantID, projections.EventDiscoveryRunQueued, 8, projections.DiscoveryRunQueued{
+			ID: runID, SourceID: sourceID, RequestedBy: "agent:" + agentName,
+		}),
+		aud64Event(t, tenantID, projections.EventDiscoveryRunStarted, 9, projections.DiscoveryRunStarted{ID: runID}),
+		aud64Event(t, tenantID, projections.EventDiscoveryFindingRecorded, 10, projections.DiscoveryFindingRecorded{
 			ID: findingID, RunID: runID, SourceID: sourceID, Kind: "service_dependency", Ref: "lb-edge",
-			Provenance: prefix + "agent:relay-a:lb-edge",
-			Metadata:   json.RawMessage(fmt.Sprintf(`{"workload":%q,"target":"lb-edge","protocol":"https"}`, checkoutName)),
+			Provenance: "agent:" + agentName + ":lb-edge",
+			Metadata:   json.RawMessage(fmt.Sprintf(`{"workload":%q,"target":"lb-edge","protocol":"https","agent_id":%q}`, checkoutName, agentID)),
+		}),
+		aud64Event(t, tenantID, projections.EventDiscoveryRunCompleted, 11, projections.DiscoveryRunCompleted{
+			ID: runID, Status: "succeeded", Targets: 1, Discovered: 1, ExecutedByAgentID: agentID,
 		}),
 	}
 }
@@ -247,8 +261,14 @@ func TestAUD64ProductionGraphBuildsOwnersAndDiscoveredRelyingParties(t *testing.
 	}
 	missingOwner.Close()
 
+	withoutFinding := make([]events.Event, 0, len(authorityA)-1)
+	for _, event := range authorityA {
+		if event.Type != projections.EventDiscoveryFindingRecorded {
+			withoutFinding = append(withoutFinding, event)
+		}
+	}
 	missingDependency := newStore(t)
-	aud64Project(t, missingDependency, tenantA, "Acme", authorityA[:len(authorityA)-1])
+	aud64Project(t, missingDependency, tenantA, "Acme", withoutFinding)
 	withoutDependency, err := graph.Build(ctx, missingDependency, tenantA)
 	if err != nil {
 		t.Fatalf("build graph without dependency observation: %v", err)
