@@ -125,15 +125,6 @@ func (a *API) migrationFacts(r *http.Request, tenantID string, plan migration.Pl
 		byID[t.ID] = t
 	}
 
-	// Count trust stores per host once, rather than per member: a wave of a
-	// hundred identities on ten hosts should walk the graph once.
-	storesByHost := map[string]int{}
-	for _, n := range g.Nodes() {
-		if n.Kind == graph.KindTrustStore {
-			storesByHost[n.Attrs["host"]]++
-		}
-	}
-
 	for _, wv := range plan.Waves {
 		for _, m := range wv.Members {
 			ident, identErr := a.store.GetIdentity(r.Context(), tenantID, m)
@@ -146,12 +137,29 @@ func (a *API) migrationFacts(r *http.Request, tenantID string, plan migration.Pl
 			if t, found := byID[targetIDFromIdentityAttrs(ident.Attributes)]; found {
 				f.HasDeploymentTarget = true
 				f.HasVerifyAddress = targetHasVerifyAddress(t.Config)
-				f.TrustStoresObserved = storesByHost[t.Name]
+				f.TrustStoresObserved = observedMigrationTrustStores(g, t)
 			}
 			out[m] = f
 		}
 	}
 	return out, nil
+}
+
+// observedMigrationTrustStores accepts only stores reported by the target's
+// assigned, certificate-authenticated host agent. A target display name may
+// differ from the agent name or collide with another machine's name.
+func observedMigrationTrustStores(g *graph.Graph, target store.DeploymentTarget) int {
+	agentID, err := connector.TargetHostAgentID(target.Config)
+	if err != nil || agentID == "" {
+		return 0
+	}
+	count := 0
+	for _, n := range g.Nodes() {
+		if n.Kind == graph.KindTrustStore && n.Attrs["agent_id"] == agentID {
+			count++
+		}
+	}
+	return count
 }
 
 // targetIDFromIdentityAttrs reads the deployment target an identity is bound to.

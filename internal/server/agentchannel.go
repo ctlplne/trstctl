@@ -955,11 +955,12 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			// The peer certificate, not client-provided metadata or a certificate
 			// path, names the observing machine. Clone before stamping so request
 			// objects remain immutable to interceptors and tests.
-			findingMetadata = make(map[string]string, len(f.Metadata)+1)
+			findingMetadata = make(map[string]string, len(f.Metadata)+2)
 			for key, value := range f.Metadata {
 				findingMetadata[key] = value
 			}
 			findingMetadata["host"] = info.CommonName
+			findingMetadata["agent_id"] = agentRowID(info.TenantID, info.CommonName)
 		}
 		meta, err := metadataJSON(findingMetadata)
 		if err != nil {

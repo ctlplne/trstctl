@@ -1234,9 +1234,12 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	reported := trustStoreInventoryFindings(found)
+	reported[0].Metadata["host"] = "different-host"
+	reported[0].Metadata["agent_id"] = "22222222-2222-4222-8222-222222222222"
 	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
 		SourceKind: agentdiscovery.SourceTrustStore,
-		Findings:   trustStoreInventoryFindings(found),
+		Findings:   reported,
 	})
 	if err != nil {
 		t.Fatalf("report trust-store inventory: %v", err)
@@ -1281,6 +1284,9 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 		}
 		if f.Metadata["host"] != "edge-agent-truststores" {
 			t.Fatalf("trust-store finding host was not derived from verified agent identity: %+v", f)
+		}
+		if f.Metadata["agent_id"] != agentRowID(h.tenant, "edge-agent-truststores") {
+			t.Fatalf("trust-store finding agent ID was not derived from verified agent identity: %+v", f)
 		}
 		seenKinds[f.Metadata["trust_store_kind"]] = true
 		if f.Metadata["private_key_present"] != "false" {
@@ -1340,6 +1346,9 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 	}
 	if trust.Stores[0].Attrs["host"] != "edge-agent-truststores" || trust.CandidateStores[0].Attrs["host"] != "edge-agent-truststores" {
 		t.Fatalf("trust-store host identities = %+v, want the one verified reporting agent", trust)
+	}
+	if trust.Stores[0].Attrs["agent_id"] != agentRowID(h.tenant, "edge-agent-truststores") {
+		t.Fatalf("trust-store agent ID = %+v, want the verified reporting agent", trust.Stores[0].Attrs)
 	}
 }
 

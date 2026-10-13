@@ -304,3 +304,22 @@ func TestOrdinaryFindingsAreNotPromoted(t *testing.T) {
 		t.Error("a non-trust finding produced graph nodes on the trust path")
 	}
 }
+
+func TestVerifiedAgentBindingSurvivesHistoricalTrustStoreFindingOrder(t *testing.T) {
+	t.Parallel()
+	legacy := anchorFinding("old", "edge-1", "os", "", "CA", "aa")
+	verified := anchorFinding("new", "edge-1", "os", "", "CA", "bb")
+	verified.Metadata = json.RawMessage(`{"trust_store_kind":"os","host":"edge-1","agent_id":"11111111-1111-4111-8111-111111111111"}`)
+	for _, order := range [][]store.DiscoveryFinding{{legacy, verified}, {verified, legacy}} {
+		g := New()
+		for _, finding := range order {
+			if !addTrustStoreFinding(g, finding, testIssuerAnchorIndex("", "", "", "")) {
+				t.Fatal("trust-store finding was not promoted")
+			}
+		}
+		node, ok := g.Node("ts:edge-1:os")
+		if !ok || node.Attrs["agent_id"] != "11111111-1111-4111-8111-111111111111" {
+			t.Fatalf("verified binding lost in finding order %+v: %+v", order, node)
+		}
+	}
+}

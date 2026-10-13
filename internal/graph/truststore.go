@@ -43,7 +43,10 @@ type trustStoreMeta struct {
 	TrustStoreKind string `json:"trust_store_kind"`
 	// Host is stamped by the control plane from the reporting agent's verified
 	// mTLS identity. It must not come from client-controlled path metadata.
-	Host     string `json:"host"`
+	Host string `json:"host"`
+	// AgentID is stamped by the receiver from the same verified peer certificate.
+	// A display name is never an authorization binding for a migration.
+	AgentID  string `json:"agent_id"`
 	Platform string `json:"platform"`
 	Browser  string `json:"browser"`
 	Profile  string `json:"profile"`
@@ -176,6 +179,12 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuers issuerAnch
 	// once even when it carries several stores or anchor paths.
 	host := firstNonEmpty(strings.TrimSpace(meta.Host), f.Provenance)
 	storeNode := trustStoreNodeID(host, meta.TrustStoreKind, meta.Profile)
+	// Older reports have no agent ID. A later receiver-stamped report may
+	// replace one in this graph, but a historical row must never erase its
+	// verified binding just because keyset iteration visits it afterward.
+	if prior, exists := g.Node(storeNode); exists && prior.Attrs["agent_id"] != "" && meta.AgentID == "" {
+		meta.AgentID = prior.Attrs["agent_id"]
+	}
 	g.AddNode(Node{
 		ID:   storeNode,
 		Kind: KindTrustStore,
@@ -186,6 +195,7 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuers issuerAnch
 			"browser":          meta.Browser,
 			"profile":          meta.Profile,
 			"host":             host,
+			"agent_id":         meta.AgentID,
 			"run_id":           f.RunID,
 			"source_id":        f.SourceID,
 		},
