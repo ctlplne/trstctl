@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     createEnrollmentToken: vi.fn(),
     agentUpgradeCampaign: vi.fn(),
     agentJobPosture: vi.fn(),
+    revokeAgentCert: vi.fn(),
   },
 }));
 
@@ -76,6 +77,13 @@ describe("agent fleet surface", () => {
       queues: [{ kind: "endpoint.renew", enabled: true, pending: 2, claimed: 1 }],
       redemptions: { total: 3, live: 1 },
       receipts: { verified: 8, rejected: 0 },
+    });
+    apiMock.revokeAgentCert.mockReset().mockResolvedValue({
+      agent_id: "ag-1",
+      agent: "edge-01",
+      serial: "a17e",
+      reason: "keyCompromise",
+      revoked_at: "2026-10-14T10:00:00Z",
     });
     apiMock.agents.mockReset().mockResolvedValue([
       {
@@ -190,6 +198,32 @@ describe("agent fleet surface", () => {
     fireEvent.click(screen.getByText("Fleet status and safe actions"));
     expect(await screen.findByRole("table", { name: "Registered in-network agents" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh fleet" })).toBeInTheDocument();
+  });
+
+  it("requires an exact certificate selector and explains immediate agent-channel refusal", async () => {
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("table", { name: "Registered in-network agents" });
+    fireEvent.click(screen.getAllByRole("button", { name: "Revoke certificate" })[0]);
+    const dialog = screen.getByRole("alertdialog", { name: "Revoke certificate for edge-01" });
+    expect(dialog).toHaveTextContent(/provide the exact serial or sha-256 fingerprint/i);
+    expect(dialog).toHaveTextContent(/next agent request/i);
+    expect(dialog).not.toHaveTextContent(/once crl and ocsp propagate/i);
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /i understand this revocation cannot be undone/i }));
+    const submit = within(dialog).getByRole("button", { name: "Revoke certificate" });
+    expect(submit).toBeDisabled();
+    expect(apiMock.revokeAgentCert).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText(/serial/i), { target: { value: "a17e" } });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(apiMock.revokeAgentCert).toHaveBeenCalledWith("ag-1", {
+        reason: "keyCompromise",
+        serial: "a17e",
+        fingerprint: undefined,
+      }),
+    );
   });
 
   it("shows a host agent's served job capabilities and distinguishes them from completed work", async () => {

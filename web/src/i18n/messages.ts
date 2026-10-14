@@ -13791,8 +13791,26 @@ export const messages = {
   },
   "agents.design.fleetHelp": {
     defaultMessage:
-      "Inspect exact heartbeat and version evidence here. Revoking a certificate stops that certificate after revocation data propagates; offboarding also leaves a tombstone.",
+      "Inspect exact heartbeat and version evidence here. Revoking an exact client certificate denies its next agent request, including a request on an open connection. Offboarding denies the agent identity and leaves a tombstone.",
     description: "Safety guidance above the agent fleet table.",
+  },
+  "agents.revoke.exactSelectorHelp": {
+    defaultMessage:
+      "Provide the exact serial or SHA-256 fingerprint from the agent client certificate. The control plane refuses it on the next agent request, including renewal on an open connection. If the certificate is unavailable, offboard the agent to deny its identity.",
+    description: "Exact certificate selection and direct agent-channel revocation effect.",
+  },
+  "agents.revoke.inspectHelp": {
+    defaultMessage: "Read the serial and fingerprint from the agent client certificate:",
+    description: "Introduces a stock OpenSSL read-only command for agent certificate selection.",
+  },
+  "agents.revoke.serialLabel": { defaultMessage: "Serial (one selector required)", description: "Exact agent certificate serial input." },
+  "agents.revoke.fingerprintLabel": {
+    defaultMessage: "SHA-256 fingerprint (one selector required)",
+    description: "Exact agent certificate fingerprint input.",
+  },
+  "agents.revoke.selectorRequired": {
+    defaultMessage: "Enter the exact certificate serial or SHA-256 fingerprint.",
+    description: "Error when submitting agent certificate revocation without a selector.",
   },
   "agents.design.refresh": { defaultMessage: "Refresh fleet", description: "Secondary refresh action inside the fleet disclosure." },
   "agents.design.refreshDiagnostics": {

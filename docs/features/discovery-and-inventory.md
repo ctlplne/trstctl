@@ -216,6 +216,15 @@ tombstone and revocation row remain rebuildable from the event log. This agent
 channel checks its own denial on every RPC and renewal; it does not wait for
 CRL or OCSP propagation to terminate agent access.
 
+In **Agents → Fleet status and safe actions → Revoke certificate**, identify the
+exact client certificate with its serial or SHA-256 fingerprint. On the agent host,
+`openssl x509 -in agent.crt -noout -serial -fingerprint -sha256` reads those values
+without exposing the private key. The console requires at least one selector and
+explains that the next agent request is refused, including a request on a connection
+opened before revocation. If the certificate cannot be inspected, **Offboard agent**
+denies the whole agent identity. Operators can use the same selector with the API or
+CLI; an empty selector does not mean “current certificate.”
+
 Enrollment is deliberately two steps in **Agents → Add agent**:
 
 1. **Review exact enrollment plan** asks

@@ -262,6 +262,10 @@ export function Agents() {
 
   async function revokeCert() {
     if (!revokeTarget || !revokeConfirmed) return;
+    if (!revokeSerial.trim() && !revokeFingerprint.trim()) {
+      setRevokeError(t("agents.revoke.selectorRequired"));
+      return;
+    }
     setRevokeBusy(true);
     setRevokeError(null);
     try {
@@ -722,8 +726,10 @@ export function Agents() {
                 {translateNow("source.revoke.certificate.for.a0ed3562dc")} {revokeTarget.name}
               </h2>
               <p id="agent-revoke-cert-description" className="mt-1 text-sm text-muted-foreground">
-                Records a revocation for this agent's client certificate; mTLS RPCs presenting it are rejected once CRL and OCSP propagate. Leave serial and
-                fingerprint empty to revoke the current certificate.
+                {t("agents.revoke.exactSelectorHelp")}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t("agents.revoke.inspectHelp")} <code>openssl x509 -in agent.crt -noout -serial -fingerprint -sha256</code>
               </p>
             </div>
             <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-reason">
@@ -742,7 +748,7 @@ export function Agents() {
               </select>
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-serial">
-              {t("parity.serialOptional_e59169")}
+              {t("agents.revoke.serialLabel")}
               <input
                 id="agent-revoke-serial"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs font-normal"
@@ -753,7 +759,7 @@ export function Agents() {
               />
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-fingerprint">
-              {t("parity.fingerprintOptional_b6cd87")}
+              {t("agents.revoke.fingerprintLabel")}
               <input
                 id="agent-revoke-fingerprint"
                 className="min-h-9 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs font-normal"
@@ -778,7 +784,7 @@ export function Agents() {
               <Button type="button" variant="ghost" onClick={() => setRevokeTarget(null)} disabled={revokeBusy}>
                 {translateNow("source.cancel.19766ed6cc")}
               </Button>
-              <Button type="submit" disabled={revokeBusy || !revokeConfirmed}>
+              <Button type="submit" disabled={revokeBusy || !revokeConfirmed || (!revokeSerial.trim() && !revokeFingerprint.trim())}>
                 {revokeBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {t("parity.revokeCertificate_338ad7")}
               </Button>
