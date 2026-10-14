@@ -82,7 +82,12 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the whole package shares one database, so reset the
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE approved_target_event_fences, application_secret_mutation_fences,
+		`TRUNCATE oidc_session_locators, oidc_logout_receipts,
+		          ca_ceremony_cancel_commands, provider_suspend_commands,
+		          workload_attester_trust_commands, workload_attester_trust_receipts,
+		          identity_terminal_commands, identity_terminal_receipts,
+		          certificate_revocation_authority_fences, certificate_revocation_authority_commands,
+		          approved_target_event_fences, application_secret_mutation_fences,
 		          application_secret_tenant_epochs, application_secret_mutation_receipts,
 		          secret_sync_jobs, dynamic_secret_leases,
 		          secret_store_versions, secret_store,

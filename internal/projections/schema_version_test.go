@@ -423,6 +423,7 @@ func TestLifecycleSchemaVersionGate(t *testing.T) {
 	v2 := events.Event{
 		Type:          projections.EventIdentityRevoked,
 		TenantID:      tenantA,
+		Sequence:      2,
 		SchemaVersion: projections.LifecycleEventSchemaVersion,
 		Data:          v2Payload,
 	}
