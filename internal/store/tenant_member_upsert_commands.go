@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -200,6 +201,11 @@ func (s *Store) SupersedeTenantMemberUpsertCommandTx(ctx context.Context, tx pgx
 // CompleteTenantMemberUpsertCommandTx scrubs pending personal data in the
 // projection transaction. Legacy source events have no command and still replay.
 func (s *Store) CompleteTenantMemberUpsertCommandTx(ctx context.Context, tx pgx.Tx, tenantID, subject string, event events.Event) error {
+	// Legacy source events can carry non-UUID IDs. The command table only
+	// accepts UUID event IDs, so those events have no command to complete.
+	if _, err := uuid.Parse(event.ID); err != nil {
+		return nil
+	}
 	var commandRef string
 	err := tx.QueryRow(ctx, `SELECT subject_ref FROM tenant_member_upsert_commands
 		WHERE tenant_id = $1 AND event_id = $2`, tenantID, event.ID).Scan(&commandRef)
