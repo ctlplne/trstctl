@@ -19,9 +19,13 @@ var (
 )
 
 type LogoutTokenClaims struct {
-	Subject string
-	SID     string
-	JTI     string
+	Issuer    string
+	ClientID  string
+	Subject   string
+	SID       string
+	JTI       string
+	IssuedAt  int64
+	ExpiresAt int64
 }
 
 type logoutTokenClaims struct {
@@ -70,13 +74,16 @@ func (v OIDCLogoutVerifier) Verify(raw string) (LogoutTokenClaims, error) {
 		return LogoutTokenClaims{}, ErrLogoutTokenInvalid
 	}
 	now := v.now().Unix()
-	if c.Exp == 0 || c.Exp <= now || c.Iat > now+60 {
+	if c.Exp == 0 || c.Exp <= now || c.Iat <= 0 || c.Iat > now+60 {
 		return LogoutTokenClaims{}, ErrLogoutTokenInvalid
 	}
 	if v.Replay != nil && !v.Replay.Accept(c.JTI, time.Unix(c.Exp, 0), v.now()) {
 		return LogoutTokenClaims{}, ErrLogoutTokenReplay
 	}
-	return LogoutTokenClaims{Subject: c.Sub, SID: c.SID, JTI: c.JTI}, nil
+	return LogoutTokenClaims{
+		Issuer: c.Iss, ClientID: v.ClientID, Subject: c.Sub, SID: c.SID,
+		JTI: c.JTI, IssuedAt: c.Iat, ExpiresAt: c.Exp,
+	}, nil
 }
 
 type LogoutReplayCache struct {

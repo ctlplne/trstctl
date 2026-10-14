@@ -29,6 +29,17 @@ func newBrowserSessionIssuer(secret []byte, ttl time.Duration, st *store.Store) 
 }
 
 func (s postgresBrowserSessionStore) Create(ctx context.Context, rec auth.SessionRecord) error {
+	method := "other"
+	providerHash, sidHash := "", ""
+	issuedAt := int64(0)
+	if rec.OIDC != nil {
+		method = "oidc"
+		providerHash = oidcProviderHash(rec.OIDC.Issuer, rec.OIDC.ClientID)
+		if rec.OIDC.SID != "" {
+			sidHash = oidcSIDHash(providerHash, rec.OIDC.SID)
+		}
+		issuedAt = rec.OIDC.IssuedAt
+	}
 	return s.store.CreateBrowserSession(ctx, store.BrowserSession{
 		TenantID:    rec.TenantID,
 		SessionHash: rec.ID,
@@ -37,6 +48,7 @@ func (s postgresBrowserSessionStore) Create(ctx context.Context, rec auth.Sessio
 		CreatedAt:   rec.CreatedAt,
 		LastSeenAt:  rec.LastSeenAt,
 		RevokedAt:   rec.RevokedAt,
+		AuthMethod:  method, OIDCProviderHash: providerHash, OIDCSIDHash: sidHash, OIDCIDTokenIat: issuedAt,
 	})
 }
 
@@ -68,6 +80,18 @@ func (s postgresBrowserSessionStore) RevokeSubject(ctx context.Context, tenantID
 	return s.store.RevokeBrowserSessionsBySubject(ctx, tenantID, browserSessionSubjectHash(tenantID, subject), revokedAt)
 }
 
+func (s postgresBrowserSessionStore) RevokeOIDC(ctx context.Context, tenantID string, claims auth.LogoutTokenClaims, revokedAt time.Time) error {
+	providerHash := oidcProviderHash(claims.Issuer, claims.ClientID)
+	subjectHash, sidHash := "", ""
+	if claims.Subject != "" {
+		subjectHash = browserSessionSubjectHash(tenantID, claims.Subject)
+	}
+	if claims.SID != "" {
+		sidHash = oidcSIDHash(providerHash, claims.SID)
+	}
+	return s.store.RevokeBrowserOIDCSessions(ctx, tenantID, providerHash, subjectHash, sidHash, revokedAt)
+}
+
 func (s postgresBrowserSessionStore) Touch(ctx context.Context, tenantID, id string, seenAt time.Time) error {
 	err := s.store.TouchBrowserSession(ctx, tenantID, id, seenAt)
 	if store.IsNotFound(err) {
@@ -78,4 +102,12 @@ func (s postgresBrowserSessionStore) Touch(ctx context.Context, tenantID, id str
 
 func browserSessionSubjectHash(tenantID, subject string) string {
 	return crypto.SHA256Hex([]byte(tenantID + "\x00" + subject))
+}
+
+func oidcProviderHash(issuer, clientID string) string {
+	return crypto.SHA256Hex([]byte(issuer + "\x00" + clientID))
+}
+
+func oidcSIDHash(providerHash, sid string) string {
+	return crypto.SHA256Hex([]byte(providerHash + "\x00" + sid))
 }

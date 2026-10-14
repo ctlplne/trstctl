@@ -24,7 +24,7 @@ func TestOIDCNonceIsMandatory(t *testing.T) {
 
 	withNonce := idToken(t, sk, map[string]any{
 		"iss": testIssuer, "aud": testClientID, "sub": "u", "nonce": "n-abc",
-		"exp": now.Add(time.Hour).Unix(),
+		"exp": now.Add(time.Hour).Unix(), "iat": now.Unix(),
 	})
 	// An empty expected nonce must NOT skip the check — it is a rejection.
 	if _, err := v.Verify(withNonce, ""); err == nil {
@@ -37,7 +37,7 @@ func TestOIDCNonceIsMandatory(t *testing.T) {
 	// A token with no nonce claim is rejected even when a nonce is expected.
 	noNonce := idToken(t, sk, map[string]any{
 		"iss": testIssuer, "aud": testClientID, "sub": "u",
-		"exp": now.Add(time.Hour).Unix(),
+		"exp": now.Add(time.Hour).Unix(), "iat": now.Unix(),
 	})
 	if _, err := v.Verify(noNonce, "n-abc"); err == nil {
 		t.Error("Verify accepted a token carrying no nonce")

@@ -20,6 +20,7 @@ import (
 // Claims are the verified, relevant fields of an OIDC id_token.
 type Claims struct {
 	Subject   string
+	SID       string
 	Email     string
 	Issuer    string
 	Audience  string
@@ -45,6 +46,7 @@ type idTokenClaims struct {
 	Iss   string `json:"iss"`
 	Aud   any    `json:"aud"` // string or []string per OIDC
 	Sub   string `json:"sub"`
+	SID   string `json:"sid"`
 	Email string `json:"email"`
 	Nonce string `json:"nonce"`
 	Exp   int64  `json:"exp"`
@@ -92,6 +94,9 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 	if c.Iss != v.Issuer {
 		return Claims{}, fmt.Errorf("auth: id_token issuer %q is not %q", c.Iss, v.Issuer)
 	}
+	if c.Sub == "" {
+		return Claims{}, fmt.Errorf("auth: id_token missing subject")
+	}
 	if !audienceMatches(c.Aud, v.ClientID) {
 		return Claims{}, fmt.Errorf("auth: id_token audience does not include %q", v.ClientID)
 	}
@@ -113,7 +118,10 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 	if c.Nbf != 0 && now+leeway < c.Nbf {
 		return Claims{}, fmt.Errorf("auth: id_token is not yet valid (nbf)")
 	}
-	if c.Iat != 0 && c.Iat > now+leeway {
+	if c.Iat == 0 {
+		return Claims{}, fmt.Errorf("auth: id_token missing iat")
+	}
+	if c.Iat > now+leeway {
 		return Claims{}, fmt.Errorf("auth: id_token issued in the future (iat)")
 	}
 	// The nonce is mandatory: an empty expected nonce is a rejection, not a skip
@@ -125,7 +133,7 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 		return Claims{}, fmt.Errorf("auth: id_token nonce mismatch")
 	}
 	out := Claims{
-		Subject: c.Sub, Email: c.Email, Issuer: c.Iss, Audience: v.ClientID,
+		Subject: c.Sub, SID: c.SID, Email: c.Email, Issuer: c.Iss, Audience: v.ClientID,
 		Nonce: c.Nonce, ExpiresAt: c.Exp, IssuedAt: c.Iat,
 	}
 	// Per-user → tenant mapping inputs (TENANT-004): extract the configured tenant /

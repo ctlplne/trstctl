@@ -43,6 +43,16 @@ type SessionRecord struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	RevokedAt  *time.Time
+	// OIDC is present only for a browser session established from a verified
+	// OIDC ID token. SAML and LDAP sessions must never match an IdP logout.
+	OIDC *OIDCSessionBinding
+}
+
+type OIDCSessionBinding struct {
+	Issuer   string
+	ClientID string
+	SID      string
+	IssuedAt int64
 }
 
 type SessionStore interface {
@@ -50,6 +60,7 @@ type SessionStore interface {
 	Get(context.Context, string, string) (SessionRecord, error)
 	Revoke(context.Context, string, string, time.Time) error
 	RevokeSubject(context.Context, string, string, time.Time) error
+	RevokeOIDC(context.Context, string, LogoutTokenClaims, time.Time) error
 	Touch(context.Context, string, string, time.Time) error
 }
 
@@ -108,6 +119,23 @@ func (s *MemorySessionStore) RevokeSubject(_ context.Context, tenantID, subject 
 	return nil
 }
 
+func (s *MemorySessionStore) RevokeOIDC(_ context.Context, tenantID string, claims LogoutTokenClaims, revokedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, rec := range s.rows {
+		binding := rec.OIDC
+		if rec.TenantID != tenantID || binding == nil || rec.RevokedAt != nil ||
+			binding.Issuer != claims.Issuer || binding.ClientID != claims.ClientID ||
+			(claims.Subject != "" && rec.Subject != claims.Subject) ||
+			(claims.SID != "" && binding.SID != claims.SID) {
+			continue
+		}
+		rec.RevokedAt = &revokedAt
+		s.rows[id] = rec
+	}
+	return nil
+}
+
 func (s *MemorySessionStore) Touch(_ context.Context, tenantID, id string, seenAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -160,6 +188,20 @@ func (s *SessionIssuer) Issue(subject, tenantID, email string, roles []string) (
 // IssueContext mints a signed, opaque-ID cookie and records only a digest of its
 // random ID in the shared session store.
 func (s *SessionIssuer) IssueContext(ctx context.Context, subject, tenantID, email string, roles []string) (string, error) {
+	return s.issueContext(ctx, subject, tenantID, email, roles, nil)
+}
+
+// IssueOIDCContext keeps the verified provider and IdP session binding with
+// the browser-session authority. A backchannel logout must use these bindings
+// rather than equating an IdP sid with trstctl's independent cookie ID.
+func (s *SessionIssuer) IssueOIDCContext(ctx context.Context, subject, tenantID, email string, roles []string, binding OIDCSessionBinding) (string, error) {
+	if binding.Issuer == "" || binding.ClientID == "" || binding.IssuedAt <= 0 || subject == "" {
+		return "", ErrSessionInvalid
+	}
+	return s.issueContext(ctx, subject, tenantID, email, roles, &binding)
+}
+
+func (s *SessionIssuer) issueContext(ctx context.Context, subject, tenantID, email string, roles []string, binding *OIDCSessionBinding) (string, error) {
 	now := s.now()
 	id, err := randomSessionID()
 	if err != nil {
@@ -178,7 +220,7 @@ func (s *SessionIssuer) IssueContext(ctx context.Context, subject, tenantID, ema
 			ID: stored.ID, Subject: subject, TenantID: tenantID, Email: email, Roles: append([]string(nil), roles...),
 			ExpiresAt: expiresAt.Unix(),
 		},
-		CreatedAt: now, LastSeenAt: now,
+		CreatedAt: now, LastSeenAt: now, OIDC: binding,
 	}); err != nil {
 		return "", err
 	}
@@ -269,6 +311,10 @@ func (s *SessionIssuer) RevokeSubject(subject string) error {
 
 func (s *SessionIssuer) RevokeSubjectContext(ctx context.Context, tenantID, subject string) error {
 	return s.store.RevokeSubject(ctx, tenantID, subject, s.now())
+}
+
+func (s *SessionIssuer) RevokeOIDCContext(ctx context.Context, tenantID string, claims LogoutTokenClaims) error {
+	return s.store.RevokeOIDC(ctx, tenantID, claims, s.now())
 }
 
 func randomSessionID() (string, error) {

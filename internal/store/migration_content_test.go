@@ -19,6 +19,41 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// Existing browser cookies cannot be attributed to an OIDC issuer/sid after an
+// upgrade. The migration must mark them legacy (and therefore unusable) without
+// inventing a provider binding or changing historical revocation timestamps.
+func testMigration0272BrowserOIDCBindingStartsUnclaimed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, session_hash, subject_hash,
+	    expires_at::text, created_at::text, last_seen_at::text, revoked_at::text
+	    FROM browser_sessions ORDER BY tenant_id, session_hash`
+	runPopulatedDefaultMigrationHarness(t, 272, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `INSERT INTO browser_sessions
+				    (tenant_id, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at)
+				    VALUES ($1, $2, $3, '2026-11-01T00:00:00Z'::timestamptz,
+				      '2026-10-13T00:00:00Z'::timestamptz, '2026-10-13T00:01:00Z'::timestamptz,
+				      CASE WHEN $4 THEN '2026-10-13T00:02:00Z'::timestamptz ELSE NULL END)`,
+					tenantID, strings.Repeat(fmt.Sprintf("%x", index+1), 64),
+					strings.Repeat(fmt.Sprintf("%x", index+3), 64), index == 1); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var unbound bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(auth_method = 'legacy'
+			    AND oidc_provider_hash IS NULL AND oidc_sid_hash IS NULL AND oidc_id_token_iat IS NULL)
+			    FROM browser_sessions WHERE tenant_id IN ($1, $2)`, tenantA, tenantB).Scan(&rows, &unbound); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !unbound {
+				t.Fatalf("0272 falsely bound historical browser sessions: rows=%d want=%d unbound=%t", rows, want, unbound)
+			}
+		})
+}
+
 // 0268 gives historical member rows an unclaimed source-order slot. Existing
 // active/offboarded posture and roles must survive; zero must not invent a
 // newer rehire or offboard event during upgrade.
@@ -809,6 +844,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	272: true, // TestMigrationDataContentBackfills/0272_browser_oidc_binding_starts_unclaimed
 	268: true, // TestMigrationDataContentBackfills/0268_tenant_member_sequence_starts_unclaimed
 	267: true, // TestMigrationDataContentBackfills/0267_machine_auth_method_sequence_starts_unclaimed
 	265: true, // TestMigrationDataContentBackfills/0265_discovery_schedule_control_starts_unclaimed
@@ -1874,6 +1910,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0272_browser_oidc_binding_starts_unclaimed", testMigration0272BrowserOIDCBindingStartsUnclaimed)
 	t.Run("0268_tenant_member_sequence_starts_unclaimed", testMigration0268TenantMemberSequenceStartsUnclaimed)
 	t.Run("0267_machine_auth_method_sequence_starts_unclaimed", testMigration0267MachineAuthMethodSequenceStartsUnclaimed)
 	t.Run("0265_discovery_schedule_control_starts_unclaimed", testMigration0265DiscoveryScheduleControlStartsUnclaimed)

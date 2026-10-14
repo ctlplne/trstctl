@@ -363,7 +363,9 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
-	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, preLogin.ReturnTo, preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName)
+	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, preLogin.ReturnTo,
+		&auth.OIDCSessionBinding{Issuer: claims.Issuer, ClientID: claims.Audience, SID: claims.SID, IssuedAt: claims.IssuedAt},
+		preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName)
 }
 
 // prefersLoginRecoveryPage keeps JSON API callers on the existing problem
@@ -509,7 +511,7 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
-	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, returnTo, clearCookies...)
+	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, returnTo, nil, clearCookies...)
 }
 
 func (a *API) authSAMLMetadata(w http.ResponseWriter, _ *http.Request) {
@@ -563,11 +565,17 @@ func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, clearCookies ...string) {
-	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, "", clearCookies...)
+	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, "", nil, clearCookies...)
 }
 
-func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, returnTo string, clearCookies ...string) {
-	token, err := a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
+func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, returnTo string, binding *auth.OIDCSessionBinding, clearCookies ...string) {
+	var token string
+	var err error
+	if binding == nil {
+		token, err = a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
+	} else {
+		token, err = a.auth.Sessions.IssueOIDCContext(r.Context(), claims.Subject, tenantID, claims.Email, roles, *binding)
+	}
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -780,19 +788,10 @@ func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	for _, tenantID := range a.configuredAuthTenants() {
-		if claims.SID != "" {
-			if err := a.auth.Sessions.RevokeContext(r.Context(), tenantID, claims.SID); err != nil {
-				a.auth.ReleaseOIDCLogoutJTI(claims.JTI)
-				a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
-				return
-			}
-		}
-		if claims.Subject != "" {
-			if err := a.auth.Sessions.RevokeSubjectContext(r.Context(), tenantID, claims.Subject); err != nil {
-				a.auth.ReleaseOIDCLogoutJTI(claims.JTI)
-				a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
-				return
-			}
+		if err := a.auth.Sessions.RevokeOIDCContext(r.Context(), tenantID, claims); err != nil {
+			a.auth.ReleaseOIDCLogoutJTI(claims.JTI)
+			a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
+			return
 		}
 	}
 	w.WriteHeader(http.StatusOK)

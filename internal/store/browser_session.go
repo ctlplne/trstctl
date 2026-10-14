@@ -13,18 +13,25 @@ import (
 // replicas. SessionHash and SubjectHash are one-way SHA-256 digests; raw session
 // IDs, names, email addresses, and role claims are never stored in this table.
 type BrowserSession struct {
-	TenantID    string
-	SessionHash string
-	SubjectHash string
-	ExpiresAt   time.Time
-	CreatedAt   time.Time
-	LastSeenAt  time.Time
-	RevokedAt   *time.Time
+	TenantID         string
+	SessionHash      string
+	SubjectHash      string
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
+	LastSeenAt       time.Time
+	RevokedAt        *time.Time
+	AuthMethod       string
+	OIDCProviderHash string
+	OIDCSIDHash      string
+	OIDCIDTokenIat   int64
 }
 
 // CreateBrowserSession records a newly issued session and removes already-expired
 // rows for the same tenant. Both statements execute under the tenant's RLS scope.
 func (s *Store) CreateBrowserSession(ctx context.Context, session BrowserSession) error {
+	if session.AuthMethod == "" {
+		session.AuthMethod = "other"
+	}
 	return s.WithTenant(ctx, session.TenantID, func(tx pgx.Tx) error {
 		if err := lockUpsertArbiterTx(ctx, tx, "tenant_member_offboard_commands", session.TenantID, session.SubjectHash); err != nil {
 			return err
@@ -50,10 +57,12 @@ func (s *Store) CreateBrowserSession(ctx context.Context, session BrowserSession
 		}
 		_, err := tx.Exec(ctx,
 			`INSERT INTO browser_sessions
-			        (tenant_id, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			        (tenant_id, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at,
+			         auth_method, oidc_provider_hash, oidc_sid_hash, oidc_id_token_iat)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), NULLIF($10, ''), NULLIF($11, 0))`,
 			session.TenantID, session.SessionHash, session.SubjectHash, session.ExpiresAt,
-			session.CreatedAt, session.LastSeenAt, session.RevokedAt)
+			session.CreatedAt, session.LastSeenAt, session.RevokedAt, session.AuthMethod,
+			session.OIDCProviderHash, session.OIDCSIDHash, session.OIDCIDTokenIat)
 		return err
 	})
 }
@@ -63,14 +72,32 @@ func (s *Store) GetBrowserSession(ctx context.Context, tenantID, sessionHash str
 	var session BrowserSession
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT tenant_id::text, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at
+			`SELECT tenant_id::text, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at, auth_method
 			   FROM browser_sessions
 			  WHERE tenant_id = $1 AND session_hash = $2`,
 			tenantID, sessionHash).Scan(
 			&session.TenantID, &session.SessionHash, &session.SubjectHash, &session.ExpiresAt,
-			&session.CreatedAt, &session.LastSeenAt, &session.RevokedAt)
+			&session.CreatedAt, &session.LastSeenAt, &session.RevokedAt, &session.AuthMethod)
 	})
+	if err == nil && session.AuthMethod == "legacy" {
+		return BrowserSession{}, pgx.ErrNoRows
+	}
 	return session, err
+}
+
+// RevokeBrowserOIDCSessions restricts IdP logout to the exact provider and
+// verified subject/sid intersection. A SAML or LDAP cookie with the same
+// subject is never a target. Both digest predicates are tenant-scoped.
+func (s *Store) RevokeBrowserOIDCSessions(ctx context.Context, tenantID, providerHash, subjectHash, sidHash string, revokedAt time.Time) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE browser_sessions
+		    SET revoked_at = coalesce(revoked_at, $5)
+		  WHERE tenant_id = $1 AND auth_method = 'oidc' AND oidc_provider_hash = $2
+		    AND ($3 = '' OR subject_hash = $3)
+		    AND ($4 = '' OR oidc_sid_hash = $4)
+		    AND revoked_at IS NULL`, tenantID, providerHash, subjectHash, sidHash, revokedAt)
+		return err
+	})
 }
 
 // TouchBrowserSession advances the idle-time authority for one exact session.

@@ -717,32 +717,32 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:879` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
-| `internal/api/auth.go:890` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:914` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:921` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:878` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
+| `internal/api/auth.go:889` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:913` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:920` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:80` | request cookie for the local handler fixture (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:83` | request cookie for the local handler fixture (CWE-1004) |
-| `internal/api/auth_test.go:226` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:227` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:228` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:229` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:283` | explicit loopback-only plaintext development test (CWE-1004) |
-| `internal/api/auth_test.go:313` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:230` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:284` | explicit loopback-only plaintext development test (CWE-1004) |
 | `internal/api/auth_test.go:314` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:315` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:316` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:463` | test cookie against the test's own local server (CWE-1004) (mismatch) |
-| `internal/api/auth_test.go:483` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:317` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:464` | test cookie against the test's own local server (CWE-1004) (mismatch) |
 | `internal/api/auth_test.go:484` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:511` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:485` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:512` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:541` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:562` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:609` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:881` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
-| `internal/api/auth_test.go:924` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
+| `internal/api/auth_test.go:513` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:542` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:563` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:610` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:926` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
+| `internal/api/auth_test.go:969` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
 | `internal/api/csrf_test.go:37` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:52` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:53` | test cookie against the test's own local server (CWE-1004) |
@@ -757,7 +757,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3731` | closed test table list above |
+| `internal/store/migration_content_test.go:3768` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

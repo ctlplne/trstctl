@@ -5,6 +5,12 @@ These runbooks wire browser sign-on to the served trstctl OIDC path:
 session, `/auth/logout` clears the session, and `/auth/oidc/back-channel-logout`
 accepts logout tokens from providers that support back-channel logout.
 
+OIDC logout matches the verified issuer and client, then the IdP subject and
+`sid` when present. The `sid` is the IdP's identifier; it is not the trstctl
+browser-cookie identifier. SAML and LDAP browser sessions sharing a username
+are outside that match. The browser-session binding migration signs existing
+operators out once so old, unbound cookies cannot survive an IdP logout.
+
 Every provider page uses the same hardened shape:
 
 - trstctl is a **confidential client**. Store the client secret in the encrypted

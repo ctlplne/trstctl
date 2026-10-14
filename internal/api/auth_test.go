@@ -39,7 +39,8 @@ func authConfig() (api.AuthConfig, *auth.SessionIssuer) {
 		},
 		VerifyIDToken: func(idToken, nonce string) (auth.Claims, error) {
 			if idToken == "id-token-good" {
-				return auth.Claims{Subject: "user-1", Email: "u@example.test", Nonce: nonce}, nil
+				return auth.Claims{Subject: "user-1", Email: "u@example.test", Nonce: nonce,
+					Issuer: testOIDCIssuer, Audience: "trstctl-ui", IssuedAt: time.Now().Unix()}, nil
 			}
 			return auth.Claims{}, errors.New("bad id_token")
 		},
@@ -665,8 +666,9 @@ func TestOIDCBackChannelLogoutRevokesSubjectSessions(t *testing.T) {
 	cfg.VerifyOIDCLogoutToken = verifier.Verify
 	cfg.ReleaseOIDCLogoutJTI = verifier.Replay.Release
 	h := api.New(nil, nil, nil, api.WithAuth(cfg))
-	user1a, _ := sessions.Issue("user-1", testTenant, "u1@example.test", []string{"viewer"})
-	user1b, _ := sessions.Issue("user-1", testTenant, "u1@example.test", []string{"viewer"})
+	binding := auth.OIDCSessionBinding{Issuer: testOIDCIssuer, ClientID: "trstctl-ui", IssuedAt: now.Unix()}
+	user1a, _ := sessions.IssueOIDCContext(context.Background(), "user-1", testTenant, "u1@example.test", []string{"viewer"}, binding)
+	user1b, _ := sessions.IssueOIDCContext(context.Background(), "user-1", testTenant, "u1@example.test", []string{"viewer"}, binding)
 	user2, _ := sessions.Issue("user-2", testTenant, "u2@example.test", []string{"viewer"})
 	raw := logoutToken(t, sk, map[string]any{
 		"iss": testOIDCIssuer, "aud": "trstctl-ui", "sub": "user-1", "jti": "logout-1",
@@ -685,6 +687,41 @@ func TestOIDCBackChannelLogoutRevokesSubjectSessions(t *testing.T) {
 	}
 	if _, err := sessions.Verify(user2); err != nil {
 		t.Fatalf("unrelated subject session was revoked: %v", err)
+	}
+}
+
+func TestOIDCBackChannelLogoutKeepsSameSubjectNonOIDCSession(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	sk, err := jose.GenerateRSASigningKey("idp-bcl-method-scope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, sessions := authConfig()
+	verifier := auth.OIDCLogoutVerifier{
+		Issuer: testOIDCIssuer, ClientID: "trstctl-ui", Keys: sk.JWKS(),
+		Replay: auth.NewLogoutReplayCache(), Now: func() time.Time { return now },
+	}
+	cfg.VerifyOIDCLogoutToken = verifier.Verify
+	cfg.ReleaseOIDCLogoutJTI = verifier.Replay.Release
+	h := api.New(nil, nil, nil, api.WithAuth(cfg))
+	// IssueContext represents SAML/LDAP browser sessions, whose subject can
+	// legitimately equal an OIDC subject in the same tenant.
+	nonOIDC, err := sessions.Issue("shared-subject", testTenant, "", []string{"viewer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := logoutToken(t, sk, map[string]any{
+		"iss": testOIDCIssuer, "aud": "trstctl-ui", "sub": "shared-subject", "jti": "logout-method-scope",
+		"iat": now.Unix(), "exp": now.Add(time.Minute).Unix(),
+		"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}},
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, logoutRequest(raw))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("back-channel logout = %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := sessions.Verify(nonOIDC); err != nil {
+		t.Fatalf("OIDC assertion revoked unrelated auth-method session: %v", err)
 	}
 }
 
@@ -750,7 +787,8 @@ func TestOIDCBackChannelLogoutStoreFailureKeepsExactAssertionRetryable(t *testin
 	cfg.VerifyOIDCLogoutToken = verifier.Verify
 	cfg.ReleaseOIDCLogoutJTI = verifier.Replay.Release
 	h := api.New(nil, nil, nil, api.WithAuth(cfg))
-	cookie, err := sessions.Issue("user-1", testTenant, "u@example.test", []string{"viewer"})
+	cookie, err := sessions.IssueOIDCContext(context.Background(), "user-1", testTenant, "u@example.test", []string{"viewer"},
+		auth.OIDCSessionBinding{Issuer: testOIDCIssuer, ClientID: "trstctl-ui", IssuedAt: now.Unix()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -857,6 +895,13 @@ func (s *failingLogoutSessionStore) RevokeSubject(ctx context.Context, tenantID,
 		return errors.New("injected subject-session revoke outage")
 	}
 	return s.SessionStore.RevokeSubject(ctx, tenantID, subject, at)
+}
+
+func (s *failingLogoutSessionStore) RevokeOIDC(ctx context.Context, tenantID string, claims auth.LogoutTokenClaims, at time.Time) error {
+	if s.failSubjectRevoke {
+		return errors.New("injected OIDC-session revoke outage")
+	}
+	return s.SessionStore.RevokeOIDC(ctx, tenantID, claims, at)
 }
 
 func TestAuthLogoutStoreFailurePreservesRetryableCookie(t *testing.T) {
