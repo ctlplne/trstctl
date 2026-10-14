@@ -71,6 +71,29 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lateSessionRaw, lateSessionHash, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(lateSessionRaw)
+	lateSessionID := uuid.NewString()
+	issuedAt := time.Now().UTC().Truncate(time.Microsecond)
+	lateSessionPayload, err := json.Marshal(projections.MachineSessionStarted{
+		ID: lateSessionID, Principal: subject, Method: "qa-jwt",
+		Scopes: []string{"access:read"}, IssuedAt: issuedAt,
+		ExpiresAt: issuedAt.Add(time.Hour), TokenHash: lateSessionHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lateSessionEvent, err := log.Append(ctx, events.Event{
+		ID: uuid.NewString(), Type: projections.EventMachineSessionStarted,
+		TenantID: tenantID, SchemaVersion: events.DefaultSchemaVersion,
+		Time: issuedAt, Data: lateSessionPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	const trigger = "qa_member_offboard_projection_gap"
 	const function = "qa_member_offboard_projection_gap_fn"
@@ -161,6 +184,51 @@ func TestServedMemberOffboardDeniesBearerDuringProjectionGap(t *testing.T) {
 	}
 	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", string(lateRaw), "", nil); code != http.StatusUnauthorized {
 		t.Fatalf("late pre-offboard bearer revived after rehire: status=%d body=%s", code, body)
+	}
+	if err := projections.New(st).Apply(ctx, lateSessionEvent); err != nil {
+		t.Fatalf("late pre-offboard machine-session projection: %v", err)
+	}
+	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", string(lateSessionRaw), "", nil); code != http.StatusUnauthorized {
+		t.Fatalf("late pre-offboard machine bearer revived after rehire: status=%d body=%s", code, body)
+	}
+	lateSession, err := st.GetMachineSession(ctx, tenantID, lateSessionID)
+	if err != nil || lateSession.Status != store.MachineSessionStatusRevoked || lateSession.RevokedAt == nil {
+		t.Fatalf("late pre-offboard machine session ledger: status=%q revoked_at=%v err=%v; want revoked",
+			lateSession.Status, lateSession.RevokedAt, err)
+	}
+	newSessionRaw, newSessionHash, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(newSessionRaw)
+	newSessionID := uuid.NewString()
+	newIssuedAt := time.Now().UTC().Truncate(time.Microsecond)
+	newSessionPayload, err := json.Marshal(projections.MachineSessionStarted{
+		ID: newSessionID, Principal: subject, Method: "qa-jwt",
+		Scopes: []string{"access:read"}, IssuedAt: newIssuedAt,
+		ExpiresAt: newIssuedAt.Add(time.Hour), TokenHash: newSessionHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newSessionEvent, err := log.Append(ctx, events.Event{
+		ID: uuid.NewString(), Type: projections.EventMachineSessionStarted,
+		TenantID: tenantID, SchemaVersion: events.DefaultSchemaVersion,
+		Time: newIssuedAt, Data: newSessionPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, newSessionEvent); err != nil {
+		t.Fatalf("post-rehire machine-session projection: %v", err)
+	}
+	if code, body := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", string(newSessionRaw), "", nil); code != http.StatusOK {
+		t.Fatalf("post-rehire machine bearer refused: status=%d body=%s", code, body)
+	}
+	newSession, err := st.GetMachineSession(ctx, tenantID, newSessionID)
+	if err != nil || newSession.Status != store.MachineSessionStatusActive || newSession.RevokedAt != nil {
+		t.Fatalf("post-rehire machine session ledger: status=%q revoked_at=%v err=%v; want active",
+			newSession.Status, newSession.RevokedAt, err)
 	}
 	// Historical offboard events have no independent command row. Their
 	// projected tombstones must still refuse new credentials after upgrade.

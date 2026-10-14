@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/privacy"
 )
 
 // Machine-session read-model statuses. "expired" is a display state computed
@@ -40,7 +42,31 @@ type MachineSession struct {
 // ApplyMachineSessionStartedTx projects secrets.session.started. The first
 // event owns the row: a duplicate replay cannot reopen a revoked session or
 // replace its principal, method, scopes, or expiry.
-func (s *Store) ApplyMachineSessionStartedTx(ctx context.Context, tx pgx.Tx, m MachineSession) error {
+func (s *Store) ApplyMachineSessionStartedTx(ctx context.Context, tx pgx.Tx, m MachineSession, eventSequence uint64) error {
+	if eventSequence > 1<<63-1 {
+		return errors.New("store: machine-session source sequence exceeds PostgreSQL bigint")
+	}
+	// A retained pre-offboard start can arrive after the offboard projection or
+	// even after an explicit rehire. Serialize with the claim, then derive its
+	// terminal state from the durable source sequence rather than current member
+	// status. A pending claim denies every earlier session start.
+	if err := s.LockTenantMemberSubjectTx(ctx, tx, m.TenantID, m.Principal); err != nil {
+		return err
+	}
+	var offboardAt time.Time
+	err := tx.QueryRow(ctx, `SELECT event_time FROM tenant_member_offboard_commands
+		WHERE tenant_id = $1 AND subject_ref = $2
+		  AND (status = 'pending' OR last_event_sequence >= $3::bigint)`,
+		m.TenantID, privacy.SubjectRef(m.TenantID, m.Principal),
+		strconv.FormatUint(eventSequence, 10)).Scan(&offboardAt)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if err == nil {
+		m.Status = MachineSessionStatusRevoked
+		m.RevokedAt = &offboardAt
+		m.RevokedBy = "member offboard"
+	}
 	if m.Scopes == nil {
 		m.Scopes = []string{}
 	}

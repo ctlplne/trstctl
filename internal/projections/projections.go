@@ -6815,7 +6815,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, ID: pl.ID, Principal: pl.Principal, Method: pl.Method,
 			Scopes: pl.Scopes, Status: store.MachineSessionStatusActive,
 			IssuedAt: issuedAt, ExpiresAt: pl.ExpiresAt,
-		}); err != nil {
+		}, e.Sequence); err != nil {
 			return err
 		}
 		// Legacy v1 events have no token_hash and remain replayable as ledger-only

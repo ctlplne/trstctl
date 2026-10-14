@@ -100,6 +100,9 @@ today (see [Current limitations](../limitations.md) and
    and `secrets login`. A successful machine login returns a scoped `trst_…`
    bearer once. Store it directly in the workload; the ledger retains only its
    hash, and revoking that session makes the bearer stop working immediately.
+   Offboarding the member behind a machine login also revokes that bearer and
+   marks its session revoked. Rehiring the member does not revive an earlier
+   session, even if its start event is processed late.
 
    After granting a workload credential, explicitly choose **Secret to verify** on
    the Machine access page. The check uses that exact name and the new bearer,
