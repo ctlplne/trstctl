@@ -280,6 +280,15 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// two counts and one timestamp, never a tenant, agent, job, reference
 		// name or value.
 		"internal/store/agent_jobs.go": 3,
+		// Authority-removal receivers must recover pending commands across every
+		// tenant before any one tenant is selected. Each enumerator is capped at
+		// 100 opaque tenant/command keys; payloads and certificate data are read
+		// later through that tenant's RLS-scoped transaction. These are four
+		// distinct recovery lanes, each with one reviewed system-pool lookup.
+		"internal/store/certificate_revocation_authority.go": 1,
+		"internal/store/identity_terminal_commands.go":       1,
+		"internal/store/provider_suspend_commands.go":        1,
+		"internal/store/workload_attester_trust_commands.go": 1,
 		// A1: two process-wide reads of the signed receipt ledger for the same
 		// operations surface. "Is the evidence on this control plane intact" is
 		// a question about the deployment, not about one tenant's certificates —

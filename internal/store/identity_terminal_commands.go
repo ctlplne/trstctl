@@ -285,7 +285,7 @@ func (s *Store) PendingIdentityTerminalKeysSystem(ctx context.Context, afterTena
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	//trstctl:system-query — startup inventory exposes only tenant/identity IDs, not event payloads.
+	//trstctl:system-query — cross-tenant startup recovery needs pending tenant/identity keys before any tenant is known; this bounded system read returns no event payload, and each command is loaded in its tenant's RLS context.
 	rows, err := s.SystemPool().Query(ctx, `SELECT tenant_id::text,identity_id::text FROM identity_terminal_commands
 		WHERE status='pending' AND (tenant_id,identity_id) > ($1::uuid,$2::uuid)
 		ORDER BY tenant_id,identity_id LIMIT $3`, afterTenant, afterIdentity, limit)

@@ -212,7 +212,7 @@ func (s *Store) PendingProviderSuspendKeysSystem(ctx context.Context, afterTenan
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	//trstctl:system-query — startup inventory returns only tenant and event IDs, not command payloads.
+	//trstctl:system-query — cross-tenant startup recovery needs pending tenant/event keys before any tenant is known; this bounded system read returns no command payload, and each command is loaded in its tenant's RLS context.
 	rows, err := s.SystemPool().Query(ctx, `SELECT tenant_id::text,event_id FROM provider_suspend_commands
 		WHERE status='pending' AND (tenant_id,event_id) > ($1::uuid,$2)
 		ORDER BY tenant_id,event_id LIMIT $3`, afterTenant, afterEvent, limit)
