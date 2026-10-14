@@ -668,6 +668,9 @@ func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]stri
 // confirmed absent). A store outage must leave the browser with its exact cookie
 // so it can retry; a 204 in that state would falsely report completed logout.
 func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
+	if !a.enforceCSRF(w, r) {
+		return
+	}
 	if a.auth != nil && a.auth.Sessions != nil {
 		if cookie, err := r.Cookie(a.browserSessionCookieName()); err == nil {
 			session, err := a.auth.Sessions.VerifyForLogoutContext(r.Context(), cookie.Value)

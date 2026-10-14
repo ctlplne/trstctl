@@ -823,6 +823,10 @@ func TestAuthLogoutStoreFailurePreservesRetryableCookie(t *testing.T) {
 				req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
 				req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: cookie,
 					Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+				req.AddCookie(&http.Cookie{ // #nosec G124 -- test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set.
+					Name: "trstctl_csrf", Value: "nonce-1",
+					Path: "/", Secure: true, SameSite: http.SameSiteStrictMode})
+				req.Header.Set("X-CSRF-Token", "nonce-1")
 				h.ServeHTTP(rec, req)
 				return rec
 			}
@@ -847,5 +851,53 @@ func TestAuthLogoutStoreFailurePreservesRetryableCookie(t *testing.T) {
 				t.Fatalf("recovered logout left cookie usable: %v", err)
 			}
 		})
+	}
+}
+
+func TestAuthLogoutRequiresMatchingDoubleSubmitCSRF(t *testing.T) {
+	h, sessions := authAPI(t)
+	cookie, err := sessions.Issue("user-1", testTenant, "u@example.test", []string{"admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logout := func(csrfCookie, csrfHeader string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+		req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: cookie,
+			Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+		if csrfCookie != "" {
+			req.AddCookie(&http.Cookie{ // #nosec G124 -- test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set.
+				Name: "trstctl_csrf", Value: csrfCookie,
+				Path: "/", Secure: true, SameSite: http.SameSiteStrictMode})
+		}
+		if csrfHeader != "" {
+			req.Header.Set("X-CSRF-Token", csrfHeader)
+		}
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, tc := range []struct {
+		name, csrfCookie, csrfHeader string
+	}{
+		{name: "missing both"},
+		{name: "missing header", csrfCookie: "nonce-1"},
+		{name: "wrong header", csrfCookie: "nonce-1", csrfHeader: "nonce-2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := logout(tc.csrfCookie, tc.csrfHeader)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("cross-site logout = %d, want 403", rec.Code)
+			}
+			if _, err := sessions.Verify(cookie); err != nil {
+				t.Fatalf("CSRF refusal revoked session: %v", err)
+			}
+		})
+	}
+	accepted := logout("nonce-1", "nonce-1")
+	if accepted.Code != http.StatusNoContent {
+		t.Fatalf("same-origin logout = %d, want 204", accepted.Code)
+	}
+	if _, err := sessions.Verify(cookie); !errors.Is(err, auth.ErrSessionRevoked) {
+		t.Fatalf("accepted logout left cookie usable: %v", err)
 	}
 }
