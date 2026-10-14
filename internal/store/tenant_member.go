@@ -55,28 +55,40 @@ func (s *Store) ShouldApplyTenantMemberEventTx(ctx context.Context, tx pgx.Tx, t
 	if err := lockTenantMemberProjection(ctx, tx, tenantID, subject); err != nil {
 		return false, err
 	}
-	var last int64
-	err = tx.QueryRow(ctx, `SELECT last_event_sequence FROM tenant_members
-		WHERE tenant_id = $1 AND subject = $2`, tenantID, subject).Scan(&last)
-	if err == pgx.ErrNoRows {
-		return true, nil
-	}
+	var last *int64
+	err = tx.QueryRow(ctx, `SELECT max(last_event_sequence) FROM tenant_members
+		WHERE tenant_id = $1 AND (subject = $2 OR subject_ref = $3)`,
+		tenantID, subject, privacy.SubjectRef(tenantID, subject)).Scan(&last)
 	if err != nil {
 		return false, err
 	}
-	if last < 0 {
+	if last == nil {
+		return true, nil
+	}
+	if *last < 0 {
 		return false, fmt.Errorf("store: negative tenant member source sequence")
 	}
 	if sequence == 0 {
-		return last == 0, nil
+		return *last == 0, nil
 	} // In-memory legacy test events only.
-	return last < want, nil
+	return *last < want, nil
 }
 
 // ApplyTenantMemberUpsertedTx projects a tenant.member.upserted event.
 func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m TenantMember) error {
 	if err := lockTenantMemberProjection(ctx, tx, m.TenantID, m.Subject); err != nil {
 		return err
+	}
+	if m.EventSequence > 0 {
+		// A fresh, post-erasure rehire replaces the old pseudonymous
+		// authority tombstone under the full subject reference. Old browser
+		// sessions were revoked by erasure and cannot inherit the new grant.
+		if _, err := tx.Exec(ctx, `DELETE FROM tenant_members
+			WHERE tenant_id = $1 AND subject_ref = $2 AND subject <> $3
+			  AND status = 'offboarded' AND last_event_sequence < $4::bigint`,
+			m.TenantID, privacy.SubjectRef(m.TenantID, m.Subject), m.Subject, strconv.FormatUint(m.EventSequence, 10)); err != nil {
+			return err
+		}
 	}
 	roles := m.Roles
 	if roles == nil {

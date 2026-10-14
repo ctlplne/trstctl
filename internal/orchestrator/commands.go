@@ -2211,12 +2211,12 @@ func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, 
 		TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
 		Data: payload, Actor: actor}
 	requireActive, _ := ctx.Value(requireActiveMemberUpsertKey{}).(bool)
-	command, created, err := o.store.ClaimTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
+	command, _, err := o.store.ClaimTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
 	if err != nil {
 		return store.TenantMember{}, err
 	}
 	if command.Status == "pending" {
-		err = o.reconcileTenantMemberUpsertCommand(ctx, command, created)
+		err = o.reconcileTenantMemberUpsertCommand(ctx, command)
 	}
 	if err != nil {
 		return store.TenantMember{}, err

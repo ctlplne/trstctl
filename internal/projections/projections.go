@@ -6451,6 +6451,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		erasure := store.PrivacySubjectErasure{
 			TenantID:       e.TenantID,
 			SubjectRef:     pl.SubjectRef,
+			SourceSequence: e.Sequence,
 			RequestedByRef: pl.RequestedByRef,
 			Reason:         pl.Reason,
 			Selectors:      pl.Selectors,

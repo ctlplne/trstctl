@@ -951,6 +951,11 @@ While that exact event is pending projection, existing browser sessions keep the
 identity but have no grants; an access check returns 403. A failed member/fence
 read returns an error rather than restoring roles from the old cookie. Recovery
 replays the exact event; a later offboard supersedes one that never appended.
+Subject erasure also revokes existing browser sessions and leaves an offboarded
+pseudonymous member tombstone, even when the member update had not projected yet.
+Recovery compares source event sequence with the erasure event: an older pending
+role change cannot reactivate the erased subject. A later explicit rehire requires
+a new member event and new browser login; the old session remains revoked.
 `GET /auth/me` returns the roles the session holds. The evaluation compose files set
 `default_roles` to `admin` so the first operator can sign in; in production, leave it
 unset or use a read-only role and grant more through member records or mappings.

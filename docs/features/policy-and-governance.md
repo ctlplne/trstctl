@@ -401,6 +401,12 @@ event identity and response after the generic response cache expires or the live
 event moves to the signed audit archive. That record is independent PostgreSQL
 backup state, so projection rebuild and snapshot restore do not erase retry
 authority.
+The erasure projection revokes the subject's browser sessions and records an
+offboarded member tombstone. A role change claimed before erasure cannot be
+published afterward; an already-retained role event is ordered by source
+sequence and cannot restore the erased member's authority. A new explicit
+rehire may create a fresh member record and session without reviving old
+sessions.
 
 When erasure changes bytes in the hot event history, the control plane also emits
 `history.tenant_data_rewrite.continuity`. This is system-signed generation evidence,

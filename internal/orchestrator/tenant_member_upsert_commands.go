@@ -12,7 +12,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -20,7 +19,7 @@ import (
 // reconcileTenantMemberUpsertCommand publishes and projects the exact first
 // event while the cookie-role fence stays committed. A newer offboard claim
 // supersedes an upsert that never reached the immutable log.
-func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, command store.TenantMemberUpsertCommand, newlyClaimed bool) error {
+func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, command store.TenantMemberUpsertCommand) error {
 	if command.Status == "completed" {
 		return nil
 	}
@@ -61,13 +60,13 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 					!reflect.DeepEqual(current.Event.Actor, command.Event.Actor) {
 					return errors.New("orchestrator: member upsert command changed during recovery")
 				}
-				var retained events.Event
-				var found bool
-				if !newlyClaimed {
-					retained, found, err = o.log.EventByID(barrierCtx, current.Event.ID)
-					if err != nil {
-						return fmt.Errorf("orchestrator: resolve member upsert source: %w", err)
-					}
+				retained, found, err := o.log.EventByID(barrierCtx, current.Event.ID)
+				if err != nil {
+					return fmt.Errorf("orchestrator: resolve member upsert source: %w", err)
+				}
+				privacyChanged, erasureSequence, err := o.store.MemberUpsertPrivacyGenerationTx(barrierCtx, tx, current)
+				if err != nil {
+					return err
 				}
 				if found {
 					if retained.TenantID != current.Event.TenantID || retained.Type != current.Event.Type ||
@@ -76,7 +75,29 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 						!reflect.DeepEqual(retained.Actor, current.Event.Actor) {
 						return errors.New("orchestrator: retained member upsert event conflicts with first command")
 					}
+					if erasureSequence > 0 {
+						if retained.Sequence == 0 || retained.Sequence > 1<<63-1 {
+							return errors.New("orchestrator: member upsert has invalid source sequence")
+						}
+						if int64(retained.Sequence) <= erasureSequence {
+							if !privacyChanged || int64(retained.Sequence) == erasureSequence {
+								return errors.New("orchestrator: member upsert source conflicts with privacy erasure order")
+							}
+							return o.store.CompleteTenantMemberUpsertCommandTx(barrierCtx, tx,
+								current.TenantID, payload.Subject, retained)
+						}
+						if privacyChanged {
+							return errors.New("orchestrator: pre-erasure member upsert source appeared after erasure")
+						}
+					}
 				} else {
+					if privacyChanged {
+						if err := o.store.SupersedeTenantMemberUpsertCommandTx(barrierCtx, tx, current); err != nil {
+							return err
+						}
+						superseded = true
+						return nil
+					}
 					changed, err := o.store.MemberUpsertOffboardChangedTx(barrierCtx, tx, current)
 					if err != nil {
 						return err
@@ -123,7 +144,7 @@ func (o *Orchestrator) ReconcilePendingTenantMemberUpserts(ctx context.Context) 
 				break
 			}
 			for _, command := range pending {
-				if err := o.reconcileTenantMemberUpsertCommand(ctx, command, false); err != nil && !errors.Is(err, store.ErrTenantMemberOffboarded) {
+				if err := o.reconcileTenantMemberUpsertCommand(ctx, command); err != nil && !errors.Is(err, store.ErrTenantMemberOffboarded) {
 					return healed, fmt.Errorf("orchestrator: reconcile member upsert %s: %w", command.Event.ID, err)
 				}
 				healed++

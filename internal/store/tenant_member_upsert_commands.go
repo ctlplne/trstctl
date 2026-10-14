@@ -26,13 +26,14 @@ type TenantMemberUpsertCommand struct {
 	TenantID          string
 	SubjectRef        string
 	OffboardEventID   *string
+	PrivacyEventID    *string
 	Event             events.Event
 	LastEventSequence int64
 	Status            string
 }
 
 const tenantMemberUpsertCommandColumns = `tenant_id::text, subject_ref, event_id::text,
-    event_time, event_schema_version, offboard_event_id::text, event_actor,
+    event_time, event_schema_version, offboard_event_id::text, privacy_erasure_event_id, event_actor,
     event_payload, payload_sha256, last_event_sequence, status`
 
 func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, error) {
@@ -40,7 +41,7 @@ func scanTenantMemberUpsertCommand(row pgx.Row) (TenantMemberUpsertCommand, erro
 	var actor, payload []byte
 	var digest *string
 	if err := row.Scan(&c.TenantID, &c.SubjectRef, &c.Event.ID, &c.Event.Time,
-		&c.Event.SchemaVersion, &c.OffboardEventID, &actor, &payload, &digest,
+		&c.Event.SchemaVersion, &c.OffboardEventID, &c.PrivacyEventID, &actor, &payload, &digest,
 		&c.LastEventSequence, &c.Status); err != nil {
 		return c, err
 	}
@@ -124,6 +125,10 @@ func (s *Store) ClaimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 				WHERE tenant_id = $1 AND subject_ref = $2`, tenantID, ref).Scan(&offboardEventID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
+			privacyEventID, _, err := latestMemberPrivacyErasureTx(barrierCtx, tx, tenantID, ref)
+			if err != nil {
+				return err
+			}
 			var actor []byte
 			if ev.Actor != nil {
 				actor, err = json.Marshal(ev.Actor)
@@ -134,16 +139,17 @@ func (s *Store) ClaimTenantMemberUpsertCommand(ctx context.Context, tenantID, su
 			if canonical.Status != "" {
 				_, err = tx.Exec(barrierCtx, `UPDATE tenant_member_upsert_commands
 				 SET event_id = $3, event_time = $4, event_schema_version = $5,
-				     offboard_event_id = $6, event_actor = $7, event_payload = $8,
-				     payload_sha256 = $9, last_event_sequence = 0, status = 'pending', updated_at = now()
+				     offboard_event_id = $6, privacy_erasure_event_id = $7,
+				     event_actor = $8, event_payload = $9,
+				     payload_sha256 = $10, last_event_sequence = 0, status = 'pending', updated_at = now()
 				 WHERE tenant_id = $1 AND subject_ref = $2`, tenantID, ref, ev.ID, ev.Time,
-					ev.SchemaVersion, offboardEventID, actor, ev.Data, crypto.SHA256Hex(ev.Data))
+					ev.SchemaVersion, offboardEventID, privacyEventID, actor, ev.Data, crypto.SHA256Hex(ev.Data))
 			} else {
 				_, err = tx.Exec(barrierCtx, `INSERT INTO tenant_member_upsert_commands
 				 (tenant_id, subject_ref, event_id, event_time, event_schema_version,
-				  offboard_event_id, event_actor, event_payload, payload_sha256)
-				 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, tenantID, ref, ev.ID, ev.Time,
-					ev.SchemaVersion, offboardEventID, actor, ev.Data, crypto.SHA256Hex(ev.Data))
+				  offboard_event_id, privacy_erasure_event_id, event_actor, event_payload, payload_sha256)
+				 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, tenantID, ref, ev.ID, ev.Time,
+					ev.SchemaVersion, offboardEventID, privacyEventID, actor, ev.Data, crypto.SHA256Hex(ev.Data))
 			}
 			if err != nil {
 				return err
@@ -181,6 +187,36 @@ func (s *Store) MemberUpsertOffboardChangedTx(ctx context.Context, tx pgx.Tx, c 
 		return current != nil || c.OffboardEventID != nil, nil
 	}
 	return *current != *c.OffboardEventID, nil
+}
+
+// latestMemberPrivacyErasureTx uses the projected source sequence, not clock
+// time, to order an erasure against a role event. The subject reference stays
+// complete even after the visible member name is pseudonymized.
+func latestMemberPrivacyErasureTx(ctx context.Context, tx pgx.Tx, tenantID, subjectRef string) (*string, int64, error) {
+	var eventID string
+	var sequence int64
+	err := tx.QueryRow(ctx, `SELECT event_id, event_sequence
+		FROM privacy_subject_erasure_operations
+		WHERE tenant_id = $1 AND subject_ref = $2
+		ORDER BY event_sequence DESC LIMIT 1`, tenantID, subjectRef).Scan(&eventID, &sequence)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, 0, nil
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	return &eventID, sequence, nil
+}
+
+func (s *Store) MemberUpsertPrivacyGenerationTx(ctx context.Context, tx pgx.Tx, c TenantMemberUpsertCommand) (bool, int64, error) {
+	current, sequence, err := latestMemberPrivacyErasureTx(ctx, tx, c.TenantID, c.SubjectRef)
+	if err != nil {
+		return false, 0, err
+	}
+	if current == nil || c.PrivacyEventID == nil {
+		return current != nil || c.PrivacyEventID != nil, sequence, nil
+	}
+	return *current != *c.PrivacyEventID, sequence, nil
 }
 
 func (s *Store) SupersedeTenantMemberUpsertCommandTx(ctx context.Context, tx pgx.Tx, c TenantMemberUpsertCommand) error {

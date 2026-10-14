@@ -99,7 +99,9 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 	srcRolePending, err := src.ListPendingTenantMemberUpsertCommands(ctx, tenantA, 10)
 	if err != nil || len(srcRolePending) != 1 ||
-		srcRolePending[0].Event.ID != "00000000-0000-0000-0000-00000000a028" {
+		srcRolePending[0].Event.ID != "00000000-0000-0000-0000-00000000a028" ||
+		srcRolePending[0].PrivacyEventID == nil ||
+		*srcRolePending[0].PrivacyEventID != "full-dr-privacy-role-event" {
 		t.Fatalf("source pending member role fence: rows=%+v err=%v", srcRolePending, err)
 	}
 	if _, _, _, pending, err := src.MemberSessionAuthority(ctx, tenantA, "full-dr-pending-role"); err != nil || !pending {
@@ -217,6 +219,8 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	dstRolePending, err := dst.ListPendingTenantMemberUpsertCommands(ctx, tenantA, 10)
 	if err != nil || len(dstRolePending) != 1 ||
 		dstRolePending[0].Event.ID != srcRolePending[0].Event.ID ||
+		dstRolePending[0].PrivacyEventID == nil ||
+		*dstRolePending[0].PrivacyEventID != *srcRolePending[0].PrivacyEventID ||
 		!bytes.Equal(dstRolePending[0].Event.Data, srcRolePending[0].Event.Data) {
 		t.Fatalf("restored pending member role fence: source=%+v destination=%+v err=%v",
 			srcRolePending, dstRolePending, err)
@@ -815,6 +819,16 @@ func seedRecoveredFromPostgresTables(
 					tenantA, "full-dr-privacy-operation", "sha256:full-dr-request",
 					"full-dr-privacy-event", int64(17), "subject:full-dr",
 					"actor:full-dr", "approved erasure", `{}`, `{"owners":1}`, now,
+				}},
+			{`INSERT INTO privacy_subject_erasure_operations
+			        (tenant_id, operation_id, request_binding, event_id, event_sequence,
+			         subject_ref, requested_by_ref, reason, selectors, counts, erased_at)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`,
+				[]any{
+					tenantA, "full-dr-privacy-role-operation", "sha256:full-dr-role-request",
+					"full-dr-privacy-role-event", int64(18),
+					privacy.SubjectRef(tenantA, "full-dr-pending-role"),
+					"actor:full-dr", "prior erasure", `{}`, `{}`, now,
 				}},
 			{`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-token-hash", "full-dr-share", []byte{0xee, 0xff}, now.Add(time.Hour)}},
 			// AUD-77: a crash fence and a completed mutation receipt are independent

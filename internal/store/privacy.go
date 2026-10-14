@@ -187,6 +187,7 @@ func ValidatePrivacyErasureCountsV3(counts map[string]int) error {
 type PrivacySubjectErasure struct {
 	TenantID       string
 	SubjectRef     string
+	SourceSequence uint64
 	RequestedByRef string
 	Reason         string
 	Selectors      PrivacyErasureSelectors
@@ -1003,6 +1004,18 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		return err
 	}
 	placeholder := privacy.Placeholder(e.SubjectRef)
+	if e.SourceSequence > 1<<63-1 {
+		return errors.New("store: privacy erasure source sequence exceeds PostgreSQL range")
+	}
+	// The tombstone INSERT and replayed member projection use the same
+	// primary-key arbiter. Serialize their speculative inserts so the other
+	// unique member index cannot reject an otherwise identical replay.
+	if err := lockTenantMemberProjection(ctx, tx, e.TenantID, placeholder); err != nil {
+		return err
+	}
+	if err := s.RevokeBrowserSessionsBySubjectTx(ctx, tx, e.TenantID, e.SubjectRef, e.ErasedAt); err != nil {
+		return err
+	}
 	if err := pseudonymizeLegacyCodeSigningOperationKeysTx(
 		ctx, tx, e.TenantID, e.Selectors.CodeSigningOperationIDs,
 	); err != nil {
@@ -1018,10 +1031,34 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		        updated_at = $4,
 		        offboarded_at = COALESCE(offboarded_at, $4),
 		        offboarded_by = 'privacy-erasure',
-		        offboard_reason = CASE WHEN offboard_reason = '' THEN $5 ELSE offboard_reason END
-		  WHERE tenant_id = $1 AND subject_ref = $2 AND subject <> $3`,
-		e.TenantID, e.SubjectRef, placeholder, e.ErasedAt, e.Reason); err != nil {
+		        offboard_reason = CASE WHEN offboard_reason = '' THEN $5 ELSE offboard_reason END,
+		        last_event_sequence = GREATEST(last_event_sequence, $6::bigint)
+		  WHERE tenant_id = $1 AND subject_ref = $2 AND subject <> $3
+		    AND ($6::bigint = 0 OR last_event_sequence <= $6::bigint)`,
+		e.TenantID, e.SubjectRef, placeholder, e.ErasedAt, e.Reason, int64(e.SourceSequence)); err != nil {
 		return err
+	}
+	if e.SourceSequence > 0 {
+		// A pre-append member command may have no projected row. An erased
+		// subject still needs a durable authority tombstone after completion.
+		if _, err := tx.Exec(ctx, `INSERT INTO tenant_members
+			(tenant_id, subject, subject_ref, display_name, email, roles, source, status,
+			 created_at, updated_at, offboarded_at, offboarded_by, offboard_reason, last_event_sequence)
+			SELECT $1, $2, $3, '', '', '{}', 'privacy-erasure', 'offboarded',
+			       $4, $4, $4, 'privacy-erasure', $5, $6::bigint
+			WHERE NOT EXISTS (SELECT 1 FROM tenant_members
+			                  WHERE tenant_id = $1 AND subject_ref = $3
+			                    AND last_event_sequence > $6::bigint)
+			ON CONFLICT (tenant_id, subject) DO UPDATE
+			SET status = 'offboarded', display_name = '', email = '', roles = '{}',
+			    scim_identity = NULL, updated_at = EXCLUDED.updated_at,
+			    offboarded_at = COALESCE(tenant_members.offboarded_at, EXCLUDED.offboarded_at),
+			    offboarded_by = 'privacy-erasure', offboard_reason = EXCLUDED.offboard_reason,
+			    last_event_sequence = GREATEST(tenant_members.last_event_sequence, EXCLUDED.last_event_sequence)
+			WHERE tenant_members.last_event_sequence <= EXCLUDED.last_event_sequence`,
+			e.TenantID, placeholder, e.SubjectRef, e.ErasedAt, e.Reason, int64(e.SourceSequence)); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE api_tokens
@@ -1195,6 +1232,7 @@ func (s *Store) ApplyPrivacySubjectErasureOperationTx(
 	}
 	if tag.RowsAffected() == 1 {
 		op.Counts = counts
+		op.SourceSequence = op.EventSequence
 		if err := s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure); err != nil {
 			return err
 		}
@@ -1229,6 +1267,7 @@ func (s *Store) ApplyPrivacySubjectErasureOperationTx(
 	// subject aggregate. Reapplying the exact event must therefore still rebuild
 	// that aggregate; replay order ensures a later subject operation wins again.
 	op.Counts = counts
+	op.SourceSequence = op.EventSequence
 	if err := s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure); err != nil {
 		return err
 	}
