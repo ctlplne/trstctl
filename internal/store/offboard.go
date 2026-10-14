@@ -639,6 +639,14 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 	// before attesting erasure, then restore the customer scope for the normal
 	// catalog verification pass. Member offboard admission already fences a
 	// concurrent login before it can create another browser row/locator pair.
+	var priorTenant, priorSearchPath string
+	if err := tx.QueryRow(ctx, `SELECT current_setting('trstctl.tenant_id'),
+		current_setting('search_path')`).Scan(&priorTenant, &priorSearchPath); err != nil {
+		return att, fmt.Errorf("store: capture tenant offboard scope: %w", err)
+	}
+	if priorTenant != tenantID {
+		return att, errors.New("store: tenant offboard transaction scope changed before auth-locator erase")
+	}
 	if err := setOIDCAuthScopeTx(ctx, tx); err != nil {
 		return att, err
 	}
@@ -649,8 +657,12 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 	}
 	att.Deleted["oidc_session_locators"] += int(locatorTag.RowsAffected())
 	att.Total += int(locatorTag.RowsAffected())
-	if err := setOIDCCustomerScopeTx(ctx, tx, tenantID); err != nil {
-		return att, err
+	// Resume the exact caller path. A pooled tenant may enter with PostgreSQL's
+	// default "$user", public path; replacing it with just public changes the
+	// transaction seen by later lifecycle projections.
+	if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id',$1,true),
+		set_config('search_path',$2,true)`, priorTenant, priorSearchPath); err != nil {
+		return att, fmt.Errorf("store: restore tenant offboard scope: %w", err)
 	}
 
 	// Verification pass: in the same transaction (and same tenant RLS context),
