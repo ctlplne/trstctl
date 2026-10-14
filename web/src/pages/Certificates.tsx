@@ -1600,7 +1600,7 @@ function CertificateWorkspace() {
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
-                <dd>{detail.status}</dd>
+                <dd>{detail.revocation_pending ? translateNow("certificates.revocation.authorityPendingLabel") : detail.status}</dd>
               </div>
               {detail.status === "revoked" && (
                 <>
@@ -1905,7 +1905,9 @@ function certificateColumns(
       header: "Needs attention",
       className: "whitespace-nowrap align-middle",
       cell: (c) =>
-        c.status === "active" && c.expected_ephemeral_expiry ? (
+        c.revocation_pending ? (
+          <StatusBadge value="pending" label={translateNow("certificates.revocation.authorityPendingLabel")} tone="warning" />
+        ) : c.status === "active" && c.expected_ephemeral_expiry ? (
           <span className="text-muted-foreground">{translateNow("certificates.jit.expectedExpiry")}</span>
         ) : c.status === "active" ? (
           <StatusBadge vocabulary="expiry" value={validityBandForDates(c.not_before, c.not_after)} />
@@ -1920,7 +1922,11 @@ function certificateColumns(
       className: "whitespace-nowrap align-middle",
       cell: (c) => (
         <div className="grid gap-1">
-          <StatusBadge vocabulary="certificate" value={c.status} />
+          {c.revocation_pending ? (
+            <StatusBadge value="pending" label={translateNow("certificates.revocation.authorityPendingLabel")} tone="warning" />
+          ) : (
+            <StatusBadge vocabulary="certificate" value={c.status} />
+          )}
           {c.status === "revoked" && c.revocation_reason && <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>}
         </div>
       ),

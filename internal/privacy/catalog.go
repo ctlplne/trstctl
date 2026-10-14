@@ -118,6 +118,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "workload identity",
 		},
 		{
+			ID:             "identity_terminal_commands.pending-payload",
+			Location:       "identity_terminal_commands.event_payload",
+			Category:       "transient identity lifecycle operator reason",
+			Purpose:        "recover the first terminal identity event after ambiguous append or projection failure",
+			RetentionClass: "transient:until-terminal-projection",
+			Erasure:        "privacy.subject.erased pseudonymizes pending command material; projection removes the payload while retaining opaque denial",
+			Owner:          "certificate lifecycle",
+		},
+		{
 			ID:             "machine_auth_method_commands.pending-actor",
 			Location:       "machine_auth_method_commands.event_actor/event_payload",
 			Category:       "transient machine-auth method operator subject",

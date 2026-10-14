@@ -12,10 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/ownership"
@@ -468,6 +470,10 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		return errors.New("orchestrator: issuance binding is only valid for requested -> issued")
 	}
 	commandTime := time.Now().UTC()
+	terminal := to == StateRevoked || to == StateRetired
+	if terminal {
+		commandTime = commandTime.Truncate(time.Microsecond)
+	}
 	var ownershipReadiness *store.OwnershipReadinessEvidence
 	if o.ownershipAttestationCadence > 0 && to == StateDeployed {
 		if approval != nil || issuance != nil {
@@ -500,10 +506,27 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	sideEffectKey := ""
 	if hasSideEffect {
 		eventID = events.NewID()
+		if terminal {
+			eventID = uuid.NewString()
+		}
 		sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
 		schemaVersion = projections.LifecycleSideEffectEventSchemaVersion
 	}
 	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey, SubjectCSRPEM: subjectCSRPEM, Approval: approval, Issuance: issuance, OwnershipReadiness: ownershipReadiness}
+	terminalRequestBinding := ""
+	if terminal {
+		boundRequest, err := json.Marshal(struct {
+			TenantID, CompletedDestination string
+			Payload                        transitionPayload
+			Compromise                     *EndpointContainmentRequest
+			SideEffectPayload              []byte
+			ExpectedVersion                *uint64
+		}{tenantID, completedDestination, basePayload, compromise, sideEffectPayload, expectedVersion})
+		if err != nil {
+			return err
+		}
+		terminalRequestBinding = crypto.SHA256Hex(boundRequest)
+	}
 	if approval != nil {
 		schemaVersion = projections.LifecycleApprovalEventSchemaVersion
 		eventID = approvalExecutionEventID(tenantID, *approval)
@@ -529,6 +552,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			eventID = keyCompromiseEventID(tenantID, identityID, idempotencyKey)
 		}
 		sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
+	}
+	if terminal && eventID == "" {
+		eventID = uuid.NewString()
 	}
 	// Classify the claim demand from the RAW side-effect payload, before any
 	// sealing transform makes it opaque (epic A3). The classifier is injected by
@@ -677,6 +703,13 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				}
 				return &TransitionError{IdentityID: identityID, From: State(locked.Status), To: to}
 			}
+			if !terminal {
+				if _, _, found, err := o.store.IdentityTerminalState(ctx, tenantID, identityID); err != nil {
+					return err
+				} else if found {
+					return fmt.Errorf("%w: identity has terminal authority", store.ErrIdempotencyConflict)
+				}
+			}
 			if approval != nil {
 				if approval.ResourceKind != "identity" || approval.ResourceID != identityID ||
 					approval.FromState != string(from) || approval.ToState != string(to) ||
@@ -792,6 +825,18 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					return err
 				}
 				var reservedID int64
+				if pending, pendingErr := o.store.IdentityTerminalCommandByIdentity(ctx, tenantID, identityID); pendingErr == nil && pending.Status == "pending" {
+					if pending.RequestBinding != terminalRequestBinding {
+						return store.ErrIdempotencyConflict
+					}
+					var prior transitionPayload
+					if err := json.Unmarshal(pending.Event.Data, &prior); err != nil || prior.CompromiseContainment == nil || prior.CompromiseContainment.OutboxID <= 0 {
+						return store.ErrIdempotencyConflict
+					}
+					reservedID = prior.CompromiseContainment.OutboxID
+				} else if pendingErr != nil && !store.IsNotFound(pendingErr) {
+					return pendingErr
+				}
 				if found {
 					if retained.TenantID != tenantID || retained.Type != evType ||
 						retained.SchemaVersion != schemaVersion {
@@ -802,6 +847,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 						return err
 					}
 					if prior.CompromiseContainment == nil || prior.CompromiseContainment.OutboxID <= 0 {
+						return store.ErrIdempotencyConflict
+					}
+					if reservedID != 0 && reservedID != prior.CompromiseContainment.OutboxID {
 						return store.ErrIdempotencyConflict
 					}
 					reservedID = prior.CompromiseContainment.OutboxID
@@ -840,6 +888,21 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				if err != nil {
 					return err
 				}
+			}
+			if terminal {
+				if schemaVersion == 0 {
+					schemaVersion = events.DefaultSchemaVersion
+				}
+				first, err := o.store.ClaimIdentityTerminalCommand(ctx, store.IdentityTerminalCommand{
+					IdentityID: identityID, RequestBinding: terminalRequestBinding, TargetState: string(to),
+					Event: events.Event{ID: eventID, Type: evType, TenantID: tenantID,
+						Time: eventTime, SchemaVersion: schemaVersion, Data: payload},
+				})
+				if err != nil {
+					return err
+				}
+				eventID, eventTime, schemaVersion, payload = first.Event.ID, first.Event.Time,
+					first.Event.SchemaVersion, first.Event.Data
 			}
 			ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, Time: eventTime, SchemaVersion: schemaVersion, Data: payload})
 			if err != nil {

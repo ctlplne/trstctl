@@ -47,6 +47,12 @@ var RecoveredFromPostgresBackup = []string{
 	// Attester trust removal blocks new proofs before its event projects.
 	"workload_attester_trust_commands",
 	"workload_attester_trust_receipts",
+	// Terminal identity admission remains denied before lifecycle projection.
+	"identity_terminal_commands",
+	"identity_terminal_receipts",
+	// Revocation denial and exact recoverable commands survive restore.
+	"certificate_revocation_authority_commands",
+	"certificate_revocation_authority_fences",
 	// A pending agent removal denies old mTLS authority before its source event
 	// reaches the read model; restore its exact first-writer command.
 	"agent_removal_commands",

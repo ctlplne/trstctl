@@ -1177,6 +1177,11 @@ func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Contex
 // already committed its transition and outbox together, or moved past this work;
 // it must not get a new credential-deploy command from the old issuance retry.
 func (d *issuanceDispatcher) deployCredential(ctx context.Context, tenantID string, ident store.Identity, reason string, certPEM, keyPEM []byte, fingerprint string, allowRedeploy bool) error {
+	if _, _, terminal, err := d.store.IdentityTerminalState(ctx, tenantID, ident.ID); err != nil {
+		return err
+	} else if terminal {
+		return errors.New("server: terminal identity authority refuses credential deployment")
+	}
 	connName, target := deploymentRoutingAttrs(ident.Attributes)
 	targetID := deploymentTargetID(ident.Attributes)
 	if target == "" {
@@ -1289,11 +1294,8 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		return err
 	}
 	defer wipeConnectorDeployPayload(&p)
-	if d.connectorDeployVantage(p.Connector) == connector.VantageHostAgent {
-		// Legacy rows predate required_agent_role. The decoded family is their
-		// last safe routing boundary, so refuse before registry lookup or I/O.
-		return orchestrator.DeferDelivery(fmt.Errorf(
-			"server: %s deploy executes on the enrolled host agent, not the control plane", p.Connector))
+	if err := d.requireControlPlaneDeployAuthority(ctx, m.TenantID, identityID, p.Connector); err != nil {
+		return err
 	}
 	p.TenantID = m.TenantID
 	receipt := connectorDeliveryEvidence{
@@ -1420,6 +1422,25 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		return []byte("deployed:" + p.Connector), nil
 	}
 	return d.runConnectorEffect(ctx, m, receipt, connector.ReplaySafetyAtMostOnce, effect)
+}
+
+func (d *issuanceDispatcher) requireControlPlaneDeployAuthority(ctx context.Context, tenantID string, identityID *string, connectorName string) error {
+	if identityID != nil {
+		_, _, terminal, err := d.store.IdentityTerminalState(ctx, tenantID, *identityID)
+		if err != nil {
+			return err
+		}
+		if terminal {
+			return orchestrator.DefiniteNoEffect(errors.New("server: terminal identity authority refuses connector deployment"))
+		}
+	}
+	if d.connectorDeployVantage(connectorName) == connector.VantageHostAgent {
+		// Legacy rows predate required_agent_role. The decoded family is their
+		// last safe routing boundary, so refuse before registry lookup or I/O.
+		return orchestrator.DeferDelivery(fmt.Errorf(
+			"server: %s deploy executes on the enrolled host agent, not the control plane", connectorName))
+	}
+	return nil
 }
 
 // connectorDeployVantage uses the production registry declaration when it has

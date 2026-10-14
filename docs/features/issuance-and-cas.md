@@ -548,6 +548,20 @@ asynchronous: a committed result is not proof that publication or a relying-part
 check succeeded. Follow the delivery outcome, verify signed CRL/OCSP data, and test
 a client configured to enforce revocation before declaring containment complete.
 
+The local CA denies a Good OCSP answer as soon as an exact revocation command
+is accepted, even if its event append or SQL projection must be recovered after
+a crash. CRL readers likewise refuse an older signed list while that command
+is pending or while the current issuer ledger contains more revoked serials
+than the latest full signed CRL. The outbox worker publishes the replacement;
+an unavailable CRL during this window is an explicit distribution failure to
+monitor, not evidence that a relying party has rejected the leaf. A revoked or
+retired identity also stops queued local signing, deployment, and host renewal
+work from receiving fresh authority while its terminal event is reconciled.
+Certificate list and detail responses expose `revocation_pending`; identity
+list and detail responses expose `terminal_pending` and the accepted
+`terminal_target_state`. The console labels these pending states so an operator
+can distinguish accepted authority removal from completed projection.
+
 For one managed certificate, **Certificates → Revocation & CT → Revocation center** is the
 safe operator path. It is a three-step journey: choose the X.509 identity and factual
 RFC 5280 reason; fetch an effect-free server preview; then type the exact credential

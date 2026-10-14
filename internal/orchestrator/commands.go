@@ -2019,8 +2019,12 @@ func (o *Orchestrator) RevokeCertificateForCA(ctx context.Context, tenantID, fin
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventCertificateRevoked, tenantID, payload)
-	return err
+	if caID == "" {
+		_, err = o.emit(ctx, projections.EventCertificateRevoked, tenantID, payload)
+		return err
+	}
+	eventID := "certificate-direct:" + crypto.SHA256Hex([]byte(tenantID+"\x00"+string(payload)))
+	return o.revokeCertificateForCAWithAuthority(ctx, tenantID, eventID, fingerprint, serial, caID, reason, reasonCode, payload)
 }
 
 // RevokeCertificateForCAWithEventID is the durable receiver form used by H3.
@@ -2036,9 +2040,50 @@ func (o *Orchestrator) RevokeCertificateForCAWithEventID(ctx context.Context, te
 	if err != nil {
 		return err
 	}
-	_, err = o.emitPreparedExact(ctx, events.Event{
-		ID: eventID, Type: projections.EventCertificateRevoked, TenantID: tenantID, Data: payload,
+	if caID == "" {
+		_, err = o.emitPreparedExact(ctx, events.Event{
+			ID: eventID, Type: projections.EventCertificateRevoked, TenantID: tenantID, Data: payload,
+		})
+		return err
+	}
+	return o.revokeCertificateForCAWithAuthority(ctx, tenantID, eventID, fingerprint, serial, caID, reason, reasonCode, payload)
+}
+
+func (o *Orchestrator) revokeCertificateForCAWithAuthority(ctx context.Context, tenantID, eventID, fingerprint, serial, caID, reason string, reasonCode int, payload []byte) error {
+	if !crypto.IsValidRevocationReason(reason) || reason == "removeFromCRL" ||
+		crypto.CRLReasonCode(crypto.RevocationReason(reason)) != reasonCode {
+		return ErrCertificateRevocationInvalid
+	}
+	ctx, release, err := o.beginTenantCommand(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	certificate, err := o.store.GetCertificateByFingerprint(ctx, tenantID, fingerprint)
+	if err != nil {
+		return err
+	}
+	if certificate.Serial != serial || (certificate.CAID != "" && certificate.CAID != caID) {
+		return fmt.Errorf("%w: direct certificate revocation target differs from inventory", store.ErrIdempotencyConflict)
+	}
+	if _, found, err := o.store.LookupIssuedCert(ctx, tenantID, caID, serial); err != nil {
+		return err
+	} else if !found {
+		return fmt.Errorf("%w: direct certificate revocation has no issuer record", store.ErrIdempotencyConflict)
+	}
+	first, err := o.store.ClaimCertificateRevocationAuthority(ctx, store.CertificateRevocationAuthorityCommand{
+		Event: events.Event{ID: eventID, Type: projections.EventCertificateRevoked,
+			TenantID: tenantID, Time: time.Now().UTC().Truncate(time.Microsecond),
+			SchemaVersion: events.DefaultSchemaVersion, Data: payload},
+		RequestBinding: crypto.SHA256Hex([]byte(tenantID + "\x00" + string(payload))),
+		Targets: []store.CertificateRevocationAuthorityTarget{{
+			CAID: caID, Serial: serial, Fingerprint: fingerprint,
+		}},
 	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emitPreparedExact(ctx, first.Event)
 	return err
 }
 

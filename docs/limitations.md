@@ -4256,6 +4256,16 @@ tenant's CRL set ahead of `nextUpdate`. Trusted issue, renewal, revocation,
 protocol-enrollment, and scheduler paths publish CRLs; public CRL reads
 are read-only and return 404 until artifacts are already published for a
 tenant that has issued certificates. A query for a revoked serial returns
+
+When a local revocation has been accepted but its event has not projected,
+OCSP refuses a Good answer and CRL readers refuse the predecessor artifact.
+After projection, CRL readers continue to refuse an older signed artifact
+until its revoked count covers the current issuer ledger. The replacement is
+published by the outbox worker; clients configured to soft-fail may still
+accept a leaf during this unavailable interval, so relay health and stock-client
+rejection remain separate evidence.
+
+A query for a revoked serial returns
 `revoked` over OCSP and the serial appears on the full CRL, its shard, and
 any applicable delta CRL within the freshness window; a query for an
 issued-but-not-revoked serial returns `good`; an unknown serial returns a

@@ -102,8 +102,11 @@ const ocspCatchUpInterval = 5 * time.Second
 
 type revocationStore interface {
 	LookupIssuedCert(ctx context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error)
+	PendingCertificateRevocationForSerial(ctx context.Context, tenantID, caID, serial string) (bool, error)
+	PendingCertificateRevocationForCA(ctx context.Context, tenantID, caID string) (bool, error)
 	HasIssuedCerts(ctx context.Context, tenantID, caID string) (bool, error)
 	ListRevokedCerts(ctx context.Context, tenantID, caID string) ([]store.IssuedCert, error)
+	CountRevokedCerts(ctx context.Context, tenantID, caID string) (int64, error)
 	NextCRLNumber(ctx context.Context, tenantID, caID string) (int64, error)
 	InsertCRL(ctx context.Context, c store.CRL) error
 	TenantsWithIssuedCerts(ctx context.Context, caID string) ([]string, error)
@@ -148,6 +151,11 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 	}
 	if noncePresent {
 		s.observeOCSPNonce("echoed")
+	}
+	if pending, err := s.store.PendingCertificateRevocationForSerial(ctx, tenantID, s.caID, serial); err != nil {
+		return nil, err
+	} else if pending {
+		return nil, errors.New("server: issuer serial has a pending revocation decision")
 	}
 	rec, found, err := s.store.LookupIssuedCert(ctx, tenantID, s.caID, serial)
 	if err != nil {
@@ -280,6 +288,11 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 // Recovery, manual, and scheduler entry points continue to use generateCRL,
 // which performs the catch-up before entering this helper.
 func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context, tenantID string) ([]byte, error) {
+	if pending, err := s.store.PendingCertificateRevocationForCA(ctx, tenantID, s.caID); err != nil {
+		return nil, err
+	} else if pending {
+		return nil, errors.New("server: issuer has a pending revocation decision")
+	}
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -449,6 +462,11 @@ func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) erro
 // read path, so it must never mutate tenant state: CRLs are produced by trusted
 // issuance/revocation/scheduler paths, not by unauthenticated GETs.
 func (s *revocationService) servedCRL(ctx context.Context, tenantID string) ([]byte, error) {
+	if pending, err := s.store.PendingCertificateRevocationForCA(ctx, tenantID, s.caID); err != nil {
+		return nil, err
+	} else if pending {
+		return nil, errors.New("server: issuer has a pending revocation decision")
+	}
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -461,12 +479,20 @@ func (s *revocationService) servedCRL(ctx context.Context, tenantID string) ([]b
 		return nil, err
 	}
 	if found {
+		if err := s.requireFreshFullCRL(ctx, tenantID, crl); err != nil {
+			return nil, err
+		}
 		return crl.DER, nil
 	}
 	return nil, errCRLNotPublished
 }
 
 func (s *revocationService) servedCRLShard(ctx context.Context, tenantID string, shardIndex int) ([]byte, error) {
+	if pending, err := s.store.PendingCertificateRevocationForCA(ctx, tenantID, s.caID); err != nil {
+		return nil, err
+	} else if pending {
+		return nil, errors.New("server: issuer has a pending revocation decision")
+	}
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -481,6 +507,9 @@ func (s *revocationService) servedCRLShard(ctx context.Context, tenantID string,
 	if !found || full.ShardCount <= 1 || shardIndex < 0 || shardIndex >= full.ShardCount {
 		return nil, errCRLNotPublished
 	}
+	if err := s.requireFreshFullCRL(ctx, tenantID, full); err != nil {
+		return nil, err
+	}
 	shard, found, err := s.store.LatestCRLShard(ctx, tenantID, s.caID, shardIndex)
 	if err != nil {
 		return nil, err
@@ -492,12 +521,27 @@ func (s *revocationService) servedCRLShard(ctx context.Context, tenantID string,
 }
 
 func (s *revocationService) servedDeltaCRL(ctx context.Context, tenantID string, baseNumber int64) ([]byte, error) {
+	if pending, err := s.store.PendingCertificateRevocationForCA(ctx, tenantID, s.caID); err != nil {
+		return nil, err
+	} else if pending {
+		return nil, errors.New("server: issuer has a pending revocation decision")
+	}
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, errNoCRLSurface
+	}
+	full, found, err := s.store.LatestCRL(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, errCRLNotPublished
+	}
+	if err := s.requireFreshFullCRL(ctx, tenantID, full); err != nil {
+		return nil, err
 	}
 	delta, found, err := s.store.LatestDeltaCRL(ctx, tenantID, s.caID, baseNumber)
 	if err != nil {
@@ -507,6 +551,22 @@ func (s *revocationService) servedDeltaCRL(ctx context.Context, tenantID string,
 		return nil, errCRLNotPublished
 	}
 	return delta.DER, nil
+}
+
+// A projected revocation is not yet published merely because its outbox row
+// exists. Until the latest full signed artifact covers every revoked issuer
+// row, serving it would tell an offline client that the certificate is valid.
+// Issuer revocation is monotonic, so an equal count plus the non-shrinking CRL
+// publication check proves the full artifact includes the current set.
+func (s *revocationService) requireFreshFullCRL(ctx context.Context, tenantID string, full store.CRL) error {
+	revoked, err := s.store.CountRevokedCerts(ctx, tenantID, s.caID)
+	if err != nil {
+		return err
+	}
+	if int64(full.RevokedCount) != revoked {
+		return errCRLNotPublished
+	}
+	return nil
 }
 
 type crlManifestResponse struct {
@@ -530,6 +590,11 @@ type crlManifestShardResponse struct {
 }
 
 func (s *revocationService) servedCRLManifest(ctx context.Context, tenantID string) (crlManifestResponse, error) {
+	if pending, err := s.store.PendingCertificateRevocationForCA(ctx, tenantID, s.caID); err != nil {
+		return crlManifestResponse{}, err
+	} else if pending {
+		return crlManifestResponse{}, errors.New("server: issuer has a pending revocation decision")
+	}
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return crlManifestResponse{}, err
@@ -560,6 +625,11 @@ func (s *revocationService) servedCRLManifest(ctx context.Context, tenantID stri
 				manifest.DeltaBaseNumber = *artifact.DeltaBaseNumber
 				manifest.DeltaURL = fmt.Sprintf("/crl/%s/delta/%d", tenantID, *artifact.DeltaBaseNumber)
 			}
+		}
+	}
+	if manifest.FullNumber != 0 {
+		if err := s.requireFreshFullCRL(ctx, tenantID, store.CRL{RevokedCount: manifest.RevokedCount}); err != nil {
+			return crlManifestResponse{}, err
 		}
 	}
 	if manifest.FullNumber == 0 {

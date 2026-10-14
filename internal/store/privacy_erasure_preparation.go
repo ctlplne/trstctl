@@ -30,6 +30,7 @@ const (
 	PrivacyRecoveryFenceCACeremonyCancel     = "ca_ceremony_cancel"
 	PrivacyRecoveryFenceProviderSuspend      = "provider_suspend"
 	PrivacyRecoveryFenceAttesterTrust        = "attester_trust"
+	PrivacyRecoveryFenceIdentityTerminal     = "identity_terminal"
 	PrivacyRecoveryFenceAgentRemoval         = "agent_removal"
 	PrivacyRecoveryFenceMachineAuthMethod    = "machine_auth_method"
 	PrivacyRecoveryFenceTenantMemberOffboard = "tenant_member_offboard"
@@ -130,6 +131,7 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 			fence.Kind != PrivacyRecoveryFenceCACeremonyCancel &&
 			fence.Kind != PrivacyRecoveryFenceProviderSuspend &&
 			fence.Kind != PrivacyRecoveryFenceAttesterTrust &&
+			fence.Kind != PrivacyRecoveryFenceIdentityTerminal &&
 			fence.Kind != PrivacyRecoveryFenceAgentRemoval &&
 			fence.Kind != PrivacyRecoveryFenceMachineAuthMethod &&
 			fence.Kind != PrivacyRecoveryFenceTenantMemberOffboard &&
@@ -413,6 +415,10 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
+		identityTerminalFences, err := s.prepareIdentityTerminalFencesTx(ctx, tx, tenantID, subject)
+		if err != nil {
+			return err
+		}
 		methodFences, err := s.prepareMachineAuthMethodFencesTx(ctx, tx, tenantID, subject)
 		if err != nil {
 			return err
@@ -430,6 +436,7 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			return err
 		}
 		recoveryFences := append(append(append(append(append(append(append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), caCancelFences...), providerSuspendFences...), attesterTrustFences...), methodFences...), memberFences...), memberUpsertFences...), agentFences...)
+		recoveryFences = append(recoveryFences, identityTerminalFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -453,6 +460,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			recoveryFences, PrivacyRecoveryFenceProviderSuspend)
 		selected.Counts["workload_attester_trust_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceAttesterTrust)
+		selected.Counts["identity_terminal_commands"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceIdentityTerminal)
 		selected.Counts["machine_auth_method_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceMachineAuthMethod)
 		selected.Counts["tenant_member_offboard_commands"] = countPrivacyRecoveryFences(
@@ -1283,6 +1292,65 @@ func (s *Store) prepareAttesterTrustFencesTx(
 		}
 		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
 			Kind: PrivacyRecoveryFenceAttesterTrust, EventID: row.eventID,
+			Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
+func (s *Store) prepareIdentityTerminalFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingRow struct {
+		eventID, eventType, digest string
+		version                    int
+		payload                    []byte
+	}
+	rows, err := tx.Query(ctx, `SELECT event_id::text,event_type,event_schema_version,event_payload,payload_sha256
+		FROM identity_terminal_commands WHERE tenant_id=$1 AND status='pending'
+		ORDER BY identity_id FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var row pendingRow
+		if err := rows.Scan(&row.eventID, &row.eventType, &row.version, &row.payload, &row.digest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, row := range pending {
+		if crypto.SHA256Hex(row.payload) != row.digest {
+			return nil, fmt.Errorf("store: identity terminal command %s payload digest mismatch", row.eventID)
+		}
+		rewritten, changed, err := events.PseudonymizeEventDataForSubject(
+			row.payload, tenantID, subject, row.eventType, row.version)
+		if err != nil {
+			return nil, err
+		}
+		if !changed {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE identity_terminal_commands SET
+			event_payload=$3,payload_sha256=$4,updated_at=now()
+			WHERE tenant_id=$1 AND event_id=$2 AND status='pending'`, tenantID, row.eventID,
+			rewritten, crypto.SHA256Hex(rewritten))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind: PrivacyRecoveryFenceIdentityTerminal, EventID: row.eventID,
 			Disposition: PrivacyRecoveryFencePseudonymized,
 		})
 	}

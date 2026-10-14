@@ -2910,5 +2910,6 @@ function pageQueryString(options?: { limit?: number; cursor?: string }, scopedId
  * (OpenAPI Identity) names this field `status`; this helper keeps the call sites
  * decoupled from the field name so a future contract change is a one-line edit here. */
 export function identityState(i: Identity): string {
+  if (i.terminal_pending) return i.terminal_target_state === "retired" ? "retirement_pending" : "revocation_pending";
   return i.status ?? "";
 }

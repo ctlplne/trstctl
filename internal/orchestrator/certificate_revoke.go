@@ -146,12 +146,40 @@ func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, com
 					return err
 				}
 				version := 1
+				targets := make([]store.CertificateRevocationAuthorityTarget, 0, len(batch.Items))
 				for _, item := range batch.Items {
 					if item.Status == "queued" {
 						version = projections.CertificateExternalRevocationSchemaVersion
 					}
+					if item.Status == "revoked" {
+						issuer, issuerErr := o.store.IssuedCertificateForRevocationTx(ctx, tx, tenantID, item.CAID, item.Serial)
+						if issuerErr != nil {
+							return issuerErr
+						}
+						if !issuer.Revoked() {
+							targets = append(targets, store.CertificateRevocationAuthorityTarget{
+								CAID: item.CAID, Serial: item.Serial, Fingerprint: item.Fingerprint,
+							})
+						}
+					}
 				}
-				event, err := o.log.Append(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRevocationBatchApplied, TenantID: tenantID, Data: payload, SchemaVersion: version})
+				eventTime := time.Now().UTC().Truncate(time.Microsecond)
+				if len(targets) != 0 {
+					first, claimErr := o.store.ClaimCertificateRevocationAuthority(ctx, store.CertificateRevocationAuthorityCommand{
+						Event: events.Event{ID: eventID, Type: projections.EventCertificateRevocationBatchApplied,
+							TenantID: tenantID, Time: eventTime, Data: payload, SchemaVersion: version},
+						RequestBinding: requestBinding, Targets: targets,
+					})
+					if claimErr != nil {
+						return claimErr
+					}
+					eventTime, payload, version = first.Event.Time, first.Event.Data, first.Event.SchemaVersion
+					if err := json.Unmarshal(payload, &batch); err != nil || batch.RequestBinding != requestBinding ||
+						batch.Reason != reason || !sameCertificateRevocationSelection(batch, selected) {
+						return store.ErrIdempotencyConflict
+					}
+				}
+				event, err := o.log.Append(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRevocationBatchApplied, TenantID: tenantID, Time: eventTime, Data: payload, SchemaVersion: version})
 				if err != nil {
 					return err
 				}

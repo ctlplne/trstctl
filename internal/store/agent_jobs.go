@@ -266,8 +266,15 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			                 SELECT 1 FROM identities AS i
 			                  WHERE i.tenant_id = c.tenant_id
 			                    AND i.status IN ('revoked', 'retired')
-			                    AND c.destination = 'endpoint.renew'
-			                    AND i.id::text = CASE WHEN c.destination = 'endpoint.renew'
+			                    AND c.destination IN ('endpoint.renew','connector.deploy')
+			                    AND i.id::text = CASE WHEN c.destination IN ('endpoint.renew','connector.deploy')
+			                        THEN convert_from(c.payload, 'UTF8')::jsonb ->> 'identity_id' END
+			           )
+			           AND NOT EXISTS (
+			                 SELECT 1 FROM identity_terminal_commands AS terminal
+			                  WHERE terminal.tenant_id = c.tenant_id
+			                    AND c.destination IN ('endpoint.renew','connector.deploy')
+			                    AND terminal.identity_id::text = CASE WHEN c.destination IN ('endpoint.renew','connector.deploy')
 			                        THEN convert_from(c.payload, 'UTF8')::jsonb ->> 'identity_id' END
 			           )
 		           -- A disabled target pauses ordinary deployment work, but an exact
@@ -557,7 +564,18 @@ func (s *Store) RedeemAgentJobCredential(
 			return out, false, nil
 		}
 	}
+	if expected.Destination == "connector.deploy" && json.Unmarshal(expected.Payload, &host) != nil {
+		return out, false, nil
+	}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// The terminal transition and credential handoff take the same
+		// per-identity lock. Whichever commits first defines whether this
+		// attempt may receive material; a read-only precheck would race.
+		if host.IdentityID != "" {
+			if err := lockUpsertArbiterTx(ctx, tx, "identity_terminal_commands", tenantID, host.IdentityID); err != nil {
+				return err
+			}
+		}
 		if expected.Destination == "connector.rollback" {
 			if err := s.checkConnectorRollbackPayloadTx(ctx, tx, tenantID, expected.Payload); err != nil {
 				if errors.Is(err, ErrUnsafeRollback) {
@@ -596,6 +614,10 @@ func (s *Store) RedeemAgentJobCredential(
 			                WHERE i.tenant_id = $1 AND i.id::text = $13
 			                  AND i.status IN ('revoked', 'retired')
 			           )
+			   AND NOT EXISTS (
+			       SELECT 1 FROM identity_terminal_commands terminal
+			        WHERE terminal.tenant_id = $1 AND terminal.identity_id::text = $13
+			   )
 			 ), ins AS (
 			    INSERT INTO agent_job_credential_redemptions
 			           (tenant_id, job_id, attempt, agent_id, binding, expires_at)

@@ -4634,7 +4634,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.CAID == "" || pl.Serial == "" {
 			return nil
 		}
-		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.ReasonCode, revokedAt)
+		if err := p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.ReasonCode, revokedAt); err != nil {
+			return err
+		}
+		return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, e)
 	case EventCertificateRevocationBatchApplied:
 		return p.applyCertificateRevocationBatchTx(ctx, tx, e)
 	case EventCertificateSuperseded:
@@ -7223,8 +7226,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				}
 			}
 			if pl.To == "revoked" || pl.To == "retired" {
-				_, err := p.stopIdentityWorkTx(ctx, tx, e.TenantID, pl.IdentityID, time.Now().UTC())
-				return err
+				if _, err := p.stopIdentityWorkTx(ctx, tx, e.TenantID, pl.IdentityID, time.Now().UTC()); err != nil {
+					return err
+				}
+				return p.store.CompleteIdentityTerminalCommandTx(ctx, tx, pl.IdentityID, e)
 			}
 			return nil
 		}

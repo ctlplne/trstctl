@@ -192,6 +192,9 @@ function actionForTarget(state: string, target: TransitionTo): Action | undefine
 }
 
 function terminalMessage(state: string): string | null {
+  if (state === "revocation_pending" || state === "retirement_pending") {
+    return translateNow("identities.lifecycle.terminalProjectionPending");
+  }
   if (state === "retired") {
     return "Terminal state: retired identities have no valid next transition.";
   }
@@ -694,7 +697,12 @@ export function Identities() {
       {
         id: "state",
         header: "State",
-        cell: (identity) => <StatusBadge vocabulary="lifecycle" value={identityState(identity)} />,
+        cell: (identity) =>
+          identity.terminal_pending ? (
+            <StatusBadge value="pending" label={translateNow("identities.lifecycle.terminalPendingLabel")} tone="warning" />
+          ) : (
+            <StatusBadge vocabulary="lifecycle" value={identityState(identity)} />
+          ),
       },
       {
         id: "delivery",

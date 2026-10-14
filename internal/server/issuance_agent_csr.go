@@ -112,12 +112,9 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	if identityID == "" {
 		return nil, status.Error(codes.FailedPrecondition, "this renewal job names no identity")
 	}
-	ident, err := d.store.GetIdentity(ctx, tenantID, identityID)
+	ident, err := d.agentCSRIdentityUnderFence(ctx, tenantID, identityID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "load identity %s: %v", identityID, err)
-	}
-	if ident.Status == string(orchestrator.StateRevoked) || ident.Status == string(orchestrator.StateRetired) {
-		return nil, status.Error(codes.PermissionDenied, "the identity is revoked or retired; this host job no longer authorizes signing")
+		return nil, err
 	}
 
 	// Idempotency keyed on the CSR'S OWN BYTES, not on the job attempt alone.
@@ -223,6 +220,22 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	}, nil
 }
 
+func (d *issuanceDispatcher) agentCSRIdentityUnderFence(ctx context.Context, tenantID, identityID string) (store.Identity, error) {
+	if _, _, terminal, err := d.store.IdentityTerminalState(ctx, tenantID, identityID); err != nil {
+		return store.Identity{}, status.Errorf(codes.Internal, "check terminal identity authority: %v", err)
+	} else if terminal {
+		return store.Identity{}, status.Error(codes.PermissionDenied, "the identity has terminal authority; this host job no longer authorizes signing")
+	}
+	ident, err := d.store.GetIdentity(ctx, tenantID, identityID)
+	if err != nil {
+		return store.Identity{}, status.Errorf(codes.Internal, "load identity %s: %v", identityID, err)
+	}
+	if ident.Status == string(orchestrator.StateRevoked) || ident.Status == string(orchestrator.StateRetired) {
+		return store.Identity{}, status.Error(codes.PermissionDenied, "the identity is revoked or retired; this host job no longer authorizes signing")
+	}
+	return ident, nil
+}
+
 // Check the retained migration authority before the signer sees a CSR. Receipt
 // validation alone is too late: a drifted job could otherwise mint an orphan
 // certificate and only then fail to join the incident run.
@@ -300,6 +313,11 @@ func (d *issuanceDispatcher) checkAgentCSRRequestBinding(
 // Call only while holding this identity's issuance fence, before replaying an
 // idempotent result or making a new signing request.
 func (d *issuanceDispatcher) identityStillPermitsIssuance(ctx context.Context, tenantID, identityID string) error {
+	if _, _, terminal, err := d.store.IdentityTerminalState(ctx, tenantID, identityID); err != nil {
+		return err
+	} else if terminal {
+		return errors.New("the identity has terminal authority; this command no longer authorizes issuance")
+	}
 	ident, err := d.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
 		return err

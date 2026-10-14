@@ -122,17 +122,19 @@ type identityRequest struct {
 }
 
 type identityResponse struct {
-	ID         string          `json:"id"`
-	TenantID   string          `json:"tenant_id"`
-	Kind       string          `json:"kind"`
-	Name       string          `json:"name"`
-	OwnerID    string          `json:"owner_id"`
-	IssuerID   *string         `json:"issuer_id"`
-	Status     string          `json:"status"`
-	NotBefore  *time.Time      `json:"not_before"`
-	NotAfter   *time.Time      `json:"not_after"`
-	Attributes json.RawMessage `json:"attributes"`
-	CreatedAt  time.Time       `json:"created_at"`
+	ID                  string          `json:"id"`
+	TenantID            string          `json:"tenant_id"`
+	Kind                string          `json:"kind"`
+	Name                string          `json:"name"`
+	OwnerID             string          `json:"owner_id"`
+	IssuerID            *string         `json:"issuer_id"`
+	Status              string          `json:"status"`
+	TerminalPending     bool            `json:"terminal_pending"`
+	TerminalTargetState string          `json:"terminal_target_state,omitempty"`
+	NotBefore           *time.Time      `json:"not_before"`
+	NotAfter            *time.Time      `json:"not_after"`
+	Attributes          json.RawMessage `json:"attributes"`
+	CreatedAt           time.Time       `json:"created_at"`
 }
 
 func toIdentityResponse(it store.Identity) identityResponse {
@@ -445,7 +447,15 @@ func (a *API) getIdentity(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toIdentityResponse(it))
+	pending, err := a.store.PendingIdentityTerminalTargets(r.Context(), tenantID, []string{it.ID})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response := toIdentityResponse(it)
+	response.TerminalTargetState = pending[it.ID]
+	response.TerminalPending = response.TerminalTargetState != ""
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
@@ -465,8 +475,20 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]identityResponse, 0, len(idents))
+	ids := make([]string, 0, len(idents))
 	for _, it := range idents {
-		items = append(items, toIdentityResponse(it))
+		ids = append(ids, it.ID)
+	}
+	pending, err := a.store.PendingIdentityTerminalTargets(r.Context(), tenantID, ids)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	for _, it := range idents {
+		response := toIdentityResponse(it)
+		response.TerminalTargetState = pending[it.ID]
+		response.TerminalPending = response.TerminalTargetState != ""
+		items = append(items, response)
 	}
 	next := ""
 	if len(idents) == limit {

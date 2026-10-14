@@ -368,7 +368,7 @@ not this file.
 | `internal/store/dynamic_secret_lease.go:644` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/honey_token.go:38` | SQL column names only; this string contains no credential material. |
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
-| `internal/store/privacy_erasure_preparation.go:173` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/privacy_erasure_preparation.go:175` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
@@ -497,10 +497,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:604` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5279` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5296` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5309` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5337` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5282` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5299` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5312` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5340` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -529,7 +529,7 @@ not this file.
 | `internal/server/protocol_mounts.go:914` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:916` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
-| `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
+| `internal/server/revocation.go:436` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:213` | bounded small ints from config (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:1004` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:1008` | positive int64 is exactly representable as uint64. |
@@ -985,7 +985,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2560` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2517` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2537` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1354,8 +1354,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2444` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2521` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2464` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2541` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1537,7 +1537,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2527` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2547` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

@@ -9575,6 +9575,8 @@ export interface components {
             not_before?: string;
             /** Format: uuid */
             owner_id?: string;
+            /** @description An exact local issuer revocation command is authoritative while its event projection is pending; OCSP Good and predecessor CRLs are refused. */
+            revocation_pending?: boolean;
             revocation_reason?: string;
             /** Format: date-time */
             revoked_at?: string;
@@ -11682,6 +11684,13 @@ export interface components {
             status: string;
             /** Format: uuid */
             tenant_id?: string;
+            /** @description A revoked or retired identity command is already authoritative but its event has not projected. Signing, deployment and host renewal are denied while recovery completes. */
+            terminal_pending?: boolean;
+            /**
+             * @description Target of the accepted pending terminal command; absent when no command is pending.
+             * @enum {string}
+             */
+            terminal_target_state?: "revoked" | "retired";
         };
         IdentityConnectorTargetRequest: {
             /** Format: uuid */

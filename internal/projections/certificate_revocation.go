@@ -134,5 +134,5 @@ func (p *Projector) applyCertificateRevocationBatchTx(ctx context.Context, tx pg
 			return err
 		}
 	}
-	return nil
+	return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, event)
 }

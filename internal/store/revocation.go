@@ -209,6 +209,18 @@ func (s *Store) ListRevokedCerts(ctx context.Context, tenantID, caID string) ([]
 	return out, err
 }
 
+// CountRevokedCerts is the issuer-scoped publication watermark check. The
+// (tenant_id, ca_id, revoked_at) index keeps the read on this authority's
+// revoked rows; no event replay or cross-tenant scan occurs on a CRL request.
+func (s *Store) CountRevokedCerts(ctx context.Context, tenantID, caID string) (int64, error) {
+	var count int64
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM ca_issued_certs
+			WHERE tenant_id=$1 AND ca_id=$2 AND revoked_at IS NOT NULL`, tenantID, caID).Scan(&count)
+	})
+	return count, err
+}
+
 // CRL is a published certificate revocation list.
 type CRL struct {
 	TenantID        string

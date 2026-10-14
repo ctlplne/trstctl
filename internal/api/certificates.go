@@ -51,9 +51,10 @@ type certificateResponse struct {
 	// Lifecycle status (active | superseded | revoked) and revocation metadata, so
 	// the served surface reflects a revoked certificate — a revoked cert is
 	// visibly "revoked", not silently still "active".
-	Status           string     `json:"status"`
-	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
-	RevocationReason string     `json:"revocation_reason,omitempty"`
+	Status            string     `json:"status"`
+	RevocationPending bool       `json:"revocation_pending"`
+	RevokedAt         *time.Time `json:"revoked_at,omitempty"`
+	RevocationReason  string     `json:"revocation_reason,omitempty"`
 	// Custody: where this certificate's private key was generated and what
 	// holds it (epic B5). An auditor asks about the certificate in front of
 	// them, not about the system in general, so this is recorded per
@@ -308,6 +309,12 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := toCertificateResponse(c)
+	pending, err := a.store.PendingCertificateRevocationFingerprints(r.Context(), tenantID, []string{c.Fingerprint})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response.RevocationPending = pending[c.Fingerprint]
 	response.IdentityIDs = bindings[c.ID]
 	if c.IssuanceEventID != "" {
 		provenance, err := a.store.ListKubernetesCertificateProvenance(r.Context(), tenantID, []string{c.Fingerprint})
@@ -388,8 +395,18 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	allFingerprints := make([]string, 0, len(certs))
+	for _, c := range certs {
+		allFingerprints = append(allFingerprints, c.Fingerprint)
+	}
+	pending, err := a.store.PendingCertificateRevocationFingerprints(r.Context(), tenantID, allFingerprints)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	for _, c := range certs {
 		response := toCertificateResponse(c)
+		response.RevocationPending = pending[c.Fingerprint]
 		response.IdentityIDs = bindings[c.ID]
 		if c.IssuanceEventID != "" {
 			response.KubernetesProvenance = provenance[c.Fingerprint]

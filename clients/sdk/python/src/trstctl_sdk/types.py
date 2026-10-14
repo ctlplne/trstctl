@@ -2921,6 +2921,7 @@ Certificate = TypedDict(
         'not_after': str,
         'not_before': str,
         'owner_id': str,
+        'revocation_pending': bool,
         'revocation_reason': str,
         'revoked_at': str,
         'sans': list[str],
@@ -5616,6 +5617,8 @@ Identity = TypedDict(
         'owner_id': str,
         'status': str,
         'tenant_id': str,
+        'terminal_pending': bool,
+        'terminal_target_state': str,
     },
     total=False,
 )

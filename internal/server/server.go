@@ -1190,6 +1190,26 @@ func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchest
 		} else if healed > 0 && d.Logger != nil {
 			d.Logger.Warn("reconciled attester trust commands missed by an append/project crash", slog.Int("healed", healed))
 		}
+		if healed, err := reconcilePendingIdentityTerminals(ctx, d.Store, d.Log); err != nil {
+			if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+				return fmt.Errorf("server: reconcile terminal identity commands: %w", err)
+			}
+			if d.Logger != nil {
+				d.Logger.Warn("terminal identity recovery is blocked by active privacy erasure; signing remains denied")
+			}
+		} else if healed > 0 && d.Logger != nil {
+			d.Logger.Warn("reconciled terminal identity commands missed by an append/project crash", slog.Int("healed", healed))
+		}
+		if healed, err := reconcilePendingCertificateRevocationAuthority(ctx, d.Store, d.Log); err != nil {
+			if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+				return fmt.Errorf("server: reconcile certificate revocation authority: %w", err)
+			}
+			if d.Logger != nil {
+				d.Logger.Warn("certificate revocation recovery is blocked by active privacy erasure; OCSP and CRL remain fenced")
+			}
+		} else if healed > 0 && d.Logger != nil {
+			d.Logger.Warn("reconciled certificate revocation authority missed by an append/project crash", slog.Int("healed", healed))
+		}
 	}
 	if healed, reconcileErr := a.ReconcileApplicationSecretMutationFences(ctx); reconcileErr != nil {
 		if !errors.Is(reconcileErr, api.ErrApplicationSecretMutationReconcileBlocked) {
@@ -3049,6 +3069,20 @@ func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 			}
 		} else if healed > 0 && s.logger != nil {
 			s.logger.Warn("reconciled pending attester trust commands", slog.Int("healed", healed))
+		}
+		if healed, err := reconcilePendingIdentityTerminals(ctx, s.store, s.log); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("terminal identity recovery sweep incomplete", slog.String("error", err.Error()))
+			}
+		} else if healed > 0 && s.logger != nil {
+			s.logger.Warn("reconciled pending terminal identity commands", slog.Int("healed", healed))
+		}
+		if healed, err := reconcilePendingCertificateRevocationAuthority(ctx, s.store, s.log); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("certificate revocation authority recovery sweep incomplete", slog.String("error", err.Error()))
+			}
+		} else if healed > 0 && s.logger != nil {
+			s.logger.Warn("reconciled pending certificate revocation authority", slog.Int("healed", healed))
 		}
 	}
 	healed, err := s.api.ReconcileApplicationSecretMutationFences(ctx)

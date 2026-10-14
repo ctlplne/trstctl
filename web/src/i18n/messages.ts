@@ -7562,6 +7562,10 @@ export const messages = {
     defaultMessage: "Revocation center",
     description: "Heading for the unified X.509 revocation operator journey.",
   },
+  "certificates.revocation.authorityPendingLabel": {
+    defaultMessage: "Revocation pending recovery",
+    description: "Exact issuer revocation already denies Good OCSP while its retained event awaits projection.",
+  },
   "certificates.revocation.description": {
     defaultMessage:
       "Safely stop one certificate from being trusted. trstctl first re-reads the exact record, explains the publication and proof, then verifies the durable revoked state. Nothing changes until you confirm.",
@@ -28521,6 +28525,15 @@ export const messages = {
   "identities.lifecycle.revokedState": {
     defaultMessage: "Revocation requested. Verify completion at the issuing system and client enforcement before retiring this record.",
     description: "Revoked lifecycle state does not itself prove upstream publication or relying-party rejection.",
+  },
+  "identities.lifecycle.terminalPendingLabel": {
+    defaultMessage: "Terminal change pending",
+    description: "Identity revocation or retirement already denies signing and deployment while its event awaits projection.",
+  },
+  "identities.lifecycle.terminalProjectionPending": {
+    defaultMessage:
+      "Revocation or retirement was accepted. Issuance and deployment are blocked while the recorded change is recovered; refresh this page for the final state.",
+    description: "Operator explanation for a pending terminal identity command after an ambiguous result.",
   },
   "identities.lifecycle.reviewLoading": {
     defaultMessage: "Reviewing the exact action with the server…",

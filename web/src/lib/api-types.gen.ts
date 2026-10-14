@@ -2097,6 +2097,7 @@ export interface Certificate {
   not_after?: string;
   not_before?: string;
   owner_id?: string;
+  revocation_pending?: boolean;
   revocation_reason?: string;
   revoked_at?: string;
   sans?: string[];
@@ -4072,6 +4073,8 @@ export interface Identity {
   owner_id: string;
   status: string;
   tenant_id?: string;
+  terminal_pending?: boolean;
+  terminal_target_state?: "revoked" | "retired";
 }
 
 export interface IdentityConnectorTargetRequest {

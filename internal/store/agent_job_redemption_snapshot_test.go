@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	googleuuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -18,13 +20,14 @@ func TestHostRedemptionGrantRechecksResolvedJobAndCurrentAuthority(t *testing.T)
 	tenantID := tenantA
 	const agentID = "bbbbbbbb-0000-0000-0000-000000000001"
 	const targetID = "bbbbbbbb-0000-0000-0000-000000000002"
-	for _, mode := range []string{"unchanged", "cancelled", "different payload", "different destination", "different idempotency key", "different assignment", "disabled target", "reassigned target", "missing target", "expired lease"} {
+	for _, mode := range []string{"unchanged", "cancelled", "different payload", "different destination", "different idempotency key", "different assignment", "disabled target", "reassigned target", "missing target", "expired lease", "pending terminal"} {
 		t.Run(mode, func(t *testing.T) {
+			identityID := googleuuid.NewString()
 			config := []byte(`{"executor":"agent","required_agent_id":"` + agentID + `"}`)
 			if err := st.UpsertDeploymentTarget(ctx, store.DeploymentTarget{ID: targetID, TenantID: tenantID, Name: "java", Type: "java-keystore", Config: config, Enabled: true, EnabledSet: true}); err != nil {
 				t.Fatal(err)
 			}
-			payload := []byte(`{"connector":"java-keystore","target_id":"` + targetID + `"}`)
+			payload := []byte(`{"connector":"java-keystore","target_id":"` + targetID + `","identity_id":"` + identityID + `"}`)
 			var id int64
 			if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 				return tx.QueryRow(ctx, `INSERT INTO outbox(tenant_id,destination,payload,idempotency_key,required_agent_id,required_agent_role) VALUES($1,'endpoint.renew',$2,$3,$4,'host') RETURNING id`, tenantID, payload, mode, agentID).Scan(&id)
@@ -39,6 +42,17 @@ func TestHostRedemptionGrantRechecksResolvedJobAndCurrentAuthority(t *testing.T)
 			job, held, err := st.GetAgentJobForRedemption(ctx, tenantID, agentID, id, now)
 			if err != nil || !held {
 				t.Fatalf("snapshot: %v", err)
+			}
+			if mode == "pending terminal" {
+				terminalPayload := []byte(`{"identity_id":"` + identityID + `","from":"issued","to":"revoked","reason":"cessationOfOperation"}`)
+				if _, err := st.ClaimIdentityTerminalCommand(ctx, store.IdentityTerminalCommand{
+					IdentityID: identityID, TargetState: "revoked",
+					RequestBinding: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					Event: events.Event{ID: googleuuid.NewString(), Type: "identity.revoked", TenantID: tenantID,
+						Time: now.Truncate(time.Microsecond), SchemaVersion: events.DefaultSchemaVersion, Data: terminalPayload},
+				}); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 				var err error

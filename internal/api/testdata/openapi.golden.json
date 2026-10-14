@@ -8570,6 +8570,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "revocation_pending": {
+            "description": "An exact local issuer revocation command is authoritative while its event projection is pending; OCSP Good and predecessor CRLs are refused.",
+            "type": "boolean"
+          },
           "revocation_reason": {
             "type": "string"
           },
@@ -16795,6 +16799,18 @@
           },
           "tenant_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "terminal_pending": {
+            "description": "A revoked or retired identity command is already authoritative but its event has not projected. Signing, deployment and host renewal are denied while recovery completes.",
+            "type": "boolean"
+          },
+          "terminal_target_state": {
+            "description": "Target of the accepted pending terminal command; absent when no command is pending.",
+            "enum": [
+              "revoked",
+              "retired"
+            ],
             "type": "string"
           }
         },

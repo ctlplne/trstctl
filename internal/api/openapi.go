@@ -840,7 +840,9 @@ func componentSchemas() map[string]*Schema {
 	identity := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: identityKinds},
 		"name": str(), "owner_id": uuid(), "issuer_id": uuid(), "status": str(),
-		"not_before": timestamp(), "not_after": timestamp(), "attributes": {Type: "object"}, "created_at": timestamp(),
+		"terminal_pending":      {Type: "boolean", Description: "A revoked or retired identity command is already authoritative but its event has not projected. Signing, deployment and host renewal are denied while recovery completes."},
+		"terminal_target_state": {Type: "string", Enum: []string{"revoked", "retired"}, Description: "Target of the accepted pending terminal command; absent when no command is pending."},
+		"not_before":            timestamp(), "not_after": timestamp(), "attributes": {Type: "object"}, "created_at": timestamp(),
 	}, "id", "kind", "name", "owner_id", "status")
 	identityReq := object(map[string]*Schema{
 		"kind": {Type: "string", Enum: identityKinds}, "name": str(), "owner_id": uuid(),
@@ -1642,6 +1644,7 @@ func componentSchemas() map[string]*Schema {
 		"deployment_location": str(), "source": str(), "created_at": timestamp(),
 		"expected_ephemeral_expiry": {Type: "boolean", Description: "True only for a JIT certificate whose immutable issuance command expects short expiry. Inventory and audit retain it, but it is not actionable renewal or owner-gap work."},
 		"status":                    {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
+		"revocation_pending":        {Type: "boolean", Description: "An exact local issuer revocation command is authoritative while its event projection is pending; OCSP Good and predecessor CRLs are refused."},
 		"revoked_at":                timestamp(),
 		"revocation_reason":         str(),
 		// B5: per-certificate key custody. Empty means UNRECORDED, which is a

@@ -135,14 +135,19 @@ func servedPublicBrokerRevocationFixtureWithHistoryOptions(t *testing.T, eventOp
 	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, opts...)
 	registerServedTenant(t, h, "Public certificate revocation")
 	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "identities:write")
-	status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources", owner, "public-revocation-trust", map[string]any{
-		"name": "public-revocation-trust", "method": "k8s_sat", "issuer": "https://kubernetes.default.svc", "audience": "trstctl",
+	fixtureID := crypto.SHA256Hex([]byte(events.NewID()))[:12]
+	issuer := "https://kubernetes.default.svc/" + fixtureID
+	trustName := "public-revocation-trust-" + fixtureID
+	status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources", owner, trustName, map[string]any{
+		"name": trustName, "method": "k8s_sat", "issuer": issuer, "audience": "trstctl",
 		"jwks": crypto.JWKS{Keys: []crypto.JWK{jwk}},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("register genuine proof trust: HTTP %d", status)
 	}
-	body := servedClockProofBody(t, authority, servedAttestedPublicKeyPEM(t), nil)
+	body := servedClockProofBody(t, authority, servedAttestedPublicKeyPEM(t), func(claims map[string]any) {
+		claims["iss"] = issuer
+	})
 	body["agent_id"], body["scopes"] = "agent-7", []string{"tool:inventory.read"}
 	return h, owner, body
 }
