@@ -2995,8 +2995,8 @@ export const messages = {
   },
   "secrets.sessions.description": {
     defaultMessage:
-      "The event-sourced machine-login ledger. Sessions are scope receipts; revoking records evidence, and enforcement lives in method disable and token revocation.",
-    description: "Secrets Access tab: session-ledger description, honest about advisory semantics.",
+      "The event-sourced machine-login ledger. Revoking a current session denies its exact bearer before the event is published. Older ledger-only sessions have no linked bearer; disabling a method stops new logins.",
+    description: "Secrets Access tab: explain exact linked-bearer revocation and legacy ledger-only rows.",
   },
   "secrets.sessions.principal": { defaultMessage: "Principal", description: "Session ledger column: principal." },
   "secrets.sessions.method": { defaultMessage: "Method", description: "Session ledger column: login method." },
@@ -3005,7 +3005,7 @@ export const messages = {
   "secrets.sessions.issued": { defaultMessage: "Issued", description: "Session ledger column: issue time." },
   "secrets.sessions.expires": { defaultMessage: "Expires", description: "Session ledger column: expiry time." },
   "secrets.sessions.actions": { defaultMessage: "Actions", description: "Session ledger column: actions." },
-  "secrets.sessions.revoke": { defaultMessage: "Revoke", description: "Session ledger action: mark a session revoked." },
+  "secrets.sessions.revoke": { defaultMessage: "Revoke", description: "Session ledger action: deny the linked bearer and mark the session revoked." },
   "secrets.sessions.empty": { defaultMessage: "No sessions issued yet.", description: "Session ledger empty state." },
   "secrets.sessions.unavailable": {
     defaultMessage: "Session ledger unavailable on this deployment.",

@@ -62233,7 +62233,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Mark an issued machine session revoked in the ledger (idempotent)",
+        "summary": "Revoke a machine session and deny its linked bearer before event append",
         "x-trstctl-permission": "secrets:write"
       }
     },

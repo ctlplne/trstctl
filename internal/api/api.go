@@ -1542,10 +1542,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/secrets/auth-methods", opID: "listMachineAuthMethods", summary: "List configured machine-auth login methods (secret-free projection)", handler: a.listMachineAuthMethods, resSchema: "MachineAuthMethodList", successCode: "200", perm: authz.SecretsRead},
 		// C-S3 (DA-02): the issued-session ledger + per-tenant method overlay,
 		// both event-sourced (secrets.session.* / secrets.auth_method.*).
-		// Sessions are advisory scope receipts; the enforcement half of
-		// revocation is the method overlay, consulted on every login.
+		// Current session revocation fences the linked bearer before append;
+		// the method overlay separately blocks future logins.
 		{method: "GET", path: "/api/v1/secrets/sessions", opID: "listMachineSessions", summary: "List issued machine-login sessions (event-sourced ledger)", handler: a.listMachineSessions, query: []param{{name: "limit", typ: "integer", desc: "maximum ledger rows to return (newest first)"}}, resSchema: "MachineSessionList", successCode: "200", perm: authz.SecretsRead},
-		{method: "POST", path: "/api/v1/secrets/sessions/{id}/revoke", opID: "revokeMachineSession", summary: "Mark an issued machine session revoked in the ledger (idempotent)", handler: a.revokeMachineSession, pathParams: []param{pathString("id", "machine session id")}, resSchema: "MachineSession", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/sessions/{id}/revoke", opID: "revokeMachineSession", summary: "Revoke a machine session and deny its linked bearer before event append", handler: a.revokeMachineSession, pathParams: []param{pathString("id", "machine session id")}, resSchema: "MachineSession", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/auth-methods/{name}/disable", opID: "disableMachineAuthMethod", summary: "Disable a configured machine-auth method for this tenant (refused at login until re-enabled)", handler: a.disableMachineAuthMethod, pathParams: []param{pathString("name", "configured method name")}, resSchema: "MachineAuthMethodOverride", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/auth-methods/{name}/enable", opID: "enableMachineAuthMethod", summary: "Re-enable a configured machine-auth method for this tenant", handler: a.enableMachineAuthMethod, pathParams: []param{pathString("name", "configured method name")}, resSchema: "MachineAuthMethodOverride", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 

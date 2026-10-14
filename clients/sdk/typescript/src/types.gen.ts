@@ -6528,7 +6528,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mark an issued machine session revoked in the ledger (idempotent) */
+        /** Revoke a machine session and deny its linked bearer before event append */
         post: operations["revokeMachineSession"];
         delete?: never;
         options?: never;

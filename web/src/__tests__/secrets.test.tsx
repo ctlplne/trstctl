@@ -3035,6 +3035,7 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
 
   it("revokes an active session and refreshes the ledger", async () => {
     const user = await openAccessTab();
+    expect(screen.getByText(/Revoking a current session denies its exact bearer before the event is published/)).toBeInTheDocument();
     const activeRow = (await screen.findByText("payments-bot")).closest("tr") as HTMLTableRowElement;
     await user.click(within(activeRow).getByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(apiMock.revokeMachineSession).toHaveBeenCalledWith("sess-active-1"));
