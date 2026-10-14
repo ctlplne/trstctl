@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -228,9 +229,16 @@ func (s *Store) CompleteTenantMemberOffboardCommandTx(ctx context.Context, tx pg
 	ref := privacy.SubjectRef(tenantID, subject)
 	// Privacy erasure may have pseudonymized a pending event's subject. Its
 	// independently durable command keeps the original opaque admission key.
+	// Historical source events may have non-UUID IDs. Skip the command lookup
+	// for those events; UUID commands still use the indexed exact-ID lookup.
 	var commandRef string
-	err := tx.QueryRow(ctx, `SELECT subject_ref FROM tenant_member_offboard_commands
-		WHERE tenant_id = $1 AND event_id = $2`, tenantID, event.ID).Scan(&commandRef)
+	var err error
+	if eventID, parseErr := uuid.Parse(event.ID); parseErr == nil {
+		err = tx.QueryRow(ctx, `SELECT subject_ref FROM tenant_member_offboard_commands
+			WHERE tenant_id = $1 AND event_id = $2`, tenantID, eventID).Scan(&commandRef)
+	} else {
+		err = pgx.ErrNoRows
+	}
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
