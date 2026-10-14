@@ -229,17 +229,23 @@ func (s *Store) ListPendingMachineAuthMethodCommands(ctx context.Context, tenant
 }
 
 // WithMachineAuthMethodAdmission serializes the final bearer-mint decision
-// with a disable claim across replicas. Credential verification runs before
-// this short lock. If login wins, its session event appends before disable can
-// claim; its read-model projection happens after release. If disable wins, the
-// login receives a generic denial. The callback must not acquire a second
-// request-pool connection while this transaction is open.
-func (s *Store) WithMachineAuthMethodAdmission(ctx context.Context, tenantID, name string, issue func() error) error {
-	if tenantID == "" || name == "" || issue == nil {
+// with both method disable and member offboard claims across replicas.
+// Credential verification runs before these short locks. If login wins, its
+// session event appends first; projection happens after release. If either
+// removal wins, login receives a generic denial. The callback must not acquire
+// another request-pool connection while this transaction is open.
+func (s *Store) WithMachineAuthMethodAdmission(ctx context.Context, tenantID, name, subject string, issue func() error) error {
+	if tenantID == "" || name == "" || subject == "" || issue == nil {
 		return errors.New("store: incomplete machine-auth admission")
 	}
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := lockUpsertArbiterTx(ctx, tx, "machine_auth_method_commands", tenantID, name); err != nil {
+			return err
+		}
+		if err := s.LockTenantMemberSubjectTx(ctx, tx, tenantID, subject); err != nil {
+			return err
+		}
+		if err := s.CheckTenantMemberBearerAdmissionTx(ctx, tx, tenantID, subject); err != nil {
 			return err
 		}
 		var disabled bool

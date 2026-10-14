@@ -51,6 +51,8 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrResourceAdmissionBusy):
 		w.Header().Set("Retry-After", "1")
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "resource creation is in progress; retry the same request"))
+	case errors.Is(err, store.ErrTenantMemberOffboarded):
+		a.writeProblem(w, problem.New(http.StatusConflict, "member is offboarded or offboarding; explicitly reactivate the member before granting access"))
 	case errors.Is(err, usage.ErrQuotaExhausted):
 		a.writeProblem(w, problem.New(http.StatusTooManyRequests, err.Error()))
 	case errors.Is(err, usage.ErrQuotaUnavailable):

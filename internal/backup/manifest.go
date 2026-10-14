@@ -37,6 +37,9 @@ var RecoveredFromPostgresBackup = []string{
 	// First-writer revocation commands and terminal denial tombstones must
 	// survive restores independently of the token read model and event log.
 	"api_token_revocation_commands",
+	// Pending member removal is immediate denial authority; completed opaque
+	// subject markers retain replay order independently of the read model.
+	"tenant_member_offboard_commands",
 	// Machine-login method disable and pending enable must survive restore
 	// independently of the replayable operator read model.
 	"machine_auth_method_commands",

@@ -122,8 +122,8 @@ func TestServedSCIMProvisioningReflectsRBAC(t *testing.T) {
 	if deprovision.Code != http.StatusOK || !bytes.Contains(deprovision.Body.Bytes(), []byte(`"active":false`)) {
 		t.Fatalf("deprovision SCIM user = %d body=%s; want active=false", deprovision.Code, deprovision.Body.String())
 	}
-	if code, body := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", aliceSession); code != http.StatusForbidden {
-		t.Fatalf("deprovisioned session role read = %d body=%s; want 403 after SCIM offboard removes RBAC grants", code, body)
+	if code, body := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", aliceSession); code != http.StatusUnauthorized {
+		t.Fatalf("deprovisioned session role read = %d body=%s; want 401 after SCIM offboard invalidates the session", code, body)
 	}
 
 	// IdPs often remove groups after disabling an account. Both late removal
@@ -138,7 +138,7 @@ func TestServedSCIMProvisioningReflectsRBAC(t *testing.T) {
 		if got.Code != want {
 			t.Fatalf("late %s status=%d body=%s", op, got.Code, got.Body)
 		}
-		if code, _ := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", aliceSession); code != http.StatusForbidden {
+		if code, _ := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", aliceSession); code != http.StatusUnauthorized {
 			t.Fatalf("late group %s restored session status=%d", op, code)
 		}
 	}

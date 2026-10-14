@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -38,6 +39,38 @@ type TenantMember struct {
 	OffboardedAt   *time.Time
 	OffboardedBy   string
 	OffboardReason string
+	EventSequence  uint64
+}
+
+// ShouldApplyTenantMemberEventTx locks the member projection and rejects an
+// older duplicate source event before it can revoke a newer rehire's tokens.
+func (s *Store) ShouldApplyTenantMemberEventTx(ctx context.Context, tx pgx.Tx, tenantID, subject string, sequence uint64) (bool, error) {
+	if sequence > 1<<63-1 {
+		return false, fmt.Errorf("store: invalid tenant member event sequence")
+	}
+	want, err := strconv.ParseInt(strconv.FormatUint(sequence, 10), 10, 64)
+	if err != nil {
+		return false, err
+	}
+	if err := lockTenantMemberProjection(ctx, tx, tenantID, subject); err != nil {
+		return false, err
+	}
+	var last int64
+	err = tx.QueryRow(ctx, `SELECT last_event_sequence FROM tenant_members
+		WHERE tenant_id = $1 AND subject = $2`, tenantID, subject).Scan(&last)
+	if err == pgx.ErrNoRows {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if last < 0 {
+		return false, fmt.Errorf("store: negative tenant member source sequence")
+	}
+	if sequence == 0 {
+		return last == 0, nil
+	} // In-memory legacy test events only.
+	return last < want, nil
 }
 
 // ApplyTenantMemberUpsertedTx projects a tenant.member.upserted event.
@@ -51,8 +84,8 @@ func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m Te
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenant_members
-		        (tenant_id, subject, subject_ref, display_name, email, roles, source, status, created_at, updated_at, scim_identity)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10)
+		        (tenant_id, subject, subject_ref, display_name, email, roles, source, status, created_at, updated_at, scim_identity, last_event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10, $11::bigint)
 		 ON CONFLICT (tenant_id, subject) DO UPDATE
 		    SET subject_ref = EXCLUDED.subject_ref,
 		        display_name = EXCLUDED.display_name,
@@ -64,8 +97,11 @@ func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m Te
 		        updated_at = EXCLUDED.updated_at,
 		        offboarded_at = NULL,
 		        offboarded_by = '',
-		        offboard_reason = ''`,
-		m.TenantID, m.Subject, privacy.SubjectRef(m.TenantID, m.Subject), m.DisplayName, m.Email, roles, m.Source, m.CreatedAt, m.UpdatedAt, m.SCIM)
+		        offboard_reason = '',
+		        last_event_sequence = EXCLUDED.last_event_sequence
+		  WHERE tenant_members.last_event_sequence < EXCLUDED.last_event_sequence
+		     OR (tenant_members.last_event_sequence = 0 AND EXCLUDED.last_event_sequence = 0)`,
+		m.TenantID, m.Subject, privacy.SubjectRef(m.TenantID, m.Subject), m.DisplayName, m.Email, roles, m.Source, m.CreatedAt, m.UpdatedAt, m.SCIM, strconv.FormatUint(m.EventSequence, 10))
 	return err
 }
 
@@ -79,8 +115,8 @@ func (s *Store) ApplyTenantMemberOffboardedTx(ctx context.Context, tx pgx.Tx, m 
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenant_members
 		        (tenant_id, subject, subject_ref, display_name, email, roles, source, status,
-		         created_at, updated_at, offboarded_at, offboarded_by, offboard_reason, scim_identity)
-		 VALUES ($1, $2, $3, '', '', '{}', 'offboard', 'offboarded', $4, $4, $4, $5, $6, $7)
+		         created_at, updated_at, offboarded_at, offboarded_by, offboard_reason, scim_identity, last_event_sequence)
+		 VALUES ($1, $2, $3, '', '', '{}', 'offboard', 'offboarded', $4, $4, $4, $5, $6, $7, $8::bigint)
 		 ON CONFLICT (tenant_id, subject) DO UPDATE
 		    SET subject_ref = EXCLUDED.subject_ref,
 		        status = 'offboarded',
@@ -88,8 +124,11 @@ func (s *Store) ApplyTenantMemberOffboardedTx(ctx context.Context, tx pgx.Tx, m 
 		        updated_at = EXCLUDED.updated_at,
 		        offboarded_at = COALESCE(tenant_members.offboarded_at, EXCLUDED.offboarded_at),
 		        offboarded_by = CASE WHEN tenant_members.offboarded_by = '' THEN EXCLUDED.offboarded_by ELSE tenant_members.offboarded_by END,
-		        offboard_reason = CASE WHEN tenant_members.offboard_reason = '' THEN EXCLUDED.offboard_reason ELSE tenant_members.offboard_reason END`,
-		m.TenantID, m.Subject, privacy.SubjectRef(m.TenantID, m.Subject), m.UpdatedAt, m.OffboardedBy, m.OffboardReason, m.SCIM)
+		        offboard_reason = CASE WHEN tenant_members.offboard_reason = '' THEN EXCLUDED.offboard_reason ELSE tenant_members.offboard_reason END,
+		        last_event_sequence = EXCLUDED.last_event_sequence
+		  WHERE tenant_members.last_event_sequence < EXCLUDED.last_event_sequence
+		     OR (tenant_members.last_event_sequence = 0 AND EXCLUDED.last_event_sequence = 0)`,
+		m.TenantID, m.Subject, privacy.SubjectRef(m.TenantID, m.Subject), m.UpdatedAt, m.OffboardedBy, m.OffboardReason, m.SCIM, strconv.FormatUint(m.EventSequence, 10))
 	return err
 }
 

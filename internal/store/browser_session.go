@@ -26,6 +26,23 @@ type BrowserSession struct {
 // rows for the same tenant. Both statements execute under the tenant's RLS scope.
 func (s *Store) CreateBrowserSession(ctx context.Context, session BrowserSession) error {
 	return s.WithTenant(ctx, session.TenantID, func(tx pgx.Tx) error {
+		if err := lockUpsertArbiterTx(ctx, tx, "tenant_member_offboard_commands", session.TenantID, session.SubjectHash); err != nil {
+			return err
+		}
+		var denied bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (
+		 SELECT 1 FROM tenant_member_offboard_commands AS c
+		 LEFT JOIN tenant_members AS m ON m.tenant_id = c.tenant_id AND m.subject_ref = c.subject_ref
+		 WHERE c.tenant_id = $1 AND c.subject_ref = $2
+			   AND (c.status = 'pending' OR m.status IS DISTINCT FROM 'active'))
+			 OR EXISTS (SELECT 1 FROM tenant_members AS m
+		            WHERE m.tenant_id = $1 AND m.subject_ref = $2 AND m.status = 'offboarded')`,
+			session.TenantID, session.SubjectHash).Scan(&denied); err != nil {
+			return err
+		}
+		if denied {
+			return ErrTenantMemberOffboarded
+		}
 		if _, err := tx.Exec(ctx,
 			`DELETE FROM browser_sessions WHERE tenant_id = $1 AND expires_at <= $2`,
 			session.TenantID, session.CreatedAt); err != nil {
@@ -97,11 +114,17 @@ func (s *Store) RevokeBrowserSession(ctx context.Context, tenantID, sessionHash 
 // pseudonymous subject inside one tenant. It never scans another tenant.
 func (s *Store) RevokeBrowserSessionsBySubject(ctx context.Context, tenantID, subjectHash string, revokedAt time.Time) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE browser_sessions
+		return s.RevokeBrowserSessionsBySubjectTx(ctx, tx, tenantID, subjectHash, revokedAt)
+	})
+}
+
+// RevokeBrowserSessionsBySubjectTx joins member retirement in the projector's
+// transaction so an event cannot commit half of its authority removal.
+func (s *Store) RevokeBrowserSessionsBySubjectTx(ctx context.Context, tx pgx.Tx, tenantID, subjectHash string, revokedAt time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE browser_sessions
 			    SET revoked_at = coalesce(revoked_at, $3)
 			  WHERE tenant_id = $1 AND subject_hash = $2`,
-			tenantID, subjectHash, revokedAt)
-		return err
-	})
+		tenantID, subjectHash, revokedAt)
+	return err
 }

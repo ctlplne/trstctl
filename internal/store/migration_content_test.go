@@ -19,6 +19,53 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// 0268 gives historical member rows an unclaimed source-order slot. Existing
+// active/offboarded posture and roles must survive; zero must not invent a
+// newer rehire or offboard event during upgrade.
+func testMigration0268TenantMemberSequenceStartsUnclaimed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, subject, subject_ref, display_name,
+		roles::text, source, status, created_at::text, updated_at::text,
+		offboarded_at::text, offboarded_by, offboard_reason
+		FROM tenant_members ORDER BY tenant_id, subject`
+	runPopulatedDefaultMigrationHarness(t, 268, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name)
+					VALUES ($1, $2) ON CONFLICT (tenant_id) DO NOTHING`,
+					tenantID, fmt.Sprintf("pre-0268-tenant-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+				status := "active"
+				if index == 1 {
+					status = "offboarded"
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO tenant_members
+					(tenant_id, subject, subject_ref, display_name, roles, source,
+					 status, created_at, updated_at, offboarded_at, offboarded_by, offboard_reason)
+					VALUES ($1, $2, $3, $4, ARRAY['viewer'], 'scim', $5,
+					 '2026-10-13T00:00:00Z'::timestamptz,
+					 '2026-10-13T00:01:00Z'::timestamptz,
+					 CASE WHEN $5 = 'offboarded' THEN '2026-10-13T00:01:00Z'::timestamptz ELSE NULL END,
+					 'qa-operator', 'fixture')`, tenantID,
+					fmt.Sprintf("pre-0268-member-%d", index), strings.Repeat(fmt.Sprintf("%x", index+1), 64),
+					fmt.Sprintf("Pre 0268 Member %d", index), status); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var zero bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(last_event_sequence = 0)
+				FROM tenant_members WHERE subject LIKE 'pre-0268-member-%'`).Scan(&rows, &zero); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !zero {
+				t.Fatalf("0268 invented member source order: rows=%d want=%d zero=%t", rows, want, zero)
+			}
+		})
+}
+
 // 0267 adds source-order memory to historical method overlays. A zero value
 // means no sequence was recorded by the old schema; it must not invent an
 // operator action or alter the enabled/disabled posture during upgrade.
@@ -762,6 +809,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	268: true, // TestMigrationDataContentBackfills/0268_tenant_member_sequence_starts_unclaimed
 	267: true, // TestMigrationDataContentBackfills/0267_machine_auth_method_sequence_starts_unclaimed
 	265: true, // TestMigrationDataContentBackfills/0265_discovery_schedule_control_starts_unclaimed
 	258: true, // TestMigrationDataContentBackfills/0258_secret_schedule_control_starts_unclaimed
@@ -1826,6 +1874,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0268_tenant_member_sequence_starts_unclaimed", testMigration0268TenantMemberSequenceStartsUnclaimed)
 	t.Run("0267_machine_auth_method_sequence_starts_unclaimed", testMigration0267MachineAuthMethodSequenceStartsUnclaimed)
 	t.Run("0265_discovery_schedule_control_starts_unclaimed", testMigration0265DiscoveryScheduleControlStartsUnclaimed)
 	t.Run("0258_secret_schedule_control_starts_unclaimed", testMigration0258SecretScheduleControlStartsUnclaimed)

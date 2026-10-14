@@ -1188,6 +1188,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
 		"api_token_revocation_commands",
+		"tenant_member_offboard_commands",
 		"machine_auth_method_commands",
 		// CloudTrail lookup permits have no parent FK; restore their exact
 		// per-account/Region schedule before monitors resume after recovery.

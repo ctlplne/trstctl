@@ -511,9 +511,12 @@ func (a *scimHandler) addRoleToMember(ctx context.Context, tok scimToken, subjec
 	if member.Email == "" && strings.Contains(subject, "@") {
 		member.Email = subject
 	}
-	_, err = a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
+	_, err = a.orch.UpsertActiveTenantMember(ctx, tenantID, store.TenantMember{
 		Subject: subject, DisplayName: member.DisplayName, Email: member.Email, Roles: roles, Source: "scim",
 	})
+	if errors.Is(err, store.ErrTenantMemberOffboarded) {
+		return scimHTTPError{status: http.StatusConflict, scimType: "invalidValue", detail: "provision the user as active before adding group membership"}
+	}
 	return err
 }
 
@@ -532,9 +535,12 @@ func (a *scimHandler) removeRoleFromMember(ctx context.Context, tok scimToken, s
 		return nil
 	}
 	roles := removeRole(member.Roles, roleName)
-	_, err = a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
+	_, err = a.orch.UpsertActiveTenantMember(ctx, tenantID, store.TenantMember{
 		Subject: member.Subject, DisplayName: member.DisplayName, Email: member.Email, Roles: roles, Source: "scim",
 	})
+	if errors.Is(err, store.ErrTenantMemberOffboarded) {
+		return nil
+	}
 	return err
 }
 
@@ -796,6 +802,10 @@ func writeSCIMMappedError(w http.ResponseWriter, err error) {
 	var scimErr scimHTTPError
 	if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
 		writeSCIMError(w, http.StatusConflict, "", "Idempotency-Key was already used for a different authenticated SCIM request")
+		return
+	}
+	if errors.Is(err, store.ErrTenantMemberOffboarded) {
+		writeSCIMError(w, http.StatusConflict, "invalidValue", "member offboarding is in progress; retry explicit activation after recovery")
 		return
 	}
 	if errors.As(err, &scimErr) {

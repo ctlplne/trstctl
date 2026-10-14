@@ -91,6 +91,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "access control",
 		},
 		{
+			ID:             "tenant_member_offboard_commands.pending-actor-reason",
+			Location:       "tenant_member_offboard_commands.event_actor/event_payload",
+			Category:       "transient member-offboard actor, subject and free-form reason",
+			Purpose:        "recover the exact first offboard after an ambiguous append or SQL projection failure",
+			RetentionClass: "transient:until-member-offboard-projection",
+			Erasure:        "privacy.subject.erased pseudonymizes a pending command; completion removes actor and payload while retaining opaque denial and source order",
+			Owner:          "access control",
+		},
+		{
 			ID:             "identities.name-attributes",
 			Location:       "identities.name/attributes",
 			Category:       "workload or human-linked identity metadata",

@@ -942,7 +942,10 @@ A browser session starts with the roles of the tenant mapping that matched
 When the signed-in person has a tenant member record that names roles, set in
 **Operations → People and roles**, through `PUT /api/v1/access/members/{subject}` or
 by SCIM, those roles replace the sign-in roles on every request. A member record that
-names no roles keeps the sign-in roles, and an offboarded member has none.
+names no roles keeps the sign-in roles. Offboarding immediately invalidates that
+subject's browser sessions and API tokens, including while the event projector is
+recovering; subsequent requests return 401. An explicit rehire creates a new
+member event and requires new sessions and tokens. Old credentials stay revoked.
 `GET /auth/me` returns the roles the session holds. The evaluation compose files set
 `default_roles` to `admin` so the first operator can sign in; in production, leave it
 unset or use a read-only role and grant more through member records or mappings.
@@ -989,7 +992,10 @@ through PUT or PATCH. With the explicit `externalId` mapping, the readable
 unique ignoring case within the tenant, including inactive resources. Provision
 the user first, then send the returned resource `id` as each group's member
 `value`. An inactive user must be explicitly activated before a group grant;
-a delayed group removal never activates an offboarded user.
+a delayed group removal never activates an offboarded user. If event projection
+is interrupted during deprovisioning, the subject remains denied and the exact
+first offboard command resumes after restart. A group delta cannot reactivate
+the subject; send an explicit active user update after recovery.
 
 Changing a token's mapping does not relink existing accounts. Legacy members
 without a stored binding are hidden from the `externalId`-mapped user list until

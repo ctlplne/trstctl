@@ -810,6 +810,12 @@ func (a *API) sessionFrom(r *http.Request) (auth.Session, bool) {
 	if err != nil {
 		return auth.Session{}, false
 	}
+	if a.store != nil && sess.TenantID != "" && sess.Subject != "" {
+		denied, err := a.store.MemberOffboardStatus(r.Context(), sess.TenantID, sess.Subject)
+		if err != nil || denied {
+			return auth.Session{}, false
+		}
+	}
 	return sess, true
 }
 

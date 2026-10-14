@@ -117,6 +117,23 @@ func TestMachineAuthMethodCommandBackupAndRestoreOrder(t *testing.T) {
 	}
 }
 
+func TestTenantMemberOffboardCommandBackupAndRestoreOrder(t *testing.T) {
+	const table = "tenant_member_offboard_commands"
+	if class, found := Classify(table); !found || class != ClassPostgresBackup {
+		t.Fatalf("%s must survive PostgreSQL restore independently of the member read model: class=%v found=%v", table, class, found)
+	}
+	if !slices.Contains(postgresStateTables(), table) {
+		t.Fatalf("PostgreSQL backup omits %s", table)
+	}
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(order, table) {
+		t.Fatalf("PostgreSQL restore omits %s", table)
+	}
+}
+
 func TestMDMSCEPNonceFenceIsCapturedAndRestoredAsOneUseAuthority(t *testing.T) {
 	const table = "mdm_scep_nonce_fences"
 	contained := func(tables []string) bool {

@@ -261,6 +261,42 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 
 	var ev events.Event
 	err = o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+		// An offboard claim and a bearer/member source append take the same
+		// subject transaction lock. The winner's source order is fixed before
+		// either SQL transaction releases its admission decision.
+		if next.Type == projections.EventTenantMemberUpserted || next.Type == projections.EventAPITokenCreated {
+			var subject string
+			if next.Type == projections.EventTenantMemberUpserted {
+				var pl projections.TenantMemberUpserted
+				if err := json.Unmarshal(next.Data, &pl); err != nil {
+					return err
+				}
+				subject = pl.Subject
+			} else {
+				var pl projections.APITokenCreated
+				if err := json.Unmarshal(next.Data, &pl); err != nil {
+					return err
+				}
+				subject = pl.Subject
+			}
+			if err := o.store.LockTenantMemberSubjectTx(ctx, tx, next.TenantID, subject); err != nil {
+				return err
+			}
+			if next.Type == projections.EventAPITokenCreated {
+				if err := o.store.CheckTenantMemberBearerAdmissionTx(ctx, tx, next.TenantID, subject); err != nil {
+					return err
+				}
+			} else {
+				if err := o.store.CheckTenantMemberUpsertAdmissionTx(ctx, tx, next.TenantID, subject); err != nil {
+					return err
+				}
+				if required, _ := ctx.Value(requireActiveMemberUpsertKey{}).(bool); required {
+					if err := o.store.CheckTenantMemberCurrentlyActiveTx(ctx, tx, next.TenantID, subject); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		if certificateMetadata {
 			// Admission covers the source append, not just SQL projection. A
 			// recording that already owns this fence must finish before we get
@@ -2119,6 +2155,14 @@ func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, 
 	return o.store.GetTenantMember(ctx, tenantID, member.Subject)
 }
 
+type requireActiveMemberUpsertKey struct{}
+
+// UpsertActiveTenantMember applies a SCIM group delta only while the member is
+// still active at source append. A stale group read must not rehire a principal.
+func (o *Orchestrator) UpsertActiveTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
+	return o.UpsertTenantMember(context.WithValue(ctx, requireActiveMemberUpsertKey{}, true), tenantID, member)
+}
+
 // OffboardTenantMember records member retirement and lets the projector revoke
 // every active API token for that subject. revokedCount is evidence captured
 // before the event is applied; replay is still deterministic because the event
@@ -2138,23 +2182,39 @@ func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subje
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
 	}
-	revokedCount, err := o.store.CountActiveAPITokensForSubject(ctx, tenantID, subject)
-	if err != nil {
-		return store.TenantMember{}, 0, err
-	}
-	payload, err := json.Marshal(projections.TenantMemberOffboarded{
-		Subject: subject, Reason: reason, OffboardedBy: actor, RevokedTokenCount: revokedCount, SCIM: identity,
-	})
-	if err != nil {
-		return store.TenantMember{}, 0, err
-	}
 	version := 1
 	if identity != nil {
 		version = projections.TenantMemberSCIMSchemaVersion
 	}
-	_, err = o.emitVersioned(ctx, projections.EventTenantMemberOffboarded, tenantID, version, payload)
+	var eventActor *events.Actor
+	if a, ok := events.ActorFromContext(ctx); ok {
+		eventActor = &a
+	}
+	command, revokedCount, created, err := o.store.ClaimTenantMemberOffboardCommand(ctx, tenantID, subject, func(count int) (events.Event, error) {
+		payload, err := json.Marshal(projections.TenantMemberOffboarded{
+			Subject: subject, Reason: reason, OffboardedBy: actor, RevokedTokenCount: count, SCIM: identity,
+		})
+		if err != nil {
+			return events.Event{}, err
+		}
+		return events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberOffboarded,
+			TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
+			Data: payload, Actor: eventActor}, nil
+	})
 	if err != nil {
 		return store.TenantMember{}, 0, err
+	}
+	if !created && command.Status == "pending" {
+		var first projections.TenantMemberOffboarded
+		if err := json.Unmarshal(command.Event.Data, &first); err != nil {
+			return store.TenantMember{}, 0, err
+		}
+		revokedCount = first.RevokedTokenCount
+	}
+	if command.Status == "pending" {
+		if err := o.reconcileTenantMemberOffboardCommand(ctx, command, created); err != nil {
+			return store.TenantMember{}, 0, err
+		}
 	}
 	member, err := o.store.GetTenantMember(ctx, tenantID, subject)
 	if err != nil {

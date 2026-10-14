@@ -612,7 +612,7 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 		// Project after release: retaining a request connection while acquiring
 		// another for projection could starve the request pool under a burst.
 		var started events.Event
-		admissionErr := a.secrets.be.Store.WithMachineAuthMethodAdmission(ctx, resolvedTenantID, method, func() error {
+		admissionErr := a.secrets.be.Store.WithMachineAuthMethodAdmission(ctx, resolvedTenantID, method, sess.Principal, func() error {
 			var tokenHash string
 			var tokenErr error
 			rawToken, tokenHash, tokenErr = apiauth.GenerateAPIToken()
@@ -624,7 +624,7 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 		})
 		if admissionErr != nil {
 			secret.Wipe(rawToken)
-			if errors.Is(admissionErr, store.ErrMachineAuthMethodDisabled) {
+			if errors.Is(admissionErr, store.ErrMachineAuthMethodDisabled) || errors.Is(admissionErr, store.ErrTenantMemberOffboarded) {
 				return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")
 			}
 			return 0, nil, admissionErr

@@ -4,6 +4,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,6 +30,9 @@ type APITokenRecord struct {
 	// the served API (F262). Rows projected before migration 0231, and rows
 	// seeded outside the event log, read as false.
 	Delegated bool
+	// EventSequence orders this bearer against a durable subject offboard fence.
+	// It is populated by the projector and is not secret material.
+	EventSequence uint64
 }
 
 // CreateAPIToken inserts a token in its tenant context (RLS-enforced), with a
@@ -51,6 +56,9 @@ func (s *Store) CreateAPIToken(ctx context.Context, r APITokenRecord) (APITokenR
 // model. The token secret itself is never in this row or the event; only its
 // lookup hash is stored.
 func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APITokenRecord) error {
+	if r.EventSequence > 1<<63-1 {
+		return errors.New("store: API-token source sequence exceeds PostgreSQL bigint")
+	}
 	scopes := r.Scopes
 	if scopes == nil {
 		scopes = []string{}
@@ -59,8 +67,11 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		return err
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at, delegated)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at, delegated, revoked_at)
+		 VALUES ($1, $2, $3, $4, $5::char(64), $6, $7, $8::timestamptz, $9,
+		   CASE WHEN EXISTS (SELECT 1 FROM tenant_member_offboard_commands AS c
+		                     WHERE c.tenant_id = $2 AND c.subject_ref = $5::char(64)
+		                       AND c.last_event_sequence >= $10::bigint) THEN $8::timestamptz ELSE NULL END)
 		 ON CONFLICT (id) DO UPDATE
 		    SET token_hash = EXCLUDED.token_hash,
 		        subject = EXCLUDED.subject,
@@ -68,8 +79,9 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		        scopes = EXCLUDED.scopes,
 		        expires_at = EXCLUDED.expires_at,
 		        created_at = EXCLUDED.created_at,
-		        delegated = EXCLUDED.delegated`,
-		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt, r.Delegated)
+		        delegated = EXCLUDED.delegated,
+		        revoked_at = COALESCE(api_tokens.revoked_at, EXCLUDED.revoked_at)`,
+		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt, r.Delegated, strconv.FormatUint(r.EventSequence, 10))
 	return err
 }
 
@@ -203,6 +215,17 @@ func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APIToken
 		    AND NOT EXISTS (
 		      SELECT 1 FROM api_token_revocation_commands AS c
 		       WHERE c.tenant_id = t.tenant_id AND c.token_id = t.id
+		    )
+		    AND NOT EXISTS (
+		      SELECT 1 FROM tenant_member_offboard_commands AS c
+		      LEFT JOIN tenant_members AS m ON m.tenant_id = c.tenant_id AND m.subject_ref = c.subject_ref
+		       WHERE c.tenant_id = t.tenant_id AND c.subject_ref = t.subject_ref
+		         AND (c.status = 'pending' OR m.status IS DISTINCT FROM 'active')
+		    )
+		    AND NOT EXISTS (
+		      SELECT 1 FROM tenant_members AS m
+		       WHERE m.tenant_id = t.tenant_id AND m.subject_ref = t.subject_ref
+		         AND m.status = 'offboarded'
 		    )`, hash).
 		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.Delegated)
 	return r, err

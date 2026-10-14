@@ -339,6 +339,67 @@ func TestPreparePrivacySubjectErasureRewritesPendingMachineAuthMethodCommand(t *
 	}
 }
 
+func TestPreparePrivacySubjectErasureRewritesPendingMemberOffboardCommand(t *testing.T) {
+	ctx := context.Background()
+	st := newOperationApprovalStore(t)
+	const subject = "qa-member-offboard-erasure-subject"
+	const eventID = "b10105b8-32b8-4f13-a7c4-60844862650d"
+	_, _, created, err := st.ClaimTenantMemberOffboardCommand(ctx, tenantA, subject, func(count int) (events.Event, error) {
+		payload, err := json.Marshal(projections.TenantMemberOffboarded{
+			Subject: subject, OffboardedBy: subject, Reason: "requested by " + subject,
+			RevokedTokenCount: count,
+		})
+		if err != nil {
+			return events.Event{}, err
+		}
+		return events.Event{ID: eventID, TenantID: tenantA, Type: projections.EventTenantMemberOffboarded,
+			SchemaVersion: events.DefaultSchemaVersion,
+			Time:          time.Now().UTC().Truncate(time.Microsecond), Data: payload,
+			Actor: &events.Actor{Subject: subject, Roles: []string{"operator"}}}, nil
+	})
+	if err != nil || !created {
+		t.Fatalf("claim pending member offboard: created=%v err=%v", created, err)
+	}
+	candidate := store.PrivacySubjectErasurePreparation{
+		PrivacySubjectErasure: store.PrivacySubjectErasure{
+			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+			RequestedByRef: privacy.SubjectRef(tenantA, "privacy-admin"),
+			Reason:         "verified erasure", ErasedAt: time.Now().UTC(),
+		},
+		OperationID:        "sha256:" + strings.Repeat("7", 64),
+		RequestBinding:     strings.Repeat("8", 64),
+		EventID:            "sha256:" + strings.Repeat("9", 64),
+		RewriteOperationID: "qa-member-offboard-rewrite",
+		TargetGeneration:   "qa-member-offboard-generation",
+		EventActor:         &events.Actor{Subject: privacy.Placeholder(privacy.SubjectRef(tenantA, "privacy-admin"))},
+	}
+	prepared, err := st.PreparePrivacySubjectErasure(ctx, tenantA, subject, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Counts["tenant_member_offboard_commands"] != 1 ||
+		!slices.Contains(prepared.RecoveryFences, store.PrivacyRecoveryFenceDisposition{
+			Kind:    store.PrivacyRecoveryFenceTenantMemberOffboard,
+			EventID: eventID, Disposition: store.PrivacyRecoveryFencePseudonymized,
+		}) {
+		t.Fatalf("member offboard rewrite evidence missing: %+v", prepared)
+	}
+	pending, err := st.ListPendingTenantMemberOffboardCommands(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Event.ID != eventID ||
+		pending[0].SubjectRef != privacy.SubjectRef(tenantA, subject) ||
+		pending[0].Event.Actor == nil ||
+		pending[0].Event.Actor.Subject != privacy.Placeholder(privacy.SubjectRef(tenantA, subject)) ||
+		bytes.Contains(pending[0].Event.Data, []byte(subject)) {
+		t.Fatalf("pending member offboard retained erased subject or lost denial key: %+v", pending)
+	}
+	if denied, err := st.MemberOffboardStatus(ctx, tenantA, subject); err != nil || !denied {
+		t.Fatalf("erasure lifted pending member denial: denied=%v err=%v", denied, err)
+	}
+}
+
 func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFencesAtomically(t *testing.T) {
 	ctx := context.Background()
 	st := newOperationApprovalStore(t)

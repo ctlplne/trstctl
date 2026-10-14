@@ -6506,6 +6506,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Subject == "" {
 			return fmt.Errorf("projections: %s requires subject", e.Type)
 		}
+		apply, err := p.store.ShouldApplyTenantMemberEventTx(ctx, tx, e.TenantID, pl.Subject, e.Sequence)
+		if err != nil {
+			return err
+		}
+		if !apply {
+			return nil
+		}
 		source := pl.Source
 		if source == "" {
 			source = "manual"
@@ -6513,7 +6520,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyTenantMemberUpsertedTx(ctx, tx, store.TenantMember{
 			TenantID: e.TenantID, Subject: pl.Subject, DisplayName: pl.DisplayName, SCIM: normalizedSCIMIdentity(pl.SCIM),
 			Email: pl.Email, Roles: pl.Roles, Source: source, Status: "active",
-			CreatedAt: e.Time, UpdatedAt: e.Time,
+			CreatedAt: e.Time, UpdatedAt: e.Time, EventSequence: e.Sequence,
 		})
 	case EventTenantMemberOffboarded:
 		var pl TenantMemberOffboarded
@@ -6526,13 +6533,26 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Subject == "" {
 			return fmt.Errorf("projections: %s requires subject", e.Type)
 		}
+		if err := p.store.CompleteTenantMemberOffboardCommandTx(ctx, tx, e.TenantID, pl.Subject, e); err != nil {
+			return err
+		}
+		apply, err := p.store.ShouldApplyTenantMemberEventTx(ctx, tx, e.TenantID, pl.Subject, e.Sequence)
+		if err != nil {
+			return err
+		}
+		if !apply {
+			return nil
+		}
 		if err := p.store.ApplyTenantMemberOffboardedTx(ctx, tx, store.TenantMember{
 			TenantID: e.TenantID, Subject: pl.Subject, Status: "offboarded", SCIM: normalizedSCIMIdentity(pl.SCIM),
-			UpdatedAt: e.Time, OffboardedBy: pl.OffboardedBy, OffboardReason: pl.Reason,
+			UpdatedAt: e.Time, OffboardedBy: pl.OffboardedBy, OffboardReason: pl.Reason, EventSequence: e.Sequence,
 		}); err != nil {
 			return err
 		}
 		if err := p.store.ApplyAPITokensRevokedForSubjectTx(ctx, tx, e.TenantID, pl.Subject, pl.OffboardedBy, "member offboarded: "+pl.Reason, e.Time); err != nil {
+			return err
+		}
+		if err := p.store.RevokeBrowserSessionsBySubjectTx(ctx, tx, e.TenantID, privacyref.SubjectRef(e.TenantID, pl.Subject), e.Time); err != nil {
 			return err
 		}
 		return p.store.ApplyMachineSessionsRevokedForSubjectTx(ctx, tx, e.TenantID, pl.Subject, pl.OffboardedBy, e.Time)
@@ -6547,7 +6567,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyAPITokenCreatedTx(ctx, tx, store.APITokenRecord{
 			ID: pl.ID, TenantID: e.TenantID, TokenHash: pl.TokenHash, Subject: pl.Subject,
 			Scopes: pl.Scopes, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
-			Delegated: apiTokenMintedForAnother(e.Actor, pl.Subject),
+			Delegated: apiTokenMintedForAnother(e.Actor, pl.Subject), EventSequence: e.Sequence,
 		})
 	case EventAPITokenRevoked:
 		var pl APITokenRevoked
@@ -6807,7 +6827,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyAPITokenCreatedTx(ctx, tx, store.APITokenRecord{
 			ID: pl.ID, TenantID: e.TenantID, TokenHash: pl.TokenHash,
 			Subject: pl.Principal, Scopes: pl.Scopes, ExpiresAt: &expiresAt,
-			CreatedAt: issuedAt,
+			CreatedAt: issuedAt, EventSequence: e.Sequence,
 		})
 	case EventMachineSessionRevoked:
 		var pl MachineSessionRevoked

@@ -26,8 +26,9 @@ const (
 	PrivacyRecoveryFenceApplicationSecretImport = "application_secret_import"
 	PrivacyRecoveryFenceApprovedTarget          = "approved_target"
 	// #nosec G101 -- this is a bounded privacy evidence label, not a credential.
-	PrivacyRecoveryFenceAPITokenRevocation = "api_token_revocation"
-	PrivacyRecoveryFenceMachineAuthMethod  = "machine_auth_method"
+	PrivacyRecoveryFenceAPITokenRevocation   = "api_token_revocation"
+	PrivacyRecoveryFenceMachineAuthMethod    = "machine_auth_method"
+	PrivacyRecoveryFenceTenantMemberOffboard = "tenant_member_offboard"
 
 	PrivacyRecoveryFenceDeleted       = "deleted"
 	PrivacyRecoveryFencePseudonymized = "pseudonymized"
@@ -121,7 +122,8 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 			fence.Kind != PrivacyRecoveryFenceApplicationSecretImport &&
 			fence.Kind != PrivacyRecoveryFenceApprovedTarget &&
 			fence.Kind != PrivacyRecoveryFenceAPITokenRevocation &&
-			fence.Kind != PrivacyRecoveryFenceMachineAuthMethod {
+			fence.Kind != PrivacyRecoveryFenceMachineAuthMethod &&
+			fence.Kind != PrivacyRecoveryFenceTenantMemberOffboard {
 			return fmt.Errorf("store: privacy recovery fence kind %q is unsupported", fence.Kind)
 		}
 		if fence.Disposition != PrivacyRecoveryFenceDeleted &&
@@ -387,7 +389,11 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
-		recoveryFences := append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), methodFences...)
+		memberFences, err := s.prepareTenantMemberOffboardFencesTx(ctx, tx, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		recoveryFences := append(append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), methodFences...), memberFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -407,6 +413,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			recoveryFences, PrivacyRecoveryFenceAPITokenRevocation)
 		selected.Counts["machine_auth_method_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceMachineAuthMethod)
+		selected.Counts["tenant_member_offboard_commands"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceTenantMemberOffboard)
 		scheduler, err := s.PrepareSecretRotationSchedulePrivacyErasureTx(
 			ctx, tx, tenantID, subject, expectedRef,
 			candidate.OperationID, candidate.EventID, resolveSchedulerOuter,
@@ -1035,6 +1043,74 @@ func (s *Store) prepareApplicationSecretImportRecoveryFencesTx(
 // Prepare the same byte-preserving privacy rewrite for a revocation command
 // that survived append/project failure. The later worker can then compare its
 // exact retained event against the rewritten first command.
+func (s *Store) prepareTenantMemberOffboardFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingRow struct {
+		ref, eventID   string
+		version        int
+		actor, payload []byte
+		digest         string
+	}
+	rows, err := tx.Query(ctx, `SELECT subject_ref, event_id::text, event_schema_version,
+		event_actor, event_payload, payload_sha256
+		FROM tenant_member_offboard_commands
+		WHERE tenant_id = $1 AND status = 'pending'
+		ORDER BY subject_ref FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var row pendingRow
+		if err := rows.Scan(&row.ref, &row.eventID, &row.version, &row.actor, &row.payload, &row.digest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, row := range pending {
+		if crypto.SHA256Hex(row.payload) != row.digest {
+			return nil, fmt.Errorf("store: member offboard command %s payload digest mismatch", row.eventID)
+		}
+		rewritten, payloadChanged, err := events.PseudonymizeEventDataForSubject(
+			row.payload, tenantID, subject, "tenant.member.offboarded", row.version)
+		if err != nil {
+			return nil, err
+		}
+		actorValue, _, actorChanged, err := pseudonymizeRecoveryActor(row.actor, tenantID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !payloadChanged && !actorChanged {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE tenant_member_offboard_commands
+			SET event_actor = $4::jsonb, event_payload = $5,
+			    payload_sha256 = $6, updated_at = now()
+			WHERE tenant_id = $1 AND subject_ref = $2 AND event_id = $3
+			  AND status = 'pending'`, tenantID, row.ref, row.eventID,
+			actorValue, rewritten, crypto.SHA256Hex(rewritten))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind: PrivacyRecoveryFenceTenantMemberOffboard, EventID: row.eventID,
+			Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
 func (s *Store) prepareAPITokenRevocationFencesTx(
 	ctx context.Context, tx pgx.Tx, tenantID, subject string,
 ) ([]PrivacyRecoveryFenceDisposition, error) {
