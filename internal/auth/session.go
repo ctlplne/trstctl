@@ -19,6 +19,7 @@ var (
 	ErrSessionNotFound = errors.New("auth: session not found")
 	ErrSessionRevoked  = errors.New("auth: session revoked")
 	ErrSessionExpired  = errors.New("auth: session has expired")
+	ErrSessionInvalid  = errors.New("auth: invalid signed session")
 )
 
 // Session is the authenticated session minted after a successful login. Roles
@@ -230,11 +231,11 @@ func (s *SessionIssuer) VerifyForLogoutContext(ctx context.Context, token string
 func (s *SessionIssuer) verifySignedRecord(ctx context.Context, token string) (SessionRecord, error) {
 	b, err := jose.VerifyHS256(s.secret, token)
 	if err != nil {
-		return SessionRecord{}, err
+		return SessionRecord{}, ErrSessionInvalid
 	}
 	var cookie sessionCookie
 	if err := json.Unmarshal(b, &cookie); err != nil {
-		return SessionRecord{}, err
+		return SessionRecord{}, ErrSessionInvalid
 	}
 	now := s.now()
 	if cookie.ID == "" || cookie.Subject == "" || cookie.TenantID == "" || cookie.ExpiresAt <= now.Unix() {

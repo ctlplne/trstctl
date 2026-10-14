@@ -783,3 +783,69 @@ func TestAuthLogoutClearsSession(t *testing.T) {
 		t.Error("logout should clear the CSRF cookie")
 	}
 }
+
+type failingLogoutSessionStore struct {
+	auth.SessionStore
+	failGet    bool
+	failRevoke bool
+}
+
+func (s *failingLogoutSessionStore) Get(ctx context.Context, tenantID, id string) (auth.SessionRecord, error) {
+	if s.failGet {
+		return auth.SessionRecord{}, errors.New("injected session read outage")
+	}
+	return s.SessionStore.Get(ctx, tenantID, id)
+}
+
+func (s *failingLogoutSessionStore) Revoke(ctx context.Context, tenantID, id string, at time.Time) error {
+	if s.failRevoke {
+		return errors.New("injected session revoke outage")
+	}
+	return s.SessionStore.Revoke(ctx, tenantID, id, at)
+}
+
+func TestAuthLogoutStoreFailurePreservesRetryableCookie(t *testing.T) {
+	for _, failure := range []string{"read", "revoke"} {
+		t.Run(failure, func(t *testing.T) {
+			store := &failingLogoutSessionStore{SessionStore: auth.NewMemorySessionStore()}
+			sessions := auth.NewSessionIssuerWithStore([]byte("test-secret-0123456789abcdef0123"), time.Hour, time.Hour, store)
+			cfg, _ := authConfig()
+			cfg.Sessions = sessions
+			h := api.New(nil, nil, nil, api.WithAuth(cfg))
+			cookie, err := sessions.Issue("user-1", testTenant, "u@example.test", []string{"admin"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			store.failGet = failure == "read"
+			store.failRevoke = failure == "revoke"
+			logout := func() *httptest.ResponseRecorder {
+				rec := httptest.NewRecorder()
+				req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+				req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: cookie,
+					Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+				h.ServeHTTP(rec, req)
+				return rec
+			}
+			first := logout()
+			if first.Code != http.StatusServiceUnavailable {
+				t.Fatalf("failed logout = %d, want retryable 503", first.Code)
+			}
+			for _, cleared := range first.Result().Cookies() {
+				if cleared.Name == "__Host-trstctl_session" && cleared.MaxAge < 0 {
+					t.Fatal("failed logout cleared the only retryable browser cookie")
+				}
+			}
+			store.failGet, store.failRevoke = false, false
+			if _, err := sessions.Verify(cookie); err != nil {
+				t.Fatalf("failed logout unexpectedly revoked the session: %v", err)
+			}
+			second := logout()
+			if second.Code != http.StatusNoContent {
+				t.Fatalf("recovered logout = %d, want 204", second.Code)
+			}
+			if _, err := sessions.Verify(cookie); !errors.Is(err, auth.ErrSessionRevoked) {
+				t.Fatalf("recovered logout left cookie usable: %v", err)
+			}
+		})
+	}
+}

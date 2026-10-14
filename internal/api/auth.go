@@ -664,12 +664,20 @@ func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]stri
 	return roleNames, permissions, nil
 }
 
-// authLogout clears the session and CSRF cookies.
+// authLogout clears cookies only after server-side authority was revoked (or
+// confirmed absent). A store outage must leave the browser with its exact cookie
+// so it can retry; a 204 in that state would falsely report completed logout.
 func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
 	if a.auth != nil && a.auth.Sessions != nil {
 		if cookie, err := r.Cookie(a.browserSessionCookieName()); err == nil {
-			if session, err := a.auth.Sessions.VerifyForLogoutContext(r.Context(), cookie.Value); err == nil {
-				_ = a.auth.Sessions.RevokeContext(r.Context(), session.TenantID, session.ID)
+			session, err := a.auth.Sessions.VerifyForLogoutContext(r.Context(), cookie.Value)
+			if err == nil {
+				err = a.auth.Sessions.RevokeContext(r.Context(), session.TenantID, session.ID)
+			}
+			if err != nil && !errors.Is(err, auth.ErrSessionInvalid) &&
+				!errors.Is(err, auth.ErrSessionExpired) && !errors.Is(err, auth.ErrSessionNotFound) {
+				a.writeError(w, errStatus(http.StatusServiceUnavailable, "session revocation is not confirmed; retry logout"))
+				return
 			}
 		}
 	}
