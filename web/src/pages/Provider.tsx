@@ -496,7 +496,11 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   );
 
   const statusClass = (status: ProviderTenant["status"]) =>
-    status === "active" ? "text-status-success" : status === "suspended" || status === "offboarding" ? "text-status-warning" : "text-status-danger";
+    status === "active"
+      ? "text-status-success"
+      : status === "suspended" || status === "suspension_pending" || status === "offboarding"
+        ? "text-status-warning"
+        : "text-status-danger";
 
   return (
     <main className="mx-auto max-w-5xl p-comfortable">
@@ -554,15 +558,23 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
               cell: (tenant) => (
                 <div className="min-w-40 max-w-xs whitespace-normal">
                   <span className={statusClass(tenant.status)}>
-                    {tenant.status === "offboarding"
-                      ? translateNow("provider.offboard.pending")
-                      : tenant.status === "offboard_failed"
-                        ? translateNow("provider.offboard.failed")
-                        : tenant.status}
+                    {tenant.status === "suspension_pending"
+                      ? translateNow("provider.suspend.pending")
+                      : tenant.status === "offboarding"
+                        ? translateNow("provider.offboard.pending")
+                        : tenant.status === "offboard_failed"
+                          ? translateNow("provider.offboard.failed")
+                          : tenant.status}
                   </span>
-                  {tenant.status === "offboarding" || tenant.status === "offboard_failed" ? (
+                  {tenant.status === "suspension_pending" || tenant.status === "offboarding" || tenant.status === "offboard_failed" ? (
                     <p className="mt-1 text-caption text-muted-foreground">
-                      {translateNow(tenant.status === "offboarding" ? "provider.offboard.pendingHelp" : "provider.offboard.failedHelp")}
+                      {translateNow(
+                        tenant.status === "suspension_pending"
+                          ? "provider.suspend.pendingHelp"
+                          : tenant.status === "offboarding"
+                            ? "provider.offboard.pendingHelp"
+                            : "provider.offboard.failedHelp",
+                      )}
                     </p>
                   ) : null}
                 </div>
@@ -606,7 +618,10 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
                       {translateNow("source.provider.resume.action.qa1850002")}
                     </Button>
                   ) : null}
-                  {tenant.status !== "offboarded" && tenant.status !== "offboarding" && authority?.customers[tenant.id]?.offboard ? (
+                  {tenant.status !== "offboarded" &&
+                  tenant.status !== "offboarding" &&
+                  tenant.status !== "suspension_pending" &&
+                  authority?.customers[tenant.id]?.offboard ? (
                     <Button
                       type="button"
                       variant="destructive-outline"

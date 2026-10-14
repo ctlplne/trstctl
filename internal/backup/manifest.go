@@ -42,6 +42,8 @@ var RecoveredFromPostgresBackup = []string{
 	"api_token_revocation_commands",
 	// A pending CA cancellation denies signing before its event projection.
 	"ca_ceremony_cancel_commands",
+	// A Provider suspension denies service before its event projects.
+	"provider_suspend_commands",
 	// A pending agent removal denies old mTLS authority before its source event
 	// reaches the read model; restore its exact first-writer command.
 	"agent_removal_commands",

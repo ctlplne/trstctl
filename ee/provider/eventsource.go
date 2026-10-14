@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -199,6 +200,37 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 		eventTime = payload.Audit.At
 	}
 	wanted := events.Event{ID: eventID, Type: typ, TenantID: tenantID, Time: eventTime, Data: data}
+	if typ == AuditTenantSuspended {
+		// The customer service barrier surrounds this append. Persist denial
+		// authority before a broker ACK can outlive its SQL projection.
+		wanted.Time = wanted.Time.UTC().Truncate(time.Microsecond)
+		wanted.SchemaVersion = events.DefaultSchemaVersion
+		if actor, ok := events.ActorFromContext(ctx); ok {
+			wanted.Actor = &actor
+		}
+		retained, found, err := s.log.EventByID(ctx, eventID)
+		if err != nil {
+			return eventspec.Event{}, fmt.Errorf("%w: find suspension command: %v", ErrMutationPersistence, err)
+		}
+		if found {
+			if !sameSuspendRequest(retained, wanted, payload.RequestBinding) {
+				return eventspec.Event{}, ErrMutationConflict
+			}
+			wanted = retained
+		} else {
+			claim, err := s.projection.store.ClaimProviderSuspendCommand(ctx, wanted)
+			if errors.Is(err, corestore.ErrIdempotencyConflict) {
+				return eventspec.Event{}, ErrMutationConflict
+			}
+			if err != nil {
+				return eventspec.Event{}, fmt.Errorf("%w: claim suspension: %v", ErrMutationPersistence, err)
+			}
+			if claim.Status != "pending" || !sameSuspendRequest(claim.Event, wanted, payload.RequestBinding) {
+				return eventspec.Event{}, ErrMutationConflict
+			}
+			wanted = claim.Event
+		}
+	}
 	if typ == EventTenantBrandSet && payload.Brand != nil {
 		// A stable-key retry must return its original outcome even when the
 		// hostname changed owners later. Look up retained history before testing
@@ -265,6 +297,23 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 		}
 	}
 	return canonical, nil
+}
+
+func sameSuspendRequest(canonical, wanted events.Event, binding string) bool {
+	if canonical.ID != wanted.ID || canonical.Type != wanted.Type ||
+		canonical.TenantID != wanted.TenantID ||
+		canonical.SchemaVersion != events.DefaultSchemaVersion {
+		return false
+	}
+	if binding == "" {
+		return bytes.Equal(canonical.Data, wanted.Data) &&
+			reflect.DeepEqual(canonical.Actor, wanted.Actor)
+	}
+	var prior, proposed AuthorityEvent
+	return json.Unmarshal(canonical.Data, &prior) == nil &&
+		json.Unmarshal(wanted.Data, &proposed) == nil &&
+		prior.RequestBinding == binding && prior.Audit.OperatorID != "" &&
+		prior.Audit.OperatorID == proposed.Audit.OperatorID
 }
 
 type brandDomainQuerier interface {
@@ -537,6 +586,16 @@ func (p *AuthorityProjection) ApplyTx(ctx context.Context, tx pgx.Tx, event even
 		if outcome == "applied" {
 			if err := applyAuthorityEventTx(ctx, tx, event, payload); err != nil {
 				return err
+			}
+			if event.Type == AuditTenantSuspended {
+				if err := p.store.CompleteProviderSuspendCommandTx(ctx, tx, event); err != nil {
+					return err
+				}
+			}
+			if event.Type == AuditTenantResumed {
+				if err := p.store.ReleaseProviderSuspendCommandTx(ctx, tx, event.TenantID, event.ID, event.Sequence); err != nil {
+					return err
+				}
 			}
 		}
 		return recordAuthorityCompletionTx(ctx, tx, event, digest, outcome)

@@ -29,6 +29,18 @@ func TenantOffboardReceiverExistsTx(ctx context.Context, tx pgx.Tx, tenantID str
 	return exists, nil
 }
 
+// TenantOffboardPending is a narrow status-command guard. A Provider suspend
+// or resume cannot overtake a core erasure request prepared before its event.
+func (s *Store) TenantOffboardPending(ctx context.Context, tenantID string) (bool, error) {
+	var pending bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		pending, err = TenantOffboardReceiverExistsTx(ctx, tx, tenantID)
+		return err
+	})
+	return pending, err
+}
+
 // RequireLiveTenantService requires a current tenant row, no persisted customer
 // restriction, and no pending erase. Reading an existing restriction is core
 // tenancy enforcement; the licensed plane still owns its management and events.
@@ -54,6 +66,13 @@ func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) e
 			return fmt.Errorf("store: inspect persisted tenant restriction: %w", err)
 		}
 		if restricted {
+			return tenancy.ErrServiceUnavailable
+		}
+		suspended, err := ProviderSuspendCommandActiveTx(ctx, tx, tenantID)
+		if err != nil {
+			return fmt.Errorf("store: inspect pending Provider suspension: %w", err)
+		}
+		if suspended {
 			return tenancy.ErrServiceUnavailable
 		}
 		pending, err := TenantOffboardReceiverExistsTx(ctx, tx, tenantID)
@@ -229,6 +248,7 @@ var TenantScopedTables = []string{
 	"api_tokens",
 	"api_token_revocation_commands",
 	"ca_ceremony_cancel_commands",
+	"provider_suspend_commands",
 	"agent_removal_commands",
 	"tenant_member_offboard_commands",
 	"tenant_member_upsert_commands",

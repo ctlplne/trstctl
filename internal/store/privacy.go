@@ -163,7 +163,7 @@ func ValidatePrivacyErasureCountsV3(counts map[string]int) error {
 		"owners": {}, "identities": {}, "certificates": {}, "ssh_keys": {},
 		"attestations": {}, "approval_requests": {}, "approvals": {},
 		"profiles": {}, "agents": {}, "agent_offboard_actors": {},
-		"agent_offboard_reasons": {}, "api_tokens": {}, "api_token_revocation_commands": {}, "ca_ceremony_cancel_commands": {}, "agent_removal_commands": {}, "tenant_member_offboard_commands": {}, "tenant_member_upsert_commands": {}, "machine_auth_method_commands": {}, "tenant_members": {},
+		"agent_offboard_reasons": {}, "api_tokens": {}, "api_token_revocation_commands": {}, "ca_ceremony_cancel_commands": {}, "provider_suspend_commands": {}, "agent_removal_commands": {}, "tenant_member_offboard_commands": {}, "tenant_member_upsert_commands": {}, "machine_auth_method_commands": {}, "tenant_members": {},
 		"read_models": {}, "application_secret_mutation_fences": {},
 		"application_secret_import_batches": {},
 		"approved_target_event_fences":      {}, "code_signing_operations": {},

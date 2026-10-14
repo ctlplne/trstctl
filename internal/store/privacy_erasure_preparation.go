@@ -28,6 +28,7 @@ const (
 	// #nosec G101 -- this is a bounded privacy evidence label, not a credential.
 	PrivacyRecoveryFenceAPITokenRevocation   = "api_token_revocation"
 	PrivacyRecoveryFenceCACeremonyCancel     = "ca_ceremony_cancel"
+	PrivacyRecoveryFenceProviderSuspend      = "provider_suspend"
 	PrivacyRecoveryFenceAgentRemoval         = "agent_removal"
 	PrivacyRecoveryFenceMachineAuthMethod    = "machine_auth_method"
 	PrivacyRecoveryFenceTenantMemberOffboard = "tenant_member_offboard"
@@ -126,6 +127,7 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 			fence.Kind != PrivacyRecoveryFenceApprovedTarget &&
 			fence.Kind != PrivacyRecoveryFenceAPITokenRevocation &&
 			fence.Kind != PrivacyRecoveryFenceCACeremonyCancel &&
+			fence.Kind != PrivacyRecoveryFenceProviderSuspend &&
 			fence.Kind != PrivacyRecoveryFenceAgentRemoval &&
 			fence.Kind != PrivacyRecoveryFenceMachineAuthMethod &&
 			fence.Kind != PrivacyRecoveryFenceTenantMemberOffboard &&
@@ -395,6 +397,10 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
+		providerSuspendFences, err := s.prepareProviderSuspendFencesTx(ctx, tx, tenantID, subject)
+		if err != nil {
+			return err
+		}
 		methodFences, err := s.prepareMachineAuthMethodFencesTx(ctx, tx, tenantID, subject)
 		if err != nil {
 			return err
@@ -411,7 +417,7 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
-		recoveryFences := append(append(append(append(append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), caCancelFences...), methodFences...), memberFences...), memberUpsertFences...), agentFences...)
+		recoveryFences := append(append(append(append(append(append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), caCancelFences...), providerSuspendFences...), methodFences...), memberFences...), memberUpsertFences...), agentFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -431,6 +437,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			recoveryFences, PrivacyRecoveryFenceAPITokenRevocation)
 		selected.Counts["ca_ceremony_cancel_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceCACeremonyCancel)
+		selected.Counts["provider_suspend_commands"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceProviderSuspend)
 		selected.Counts["machine_auth_method_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceMachineAuthMethod)
 		selected.Counts["tenant_member_offboard_commands"] = countPrivacyRecoveryFences(
@@ -1199,6 +1207,69 @@ func (s *Store) prepareTenantMemberUpsertFencesTx(
 		}
 		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
 			Kind: PrivacyRecoveryFenceTenantMemberUpsert, EventID: row.eventID,
+			Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
+func (s *Store) prepareProviderSuspendFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingRow struct {
+		eventID        string
+		actor, payload []byte
+		digest         string
+	}
+	rows, err := tx.Query(ctx, `SELECT event_id,event_actor,event_payload,payload_sha256
+		FROM provider_suspend_commands WHERE tenant_id=$1 AND status='pending'
+		ORDER BY event_id FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var row pendingRow
+		if err := rows.Scan(&row.eventID, &row.actor, &row.payload, &row.digest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, row := range pending {
+		if crypto.SHA256Hex(row.payload) != row.digest {
+			return nil, fmt.Errorf("store: Provider suspension command %s payload digest mismatch", row.eventID)
+		}
+		rewritten, payloadChanged, err := events.PseudonymizeEventDataForSubject(
+			row.payload, tenantID, subject, "provider.tenant_suspend", events.DefaultSchemaVersion)
+		if err != nil {
+			return nil, err
+		}
+		actorValue, _, actorChanged, err := pseudonymizeRecoveryActor(row.actor, tenantID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !payloadChanged && !actorChanged {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE provider_suspend_commands
+			SET event_actor=$3::jsonb,event_payload=$4,payload_sha256=$5,updated_at=now()
+			WHERE tenant_id=$1 AND event_id=$2 AND status='pending'`,
+			tenantID, row.eventID, actorValue, rewritten, crypto.SHA256Hex(rewritten))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind: PrivacyRecoveryFenceProviderSuspend, EventID: row.eventID,
 			Disposition: PrivacyRecoveryFencePseudonymized,
 		})
 	}

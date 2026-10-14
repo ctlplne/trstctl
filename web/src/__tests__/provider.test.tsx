@@ -319,6 +319,18 @@ describe("provider console (L3)", () => {
     expect(within(row).queryByRole("button", { name: /Offboard|Resume/ })).not.toBeInTheDocument();
   });
 
+  it("shows a committed suspension denial before event projection finishes", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "suspension_pending", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-03T00:00:00Z" },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    expect(within(row).getByText("Suspension pending")).toBeInTheDocument();
+    expect(within(row).getByText(/Customer access is blocked/)).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /Suspend|Resume|Offboard/ })).not.toBeInTheDocument();
+  });
+
   it("continues an original offboarding request from activity after its customer leaves the roster", async () => {
     const request = {
       sequence: 10,

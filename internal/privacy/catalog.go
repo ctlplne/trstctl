@@ -91,6 +91,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "CA governance",
 		},
 		{
+			ID:             "provider_suspend_commands.pending-actor",
+			Location:       "provider_suspend_commands.event_actor/event_payload",
+			Category:       "transient Provider suspension operator identity",
+			Purpose:        "recover the exact first suspension across an ambiguous event append or projection failure",
+			RetentionClass: "transient:until-provider-suspension-projection",
+			Erasure:        "privacy.subject.erased pseudonymizes pending command material; projection removes the actor and payload while preserving opaque service denial",
+			Owner:          "Provider plane",
+		},
+		{
 			ID:             "machine_auth_method_commands.pending-actor",
 			Location:       "machine_auth_method_commands.event_actor/event_payload",
 			Category:       "transient machine-auth method operator subject",

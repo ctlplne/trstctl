@@ -851,6 +851,17 @@ func (s *Service) setTenantStatusLocked(ctx context.Context, actor Operator, ten
 	if err != nil {
 		return err
 	}
+	if guard, ok := s.store.(interface {
+		TenantOffboardPending(context.Context, string) (bool, error)
+	}); ok {
+		pending, err := guard.TenantOffboardPending(ctx, tenantID)
+		if err != nil {
+			return err
+		}
+		if pending {
+			return ErrTenantStateConflict
+		}
+	}
 	if tenant.Status == TenantOffboarding || (tenant.Status == TenantOffboarded && status != TenantOffboarded) {
 		return ErrTenantStateConflict
 	}

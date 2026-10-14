@@ -26,5 +26,7 @@ func (p *PGStore) RequireCustomerService(ctx context.Context, tenantID string) e
 	if tenant.Status != TenantActive {
 		return tenancy.ErrServiceUnavailable
 	}
-	return nil
+	// The core receiver is committed before a Provider suspension event. It
+	// denies both core and licensed admissions while projection catches up.
+	return p.store.RequireLiveTenantService(ctx, tenantID)
 }

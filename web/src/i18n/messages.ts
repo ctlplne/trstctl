@@ -16677,6 +16677,14 @@ export const messages = {
     description: "L3: offboard confirmation.",
   },
   "provider.offboard.pending": { defaultMessage: "Offboarding pending", description: "Customer deletion has not completed." },
+  "provider.suspend.pending": {
+    defaultMessage: "Suspension pending",
+    description: "Customer service is denied while the suspension event is being recovered.",
+  },
+  "provider.suspend.pendingHelp": {
+    defaultMessage: "Customer access is blocked. Retry the suspension with its original request key, then refresh before resuming or offboarding.",
+    description: "Retained suspension command needs exact recovery.",
+  },
   "provider.offboard.completed": {
     defaultMessage: "Deletion verified",
     description: "The durable completion record confirms the deletion operation finished.",

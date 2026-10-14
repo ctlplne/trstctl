@@ -45,6 +45,10 @@ func (p *PGStore) RequireCustomerWorkQuiescent(ctx context.Context, tenantID str
 	return p.store.RequireTenantAgentWorkQuiescent(ctx, tenantID)
 }
 
+func (p *PGStore) TenantOffboardPending(ctx context.Context, tenantID string) (bool, error) {
+	return p.store.TenantOffboardPending(ctx, tenantID)
+}
+
 var _ Store = (*PGStore)(nil)
 
 // WithLifecycleMutation serializes rare Provider status commands with each
@@ -69,8 +73,12 @@ func (p *PGStore) CountBillableTenants(ctx context.Context) (int, error) {
 
 func (p *PGStore) ListTenants(ctx context.Context) ([]Tenant, error) {
 	rows, err := p.store.SystemPool().Query(ctx,
-		`SELECT tenant_id::text, slug, name, status, created_at, updated_at
-		   FROM provider_tenants ORDER BY slug`)
+		`SELECT t.tenant_id::text, t.slug, t.name,
+		   CASE WHEN EXISTS (SELECT 1 FROM provider_suspend_commands AS c
+		     WHERE c.tenant_id=t.tenant_id AND c.status='pending')
+		     THEN 'suspension_pending' ELSE t.status END,
+		   t.created_at, t.updated_at
+		   FROM provider_tenants AS t ORDER BY t.slug`)
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +118,14 @@ func (p *PGStore) DirectTenantSnapshot(ctx context.Context, tenantID string) (Te
 	}
 	var active int
 	var registration *int64
+	var pendingSuspend bool
 	if err := p.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT (SELECT event_seq FROM tenants WHERE tenant_id = $1),
-			        (SELECT count(*) FROM certificates WHERE tenant_id = $1 AND status = 'active')`,
-			tenantID).Scan(&registration, &active)
+			        (SELECT count(*) FROM certificates WHERE tenant_id = $1 AND status = 'active'),
+			        EXISTS (SELECT 1 FROM provider_suspend_commands
+			                WHERE tenant_id = $1 AND status = 'pending')`,
+			tenantID).Scan(&registration, &active, &pendingSuspend)
 	}); err != nil {
 		return TenantSnapshot{}, err
 	}
@@ -127,6 +138,8 @@ func (p *PGStore) DirectTenantSnapshot(ctx context.Context, tenantID string) (Te
 	configured := registration != nil
 	health := "healthy"
 	switch {
+	case pendingSuspend:
+		health = "suspension_pending"
 	case tenant.Status == TenantSuspended:
 		health = "suspended"
 	case tenant.Status == TenantOffboarding:

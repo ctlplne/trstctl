@@ -3,10 +3,12 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -48,8 +50,51 @@ func (r *AuthorityRuntime) Bootstrap(ctx context.Context) error {
 		if err := r.captureLegacyAuthority(captureCtx); err != nil {
 			return err
 		}
+		if err := r.recoverPendingSuspensions(captureCtx); err != nil {
+			return err
+		}
 		return r.Projection.recoverOrdered(captureCtx, r.Mutations.log)
 	})
+}
+
+// A process may stop after the SQL denial commits but before JetStream ACKs.
+// Reconcile each exact event ID before replay; never release the denial merely
+// because the source event is absent.
+func (r *AuthorityRuntime) recoverPendingSuspensions(ctx context.Context) error {
+	var afterTenant, afterEvent string
+	for {
+		keys, err := r.Projection.store.PendingProviderSuspendKeysSystem(ctx, afterTenant, afterEvent, 100)
+		if err != nil {
+			return err
+		}
+		if len(keys) == 0 {
+			return nil
+		}
+		for _, key := range keys {
+			command, err := r.Projection.store.ProviderSuspendCommand(ctx, key[0], key[1])
+			if err != nil {
+				return err
+			}
+			retained, found, err := r.Mutations.log.EventByID(ctx, key[1])
+			if err != nil {
+				return err
+			}
+			if !found {
+				retained, err = r.Mutations.log.Append(ctx, command.Event)
+				if err != nil {
+					return fmt.Errorf("provider: recover pending suspension %s: %w", key[1], err)
+				}
+			}
+			if retained.ID != command.Event.ID || retained.Type != command.Event.Type ||
+				retained.TenantID != command.Event.TenantID || !retained.Time.Equal(command.Event.Time) ||
+				!bytes.Equal(retained.Data, command.Event.Data) ||
+				!reflect.DeepEqual(retained.Actor, command.Event.Actor) {
+				return fmt.Errorf("provider: suspension %s source differs from first command", key[1])
+			}
+		}
+		last := keys[len(keys)-1]
+		afterTenant, afterEvent = last[0], last[1]
+	}
 }
 
 func (r *AuthorityRuntime) captureLegacyAuthority(ctx context.Context) error {

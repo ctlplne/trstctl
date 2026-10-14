@@ -35,6 +35,11 @@ func TestProviderOffboardRequestFailureRetainsCoreAdmissionDenial(t *testing.T) 
 			}); err != nil {
 				t.Fatal(err)
 			}
+			if _, err := sink.Append(ctx, "grant-suspend", EventDelegationGranted, id, AuthorityEvent{
+				Delegation: &DelegationMutation{OperatorID: "op-1", CustomerID: id, Operation: OpSuspend, GrantedBy: "admin"}, EffectiveAt: now,
+			}); err != nil {
+				t.Fatal(err)
+			}
 			runtime := NewAuthorityRuntime(st, log)
 			projector := projections.New(st, runtime.ProjectionOptions...)
 			idem := orchestrator.NewIdempotency(st)
@@ -82,6 +87,14 @@ func TestProviderOffboardRequestFailureRetainsCoreAdmissionDenial(t *testing.T) 
 				}
 			}
 			assertCoreDenied()
+			suspend := httptest.NewRequest(http.MethodPost, "/provider/v1/tenants/"+id+"/suspend", strings.NewReader(`{}`))
+			suspend.Header.Set("Authorization", "Bearer requester")
+			suspend.Header.Set("Idempotency-Key", "suspend-after-erase-request")
+			suspendResult := httptest.NewRecorder()
+			NewHandler(cfg).ServeHTTP(suspendResult, suspend)
+			if suspendResult.Code != http.StatusConflict {
+				t.Fatalf("suspend overtook pending erasure: %d %s", suspendResult.Code, suspendResult.Body.String())
+			}
 			if err := projections.New(st).Rebuild(ctx, log); err != nil {
 				t.Fatalf("core-only rebuild: %v", err)
 			}

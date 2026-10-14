@@ -1190,6 +1190,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"oidc_logout_receipts",
 		"api_token_revocation_commands",
 		"ca_ceremony_cancel_commands",
+		"provider_suspend_commands",
 		"agent_removal_commands",
 		"tenant_member_offboard_commands",
 		"tenant_member_upsert_commands",

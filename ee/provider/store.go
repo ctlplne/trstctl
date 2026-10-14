@@ -82,11 +82,14 @@ type Operator struct {
 type TenantStatus string
 
 const (
-	TenantActive         TenantStatus = "active"
-	TenantSuspended      TenantStatus = "suspended"
-	TenantOffboarding    TenantStatus = "offboarding"
-	TenantOffboardFailed TenantStatus = "offboard_failed"
-	TenantOffboarded     TenantStatus = "offboarded"
+	TenantActive    TenantStatus = "active"
+	TenantSuspended TenantStatus = "suspended"
+	// SuspensionPending is a read-only operator view of a durable denial whose
+	// source event has not yet reached the Provider projection.
+	TenantSuspensionPending TenantStatus = "suspension_pending"
+	TenantOffboarding       TenantStatus = "offboarding"
+	TenantOffboardFailed    TenantStatus = "offboard_failed"
+	TenantOffboarded        TenantStatus = "offboarded"
 )
 
 // providerCustomerNamespace names the space customer ids are minted in. A fixed

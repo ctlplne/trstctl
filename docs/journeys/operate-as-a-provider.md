@@ -311,6 +311,17 @@ responses. They return HTTP 403 for a missing or restricted customer and HTTP 50
 when current service authority cannot be checked, using the Vault `errors` array.
 An active mutation holds the customer's lifecycle lock through its response, so a
 conflicting suspension or offboarding request must retry after that work finishes.
+Suspension commits a tenant-scoped denial command before publishing its event.
+The core and Provider admission checks read that command, including when the
+Provider status projection is delayed or a core-only binary is running. Startup
+reconciles a command left before publication using its original event ID and
+payload. The command stays restrictive after projection and is released only in
+the same transaction that projects an authorized Resume event. A failed suspend
+request can therefore leave the customer safely paused; retry it with the same
+`Idempotency-Key`, then check the customer state and activity before resuming.
+While the source event is still pending, the Customers list says **Suspension
+pending** instead of showing the stale projected Active state; Resume and
+Offboard stay unavailable there until recovery completes.
 
 Removing the Provider license or starting a core-only build does not clear a
 persisted customer restriction. Suspended customers, unfinished offboarding,

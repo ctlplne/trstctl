@@ -33,7 +33,7 @@ export function clearProviderToken(): void {
   operatorToken = null;
 }
 
-export type ProviderTenantStatus = "active" | "suspended" | "offboarding" | "offboard_failed" | "offboarded";
+export type ProviderTenantStatus = "active" | "suspension_pending" | "suspended" | "offboarding" | "offboard_failed" | "offboarded";
 
 export interface ProviderTenant {
   id: string;

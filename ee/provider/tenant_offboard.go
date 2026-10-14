@@ -105,6 +105,13 @@ func (o *TenantOffboarder) authorizeBeforeServiceBarrier(ctx context.Context, se
 
 func (o *TenantOffboarder) executeQuiesced(ctx context.Context, service *Service, actor Operator, tenantID, requestID string) error {
 	return withAuthorityFence(ctx, o.store, func(ctx context.Context) error {
+		pendingSuspend, err := o.store.ProviderSuspendPending(ctx, tenantID)
+		if err != nil {
+			return fmt.Errorf("%w: inspect pending suspension: %v", ErrMutationPersistence, err)
+		}
+		if pendingSuspend {
+			return ErrTenantStateConflict
+		}
 		if err := service.requireMutation(actor, true); err != nil {
 			return err
 		}
