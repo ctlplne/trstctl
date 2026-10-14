@@ -1187,6 +1187,7 @@ func postgresStateTables() []string {
 func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
+		"oidc_logout_receipts",
 		"api_token_revocation_commands",
 		"agent_removal_commands",
 		"tenant_member_offboard_commands",

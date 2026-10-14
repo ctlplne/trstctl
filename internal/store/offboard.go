@@ -282,6 +282,11 @@ var TenantScopedTables = []string{
 	"tenant_key_domains",
 	// Operational/system tenant-scoped tables.
 	"browser_sessions",
+	// Fixed OIDC auth partition: customer offboard explicitly removes matching
+	// locator rows by browser_tenant_id inside this same transaction. Receipts
+	// are provider-bound replay/cutoff authority and outlive one customer.
+	"oidc_session_locators",
+	"oidc_logout_receipts",
 	"idempotency_keys",
 	"outbox",
 	"rate_limits",
@@ -567,6 +572,14 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 		return att, err
 	}
 	for _, table := range TenantScopedTables {
+		if table == "oidc_logout_receipts" {
+			// The fixed auth partition stores provider/JTI cutoffs shared by
+			// customers. This customer's RLS scope can contain no rows here;
+			// keep the immutable receipts so a restored late callback remains
+			// denied after another customer's offboard.
+			att.Deleted[table] = 0
+			continue
+		}
 		if table == "certificates" {
 			var exists bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (
@@ -619,6 +632,24 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 		n := int(tag.RowsAffected())
 		att.Deleted[table] = n
 		att.Total += n
+	}
+	// The IdP's logout_token has no customer tenant ID, so its locator is held
+	// under a fixed auth RLS partition. Delete this customer's exact locators
+	// before attesting erasure, then restore the customer scope for the normal
+	// catalog verification pass. Member offboard admission already fences a
+	// concurrent login before it can create another browser row/locator pair.
+	if err := setOIDCAuthScopeTx(ctx, tx); err != nil {
+		return att, err
+	}
+	locatorTag, err := tx.Exec(ctx, `DELETE FROM oidc_session_locators
+	    WHERE tenant_id = $1 AND browser_tenant_id = $2`, oidcAuthPartition, tenantID)
+	if err != nil {
+		return att, fmt.Errorf("store: offboard OIDC browser locators: %w", err)
+	}
+	att.Deleted["oidc_session_locators"] += int(locatorTag.RowsAffected())
+	att.Total += int(locatorTag.RowsAffected())
+	if err := setOIDCCustomerScopeTx(ctx, tx, tenantID); err != nil {
+		return att, err
 	}
 
 	// Verification pass: in the same transaction (and same tenant RLS context),

@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"trstctl.com/trstctl/internal/auth"
@@ -40,7 +41,7 @@ func (s postgresBrowserSessionStore) Create(ctx context.Context, rec auth.Sessio
 		}
 		issuedAt = rec.OIDC.IssuedAt
 	}
-	return s.store.CreateBrowserSession(ctx, store.BrowserSession{
+	err := s.store.CreateBrowserSession(ctx, store.BrowserSession{
 		TenantID:    rec.TenantID,
 		SessionHash: rec.ID,
 		SubjectHash: browserSessionSubjectHash(rec.TenantID, rec.Subject),
@@ -48,8 +49,14 @@ func (s postgresBrowserSessionStore) Create(ctx context.Context, rec auth.Sessio
 		CreatedAt:   rec.CreatedAt,
 		LastSeenAt:  rec.LastSeenAt,
 		RevokedAt:   rec.RevokedAt,
-		AuthMethod:  method, OIDCProviderHash: providerHash, OIDCSIDHash: sidHash, OIDCIDTokenIat: issuedAt,
+		AuthMethod:  method, OIDCProviderHash: providerHash,
+		OIDCGlobalSubjectHash: oidcGlobalSubjectHash(providerHash, rec.Subject),
+		OIDCSIDHash:           sidHash, OIDCIDTokenIat: issuedAt,
 	})
+	if errors.Is(err, store.ErrOIDCLoginLoggedOut) {
+		return auth.ErrOIDCSessionLoggedOut
+	}
+	return err
 }
 
 func (s postgresBrowserSessionStore) Get(ctx context.Context, tenantID, id string) (auth.SessionRecord, error) {
@@ -92,6 +99,27 @@ func (s postgresBrowserSessionStore) RevokeOIDC(ctx context.Context, tenantID st
 	return s.store.RevokeBrowserOIDCSessions(ctx, tenantID, providerHash, subjectHash, sidHash, revokedAt)
 }
 
+func (s postgresBrowserSessionStore) LogoutOIDC(ctx context.Context, claims auth.LogoutTokenClaims, assertionHash string, revokedAt time.Time) error {
+	providerHash := oidcProviderHash(claims.Issuer, claims.ClientID)
+	globalSubjectHash, sidHash := "", ""
+	if claims.Subject != "" {
+		globalSubjectHash = oidcGlobalSubjectHash(providerHash, claims.Subject)
+	}
+	if claims.SID != "" {
+		sidHash = oidcSIDHash(providerHash, claims.SID)
+	}
+	err := s.store.ApplyOIDCBackchannelLogout(ctx, store.OIDCBackchannelLogout{
+		ProviderHash: providerHash, GlobalSubjectHash: globalSubjectHash,
+		SIDHash: sidHash, JTIHash: crypto.SHA256Hex([]byte(providerHash + "\x00" + claims.JTI)),
+		AssertionHash: assertionHash, IssuedAt: claims.IssuedAt,
+		ExpiresAt: claims.ExpiresAt, CompletedAt: revokedAt,
+	})
+	if errors.Is(err, store.ErrOIDCLogoutJTIConflict) {
+		return auth.ErrLogoutTokenReplay
+	}
+	return err
+}
+
 func (s postgresBrowserSessionStore) Touch(ctx context.Context, tenantID, id string, seenAt time.Time) error {
 	err := s.store.TouchBrowserSession(ctx, tenantID, id, seenAt)
 	if store.IsNotFound(err) {
@@ -110,4 +138,8 @@ func oidcProviderHash(issuer, clientID string) string {
 
 func oidcSIDHash(providerHash, sid string) string {
 	return crypto.SHA256Hex([]byte(providerHash + "\x00" + sid))
+}
+
+func oidcGlobalSubjectHash(providerHash, subject string) string {
+	return crypto.SHA256Hex([]byte(providerHash + "\x00" + subject))
 }

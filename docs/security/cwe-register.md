@@ -717,10 +717,10 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:878` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
-| `internal/api/auth.go:889` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:913` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:920` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:867` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
+| `internal/api/auth.go:878` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:902` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:909` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:80` | request cookie for the local handler fixture (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:83` | request cookie for the local handler fixture (CWE-1004) |
@@ -741,8 +741,8 @@ not this file.
 | `internal/api/auth_test.go:542` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:563` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:610` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:926` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
-| `internal/api/auth_test.go:969` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
+| `internal/api/auth_test.go:971` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
+| `internal/api/auth_test.go:1014` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
 | `internal/api/csrf_test.go:37` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:52` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:53` | test cookie against the test's own local server (CWE-1004) |
@@ -757,7 +757,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3768` | closed test table list above |
+| `internal/store/migration_content_test.go:3816` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 
@@ -805,9 +805,9 @@ not this file.
 | `deploy/helm/helm_test.go:1118` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/local-oidc/oidc_test.go:109` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
-| `deploy/local-oidc/oidc_test.go:211` | arguments are fixed checked-in scripts (CWE-78) |
-| `deploy/local-oidc/oidc_test.go:414` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:112` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:300` | arguments are fixed checked-in scripts (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:514` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `docs/claim_applications_test.go:67` | test runs the repository's own committed generator against tempdir fixtures it just wrote itself (CWE-78) |
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
@@ -1127,7 +1127,7 @@ not this file.
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:495` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:512` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/local-oidc/oidc_test.go:220` | paths are exact children of t.TempDir (CWE-22) |
+| `deploy/local-oidc/oidc_test.go:309` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/aud56_test.go:62` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud58_test.go:15` | name comes from the fixed documentation manifest in this test (CWE-22). |

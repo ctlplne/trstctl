@@ -141,7 +141,9 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 		GroupsClaim: o.GroupsClaim,
 	}
 	logoutVerifier := auth.OIDCLogoutVerifier{
-		Issuer: o.Issuer, ClientID: o.ClientID, Keys: keys, Replay: auth.NewLogoutReplayCache(),
+		// PostgreSQL owns exact-JTI replay and the login cutoff across replicas.
+		// A process-local cache cannot be the authority after a restart.
+		Issuer: o.Issuer, ClientID: o.ClientID, Keys: keys,
 	}
 
 	// Persistent session HMAC secret: a restart must not log users out, and HA
@@ -186,7 +188,6 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 		Exchange:                               oidcExchange(o, httpClient, secretSource),
 		VerifyIDToken:                          verifier.Verify,
 		VerifyOIDCLogoutToken:                  logoutVerifier.Verify,
-		ReleaseOIDCLogoutJTI:                   logoutVerifier.Replay.Release,
 		ResolveTenant:                          mapper.ResolveTenant,
 		Sessions:                               sessions,
 		LoginRedirect:                          o.LoginRedirect,

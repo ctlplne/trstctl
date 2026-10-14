@@ -16,10 +16,11 @@ import (
 )
 
 var (
-	ErrSessionNotFound = errors.New("auth: session not found")
-	ErrSessionRevoked  = errors.New("auth: session revoked")
-	ErrSessionExpired  = errors.New("auth: session has expired")
-	ErrSessionInvalid  = errors.New("auth: invalid signed session")
+	ErrSessionNotFound      = errors.New("auth: session not found")
+	ErrSessionRevoked       = errors.New("auth: session revoked")
+	ErrSessionExpired       = errors.New("auth: session has expired")
+	ErrSessionInvalid       = errors.New("auth: invalid signed session")
+	ErrOIDCSessionLoggedOut = errors.New("auth: OIDC session was signed out by its identity provider")
 )
 
 // Session is the authenticated session minted after a successful login. Roles
@@ -61,16 +62,23 @@ type SessionStore interface {
 	Revoke(context.Context, string, string, time.Time) error
 	RevokeSubject(context.Context, string, string, time.Time) error
 	RevokeOIDC(context.Context, string, LogoutTokenClaims, time.Time) error
+	LogoutOIDC(context.Context, LogoutTokenClaims, string, time.Time) error
 	Touch(context.Context, string, string, time.Time) error
 }
 
 type MemorySessionStore struct {
-	mu   sync.Mutex
-	rows map[string]SessionRecord
+	mu      sync.Mutex
+	rows    map[string]SessionRecord
+	logouts map[string]memoryOIDCLogout
+}
+
+type memoryOIDCLogout struct {
+	claims        LogoutTokenClaims
+	assertionHash string
 }
 
 func NewMemorySessionStore() *MemorySessionStore {
-	return &MemorySessionStore{rows: map[string]SessionRecord{}}
+	return &MemorySessionStore{rows: map[string]SessionRecord{}, logouts: map[string]memoryOIDCLogout{}}
 }
 
 func sessionStoreKey(tenantID, id string) string { return tenantID + "\x00" + id }
@@ -78,9 +86,47 @@ func sessionStoreKey(tenantID, id string) string { return tenantID + "\x00" + id
 func (s *MemorySessionStore) Create(_ context.Context, rec SessionRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if rec.OIDC != nil {
+		for _, logout := range s.logouts {
+			if oidcLogoutMatchesRecord(logout.claims, rec) {
+				return ErrOIDCSessionLoggedOut
+			}
+		}
+	}
 	rec.Roles = append([]string(nil), rec.Roles...)
 	s.rows[sessionStoreKey(rec.TenantID, rec.ID)] = rec
 	return nil
+}
+
+// LogoutOIDC is the in-memory test counterpart of the PostgreSQL authority
+// transaction. Production uses the durable, indexed PostgreSQL receiver.
+func (s *MemorySessionStore) LogoutOIDC(_ context.Context, claims LogoutTokenClaims, assertionHash string, revokedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := claims.Issuer + "\x00" + claims.ClientID + "\x00" + claims.JTI
+	if prior, ok := s.logouts[key]; ok {
+		if prior.assertionHash == assertionHash {
+			return nil
+		}
+		return ErrLogoutTokenReplay
+	}
+	for id, rec := range s.rows {
+		if rec.RevokedAt != nil || !oidcLogoutMatchesRecord(claims, rec) {
+			continue
+		}
+		rec.RevokedAt = &revokedAt
+		s.rows[id] = rec
+	}
+	s.logouts[key] = memoryOIDCLogout{claims: claims, assertionHash: assertionHash}
+	return nil
+}
+
+func oidcLogoutMatchesRecord(claims LogoutTokenClaims, rec SessionRecord) bool {
+	binding := rec.OIDC
+	return binding != nil && binding.Issuer == claims.Issuer && binding.ClientID == claims.ClientID &&
+		(claims.Subject == "" || rec.Subject == claims.Subject) &&
+		(claims.SID == "" || binding.SID == claims.SID) &&
+		(claims.SID != "" || binding.IssuedAt <= claims.IssuedAt)
 }
 
 func (s *MemorySessionStore) Get(_ context.Context, tenantID, id string) (SessionRecord, error) {
@@ -315,6 +361,10 @@ func (s *SessionIssuer) RevokeSubjectContext(ctx context.Context, tenantID, subj
 
 func (s *SessionIssuer) RevokeOIDCContext(ctx context.Context, tenantID string, claims LogoutTokenClaims) error {
 	return s.store.RevokeOIDC(ctx, tenantID, claims, s.now())
+}
+
+func (s *SessionIssuer) LogoutOIDCContext(ctx context.Context, claims LogoutTokenClaims, assertionHash string) error {
+	return s.store.LogoutOIDC(ctx, claims, assertionHash, s.now())
 }
 
 func randomSessionID() (string, error) {

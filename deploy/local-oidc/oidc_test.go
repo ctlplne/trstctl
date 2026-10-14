@@ -17,6 +17,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 const (
@@ -133,7 +136,7 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 	}
 	_ = bad.Body.Close()
 
-	code := authorizationCode(t, client, issuer, "eval-admin", passwordBySubject["eval-admin"])
+	code, idpCookie := authorizationCodeWithSession(t, client, issuer, "eval-admin", passwordBySubject["eval-admin"])
 	if len(code) != 43 || strings.Contains(code, "eval-admin") || strings.Contains(code, testTenant) {
 		t.Fatalf("authorization code is not an opaque 256-bit value: %q", code)
 	}
@@ -159,6 +162,92 @@ func TestLocalEvaluationOIDCUsesStableSeparatedKeysAndSingleUsePKCECodes(t *test
 		if got, _ := claims[key].(string); got != want {
 			t.Errorf("ID token claim %s = %q, want %q", key, got, want)
 		}
+	}
+	sid, _ := claims["sid"].(string)
+	if sid == "" || idpCookie == nil {
+		t.Fatal("local IdP did not bind the login to a private session and signed sid")
+	}
+	logoutPage, err := http.NewRequest(http.MethodGet, issuer+"/backchannel/logout-token", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoutPage.AddCookie(idpCookie)
+	pageResp, err := client.Do(logoutPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := readBody(pageResp)
+	_ = pageResp.Body.Close()
+	marker := `name="logout_challenge" value="`
+	start := strings.Index(page, marker)
+	if pageResp.StatusCode != http.StatusOK || start < 0 {
+		t.Fatalf("authenticated local IdP logout page = %d, challenge present = %t", pageResp.StatusCode, start >= 0)
+	}
+	challenge := strings.SplitN(page[start+len(marker):], `"`, 2)[0]
+	logoutForm := url.Values{"logout_challenge": {challenge}, "scope": {"sid"}}
+	logoutReq, err := http.NewRequest(http.MethodPost, issuer+"/backchannel/logout-token", strings.NewReader(logoutForm.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoutReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	logoutReq.AddCookie(idpCookie)
+	logoutResp, err := client.Do(logoutReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logoutBody struct {
+		LogoutToken string `json:"logout_token"`
+	}
+	decodeJSON(t, logoutResp.Body, &logoutBody)
+	_ = logoutResp.Body.Close()
+	keys, err := jose.ParseJWKSet(publicBefore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := (auth.OIDCLogoutVerifier{Issuer: issuer, ClientID: testClientID, Keys: keys}).Verify(logoutBody.LogoutToken)
+	if logoutResp.StatusCode != http.StatusOK || err != nil || verified.SID != sid || verified.Subject != "" {
+		t.Fatalf("session-bound signed sid-only logout = status %d, claims %+v, verify %v", logoutResp.StatusCode, verified, err)
+	}
+	anonymous, err := client.Get(issuer + "/backchannel/logout-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = anonymous.Body.Close()
+	if anonymous.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous logout assertion page = %d, want 401", anonymous.StatusCode)
+	}
+	retryReq, err := http.NewRequest(http.MethodPost, issuer+"/backchannel/logout-token", strings.NewReader(logoutForm.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	retryReq.AddCookie(idpCookie)
+	retryResp, err := client.Do(retryReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retryBody struct {
+		LogoutToken string `json:"logout_token"`
+	}
+	decodeJSON(t, retryResp.Body, &retryBody)
+	_ = retryResp.Body.Close()
+	if retryResp.StatusCode != http.StatusOK || retryBody.LogoutToken != logoutBody.LogoutToken {
+		t.Fatal("lost-response retry did not return the exact signed assertion")
+	}
+	changedForm := url.Values{"logout_challenge": {challenge}, "scope": {"subject"}}
+	changedReq, err := http.NewRequest(http.MethodPost, issuer+"/backchannel/logout-token", strings.NewReader(changedForm.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	changedReq.AddCookie(idpCookie)
+	changedResp, err := client.Do(changedReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = changedResp.Body.Close()
+	if changedResp.StatusCode != http.StatusConflict {
+		t.Fatalf("changed-scope assertion retry = %d, want 409", changedResp.StatusCode)
 	}
 
 	replay := exchangeCode(t, client, issuer, code, testPKCEVerifier)
@@ -269,6 +358,11 @@ func authorize(t *testing.T, client *http.Client, issuer, redirectURI string) *h
 }
 
 func authorizationCode(t *testing.T, client *http.Client, issuer, subject, password string) string {
+	code, _ := authorizationCodeWithSession(t, client, issuer, subject, password)
+	return code
+}
+
+func authorizationCodeWithSession(t *testing.T, client *http.Client, issuer, subject, password string) (string, *http.Cookie) {
 	t.Helper()
 	page := authorize(t, client, issuer, testRedirectURI)
 	challenge := loginChallenge(t, page)
@@ -288,7 +382,13 @@ func authorizationCode(t *testing.T, client *http.Client, issuer, subject, passw
 	if code == "" {
 		t.Fatal("authorize redirect has no code")
 	}
-	return code
+	var idpCookie *http.Cookie
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "trstctl_local_idp_session" {
+			idpCookie = cookie
+		}
+	}
+	return code, idpCookie
 }
 
 func loginChallenge(t *testing.T, resp *http.Response) string {

@@ -27,6 +27,9 @@ const authorizationCodes = new Map();
 const loginChallenges = new Map();
 const loginChallengeTTL = 2 * 60 * 1000;
 const maxLoginChallenges = 256;
+const idpSessions = new Map();
+const idpSessionTTL = 60 * 60 * 1000;
+const maxIdpSessions = 256;
 let tenantUsers = [];
 if (usersPath) {
   const info = statSync(usersPath);
@@ -99,8 +102,8 @@ function json(res, status, body) {
   res.end(raw);
 }
 
-function redirect(res, location) {
-  res.writeHead(302, { ...responseHeaders("text/plain; charset=utf-8"), location });
+function redirect(res, location, extraHeaders = {}) {
+  res.writeHead(302, { ...responseHeaders("text/plain; charset=utf-8"), location, ...extraHeaders });
   res.end();
 }
 
@@ -128,6 +131,20 @@ function cleanupExpiredLoginChallenges(now = Date.now()) {
   for (const [challenge, record] of loginChallenges) {
     if (now - record.createdAt > loginChallengeTTL) loginChallenges.delete(challenge);
   }
+}
+
+function cleanupExpiredIdpSessions(now = Date.now()) {
+  for (const [cookie, record] of idpSessions) {
+    if (now - record.createdAt > idpSessionTTL) idpSessions.delete(cookie);
+  }
+}
+
+function idpSession(req) {
+  cleanupExpiredIdpSessions();
+  const raw = (req.headers.cookie || "").split(";").map((part) => part.trim());
+  const cookie = raw.find((part) => part.startsWith("trstctl_local_idp_session="));
+  const value = cookie?.slice("trstctl_local_idp_session=".length) || "";
+  return /^[A-Za-z0-9_-]{43}$/.test(value) ? idpSessions.get(value) : undefined;
 }
 
 async function readForm(req) {
@@ -212,12 +229,20 @@ async function finishAuthorize(req, res) {
   }
   cleanupExpiredCodes();
   if (authorizationCodes.size >= maxAuthorizationCodes) return json(res, 503, { error: "temporarily_unavailable" });
+  cleanupExpiredIdpSessions();
+  if (idpSessions.size >= maxIdpSessions) return json(res, 503, { error: "temporarily_unavailable" });
   const code = randomBytes(32).toString("base64url");
-  authorizationCodes.set(code, { ...record, user });
+  const sid = randomBytes(32).toString("base64url");
+  const cookie = randomBytes(32).toString("base64url");
+  idpSessions.set(cookie, { user, sid, challenge: randomBytes(32).toString("base64url"), createdAt: Date.now() });
+  authorizationCodes.set(code, { ...record, user, sid });
   const target = new URL(record.redirectURI);
   target.searchParams.set("code", code);
   target.searchParams.set("state", record.state);
-  return redirect(res, target.toString());
+  const secure = issuer.startsWith("https://") ? "; Secure" : "";
+  return redirect(res, target.toString(), {
+    "set-cookie": `trstctl_local_idp_session=${cookie}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600${secure}`,
+  });
 }
 
 async function exchange(req, res) {
@@ -258,6 +283,7 @@ async function exchange(req, res) {
     iss: issuer,
     aud: clientID,
     sub: record.user.subject,
+    sid: record.sid,
     email: record.user.email,
     name: record.user.name,
     tenant,
@@ -266,6 +292,46 @@ async function exchange(req, res) {
     exp: now + 3600,
   });
   return json(res, 200, { id_token: idToken, token_type: "Bearer", expires_in: 3600 });
+}
+
+// This is a loopback evaluation IdP, so a stock client can obtain a real signed
+// logout assertion for the exact separately authenticated IdP browser session.
+// The private signing key never leaves this fixture. A lost response can fetch
+// the same signed assertion, while a changed scope cannot reuse its challenge.
+function logoutTokenPage(req, res) {
+  const session = idpSession(req);
+  if (!session) return json(res, 401, { error: "login_required" });
+  return html(res, 200, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Evaluation IdP logout</title></head><body>
+<main><h1>Evaluation IdP logout assertion</h1><p>Signed for the current authenticated IdP session. Post the returned assertion to the local trstctl back-channel endpoint with a stock client.</p>
+<form method="post" action="/backchannel/logout-token"><input type="hidden" name="logout_challenge" value="${session.challenge}">
+<label>Scope <select name="scope"><option value="sid">This IdP session</option><option value="both">This subject and IdP session</option><option value="subject">All older sessions for this subject</option></select></label>
+<button type="submit">Create signed logout assertion</button></form></main></body></html>`);
+}
+
+async function logoutToken(req, res) {
+  const session = idpSession(req);
+  if (!session) return json(res, 401, { error: "login_required" });
+  let form;
+  try { form = await readForm(req); }
+  catch { return json(res, 413, { error: "invalid_request" }); }
+  const challenge = form.get("logout_challenge") || "";
+  const scope = form.get("scope") || "";
+  if (!constantTimeEqual(challenge, session.challenge) || !["sid", "both", "subject"].includes(scope)) {
+    return json(res, 400, { error: "invalid_request" });
+  }
+  if (session.assertion && session.scope !== scope) return json(res, 409, { error: "scope_changed" });
+  if (!session.assertion) {
+    const now = Math.floor(Date.now() / 1000);
+    session.assertion = signIDToken({
+      iss: issuer, aud: clientID,
+      ...(scope === "sid" ? {} : { sub: session.user.subject }),
+      ...(scope === "subject" ? {} : { sid: session.sid }),
+      jti: randomBytes(32).toString("base64url"), iat: now, exp: now + 300,
+      events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+    });
+    session.scope = scope;
+  }
+  return json(res, 200, { logout_token: session.assertion, token_type: "logout_token" });
 }
 
 function html(res, status, body) {
@@ -365,6 +431,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/authorize") return authorize(url, res);
     if (req.method === "POST" && url.pathname === "/authorize") return finishAuthorize(req, res);
     if (req.method === "POST" && url.pathname === "/token") return exchange(req, res);
+    if (req.method === "GET" && url.pathname === "/backchannel/logout-token") return logoutTokenPage(req, res);
+    if (req.method === "POST" && url.pathname === "/backchannel/logout-token") return logoutToken(req, res);
     if (providerClientID && req.method === "GET" && url.pathname === "/provider/sign-in") return providerSignInPage(res);
     if (providerClientID && req.method === "POST" && url.pathname === "/provider/token") return providerToken(req, res);
     return json(res, 404, { error: "not_found" });

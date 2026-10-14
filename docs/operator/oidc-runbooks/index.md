@@ -8,8 +8,31 @@ accepts logout tokens from providers that support back-channel logout.
 OIDC logout matches the verified issuer and client, then the IdP subject and
 `sid` when present. The `sid` is the IdP's identifier; it is not the trstctl
 browser-cookie identifier. SAML and LDAP browser sessions sharing a username
-are outside that match. The browser-session binding migration signs existing
-operators out once so old, unbound cookies cannot survive an IdP logout.
+are outside that match. A subject-only assertion revokes sessions whose ID
+token was issued no later than the logout assertion; a `sid` assertion revokes
+that exact IdP session. When both claims exist, both must match. The receiver
+finds matching sessions through an indexed, provider-bound locator even when
+the user's tenant came from an ID-token claim. It commits revocation and an
+exact signed-assertion receipt together, so an identical retry after a lost
+response succeeds while a changed assertion reusing the JTI is refused. A
+callback carrying an ID token issued before the logout is refused. These
+receipts are included in PostgreSQL backup and restore. The locator contains
+only digests and is removed with the tenant or subject; it is rebuilt by a
+new login, not restored from backup.
+
+The locator migration makes already-issued OIDC cookies reauthenticate once.
+Those cookies have no recoverable global subject binding, so the new server
+rejects them instead of claiming an IdP logout reached them. SAML and LDAP
+cookies remain in their own auth-method scope.
+
+The local evaluation IdP can issue a signed logout assertion for its own
+authenticated browser session at `/backchannel/logout-token`. Its HTML form
+binds a single-use challenge to that IdP session; a stock client can POST the
+returned `logout_token` to trstctl's `/auth/oidc/back-channel-logout` endpoint.
+Keep the assertion in a private file during testing and omit it from screenshots
+and reports. The same challenge returns the same signed assertion after a lost
+response, and cannot be changed to a broader scope. This fixture is local QA
+support; production IdPs send their own signed logout assertions.
 
 Every provider page uses the same hardened shape:
 

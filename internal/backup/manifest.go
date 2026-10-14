@@ -34,6 +34,9 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 // PostgreSQL dump in the backup set.
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
+	// Exact IdP logout assertions and callback cutoffs must survive a database
+	// restore; they cannot be reconstructed from event projections.
+	"oidc_logout_receipts",
 	// First-writer revocation commands and terminal denial tombstones must
 	// survive restores independently of the token read model and event log.
 	"api_token_revocation_commands",
@@ -220,6 +223,9 @@ var Ephemeral = []string{
 	// login into the recovered control plane. The PostgreSQL dump may carry these
 	// rows incidentally, but restore correctness never depends on them.
 	"browser_sessions",
+	// Locators name only live browser cookies. Restored cookies are invalidated,
+	// so these are cleared with the browser-session authority on restore.
+	"oidc_session_locators",
 	// This durable deployment-local red light is recreated by migration and then
 	// managed by the restore coordinator. Copying it from the source PostgreSQL
 	// artifact would be wrong in both directions: an event-only target must remain

@@ -19,6 +19,53 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// Existing OIDC cookies have only tenant-local subject digests. Their global
+// subject locator cannot be recovered without the original verified claim, so
+// the upgrade must require reauthentication instead of leaving an unlocatable
+// live cookie behind the new global logout receiver.
+func TestMigration0274InvalidatesUnindexedOIDCBrowserSessions(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 274)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	for _, tenantID := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `INSERT INTO browser_sessions
+		    (tenant_id, session_hash, subject_hash, expires_at, created_at, last_seen_at,
+		     auth_method, oidc_provider_hash, oidc_id_token_iat)
+		    VALUES ($1, repeat('a', 64), repeat('b', 64), now() + interval '1 hour',
+		            now(), now(), 'oidc', repeat('c', 64), extract(epoch from now())::bigint)`, tenantID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO browser_sessions
+	    (tenant_id, session_hash, subject_hash, expires_at, created_at, last_seen_at, auth_method)
+	    VALUES ($1, repeat('d', 64), repeat('e', 64), now() + interval '1 hour', now(), now(), 'other')`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var oldOIDC, otherLive, inventedLocators int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM browser_sessions
+	    WHERE auth_method = 'oidc' AND revoked_at IS NULL
+	      AND oidc_locator_generation = 1`).Scan(&oldOIDC); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM browser_sessions
+	    WHERE auth_method = 'other' AND revoked_at IS NULL`).Scan(&otherLive); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM oidc_session_locators`).Scan(&inventedLocators); err != nil {
+		t.Fatal(err)
+	}
+	if oldOIDC != 0 || otherLive != 1 || inventedLocators != 0 {
+		t.Fatalf("upgrade left old OIDC authority=%d other live=%d invented locators=%d", oldOIDC, otherLive, inventedLocators)
+	}
+}
+
 // Existing browser cookies cannot be attributed to an OIDC issuer/sid after an
 // upgrade. The migration must mark them legacy (and therefore unusable) without
 // inventing a provider binding or changing historical revocation timestamps.
@@ -844,6 +891,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	274: true, // TestMigration0274InvalidatesUnindexedOIDCBrowserSessions
 	272: true, // TestMigrationDataContentBackfills/0272_browser_oidc_binding_starts_unclaimed
 	268: true, // TestMigrationDataContentBackfills/0268_tenant_member_sequence_starts_unclaimed
 	267: true, // TestMigrationDataContentBackfills/0267_machine_auth_method_sequence_starts_unclaimed

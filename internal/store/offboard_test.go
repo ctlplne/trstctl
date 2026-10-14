@@ -328,6 +328,60 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 	}
 }
 
+func TestOffboardTenantRemovesOnlyCustomerOIDCLocators(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for _, tenantID := range []string{tenantA, tenantB} {
+		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "OIDC locator tenant"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const authPartition = "00000000-0000-0000-0000-000000000002"
+	for index, tenantID := range []string{tenantA, tenantB} {
+		sessionHash := strings.Repeat("a", 64)
+		if index == 1 {
+			sessionHash = strings.Repeat("b", 64)
+		}
+		if _, err := s.SystemPool().Exec(ctx, `INSERT INTO oidc_session_locators
+		    (tenant_id, browser_tenant_id, session_hash, provider_hash,
+		     global_subject_hash, browser_subject_hash, id_token_iat, expires_at)
+		    VALUES ($1, $2, $3, $4, $5, $6, 1700000000, now() + interval '1 hour')`,
+			authPartition, tenantID, sessionHash, strings.Repeat("c", 64),
+			strings.Repeat("d", 64), strings.Repeat("e", 64)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.SystemPool().Exec(ctx, `INSERT INTO oidc_logout_receipts
+	    (tenant_id, provider_hash, jti_hash, assertion_hash, global_subject_hash,
+	     logout_iat, token_exp, completed_at, revoked_sessions)
+	    VALUES ($1, $2, $3, $4, $5, 1700000000, 1700000060, now(), 1)`,
+		authPartition, strings.Repeat("c", 64), strings.Repeat("f", 64),
+		strings.Repeat("1", 64), strings.Repeat("d", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.OffboardTenant(ctx, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	for tenantID, want := range map[string]int{tenantA: 0, tenantB: 1} {
+		var count int
+		if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM oidc_session_locators
+		    WHERE tenant_id = $1 AND browser_tenant_id = $2`, authPartition, tenantID).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			t.Errorf("tenant %s retained %d OIDC locators, want %d", tenantID, count, want)
+		}
+	}
+	var receipts int
+	if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM oidc_logout_receipts
+	    WHERE tenant_id = $1`, authPartition).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 1 {
+		t.Fatalf("customer offboard removed shared logout cutoff: receipts=%d", receipts)
+	}
+}
+
 func TestOffboardTenantErasesOnlyItsApplicationSecretActorFence(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

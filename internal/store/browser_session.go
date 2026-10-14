@@ -13,26 +13,35 @@ import (
 // replicas. SessionHash and SubjectHash are one-way SHA-256 digests; raw session
 // IDs, names, email addresses, and role claims are never stored in this table.
 type BrowserSession struct {
-	TenantID         string
-	SessionHash      string
-	SubjectHash      string
-	ExpiresAt        time.Time
-	CreatedAt        time.Time
-	LastSeenAt       time.Time
-	RevokedAt        *time.Time
-	AuthMethod       string
-	OIDCProviderHash string
-	OIDCSIDHash      string
-	OIDCIDTokenIat   int64
+	TenantID              string
+	SessionHash           string
+	SubjectHash           string
+	ExpiresAt             time.Time
+	CreatedAt             time.Time
+	LastSeenAt            time.Time
+	RevokedAt             *time.Time
+	AuthMethod            string
+	OIDCProviderHash      string
+	OIDCGlobalSubjectHash string
+	OIDCSIDHash           string
+	OIDCIDTokenIat        int64
 }
 
 // CreateBrowserSession records a newly issued session and removes already-expired
 // rows for the same tenant. Both statements execute under the tenant's RLS scope.
 func (s *Store) CreateBrowserSession(ctx context.Context, session BrowserSession) error {
+	if session.TenantID == oidcAuthPartition {
+		return ErrOIDCAuthPartitionTenant
+	}
 	if session.AuthMethod == "" {
 		session.AuthMethod = "other"
 	}
 	return s.WithTenant(ctx, session.TenantID, func(tx pgx.Tx) error {
+		if session.AuthMethod == "oidc" {
+			if err := s.prepareOIDCBrowserCreateTx(ctx, tx, session); err != nil {
+				return err
+			}
+		}
 		if err := lockUpsertArbiterTx(ctx, tx, "tenant_member_offboard_commands", session.TenantID, session.SubjectHash); err != nil {
 			return err
 		}
@@ -58,12 +67,19 @@ func (s *Store) CreateBrowserSession(ctx context.Context, session BrowserSession
 		_, err := tx.Exec(ctx,
 			`INSERT INTO browser_sessions
 			        (tenant_id, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at,
-			         auth_method, oidc_provider_hash, oidc_sid_hash, oidc_id_token_iat)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), NULLIF($10, ''), NULLIF($11, 0))`,
+			         auth_method, oidc_provider_hash, oidc_sid_hash, oidc_id_token_iat, oidc_locator_generation)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), NULLIF($10, ''), NULLIF($11, 0),
+			         CASE WHEN $8 = 'oidc' THEN 1 ELSE 0 END)`,
 			session.TenantID, session.SessionHash, session.SubjectHash, session.ExpiresAt,
 			session.CreatedAt, session.LastSeenAt, session.RevokedAt, session.AuthMethod,
 			session.OIDCProviderHash, session.OIDCSIDHash, session.OIDCIDTokenIat)
-		return err
+		if err != nil {
+			return err
+		}
+		if session.AuthMethod == "oidc" {
+			return insertOIDCBrowserLocatorTx(ctx, tx, session)
+		}
+		return nil
 	})
 }
 
@@ -74,7 +90,8 @@ func (s *Store) GetBrowserSession(ctx context.Context, tenantID, sessionHash str
 		return tx.QueryRow(ctx,
 			`SELECT tenant_id::text, session_hash, subject_hash, expires_at, created_at, last_seen_at, revoked_at, auth_method
 			   FROM browser_sessions
-			  WHERE tenant_id = $1 AND session_hash = $2`,
+			  WHERE tenant_id = $1 AND session_hash = $2
+			    AND (auth_method <> 'oidc' OR oidc_locator_generation = 1)`,
 			tenantID, sessionHash).Scan(
 			&session.TenantID, &session.SessionHash, &session.SubjectHash, &session.ExpiresAt,
 			&session.CreatedAt, &session.LastSeenAt, &session.RevokedAt, &session.AuthMethod)
@@ -153,5 +170,19 @@ func (s *Store) RevokeBrowserSessionsBySubjectTx(ctx context.Context, tx pgx.Tx,
 			    SET revoked_at = coalesce(revoked_at, $3)
 			  WHERE tenant_id = $1 AND subject_hash = $2`,
 		tenantID, subjectHash, revokedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	// Subject retirement and privacy erasure must also remove the bounded
+	// global lookup. The browser row remains revoked in its customer partition;
+	// the locator contains only digests but should not outlive that authority.
+	if err := setOIDCAuthScopeTx(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM oidc_session_locators
+	    WHERE tenant_id = $1 AND browser_tenant_id = $2 AND browser_subject_hash = $3`,
+		oidcAuthPartition, tenantID, subjectHash); err != nil {
+		return err
+	}
+	return setOIDCCustomerScopeTx(ctx, tx, tenantID)
 }

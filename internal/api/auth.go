@@ -577,6 +577,10 @@ func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request
 		token, err = a.auth.Sessions.IssueOIDCContext(r.Context(), claims.Subject, tenantID, claims.Email, roles, *binding)
 	}
 	if err != nil {
+		if errors.Is(err, auth.ErrOIDCSessionLoggedOut) {
+			a.writeError(w, errStatus(http.StatusUnauthorized, "identity provider session has signed out; start a new sign-in"))
+			return
+		}
 		a.writeError(w, err)
 		return
 	}
@@ -760,8 +764,7 @@ func webLocaleForLanguageTag(tag string) string {
 }
 
 func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) {
-	if a.auth == nil || a.auth.VerifyOIDCLogoutToken == nil ||
-		a.auth.ReleaseOIDCLogoutJTI == nil || a.auth.Sessions == nil {
+	if a.auth == nil || a.auth.VerifyOIDCLogoutToken == nil || a.auth.Sessions == nil {
 		a.writeError(w, errStatus(http.StatusNotFound, "OIDC back-channel logout is not configured"))
 		return
 	}
@@ -787,12 +790,16 @@ func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-	for _, tenantID := range a.configuredAuthTenants() {
-		if err := a.auth.Sessions.RevokeOIDCContext(r.Context(), tenantID, claims); err != nil {
+	if err := a.auth.Sessions.LogoutOIDCContext(r.Context(), claims, crypto.SHA256Hex([]byte(raw))); err != nil {
+		if a.auth.ReleaseOIDCLogoutJTI != nil {
 			a.auth.ReleaseOIDCLogoutJTI(claims.JTI)
-			a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
+		}
+		if errors.Is(err, auth.ErrLogoutTokenReplay) {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid logout_token"))
 			return
 		}
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -846,24 +853,6 @@ func (a *API) sessionFrom(r *http.Request) (auth.Session, bool) {
 		}
 	}
 	return sess, true
-}
-
-func (a *API) configuredAuthTenants() []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(a.auth.TenantMappings)+1)
-	add := func(tenantID string) {
-		if tenantID != "" && !seen[tenantID] {
-			seen[tenantID] = true
-			out = append(out, tenantID)
-		}
-	}
-	if a.auth.AllowDefaultTenant {
-		add(a.auth.DefaultTenant)
-	}
-	for _, mapping := range a.auth.TenantMappings {
-		add(mapping.TenantID)
-	}
-	return out
 }
 
 func (a *API) setTransientCookie(w http.ResponseWriter, name, value string) {
