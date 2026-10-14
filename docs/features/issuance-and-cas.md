@@ -349,6 +349,11 @@ and protocols. Editing a profile creates a *new version*; old versions stay
 queryable, so you always know which rules a past certificate was issued under. On
 every issuance, `enforceProfile` fetches the active version, validates the request,
 and emits an audit event for the allow-or-deny decision.
+For an identity lifecycle issuance, preview and execution check the pinned profile's
+known protocol, validity, and subject-name rules before recording `identity.issued`.
+The signing worker still checks the actual CSR, including key strength and requested
+usages, before signing. A ready lifecycle preview therefore cannot turn an
+ACME-only profile into a queued API issuance.
 
 The **registration-authority (RA) model** is a role split that prevents the classic
 PKI abuse of one person approving and fulfilling their own request. The built-in

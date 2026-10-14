@@ -96,7 +96,7 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 			}
 			profileReq = configured
 		}
-		if err := a.validateIdentityProfileLifetime(ctx, tenantID, identity, profileReq); err != nil {
+		if err := a.validateIdentityProfileLifetime(ctx, tenantID, identity, profileReq, csrPEM); err != nil {
 			return 0, nil, err
 		}
 		gate = gateWithProfileApproval(gate, profileReq)

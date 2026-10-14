@@ -103,7 +103,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			requirement, err = a.orch.ProfileApprovalRequirementByName(r.Context(), tenantID, a.gate.Profile)
 		}
 		if err == nil {
-			err = a.validateIdentityProfileLifetime(r.Context(), tenantID, identity, requirement)
+			err = a.validateIdentityProfileLifetime(r.Context(), tenantID, identity, requirement, req.SubjectCSRPEM)
 		}
 		if err != nil {
 			a.writeError(w, err)

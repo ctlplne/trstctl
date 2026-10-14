@@ -32,7 +32,11 @@ func validateProfileSigningLifetime(name string, maximum time.Duration, issuerSo
 	return nil
 }
 
-func (a *API) validateIdentityProfileLifetime(ctx context.Context, tenantID string, identity store.Identity, requirement orchestrator.ProfileApprovalRequirement) error {
+// validateIdentityProfileLifetime checks the parts of the eventual signing
+// request that are already known before a lifecycle event is appended. The
+// worker still validates the final CSR, but an ACME-only or name-constrained
+// profile must not leave an identity claiming to be issued with no certificate.
+func (a *API) validateIdentityProfileLifetime(ctx context.Context, tenantID string, identity store.Identity, requirement orchestrator.ProfileApprovalRequirement, transitionCSR string) error {
 	if identity.Kind != store.KindX509Certificate || requirement.ProfileName == "" {
 		return nil
 	}
@@ -60,5 +64,38 @@ func (a *API) validateIdentityProfileLifetime(ctx context.Context, tenantID stri
 	if err := json.Unmarshal(record.Spec, &policy); err != nil {
 		return err
 	}
-	return validateProfileSigningLifetime(record.Name, time.Duration(policy.MaxValidity), source)
+	policy.Name, policy.Version = record.Name, record.Version
+	if err := validateProfileSigningLifetime(record.Name, time.Duration(policy.MaxValidity), source); err != nil {
+		return err
+	}
+	request := profile.Request{Protocol: "api", TTL: time.Duration(requirement.EffectiveTTLSeconds) * time.Second}
+	csr := strings.TrimSpace(transitionCSR)
+	if csr == "" {
+		if raw, ok := attrs["subject_csr_pem"]; ok {
+			if err := json.Unmarshal(raw, &csr); err != nil {
+				return errStatus(http.StatusUnprocessableEntity, "identity subject CSR is invalid; nothing was queued")
+			}
+			csr = strings.TrimSpace(csr)
+		}
+	}
+	if csr != "" {
+		_, info, err := crypto.ParsePublicCSRPEMWithInspector([]byte(csr), crypto.InspectCSR)
+		if err != nil {
+			return errWithStatus(http.StatusBadRequest, err)
+		}
+		request.DNSNames = info.DNSNames
+		if len(request.DNSNames) == 0 && strings.TrimSpace(info.CommonName) != "" {
+			request.DNSNames = []string{info.CommonName}
+		}
+		request.IPAddresses = info.IPAddresses
+		request.EmailAddresses = info.EmailAddresses
+		request.URIs = info.URIs
+	}
+	if len(request.DNSNames) == 0 {
+		request.DNSNames = []string{identity.Name}
+	}
+	if err := policy.ValidateRequestMetadata(request); err != nil {
+		return errStatus(http.StatusUnprocessableEntity, err.Error()+"; no identity transition or CA issuance was queued")
+	}
+	return nil
 }

@@ -1053,6 +1053,7 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
 		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", profileName, err)
 	}
+	prof.Name, prof.Version = rec.Name, rec.Version
 	info, err := d.inspectSubjectCSR(csrDER)
 	if err != nil {
 		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", "unparseable CSR"); aerr != nil {

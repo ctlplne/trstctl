@@ -244,3 +244,104 @@ func assertUnusableProfileRecoveryProblem(t *testing.T, raw []byte) {
 		t.Fatalf("permanently pinned lifetime refusal lacks machine-readable recovery: %s", raw)
 	}
 }
+
+func TestIdentityLifecycleRefusesIncompatibleDefaultProfileBeforeAppend(t *testing.T) {
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) {
+		d.DefaultProfile = "acme-only-default"
+	})
+	registerServedTenant(t, h, "incompatible lifecycle profile")
+	token := seedScopedToken(t, h.store, h.tenant, "profiles:write", "owners:write", "identities:write", "identities:read", "certs:issue")
+	create := func(path string, request any) string {
+		t.Helper()
+		code, body := secretsReq(t, h, http.MethodPost, path, token, request)
+		if code != http.StatusCreated {
+			t.Fatalf("create %s: %d %s", path, code, body)
+		}
+		var result struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil || result.ID == "" {
+			t.Fatalf("decode %s: %v %s", path, err, body)
+		}
+		return result.ID
+	}
+	create("/api/v1/profiles", map[string]any{"name": "acme-only-default", "spec": map[string]any{
+		"max_validity": "720h", "allowed_protocols": []string{"acme"},
+		"allowed_dns_suffixes": []string{"acme.example.test"}, "allowed_key_algorithms": []string{"ECDSA"},
+	}})
+	owner := create("/api/v1/owners", map[string]any{"kind": "workload", "name": "Lifecycle profile refusal"})
+	id := create("/api/v1/identities", map[string]any{"kind": "x509_certificate", "name": "api.example.test", "owner_id": owner})
+	before, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/identities/" + id + "/transitions"
+	request := map[string]any{"to": "issued", "reason": "review ACME-only profile"}
+	for _, suffix := range []string{"/preview", ""} {
+		code, body := secretsReqKey(t, h, http.MethodPost, path+suffix, token, "acme-only-"+suffix, request)
+		var problem struct {
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal(body, &problem); err != nil {
+			t.Fatal(err)
+		}
+		if code != http.StatusUnprocessableEntity || !strings.Contains(problem.Detail, `profile "acme-only-default" v1 does not permit enrollment protocol "api"`) {
+			t.Fatalf("%s accepted incompatible default profile: %d %s", suffix, code, body)
+		}
+	}
+	after, err := h.log.LastSequence(t.Context())
+	if err != nil || after != before {
+		t.Fatalf("profile refusal appended an event: %d -> %d, %v", before, after, err)
+	}
+	code, body := secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+id, token, nil)
+	if code != http.StatusOK || !strings.Contains(string(body), `"status":"requested"`) {
+		t.Fatalf("profile refusal changed identity: %d %s", code, body)
+	}
+	jobs, err := orchestrator.NewOutbox(h.store).Pending(t.Context(), h.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range jobs {
+		if job.Destination == "ca.issue" {
+			t.Fatal("profile refusal queued CA issuance")
+		}
+	}
+
+	// A profile that permits API enrollment can still refuse the identity's
+	// DNS name. The signer would use that name for the fallback CSR, so both
+	// lifecycle entry points must reject it before appending the transition.
+	create("/api/v1/profiles", map[string]any{"name": "api-other-name", "spec": map[string]any{
+		"max_validity": "720h", "allowed_protocols": []string{"api"},
+		"allowed_dns_suffixes": []string{"permitted.example.test"}, "allowed_key_algorithms": []string{"ECDSA"},
+	}})
+	nameID := create("/api/v1/identities", map[string]any{
+		"kind": "x509_certificate", "name": "outside.example.test", "owner_id": owner,
+		"attributes": map[string]any{"profile_name": "api-other-name"},
+	})
+	before, err = h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path = "/api/v1/identities/" + nameID + "/transitions"
+	request = map[string]any{"to": "issued", "reason": "review DNS constraint"}
+	for _, suffix := range []string{"/preview", ""} {
+		code, body := secretsReqKey(t, h, http.MethodPost, path+suffix, token, "name-constraint-"+suffix, request)
+		var problem struct {
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal(body, &problem); err != nil {
+			t.Fatal(err)
+		}
+		if code != http.StatusUnprocessableEntity || !strings.Contains(problem.Detail, `profile "api-other-name" v1 does not permit DNS SAN "outside.example.test"`) {
+			t.Fatalf("%s accepted disallowed identity name: %d %s", suffix, code, body)
+		}
+	}
+	after, err = h.log.LastSequence(t.Context())
+	if err != nil || after != before {
+		t.Fatalf("DNS constraint refusal appended an event: %d -> %d, %v", before, after, err)
+	}
+	code, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+nameID, token, nil)
+	if code != http.StatusOK || !strings.Contains(string(body), `"status":"requested"`) {
+		t.Fatalf("DNS constraint refusal changed identity: %d %s", code, body)
+	}
+}
