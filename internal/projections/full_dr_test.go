@@ -919,6 +919,50 @@ func seedRecoveredFromPostgresTables(
 			  VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
 				[]any{tenantA, "00000000-0000-0000-0000-00000000a019", strings.Repeat("f", 64),
 					strings.Repeat("e", 64), string(batchReceiptItems), now}},
+			// These completed authority receivers and immutable receipts cannot be
+			// reconstructed from the event stream after a PostgreSQL restore.
+			{`INSERT INTO ca_ceremony_cancel_commands
+			        (tenant_id, ceremony_id, event_id, event_time, status)
+			  VALUES ($1, $2, $3, $4, 'completed')`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a035", "00000000-0000-0000-0000-00000000a036", now}},
+			{`INSERT INTO provider_suspend_commands
+			        (tenant_id, event_id, event_time, status, projected_sequence)
+			  VALUES ($1, $2, $3, 'completed', 5)`,
+				[]any{tenantA, "full-dr-provider-suspend", now}},
+			{`INSERT INTO workload_attester_trust_commands
+			        (tenant_id, source_id, event_id, event_type, event_time,
+			         binding_sha256, request_binding, target_disabled, status, projected_sequence)
+			  VALUES ($1, $2, $3, 'workload.attester_trust_source.revoked', $4,
+			          $5, $6, true, 'completed', 6)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a029", "00000000-0000-0000-0000-00000000a030",
+					now, strings.Repeat("a", 64), strings.Repeat("b", 64)}},
+			{`INSERT INTO workload_attester_trust_receipts
+			        (tenant_id, event_id, source_id, event_type,
+			         request_binding, binding_sha256, projected_sequence)
+			  VALUES ($1, $2, $3, 'workload.attester_trust_source.revoked', $4, $5, 6)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a030", "00000000-0000-0000-0000-00000000a029",
+					strings.Repeat("b", 64), strings.Repeat("a", 64)}},
+			{`INSERT INTO identity_terminal_commands
+			        (tenant_id, identity_id, event_id, event_type, event_time,
+			         event_schema_version, request_binding, target_state, status, projected_sequence)
+			  VALUES ($1, $2, $3, 'identity.retired', $4, 2, $5, 'retired', 'completed', 7)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a031", "00000000-0000-0000-0000-00000000a032",
+					now, strings.Repeat("c", 64)}},
+			{`INSERT INTO identity_terminal_receipts
+			        (tenant_id, event_id, identity_id, event_type, request_binding,
+			         payload_sha256, target_state, projected_sequence)
+			  VALUES ($1, $2, $3, 'identity.retired', $4, $5, 'retired', 7)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a032", "00000000-0000-0000-0000-00000000a031",
+					strings.Repeat("c", 64), strings.Repeat("d", 64)}},
+			{`INSERT INTO certificate_revocation_authority_commands
+			        (tenant_id, event_id, event_type, event_time,
+			         event_schema_version, request_binding, status, projected_sequence)
+			  VALUES ($1, $2, 'certificate.revoked', $3, 1, $4, 'completed', 8)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a033", now, strings.Repeat("e", 64)}},
+			{`INSERT INTO certificate_revocation_authority_fences
+			        (tenant_id, ca_id, serial, fingerprint, event_id, status, projected_sequence)
+			  VALUES ($1, $2, 'full-dr-revoked-serial', $3, $4, 'completed', 8)`,
+				[]any{tenantA, caID, strings.Repeat("f", 64), "00000000-0000-0000-0000-00000000a033"}},
 			{`INSERT INTO ssh_keys (id, tenant_id, fingerprint, key_type, comment, source, location, standing_access, orphaned) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, []any{"00000000-0000-0000-0000-00000000a011", tenantA, "SHA256:fulldr", "ssh-ed25519", "edge", "authorized_keys", "/home/app/.ssh/authorized_keys", true, false}},
 		}
 		for _, stmt := range statements {
@@ -930,6 +974,19 @@ func seedRecoveredFromPostgresTables(
 	})
 	if err != nil {
 		t.Fatalf("seed independent PostgreSQL tables: %v", err)
+	}
+	// OIDC logout receipts belong to the fixed auth partition, not the tenant
+	// that consumed the browser session. Exercise that RLS scope in the DR cut.
+	if err := st.WithTenantProjection(ctx, "00000000-0000-0000-0000-000000000002", func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO oidc_logout_receipts
+			(tenant_id, provider_hash, jti_hash, assertion_hash, global_subject_hash,
+			 logout_iat, token_exp, completed_at, revoked_sessions)
+			VALUES ($1, $2, $3, $4, $5, 100, 200, $6, 1)`,
+			"00000000-0000-0000-0000-000000000002", strings.Repeat("1", 64),
+			strings.Repeat("2", 64), strings.Repeat("3", 64), strings.Repeat("4", 64), now)
+		return err
+	}); err != nil {
+		t.Fatalf("seed fixed-partition OIDC logout receipt: %v", err)
 	}
 	// A crash can leave this first-writer command durable before publication.
 	// Seed it through the production claim rather than inserting a synthetic
