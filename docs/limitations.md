@@ -1471,6 +1471,11 @@ channel's `Renew`, refuse a revoked agent certificate, an offboarded agent, and 
 that names a different agent than the presenting certificate. Renewal rotates a key; it
 never restores a revoked identity or changes which agent a certificate names. Such
 agents get 403 with the reason and must be enrolled again with a new bootstrap token.
+Revocation and offboarding first commit a tenant-scoped removal command. That row
+blocks every new agent RPC on an already-open connection before the event projects;
+startup and the bounded recovery worker publish and project its exact retained
+event after an interrupted attempt. Agent channel refusal is a direct admission
+check, independent of CRL or OCSP distribution to other relying parties.
 
 ### The CA calendar: year-scale hierarchy expiry
 

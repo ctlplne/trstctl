@@ -1119,6 +1119,16 @@ func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator) e
 // privacy erasure preparation leaves the affected commands fenced and is
 // logged, not fatal; any other failure stops Build.
 func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchestrator.Orchestrator) error {
+	if healed, err := orch.ReconcilePendingAgentRemovals(ctx); err != nil {
+		if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+			return fmt.Errorf("server: reconcile agent removal commands: %w", err)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("agent removal recovery is blocked by active privacy erasure; certificates remain denied")
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled agent removal commands missed by an append/project crash", slog.Int("healed", healed))
+	}
 	if healed, err := orch.ReconcilePendingTenantMemberOffboards(ctx); err != nil {
 		if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
 			return fmt.Errorf("server: reconcile member offboard commands: %w", err)
@@ -2957,6 +2967,13 @@ func (s *Server) RunApplicationSecretMutationReconciler(ctx context.Context) {
 
 func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 	if s.orch != nil {
+		if healed, err := s.orch.ReconcilePendingAgentRemovals(ctx); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("agent removal recovery sweep incomplete", slog.String("error", err.Error()))
+			}
+		} else if healed > 0 && s.logger != nil {
+			s.logger.Warn("reconciled pending agent removals", slog.Int("healed", healed))
+		}
 		if healed, err := s.orch.ReconcilePendingTenantMemberOffboards(ctx); err != nil {
 			if s.logger != nil {
 				s.logger.Warn("member offboard recovery sweep incomplete", slog.String("error", err.Error()))

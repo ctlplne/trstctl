@@ -277,6 +277,98 @@ func TestPreparePrivacySubjectErasureRewritesPendingAPITokenRevocation(t *testin
 	}
 }
 
+func TestPreparePrivacySubjectErasureRewritesPendingAgentRemovals(t *testing.T) {
+	ctx := context.Background()
+	st := newOperationApprovalStore(t)
+	const (
+		subject = "qa-agent-removal-erasure-subject"
+		agentID = "b10105b8-32b8-4f13-a7c4-608448626510"
+		certID  = "b10105b8-32b8-4f13-a7c4-608448626511"
+		offID   = "b10105b8-32b8-4f13-a7c4-608448626512"
+		serial  = "a17e"
+	)
+	issuedAt := time.Now().UTC().Truncate(time.Microsecond)
+	certPayload, err := json.Marshal(projections.AgentCertRevoked{
+		ID: agentID, Agent: "qa-agent", Serial: serial,
+		Reason: "reported by " + subject, RevokedAt: issuedAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	offPayload, err := json.Marshal(projections.AgentOffboarded{
+		ID: agentID, Agent: "qa-agent", Reason: "requested by " + subject,
+		OffboardedBy: subject,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		kind, serial, eventType, eventID string
+		payload                          []byte
+	}{
+		{"cert", serial, projections.EventAgentCertRevoked, certID, certPayload},
+		{"offboard", "", projections.EventAgentOffboarded, offID, offPayload},
+	} {
+		_, created, err := st.ClaimAgentRemovalCommand(ctx, store.AgentRemovalCommand{
+			TenantID: tenantA, AgentID: agentID, Kind: item.kind, Serial: item.serial,
+			Event: events.Event{ID: item.eventID, TenantID: tenantA, Type: item.eventType,
+				SchemaVersion: events.DefaultSchemaVersion, Time: issuedAt, Data: item.payload,
+				Actor: &events.Actor{Subject: subject, Roles: []string{"operator"}}},
+		})
+		if err != nil || !created {
+			t.Fatalf("claim %s agent removal: created=%t err=%v", item.kind, created, err)
+		}
+	}
+	candidate := store.PrivacySubjectErasurePreparation{
+		PrivacySubjectErasure: store.PrivacySubjectErasure{
+			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+			RequestedByRef: privacy.SubjectRef(tenantA, "privacy-admin"),
+			Reason:         "verified erasure", ErasedAt: time.Now().UTC(),
+		},
+		OperationID:        "sha256:" + strings.Repeat("a", 64),
+		RequestBinding:     strings.Repeat("b", 64),
+		EventID:            "sha256:" + strings.Repeat("c", 64),
+		RewriteOperationID: "qa-agent-removal-rewrite",
+		TargetGeneration:   "qa-agent-removal-generation",
+		EventActor:         &events.Actor{Subject: privacy.Placeholder(privacy.SubjectRef(tenantA, "privacy-admin"))},
+	}
+	prepared, err := st.PreparePrivacySubjectErasure(ctx, tenantA, subject, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Counts["agent_removal_commands"] != 2 {
+		t.Fatalf("pending agent removal rewrite count=%d, want two", prepared.Counts["agent_removal_commands"])
+	}
+	for _, eventID := range []string{certID, offID} {
+		if !slices.Contains(prepared.RecoveryFences, store.PrivacyRecoveryFenceDisposition{
+			Kind: store.PrivacyRecoveryFenceAgentRemoval, EventID: eventID,
+			Disposition: store.PrivacyRecoveryFencePseudonymized,
+		}) {
+			t.Fatalf("agent removal %s rewrite evidence missing: %+v", eventID, prepared.RecoveryFences)
+		}
+	}
+	pending, err := st.ListPendingAgentRemovals(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 2 {
+		t.Fatalf("pending agent removals=%d, want two", len(pending))
+	}
+	for _, command := range pending {
+		if command.Event.Actor == nil ||
+			command.Event.Actor.Subject != privacy.Placeholder(privacy.SubjectRef(tenantA, subject)) ||
+			bytes.Contains(command.Event.Data, []byte(subject)) {
+			t.Fatalf("pending agent removal retained erased subject: %+v", command)
+		}
+	}
+	if denied, err := st.AgentCertRevoked(ctx, tenantA, agentID, serial, ""); err != nil || !denied {
+		t.Fatalf("erasure lifted pending certificate denial: denied=%t err=%v", denied, err)
+	}
+	if denied, err := st.AgentOffboarded(ctx, tenantA, agentID); err != nil || !denied {
+		t.Fatalf("erasure lifted pending offboard denial: denied=%t err=%v", denied, err)
+	}
+}
+
 func TestPreparePrivacySubjectErasureRewritesPendingMachineAuthMethodCommand(t *testing.T) {
 	ctx := context.Background()
 	st := newOperationApprovalStore(t)

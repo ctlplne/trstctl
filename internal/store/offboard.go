@@ -228,6 +228,7 @@ var TenantScopedTables = []string{
 	"tenant_members",
 	"api_tokens",
 	"api_token_revocation_commands",
+	"agent_removal_commands",
 	"tenant_member_offboard_commands",
 	"machine_auth_method_commands",
 	"aws_honey_uses",

@@ -2061,33 +2061,74 @@ func (o *Orchestrator) SupersedeCertificate(ctx context.Context, tenantID, finge
 	return err
 }
 
-// RevokeAgentCertificate records an agent.cert.revoked event. The relational
-// deny-list is only a projection of this event, so a rebuild from the event log
-// restores the same agent certificate rejection behavior (AN-2).
-func (o *Orchestrator) RevokeAgentCertificate(ctx context.Context, tenantID, agentID, agentName, serial, fingerprint, reason string, revokedAt time.Time) error {
+// RevokeAgentCertificate commits an independent admission fence before
+// publishing and projecting the exact agent.cert.revoked event.
+func (o *Orchestrator) RevokeAgentCertificate(ctx context.Context, tenantID, agentID, agentName, serial, fingerprint, reason string, revokedAt time.Time) (projections.AgentCertRevoked, error) {
 	agentID = strings.TrimSpace(agentID)
 	agentName = strings.TrimSpace(agentName)
 	serial = normalizeAgentCertSerial(serial)
 	fingerprint = normalizeAgentCertFingerprint(fingerprint)
 	reason = strings.TrimSpace(reason)
 	if agentID == "" {
-		return fmt.Errorf("orchestrator: agent certificate revocation requires an agent id")
+		return projections.AgentCertRevoked{}, fmt.Errorf("orchestrator: agent certificate revocation requires an agent id")
 	}
 	if serial == "" && fingerprint == "" {
-		return fmt.Errorf("orchestrator: agent certificate revocation requires a serial or fingerprint")
+		return projections.AgentCertRevoked{}, fmt.Errorf("orchestrator: agent certificate revocation requires a serial or fingerprint")
 	}
 	if revokedAt.IsZero() {
 		revokedAt = time.Now().UTC()
 	}
-	payload, err := json.Marshal(projections.AgentCertRevoked{
+	revokedAt = revokedAt.UTC().Truncate(time.Microsecond)
+	result := projections.AgentCertRevoked{
 		ID: agentID, Agent: agentName, Serial: serial, Fingerprint: fingerprint,
-		Reason: reason, RevokedAt: revokedAt.UTC(),
+		Reason: reason, RevokedAt: revokedAt,
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return projections.AgentCertRevoked{}, err
+	}
+	var actor *events.Actor
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = &a
+	}
+	command, created, err := o.store.ClaimAgentRemovalCommand(ctx, store.AgentRemovalCommand{
+		TenantID: tenantID, AgentID: agentID, Kind: "cert", Serial: serial, Fingerprint: fingerprint,
+		Event: events.Event{ID: uuid.NewString(), Type: projections.EventAgentCertRevoked,
+			TenantID: tenantID, SchemaVersion: events.DefaultSchemaVersion,
+			Time: revokedAt, Data: payload, Actor: actor},
 	})
 	if err != nil {
-		return err
+		return projections.AgentCertRevoked{}, err
 	}
-	_, err = o.emit(ctx, projections.EventAgentCertRevoked, tenantID, payload)
-	return err
+	if command.Status == "pending" {
+		if err := o.reconcileAgentRemovalCommand(ctx, command, created); err != nil {
+			return projections.AgentCertRevoked{}, err
+		}
+		if err := json.Unmarshal(command.Event.Data, &result); err != nil {
+			return projections.AgentCertRevoked{}, err
+		}
+	} else {
+		// Completion discards the SQL copy of the reason and actor. Read the
+		// indexed immutable source event for the exact first-writer receipt;
+		// a later key may not claim that its different reason took effect.
+		retained, found, err := o.log.EventByID(ctx, command.Event.ID)
+		if err != nil {
+			return projections.AgentCertRevoked{}, err
+		}
+		if !found || retained.Sequence == 0 || retained.TenantID != tenantID ||
+			retained.Type != projections.EventAgentCertRevoked ||
+			!retained.Time.Equal(command.Event.Time) {
+			return projections.AgentCertRevoked{}, errors.New("orchestrator: completed agent certificate removal has no matching retained event")
+		}
+		if err := json.Unmarshal(retained.Data, &result); err != nil {
+			return projections.AgentCertRevoked{}, err
+		}
+		if result.ID != agentID || normalizeAgentCertSerial(result.Serial) != command.Serial ||
+			normalizeAgentCertFingerprint(result.Fingerprint) != command.Fingerprint {
+			return projections.AgentCertRevoked{}, errors.New("orchestrator: retained agent certificate removal differs from durable selector")
+		}
+	}
+	return result, nil
 }
 
 // OffboardAgent records an agent.offboarded event and projects the agents read
@@ -2113,8 +2154,23 @@ func (o *Orchestrator) OffboardAgent(ctx context.Context, tenantID, agentID, rea
 	if err != nil {
 		return store.Agent{}, err
 	}
-	if _, err := o.emit(ctx, projections.EventAgentOffboarded, tenantID, payload); err != nil {
+	var eventActor *events.Actor
+	if a, ok := events.ActorFromContext(ctx); ok {
+		eventActor = &a
+	}
+	command, created, err := o.store.ClaimAgentRemovalCommand(ctx, store.AgentRemovalCommand{
+		TenantID: tenantID, AgentID: agentID, Kind: "offboard",
+		Event: events.Event{ID: uuid.NewString(), Type: projections.EventAgentOffboarded,
+			TenantID: tenantID, SchemaVersion: events.DefaultSchemaVersion,
+			Time: time.Now().UTC().Truncate(time.Microsecond), Data: payload, Actor: eventActor},
+	})
+	if err != nil {
 		return store.Agent{}, err
+	}
+	if command.Status == "pending" {
+		if err := o.reconcileAgentRemovalCommand(ctx, command, created); err != nil {
+			return store.Agent{}, err
+		}
 	}
 	return o.store.GetAgent(ctx, tenantID, agentID)
 }

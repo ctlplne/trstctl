@@ -393,6 +393,11 @@ func (s *Store) AgentCertRevoked(ctx context.Context, tenantID, agentID, serial,
 			            OR
 			           (selector_type = 'fingerprint' AND selector = $4 AND $4 <> '')
 			       )
+			) OR EXISTS (
+			    SELECT 1 FROM agent_removal_commands
+			     WHERE tenant_id = $1 AND agent_id = $2 AND kind = 'cert'
+			       AND ((serial = $3 AND $3 <> '') OR
+			            (fingerprint = $4 AND $4 <> ''))
 			)`,
 			tenantID, agentID, serial, fingerprint).Scan(&revoked)
 	})
@@ -416,6 +421,9 @@ func (s *Store) AgentOffboarded(ctx context.Context, tenantID, agentID string) (
 			     WHERE tenant_id = $1
 			       AND id = $2
 			       AND status = 'offboarded'
+			) OR EXISTS (
+			    SELECT 1 FROM agent_removal_commands
+			     WHERE tenant_id = $1 AND agent_id = $2 AND kind = 'offboard'
 			)`, tenantID, agentID).Scan(&offboarded)
 	})
 	return offboarded, err

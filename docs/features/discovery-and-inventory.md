@@ -207,6 +207,14 @@ The agent enrolls into the control plane with a one-time bootstrap token
 `POST /api/v1/agents/{id}/offboard` emits an `agent.offboarded` event, keeps the row
 visible as a tombstone with actor/reason evidence, and causes the agent's mTLS
 certificate to be rejected on future heartbeat, renewal, and inventory RPCs.
+`POST /api/v1/agents/{id}/cert-revocations` takes the exact client-certificate
+serial, SHA-256 fingerprint, or both. The control plane commits an independent
+tenant-scoped denial before publishing either removal event, so an already-open
+mTLS connection is refused on its next RPC even if the event projection fails.
+The pending command retains the exact event for restart recovery; the projected
+tombstone and revocation row remain rebuildable from the event log. This agent
+channel checks its own denial on every RPC and renewal; it does not wait for
+CRL or OCSP propagation to terminate agent access.
 
 Enrollment is deliberately two steps in **Agents → Add agent**:
 

@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -473,6 +474,25 @@ func TestAgentCertRevocationIsEventSourced(t *testing.T) {
 	})
 	if code != http.StatusCreated {
 		t.Fatalf("revoke agent cert: status %d body %s", code, body)
+	}
+	retryCode, retryBody := secretsReqKey(t, h, http.MethodPost,
+		"/api/v1/agents/"+agentID+"/cert-revocations", token,
+		"agent-revoke-second-key", map[string]any{
+			"agent": agentName, "serial": serial,
+			"fingerprint": fingerprint, "reason": "later reason must not replace first",
+		})
+	if retryCode != http.StatusCreated || !bytes.Equal(retryBody, body) {
+		t.Fatalf("same certificate selector returned a different receipt: first=%d %s retry=%d %s",
+			code, body, retryCode, retryBody)
+	}
+	var revocationEvents int
+	if err := h.log.Replay(context.Background(), 0, func(e events.Event) error {
+		if e.TenantID == h.tenant && e.Type == projections.EventAgentCertRevoked {
+			revocationEvents++
+		}
+		return nil
+	}); err != nil || revocationEvents != 1 {
+		t.Fatalf("second key emitted another revocation: events=%d err=%v", revocationEvents, err)
 	}
 	if !h.hasEvent(t, projections.EventAgentCertRevoked) {
 		t.Fatal("agent certificate revocation did not emit agent.cert.revoked")

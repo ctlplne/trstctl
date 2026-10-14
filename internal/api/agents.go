@@ -686,12 +686,13 @@ func (a *API) revokeAgentCertificate(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "serial or fingerprint is required")
 		}
 		revokedAt := time.Now().UTC()
-		if err := a.orch.RevokeAgentCertificate(ctx, tenantID, agentID, req.Agent, req.Serial, req.Fingerprint, req.Reason, revokedAt); err != nil {
+		result, err := a.orch.RevokeAgentCertificate(ctx, tenantID, agentID, req.Agent, req.Serial, req.Fingerprint, req.Reason, revokedAt)
+		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusCreated, agentCertRevocationResponse{
-			AgentID: agentID, Agent: req.Agent, Serial: req.Serial, Fingerprint: req.Fingerprint,
-			Reason: req.Reason, RevokedAt: revokedAt,
+			AgentID: agentID, Agent: result.Agent, Serial: result.Serial, Fingerprint: result.Fingerprint,
+			Reason: result.Reason, RevokedAt: result.RevokedAt,
 		}, nil
 	})
 }

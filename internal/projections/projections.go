@@ -5129,6 +5129,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			LastSeenAt: &lastSeen, CreatedAt: e.Time,
 		})
 	case EventAgentCertRevoked:
+		if err := p.store.LockAgentRemovalEventTx(ctx, tx, e); err != nil {
+			return err
+		}
 		var pl AgentCertRevoked
 		if err := decode(e, &pl); err != nil {
 			return err
@@ -5158,8 +5161,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				return err
 			}
 		}
-		return nil
+		return p.store.CompleteAgentRemovalCommandTx(ctx, tx, e)
 	case EventAgentOffboarded:
+		if err := p.store.LockAgentRemovalEventTx(ctx, tx, e); err != nil {
+			return err
+		}
 		var pl AgentOffboarded
 		if err := decode(e, &pl); err != nil {
 			return err
@@ -5168,10 +5174,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
 		offboardedAt := e.Time
-		return p.store.ApplyAgentOffboardedTx(ctx, tx, store.Agent{
+		if err := p.store.ApplyAgentOffboardedTx(ctx, tx, store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: "offboarded",
 			CreatedAt: e.Time, OffboardedAt: &offboardedAt, OffboardedBy: pl.OffboardedBy, OffboardReason: pl.Reason,
-		})
+		}); err != nil {
+			return err
+		}
+		return p.store.CompleteAgentRemovalCommandTx(ctx, tx, e)
 	case EventProfileCreated, EventProfileUpdated:
 		if schemaVersionOf(e) == 1 {
 			// Legacy profile audit events did not carry the spec or id. They are kept

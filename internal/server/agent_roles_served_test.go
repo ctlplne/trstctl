@@ -70,6 +70,10 @@ func newRoleHarnessWithDeps(t *testing.T, roles, claimable []string, options ...
 }
 
 func newRoleHarnessWithEventOptions(t *testing.T, roles, claimable []string, eventOptions []events.OpenOption, options ...func(*Deps)) *roleHarness {
+	return newRoleHarnessNamedWithEventOptions(t, "role-agent", roles, claimable, eventOptions, options...)
+}
+
+func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, claimable []string, eventOptions []events.OpenOption, options ...func(*Deps)) *roleHarness {
 	t.Helper()
 	deps := []func(*Deps){withAgentChannel, func(d *Deps) {
 		d.AgentClaimableJobKinds = claimable
@@ -89,7 +93,7 @@ func newRoleHarnessWithEventOptions(t *testing.T, roles, claimable []string, eve
 	t.Cleanup(func() { chCancel(); <-chDone })
 
 	const serverName = "agent.trstctl.local"
-	cn := "role-agent"
+	cn := agentName
 	a := enrollAgentWithRoles(t, h, cn, serverName, roles)
 	creds, err := a.Credentials()
 	if err != nil {

@@ -27,6 +27,7 @@ const (
 	PrivacyRecoveryFenceApprovedTarget          = "approved_target"
 	// #nosec G101 -- this is a bounded privacy evidence label, not a credential.
 	PrivacyRecoveryFenceAPITokenRevocation   = "api_token_revocation"
+	PrivacyRecoveryFenceAgentRemoval         = "agent_removal"
 	PrivacyRecoveryFenceMachineAuthMethod    = "machine_auth_method"
 	PrivacyRecoveryFenceTenantMemberOffboard = "tenant_member_offboard"
 
@@ -122,6 +123,7 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 			fence.Kind != PrivacyRecoveryFenceApplicationSecretImport &&
 			fence.Kind != PrivacyRecoveryFenceApprovedTarget &&
 			fence.Kind != PrivacyRecoveryFenceAPITokenRevocation &&
+			fence.Kind != PrivacyRecoveryFenceAgentRemoval &&
 			fence.Kind != PrivacyRecoveryFenceMachineAuthMethod &&
 			fence.Kind != PrivacyRecoveryFenceTenantMemberOffboard {
 			return fmt.Errorf("store: privacy recovery fence kind %q is unsupported", fence.Kind)
@@ -393,7 +395,11 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
-		recoveryFences := append(append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), methodFences...), memberFences...)
+		agentFences, err := s.prepareAgentRemovalFencesTx(ctx, tx, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		recoveryFences := append(append(append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), methodFences...), memberFences...), agentFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -415,6 +421,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			recoveryFences, PrivacyRecoveryFenceMachineAuthMethod)
 		selected.Counts["tenant_member_offboard_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceTenantMemberOffboard)
+		selected.Counts["agent_removal_commands"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceAgentRemoval)
 		scheduler, err := s.PrepareSecretRotationSchedulePrivacyErasureTx(
 			ctx, tx, tenantID, subject, expectedRef,
 			candidate.OperationID, candidate.EventID, resolveSchedulerOuter,
@@ -1174,6 +1182,78 @@ func (s *Store) prepareAPITokenRevocationFencesTx(
 		}
 		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
 			Kind: PrivacyRecoveryFenceAPITokenRevocation, EventID: row.eventID,
+			Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
+// A pending agent removal command may retain a human actor or a free-form
+// reason. Rewrite its exact recovery event under the privacy barrier before
+// a worker can republish it after erasure.
+func (s *Store) prepareAgentRemovalFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingRow struct {
+		eventID, kind  string
+		actor, payload []byte
+		digest         string
+	}
+	rows, err := tx.Query(ctx, `SELECT event_id::text, kind, event_actor,
+		event_payload, payload_sha256 FROM agent_removal_commands
+		WHERE tenant_id=$1 AND status='pending'
+		ORDER BY agent_id, kind, serial, fingerprint FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var row pendingRow
+		if err := rows.Scan(&row.eventID, &row.kind, &row.actor, &row.payload, &row.digest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, row := range pending {
+		if crypto.SHA256Hex(row.payload) != row.digest {
+			return nil, fmt.Errorf("store: agent removal command %s payload digest mismatch", row.eventID)
+		}
+		eventType := "agent.offboarded"
+		if row.kind == "cert" {
+			eventType = "agent.cert.revoked"
+		}
+		rewritten, payloadChanged, err := events.PseudonymizeEventDataForSubject(
+			row.payload, tenantID, subject, eventType, events.DefaultSchemaVersion)
+		if err != nil {
+			return nil, err
+		}
+		actorValue, _, actorChanged, err := pseudonymizeRecoveryActor(row.actor, tenantID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !payloadChanged && !actorChanged {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE agent_removal_commands
+			SET event_actor=$3::jsonb, event_payload=$4, payload_sha256=$5,
+			    updated_at=now()
+			WHERE tenant_id=$1 AND event_id=$2 AND status='pending'`,
+			tenantID, row.eventID, actorValue, rewritten, crypto.SHA256Hex(rewritten))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind: PrivacyRecoveryFenceAgentRemoval, EventID: row.eventID,
 			Disposition: PrivacyRecoveryFencePseudonymized,
 		})
 	}
