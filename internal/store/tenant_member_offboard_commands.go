@@ -167,13 +167,19 @@ func (s *Store) ClaimTenantMemberOffboardCommand(ctx context.Context, tenantID, 
 				if canonical.Status == "pending" {
 					return nil
 				}
-				var active bool
+				var active, pendingRehire bool
 				if err := tx.QueryRow(barrierCtx,
 					`SELECT EXISTS (SELECT 1 FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2 AND status = 'active')`,
 					tenantID, ref).Scan(&active); err != nil {
 					return err
 				}
-				if !active {
+				if err := tx.QueryRow(barrierCtx,
+					`SELECT EXISTS (SELECT 1 FROM tenant_member_upsert_commands
+					 WHERE tenant_id = $1 AND subject_ref = $2 AND status = 'pending')`,
+					tenantID, ref).Scan(&pendingRehire); err != nil {
+					return err
+				}
+				if !active && !pendingRehire {
 					return nil
 				}
 			}

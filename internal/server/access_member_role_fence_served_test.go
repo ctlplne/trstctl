@@ -222,3 +222,74 @@ func TestServedMemberRoleNarrowingDeniesCookieDuringProjectionGap(t *testing.T) 
 		t.Fatalf("late role projection reactivated offboarded member: status=%q err=%v", member.Status, err)
 	}
 }
+
+// A completed offboard is not a valid receipt for a new offboard request when
+// a later rehire has already claimed the same subject. The second offboard
+// must advance the durable generation before the rehire can be reconciled.
+func TestServedRepeatOffboardSupersedesPendingRehire(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts PostgreSQL and embedded JetStream")
+	}
+	ctx := context.Background()
+	const tenantID = "f2630000-0000-4000-8000-000000000265"
+	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "repeat offboard"}); err != nil {
+		t.Fatal(err)
+	}
+	admin := seedServedAPIToken(t, ctx, st, tenantID, "qa-repeat-offboard-admin", []string{"*"})
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := Build(ctx, Deps{Store: st, Log: log})
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	defer func() { _ = srv.Shutdown(context.Background()) }()
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	for _, retained := range []bool{false, true} {
+		name := "unappended"
+		if retained {
+			name = "retained"
+		}
+		t.Run(name, func(t *testing.T) {
+			subject := "qa-repeat-offboard-" + name
+			upsertMember(t, ts, admin, subject, []string{"viewer"})
+			path := "/api/v1/access/members/" + subject + "/offboard"
+			if code, body := doBearer(t, ts, http.MethodPost, path, admin,
+				"qa-first-offboard-"+name, map[string]string{"reason": "first retirement"}); code != http.StatusOK {
+				t.Fatalf("first offboard = %d body=%s", code, body)
+			}
+			payload, err := json.Marshal(projections.TenantMemberUpserted{
+				Subject: subject, Roles: []string{"admin"}, Source: "manual",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rehire := events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberUpserted,
+				TenantID: tenantID, SchemaVersion: 1, Time: time.Now().UTC().Truncate(time.Microsecond), Data: payload}
+			if _, created, err := st.ClaimTenantMemberUpsertCommand(ctx, tenantID, subject, rehire, false); err != nil || !created {
+				t.Fatalf("pending rehire claim: created=%t err=%v", created, err)
+			}
+			if retained {
+				if _, err := log.Append(ctx, rehire); err != nil {
+					t.Fatalf("retain rehire before projection: %v", err)
+				}
+			}
+			if code, body := doBearer(t, ts, http.MethodPost, path, admin,
+				"qa-repeat-offboard-"+name, map[string]string{"reason": "urgent second retirement"}); code != http.StatusOK {
+				t.Fatalf("repeat offboard = %d body=%s", code, body)
+			}
+			if healed, err := srv.orch.ReconcilePendingTenantMemberUpserts(ctx); err != nil || healed != 1 {
+				t.Fatalf("rehire recovery after repeat offboard: healed=%d err=%v", healed, err)
+			}
+			member, err := st.GetTenantMember(ctx, tenantID, subject)
+			if err != nil || member.Status != "offboarded" {
+				t.Fatalf("repeat offboard allowed delayed rehire: status=%q err=%v", member.Status, err)
+			}
+		})
+	}
+}
