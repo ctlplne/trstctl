@@ -1742,7 +1742,7 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 	}
 	if a.auth != nil {
 		if sess, ok := a.sessionFrom(r); ok {
-			return a.sessionPrincipal(r.Context(), sess), nil
+			return a.sessionPrincipal(r.Context(), sess)
 		}
 	}
 	return authz.Principal{}, errors.New("api: unauthenticated")
@@ -1752,36 +1752,42 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 // session's role names resolve (against the role registry) to grants held
 // tenant-wide within the session's tenant. This is what makes a browser login
 // authorize API calls, not just /auth/me.
-func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) authz.Principal {
-	roleNames := a.sessionRoleNames(ctx, sess)
+func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) (authz.Principal, error) {
+	roleNames, err := a.sessionRoleNames(ctx, sess)
+	if err != nil {
+		return authz.Principal{}, err
+	}
 	grants := make([]authz.Grant, 0, len(roleNames))
 	for _, name := range roleNames {
 		if role, ok := a.roles.Role(name); ok {
 			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
 		}
 	}
-	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}
+	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}, nil
 }
 
-func (a *API) sessionRoleNames(ctx context.Context, sess auth.Session) []string {
+func (a *API) sessionRoleNames(ctx context.Context, sess auth.Session) ([]string, error) {
 	roleNames := append([]string(nil), sess.Roles...)
 	if a.store != nil && sess.TenantID != "" && sess.Subject != "" {
-		if member, err := a.store.GetTenantMember(ctx, sess.TenantID, sess.Subject); err == nil {
-			if member.Status == "offboarded" {
+		roles, status, found, pending, err := a.store.MemberSessionAuthority(ctx, sess.TenantID, sess.Subject)
+		if err != nil {
+			return nil, err
+		}
+		if pending || status == "offboarded" {
+			return nil, nil
+		}
+		if found {
+			// A member record that names roles decides the session's roles, so
+			// People and roles, the access API and SCIM can narrow access as well
+			// as widen it. Sign-in roles (a tenant mapping or default_roles) apply
+			// only while the member record names none.
+			if namesRole(roles) {
 				roleNames = nil
-			} else {
-				// A member record that names roles decides the session's roles, so
-				// People and roles, the access API and SCIM can narrow access as well
-				// as widen it. Sign-in roles (a tenant mapping or default_roles) apply
-				// only while the member record names none.
-				if namesRole(member.Roles) {
-					roleNames = nil
-				}
-				roleNames = mergeRoleNames(roleNames, member.Roles)
 			}
+			roleNames = mergeRoleNames(roleNames, roles)
 		}
 	}
-	return roleNames
+	return roleNames, nil
 }
 
 func namesRole(roles []string) bool {

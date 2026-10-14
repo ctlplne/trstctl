@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { ChevronDown, History, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus, Users } from "lucide-react";
+import { ChevronDown, History, KeyRound, Loader2, Pencil, Plus, RefreshCw, ShieldCheck, UserMinus, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
@@ -104,6 +104,8 @@ export function AdminAccess() {
   const [pamLoadingMore, setPAMLoadingMore] = useState(false);
 
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const editMemberTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [accessKeyOpen, setAccessKeyOpen] = useState(false);
   const [offboardOpen, setOffboardOpen] = useState(false);
   const [offboardConfirmed, setOffboardConfirmed] = useState(false);
@@ -130,10 +132,13 @@ export function AdminAccess() {
   const [pamPending, setPAMPending] = useState<PAMApprovalRequest | null>(null);
   const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
   const [pamCopied, setPAMCopied] = useState(false);
-  const updatePAMSession = useCallback((next: PAMSession) => {
-    setPAMRows((current) => current?.map((item) => (item.id === next.id ? next : item)) ?? null);
-    setPAMDetail((current) => (current?.id === next.id ? next : current));
-  }, []);
+  const updatePAMSession = useCallback(
+    (next: PAMSession) => {
+      setPAMRows((current) => current?.map((item) => (item.id === next.id ? next : item)) ?? null);
+      setPAMDetail((current) => (current?.id === next.id ? next : current));
+    },
+    [setPAMDetail],
+  );
 
   const addPersonTriggerRef = useRef<HTMLButtonElement>(null);
   const accessKeyTriggerRef = useRef<HTMLButtonElement>(null);
@@ -257,11 +262,12 @@ export function AdminAccess() {
         source: "manual",
       });
       await loadOverview();
-      setNotice(t("admin.access.addedNotice", { subject }));
+      setNotice(t(editingMember ? "admin.access.rolesSavedNotice" : "admin.access.addedNotice", { subject }));
       setMemberSubject("");
       setMemberDisplayName("");
       setMemberEmail("");
       setAddPersonOpen(false);
+      setEditingMember(null);
     } catch (err) {
       setMemberFormError(accessProblemMessage(err, t("admin.access.loadFailed")));
     } finally {
@@ -314,10 +320,15 @@ export function AdminAccess() {
 
   function closeAddPersonDialog() {
     setAddPersonOpen(false);
+    setEditingMember(null);
     setMemberFormError(null);
   }
 
   function openAddPersonDialog() {
+    setEditingMember(null);
+    setMemberSubject("");
+    setMemberDisplayName("");
+    setMemberEmail("");
     const available = new Set(roleRows.map((role) => role.name));
     setMemberRoles((current) => {
       const stillAvailable = current.filter((role) => available.has(role));
@@ -325,6 +336,17 @@ export function AdminAccess() {
       const firstChoice = roleRows.find((role) => role.name === "operator") ?? roleRows[0];
       return firstChoice ? [firstChoice.name] : [];
     });
+    setAddPersonOpen(true);
+  }
+
+  function openEditMemberDialog(member: Member, trigger: HTMLButtonElement) {
+    editMemberTriggerRef.current = trigger;
+    setEditingMember(member);
+    setMemberSubject(member.subject);
+    setMemberDisplayName(member.display_name ?? "");
+    setMemberEmail(member.email ?? "");
+    setMemberRoles(member.roles ?? []);
+    setMemberFormError(null);
     setAddPersonOpen(true);
   }
 
@@ -604,6 +626,7 @@ export function AdminAccess() {
                     <th scope="col">{translateNow("source.roles.c253370554")}</th>
                     <th scope="col">{translateNow("source.status.920e413c7d")}</th>
                     <th scope="col">{translateNow("source.updated.3a5ecca188")}</th>
+                    <th scope="col">{t("admin.access.memberActions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -616,6 +639,22 @@ export function AdminAccess() {
                       <td className="font-mono text-xs">{(member.roles ?? []).join(", ") || "—"}</td>
                       <td>{member.status}</td>
                       <td>{formatOptionalDate(member.updated_at, formatPolicy)}</td>
+                      <td>
+                        {member.status === "active" && member.source !== "scim" && member.subject !== user?.subject ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            aria-label={t("admin.access.editRolesFor", { subject: member.subject })}
+                            onClick={(event) => openEditMemberDialog(member, event.currentTarget)}
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                            {t("admin.access.editRoles")}
+                          </Button>
+                        ) : member.source === "scim" ? (
+                          <span className="text-xs text-muted-foreground">{t("admin.access.scimRolesAtIdP")}</span>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -754,17 +793,17 @@ export function AdminAccess() {
           onClose={closeAddPersonDialog}
           titleId="add-person-heading"
           descriptionId="add-person-description"
-          returnFocusRef={addPersonTriggerRef}
+          returnFocusRef={editingMember ? editMemberTriggerRef : addPersonTriggerRef}
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           overlayClassName="absolute inset-0 bg-black/55"
           panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
         >
           <header className="border-b border-border px-5 py-4">
             <h2 id="add-person-heading" className="text-title font-semibold">
-              {t("admin.access.addPerson")}
+              {t(editingMember ? "admin.access.editRolesTitle" : "admin.access.addPerson")}
             </h2>
             <p id="add-person-description" className="mt-1 text-sm text-muted-foreground">
-              {t("admin.access.addPersonDescription")}
+              {t(editingMember ? "admin.access.editRolesDescription" : "admin.access.addPersonDescription")}
             </p>
           </header>
           <form onSubmit={(event) => void onboardMember(event)} className="grid gap-3 p-5">
@@ -774,7 +813,7 @@ export function AdminAccess() {
               </ErrorState>
             ) : null}
             <FormField label={translateNow("source.subject.6897128384")}>
-              <Input value={memberSubject} onChange={(event) => setMemberSubject(event.target.value)} required />
+              <Input value={memberSubject} onChange={(event) => setMemberSubject(event.target.value)} disabled={!!editingMember} required />
             </FormField>
             <FormField label={translateNow("source.display.name.2b7f6a84de")}>
               <Input value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} />
@@ -811,7 +850,7 @@ export function AdminAccess() {
               </Button>
               <Button type="submit" disabled={busy || !memberSubject.trim() || memberRoles.length === 0}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-                {t("admin.access.addPerson")}
+                {t(editingMember ? "admin.access.saveRoles" : "admin.access.addPerson")}
               </Button>
             </div>
           </form>

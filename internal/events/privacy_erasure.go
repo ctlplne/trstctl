@@ -549,6 +549,10 @@ func PseudonymizeEventDataForSubjectVersioned(
 	if eventType == privacyApplicationSecretBatchImportedEvent {
 		return pseudonymizeApplicationSecretBatchImportData(data, tenantID, subject, schemaVersion)
 	}
+	if eventType == "tenant.member.upserted" {
+		next, changed, err = pseudonymizeTenantMemberUpsertData(data, tenantID, subject, schemaVersion)
+		return next, schemaVersion, changed, err
+	}
 	if eventType == privacyCodeSigningCommandedEvent {
 		next, changed, err = pseudonymizeCodeSigningCommandData(
 			data, tenantID, subject, schemaVersion,
@@ -559,6 +563,38 @@ func PseudonymizeEventDataForSubjectVersioned(
 		data, tenantID, subject, eventType, schemaVersion,
 	)
 	return next, schemaVersion, changed, err
+}
+
+// The member subject owns its display name and email even when the OIDC
+// subject is an opaque ID and those values do not contain its spelling.
+// Other members' names and email addresses must remain intact.
+func pseudonymizeTenantMemberUpsertData(data []byte, tenantID, subject string, schemaVersion int) ([]byte, bool, error) {
+	next, changed, err := applyRegisteredPrivacyEventPolicy(data, tenantID, subject,
+		"tenant.member.upserted", schemaVersion)
+	if err != nil {
+		return nil, false, err
+	}
+	var before struct {
+		Subject string `json:"subject"`
+	}
+	if err := json.Unmarshal(data, &before); err != nil {
+		return nil, false, err
+	}
+	if before.Subject != subject {
+		return next, changed, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(next, &fields); err != nil {
+		return nil, false, err
+	}
+	for _, field := range []string{"display_name", "email"} {
+		if _, ok := fields[field]; ok {
+			fields[field] = json.RawMessage(`""`)
+			changed = true
+		}
+	}
+	next, err = json.Marshal(fields)
+	return next, changed, err
 }
 
 func pseudonymizeApplicationSecretBatchImportData(data []byte, tenantID, subject string, schemaVersion int) ([]byte, int, bool, error) {

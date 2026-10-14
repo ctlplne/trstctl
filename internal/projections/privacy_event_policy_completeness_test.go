@@ -15,6 +15,25 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func TestMemberPrivacyErasureClearsOpaqueSubjectsPersonalFieldsOnly(t *testing.T) {
+	const subject = "opaque-member-123"
+	for _, version := range []int{1, TenantMemberSCIMSchemaVersion} {
+		payload := []byte(`{"subject":"opaque-member-123","display_name":"Taylor Admin","email":"taylor@qa.local","roles":["viewer"],"source":"manual"}`)
+		rewritten, changed, err := events.PseudonymizeEventDataForSubject(
+			payload, "tenant-a", subject, EventTenantMemberUpserted, version)
+		if err != nil || !changed || bytes.Contains(rewritten, []byte("Taylor Admin")) ||
+			bytes.Contains(rewritten, []byte("taylor@qa.local")) {
+			t.Fatalf("member v%d retained personal fields: changed=%t payload=%s err=%v", version, changed, rewritten, err)
+		}
+		unrelated := []byte(`{"subject":"another-member","display_name":"Taylor Admin","email":"taylor@qa.local","roles":["viewer"],"source":"manual"}`)
+		unchanged, changed, err := events.PseudonymizeEventDataForSubject(
+			unrelated, "tenant-a", subject, EventTenantMemberUpserted, version)
+		if err != nil || changed || !bytes.Equal(unchanged, unrelated) {
+			t.Fatalf("member v%d changed unrelated identity: changed=%t payload=%s err=%v", version, changed, unchanged, err)
+		}
+	}
+}
+
 func TestEveryProjectorKnownSchemaHasClosedPrivacyPolicy(t *testing.T) {
 	types := make([]string, 0, len(knownSchemaVersions))
 	for eventType := range knownSchemaVersions {

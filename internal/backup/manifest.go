@@ -43,6 +43,8 @@ var RecoveredFromPostgresBackup = []string{
 	// Pending member removal is immediate denial authority; completed opaque
 	// subject markers retain replay order independently of the read model.
 	"tenant_member_offboard_commands",
+	// A pending member role update is a first-writer cookie authority fence.
+	"tenant_member_upsert_commands",
 	// Machine-login method disable and pending enable must survive restore
 	// independently of the replayable operator read model.
 	"machine_auth_method_commands",

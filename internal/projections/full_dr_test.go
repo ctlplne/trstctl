@@ -97,6 +97,14 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	if _, err := src.LookupAPITokenByHash(ctx, "full-dr-offboard-api-token-hash"); !store.IsNotFound(err) {
 		t.Fatalf("source pending member offboard admitted bearer: %v", err)
 	}
+	srcRolePending, err := src.ListPendingTenantMemberUpsertCommands(ctx, tenantA, 10)
+	if err != nil || len(srcRolePending) != 1 ||
+		srcRolePending[0].Event.ID != "00000000-0000-0000-0000-00000000a028" {
+		t.Fatalf("source pending member role fence: rows=%+v err=%v", srcRolePending, err)
+	}
+	if _, _, _, pending, err := src.MemberSessionAuthority(ctx, tenantA, "full-dr-pending-role"); err != nil || !pending {
+		t.Fatalf("source pending member role admitted cookie: pending=%t err=%v", pending, err)
+	}
 	srcAgentPending, err := src.ListPendingAgentRemovals(ctx, tenantA, 10)
 	if err != nil || len(srcAgentPending) != 2 {
 		t.Fatalf("source pending agent removal fences: rows=%+v err=%v", srcAgentPending, err)
@@ -205,6 +213,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 	if _, err := dst.LookupAPITokenByHash(ctx, "full-dr-offboard-api-token-hash"); !store.IsNotFound(err) {
 		t.Fatalf("restored pending member offboard admitted bearer: %v", err)
+	}
+	dstRolePending, err := dst.ListPendingTenantMemberUpsertCommands(ctx, tenantA, 10)
+	if err != nil || len(dstRolePending) != 1 ||
+		dstRolePending[0].Event.ID != srcRolePending[0].Event.ID ||
+		!bytes.Equal(dstRolePending[0].Event.Data, srcRolePending[0].Event.Data) {
+		t.Fatalf("restored pending member role fence: source=%+v destination=%+v err=%v",
+			srcRolePending, dstRolePending, err)
+	}
+	if _, _, _, pending, err := dst.MemberSessionAuthority(ctx, tenantA, "full-dr-pending-role"); err != nil || !pending {
+		t.Fatalf("restored pending member role admitted cookie: pending=%t err=%v", pending, err)
 	}
 	dstAgentPending, err := dst.ListPendingAgentRemovals(ctx, tenantA, 10)
 	if err != nil || len(dstAgentPending) != len(srcAgentPending) {
@@ -955,6 +973,21 @@ func seedRecoveredFromPostgresTables(
 	if err != nil || !created || offboardCommand.Status != "pending" || revokedCount != 1 {
 		t.Fatalf("seed pending member offboard command: command=%+v count=%d created=%t err=%v",
 			offboardCommand, revokedCount, created, err)
+	}
+	rolePayload, err := json.Marshal(projections.TenantMemberUpserted{
+		Subject: "full-dr-pending-role", Roles: []string{"viewer"}, Source: "manual",
+	})
+	if err != nil {
+		t.Fatalf("marshal pending member role update: %v", err)
+	}
+	roleEvent := events.Event{
+		ID: "00000000-0000-0000-0000-00000000a028", Type: projections.EventTenantMemberUpserted,
+		TenantID: tenantA, SchemaVersion: 1, Time: now.Truncate(time.Microsecond), Data: rolePayload,
+	}
+	if command, created, err := st.ClaimTenantMemberUpsertCommand(
+		ctx, tenantA, "full-dr-pending-role", roleEvent, false,
+	); err != nil || !created || command.Status != "pending" {
+		t.Fatalf("seed pending member role command: command=%+v created=%t err=%v", command, created, err)
 	}
 	// An agent authority decision can survive the database cut before its event
 	// append. Both command kinds must return with their exact payload and keep

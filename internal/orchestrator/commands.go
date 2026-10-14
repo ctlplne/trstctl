@@ -2203,7 +2203,22 @@ func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, 
 	if member.SCIM != nil {
 		version = projections.TenantMemberSCIMSchemaVersion
 	}
-	if _, err := o.emitVersioned(ctx, projections.EventTenantMemberUpserted, tenantID, version, payload); err != nil {
+	var actor *events.Actor
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = &a
+	}
+	event := events.Event{ID: uuid.NewString(), Type: projections.EventTenantMemberUpserted,
+		TenantID: tenantID, SchemaVersion: version, Time: time.Now().UTC().Truncate(time.Microsecond),
+		Data: payload, Actor: actor}
+	requireActive, _ := ctx.Value(requireActiveMemberUpsertKey{}).(bool)
+	command, created, err := o.store.ClaimTenantMemberUpsertCommand(ctx, tenantID, member.Subject, event, requireActive)
+	if err != nil {
+		return store.TenantMember{}, err
+	}
+	if command.Status == "pending" {
+		err = o.reconcileTenantMemberUpsertCommand(ctx, command, created)
+	}
+	if err != nil {
 		return store.TenantMember{}, err
 	}
 	// Projection preserves the original creation time on updates. Return the

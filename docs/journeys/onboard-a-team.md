@@ -208,7 +208,15 @@ group on a shared trstctl deployment.
    Use `admin` only for the person explicitly authorized to administer the team.
    Roles set on a member replace the roles that person would otherwise receive at
    sign-in from a tenant mapping or `default_roles`, and a change applies on their
-   next request. A member record without roles keeps the sign-in roles.
+   next request. If projection is delayed, the pending role command temporarily
+   grants that browser session no permissions; it never falls back to the old
+   cookie roles. A failed authority read returns an error. A member record
+   without roles keeps the sign-in roles after projection completes.
+   In **People and roles**, open **SSO groups and role bindings** and choose
+   **Edit roles** on the person's row. The dialog locks the exact sign-in
+   subject, shows the current roles, and reads the roster back after saving.
+   A SCIM-managed row directs you to change the source identity provider;
+   an operator cannot silently replace its SCIM binding with a manual edit.
    Verify the member through `GET /api/v1/access/members`, then have that person
    sign in with the configured identity provider; `GET /auth/me` in that session
    returns the roles it actually holds. A successful member creation does not

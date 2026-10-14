@@ -946,6 +946,11 @@ names no roles keeps the sign-in roles. Offboarding immediately invalidates that
 subject's browser sessions and API tokens, including while the event projector is
 recovering; subsequent requests return 401. An explicit rehire creates a new
 member event and requires new sessions and tokens. Old credentials stay revoked.
+Role changes commit a subject-bound admission fence before their event is appended.
+While that exact event is pending projection, existing browser sessions keep their
+identity but have no grants; an access check returns 403. A failed member/fence
+read returns an error rather than restoring roles from the old cookie. Recovery
+replays the exact event; a later offboard supersedes one that never appended.
 `GET /auth/me` returns the roles the session holds. The evaluation compose files set
 `default_roles` to `admin` so the first operator can sign in; in production, leave it
 unset or use a read-only role and grant more through member records or mappings.

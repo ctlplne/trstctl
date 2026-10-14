@@ -729,7 +729,7 @@ export function Agents() {
                 {t("agents.revoke.exactSelectorHelp")}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {t("agents.revoke.inspectHelp")} <code>openssl x509 -in agent.crt -noout -serial -fingerprint -sha256</code>
+                {t("agents.revoke.inspectHelp")} <code>{t("agents.revoke.inspectCommand")}</code>
               </p>
             </div>
             <label className="grid gap-1 text-body font-medium" htmlFor="agent-revoke-reason">

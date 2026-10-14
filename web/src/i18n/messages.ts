@@ -4252,6 +4252,23 @@ export const messages = {
     description: "ELI5 explanation of the access model.",
   },
   "admin.access.addPerson": { defaultMessage: "Add person", description: "Primary action and dialog title for adding a tenant member." },
+  "admin.access.memberActions": { defaultMessage: "Actions", description: "Available actions for a person in the tenant roster." },
+  "admin.access.editRoles": { defaultMessage: "Edit roles", description: "Open the exact role editor for an existing tenant member." },
+  "admin.access.editRolesFor": { defaultMessage: "Edit roles for {subject}", description: "Accessible action name bound to the exact member subject." },
+  "admin.access.editRolesTitle": { defaultMessage: "Edit person's roles", description: "Existing-member role editor title." },
+  "admin.access.editRolesDescription": {
+    defaultMessage: "Change the named roles for this exact sign-in subject. Existing browser sessions use the new roles as soon as the change is accepted.",
+    description: "Operator guidance for narrowing live member access.",
+  },
+  "admin.access.saveRoles": { defaultMessage: "Save roles", description: "Submit an existing member's role changes." },
+  "admin.access.scimRolesAtIdP": {
+    defaultMessage: "Change roles at the identity provider",
+    description: "SCIM-managed member roles are controlled by the source directory.",
+  },
+  "admin.access.rolesSavedNotice": {
+    defaultMessage: "Saved roles for {subject}. The current roster confirms the change.",
+    description: "Durable-readback confirmation after editing a member's roles.",
+  },
   "admin.access.people": { defaultMessage: "People", description: "Overview count label for tenant members." },
   "admin.access.activePeople": { defaultMessage: "{count} active", description: "Overview active-member count." },
   "admin.access.roles": { defaultMessage: "Roles", description: "Overview count label for served roles." },
@@ -13802,6 +13819,10 @@ export const messages = {
   "agents.revoke.inspectHelp": {
     defaultMessage: "Read the serial and fingerprint from the agent client certificate:",
     description: "Introduces a stock OpenSSL read-only command for agent certificate selection.",
+  },
+  "agents.revoke.inspectCommand": {
+    defaultMessage: "openssl x509 -in agent.crt -noout -serial -fingerprint -sha256",
+    description: "Stock OpenSSL command shown while selecting the exact agent client certificate.",
   },
   "agents.revoke.serialLabel": { defaultMessage: "Serial (one selector required)", description: "Exact agent certificate serial input." },
   "agents.revoke.fingerprintLabel": {

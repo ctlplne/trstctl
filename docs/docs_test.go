@@ -3637,8 +3637,10 @@ func TestSCIMProvisioningIsServedAndDisclosed(t *testing.T) {
 	if !strings.Contains(read(t, "../ee/enterpriseauth/scim_config.go"), "buildSCIMConfig") {
 		t.Error("ee/enterpriseauth/scim_config.go should load tenant-bound SCIM token files")
 	}
-	if !strings.Contains(read(t, "../internal/api/api.go"), "mergeRoleNames(roleNames, member.Roles)") {
-		t.Error("session RBAC should merge current tenant-member roles so SCIM group changes affect served authorization")
+	apiAuthorization := read(t, "../internal/api/api.go")
+	if !strings.Contains(apiAuthorization, "MemberSessionAuthority") ||
+		!strings.Contains(apiAuthorization, "mergeRoleNames(roleNames, roles)") {
+		t.Error("session RBAC should read projected tenant-member roles together with the pending role fence so SCIM group removal narrows served authorization")
 	}
 }
 

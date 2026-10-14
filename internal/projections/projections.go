@@ -6515,6 +6515,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Subject == "" {
 			return fmt.Errorf("projections: %s requires subject", e.Type)
 		}
+		if err := p.store.CompleteTenantMemberUpsertCommandTx(ctx, tx, e.TenantID, pl.Subject, e); err != nil {
+			return err
+		}
 		apply, err := p.store.ShouldApplyTenantMemberEventTx(ctx, tx, e.TenantID, pl.Subject, e.Sequence)
 		if err != nil {
 			return err

@@ -624,7 +624,11 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	roles, permissions := a.sessionRoleSummary(r.Context(), sess)
+	roles, permissions, err := a.sessionRoleSummary(r.Context(), sess)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	a.writeJSON(w, http.StatusOK, meResponse{
 		Subject:     sess.Subject,
 		TenantID:    sess.TenantID,
@@ -635,8 +639,11 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]string, []string) {
-	roleNames := a.sessionRoleNames(ctx, sess)
+func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]string, []string, error) {
+	roleNames, err := a.sessionRoleNames(ctx, sess)
+	if err != nil {
+		return nil, nil, err
+	}
 	seen := map[string]bool{}
 	permissions := make([]string, 0, len(roleNames))
 	for _, name := range roleNames {
@@ -654,7 +661,7 @@ func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]stri
 		}
 	}
 	sort.Strings(permissions)
-	return roleNames, permissions
+	return roleNames, permissions, nil
 }
 
 // authLogout clears the session and CSRF cookies.

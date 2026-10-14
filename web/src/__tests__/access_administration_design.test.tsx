@@ -308,6 +308,32 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("edits an existing person's exact roles from the roster", async () => {
+    const user = userEvent.setup();
+    apiMock.members.mockResolvedValue({ items: [{ ...member, roles: ["operator", "auditor"] }] });
+    renderPage();
+    await user.click(screen.getByText("SSO groups and role bindings", { exact: true }));
+    const roster = await screen.findByRole("region", { name: "People and role bindings table" });
+    await user.click(within(roster).getByRole("button", { name: `Edit roles for ${member.subject}` }));
+    const dialog = screen.getByRole("dialog", { name: "Edit person's roles" });
+    expect(within(dialog).getByRole("textbox", { name: "Subject" })).toHaveValue(member.subject);
+    expect(within(dialog).getByRole("textbox", { name: "Subject" })).toBeDisabled();
+    expect(within(dialog).getByRole("checkbox", { name: "operator" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "auditor" })).toBeChecked();
+    await user.click(within(dialog).getByRole("checkbox", { name: "operator" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save roles" }));
+    await waitFor(() =>
+      expect(apiMock.upsertMember).toHaveBeenCalledWith(member.subject, {
+        display_name: member.display_name,
+        email: member.email,
+        roles: ["auditor"],
+        source: "manual",
+      }),
+    );
+    await waitFor(() => expect(apiMock.members).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("dialog", { name: "Edit person's roles" })).not.toBeInTheDocument();
+  });
+
   it("uses the full foreground token for small Add person labels and role guidance", async () => {
     const user = userEvent.setup();
     renderPage();

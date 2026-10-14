@@ -492,6 +492,64 @@ func TestPreparePrivacySubjectErasureRewritesPendingMemberOffboardCommand(t *tes
 	}
 }
 
+func TestPreparePrivacySubjectErasureRewritesPendingMemberRoleCommand(t *testing.T) {
+	ctx := context.Background()
+	st := newOperationApprovalStore(t)
+	const subject = "qa-member-role-erasure-subject"
+	const eventID = "b10105b8-32b8-4f13-a7c4-60844862650e"
+	payload, err := json.Marshal(projections.TenantMemberUpserted{
+		Subject: subject, DisplayName: subject, Email: subject + "@qa.local",
+		Roles: []string{"viewer"}, Source: "manual",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := events.Event{ID: eventID, TenantID: tenantA, Type: projections.EventTenantMemberUpserted,
+		SchemaVersion: 1, Time: time.Now().UTC().Truncate(time.Microsecond), Data: payload,
+		Actor: &events.Actor{Subject: subject, Roles: []string{"operator"}}}
+	if _, created, err := st.ClaimTenantMemberUpsertCommand(ctx, tenantA, subject, event, false); err != nil || !created {
+		t.Fatalf("claim pending member role command: created=%t err=%v", created, err)
+	}
+	candidate := store.PrivacySubjectErasurePreparation{
+		PrivacySubjectErasure: store.PrivacySubjectErasure{
+			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+			RequestedByRef: privacy.SubjectRef(tenantA, "privacy-admin"),
+			Reason:         "verified erasure", ErasedAt: time.Now().UTC(),
+		},
+		OperationID:        "sha256:" + strings.Repeat("a", 64),
+		RequestBinding:     strings.Repeat("b", 64),
+		EventID:            "sha256:" + strings.Repeat("c", 64),
+		RewriteOperationID: "qa-member-role-rewrite",
+		TargetGeneration:   "qa-member-role-generation",
+		EventActor:         &events.Actor{Subject: privacy.Placeholder(privacy.SubjectRef(tenantA, "privacy-admin"))},
+	}
+	prepared, err := st.PreparePrivacySubjectErasure(ctx, tenantA, subject, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Counts["tenant_member_upsert_commands"] != 1 ||
+		!slices.Contains(prepared.RecoveryFences, store.PrivacyRecoveryFenceDisposition{
+			Kind:    store.PrivacyRecoveryFenceTenantMemberUpsert,
+			EventID: eventID, Disposition: store.PrivacyRecoveryFencePseudonymized,
+		}) {
+		t.Fatalf("member role rewrite evidence missing: %+v", prepared)
+	}
+	pending, err := st.ListPendingTenantMemberUpsertCommands(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Event.ID != eventID ||
+		pending[0].SubjectRef != privacy.SubjectRef(tenantA, subject) ||
+		pending[0].Event.Actor == nil ||
+		pending[0].Event.Actor.Subject != privacy.Placeholder(privacy.SubjectRef(tenantA, subject)) ||
+		bytes.Contains(pending[0].Event.Data, []byte(subject)) {
+		t.Fatalf("pending member role retained erased subject or lost recovery key: %+v", pending)
+	}
+	if _, _, _, fenced, err := st.MemberSessionAuthority(ctx, tenantA, subject); err != nil || !fenced {
+		t.Fatalf("erasure lifted pending member role fence: fenced=%t err=%v", fenced, err)
+	}
+}
+
 func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFencesAtomically(t *testing.T) {
 	ctx := context.Background()
 	st := newOperationApprovalStore(t)
