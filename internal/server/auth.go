@@ -186,6 +186,7 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 		Exchange:                               oidcExchange(o, httpClient, secretSource),
 		VerifyIDToken:                          verifier.Verify,
 		VerifyOIDCLogoutToken:                  logoutVerifier.Verify,
+		ReleaseOIDCLogoutJTI:                   logoutVerifier.Replay.Release,
 		ResolveTenant:                          mapper.ResolveTenant,
 		Sessions:                               sessions,
 		LoginRedirect:                          o.LoginRedirect,

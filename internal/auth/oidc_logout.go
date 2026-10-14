@@ -102,3 +102,11 @@ func (c *LogoutReplayCache) Accept(jti string, expiresAt, now time.Time) bool {
 	c.seen[jti] = expiresAt
 	return true
 }
+
+// Release makes a verified assertion retryable only when its authority removal
+// failed. The handler must call it before returning a retryable store error.
+func (c *LogoutReplayCache) Release(jti string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.seen, jti)
+}

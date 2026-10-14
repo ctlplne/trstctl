@@ -663,6 +663,7 @@ func TestOIDCBackChannelLogoutRevokesSubjectSessions(t *testing.T) {
 		Replay: auth.NewLogoutReplayCache(), Now: func() time.Time { return now },
 	}
 	cfg.VerifyOIDCLogoutToken = verifier.Verify
+	cfg.ReleaseOIDCLogoutJTI = verifier.Replay.Release
 	h := api.New(nil, nil, nil, api.WithAuth(cfg))
 	user1a, _ := sessions.Issue("user-1", testTenant, "u1@example.test", []string{"viewer"})
 	user1b, _ := sessions.Issue("user-1", testTenant, "u1@example.test", []string{"viewer"})
@@ -703,6 +704,7 @@ func TestOIDCBackChannelLogoutRejectsReplayAndForgery(t *testing.T) {
 		Replay: auth.NewLogoutReplayCache(), Now: func() time.Time { return now },
 	}
 	cfg.VerifyOIDCLogoutToken = verifier.Verify
+	cfg.ReleaseOIDCLogoutJTI = verifier.Replay.Release
 	h := api.New(nil, nil, nil, api.WithAuth(cfg))
 	raw := logoutToken(t, sk, map[string]any{
 		"iss": testOIDCIssuer, "aud": "trstctl-ui", "sub": "user-1", "jti": "logout-replay",
@@ -728,6 +730,51 @@ func TestOIDCBackChannelLogoutRejectsReplayAndForgery(t *testing.T) {
 	h.ServeHTTP(rec, logoutRequest(forged))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("forged back-channel logout = %d, want 401", rec.Code)
+	}
+}
+
+func TestOIDCBackChannelLogoutStoreFailureKeepsExactAssertionRetryable(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	sk, err := jose.GenerateRSASigningKey("idp-bcl-fault")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &failingLogoutSessionStore{SessionStore: auth.NewMemorySessionStore(), failSubjectRevoke: true}
+	sessions := auth.NewSessionIssuerWithStore([]byte("test-secret-0123456789abcdef0123"), time.Hour, time.Hour, store)
+	cfg, _ := authConfig()
+	cfg.Sessions = sessions
+	verifier := auth.OIDCLogoutVerifier{
+		Issuer: testOIDCIssuer, ClientID: "trstctl-ui", Keys: sk.JWKS(),
+		Replay: auth.NewLogoutReplayCache(), Now: func() time.Time { return now },
+	}
+	cfg.VerifyOIDCLogoutToken = verifier.Verify
+	cfg.ReleaseOIDCLogoutJTI = verifier.Replay.Release
+	h := api.New(nil, nil, nil, api.WithAuth(cfg))
+	cookie, err := sessions.Issue("user-1", testTenant, "u@example.test", []string{"viewer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := logoutToken(t, sk, map[string]any{
+		"iss": testOIDCIssuer, "aud": "trstctl-ui", "sub": "user-1", "jti": "logout-retry-after-store-fault",
+		"iat": now.Unix(), "exp": now.Add(time.Minute).Unix(),
+		"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}},
+	})
+	first := httptest.NewRecorder()
+	h.ServeHTTP(first, logoutRequest(raw))
+	if first.Code != http.StatusServiceUnavailable {
+		t.Fatalf("failed back-channel logout = %d, want retryable 503", first.Code)
+	}
+	if _, err := sessions.Verify(cookie); err != nil {
+		t.Fatalf("store fault unexpectedly revoked session: %v", err)
+	}
+	store.failSubjectRevoke = false
+	second := httptest.NewRecorder()
+	h.ServeHTTP(second, logoutRequest(raw))
+	if second.Code != http.StatusOK {
+		t.Fatalf("exact signed-token retry = %d, want 200", second.Code)
+	}
+	if _, err := sessions.Verify(cookie); !errors.Is(err, auth.ErrSessionRevoked) {
+		t.Fatalf("successful retry left session usable: %v", err)
 	}
 }
 
@@ -786,8 +833,9 @@ func TestAuthLogoutClearsSession(t *testing.T) {
 
 type failingLogoutSessionStore struct {
 	auth.SessionStore
-	failGet    bool
-	failRevoke bool
+	failGet           bool
+	failRevoke        bool
+	failSubjectRevoke bool
 }
 
 func (s *failingLogoutSessionStore) Get(ctx context.Context, tenantID, id string) (auth.SessionRecord, error) {
@@ -802,6 +850,13 @@ func (s *failingLogoutSessionStore) Revoke(ctx context.Context, tenantID, id str
 		return errors.New("injected session revoke outage")
 	}
 	return s.SessionStore.Revoke(ctx, tenantID, id, at)
+}
+
+func (s *failingLogoutSessionStore) RevokeSubject(ctx context.Context, tenantID, subject string, at time.Time) error {
+	if s.failSubjectRevoke {
+		return errors.New("injected subject-session revoke outage")
+	}
+	return s.SessionStore.RevokeSubject(ctx, tenantID, subject, at)
 }
 
 func TestAuthLogoutStoreFailurePreservesRetryableCookie(t *testing.T) {

@@ -114,6 +114,9 @@ type AuthConfig struct {
 	// VerifyOIDCLogoutToken validates an OIDC Back-Channel Logout logout_token and
 	// enforces JTI replay protection.
 	VerifyOIDCLogoutToken func(raw string) (auth.LogoutTokenClaims, error)
+	// ReleaseOIDCLogoutJTI returns a verified JTI to the replay fence when the
+	// session-store authority removal fails. It must be paired with the verifier.
+	ReleaseOIDCLogoutJTI func(jti string)
 
 	SAMLEnabled bool
 	// SAMLLoginRedirect creates an SP-initiated AuthnRequest redirect URL and returns
@@ -749,7 +752,8 @@ func webLocaleForLanguageTag(tag string) string {
 }
 
 func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) {
-	if a.auth == nil || a.auth.VerifyOIDCLogoutToken == nil || a.auth.Sessions == nil {
+	if a.auth == nil || a.auth.VerifyOIDCLogoutToken == nil ||
+		a.auth.ReleaseOIDCLogoutJTI == nil || a.auth.Sessions == nil {
 		a.writeError(w, errStatus(http.StatusNotFound, "OIDC back-channel logout is not configured"))
 		return
 	}
@@ -777,10 +781,18 @@ func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) 
 	}
 	for _, tenantID := range a.configuredAuthTenants() {
 		if claims.SID != "" {
-			_ = a.auth.Sessions.RevokeContext(r.Context(), tenantID, claims.SID)
+			if err := a.auth.Sessions.RevokeContext(r.Context(), tenantID, claims.SID); err != nil {
+				a.auth.ReleaseOIDCLogoutJTI(claims.JTI)
+				a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
+				return
+			}
 		}
 		if claims.Subject != "" {
-			_ = a.auth.Sessions.RevokeSubjectContext(r.Context(), tenantID, claims.Subject)
+			if err := a.auth.Sessions.RevokeSubjectContext(r.Context(), tenantID, claims.Subject); err != nil {
+				a.auth.ReleaseOIDCLogoutJTI(claims.JTI)
+				a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC logout revocation is not confirmed; retry the assertion"))
+				return
+			}
 		}
 	}
 	w.WriteHeader(http.StatusOK)
