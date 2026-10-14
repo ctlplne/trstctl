@@ -27,7 +27,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -311,6 +310,15 @@ func (h *caHierarchyService) GetCeremony(ctx context.Context, tenantID, id strin
 	if err != nil {
 		return api.CAKeyCeremony{}, err
 	}
+	if c.Status == "pending" {
+		status, err := h.store.CACeremonyCancelCommandStatus(ctx, tenantID, id)
+		if err != nil {
+			return api.CAKeyCeremony{}, err
+		}
+		if status != "" {
+			c.Status = "cancellation_pending"
+		}
+	}
 	return ceremonyResponse(c), nil
 }
 
@@ -322,84 +330,43 @@ func (h *caHierarchyService) ApproveCeremony(ctx context.Context, tenantID, id s
 	if custodian == "" {
 		return api.CAKeyCeremony{}, store.ErrAnonymousApproval
 	}
-	current, err := h.store.GetKeyCeremony(ctx, tenantID, id)
-	if err != nil {
-		return api.CAKeyCeremony{}, err
-	}
-	if current.Status != "pending" {
-		return api.CAKeyCeremony{}, store.ErrKeyCeremonyNotPending
-	}
-	if current.Opener != "" && current.Opener == custodian {
-		return api.CAKeyCeremony{}, store.ErrSelfApproval
-	}
-	evidenced, err := h.store.KeyCeremonyApprovalEvidenced(ctx, tenantID, id, custodian)
-	if err != nil {
-		return api.CAKeyCeremony{}, err
-	}
-	if evidenced {
-		return ceremonyResponse(current), nil
-	}
-	ev, err := h.appendEvent(ctx, tenantID, projections.EventCACeremonyApproved, projections.CACeremonyApproved{
-		CeremonyID: id,
-		Custodian:  custodian,
-		Approvals:  current.Approvals + 1,
-	})
-	if err != nil {
-		return api.CAKeyCeremony{}, err
-	}
-	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
-		return api.CAKeyCeremony{}, err
-	}
-	return h.GetCeremony(ctx, tenantID, id)
-}
-
-func (h *caHierarchyService) CancelCeremony(ctx context.Context, tenantID, id, reason string) (api.CAKeyCeremony, error) {
-	actor, ok := events.ActorFromContext(ctx)
-	if !ok || strings.TrimSpace(actor.Subject) == "" {
-		return api.CAKeyCeremony{}, api.ErrCAHierarchyConflict
-	}
-	reason = strings.TrimSpace(reason)
-	if reason == "" || len(reason) > 512 {
-		return api.CAKeyCeremony{}, api.ErrCAHierarchyInvalid
-	}
-	var appended events.Event
 	err := h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Hold the same ceremony row lock as the cancellation claim through the
+		// append. A late approval cannot slip between the fence check and source.
 		if err := h.store.LockPendingKeyCeremonyTx(ctx, tx, tenantID, id); err != nil {
 			return err
 		}
-		ev, err := h.appendEvent(ctx, tenantID, projections.EventCACeremonyCancelled, projections.CACeremonyCancelled{
-			CeremonyID: id, Actor: actor.Subject, Reason: reason,
+		var opener string
+		var approvals int
+		var evidenced bool
+		if err := tx.QueryRow(ctx, `SELECT opener, (SELECT count(*) FROM ca_ceremony_approvals a
+			WHERE a.tenant_id=c.tenant_id AND a.ceremony_id=c.id AND a.approval_event_id IS NOT NULL)
+			FROM ca_key_ceremonies c WHERE tenant_id=$1 AND id=$2`, tenantID, id).Scan(&opener, &approvals); err != nil {
+			return err
+		}
+		if opener != "" && opener == custodian {
+			return store.ErrSelfApproval
+		}
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM ca_ceremony_approvals
+			WHERE tenant_id=$1 AND ceremony_id=$2 AND custodian=$3 AND approval_event_id IS NOT NULL)`,
+			tenantID, id, custodian).Scan(&evidenced); err != nil {
+			return err
+		}
+		if evidenced {
+			return nil
+		}
+		ev, err := h.appendEvent(ctx, tenantID, projections.EventCACeremonyApproved, projections.CACeremonyApproved{
+			CeremonyID: id, Custodian: custodian, Approvals: approvals + 1,
 		})
 		if err != nil {
 			return err
 		}
-		appended = ev
 		return projections.New(h.store).ApplyTx(ctx, tx, ev)
 	})
-	// Once the immutable cancellation event exists, a client disconnect cannot
-	// turn a successful mutation into a false rollback response. Finish its
-	// projection and exact readback with a bounded detached context.
-	readCtx := ctx
-	if appended.ID != "" {
-		var cancel context.CancelFunc
-		readCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
-		defer cancel()
-	}
 	if err != nil {
-		if appended.ID == "" {
-			return api.CAKeyCeremony{}, caHierarchyConflict(err)
-		}
-		// The terminal event is already durable even if SQL rolled back. Confirm
-		// the exact projection before reporting success; otherwise fence retry.
-		if applyErr := projections.New(h.store).Apply(readCtx, appended); applyErr != nil {
-			return api.CAKeyCeremony{}, fmt.Errorf("%w: ceremony cancellation event %s appended but projection unresolved: %v", orchestrator.ErrEffectIndeterminate, appended.ID, applyErr)
-		}
+		return api.CAKeyCeremony{}, caHierarchyConflict(err)
 	}
-	closed, err := h.store.GetKeyCeremony(readCtx, tenantID, id)
-	if err != nil || closed.Status != "cancelled" || closed.ClosedBy != actor.Subject || closed.CloseReason != reason {
-		return api.CAKeyCeremony{}, fmt.Errorf("%w: ceremony cancellation event %s lacks exact terminal readback: %v", orchestrator.ErrEffectIndeterminate, appended.ID, err)
-	}
-	return ceremonyResponse(closed), nil
+	return h.GetCeremony(ctx, tenantID, id)
 }
 
 func (h *caHierarchyService) ListAuthorities(ctx context.Context, tenantID string) ([]api.CAAuthority, error) {
@@ -1916,6 +1883,7 @@ func ceremonyResponse(c store.KeyCeremony) api.CAKeyCeremony {
 func caHierarchyConflict(err error) error {
 	switch {
 	case errors.Is(err, store.ErrKeyCeremonyQuorumNotMet),
+		errors.Is(err, store.ErrIdempotencyConflict),
 		errors.Is(err, store.ErrKeyCeremonyNotPending),
 		errors.Is(err, store.ErrKeyCeremonyPurposeMismatch),
 		errors.Is(err, store.ErrSelfApproval),

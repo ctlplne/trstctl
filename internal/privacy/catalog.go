@@ -82,6 +82,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "access control",
 		},
 		{
+			ID:             "ca_ceremony_cancel_commands.pending-actor-reason",
+			Location:       "ca_ceremony_cancel_commands.event_actor/event_payload",
+			Category:       "transient CA ceremony cancellation actor and reason",
+			Purpose:        "recover the exact first cancellation after an ambiguous event append or projection failure",
+			RetentionClass: "transient:until-ca-cancellation-projection",
+			Erasure:        "privacy.subject.erased pseudonymizes pending command material; projection removes actor, reason and payload in the same transaction",
+			Owner:          "CA governance",
+		},
+		{
 			ID:             "machine_auth_method_commands.pending-actor",
 			Location:       "machine_auth_method_commands.event_actor/event_payload",
 			Category:       "transient machine-auth method operator subject",

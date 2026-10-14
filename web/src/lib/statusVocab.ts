@@ -66,6 +66,13 @@ export const lifecycleStatus: Record<string, StatusDescriptor> = {
     tone: "neutral",
     order: 8,
   },
+  cancellation_pending: {
+    get label() {
+      return translateNow("lifecycle.status.cancellationPending");
+    },
+    tone: "warning",
+    order: 8,
+  },
 };
 
 export const certificateStatus: Record<string, StatusDescriptor> = {

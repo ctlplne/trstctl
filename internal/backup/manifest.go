@@ -40,6 +40,8 @@ var RecoveredFromPostgresBackup = []string{
 	// First-writer revocation commands and terminal denial tombstones must
 	// survive restores independently of the token read model and event log.
 	"api_token_revocation_commands",
+	// A pending CA cancellation denies signing before its event projection.
+	"ca_ceremony_cancel_commands",
 	// A pending agent removal denies old mTLS authority before its source event
 	// reaches the read model; restore its exact first-writer command.
 	"agent_removal_commands",

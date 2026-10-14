@@ -1035,6 +1035,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	}
 	policies[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = identityTransitionV5
 	policies[privacyEventPolicyKey{EventType: EventIdentityRevoked, Version: LifecycleKeyCompromiseEventSchemaVersion}] = identityTransitionV8
+	addCACeremonyPrivacyPolicies(policies)
 	return policies
 }
 
@@ -1701,6 +1702,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	for _, eventType := range []string{EventIdentityIssued, EventIdentityDeployed, EventIdentityRenewed, EventIdentityUndeployed} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV7]()
 	}
+	addCACeremonyPrivacyShapes(shapes)
 	return shapes
 }
 
@@ -1762,9 +1764,6 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventCertificateSuperseded, 1}:                                             privacyPayloadShape[CertificateSuperseded](),
 		{EventCAIssuedCertificate, 1}:                                               privacyPayloadShape[privacyCAIssuedSerialV1](),
 		{EventCACertificateRevoked, 1}:                                              privacyPayloadShape[CACertificateRevoked](),
-		{EventCACeremonyStarted, 1}:                                                 privacyPayloadShape[CACeremonyStarted](),
-		{EventCACeremonyApproved, 1}:                                                privacyPayloadShape[CACeremonyApproved](),
-		{EventCACeremonyCancelled, 1}:                                               privacyPayloadShape[CACeremonyCancelled](),
 		{EventCARootCreated, 1}: events.PrivacyPayloadShapeOneOf(
 			privacyPayloadShape[privacyLegacyCARootCreated](),
 			privacyPayloadShape[privacyLegacyCARootCreatedWithSigner](),

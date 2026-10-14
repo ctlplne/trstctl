@@ -277,6 +277,73 @@ func TestPreparePrivacySubjectErasureRewritesPendingAPITokenRevocation(t *testin
 	}
 }
 
+func TestPreparePrivacySubjectErasureRewritesPendingCACeremonyCancel(t *testing.T) {
+	ctx := context.Background()
+	st := newOperationApprovalStore(t)
+	const (
+		subject    = "qa-ca-cancel-erasure-subject"
+		ceremonyID = "b10105b8-32b8-4f13-a7c4-608448626520"
+		cancelID   = "b10105b8-32b8-4f13-a7c4-608448626521"
+	)
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return st.ApplyKeyCeremonyStartedTx(ctx, tx, store.KeyCeremony{
+			ID: ceremonyID, TenantID: tenantA, Purpose: "qa-privacy-ca-cancel",
+			Opener: "qa-opener", Threshold: 1, Status: "pending", CreatedAt: time.Now().UTC(),
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(projections.CACeremonyCancelled{
+		CeremonyID: ceremonyID, Actor: subject, Reason: "requested by " + subject,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, created, err := st.ClaimCACeremonyCancelCommand(ctx, store.CACeremonyCancelCommand{
+		TenantID: tenantA, CeremonyID: ceremonyID,
+		Event: events.Event{ID: cancelID, TenantID: tenantA, Type: projections.EventCACeremonyCancelled,
+			SchemaVersion: events.DefaultSchemaVersion, Time: time.Now().UTC().Truncate(time.Microsecond),
+			Data: payload, Actor: &events.Actor{Subject: subject}},
+	})
+	if err != nil || !created {
+		t.Fatalf("claim CA cancel: created=%t err=%v", created, err)
+	}
+	candidate := store.PrivacySubjectErasurePreparation{
+		PrivacySubjectErasure: store.PrivacySubjectErasure{
+			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+			RequestedByRef: privacy.SubjectRef(tenantA, "privacy-admin"),
+			Reason:         "verified erasure", ErasedAt: time.Now().UTC(),
+		},
+		OperationID:        "sha256:" + strings.Repeat("1", 64),
+		RequestBinding:     strings.Repeat("2", 64),
+		EventID:            "sha256:" + strings.Repeat("3", 64),
+		RewriteOperationID: "qa-ca-cancel-rewrite",
+		TargetGeneration:   "qa-ca-cancel-generation",
+		EventActor:         &events.Actor{Subject: privacy.Placeholder(privacy.SubjectRef(tenantA, "privacy-admin"))},
+	}
+	prepared, err := st.PreparePrivacySubjectErasure(ctx, tenantA, subject, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Counts["ca_ceremony_cancel_commands"] != 1 ||
+		!slices.Contains(prepared.RecoveryFences, store.PrivacyRecoveryFenceDisposition{
+			Kind: store.PrivacyRecoveryFenceCACeremonyCancel, EventID: cancelID,
+			Disposition: store.PrivacyRecoveryFencePseudonymized,
+		}) {
+		t.Fatalf("CA cancel rewrite evidence missing: %+v", prepared)
+	}
+	pending, err := st.ListPendingCACeremonyCancels(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Event.ID != cancelID ||
+		pending[0].Event.Actor == nil ||
+		pending[0].Event.Actor.Subject != privacy.Placeholder(privacy.SubjectRef(tenantA, subject)) ||
+		bytes.Contains(pending[0].Event.Data, []byte(subject)) {
+		t.Fatalf("pending CA cancel retained erased subject: %+v", pending)
+	}
+}
+
 func TestPreparePrivacySubjectErasureRewritesPendingAgentRemovals(t *testing.T) {
 	ctx := context.Background()
 	st := newOperationApprovalStore(t)

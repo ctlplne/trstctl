@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/events"
 )
 
 // This file holds the private-CA hierarchy repositories (F48, S4.15): the CA
@@ -525,11 +527,18 @@ func (s *Store) ReserveKeyCeremonyApproval(ctx context.Context, tenantID, ceremo
 		// Separation of duties: a ceremony's opener cannot also approve it.
 		var opener, status string
 		if err := tx.QueryRow(ctx,
-			`SELECT opener, status FROM ca_key_ceremonies WHERE tenant_id = $1 AND id = $2`,
+			`SELECT opener, status FROM ca_key_ceremonies WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
 			tenantID, ceremonyID).Scan(&opener, &status); err != nil {
 			return err
 		}
 		if status != "pending" {
+			return ErrKeyCeremonyNotPending
+		}
+		fenced, err := s.CACeremonyCancelCommandExistsTx(ctx, tx, tenantID, ceremonyID)
+		if err != nil {
+			return err
+		}
+		if fenced {
 			return ErrKeyCeremonyNotPending
 		}
 		if opener != "" && opener == custodian {
@@ -567,6 +576,9 @@ func (s *Store) AttachKeyCeremonyApprovalEvidence(ctx context.Context, tenantID,
 	}
 	var count int
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := s.LockPendingKeyCeremonyTx(ctx, tx, tenantID, ceremonyID); err != nil {
+			return err
+		}
 		var attachedID string
 		if err := tx.QueryRow(ctx,
 			`UPDATE ca_ceremony_approvals
@@ -618,17 +630,30 @@ func (s *Store) LockPendingKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantI
 	if status != "pending" {
 		return ErrKeyCeremonyNotPending
 	}
+	fenced, err := s.CACeremonyCancelCommandExistsTx(ctx, tx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if fenced {
+		return ErrKeyCeremonyNotPending
+	}
 	return nil
 }
 
 // ApplyKeyCeremonyCancelledTx projects one immutable terminal event. A replay
 // of that exact event is idempotent; another terminal event cannot overwrite it.
-func (s *Store) ApplyKeyCeremonyCancelledTx(ctx context.Context, tx pgx.Tx, tenantID, id, actor, reason, eventID string, closedAt time.Time) error {
+func (s *Store) ApplyKeyCeremonyCancelledTx(ctx context.Context, tx pgx.Tx, tenantID, id, actor, reason string, event events.Event) error {
+	eventID, closedAt := event.ID, event.Time
 	if id == "" || actor == "" || reason == "" || eventID == "" {
 		return errors.New("store: cancelled ceremony requires id, actor, reason and event id")
 	}
 	if closedAt.IsZero() {
 		return errors.New("store: cancelled ceremony requires event time")
+	}
+	// Lock the first-writer command before the ceremony row, matching claim and
+	// recovery. The whole transaction rolls back if the read-model update fails.
+	if err := s.CompleteCACeremonyCancelCommandTx(ctx, tx, tenantID, id, event); err != nil {
+		return err
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE ca_key_ceremonies
@@ -687,7 +712,9 @@ func (s *Store) CompleteKeyCeremony(ctx context.Context, tenantID, id string) er
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
 			`UPDATE ca_key_ceremonies SET status = 'completed', completed_at = now()
-			   WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
+			   WHERE tenant_id = $1 AND id = $2 AND status = 'pending'
+			     AND NOT EXISTS (SELECT 1 FROM ca_ceremony_cancel_commands f
+			       WHERE f.tenant_id = ca_key_ceremonies.tenant_id AND f.ceremony_id = ca_key_ceremonies.id)`,
 			tenantID, id)
 		if err != nil {
 			return err
@@ -764,6 +791,13 @@ func (s *Store) keyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx
 		return c, nil, err
 	}
 	if c.Status != "pending" {
+		return c, nil, ErrKeyCeremonyNotPending
+	}
+	fenced, err := s.CACeremonyCancelCommandExistsTx(ctx, tx, tenantID, id)
+	if err != nil {
+		return c, nil, err
+	}
+	if fenced {
 		return c, nil, ErrKeyCeremonyNotPending
 	}
 	if c.Purpose != expectedPurpose {

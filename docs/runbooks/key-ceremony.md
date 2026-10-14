@@ -138,6 +138,11 @@ reason. The API and CLI use `POST /api/v1/ca/ceremonies/{id}/cancel` with
 result is terminal `cancelled`, preserves all approvals, records the actor and
 reason in `ca.ceremony.cancelled`, and cannot be approved or consumed afterward.
 Read back the exact ceremony and audit event before opening a replacement.
+If event publication or SQL projection is interrupted after the cancellation
+fence commits, the ceremony reads `cancellation_pending`. It cannot accept an
+approval or sign during that state. The server retries the exact cancellation
+event on startup and in its recovery worker; read back `cancelled` before treating
+the close as fully recorded. A retry with a different reason is refused.
 
 Leaf issuance (once an intermediate exists) is served at
 `POST /api/v1/ca/authorities/{id}/issue` (CSR PEM, validity, a `certs:issue`

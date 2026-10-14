@@ -4860,7 +4860,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyKeyCeremonyCancelledTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Actor, pl.Reason, e.ID, e.Time)
+		return p.store.ApplyKeyCeremonyCancelledTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Actor, pl.Reason, e)
 	case EventCARootCreated, EventCAAuthorityImported, EventCAIntermediateCreated:
 		if schemaVersionOf(e) == 1 {
 			// Legacy v1 create/import events were audit-only breadcrumbs emitted

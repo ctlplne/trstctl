@@ -28380,6 +28380,10 @@ export const messages = {
     description: "Honest lifecycle cancellation limit.",
   },
   "lifecycle.status.cancelled": { defaultMessage: "Cancelled", description: "Queued lifecycle work stopped by identity revocation or retirement." },
+  "lifecycle.status.cancellationPending": {
+    defaultMessage: "Cancellation pending",
+    description: "CA ceremony is fenced from approval and signing while its exact cancellation event is recovering.",
+  },
   "identities.automation.pendingHeading": { defaultMessage: "Renewals to review or unblock", description: "Heading above due or blocked renewals." },
   "identities.automation.expires": { defaultMessage: " · expires {time}", description: "Certificate expiry in lifecycle plan." },
   "identities.automation.startAction": { defaultMessage: "Review renewal now", description: "Open effect-free review for a due renewal." },
