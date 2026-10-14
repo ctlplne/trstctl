@@ -901,6 +901,13 @@ review-first journey:
    configuration/fingerprint change discards it and requires a fresh review. A
    disabled method shows blockers and never accepts a credential.
 
+   For a machine session with an issued bearer, revocation commits a tenant- and
+   session-bound denial before publishing its revocation event. If event delivery
+   or projection is interrupted, the bearer remains refused while the exact
+   command is recovered. Retry with the same idempotency key and read the issued
+   session ledger to confirm completion. Older ledger-only sessions have no
+   linked bearer; they remain revocable as historical records.
+
 Headless users get the same contract. Keep credential JSON in a permission-restricted
 file or provide it through a protected pipe; do not put credentials in shell history:
 

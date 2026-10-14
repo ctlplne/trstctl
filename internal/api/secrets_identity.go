@@ -816,7 +816,7 @@ func machineSessionLedgerDisabledProblem() *problem.Problem {
 // machineSessionLedgerReady reports whether the event-sourced ledger can be
 // served: it needs both the event log (append) and the store (projection).
 func (a *API) machineSessionLedgerReady() bool {
-	return a.secrets != nil && a.store != nil && a.secrets.be.Store == a.store && a.log != nil
+	return a.secrets != nil && a.store != nil && a.secrets.be.Store == a.store && a.log != nil && a.orch != nil
 }
 
 // recordMachineSession appends secrets.session.started and atomically projects
@@ -883,7 +883,9 @@ func (a *API) listMachineSessions(w http.ResponseWriter, r *http.Request) {
 
 // revokeMachineSession serves POST /api/v1/secrets/sessions/{id}/revoke
 // (C-S3): an idempotent, event-sourced revocation of both the ledger row and
-// the linked API bearer verifier.
+// the linked API bearer verifier. Current sessions use the API-token revocation
+// command so bearer admission is denied before the event append. Legacy
+// ledger-only sessions have no bearer and keep their original event type.
 //
 //trstctl:mutation
 func (a *API) revokeMachineSession(w http.ResponseWriter, r *http.Request) {
@@ -897,24 +899,42 @@ func (a *API) revokeMachineSession(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		if id == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "session id is required")
 		}
-		if _, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id); err != nil {
+		session, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
+		if store.IsNotFound(err) {
 			return 0, nil, errStatus(http.StatusNotFound, "machine session not found")
 		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		payload, err := json.Marshal(projections.MachineSessionRevoked{ID: id, RevokedBy: principal.Subject, RevokedAt: time.Now().UTC()})
 		if err != nil {
 			return 0, nil, err
 		}
-		ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionRevoked, TenantID: tenantID, Data: payload})
-		if err != nil {
-			return 0, nil, err
+		token, tokenErr := a.secrets.be.Store.GetAPIToken(ctx, tenantID, id)
+		if tokenErr != nil && !store.IsNotFound(tokenErr) {
+			return 0, nil, tokenErr
 		}
-		if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
-			return 0, nil, err
+		if tokenErr == nil && token.RevokedAt == nil {
+			// One shared first-writer command denies the bearer before NATS
+			// publication. Its projection also closes the machine-session ledger.
+			if err := a.orch.RevokeAPIToken(ctx, tenantID, id, "machine session revoked"); err != nil {
+				return 0, nil, err
+			}
+		} else if session.Status != store.MachineSessionStatusRevoked {
+			// Pre-bearer ledger rows, or a historically revoked token whose
+			// ledger was left active, have no usable authority to fence.
+			principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+			payload, err := json.Marshal(projections.MachineSessionRevoked{ID: id, RevokedBy: principal.Subject, RevokedAt: time.Now().UTC()})
+			if err != nil {
+				return 0, nil, err
+			}
+			ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionRevoked, TenantID: tenantID, Data: payload})
+			if err != nil {
+				return 0, nil, err
+			}
+			if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
+				return 0, nil, err
+			}
 		}
 		updated, err := a.secrets.be.Store.GetMachineSession(ctx, tenantID, id)
 		if err != nil {

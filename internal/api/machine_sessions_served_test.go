@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -76,6 +77,8 @@ type machineSessionHarness struct {
 	handler http.Handler
 	token   authmethod.TokenMethod
 	loginID int
+	store   *store.Store
+	log     *events.Log
 }
 
 func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
@@ -125,9 +128,245 @@ func newMachineSessionHarnessWithScopes(t *testing.T, grantedScopes []string) *m
 	)
 	return &machineSessionHarness{
 		handler: handler,
+		store:   st,
+		log:     log,
 		token: authmethod.TokenMethod{
 			Secret: authSecret, TenantID: msTenantA, DefaultScopes: append([]string(nil), grantedScopes...),
 		},
+	}
+}
+
+// The event log may retain a revocation even if PostgreSQL refuses its
+// projection. Admission must read an independently committed denial before
+// the event append, so the already-issued bearer cannot work in that gap.
+func TestMachineSessionRevokeRefusesBearerDuringProjectionGap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-session projection fault needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	status, login := h.login(t, "gap-workload")
+	if status != http.StatusOK {
+		t.Fatalf("machine login status=%d", status)
+	}
+	id, _ := login["session_id"].(string)
+	bearer, _ := login["token"].(string)
+	if id == "" || bearer == "" {
+		t.Fatal("machine login omitted session ID or one-time bearer")
+	}
+	if status, body := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", bearer); status != http.StatusOK {
+		t.Fatalf("baseline bearer status=%d body=%s", status, body)
+	}
+
+	const trigger = "qa_machine_session_revoke_projection_fail"
+	const function = "qa_machine_session_revoke_projection_fail_fn"
+	clearFault := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := h.store.SystemPool().Exec(ctx,
+			"DROP TRIGGER IF EXISTS "+trigger+" ON api_tokens; DROP FUNCTION IF EXISTS "+function+"()"); err != nil {
+			t.Errorf("clear owned projection fault: %v", err)
+		}
+	}
+	t.Cleanup(clearFault)
+	_, err := h.store.SystemPool().Exec(t.Context(), fmt.Sprintf(`
+		CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN
+			IF NEW.tenant_id = '%s'::uuid AND NEW.id = '%s'::uuid AND NEW.revoked_at IS NOT NULL THEN
+				RAISE EXCEPTION 'owned machine-session revocation projection fault';
+			END IF;
+			RETURN NEW;
+		END $$;
+		CREATE TRIGGER %s BEFORE UPDATE ON api_tokens
+		FOR EACH ROW EXECUTE FUNCTION %s()`, function, msTenantA, id, trigger, function))
+	if err != nil {
+		t.Fatalf("install owned projection fault: %v", err)
+	}
+
+	revokePath := "/api/v1/secrets/sessions/" + id + "/revoke"
+	status, _ = h.do(t, http.MethodPost, revokePath, msTenantA, "machine-gap-revoke-1", nil)
+	if status != http.StatusInternalServerError {
+		t.Fatalf("injected projection fault returned %d, want retryable 500", status)
+	}
+	revocations := 0
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID != msTenantA ||
+			(event.Type != projections.EventMachineSessionRevoked && event.Type != projections.EventAPITokenRevoked) {
+			return nil
+		}
+		var payload struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(event.Data, &payload); err != nil {
+			return err
+		}
+		if payload.ID == id {
+			revocations++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if revocations != 1 {
+		t.Fatalf("retained exact revocations=%d, want 1", revocations)
+	}
+	staleSession, err := h.store.GetMachineSession(t.Context(), msTenantA, id)
+	if err != nil || staleSession.Status != store.MachineSessionStatusActive {
+		t.Fatalf("injected fault did not leave session SQL stale: status=%s err=%v", staleSession.Status, err)
+	}
+	staleToken, err := h.store.GetAPIToken(t.Context(), msTenantA, id)
+	if err != nil || staleToken.RevokedAt != nil {
+		t.Fatalf("injected fault did not leave token SQL stale: revoked=%v err=%v", staleToken.RevokedAt, err)
+	}
+	if status, body := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", bearer); status != http.StatusUnauthorized {
+		t.Fatalf("retained revocation admitted stale bearer: status=%d body=%s", status, body)
+	}
+
+	clearFault()
+	status, body := h.do(t, http.MethodPost, revokePath, msTenantA, "machine-gap-revoke-1", nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"revoked"`) {
+		t.Fatalf("same-key recovery status=%d body=%s", status, body)
+	}
+	revocations = 0
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID != msTenantA ||
+			(event.Type != projections.EventMachineSessionRevoked && event.Type != projections.EventAPITokenRevoked) {
+			return nil
+		}
+		var payload struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(event.Data, &payload); err != nil {
+			return err
+		}
+		if payload.ID == id {
+			revocations++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if revocations != 1 {
+		t.Fatalf("same-key recovery retained %d target revocations, want 1", revocations)
+	}
+	if err := projections.New(h.store).Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("cold read-model rebuild: %v", err)
+	}
+	if status, body := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", bearer); status != http.StatusUnauthorized {
+		t.Fatalf("cold rebuilt bearer status=%d body=%s", status, body)
+	}
+	rebuilt, err := h.store.GetMachineSession(t.Context(), msTenantA, id)
+	if err != nil || rebuilt.Status != store.MachineSessionStatusRevoked {
+		t.Fatalf("cold rebuilt session status=%s err=%v", rebuilt.Status, err)
+	}
+}
+
+// A late duplicate start projection must not turn a terminal ledger row back
+// to active after the linked bearer has been revoked.
+func TestMachineSessionStartReplayCannotResurrectRevokedLedger(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-session replay needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	status, login := h.login(t, "replay-workload")
+	if status != http.StatusOK {
+		t.Fatalf("machine login status=%d", status)
+	}
+	id, _ := login["session_id"].(string)
+	bearer, _ := login["token"].(string)
+	var start events.Event
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.Type != projections.EventMachineSessionStarted || event.TenantID != msTenantA {
+			return nil
+		}
+		var payload struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(event.Data, &payload); err != nil {
+			return err
+		}
+		if payload.ID == id {
+			start = event
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if start.ID == "" {
+		t.Fatal("no retained exact machine-session start event")
+	}
+	if status, body := h.do(t, http.MethodPost, "/api/v1/secrets/sessions/"+id+"/revoke", msTenantA, "machine-replay-revoke-1", nil); status != http.StatusOK {
+		t.Fatalf("baseline revoke status=%d body=%s", status, body)
+	}
+	if err := projections.New(h.store).Apply(t.Context(), start); err != nil {
+		t.Fatalf("late start projection: %v", err)
+	}
+	ledger, err := h.store.GetMachineSession(t.Context(), msTenantA, id)
+	if err != nil || ledger.Status != store.MachineSessionStatusRevoked || ledger.RevokedAt == nil {
+		t.Fatalf("late start reopened terminal ledger: status=%s revoked=%v err=%v", ledger.Status, ledger.RevokedAt, err)
+	}
+	if status, body := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", bearer); status != http.StatusUnauthorized {
+		t.Fatalf("late start reopened bearer status=%d body=%s", status, body)
+	}
+	var conflictingStart projections.MachineSessionStarted
+	if err := json.Unmarshal(start.Data, &conflictingStart); err != nil {
+		t.Fatal(err)
+	}
+	conflictingStart.Principal = "different-workload"
+	conflictingData, err := json.Marshal(conflictingStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflictingEvent := start
+	conflictingEvent.Data = conflictingData
+	if err := projections.New(h.store).Apply(t.Context(), conflictingEvent); err == nil {
+		t.Fatal("conflicting duplicate start silently displaced first-writer identity")
+	}
+	ledger, err = h.store.GetMachineSession(t.Context(), msTenantA, id)
+	if err != nil || ledger.Status != store.MachineSessionStatusRevoked || ledger.Principal != "replay-workload" {
+		t.Fatalf("conflicting replay changed terminal ledger: status=%s principal=%s err=%v", ledger.Status, ledger.Principal, err)
+	}
+}
+
+func TestLegacyLedgerOnlyMachineSessionStillRevokes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served legacy machine-session replay needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	now := time.Now().UTC()
+	payload, err := json.Marshal(projections.MachineSessionStarted{
+		ID: id, Principal: "legacy-workload", Method: "token",
+		Scopes: []string{"secrets:read"}, IssuedAt: now, ExpiresAt: now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, err := h.log.Append(t.Context(), events.Event{
+		Type: projections.EventMachineSessionStarted, TenantID: msTenantA, Data: payload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(h.store).Apply(t.Context(), start); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.store.GetAPIToken(t.Context(), msTenantA, id); !store.IsNotFound(err) {
+		t.Fatalf("legacy ledger-only fixture unexpectedly has a bearer: %v", err)
+	}
+	path := "/api/v1/secrets/sessions/" + id + "/revoke"
+	status, body := h.do(t, http.MethodPost, path, msTenantA, "legacy-ledger-revoke-1", nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"revoked"`) {
+		t.Fatalf("legacy ledger revoke status=%d body=%s", status, body)
+	}
+	if replayStatus, replayBody := h.do(t, http.MethodPost, path, msTenantA, "legacy-ledger-revoke-1", nil); replayStatus != status || string(replayBody) != string(body) {
+		t.Fatalf("legacy same-key replay status=%d body=%s", replayStatus, replayBody)
+	}
+	if err := projections.New(h.store).Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("legacy cold rebuild: %v", err)
+	}
+	ledger, err := h.store.GetMachineSession(t.Context(), msTenantA, id)
+	if err != nil || ledger.Status != store.MachineSessionStatusRevoked {
+		t.Fatalf("legacy cold ledger status=%s err=%v", ledger.Status, err)
 	}
 }
 

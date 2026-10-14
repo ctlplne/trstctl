@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,7 +19,8 @@ const (
 )
 
 // MachineSession is the event-sourced read-model row for one machine-login
-// session (projection of secrets.session.started/.revoked). Metadata only:
+// session (projection of secrets.session.started, secrets.session.revoked, and
+// api_token.revoked for sessions with a linked bearer). Metadata only:
 // no credential material is ever projected (AN-8).
 type MachineSession struct {
 	TenantID  string
@@ -33,25 +35,37 @@ type MachineSession struct {
 	RevokedBy string
 }
 
-// ApplyMachineSessionStartedTx projects secrets.session.started. Replays are
-// idempotent on (tenant_id, id).
+// ApplyMachineSessionStartedTx projects secrets.session.started. The first
+// event owns the row: a duplicate replay cannot reopen a revoked session or
+// replace its principal, method, scopes, or expiry.
 func (s *Store) ApplyMachineSessionStartedTx(ctx context.Context, tx pgx.Tx, m MachineSession) error {
 	if m.Scopes == nil {
 		m.Scopes = []string{}
 	}
-	_, err := tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO machine_sessions
 		        (tenant_id, id, principal, method, scopes, status, issued_at, expires_at, revoked_at, revoked_by)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		 ON CONFLICT (tenant_id, id) DO UPDATE
-		    SET principal = EXCLUDED.principal,
-		        method = EXCLUDED.method,
-		        scopes = EXCLUDED.scopes,
-		        status = EXCLUDED.status,
-		        issued_at = EXCLUDED.issued_at,
-		        expires_at = EXCLUDED.expires_at`,
+		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		m.TenantID, m.ID, m.Principal, m.Method, m.Scopes, m.Status, m.IssuedAt, m.ExpiresAt, m.RevokedAt, m.RevokedBy)
-	return err
+	if err != nil || tag.RowsAffected() == 1 {
+		return err
+	}
+	// An exact duplicate is harmless, including after a later revocation.
+	// A second start with the same ID but changed identity or lifetime is not
+	// a replay and must not be silently accepted as the first writer.
+	var same bool
+	if err := tx.QueryRow(ctx,
+		`SELECT principal = $3 AND method = $4 AND scopes = $5 AND
+		        issued_at = $6 AND expires_at = $7
+		   FROM machine_sessions WHERE tenant_id = $1 AND id = $2`,
+		m.TenantID, m.ID, m.Principal, m.Method, m.Scopes, m.IssuedAt, m.ExpiresAt).Scan(&same); err != nil {
+		return err
+	}
+	if !same {
+		return fmt.Errorf("store: machine session %s conflicts with its first start event", m.ID)
+	}
+	return nil
 }
 
 // ApplyMachineSessionRevokedTx projects secrets.session.revoked. Replays are
