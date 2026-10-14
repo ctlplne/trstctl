@@ -66,6 +66,11 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	if err := src.RequireLiveTenantService(ctx, tenantA); err != nil {
 		t.Fatalf("active source tenant refused: %v", err)
 	}
+	if _, err := orch.UpsertTenantMember(ctx, tenantA, store.TenantMember{
+		Subject: "full-dr-pending-offboard", Roles: []string{"viewer"}, Source: "manual",
+	}); err != nil {
+		t.Fatalf("seed projected member for pending offboard: %v", err)
+	}
 	seedRecoveredFromPostgresTables(t, src, registration.ID, registration.Sequence)
 	// This command is deliberately pending before its event append. Its token
 	// row is still active, so only the independent PostgreSQL fence can deny
@@ -83,6 +88,14 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 	if disabled, err := src.DisabledMachineAuthMethods(ctx, tenantA); err != nil || !disabled["full-dr-token"] {
 		t.Fatalf("source pending machine-auth method admitted login: disabled=%v err=%v", disabled, err)
+	}
+	srcOffboardPending, err := src.ListPendingTenantMemberOffboardCommands(ctx, tenantA, 10)
+	if err != nil || len(srcOffboardPending) != 1 ||
+		srcOffboardPending[0].Event.ID != "00000000-0000-0000-0000-00000000a022" {
+		t.Fatalf("source pending member offboard fence: rows=%+v err=%v", srcOffboardPending, err)
+	}
+	if _, err := src.LookupAPITokenByHash(ctx, "full-dr-offboard-api-token-hash"); !store.IsNotFound(err) {
+		t.Fatalf("source pending member offboard admitted bearer: %v", err)
 	}
 	assertFullDRRemoteDeliveryRetained(t, src)
 	if err := src.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
@@ -172,6 +185,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 	if disabled, err := dst.DisabledMachineAuthMethods(ctx, tenantA); err != nil || !disabled["full-dr-token"] {
 		t.Fatalf("restored pending machine-auth method admitted login: disabled=%v err=%v", disabled, err)
+	}
+	dstOffboardPending, err := dst.ListPendingTenantMemberOffboardCommands(ctx, tenantA, 10)
+	if err != nil || len(dstOffboardPending) != 1 ||
+		dstOffboardPending[0].Event.ID != srcOffboardPending[0].Event.ID ||
+		!bytes.Equal(dstOffboardPending[0].Event.Data, srcOffboardPending[0].Event.Data) {
+		t.Fatalf("restored pending member offboard fence: source=%+v destination=%+v err=%v",
+			srcOffboardPending, dstOffboardPending, err)
+	}
+	if _, err := dst.LookupAPITokenByHash(ctx, "full-dr-offboard-api-token-hash"); !store.IsNotFound(err) {
+		t.Fatalf("restored pending member offboard admitted bearer: %v", err)
 	}
 	if destination, found, err := dst.AgentJobAttemptBinding(ctx, tenantA, "b9445160-dbc6-48fa-9c13-f078943486a9", 4242, 1); err != nil || !found || destination != "connector.deploy" {
 		t.Fatalf("restored original agent recipient cannot authorize its exact completion: destination=%q found=%v err=%v", destination, found, err)
@@ -692,6 +715,7 @@ func seedRecoveredFromPostgresTables(
 			// ledger. Restore the decision evidence, not merely an empty table.
 			{`INSERT INTO provider_breakglass_grants (id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at, consented_at, consented_by, consented_at_2, consented_by_2, use_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{"full-dr-breakglass", tenantA, "full-dr-operator", "operator@example.test", "recovery drill", now.Add(-30 * time.Minute), now.Add(30 * time.Minute), now.Add(-20 * time.Minute), "approver-one", now.Add(-10 * time.Minute), "approver-two", 2}},
 			{`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{"00000000-0000-0000-0000-00000000a001", tenantA, "full-dr-api-token-hash", "ci", []string{"owners:read"}, now.Add(time.Hour)}},
+			{`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, []any{"00000000-0000-0000-0000-00000000a023", tenantA, "full-dr-offboard-api-token-hash", "full-dr-pending-offboard", privacy.SubjectRef(tenantA, "full-dr-pending-offboard"), []string{"access:read"}, now.Add(time.Hour)}},
 			// CloudTrail's shared account/Region permit is independent quota
 			// state; a restore must retain the scheduled next lookup.
 			{`INSERT INTO aws_honey_cloudtrail_slots (tenant_id, account_id, region, next_allowed_at)
@@ -880,6 +904,26 @@ func seedRecoveredFromPostgresTables(
 	}
 	if _, created, err := st.ClaimMachineAuthMethodCommand(ctx, methodCommand); err != nil || !created {
 		t.Fatalf("seed pending machine-auth disable command: created=%t err=%v", created, err)
+	}
+	// The offboard event has not been appended. The PostgreSQL command alone
+	// must deny the existing bearer and survive full DR with its exact payload.
+	offboardCommand, revokedCount, created, err := st.ClaimTenantMemberOffboardCommand(ctx,
+		tenantA, "full-dr-pending-offboard", func(count int) (events.Event, error) {
+			payload, marshalErr := json.Marshal(projections.TenantMemberOffboarded{
+				Subject: "full-dr-pending-offboard", Reason: "full DR pending command",
+				OffboardedBy: "full-dr-admin", RevokedTokenCount: count,
+			})
+			if marshalErr != nil {
+				return events.Event{}, marshalErr
+			}
+			return events.Event{
+				ID: "00000000-0000-0000-0000-00000000a022", Type: projections.EventTenantMemberOffboarded,
+				TenantID: tenantA, SchemaVersion: 1, Time: now.Truncate(time.Microsecond), Data: payload,
+			}, nil
+		})
+	if err != nil || !created || offboardCommand.Status != "pending" || revokedCount != 1 {
+		t.Fatalf("seed pending member offboard command: command=%+v count=%d created=%t err=%v",
+			offboardCommand, revokedCount, created, err)
 	}
 	// AUD-58 moved Provider workforce identities and grants into one fixed,
 	// FORCE-RLS authority partition. They are not customer-owned rows, so seed
