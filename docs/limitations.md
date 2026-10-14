@@ -1169,7 +1169,12 @@ never live in the API process. What you can do end to end against the running bi
   X.509-SVID in the isolated signer, records `certificate.recorded`, binds
   `attestation.bound`, and returns the certificate plus verified subject metadata.
   Mutations require `Idempotency-Key`, reads and issue are tenant-scoped, forged
-  proofs fail closed, and offboarded trust sources mint nothing.
+  proofs fail closed, and offboarded trust sources mint nothing. A tenant/source
+  command is recorded before a trust change reaches the event log; pending
+  changes deny old proof while exact-event recovery completes. Completed
+  commands retain a request-bound response snapshot for a lost-response retry,
+  including a retry after a newer trust change. Subject erasure removes any
+  affected response snapshot but preserves its opaque replay fence.
 - Authentication and RBAC via scoped API tokens (`Authorization: Bearer`),
   multi-tenancy with PostgreSQL row-level security, and a tamper-evident audit
   chain. A fresh boot fails closed (every route `401`s until a credential exists);

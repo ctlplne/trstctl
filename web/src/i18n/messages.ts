@@ -19874,6 +19874,14 @@ export const messages = {
     defaultMessage: "Revoked",
     description: "Status label for a revoked workload attester trust source.",
   },
+  "workloads.attestation.statusPending": {
+    defaultMessage: "Change pending; old trust denied",
+    description: "Status for an attester trust change whose durable command is waiting for event projection recovery.",
+  },
+  "workloads.attestation.refreshTrustSources": {
+    defaultMessage: "Refresh trust sources",
+    description: "Reload the effective attester trust posture after an uncertain change or recovery.",
+  },
   "workloads.attestation.statusDisabled": {
     defaultMessage: "Disabled",
     description: "Status label for a disabled workload attester trust source.",

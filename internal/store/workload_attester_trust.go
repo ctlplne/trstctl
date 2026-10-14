@@ -37,6 +37,7 @@ type WorkloadAttesterTrustSource struct {
 	RootCertsPEM        []string
 	ExpectedNonceBase64 string
 	Enabled             bool
+	AuthorityPending    bool
 	RevokedAt           *time.Time
 	RevokedReason       string
 	RotationVersion     int
@@ -234,6 +235,32 @@ func (s *Store) GetWorkloadAttesterTrustSource(ctx context.Context, tenantID, id
 	return out, err
 }
 
+// GetEffectiveWorkloadAttesterTrustSource reports the admission posture, not
+// just the potentially lagging event projection. A pending replacement denies
+// old proof until its exact source event has been projected.
+func (s *Store) GetEffectiveWorkloadAttesterTrustSource(ctx context.Context, tenantID, id string) (WorkloadAttesterTrustSource, error) {
+	var out WorkloadAttesterTrustSource
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanEffectiveWorkloadAttesterTrustSource(tx.QueryRow(ctx,
+			`SELECT trust.id::text, trust.tenant_id::text, trust.name, trust.method,
+			        trust.issuer, trust.audience, trust.jwks, trust.root_certs_pem,
+			        trust.expected_nonce_base64,
+			        CASE WHEN command.status='pending' OR command.target_disabled
+			             THEN false ELSE trust.enabled END,
+			        trust.revoked_at, trust.revoked_reason, trust.rotation_version,
+			        trust.last_rotated_at, trust.created_at, trust.updated_at,
+			        COALESCE(command.status='pending', false)
+			   FROM workload_attester_trust_sources AS trust
+			   LEFT JOIN workload_attester_trust_commands AS command
+			     ON command.tenant_id=trust.tenant_id AND command.source_id=trust.id
+			  WHERE trust.tenant_id=$1 AND trust.id=$2`, tenantID, id), &out)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WorkloadAttesterTrustSource{}, ErrWorkloadAttesterTrustSourceNotFound
+	}
+	return out, err
+}
+
 // ListWorkloadAttesterTrustSources lists tenant-scoped trust sources.
 func (s *Store) ListWorkloadAttesterTrustSources(ctx context.Context, tenantID string) ([]WorkloadAttesterTrustSource, error) {
 	return s.listWorkloadAttesterTrustSources(ctx, tenantID, "")
@@ -248,8 +275,11 @@ func (s *Store) ListEnabledWorkloadAttesterTrustSources(ctx context.Context, ten
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
 			        rotation_version, last_rotated_at, created_at, updated_at
-			   FROM workload_attester_trust_sources
-			  WHERE tenant_id = $1 AND method = $2 AND enabled = true
+			   FROM workload_attester_trust_sources AS trust
+			  WHERE trust.tenant_id = $1 AND trust.method = $2 AND trust.enabled = true
+			    AND NOT EXISTS (SELECT 1 FROM workload_attester_trust_commands AS command
+			      WHERE command.tenant_id = trust.tenant_id AND command.source_id = trust.id
+			        AND (command.status = 'pending' OR command.target_disabled))
 			  ORDER BY name, id`,
 			tenantID, method)
 		if err != nil {
@@ -271,17 +301,26 @@ func (s *Store) ListEnabledWorkloadAttesterTrustSources(ctx context.Context, ten
 func (s *Store) listWorkloadAttesterTrustSources(ctx context.Context, tenantID, method string) ([]WorkloadAttesterTrustSource, error) {
 	var out []WorkloadAttesterTrustSource
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		sql := `SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
-		               root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
-		               rotation_version, last_rotated_at, created_at, updated_at
-		          FROM workload_attester_trust_sources
-		         WHERE tenant_id = $1`
+		sql := `SELECT trust.id::text, trust.tenant_id::text, trust.name, trust.method,
+		               trust.issuer, trust.audience, trust.jwks,
+		               trust.root_certs_pem, trust.expected_nonce_base64,
+		               CASE WHEN EXISTS (SELECT 1 FROM workload_attester_trust_commands AS command
+		                 WHERE command.tenant_id=trust.tenant_id AND command.source_id=trust.id
+		                   AND (command.status='pending' OR command.target_disabled))
+		                 THEN false ELSE trust.enabled END,
+		               trust.revoked_at, trust.revoked_reason,
+		               trust.rotation_version, trust.last_rotated_at, trust.created_at, trust.updated_at,
+		               EXISTS (SELECT 1 FROM workload_attester_trust_commands AS pending
+		                 WHERE pending.tenant_id=trust.tenant_id AND pending.source_id=trust.id
+		                   AND pending.status='pending')
+		          FROM workload_attester_trust_sources AS trust
+		         WHERE trust.tenant_id = $1`
 		args := []any{tenantID}
 		if method != "" {
-			sql += ` AND method = $2`
+			sql += ` AND trust.method = $2`
 			args = append(args, method)
 		}
-		sql += ` ORDER BY name, id`
+		sql += ` ORDER BY trust.name, trust.id`
 		rows, err := tx.Query(ctx, sql, args...)
 		if err != nil {
 			return err
@@ -289,7 +328,7 @@ func (s *Store) listWorkloadAttesterTrustSources(ctx context.Context, tenantID, 
 		defer rows.Close()
 		for rows.Next() {
 			var rec WorkloadAttesterTrustSource
-			if err := scanWorkloadAttesterTrustSource(rows, &rec); err != nil {
+			if err := scanEffectiveWorkloadAttesterTrustSource(rows, &rec); err != nil {
 				return err
 			}
 			out = append(out, rec)
@@ -303,4 +342,11 @@ func scanWorkloadAttesterTrustSource(row pgx.Row, ts *WorkloadAttesterTrustSourc
 	return row.Scan(&ts.ID, &ts.TenantID, &ts.Name, &ts.Method, &ts.Issuer, &ts.Audience,
 		&ts.JWKS, &ts.RootCertsPEM, &ts.ExpectedNonceBase64, &ts.Enabled, &ts.RevokedAt,
 		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt, &ts.UpdatedAt)
+}
+
+func scanEffectiveWorkloadAttesterTrustSource(row pgx.Row, ts *WorkloadAttesterTrustSource) error {
+	return row.Scan(&ts.ID, &ts.TenantID, &ts.Name, &ts.Method, &ts.Issuer, &ts.Audience,
+		&ts.JWKS, &ts.RootCertsPEM, &ts.ExpectedNonceBase64, &ts.Enabled, &ts.RevokedAt,
+		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt,
+		&ts.UpdatedAt, &ts.AuthorityPending)
 }

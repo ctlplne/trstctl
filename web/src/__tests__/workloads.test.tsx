@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     sshFleet: vi.fn(),
     sshStatus: vi.fn(),
     workloadAttesterTrustSources: vi.fn(),
+    revokeWorkloadAttesterTrustSource: vi.fn(),
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
@@ -76,6 +77,7 @@ describe("workload identity disclosure surface", () => {
     });
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
+    apiMock.revokeWorkloadAttesterTrustSource.mockReset();
     apiMock.agents.mockReset().mockResolvedValue([
       {
         id: "agent-1",
@@ -419,6 +421,57 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByText("wrong-tenant")).not.toBeInTheDocument();
     expect(screen.queryByText(/eyJ[a-z0-9_-]+/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+  });
+
+  it("shows a retained trust change as pending and denies the old source in the operator view", async () => {
+    apiMock.workloadAttesterTrustSources.mockResolvedValue({
+      items: [
+        {
+          id: "source-1",
+          tenant_id: "tenant-1",
+          name: "qa-k8s",
+          method: "k8s_sat",
+          jwks: {},
+          root_certs_pem: [],
+          enabled: false,
+          authority_pending: true,
+          rotation_version: 1,
+          created_at: "2026-10-14T00:00:00Z",
+          updated_at: "2026-10-14T00:00:00Z",
+        },
+      ],
+    });
+    renderWorkloads();
+    expect(await screen.findByText("Change pending; old trust denied")).toBeInTheDocument();
+    expect(
+      screen.getByText("No tenant trust source is enabled. Preview also checks operator-managed trust; otherwise add a trust source before issuing."),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the effective posture after an uncertain trust revocation", async () => {
+    const source = {
+      id: "source-1",
+      tenant_id: "tenant-1",
+      name: "qa-k8s",
+      method: "k8s_sat",
+      jwks: {},
+      root_certs_pem: [],
+      enabled: true,
+      authority_pending: false,
+      rotation_version: 1,
+      created_at: "2026-10-14T00:00:00Z",
+      updated_at: "2026-10-14T00:00:00Z",
+    };
+    apiMock.workloadAttesterTrustSources
+      .mockResolvedValueOnce({ items: [source] })
+      .mockResolvedValue({ items: [{ ...source, enabled: false, authority_pending: true }] });
+    apiMock.revokeWorkloadAttesterTrustSource.mockRejectedValue(new Error("projection unavailable"));
+    renderWorkloads();
+    await screen.findByText("qa-k8s");
+    await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(await screen.findByText("Change pending; old trust denied")).toBeInTheDocument();
+    expect(apiMock.workloadAttesterTrustSources).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Refresh trust sources" })).toBeInTheDocument();
   });
 
   it("renders scoped AI-agent broker controls as metadata-only", async () => {

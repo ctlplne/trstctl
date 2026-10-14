@@ -68,6 +68,11 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    `POST /api/v1/workloads/attester-trust-sources/{id}/rotate`; revoke and offboard old
    sources with `/revoke` and `DELETE /api/v1/workloads/attester-trust-sources/{id}`.
    The same lifecycle controls are available from the Workloads console.
+   If a trust change's event is retained but its read model has not caught up,
+   list and get return `authority_pending: true` and `enabled: false`. The old
+   attester proof is denied immediately; retry with the same idempotency key or
+   wait for recovery, then read the source again before issuing. The console
+   labels this state “Change pending; old trust denied.”
 
 3. Enable the SPIFFE Workload API. trstctl serves a SPIRE-compatible Workload API
    as a gRPC service on a Unix domain socket. Turn it on and bind it to your tenant:

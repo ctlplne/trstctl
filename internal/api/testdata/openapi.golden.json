@@ -34681,6 +34681,10 @@
           "audience": {
             "type": "string"
           },
+          "authority_pending": {
+            "description": "An accepted trust change is awaiting projection; old proof is denied until recovery completes.",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"

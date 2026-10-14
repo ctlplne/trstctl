@@ -1180,6 +1180,16 @@ func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchest
 		} else if healed > 0 && d.Logger != nil {
 			d.Logger.Warn("reconciled CA ceremony cancellations missed by an append/project crash", slog.Int("healed", healed))
 		}
+		if healed, err := reconcilePendingWorkloadAttesterTrustCommands(ctx, d.Store, d.Log); err != nil {
+			if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+				return fmt.Errorf("server: reconcile attester trust commands: %w", err)
+			}
+			if d.Logger != nil {
+				d.Logger.Warn("attester trust recovery is blocked by active privacy erasure; old trust remains denied")
+			}
+		} else if healed > 0 && d.Logger != nil {
+			d.Logger.Warn("reconciled attester trust commands missed by an append/project crash", slog.Int("healed", healed))
+		}
 	}
 	if healed, reconcileErr := a.ReconcileApplicationSecretMutationFences(ctx); reconcileErr != nil {
 		if !errors.Is(reconcileErr, api.ErrApplicationSecretMutationReconcileBlocked) {
@@ -3032,6 +3042,13 @@ func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 			} else if healed > 0 && s.logger != nil {
 				s.logger.Warn("reconciled pending CA ceremony cancellations", slog.Int("healed", healed))
 			}
+		}
+		if healed, err := reconcilePendingWorkloadAttesterTrustCommands(ctx, s.store, s.log); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("attester trust recovery sweep incomplete", slog.String("error", err.Error()))
+			}
+		} else if healed > 0 && s.logger != nil {
+			s.logger.Warn("reconciled pending attester trust commands", slog.Int("healed", healed))
 		}
 	}
 	healed, err := s.api.ReconcileApplicationSecretMutationFences(ctx)

@@ -62,7 +62,8 @@ type PrivacyReadModelSelector struct {
 
 var privacyReadModelSelectorTables = map[string]struct{}{
 	"operation_approval_requests": {}, "operation_approval_decisions": {},
-	"pam_sessions": {}, "discovery_sources": {}, "discovery_findings": {},
+	"workload_attester_trust_receipts": {},
+	"pam_sessions":                     {}, "discovery_sources": {}, "discovery_findings": {},
 	"notification_threshold_deliveries": {}, "incident_executions": {},
 	"nhi_access_review_campaigns": {}, "nhi_access_review_items": {},
 	"access_change_requests": {}, "access_change_request_decisions": {},
@@ -163,7 +164,7 @@ func ValidatePrivacyErasureCountsV3(counts map[string]int) error {
 		"owners": {}, "identities": {}, "certificates": {}, "ssh_keys": {},
 		"attestations": {}, "approval_requests": {}, "approvals": {},
 		"profiles": {}, "agents": {}, "agent_offboard_actors": {},
-		"agent_offboard_reasons": {}, "api_tokens": {}, "api_token_revocation_commands": {}, "ca_ceremony_cancel_commands": {}, "provider_suspend_commands": {}, "agent_removal_commands": {}, "tenant_member_offboard_commands": {}, "tenant_member_upsert_commands": {}, "machine_auth_method_commands": {}, "tenant_members": {},
+		"agent_offboard_reasons": {}, "api_tokens": {}, "api_token_revocation_commands": {}, "ca_ceremony_cancel_commands": {}, "provider_suspend_commands": {}, "workload_attester_trust_commands": {}, "workload_attester_trust_receipts": {}, "agent_removal_commands": {}, "tenant_member_offboard_commands": {}, "tenant_member_upsert_commands": {}, "machine_auth_method_commands": {}, "tenant_members": {},
 		"read_models": {}, "application_secret_mutation_fences": {},
 		"application_secret_import_batches": {},
 		"approved_target_event_fences":      {}, "code_signing_operations": {},
@@ -2602,6 +2603,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseComplianceReportSchedulePrivacyRows,
 		eraseIncidentFleetReissuancePrivacyRows,
 		eraseOwnershipReadinessExceptionPrivacyRows,
+		eraseAttesterTrustReceiptPrivacyRows,
 	} {
 		if err := fn(ctx, tx, tenantID, subjectRef, placeholder, selectors); err != nil {
 			return err

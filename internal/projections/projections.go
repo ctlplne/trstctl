@@ -5802,12 +5802,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.Name == "" || pl.Method == "" {
 			return fmt.Errorf("projections: %s requires id, name, and method", e.Type)
 		}
-		return p.store.ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx, tx, store.WorkloadAttesterTrustSource{
+		if err := p.store.ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx, tx, store.WorkloadAttesterTrustSource{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Method: pl.Method,
 			Issuer: pl.Issuer, Audience: pl.Audience, JWKS: pl.JWKS,
 			RootCertsPEM: pl.RootCertsPEM, ExpectedNonceBase64: pl.ExpectedNonceBase64,
 			Enabled: pl.Enabled, RotationVersion: pl.RotationVersion, CreatedAt: e.Time, UpdatedAt: e.Time,
-		})
+		}); err != nil {
+			return err
+		}
+		return p.store.CompleteWorkloadAttesterTrustCommandTx(ctx, tx, pl.ID, e)
 	case EventWorkloadAttesterTrustSourceRotated:
 		var pl WorkloadAttesterTrustSourceRotated
 		if err := decode(e, &pl); err != nil {
@@ -5816,11 +5819,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.RotationVersion <= 0 {
 			return fmt.Errorf("projections: %s requires id and positive rotation_version", e.Type)
 		}
-		return p.store.ApplyWorkloadAttesterTrustSourceRotatedTx(ctx, tx, store.WorkloadAttesterTrustSource{
+		if err := p.store.ApplyWorkloadAttesterTrustSourceRotatedTx(ctx, tx, store.WorkloadAttesterTrustSource{
 			ID: pl.ID, TenantID: e.TenantID, Issuer: pl.Issuer, Audience: pl.Audience,
 			JWKS: pl.JWKS, RootCertsPEM: pl.RootCertsPEM, ExpectedNonceBase64: pl.ExpectedNonceBase64,
 			RotationVersion: pl.RotationVersion,
-		}, e.Time)
+		}, e.Time); err != nil {
+			return err
+		}
+		return p.store.CompleteWorkloadAttesterTrustCommandTx(ctx, tx, pl.ID, e)
 	case EventWorkloadAttesterTrustSourceRevoked:
 		var pl WorkloadAttesterTrustSourceRevoked
 		if err := decode(e, &pl); err != nil {
@@ -5829,7 +5835,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" {
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
-		return p.store.ApplyWorkloadAttesterTrustSourceRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, e.Time)
+		if err := p.store.ApplyWorkloadAttesterTrustSourceRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, e.Time); err != nil {
+			return err
+		}
+		return p.store.CompleteWorkloadAttesterTrustCommandTx(ctx, tx, pl.ID, e)
 	case EventWorkloadAttesterTrustSourceDeleted:
 		var pl WorkloadAttesterTrustSourceDeleted
 		if err := decode(e, &pl); err != nil {
@@ -5838,7 +5847,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" {
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
-		return p.store.ApplyWorkloadAttesterTrustSourceDeletedTx(ctx, tx, e.TenantID, pl.ID)
+		if err := p.store.ApplyWorkloadAttesterTrustSourceDeletedTx(ctx, tx, e.TenantID, pl.ID); err != nil {
+			return err
+		}
+		return p.store.CompleteWorkloadAttesterTrustCommandTx(ctx, tx, pl.ID, e)
 	case EventComplianceReportScheduleUpserted:
 		var pl ComplianceReportScheduleUpserted
 		if err := decode(e, &pl); err != nil {

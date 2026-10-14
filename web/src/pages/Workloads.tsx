@@ -39,7 +39,7 @@ import type { MessageKey } from "@/i18n/messages";
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
-type TrustSourceStatusLabels = { revoked: string; disabled: string; enabled: string };
+type TrustSourceStatusLabels = { pending: string; revoked: string; disabled: string; enabled: string };
 
 type WorkloadOverviewState = {
   agents: Agent[] | null;
@@ -260,6 +260,13 @@ export function Workloads() {
     setRotateTrustSourceID((current) => current || source.id);
   }
 
+  async function readTrustSources() {
+    const page = await api.workloadAttesterTrustSources();
+    const items = page.items ?? [];
+    setAttesterTrustSources(items);
+    setRotateTrustSourceID((current) => (current && items.some((item) => item.id === current) ? current : (items[0]?.id ?? "")));
+  }
+
   async function issueLease(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy("issue");
@@ -344,6 +351,7 @@ export function Workloads() {
       setShowTrustSourceSetup(false);
     } catch (err) {
       setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.createErrorFallback")));
+      await readTrustSources().catch(() => undefined);
     } finally {
       setBusy(null);
     }
@@ -367,6 +375,7 @@ export function Workloads() {
       setRotateTrustSourceID(id);
     } catch (err) {
       setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.rotateErrorFallback")));
+      await readTrustSources().catch(() => undefined);
     } finally {
       setBusy(null);
     }
@@ -380,6 +389,7 @@ export function Workloads() {
       upsertTrustSource(revoked.trust_source);
     } catch (err) {
       setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.revokeErrorFallback")));
+      await readTrustSources().catch(() => undefined);
     } finally {
       setBusy(null);
     }
@@ -395,6 +405,7 @@ export function Workloads() {
       setRotateTrustSourceID((selected) => (selected === source.id ? (next[0]?.id ?? "") : selected));
     } catch (err) {
       setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.deleteErrorFallback")));
+      await readTrustSources().catch(() => undefined);
     } finally {
       setBusy(null);
     }
@@ -1046,6 +1057,14 @@ export function Workloads() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void readTrustSources().catch((err) => setTrustSourceError(apiProblemMessage(err, trustSourceLoadErrorFallback)))}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            {t("workloads.attestation.refreshTrustSources")}
+          </Button>
           {attesterTrustSources.length > 0 ? (
             <Button
               type="button"
@@ -1235,6 +1254,7 @@ export function Workloads() {
                     <td>
                       <div className="grid gap-1">
                         {trustSourceStatusBadge(source, {
+                          pending: t("workloads.attestation.statusPending"),
                           revoked: t("workloads.attestation.statusRevoked"),
                           disabled: t("workloads.attestation.statusDisabled"),
                           enabled: t("workloads.attestation.statusEnabled"),
@@ -1368,6 +1388,7 @@ function attestationMetadataOnly(attestation: Attestation): SafeAttestation {
 }
 
 function trustSourceStatusBadge(source: WorkloadAttesterTrustSource, labels: TrustSourceStatusLabels) {
+  if (source.authority_pending) return <StatusBadge value="pending" label={labels.pending} tone="warning" />;
   if (source.revoked_at) return <StatusBadge value="revoked" label={labels.revoked} tone="critical" />;
   if (!source.enabled) return <StatusBadge value="disabled" label={labels.disabled} tone="neutral" />;
   return <StatusBadge value="active" label={labels.enabled} tone="success" />;

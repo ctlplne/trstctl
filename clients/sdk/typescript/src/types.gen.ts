@@ -16365,6 +16365,8 @@ export interface components {
         };
         WorkloadAttesterTrustSource: {
             audience?: string;
+            /** @description An accepted trust change is awaiting projection; old proof is denied until recovery completes. */
+            authority_pending?: boolean;
             /** Format: date-time */
             created_at: string;
             enabled: boolean;

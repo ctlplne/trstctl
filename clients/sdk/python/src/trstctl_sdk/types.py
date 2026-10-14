@@ -11679,6 +11679,7 @@ WorkloadAttesterTrustSource = TypedDict(
     'WorkloadAttesterTrustSource',
     {
         'audience': str,
+        'authority_pending': bool,
         'created_at': str,
         'enabled': bool,
         'expected_nonce_base64': str,

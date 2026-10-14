@@ -8,12 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
+	"time"
 
 	googleuuid "github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -54,6 +58,7 @@ type workloadAttesterTrustSourceResponse struct {
 	RootCertsPEM        []string        `json:"root_certs_pem"`
 	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
 	Enabled             bool            `json:"enabled"`
+	AuthorityPending    bool            `json:"authority_pending"`
 	RevokedAt           string          `json:"revoked_at,omitempty"`
 	RevokedReason       string          `json:"revoked_reason,omitempty"`
 	RotationVersion     int             `json:"rotation_version"`
@@ -74,15 +79,78 @@ type workloadAttesterTrustSourceRevokedResponse struct {
 	TrustSource workloadAttesterTrustSourceResponse `json:"trust_source"`
 }
 
+func workloadAttesterTrustRequestBinding(r *http.Request) (string, []byte, error) {
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		return "", nil, err
+	}
+	return mutationRequestBinding(r, principal)
+}
+
+// A projected receipt is the answer after an HTTP result was lost. Reading it
+// before the current source lets a deleted source return its original 204 and
+// lets an old rotation return its original snapshot after a newer rotation.
+func (a *API) replayWorkloadAttesterTrustSource(ctx context.Context, tenantID, sourceID, key,
+	requestBinding, eventType string) (store.WorkloadAttesterTrustSource, bool, error) {
+	var zero store.WorkloadAttesterTrustSource
+	if a.store == nil || a.log == nil {
+		return zero, false, errStatus(http.StatusServiceUnavailable,
+			"workload attester trust-source management is not configured")
+	}
+	tenantUUID, err := googleuuid.Parse(tenantID)
+	if err != nil {
+		return zero, false, errStatus(http.StatusUnauthorized, "missing or invalid tenant")
+	}
+	eventID := googleuuid.NewSHA1(tenantUUID,
+		[]byte("trstctl:workload-attester-trust-command:"+key)).String()
+	receipt, err := a.store.WorkloadAttesterTrustReceiptByEventID(ctx, tenantID, eventID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return zero, false, nil
+	}
+	if err != nil {
+		return zero, false, err
+	}
+	if receipt.EventType != eventType || (sourceID != "" && receipt.SourceID != sourceID) ||
+		!crypto.ConstantTimeEqual([]byte(receipt.RequestBinding), []byte(requestBinding)) {
+		return zero, false, store.ErrIdempotencyConflict
+	}
+	if eventType == projections.EventWorkloadAttesterTrustSourceDeleted {
+		if len(receipt.Snapshot) != 0 {
+			return zero, false, errors.New("api: deleted attester trust receipt retained a source")
+		}
+		return zero, true, nil
+	}
+	if len(receipt.Snapshot) == 0 {
+		return zero, false, errStatus(http.StatusGone,
+			"the original trust-source result was erased under a privacy request; its source event was not repeated")
+	}
+	if err := json.Unmarshal(receipt.Snapshot, &zero); err != nil {
+		return zero, false, err
+	}
+	if zero.TenantID != tenantID || zero.ID != receipt.SourceID {
+		return store.WorkloadAttesterTrustSource{}, false, errors.New("api: attester trust receipt differs from source")
+	}
+	return zero, true, nil
+}
+
 //trstctl:mutation
 func (a *API) createWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	requestBinding, body, err := workloadAttesterTrustRequestBinding(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(body)
+	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if rec, replay, err := a.replayWorkloadAttesterTrustSource(ctx, tenantID, "", idempotencyKey,
+			requestBinding, projections.EventWorkloadAttesterTrustSourceUpserted); err != nil {
+			return 0, nil, err
+		} else if replay {
+			return http.StatusCreated, toWorkloadAttesterTrustSourceResponse(rec), nil
+		}
 		req, err := decodeWorkloadAttesterTrustSourceRequest(r)
 		if err != nil {
-			return 0, nil, err
-		}
-		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, ""); err != nil {
 			return 0, nil, err
 		}
 		tenantUUID, err := googleuuid.Parse(tenantID)
@@ -94,7 +162,10 @@ func (a *API) createWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		// read-side availability check before either projection becomes visible.
 		id := googleuuid.NewSHA1(tenantUUID,
 			[]byte("trstctl:workload-attester-trust-source:"+strings.ToLower(req.Name))).String()
-		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, req, 1); err != nil {
+		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, ""); err != nil {
+			return 0, nil, err
+		}
+		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding, req, 1); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -128,7 +199,7 @@ func (a *API) getWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Requ
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	rec, err := a.store.GetWorkloadAttesterTrustSource(r.Context(), tenantID, r.PathValue("id"))
+	rec, err := a.store.GetEffectiveWorkloadAttesterTrustSource(r.Context(), tenantID, r.PathValue("id"))
 	if err != nil {
 		a.writeWorkloadAttesterTrustSourceError(w, err)
 		return
@@ -140,7 +211,19 @@ func (a *API) getWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Requ
 func (a *API) updateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	requestBinding, body, err := workloadAttesterTrustRequestBinding(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(body)
+	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if rec, replay, err := a.replayWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey,
+			requestBinding, projections.EventWorkloadAttesterTrustSourceUpserted); err != nil {
+			return 0, nil, err
+		} else if replay {
+			return http.StatusOK, toWorkloadAttesterTrustSourceResponse(rec), nil
+		}
 		existing, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
 		if err != nil {
 			return 0, nil, err
@@ -152,7 +235,7 @@ func (a *API) updateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, id); err != nil {
 			return 0, nil, err
 		}
-		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, req, existing.RotationVersion); err != nil {
+		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding, req, existing.RotationVersion); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -189,7 +272,19 @@ func workloadAttesterTrustSourceNameConflict(name string) error {
 func (a *API) rotateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	requestBinding, body, err := workloadAttesterTrustRequestBinding(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(body)
+	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if rec, replay, err := a.replayWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey,
+			requestBinding, projections.EventWorkloadAttesterTrustSourceRotated); err != nil {
+			return 0, nil, err
+		} else if replay {
+			return http.StatusOK, workloadAttesterTrustSourceRotatedResponse{TrustSource: toWorkloadAttesterTrustSourceResponse(rec)}, nil
+		}
 		existing, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
 		if err != nil {
 			return 0, nil, err
@@ -206,7 +301,8 @@ func (a *API) rotateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, projections.EventWorkloadAttesterTrustSourceRotated, payload); err != nil {
+		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
+			projections.EventWorkloadAttesterTrustSourceRotated, payload, false); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -221,7 +317,19 @@ func (a *API) rotateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 func (a *API) revokeWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	requestBinding, body, err := workloadAttesterTrustRequestBinding(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(body)
+	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if rec, replay, err := a.replayWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey,
+			requestBinding, projections.EventWorkloadAttesterTrustSourceRevoked); err != nil {
+			return 0, nil, err
+		} else if replay {
+			return http.StatusOK, workloadAttesterTrustSourceRevokedResponse{TrustSource: toWorkloadAttesterTrustSourceResponse(rec)}, nil
+		}
 		if _, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id); err != nil {
 			return 0, nil, err
 		}
@@ -235,7 +343,8 @@ func (a *API) revokeWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, projections.EventWorkloadAttesterTrustSourceRevoked, payload); err != nil {
+		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
+			projections.EventWorkloadAttesterTrustSourceRevoked, payload, true); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
@@ -250,7 +359,19 @@ func (a *API) revokeWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 func (a *API) deleteWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	requestBinding, body, err := workloadAttesterTrustRequestBinding(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(body)
+	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if _, replay, err := a.replayWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey,
+			requestBinding, projections.EventWorkloadAttesterTrustSourceDeleted); err != nil {
+			return 0, nil, err
+		} else if replay {
+			return http.StatusNoContent, nil, nil
+		}
 		if _, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id); err != nil {
 			return 0, nil, err
 		}
@@ -258,14 +379,15 @@ func (a *API) deleteWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, projections.EventWorkloadAttesterTrustSourceDeleted, payload); err != nil {
+		if err := a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
+			projections.EventWorkloadAttesterTrustSourceDeleted, payload, true); err != nil {
 			return 0, nil, err
 		}
 		return http.StatusNoContent, nil, nil
 	})
 }
 
-func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id string, req workloadAttesterTrustSourceRequest, rotationVersion int) error {
+func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id, idempotencyKey, requestBinding string, req workloadAttesterTrustSourceRequest, rotationVersion int) error {
 	payload, err := json.Marshal(projections.WorkloadAttesterTrustSourceUpserted{
 		ID: id, Name: req.Name, Method: req.Method, Issuer: req.Issuer, Audience: req.Audience,
 		JWKS: req.JWKS, RootCertsPEM: req.RootCertsPEM, ExpectedNonceBase64: req.ExpectedNonceBase64,
@@ -274,16 +396,67 @@ func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id 
 	if err != nil {
 		return err
 	}
-	return a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, projections.EventWorkloadAttesterTrustSourceUpserted, payload)
+	return a.appendAndProjectWorkloadAttesterTrustSource(ctx, tenantID, id, idempotencyKey, requestBinding,
+		projections.EventWorkloadAttesterTrustSourceUpserted, payload, !*req.Enabled)
 }
 
-func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, tenantID, eventType string, payload []byte) error {
+func (a *API) appendAndProjectWorkloadAttesterTrustSource(ctx context.Context, tenantID, sourceID, idempotencyKey, requestBinding, eventType string, payload []byte, targetDisabled bool) error {
 	if a.store == nil || a.log == nil {
 		return errStatus(http.StatusServiceUnavailable, "workload attester trust-source management is not configured")
 	}
-	ev, err := a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
+	tenantUUID, err := googleuuid.Parse(tenantID)
+	if err != nil {
+		return errStatus(http.StatusUnauthorized, "missing or invalid tenant")
+	}
+	principal, err := requestPrincipalSubject(ctx)
 	if err != nil {
 		return err
+	}
+	if idempotencyKey == "" {
+		return errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations")
+	}
+	bindingMaterial, err := json.Marshal(struct {
+		Domain, TenantID, SourceID, IdempotencyKey, EventType, Principal, PayloadSHA256 string
+		TargetDisabled                                                                  bool
+	}{"trstctl.workload-attester-trust-command.v1", tenantID, sourceID, idempotencyKey,
+		eventType, principal, crypto.SHA256Hex(payload), targetDisabled})
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(bindingMaterial)
+	eventID := googleuuid.NewSHA1(tenantUUID, []byte("trstctl:workload-attester-trust-command:"+idempotencyKey)).String()
+	wanted := events.Event{ID: eventID, Type: eventType, TenantID: tenantID,
+		SchemaVersion: events.DefaultSchemaVersion,
+		Time:          time.Now().UTC().Truncate(time.Microsecond), Data: payload}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		wanted.Actor = &actor
+	}
+	command, err := a.store.ClaimWorkloadAttesterTrustCommand(ctx, store.WorkloadAttesterTrustCommand{
+		SourceID: sourceID, BindingSHA256: crypto.SHA256Hex(bindingMaterial), RequestBinding: requestBinding,
+		TargetDisabled: targetDisabled, Event: wanted,
+	})
+	if err != nil {
+		return err
+	}
+	ev, found, err := a.log.EventByID(ctx, eventID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		if command.Status != "pending" {
+			return errors.New("api: completed attester trust command has no source event")
+		}
+		ev, err = a.log.Append(ctx, command.Event)
+		if err != nil {
+			return err
+		}
+	}
+	if ev.ID != eventID || ev.TenantID != tenantID || ev.Type != eventType ||
+		ev.SchemaVersion != command.Event.SchemaVersion || !ev.Time.Equal(command.Event.Time) ||
+		(command.Status == "pending" && (!crypto.ConstantTimeEqual(ev.Data, command.Event.Data) ||
+			!reflect.DeepEqual(ev.Actor, command.Event.Actor))) ||
+		(command.Status == "completed" && ev.Sequence != command.Event.Sequence) {
+		return store.ErrIdempotencyConflict
 	}
 	return projections.New(a.store).Apply(ctx, ev)
 }
@@ -461,7 +634,8 @@ func toWorkloadAttesterTrustSourceResponse(rec store.WorkloadAttesterTrustSource
 		ID: rec.ID, TenantID: rec.TenantID, Name: rec.Name, Method: rec.Method,
 		Issuer: rec.Issuer, Audience: rec.Audience, JWKS: jwks, RootCertsPEM: roots,
 		ExpectedNonceBase64: rec.ExpectedNonceBase64, Enabled: rec.Enabled,
-		RevokedReason: rec.RevokedReason, RotationVersion: rec.RotationVersion,
+		AuthorityPending: rec.AuthorityPending,
+		RevokedReason:    rec.RevokedReason, RotationVersion: rec.RotationVersion,
 		CreatedAt: rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}

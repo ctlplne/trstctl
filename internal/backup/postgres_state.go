@@ -1191,6 +1191,8 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"api_token_revocation_commands",
 		"ca_ceremony_cancel_commands",
 		"provider_suspend_commands",
+		"workload_attester_trust_commands",
+		"workload_attester_trust_receipts",
 		"agent_removal_commands",
 		"tenant_member_offboard_commands",
 		"tenant_member_upsert_commands",

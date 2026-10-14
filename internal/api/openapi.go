@@ -4219,6 +4219,7 @@ func componentSchemas() map[string]*Schema {
 		"root_certs_pem":        {Type: "array", Items: str()},
 		"expected_nonce_base64": str(),
 		"enabled":               {Type: "boolean"},
+		"authority_pending":     {Type: "boolean", Description: "An accepted trust change is awaiting projection; old proof is denied until recovery completes."},
 		"revoked_at":            timestamp(),
 		"revoked_reason":        str(),
 		"rotation_version":      {Type: "integer"},

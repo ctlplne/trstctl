@@ -8483,6 +8483,7 @@ export interface UsageMeterDefinition {
 
 export interface WorkloadAttesterTrustSource {
   audience?: string;
+  authority_pending?: boolean;
   created_at: string;
   enabled: boolean;
   expected_nonce_base64?: string;
