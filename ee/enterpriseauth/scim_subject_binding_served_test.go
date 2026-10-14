@@ -154,8 +154,8 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 	if readback.Code != http.StatusOK || json.Unmarshal(readback.Body.Bytes(), &storedResource) != nil || storedResource.Meta == nil || resource.Meta == nil || storedResource.Meta.LastModified == nil || resource.Meta.LastModified == nil || !storedResource.Meta.LastModified.Equal(*resource.Meta.LastModified) {
 		t.Fatalf("offboard response/readback timestamps differ: response=%s read=%s", offboard.Body, readback.Body)
 	}
-	if code, _ := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", session); code != http.StatusForbidden {
-		t.Fatalf("offboarded real-subject session=%d, want403", code)
+	if code, _ := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", session); code != http.StatusUnauthorized {
+		t.Fatalf("offboarded real-subject session=%d, want401", code)
 	}
 	if code, _ := doBearer(t, ts, http.MethodGet, "/api/v1/access/roles", bearer, "", nil); code != http.StatusUnauthorized {
 		t.Fatalf("offboarded real-subject token=%d, want401", code)
