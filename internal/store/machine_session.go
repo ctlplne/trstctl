@@ -4,7 +4,9 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -145,23 +147,30 @@ func scanMachineSession(row pgx.Row, out *MachineSession) error {
 
 // ApplyMachineAuthMethodOverrideTx projects secrets.auth_method.disabled/
 // .enabled: the tenant-level overlay the login path consults. Replays are
-// idempotent on (tenant_id, method_name); latest event wins.
-func (s *Store) ApplyMachineAuthMethodOverrideTx(ctx context.Context, tx pgx.Tx, tenantID, methodName string, disabled bool, updatedBy string, updatedAt time.Time) error {
+// idempotent on (tenant_id, method_name); later source event sequence wins,
+// even if an older historical event had a future wall-clock timestamp.
+func (s *Store) ApplyMachineAuthMethodOverrideTx(ctx context.Context, tx pgx.Tx, tenantID, methodName string, disabled bool, updatedBy string, updatedAt time.Time, eventSequence uint64) error {
+	if eventSequence == 0 || eventSequence > uint64(1<<63-1) {
+		return errors.New("store: machine-auth method event requires a valid source sequence")
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO machine_auth_method_overrides
-		        (tenant_id, method_name, disabled, updated_at, updated_by)
-		 VALUES ($1, $2, $3, $4, $5)
+		        (tenant_id, method_name, disabled, updated_at, updated_by, last_event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6::bigint)
 		 ON CONFLICT (tenant_id, method_name) DO UPDATE
 		    SET disabled = EXCLUDED.disabled,
 		        updated_at = EXCLUDED.updated_at,
-		        updated_by = EXCLUDED.updated_by`,
-		tenantID, methodName, disabled, updatedAt, updatedBy)
+		        updated_by = EXCLUDED.updated_by,
+		        last_event_sequence = EXCLUDED.last_event_sequence
+		  WHERE machine_auth_method_overrides.last_event_sequence < EXCLUDED.last_event_sequence`,
+		tenantID, methodName, disabled, updatedAt, updatedBy, strconv.FormatUint(eventSequence, 10))
 	return err
 }
 
 // DisabledMachineAuthMethods returns the tenant's disabled method names. The
-// login path fails closed on read errors: refusing logins beats accepting a
-// credential against a method an operator disabled.
+// login path fails closed on read errors. The independent command row overlays
+// the event read model: pending commands deny login; a completed latest command
+// is authoritative during read-model replay and cold recovery.
 func (s *Store) DisabledMachineAuthMethods(ctx context.Context, tenantID string) (map[string]bool, error) {
 	out := map[string]bool{}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -181,7 +190,34 @@ func (s *Store) DisabledMachineAuthMethods(ctx context.Context, tenantID string)
 			}
 			out[name] = true
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		commands, err := tx.Query(ctx,
+			`SELECT method_name, target_disabled, status
+			   FROM machine_auth_method_commands
+			  WHERE tenant_id = $1`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer commands.Close()
+		for commands.Next() {
+			var name, status string
+			var targetDisabled bool
+			if err := commands.Scan(&name, &targetDisabled, &status); err != nil {
+				return err
+			}
+			if status != "pending" && status != "completed" {
+				return errors.New("store: invalid machine-auth method command state")
+			}
+			if status == "pending" || targetDisabled {
+				out[name] = true
+			} else {
+				delete(out, name)
+			}
+		}
+		return commands.Err()
 	})
 	return out, err
 }

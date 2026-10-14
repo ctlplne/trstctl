@@ -27,6 +27,7 @@ const (
 	PrivacyRecoveryFenceApprovedTarget          = "approved_target"
 	// #nosec G101 -- this is a bounded privacy evidence label, not a credential.
 	PrivacyRecoveryFenceAPITokenRevocation = "api_token_revocation"
+	PrivacyRecoveryFenceMachineAuthMethod  = "machine_auth_method"
 
 	PrivacyRecoveryFenceDeleted       = "deleted"
 	PrivacyRecoveryFencePseudonymized = "pseudonymized"
@@ -119,7 +120,8 @@ func ValidatePrivacyRecoveryFenceDispositionsV3(
 		if fence.Kind != PrivacyRecoveryFenceApplicationSecret &&
 			fence.Kind != PrivacyRecoveryFenceApplicationSecretImport &&
 			fence.Kind != PrivacyRecoveryFenceApprovedTarget &&
-			fence.Kind != PrivacyRecoveryFenceAPITokenRevocation {
+			fence.Kind != PrivacyRecoveryFenceAPITokenRevocation &&
+			fence.Kind != PrivacyRecoveryFenceMachineAuthMethod {
 			return fmt.Errorf("store: privacy recovery fence kind %q is unsupported", fence.Kind)
 		}
 		if fence.Disposition != PrivacyRecoveryFenceDeleted &&
@@ -381,7 +383,11 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		if err != nil {
 			return err
 		}
-		recoveryFences := append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...)
+		methodFences, err := s.prepareMachineAuthMethodFencesTx(ctx, tx, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		recoveryFences := append(append(append(append(applicationFences, importFences...), approvedFences...), tokenFences...), methodFences...)
 		sort.Slice(recoveryFences, func(i, j int) bool {
 			if recoveryFences[i].Kind == recoveryFences[j].Kind {
 				return recoveryFences[i].EventID < recoveryFences[j].EventID
@@ -399,6 +405,8 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 			recoveryFences, PrivacyRecoveryFenceApprovedTarget)
 		selected.Counts["api_token_revocation_commands"] = countPrivacyRecoveryFences(
 			recoveryFences, PrivacyRecoveryFenceAPITokenRevocation)
+		selected.Counts["machine_auth_method_commands"] = countPrivacyRecoveryFences(
+			recoveryFences, PrivacyRecoveryFenceMachineAuthMethod)
 		scheduler, err := s.PrepareSecretRotationSchedulePrivacyErasureTx(
 			ctx, tx, tenantID, subject, expectedRef,
 			candidate.OperationID, candidate.EventID, resolveSchedulerOuter,
@@ -1090,6 +1098,83 @@ func (s *Store) prepareAPITokenRevocationFencesTx(
 		}
 		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
 			Kind: PrivacyRecoveryFenceAPITokenRevocation, EventID: row.eventID,
+			Disposition: PrivacyRecoveryFencePseudonymized,
+		})
+	}
+	return dispositions, nil
+}
+
+// A pending method command can contain the operator subject in both the event
+// actor and payload. Rewrite its exact recovery bytes under the same privacy
+// barrier as the event history, before the worker may publish them again.
+func (s *Store) prepareMachineAuthMethodFencesTx(
+	ctx context.Context, tx pgx.Tx, tenantID, subject string,
+) ([]PrivacyRecoveryFenceDisposition, error) {
+	type pendingRow struct {
+		name, eventID  string
+		disabled       bool
+		actor, payload []byte
+		digest         string
+	}
+	rows, err := tx.Query(ctx, `SELECT method_name, event_id::text,
+		target_disabled, event_actor, event_payload, payload_sha256
+		FROM machine_auth_method_commands
+		WHERE tenant_id = $1 AND status = 'pending'
+		ORDER BY method_name FOR UPDATE`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var row pendingRow
+		if err := rows.Scan(&row.name, &row.eventID, &row.disabled,
+			&row.actor, &row.payload, &row.digest); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var dispositions []PrivacyRecoveryFenceDisposition
+	for _, row := range pending {
+		if crypto.SHA256Hex(row.payload) != row.digest {
+			return nil, fmt.Errorf("store: machine-auth command %s payload digest mismatch", row.eventID)
+		}
+		eventType := "secrets.auth_method.enabled"
+		if row.disabled {
+			eventType = "secrets.auth_method.disabled"
+		}
+		rewrittenPayload, payloadChanged, err := events.PseudonymizeEventDataForSubject(
+			row.payload, tenantID, subject, eventType, events.DefaultSchemaVersion)
+		if err != nil {
+			return nil, err
+		}
+		actorValue, _, actorChanged, err := pseudonymizeRecoveryActor(row.actor, tenantID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !payloadChanged && !actorChanged {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE machine_auth_method_commands
+			SET event_actor = $4::jsonb, event_payload = $5,
+			    payload_sha256 = $6, updated_at = now()
+			WHERE tenant_id = $1 AND method_name = $2 AND event_id = $3
+			  AND status = 'pending'`,
+			tenantID, row.name, row.eventID, actorValue, rewrittenPayload,
+			crypto.SHA256Hex(rewrittenPayload))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, ErrIdempotencyConflict
+		}
+		dispositions = append(dispositions, PrivacyRecoveryFenceDisposition{
+			Kind: PrivacyRecoveryFenceMachineAuthMethod, EventID: row.eventID,
 			Disposition: PrivacyRecoveryFencePseudonymized,
 		})
 	}

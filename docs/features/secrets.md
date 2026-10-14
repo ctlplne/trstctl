@@ -901,6 +901,14 @@ review-first journey:
    configuration/fingerprint change discards it and requires a fresh review. A
    disabled method shows blockers and never accepts a credential.
 
+   Disabling a method commits a tenant-and-method denial before publishing its
+   event, so a projection delay cannot admit a new login. A login already
+   verifying a credential must pass the same final admission lock before its
+   session event is appended; disable and that final check have one clear order
+   across replicas. Pending enable stays denied until its event projects. The exact
+   pending command and denial state survive backup and restore; retry the same
+   operation after recovery, then confirm the method status in the console.
+
    For a machine session with an issued bearer, revocation commits a tenant- and
    session-bound denial before publishing its revocation event. If event delivery
    or projection is interrupted, the bearer remains refused while the exact

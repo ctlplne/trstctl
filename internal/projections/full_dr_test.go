@@ -77,6 +77,13 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	if _, err := src.LookupAPITokenByHash(ctx, "full-dr-api-token-hash"); !store.IsNotFound(err) {
 		t.Fatalf("source pending API-token revocation admitted bearer: %v", err)
 	}
+	srcMethodPending, err := src.ListPendingMachineAuthMethodCommands(ctx, tenantA, 10)
+	if err != nil || len(srcMethodPending) != 1 || !srcMethodPending[0].TargetDisabled {
+		t.Fatalf("source pending machine-auth disable fence: rows=%+v err=%v", srcMethodPending, err)
+	}
+	if disabled, err := src.DisabledMachineAuthMethods(ctx, tenantA); err != nil || !disabled["full-dr-token"] {
+		t.Fatalf("source pending machine-auth method admitted login: disabled=%v err=%v", disabled, err)
+	}
 	assertFullDRRemoteDeliveryRetained(t, src)
 	if err := src.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
 		t.Fatalf("suspended source tenant admitted: %v", err)
@@ -155,6 +162,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 	if _, err := dst.LookupAPITokenByHash(ctx, "full-dr-api-token-hash"); !store.IsNotFound(err) {
 		t.Fatalf("restored pending API-token revocation admitted bearer: %v", err)
+	}
+	dstMethodPending, err := dst.ListPendingMachineAuthMethodCommands(ctx, tenantA, 10)
+	if err != nil || len(dstMethodPending) != 1 ||
+		dstMethodPending[0].Event.ID != srcMethodPending[0].Event.ID ||
+		!bytes.Equal(dstMethodPending[0].Event.Data, srcMethodPending[0].Event.Data) {
+		t.Fatalf("restored pending machine-auth disable fence: source=%+v destination=%+v err=%v",
+			srcMethodPending, dstMethodPending, err)
+	}
+	if disabled, err := dst.DisabledMachineAuthMethods(ctx, tenantA); err != nil || !disabled["full-dr-token"] {
+		t.Fatalf("restored pending machine-auth method admitted login: disabled=%v err=%v", disabled, err)
 	}
 	if destination, found, err := dst.AgentJobAttemptBinding(ctx, tenantA, "b9445160-dbc6-48fa-9c13-f078943486a9", 4242, 1); err != nil || !found || destination != "connector.deploy" {
 		t.Fatalf("restored original agent recipient cannot authorize its exact completion: destination=%q found=%v err=%v", destination, found, err)
@@ -846,6 +863,23 @@ func seedRecoveredFromPostgresTables(
 	}
 	if _, created, err := st.ClaimAPITokenRevocationCommand(ctx, command); err != nil || !created {
 		t.Fatalf("seed pending API-token revocation command: created=%t err=%v", created, err)
+	}
+	methodPayload, err := json.Marshal(projections.MachineAuthMethodOverride{
+		Name: "full-dr-token", UpdatedBy: "full-dr-admin",
+	})
+	if err != nil {
+		t.Fatalf("marshal pending machine-auth disable: %v", err)
+	}
+	methodCommand := store.MachineAuthMethodCommand{
+		TenantID: tenantA, MethodName: "full-dr-token", TargetDisabled: true,
+		Event: events.Event{
+			ID: "00000000-0000-0000-0000-00000000a021", Type: projections.EventMachineAuthMethodDisabled,
+			TenantID: tenantA, SchemaVersion: events.DefaultSchemaVersion,
+			Time: now.Truncate(time.Microsecond), Data: methodPayload,
+		},
+	}
+	if _, created, err := st.ClaimMachineAuthMethodCommand(ctx, methodCommand); err != nil || !created {
+		t.Fatalf("seed pending machine-auth disable command: created=%t err=%v", created, err)
 	}
 	// AUD-58 moved Provider workforce identities and grants into one fixed,
 	// FORCE-RLS authority partition. They are not customer-owned rows, so seed

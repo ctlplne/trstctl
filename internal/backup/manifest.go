@@ -37,6 +37,9 @@ var RecoveredFromPostgresBackup = []string{
 	// First-writer revocation commands and terminal denial tombstones must
 	// survive restores independently of the token read model and event log.
 	"api_token_revocation_commands",
+	// Machine-login method disable and pending enable must survive restore
+	// independently of the replayable operator read model.
+	"machine_auth_method_commands",
 	// The per-account CloudTrail lookup slot is independent PostgreSQL quota
 	// coordination. Replay cannot reconstruct its next allowed time; restoring
 	// it prevents a recovery from immediately bursting past AWS lookup limits.

@@ -19,6 +19,43 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// 0267 adds source-order memory to historical method overlays. A zero value
+// means no sequence was recorded by the old schema; it must not invent an
+// operator action or alter the enabled/disabled posture during upgrade.
+func testMigration0267MachineAuthMethodSequenceStartsUnclaimed(t *testing.T) {
+	const stable = `SELECT tenant_id::text, method_name, disabled,
+		updated_at::text, updated_by
+		FROM machine_auth_method_overrides ORDER BY tenant_id, method_name`
+	runPopulatedDefaultMigrationHarness(t, 267, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name)
+					VALUES ($1, $2) ON CONFLICT (tenant_id) DO NOTHING`,
+					tenantID, fmt.Sprintf("pre-0267-tenant-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO machine_auth_method_overrides
+					(tenant_id, method_name, disabled, updated_at, updated_by)
+					VALUES ($1, 'token', $2, '2026-10-13T00:00:00Z'::timestamptz, $3)`,
+					tenantID, index == 0, fmt.Sprintf("pre-0267-operator-%d", index)); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var zero bool
+			if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(last_event_sequence = 0)
+				FROM machine_auth_method_overrides WHERE method_name = 'token'`).Scan(&rows, &zero); err != nil {
+				t.Fatal(err)
+			}
+			if rows != want || !zero {
+				t.Fatalf("0267 invented sequence for historical method overlay: rows=%d want=%d zero=%t",
+					rows, want, zero)
+			}
+		})
+}
+
 // 0265 adds lifecycle authority to historical discovery schedules. The migration
 // must preserve enabled state and source/run identity without inventing an
 // operator decision; the event tail supplies later control facts.
@@ -725,6 +762,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	267: true, // TestMigrationDataContentBackfills/0267_machine_auth_method_sequence_starts_unclaimed
 	265: true, // TestMigrationDataContentBackfills/0265_discovery_schedule_control_starts_unclaimed
 	258: true, // TestMigrationDataContentBackfills/0258_secret_schedule_control_starts_unclaimed
 	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
@@ -1788,6 +1826,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0267_machine_auth_method_sequence_starts_unclaimed", testMigration0267MachineAuthMethodSequenceStartsUnclaimed)
 	t.Run("0265_discovery_schedule_control_starts_unclaimed", testMigration0265DiscoveryScheduleControlStartsUnclaimed)
 	t.Run("0258_secret_schedule_control_starts_unclaimed", testMigration0258SecretScheduleControlStartsUnclaimed)
 	t.Run("0250_managed_key_custody_starts_unproven", testMigration0250ManagedKeyCustodyStartsUnproven)

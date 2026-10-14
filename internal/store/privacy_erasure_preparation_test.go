@@ -277,6 +277,68 @@ func TestPreparePrivacySubjectErasureRewritesPendingAPITokenRevocation(t *testin
 	}
 }
 
+func TestPreparePrivacySubjectErasureRewritesPendingMachineAuthMethodCommand(t *testing.T) {
+	ctx := context.Background()
+	st := newOperationApprovalStore(t)
+	const subject = "qa-machine-auth-erasure-subject"
+	const eventID = "b10105b8-32b8-4f13-a7c4-60844862650c"
+	payload, err := json.Marshal(projections.MachineAuthMethodOverride{
+		Name: "qa-erasure-method", UpdatedBy: subject,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, created, err := st.ClaimMachineAuthMethodCommand(ctx, store.MachineAuthMethodCommand{
+		TenantID: tenantA, MethodName: "qa-erasure-method", TargetDisabled: true,
+		Event: events.Event{
+			ID: eventID, TenantID: tenantA, Type: projections.EventMachineAuthMethodDisabled,
+			SchemaVersion: events.DefaultSchemaVersion,
+			Time:          time.Now().UTC().Truncate(time.Microsecond), Data: payload,
+			Actor: &events.Actor{Subject: subject, Roles: []string{"operator"}},
+		},
+	})
+	if err != nil || !created {
+		t.Fatalf("claim pending machine-auth command: created=%t err=%v", created, err)
+	}
+	candidate := store.PrivacySubjectErasurePreparation{
+		PrivacySubjectErasure: store.PrivacySubjectErasure{
+			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+			RequestedByRef: privacy.SubjectRef(tenantA, "privacy-admin"),
+			Reason:         "verified erasure", ErasedAt: time.Now().UTC(),
+		},
+		OperationID:        "sha256:" + strings.Repeat("4", 64),
+		RequestBinding:     strings.Repeat("5", 64),
+		EventID:            "sha256:" + strings.Repeat("6", 64),
+		RewriteOperationID: "qa-machine-auth-rewrite",
+		TargetGeneration:   "qa-machine-auth-generation",
+		EventActor:         &events.Actor{Subject: privacy.Placeholder(privacy.SubjectRef(tenantA, "privacy-admin"))},
+	}
+	prepared, err := st.PreparePrivacySubjectErasure(ctx, tenantA, subject, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Counts["machine_auth_method_commands"] != 1 ||
+		!slices.Contains(prepared.RecoveryFences, store.PrivacyRecoveryFenceDisposition{
+			Kind:    store.PrivacyRecoveryFenceMachineAuthMethod,
+			EventID: eventID, Disposition: store.PrivacyRecoveryFencePseudonymized,
+		}) {
+		t.Fatalf("machine-auth command rewrite evidence missing: %+v", prepared)
+	}
+	pending, err := st.ListPendingMachineAuthMethodCommands(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Event.ID != eventID ||
+		pending[0].Event.Actor == nil ||
+		pending[0].Event.Actor.Subject != privacy.Placeholder(privacy.SubjectRef(tenantA, subject)) ||
+		bytes.Contains(pending[0].Event.Data, []byte(subject)) {
+		t.Fatalf("pending machine-auth command retained erased subject: %+v", pending)
+	}
+	if disabled, err := st.DisabledMachineAuthMethods(ctx, tenantA); err != nil || !disabled["qa-erasure-method"] {
+		t.Fatalf("erasure lifted pending disable fence: disabled=%v err=%v", disabled, err)
+	}
+}
+
 func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFencesAtomically(t *testing.T) {
 	ctx := context.Background()
 	st := newOperationApprovalStore(t)

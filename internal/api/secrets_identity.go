@@ -602,16 +602,39 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 			// accidentally future-valid bearer, and the public response stays generic.
 			return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")
 		}
-		rawToken, tokenHash, tokenErr := apiauth.GenerateAPIToken()
-		if tokenErr != nil {
-			return 0, nil, tokenErr
+		if !a.machineSessionLedgerReady() {
+			return 0, nil, errors.New("api: machine session ledger and token verifier are unavailable")
 		}
-		// C-S3 (DA-02): one event atomically projects both the human-readable
-		// session ledger and the hashed API-token verifier. If either cannot be
-		// recorded, no bearer is returned.
-		if recordErr := a.recordMachineSession(ctx, resolvedTenantID, sess, tokenHash); recordErr != nil {
+		var rawToken []byte
+		// The final admission lock is shared with the disable command across
+		// replicas. Verification stays outside it; the session event is appended
+		// while it is held, so its source order precedes a later disable claim.
+		// Project after release: retaining a request connection while acquiring
+		// another for projection could starve the request pool under a burst.
+		var started events.Event
+		admissionErr := a.secrets.be.Store.WithMachineAuthMethodAdmission(ctx, resolvedTenantID, method, func() error {
+			var tokenHash string
+			var tokenErr error
+			rawToken, tokenHash, tokenErr = apiauth.GenerateAPIToken()
+			if tokenErr != nil {
+				return tokenErr
+			}
+			started, tokenErr = a.appendMachineSession(ctx, resolvedTenantID, sess, tokenHash)
+			return tokenErr
+		})
+		if admissionErr != nil {
 			secret.Wipe(rawToken)
-			return 0, nil, recordErr
+			if errors.Is(admissionErr, store.ErrMachineAuthMethodDisabled) {
+				return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")
+			}
+			return 0, nil, admissionErr
+		}
+		// One event projects both the ledger and hashed bearer. A failed
+		// projection returns no raw token; replay may later restore only its
+		// unusable hash, never an unknown bearer value.
+		if err := projections.New(a.secrets.be.Store).Apply(ctx, started); err != nil {
+			secret.Wipe(rawToken)
+			return 0, nil, err
 		}
 		return http.StatusOK, &machineLoginResponse{
 			SessionID: sess.ID, Principal: sess.Principal, Method: sess.Method,
@@ -819,14 +842,14 @@ func (a *API) machineSessionLedgerReady() bool {
 	return a.secrets != nil && a.store != nil && a.secrets.be.Store == a.store && a.log != nil && a.orch != nil
 }
 
-// recordMachineSession appends secrets.session.started and atomically projects
-// the ledger plus the hash of its usable API bearer (AN-2/AN-8).
-func (a *API) recordMachineSession(ctx context.Context, tenantID string, sess authmethod.Session, tokenHash string) error {
+// appendMachineSession records the final admission in the event log while the
+// per-method lock is held. The caller projects after releasing that lock.
+func (a *API) appendMachineSession(ctx context.Context, tenantID string, sess authmethod.Session, tokenHash string) (events.Event, error) {
 	if !a.machineSessionLedgerReady() {
-		return errors.New("api: machine session ledger and token verifier are unavailable")
+		return events.Event{}, errors.New("api: machine session ledger and token verifier are unavailable")
 	}
 	if strings.TrimSpace(tokenHash) == "" {
-		return errors.New("api: machine session bearer hash is required")
+		return events.Event{}, errors.New("api: machine session bearer hash is required")
 	}
 	payload, err := json.Marshal(projections.MachineSessionStarted{
 		ID: sess.ID, Principal: sess.Principal, Method: sess.Method,
@@ -834,13 +857,9 @@ func (a *API) recordMachineSession(ctx context.Context, tenantID string, sess au
 		TokenHash: tokenHash,
 	})
 	if err != nil {
-		return err
+		return events.Event{}, err
 	}
-	ev, err := a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionStarted, TenantID: tenantID, Data: payload})
-	if err != nil {
-		return err
-	}
-	return projections.New(a.secrets.be.Store).Apply(ctx, ev)
+	return a.log.Append(ctx, events.Event{Type: projections.EventMachineSessionStarted, TenantID: tenantID, Data: payload})
 }
 
 // listMachineSessions serves GET /api/v1/secrets/sessions (C-S3, DA-02): the
@@ -952,9 +971,9 @@ type machineAuthMethodOverrideResponse struct {
 }
 
 // setMachineAuthMethodOverride is the shared disable/enable implementation:
-// validate the method exists on the served projection, then append the
-// overlay event and project it (AN-2). The login exchange consults the
-// overlay on every login, so a disabled method is refused immediately.
+// validate the configured method, claim the durable admission fence, then
+// publish and project its exact first event (AN-2). Login and preview consult
+// that fence even while the read-model projection is delayed.
 func (a *API) setMachineAuthMethodOverride(w http.ResponseWriter, r *http.Request, idempotencyKey string, disable bool) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -965,7 +984,7 @@ func (a *API) setMachineAuthMethodOverride(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	name := r.PathValue("name")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		if name == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "method name is required")
 		}
@@ -984,19 +1003,11 @@ func (a *API) setMachineAuthMethodOverride(w http.ResponseWriter, r *http.Reques
 			return 0, nil, errStatus(http.StatusNotFound, "no such configured machine-auth method")
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		eventType := projections.EventMachineAuthMethodEnabled
-		if disable {
-			eventType = projections.EventMachineAuthMethodDisabled
-		}
-		payload, err := json.Marshal(projections.MachineAuthMethodOverride{Name: name, UpdatedBy: principal.Subject})
-		if err != nil {
-			return 0, nil, err
-		}
-		ev, err := a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
-		if err != nil {
-			return 0, nil, err
-		}
-		if err := projections.New(a.secrets.be.Store).Apply(ctx, ev); err != nil {
+		if err := a.orch.SetMachineAuthMethodOverride(ctx, tenantID, name, principal.Subject, disable); err != nil {
+			if errors.Is(err, store.ErrIdempotencyConflict) {
+				return 0, nil, errStatus(http.StatusConflict,
+					"a prior machine-auth method change is pending; retry it or wait for recovery")
+			}
 			return 0, nil, err
 		}
 		return http.StatusOK, machineAuthMethodOverrideResponse{Name: name, Disabled: disable}, nil

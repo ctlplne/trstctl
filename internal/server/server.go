@@ -1119,6 +1119,16 @@ func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator) e
 // privacy erasure preparation leaves the affected commands fenced and is
 // logged, not fatal; any other failure stops Build.
 func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchestrator.Orchestrator) error {
+	if healed, err := orch.ReconcilePendingMachineAuthMethodCommands(ctx); err != nil {
+		if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+			return fmt.Errorf("server: reconcile machine-auth method commands: %w", err)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("machine-auth method recovery is blocked by active privacy erasure; logins remain denied")
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled machine-auth method commands missed by an append/project crash", slog.Int("healed", healed))
+	}
 	if healed, err := orch.ReconcilePendingAPITokenRevocations(ctx); err != nil {
 		if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
 			return fmt.Errorf("server: reconcile API-token revocation commands: %w", err)
@@ -2937,6 +2947,13 @@ func (s *Server) RunApplicationSecretMutationReconciler(ctx context.Context) {
 
 func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 	if s.orch != nil {
+		if healed, err := s.orch.ReconcilePendingMachineAuthMethodCommands(ctx); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("machine-auth method recovery sweep incomplete", slog.String("error", err.Error()))
+			}
+		} else if healed > 0 && s.logger != nil {
+			s.logger.Warn("reconciled pending machine-auth method commands", slog.Int("healed", healed))
+		}
 		if healed, err := s.orch.ReconcilePendingAPITokenRevocations(ctx); err != nil {
 			if s.logger != nil {
 				s.logger.Warn("API-token revocation recovery sweep incomplete", slog.String("error", err.Error()))

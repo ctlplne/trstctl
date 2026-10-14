@@ -6833,7 +6833,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.Name == "" {
 			return fmt.Errorf("projections: %s requires name", e.Type)
 		}
-		return p.store.ApplyMachineAuthMethodOverrideTx(ctx, tx, e.TenantID, pl.Name, e.Type == EventMachineAuthMethodDisabled, pl.UpdatedBy, e.Time)
+		if err := p.store.CompleteMachineAuthMethodCommandTx(ctx, tx, e.TenantID, pl.Name, e); err != nil {
+			return err
+		}
+		return p.store.ApplyMachineAuthMethodOverrideTx(ctx, tx, e.TenantID, pl.Name, e.Type == EventMachineAuthMethodDisabled, pl.UpdatedBy, e.Time, e.Sequence)
 	case EventPQCMigrationCampaignStarted:
 		var pl PQCMigrationCampaignStarted
 		if err := decode(e, &pl); err != nil {

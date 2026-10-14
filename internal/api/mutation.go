@@ -243,7 +243,7 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 		raw, err = a.idem.DoBound(r.Context(), tenantID, idempotencyKey, binding, recordResult)
 	}
 	if err != nil {
-		if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+		if errors.Is(err, orchestrator.ErrIdempotencyConflict) || errors.Is(err, store.ErrIdempotencyConflict) {
 			err = errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request")
 		}
 		a.writeError(w, err)

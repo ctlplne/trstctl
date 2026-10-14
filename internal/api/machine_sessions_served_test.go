@@ -81,6 +81,23 @@ type machineSessionHarness struct {
 	log     *events.Log
 }
 
+type heldMachineAuthMethod struct {
+	entered chan<- struct{}
+	release <-chan struct{}
+}
+
+func (m heldMachineAuthMethod) Name() string { return "held" }
+
+func (m heldMachineAuthMethod) Authenticate(ctx context.Context, _ []byte) (string, []string, error) {
+	close(m.entered)
+	select {
+	case <-m.release:
+		return "racing-workload", []string{"secrets:read"}, nil
+	case <-ctx.Done():
+		return "", nil, ctx.Err()
+	}
+}
+
 func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
 	return newMachineSessionHarnessWithScopes(t, []string{"secrets:read"})
 }
@@ -133,6 +150,336 @@ func newMachineSessionHarnessWithScopes(t *testing.T, grantedScopes []string) *m
 		token: authmethod.TokenMethod{
 			Secret: authSecret, TenantID: msTenantA, DefaultScopes: append([]string(nil), grantedScopes...),
 		},
+	}
+}
+
+// A retained disable event must deny new bearer minting even while its SQL
+// overlay projection is stale. The fault is scoped to this tenant and method.
+func TestMachineAuthMethodDisableDeniesLoginDuringProjectionGap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-auth disable fault needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	if status, _ := h.login(t, "before-disable"); status != http.StatusOK {
+		t.Fatalf("baseline machine login = %d", status)
+	}
+	before := len(listSessions(t, h, msTenantA))
+
+	const trigger = "qa_machine_method_disable_projection_fail"
+	const function = "qa_machine_method_disable_projection_fail_fn"
+	clearFault := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := h.store.SystemPool().Exec(ctx,
+			"DROP TRIGGER IF EXISTS "+trigger+" ON machine_auth_method_overrides; DROP FUNCTION IF EXISTS "+function+"()"); err != nil {
+			t.Errorf("clear owned method-disable projection fault: %v", err)
+		}
+	}
+	t.Cleanup(clearFault)
+	_, err := h.store.SystemPool().Exec(t.Context(), fmt.Sprintf(`
+		CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN
+			IF NEW.tenant_id = '%s'::uuid AND NEW.method_name = 'token' AND NEW.disabled THEN
+				RAISE EXCEPTION 'owned machine-auth method disable projection fault';
+			END IF;
+			RETURN NEW;
+		END $$;
+		CREATE TRIGGER %s BEFORE INSERT OR UPDATE ON machine_auth_method_overrides
+		FOR EACH ROW EXECUTE FUNCTION %s()`, function, msTenantA, trigger, function))
+	if err != nil {
+		t.Fatalf("install owned method-disable projection fault: %v", err)
+	}
+
+	path := "/api/v1/secrets/auth-methods/token/disable"
+	if status, _ := h.do(t, http.MethodPost, path, msTenantA, "machine-method-gap-disable-1", nil); status != http.StatusInternalServerError {
+		t.Fatalf("injected projection fault returned %d, want retryable 500", status)
+	}
+	retained := 0
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID == msTenantA && event.Type == projections.EventMachineAuthMethodDisabled {
+			retained++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if retained != 1 {
+		t.Fatalf("retained disable events=%d, want 1", retained)
+	}
+	var projectedDisabled bool
+	err = h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT EXISTS (SELECT 1 FROM machine_auth_method_overrides
+		  WHERE tenant_id = $1 AND method_name = 'token' AND disabled)`, msTenantA).Scan(&projectedDisabled)
+	if err != nil || projectedDisabled {
+		t.Fatalf("injected fault did not leave read-model SQL stale: disabled=%v err=%v", projectedDisabled, err)
+	}
+	disabled, err := h.store.DisabledMachineAuthMethods(t.Context(), msTenantA)
+	if err != nil || !disabled["token"] {
+		t.Fatalf("pending command did not fence the method: disabled=%v err=%v", disabled, err)
+	}
+	if status, _ := h.login(t, "after-retained-disable"); status != http.StatusUnauthorized {
+		t.Fatalf("new machine login after retained disable = %d, want 401 before projection", status)
+	}
+	if got := len(listSessions(t, h, msTenantA)); got != before {
+		t.Fatalf("new sessions after retained disable=%d, want %d", got, before)
+	}
+	if status, body := h.do(t, http.MethodPost,
+		"/api/v1/secrets/auth-methods/token/enable", msTenantA,
+		"machine-method-gap-enable-1", nil); status != http.StatusConflict ||
+		!strings.Contains(string(body), "prior machine-auth method change is pending") {
+		t.Fatalf("opposite enable while disable pending = %d; body=%s, want actionable 409", status, body)
+	}
+	clearFault()
+	if status, body := h.do(t, http.MethodPost, path, msTenantA,
+		"machine-method-gap-disable-1", nil); status != http.StatusOK {
+		t.Fatalf("same-key disable recovery = %d; body=%s", status, body)
+	}
+	if status, _ := h.login(t, "after-disable-recovery"); status != http.StatusUnauthorized {
+		t.Fatalf("login after disable recovery = %d, want 401", status)
+	}
+	if status, body := h.do(t, http.MethodPost,
+		"/api/v1/secrets/auth-methods/token/enable", msTenantA,
+		"machine-method-gap-enable-2", nil); status != http.StatusOK {
+		t.Fatalf("enable after recovered disable = %d; body=%s", status, body)
+	}
+	if status, _ := h.login(t, "after-recovered-enable"); status != http.StatusOK {
+		t.Fatalf("login after enable = %d, want 200", status)
+	}
+	pending, err := h.store.ListPendingMachineAuthMethodCommands(t.Context(), msTenantA, 10)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("pending commands after recovery=%v err=%v", pending, err)
+	}
+}
+
+func TestMachineAuthMethodReplayUsesSourceSequenceAcrossFutureLegacyTime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-auth replay test needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	payload, err := json.Marshal(projections.MachineAuthMethodOverride{Name: "token", UpdatedBy: "legacy-operator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := h.log.Append(t.Context(), events.Event{
+		Type: projections.EventMachineAuthMethodDisabled, TenantID: msTenantA,
+		Time: time.Now().UTC().Add(365 * 24 * time.Hour), Data: payload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(h.store).Apply(t.Context(), legacy); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := h.login(t, "legacy-disabled"); status != http.StatusUnauthorized {
+		t.Fatalf("legacy disabled login = %d, want 401", status)
+	}
+	if status, body := h.do(t, http.MethodPost,
+		"/api/v1/secrets/auth-methods/token/enable", msTenantA,
+		"machine-method-future-legacy-enable-1", nil); status != http.StatusOK {
+		t.Fatalf("enable after future-dated legacy event = %d; body=%s", status, body)
+	}
+	if status, _ := h.login(t, "source-order-enabled"); status != http.StatusOK {
+		t.Fatalf("source-order enabled login = %d, want 200", status)
+	}
+	if err := projections.New(h.store).Apply(t.Context(), legacy); err != nil {
+		t.Fatalf("replay old future-dated event: %v", err)
+	}
+	if err := projections.New(h.store).Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("cold read-model rebuild: %v", err)
+	}
+	if status, _ := h.login(t, "cold-source-order-enabled"); status != http.StatusOK {
+		t.Fatalf("cold source-order enabled login = %d, want 200", status)
+	}
+}
+
+func TestMachineAuthMethodDisableRecoversFirstCommandBeforeEventAppend(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-auth pre-append recovery needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	registration, err := h.log.Append(t.Context(), events.Event{
+		Type: projections.EventTenantRegistered, TenantID: msTenantA,
+		Data: []byte(`{"name":"machine-auth-recovery-fixture"}`),
+	})
+	if err != nil {
+		t.Fatalf("append fixture tenant registration: %v", err)
+	}
+	if err := projections.New(h.store).Apply(t.Context(), registration); err != nil {
+		t.Fatalf("project fixture tenant registration: %v", err)
+	}
+	payload, err := json.Marshal(projections.MachineAuthMethodOverride{
+		Name: "token", UpdatedBy: "recovery-operator",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := store.MachineAuthMethodCommand{
+		TenantID: msTenantA, MethodName: "token", TargetDisabled: true,
+		Event: events.Event{
+			ID: "b10105b8-32b8-4f13-a7c4-60844862650d", Type: projections.EventMachineAuthMethodDisabled,
+			TenantID: msTenantA, SchemaVersion: events.DefaultSchemaVersion,
+			Time: time.Now().UTC().Truncate(time.Microsecond), Data: payload,
+		},
+	}
+	canonical, created, err := h.store.ClaimMachineAuthMethodCommand(t.Context(), first)
+	if err != nil || !created || canonical.Event.ID != first.Event.ID {
+		t.Fatalf("pre-append claim: command=%+v created=%t err=%v", canonical, created, err)
+	}
+	if status, _ := h.login(t, "after-claim-before-append"); status != http.StatusUnauthorized {
+		t.Fatalf("pre-append command admitted login: status=%d", status)
+	}
+	orch := orchestrator.NewOrchestrator(h.log, h.store, nil)
+	if healed, err := orch.ReconcilePendingMachineAuthMethodCommands(t.Context()); err != nil || healed != 1 {
+		t.Fatalf("pre-append recovery: healed=%d err=%v", healed, err)
+	}
+	if healed, err := orch.ReconcilePendingMachineAuthMethodCommands(t.Context()); err != nil || healed != 0 {
+		t.Fatalf("recovery repeated command: healed=%d err=%v", healed, err)
+	}
+	retained := 0
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID == msTenantA && event.Type == projections.EventMachineAuthMethodDisabled {
+			if event.ID != first.Event.ID {
+				t.Fatalf("recovery changed first event identity: %s", event.ID)
+			}
+			retained++
+		}
+		return nil
+	}); err != nil || retained != 1 {
+		t.Fatalf("recovery retained events=%d err=%v, want exact first one", retained, err)
+	}
+	if status, _ := h.login(t, "after-pre-append-recovery"); status != http.StatusUnauthorized {
+		t.Fatalf("recovered disable admitted login: status=%d", status)
+	}
+}
+
+func TestMachineAuthMethodDisableSerializesFinalBearerAdmission(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-auth admission race needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	secretKey := []byte("served-machine-method-race-key")
+	orch := orchestrator.NewOrchestrator(h.log, h.store, nil)
+	h.handler = api.New(h.store, orchestrator.NewMemoryIdempotency(), orch,
+		api.WithInsecureHeaderResolver(), api.WithEventLog(h.log),
+		api.WithSecrets(api.SecretsBackend{
+			Store: h.store, SessionTTL: time.Hour,
+			MachineAuthMethods: func(tenantID string) []authmethod.Method {
+				if tenantID != msTenantA {
+					return nil
+				}
+				return []authmethod.Method{heldMachineAuthMethod{entered: entered, release: release}}
+			},
+			CommandMAC: func(domain, material []byte) ([]byte, error) {
+				message := make([]byte, 0, len(domain)+1+len(material))
+				message = append(message, domain...)
+				message = append(message, 0)
+				message = append(message, material...)
+				return crypto.HMACSHA256(secretKey, message), nil
+			},
+		}))
+	response := make(chan int, 1)
+	go func() {
+		status, _ := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA,
+			"held-login-before-disable", map[string]any{"method": "held", "credential": "fixture"})
+		response <- status
+	}()
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		close(release)
+		t.Fatal("machine verifier did not enter")
+	}
+	if status, body := h.do(t, http.MethodPost,
+		"/api/v1/secrets/auth-methods/held/disable", msTenantA,
+		"held-disable-during-verification", nil); status != http.StatusOK {
+		close(release)
+		t.Fatalf("disable while verifier held = %d; body=%s", status, body)
+	}
+	close(release)
+	select {
+	case status := <-response:
+		if status != http.StatusUnauthorized {
+			t.Fatalf("login after disable committed = %d, want 401", status)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("held login did not finish")
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 0 {
+		t.Fatalf("disable race minted a session: %v", sessions)
+	}
+}
+
+func TestMachineAuthMethodAdmissionUsesOneRequestConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-auth pool admission needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	secretKey := []byte("served-machine-method-pool-key")
+	orch := orchestrator.NewOrchestrator(h.log, h.store, nil)
+	h.handler = api.New(h.store, orchestrator.NewMemoryIdempotency(), orch,
+		api.WithInsecureHeaderResolver(), api.WithEventLog(h.log),
+		api.WithSecrets(api.SecretsBackend{
+			Store: h.store, SessionTTL: time.Hour,
+			MachineAuthMethods: func(tenantID string) []authmethod.Method {
+				if tenantID != msTenantA {
+					return nil
+				}
+				return []authmethod.Method{heldMachineAuthMethod{entered: entered, release: release}}
+			},
+			CommandMAC: func(domain, material []byte) ([]byte, error) {
+				message := make([]byte, 0, len(domain)+1+len(material))
+				message = append(message, domain...)
+				message = append(message, 0)
+				message = append(message, material...)
+				return crypto.HMACSHA256(secretKey, message), nil
+			},
+		}))
+	response := make(chan int, 1)
+	go func() {
+		status, _ := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA,
+			"held-login-one-request-connection", map[string]any{"method": "held", "credential": "fixture"})
+		response <- status
+	}()
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		close(release)
+		t.Fatal("machine verifier did not enter")
+	}
+	pool := h.store.SystemPool()
+	max := pool.Stat().MaxConns()
+	if max < 2 {
+		close(release)
+		t.Fatalf("request pool has %d connections, want at least two", max)
+	}
+	var held []func()
+	defer func() {
+		for _, releaseConn := range held {
+			releaseConn()
+		}
+	}()
+	for i := int32(0); i < max-1; i++ {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		conn, err := pool.Acquire(ctx)
+		cancel()
+		if err != nil {
+			close(release)
+			t.Fatalf("reserve request connection %d/%d: %v", i+1, max-1, err)
+		}
+		held = append(held, conn.Release)
+	}
+	close(release)
+	select {
+	case status := <-response:
+		if status != http.StatusOK {
+			t.Fatalf("login with one available request connection = %d, want 200", status)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("login attempted nested request-pool acquisition")
 	}
 }
 

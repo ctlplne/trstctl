@@ -82,6 +82,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "access control",
 		},
 		{
+			ID:             "machine_auth_method_commands.pending-actor",
+			Location:       "machine_auth_method_commands.event_actor/event_payload",
+			Category:       "transient machine-auth method operator subject",
+			Purpose:        "recover the exact disable or enable event after ambiguous publication or projection failure",
+			RetentionClass: "transient:until-machine-auth-method-projection",
+			Erasure:        "privacy.subject.erased pseudonymizes a pending command before publishing its event; projection removes actor and payload in the same transaction",
+			Owner:          "access control",
+		},
+		{
 			ID:             "identities.name-attributes",
 			Location:       "identities.name/attributes",
 			Category:       "workload or human-linked identity metadata",
