@@ -2,11 +2,11 @@
 -- plus the per-tenant auth-method disable overlay (C-S3, DA-02).
 --
 -- machine_sessions is the projection of secrets.session.started/.revoked. It
--- stores session metadata only: the login exchange's returned session has a
--- linked bearer whose raw value is never projected. Revocation denies that
--- bearer through the independently committed session command fence before
--- publishing the event. The auth-method command fence separately denies new
--- logins before its disable event is published.
+-- stores session metadata only: the login exchange's returned session is a
+-- scope receipt, not a bearer credential, and no credential material is ever
+-- projected. Revocation is advisory ledger state (the session is not consumed
+-- by later API calls); enforcement lives in the auth-method overlay below and
+-- in API-token revocation.
 --
 -- machine_auth_method_overrides is the projection of
 -- secrets.auth_method.disabled/.enabled: a tenant-level overlay on the
