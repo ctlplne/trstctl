@@ -97,6 +97,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	if _, err := src.LookupAPITokenByHash(ctx, "full-dr-offboard-api-token-hash"); !store.IsNotFound(err) {
 		t.Fatalf("source pending member offboard admitted bearer: %v", err)
 	}
+	srcAgentPending, err := src.ListPendingAgentRemovals(ctx, tenantA, 10)
+	if err != nil || len(srcAgentPending) != 2 {
+		t.Fatalf("source pending agent removal fences: rows=%+v err=%v", srcAgentPending, err)
+	}
+	if denied, err := src.AgentOffboarded(ctx, tenantA, "00000000-0000-0000-0000-00000000a024"); err != nil || !denied {
+		t.Fatalf("source pending agent offboard admitted work: denied=%t err=%v", denied, err)
+	}
+	if denied, err := src.AgentCertRevoked(ctx, tenantA, "00000000-0000-0000-0000-00000000a026", "full-dr-agent-serial", ""); err != nil || !denied {
+		t.Fatalf("source pending agent certificate revoke admitted work: denied=%t err=%v", denied, err)
+	}
 	assertFullDRRemoteDeliveryRetained(t, src)
 	if err := src.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
 		t.Fatalf("suspended source tenant admitted: %v", err)
@@ -195,6 +205,27 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 	if _, err := dst.LookupAPITokenByHash(ctx, "full-dr-offboard-api-token-hash"); !store.IsNotFound(err) {
 		t.Fatalf("restored pending member offboard admitted bearer: %v", err)
+	}
+	dstAgentPending, err := dst.ListPendingAgentRemovals(ctx, tenantA, 10)
+	if err != nil || len(dstAgentPending) != len(srcAgentPending) {
+		t.Fatalf("restored pending agent removal fences: source=%+v destination=%+v err=%v",
+			srcAgentPending, dstAgentPending, err)
+	}
+	for i := range srcAgentPending {
+		if dstAgentPending[i].AgentID != srcAgentPending[i].AgentID ||
+			dstAgentPending[i].Kind != srcAgentPending[i].Kind ||
+			dstAgentPending[i].Serial != srcAgentPending[i].Serial ||
+			dstAgentPending[i].Event.ID != srcAgentPending[i].Event.ID ||
+			!bytes.Equal(dstAgentPending[i].Event.Data, srcAgentPending[i].Event.Data) {
+			t.Fatalf("restored agent removal command %d changed: source=%+v destination=%+v", i,
+				srcAgentPending[i], dstAgentPending[i])
+		}
+	}
+	if denied, err := dst.AgentOffboarded(ctx, tenantA, "00000000-0000-0000-0000-00000000a024"); err != nil || !denied {
+		t.Fatalf("restored pending agent offboard admitted work: denied=%t err=%v", denied, err)
+	}
+	if denied, err := dst.AgentCertRevoked(ctx, tenantA, "00000000-0000-0000-0000-00000000a026", "full-dr-agent-serial", ""); err != nil || !denied {
+		t.Fatalf("restored pending agent certificate revoke admitted work: denied=%t err=%v", denied, err)
 	}
 	if destination, found, err := dst.AgentJobAttemptBinding(ctx, tenantA, "b9445160-dbc6-48fa-9c13-f078943486a9", 4242, 1); err != nil || !found || destination != "connector.deploy" {
 		t.Fatalf("restored original agent recipient cannot authorize its exact completion: destination=%q found=%v err=%v", destination, found, err)
@@ -924,6 +955,49 @@ func seedRecoveredFromPostgresTables(
 	if err != nil || !created || offboardCommand.Status != "pending" || revokedCount != 1 {
 		t.Fatalf("seed pending member offboard command: command=%+v count=%d created=%t err=%v",
 			offboardCommand, revokedCount, created, err)
+	}
+	// An agent authority decision can survive the database cut before its event
+	// append. Both command kinds must return with their exact payload and keep
+	// denying the old agent certificate while the read projections are stale.
+	agentRemovals := []struct {
+		agentID, eventID, kind, serial, eventType string
+		payload                                   any
+	}{
+		{
+			agentID: "00000000-0000-0000-0000-00000000a024",
+			eventID: "00000000-0000-0000-0000-00000000a025",
+			kind:    "offboard", eventType: projections.EventAgentOffboarded,
+			payload: projections.AgentOffboarded{
+				ID: "00000000-0000-0000-0000-00000000a024", Agent: "full-dr-agent-offboard",
+				Reason: "full DR pending offboard",
+			},
+		},
+		{
+			agentID: "00000000-0000-0000-0000-00000000a026",
+			eventID: "00000000-0000-0000-0000-00000000a027",
+			kind:    "cert", serial: "full-dr-agent-serial", eventType: projections.EventAgentCertRevoked,
+			payload: projections.AgentCertRevoked{
+				ID: "00000000-0000-0000-0000-00000000a026", Agent: "full-dr-agent-cert",
+				Serial: "full-dr-agent-serial", Reason: "full DR pending certificate revocation",
+				RevokedAt: now.Truncate(time.Microsecond),
+			},
+		},
+	}
+	for _, removal := range agentRemovals {
+		payload, err := json.Marshal(removal.payload)
+		if err != nil {
+			t.Fatalf("marshal pending %s agent removal: %v", removal.kind, err)
+		}
+		command := store.AgentRemovalCommand{
+			TenantID: tenantA, AgentID: removal.agentID, Kind: removal.kind, Serial: removal.serial,
+			Event: events.Event{
+				ID: removal.eventID, Type: removal.eventType, TenantID: tenantA,
+				SchemaVersion: events.DefaultSchemaVersion, Time: now.Truncate(time.Microsecond), Data: payload,
+			},
+		}
+		if _, created, err := st.ClaimAgentRemovalCommand(ctx, command); err != nil || !created {
+			t.Fatalf("seed pending %s agent removal: created=%t err=%v", removal.kind, created, err)
+		}
 	}
 	// AUD-58 moved Provider workforce identities and grants into one fixed,
 	// FORCE-RLS authority partition. They are not customer-owned rows, so seed
