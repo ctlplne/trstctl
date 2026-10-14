@@ -4081,6 +4081,22 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].name %q is invalid (want kubernetes, aws-iam, gcp, azure, oidc, or jwt)", i, name))
 			continue
 		}
+		// The inventory and preview keep config order, while login selects one
+		// method by name. Reject overlapping reach so the verifier and authority
+		// an operator reviews are exactly those used for the exchange. A blank
+		// tenant_id applies to every tenant through a verified tenant claim.
+		for j := 0; j < i; j++ {
+			prior := methods[j]
+			if strings.TrimSpace(prior.Name) != name {
+				continue
+			}
+			priorTenant := strings.TrimSpace(prior.TenantID)
+			currentTenant := strings.TrimSpace(m.TenantID)
+			if priorTenant == "" || currentTenant == "" || priorTenant == currentTenant {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].name %q overlaps secrets.machine_auth[%d] for at least one tenant; give each tenant one definition of this method", i, name, j))
+				break
+			}
+		}
 		hasScopes := false
 		seenScopes := map[string]bool{}
 		for j, rawScope := range m.Scopes {

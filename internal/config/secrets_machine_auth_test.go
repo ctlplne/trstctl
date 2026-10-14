@@ -76,3 +76,36 @@ func TestBuiltinMachineTokenRequiresTenantPinAndExplicitScopes(t *testing.T) {
 		t.Fatalf("tenant-pinned, explicitly scoped builtin token config: %v", err)
 	}
 }
+
+func TestSecretsMachineAuthRejectsOverlappingMethodNames(t *testing.T) {
+	method := func(tenantID, tenantClaim, scope string) MachineAuthMethod {
+		return MachineAuthMethod{
+			Name: "jwt", TenantID: tenantID, TenantClaim: tenantClaim,
+			Audience: "trstctl", JWKSJSON: `{"keys":[]}`, Scopes: []string{scope},
+		}
+	}
+	const tenantA = "11111111-1111-1111-1111-111111111111"
+	const tenantB = "22222222-2222-2222-2222-222222222222"
+	for _, tt := range []struct {
+		name    string
+		methods []MachineAuthMethod
+		wantErr bool
+	}{
+		{"same fixed tenant", []MachineAuthMethod{method(tenantA, "", "secrets:read"), method(tenantA, "", "secrets:write")}, true},
+		{"tenant-wide and fixed tenant", []MachineAuthMethod{method("", "tenant", "secrets:read"), method(tenantA, "", "secrets:write")}, true},
+		{"two tenant-wide", []MachineAuthMethod{method("", "tenant", "secrets:read"), method("", "tenant", "secrets:write")}, true},
+		{"distinct fixed tenants", []MachineAuthMethod{method(tenantA, "", "secrets:read"), method(tenantB, "", "secrets:write")}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Default()
+			c.Secrets.MachineAuth = tt.methods
+			err := c.Validate()
+			if tt.wantErr && (err == nil || !strings.Contains(err.Error(), "overlaps")) {
+				t.Fatalf("overlapping machine-auth name accepted: %v", err)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("disjoint machine-auth tenants rejected: %v", err)
+			}
+		})
+	}
+}

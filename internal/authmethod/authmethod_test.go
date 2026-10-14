@@ -38,6 +38,19 @@ func TestTokenMethodLoginAndReject(t *testing.T) {
 	}
 }
 
+func TestManagerRejectsDuplicateMethodNames(t *testing.T) {
+	_, err := New(Config{
+		TenantID: "11111111-1111-1111-1111-111111111111",
+		Methods: []Method{
+			TokenMethod{Secret: []byte("first-test-key")},
+			TokenMethod{Secret: []byte("second-test-key")},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("duplicate per-tenant method accepted: %v", err)
+	}
+}
+
 func TestMachineLoginTokenIsTenantBound(t *testing.T) {
 	secret := []byte("tenant-bound-secret")
 	tenantA := "11111111-1111-1111-1111-111111111111"

@@ -1525,6 +1525,11 @@ non-empty static `scopes`, or—for OIDC/generic JWT only—one signed
 `scopes_claim`. Static scopes cannot be widened by a credential's generic `scope`
 or `scopes` claim. Empty, duplicate, missing, or ambiguous scope configuration
 fails startup instead of producing an inert or over-privileged session.
+For a given tenant, each method name must resolve to one configuration. Two
+entries with the same name are valid only when both have different fixed
+`tenant_id` values. A tenant-claim entry applies across tenants and cannot
+share its method name with another entry, so the login preview and exchange
+always use the same verifier and permission source.
 
 Treat the credential-store KEK as the root that also protects the signer's sealed
 audit-evidence handle: **protect it and back it up** (a lost KEK means sealed

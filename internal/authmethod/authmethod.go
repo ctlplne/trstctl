@@ -79,6 +79,9 @@ func New(cfg Config) (*Manager, error) {
 		if meth == nil || meth.Name() == "" {
 			return nil, fmt.Errorf("authmethod: method with empty name")
 		}
+		if _, exists := m[meth.Name()]; exists {
+			return nil, fmt.Errorf("authmethod: duplicate method %q for tenant %s", meth.Name(), cfg.TenantID)
+		}
 		m[meth.Name()] = meth
 	}
 	if cfg.TTL <= 0 {
