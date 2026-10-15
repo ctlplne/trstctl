@@ -33,6 +33,7 @@ import { useApiQuery } from "@/lib/query";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
+import { loadLatestDriftRuns } from "@/pages/posture/DriftLatestRuns";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 
@@ -49,6 +50,7 @@ export function Posture() {
   const cryptoReadiness = useApiQuery(["crypto-readiness"], api.cryptoReadiness);
   const [discoverySources, setDiscoverySources] = useState<DiscoverySource[]>([]);
   const [discoveryRuns, setDiscoveryRuns] = useState<DiscoveryRun[]>([]);
+  const [driftLatestRuns, setDriftLatestRuns] = useState<Record<string, DiscoveryRun | null>>({});
   const [discoveryFindings, setDiscoveryFindings] = useState<DiscoveryFinding[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
@@ -74,10 +76,11 @@ export function Posture() {
     async function loadDiscoveryPosture() {
       setDiscoveryLoading(true);
       setDiscoveryError(null);
-      const [sourceResult, runResult, findingResult] = await Promise.allSettled([
+      const [sourceResult, runResult, findingResult, monitoringResult] = await Promise.allSettled([
         api.discoverySources({ limit: 50 }),
         api.discoveryRuns({ limit: 50 }),
         api.discoveryFindings({ limit: 50 }),
+        api.discoveryMonitoring(),
       ]);
       if (cancelled) return;
 
@@ -88,8 +91,19 @@ export function Posture() {
       if (findingResult.status === "fulfilled") setDiscoveryFindings(findingResult.value.items ?? []);
       else setDiscoveryFindings([]);
 
-      const rejected = [sourceResult, runResult, findingResult].find((result) => result.status === "rejected");
+      const rejected = [sourceResult, runResult, findingResult, monitoringResult].find((result) => result.status === "rejected");
       if (rejected?.status === "rejected") setDiscoveryError(rejected.reason instanceof Error ? rejected.reason.message : "Unable to load discovery findings");
+      else if (sourceResult.status === "fulfilled" && runResult.status === "fulfilled" && monitoringResult.status === "fulfilled") {
+        try {
+          const latest = await loadLatestDriftRuns(sourceResult.value.items ?? [], runResult.value.items ?? [], monitoringResult.value, api.getDiscoveryRun);
+          if (cancelled) return;
+          setDriftLatestRuns(latest);
+        } catch (error) {
+          if (cancelled) return;
+          setDriftLatestRuns({});
+          setDiscoveryError(error instanceof Error ? error.message : "Unable to verify latest drift runs");
+        }
+      }
       setDiscoveryLoading(false);
     }
 
@@ -298,7 +312,7 @@ export function Posture() {
               error={discoveryError}
               emptyTitle="No drift findings returned yet"
             />
-            <DriftRecoveryWorkflow sources={discoverySources} runs={discoveryRuns} loading={discoveryLoading} error={discoveryError} />
+            <DriftRecoveryWorkflow sources={discoverySources} latestRuns={driftLatestRuns} loading={discoveryLoading} error={discoveryError} />
             <DriftRemediationWorkflow
               state={driftRemediation}
               loading={driftLoading}

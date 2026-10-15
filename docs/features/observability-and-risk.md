@@ -187,6 +187,10 @@ only after the saved-source preflight is ready and effect-free. The retry endpoi
 `discovery runs retry` CLI create a new idempotent run with `retry_of_run_id`; the
 original terminal failure remains unchanged as audit evidence. The console names both
 run IDs in its receipt and never renders the stored expected fingerprint.
+The recovery card follows the monitoring projection's exact latest run ID for each
+drift source. It fetches that run by ID when it is outside the first history page;
+if the exact readback is unavailable or disagrees with monitoring, recovery is
+withheld until the operator can refresh a trustworthy view.
 
 ### The CBOM — cryptographic bill of materials (F52)
 

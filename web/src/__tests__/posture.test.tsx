@@ -9,6 +9,8 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     discoverySources: vi.fn(),
     discoveryRuns: vi.fn(),
+    discoveryMonitoring: vi.fn(),
+    getDiscoveryRun: vi.fn(),
     discoveryFindings: vi.fn(),
     ctMonitoring: vi.fn(),
     updateCTMonitoring: vi.fn(),
@@ -112,6 +114,10 @@ describe("posture collector disclosures", () => {
         },
       ],
     });
+    apiMock.discoveryMonitoring.mockReset().mockResolvedValue({
+      sources: [{ kind: "drift", source_id: "source-drift", last_run_id: "run-drift", last_run_status: "failed" }],
+    });
+    apiMock.getDiscoveryRun.mockReset();
     apiMock.discoveryFindings.mockReset().mockResolvedValue({
       items: [
         {
@@ -599,6 +605,45 @@ describe("posture collector disclosures", () => {
     expect(
       await screen.findByText("Recovery run run-drift-retry is queued. The original run-drift failure remains unchanged as evidence."),
     ).toBeInTheDocument();
+  });
+
+  it("uses the server's exact latest drift run when it fell outside the first history page", async () => {
+    apiMock.discoveryMonitoring.mockResolvedValueOnce({
+      sources: [{ kind: "drift", source_id: "source-drift", last_run_id: "run-newer", last_run_status: "succeeded" }],
+    });
+    apiMock.getDiscoveryRun.mockResolvedValueOnce({
+      id: "run-newer",
+      tenant_id: "tenant-1",
+      source_id: "source-drift",
+      status: "succeeded",
+      dry_run: false,
+      targets: 1,
+      discovered: 1,
+      failed: 0,
+      rejected: 0,
+      created_at: "2026-06-20T11:00:00Z",
+    });
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+
+    expect(await screen.findByText("The latest run does not need recovery.")).toBeInTheDocument();
+    expect(apiMock.getDiscoveryRun).toHaveBeenCalledWith("run-newer");
+    expect(screen.getByRole("button", { name: "Review exact recovery plan for Agent drift watch" })).toBeDisabled();
+  });
+
+  it("withholds drift retry when monitoring's latest run cannot be read", async () => {
+    apiMock.discoveryMonitoring.mockResolvedValueOnce({
+      sources: [{ kind: "drift", source_id: "source-drift", last_run_id: "run-newer", last_run_status: "succeeded" }],
+    });
+    apiMock.getDiscoveryRun.mockRejectedValueOnce(new Error("latest run unavailable"));
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+
+    expect((await screen.findAllByText("latest run unavailable")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Review exact recovery plan for Agent drift watch" })).not.toBeInTheDocument();
+    expect(apiMock.retryDiscoveryRun).not.toHaveBeenCalled();
   });
 
   it("fails drift recovery closed when the saved plan cannot be validated", async () => {

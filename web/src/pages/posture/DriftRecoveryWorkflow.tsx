@@ -10,7 +10,7 @@ import { useCapabilityExecution } from "@/lib/capabilities";
 
 interface DriftRecoveryWorkflowProps {
   sources: DiscoverySource[];
-  runs: DiscoveryRun[];
+  latestRuns: Record<string, DiscoveryRun | null>;
   loading: boolean;
   error: string | null;
 }
@@ -18,7 +18,7 @@ interface DriftRecoveryWorkflowProps {
 /** F18 recovery starts with the server's exact, effect-free plan. The browser
  * never reconstructs watched paths from source.config and never reveals stored
  * fingerprints. A retry is a new run linked to an immutable failed run. */
-export function DriftRecoveryWorkflow({ sources, runs, loading, error }: DriftRecoveryWorkflowProps) {
+export function DriftRecoveryWorkflow({ sources, latestRuns, loading, error }: DriftRecoveryWorkflowProps) {
   const { t } = useTranslation();
   const driftSources = useMemo(() => sources.filter((source) => source.kind === "drift"), [sources]);
 
@@ -42,7 +42,7 @@ export function DriftRecoveryWorkflow({ sources, runs, loading, error }: DriftRe
       </div>
       <div className="grid gap-3">
         {driftSources.map((source) => (
-          <DriftRecoveryCard key={source.id} source={source} latestRun={latestRunForSource(runs, source.id)} />
+          <DriftRecoveryCard key={source.id} source={source} latestRun={latestRuns[source.id] ?? null} />
         ))}
       </div>
     </section>
@@ -176,10 +176,6 @@ function DriftRecoveryCard({ source, latestRun }: { source: DiscoverySource; lat
       ) : null}
     </article>
   );
-}
-
-function latestRunForSource(runs: DiscoveryRun[], sourceID: string): DiscoveryRun | null {
-  return runs.filter((run) => run.source_id === sourceID).sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))[0] ?? null;
 }
 
 function PlanFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
