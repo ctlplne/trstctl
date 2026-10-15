@@ -1186,6 +1186,20 @@ describe("policy governance surface", () => {
     await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
     await user.click(await screen.findByRole("button", { name: "Certify" }));
     await waitFor(() => expect(apiMock.decideNHIReviewItem).toHaveBeenCalled());
+    expect(apiMock.decideNHIReviewItem.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ decision: "certified", decision_evidence_refs: [] }));
+  });
+
+  it("records only evidence entered for the NHI review decision", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    await user.type(await screen.findByLabelText("Certification evidence refs"), "qa:reviewer-checked-owner");
+    await user.click(await screen.findByRole("button", { name: "Certify" }));
+    await waitFor(() => expect(apiMock.decideNHIReviewItem).toHaveBeenCalled());
+    const decision = apiMock.decideNHIReviewItem.mock.calls[0]?.[2];
+    expect(decision).toEqual(expect.objectContaining({ decision: "certified", decision_evidence_refs: ["qa:reviewer-checked-owner"] }));
+    expect(decision).not.toHaveProperty("reviewer_subject");
   });
 
   it("serves access-change approval requests from the Policy surface", async () => {
@@ -1223,6 +1237,20 @@ describe("policy governance surface", () => {
     await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
     await user.click(await screen.findByRole("button", { name: "Approve" }));
     await waitFor(() => expect(apiMock.decideAccessChangeRequest).toHaveBeenCalled());
+    expect(apiMock.decideAccessChangeRequest.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ decision: "approved", decision_evidence_refs: [] }));
+  });
+
+  it("records only evidence entered for the access-change approval", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    await user.type(await screen.findByLabelText("Approval evidence refs"), "qa:reviewer-checked-ticket");
+    await user.click(await screen.findByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(apiMock.decideAccessChangeRequest).toHaveBeenCalled());
+    expect(apiMock.decideAccessChangeRequest.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ decision: "approved", decision_evidence_refs: ["qa:reviewer-checked-ticket"] }),
+    );
   });
 
   it("renders access-change links only when the URL is safe", async () => {

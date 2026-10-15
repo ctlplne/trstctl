@@ -12744,6 +12744,14 @@ export const messages = {
     defaultMessage: "Evidence refs",
     description: "Label for evidence references.",
   },
+  "policy.nhiReview.decisionEvidenceRefs": {
+    defaultMessage: "Certification evidence refs",
+    description: "Evidence references entered by the assigned NHI reviewer for this decision, separate from campaign evidence.",
+  },
+  "policy.accessChange.decisionEvidenceRefs": {
+    defaultMessage: "Approval evidence refs",
+    description: "Evidence references entered by this approver for this decision, separate from request evidence.",
+  },
   "policy.accessChange.reason": {
     defaultMessage: "Reason",
     description: "Label for the request or decision reason.",

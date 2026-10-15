@@ -201,7 +201,10 @@ trstctl-cli access requests decide <request-id> -f access-decision.json
 ```
 
 The Policy console shows recent requests, their PR/ticket/CAB evidence, approval count,
-and approve/deny actions, never displaying credential material.
+and approve/deny actions, never displaying credential material. An approver enters
+their own decision evidence references in the decision panel. The console does not
+copy the request's evidence into an approval; the readback shows what that
+approver actually submitted.
 
 **Status:** served for PR/ticket/CAB-backed access-change requests with distinct-approver
 enforcement, idempotency, event projection, API, CLI, and console coverage.
@@ -608,7 +611,9 @@ auth:
   supplied decision `reviewer_subject` must match it. Rejected decisions emit
   no decision event. Sign in as the assigned reviewer before using the API,
   CLI, or console to certify, revoke, or except an item. Certification may omit
-  a reason; revoke and exception decisions require one.
+  a reason; revoke and exception decisions require one. The console accepts
+  separate decision evidence references and shows them after recording; it does
+  not reuse the campaign's evidence references as the reviewer's assertion.
 - **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
   `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
   `GET /api/v1/privacy/catalog`; operator-command events `privacy.subject.erased` and

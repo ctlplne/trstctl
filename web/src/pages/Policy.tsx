@@ -191,6 +191,7 @@ function PolicyContent() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewAction, setReviewAction] = useState<string | null>(null);
   const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
+  const [reviewDecisionEvidenceRefs, setReviewDecisionEvidenceRefs] = useState<Record<string, string>>({});
   const [accessRequests, setAccessRequests] = useState<AccessChangeRequest[]>([]);
   const [activeAccessRequest, setActiveAccessRequest] = useState<AccessChangeRequest | null>(null);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -198,6 +199,7 @@ function PolicyContent() {
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessAction, setAccessAction] = useState<string | null>(null);
   const [accessDecisionReasons, setAccessDecisionReasons] = useState<Record<string, string>>({});
+  const [accessDecisionEvidenceRefs, setAccessDecisionEvidenceRefs] = useState<Record<string, string>>({});
   const [reviewForm, setReviewForm] = useState({
     name: "Quarterly NHI access certification",
     reviewer: "",
@@ -515,6 +517,7 @@ function PolicyContent() {
       });
       setActiveReview(campaign);
       setDecisionReasons({});
+      setReviewDecisionEvidenceRefs({});
       setReviewNotice(`${campaign.name} started with ${campaign.item_count} ${plural(campaign.item_count, "item")}.`);
       await refreshNHIReviews(campaign.id);
     } catch (err) {
@@ -545,11 +548,11 @@ function PolicyContent() {
     try {
       const campaign = await api.decideNHIReviewItem(activeReview.id, item.item_id, {
         decision,
-        reviewer_subject: optionalText(reviewForm.reviewer),
         reason: optionalText(decisionReasons[item.item_id]),
-        decision_evidence_refs: splitRefs(reviewForm.evidenceRefs),
+        decision_evidence_refs: splitRefs(reviewDecisionEvidenceRefs[item.item_id] ?? ""),
       });
       setActiveReview(campaign);
+      setReviewDecisionEvidenceRefs((current) => ({ ...current, [item.item_id]: "" }));
       setReviewNotice(`${item.display_name} marked ${decision}.`);
       await refreshNHIReviews(campaign.id);
     } catch (err) {
@@ -607,6 +610,7 @@ function PolicyContent() {
       });
       setActiveAccessRequest(request);
       setAccessDecisionReasons({});
+      setAccessDecisionEvidenceRefs({});
       setAccessNotice(t("policy.accessChange.openedNotice", { action: request.requested_action, changeRef: request.change_ref, name: request.display_name }));
       await refreshAccessChangeRequests(request.id);
     } catch (err) {
@@ -637,9 +641,10 @@ function PolicyContent() {
       const updated = await api.decideAccessChangeRequest(request.id, {
         decision,
         reason: optionalText(accessDecisionReasons[request.id]),
-        decision_evidence_refs: splitRefs(accessForm.evidenceRefs),
+        decision_evidence_refs: splitRefs(accessDecisionEvidenceRefs[request.id] ?? ""),
       });
       setActiveAccessRequest(updated);
+      setAccessDecisionEvidenceRefs((current) => ({ ...current, [request.id]: "" }));
       setAccessNotice(t("policy.accessChange.decisionNotice", { decision, name: request.display_name }));
       await refreshAccessChangeRequests(updated.id);
     } catch (err) {
@@ -1273,9 +1278,11 @@ function PolicyContent() {
               {activeReview && (
                 <NHIReviewCampaignPanel
                   campaign={activeReview}
+                  decisionEvidenceRefs={reviewDecisionEvidenceRefs}
                   decisionReasons={decisionReasons}
                   reviewAction={reviewAction}
                   onDecision={decideNHIReviewItem}
+                  onEvidenceRefsChange={setReviewDecisionEvidenceRefs}
                   onReasonChange={setDecisionReasons}
                 />
               )}
@@ -1448,8 +1455,10 @@ function PolicyContent() {
                 <AccessChangeRequestPanel
                   request={activeAccessRequest}
                   accessAction={accessAction}
+                  decisionEvidenceRefs={accessDecisionEvidenceRefs}
                   decisionReasons={accessDecisionReasons}
                   onDecision={decideAccessChangeRequest}
+                  onEvidenceRefsChange={setAccessDecisionEvidenceRefs}
                   onReasonChange={setAccessDecisionReasons}
                 />
               )}
@@ -1615,17 +1624,22 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
 
 function NHIReviewCampaignPanel({
   campaign,
+  decisionEvidenceRefs,
   decisionReasons,
   onDecision,
+  onEvidenceRefsChange,
   onReasonChange,
   reviewAction,
 }: {
   campaign: NHIReviewCampaign;
+  decisionEvidenceRefs: Record<string, string>;
   decisionReasons: Record<string, string>;
   onDecision: (item: NHIReviewItem, decision: NHIReviewDecisionRequest["decision"]) => Promise<void>;
+  onEvidenceRefsChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
   onReasonChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
   reviewAction: string | null;
 }) {
+  const { t } = useTranslation();
   const items = campaign.items ?? [];
 
   return (
@@ -1667,6 +1681,7 @@ function NHIReviewCampaignPanel({
             <tbody>
               {items.map((item) => {
                 const reason = decisionReasons[item.item_id] ?? "";
+                const evidenceRefs = decisionEvidenceRefs[item.item_id] ?? "";
                 const busy = reviewAction?.startsWith(`${item.item_id}:`) ?? false;
                 return (
                   <tr key={item.item_id} className="align-top">
@@ -1689,6 +1704,14 @@ function NHIReviewCampaignPanel({
                             value={reason}
                             onChange={(event) => onReasonChange((current) => ({ ...current, [item.item_id]: event.target.value }))}
                           />
+                          <label className="grid gap-1">
+                            <span className="font-medium">{t("policy.nhiReview.decisionEvidenceRefs")}</span>
+                            <input
+                              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                              value={evidenceRefs}
+                              onChange={(event) => onEvidenceRefsChange((current) => ({ ...current, [item.item_id]: event.target.value }))}
+                            />
+                          </label>
                           <div className="flex flex-wrap gap-2">
                             <Button type="button" variant="outline" disabled={busy} onClick={() => void onDecision(item, "certified")}>
                               {translateNow("source.certify.c1567c2908")}
@@ -1705,6 +1728,9 @@ function NHIReviewCampaignPanel({
                         <div>
                           <p>{item.decision_reason || translateNow("source.recorded.c7175fa7a0")}</p>
                           {item.decision_by && <p className="mt-1 text-xs text-muted-foreground">{item.decision_by}</p>}
+                          {(item.decision_evidence_refs?.length ?? 0) > 0 && (
+                            <p className="mt-1 break-all text-xs text-muted-foreground">{item.decision_evidence_refs?.join(", ")}</p>
+                          )}
                         </div>
                       )}
                     </td>
@@ -1723,20 +1749,25 @@ function NHIReviewCampaignPanel({
 
 function AccessChangeRequestPanel({
   accessAction,
+  decisionEvidenceRefs,
   decisionReasons,
   onDecision,
+  onEvidenceRefsChange,
   onReasonChange,
   request,
 }: {
   request: AccessChangeRequest;
   accessAction: string | null;
+  decisionEvidenceRefs: Record<string, string>;
   decisionReasons: Record<string, string>;
   onDecision: (request: AccessChangeRequest, decision: AccessChangeDecisionRequest["decision"]) => Promise<void>;
+  onEvidenceRefsChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
   onReasonChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
 }) {
   const { t } = useTranslation();
   const decisions = request.decisions ?? [];
   const reason = decisionReasons[request.id] ?? "";
+  const evidenceRefs = decisionEvidenceRefs[request.id] ?? "";
   const busy = accessAction === "create" || (accessAction?.startsWith(`${request.id}:`) ?? false);
   const changeHref = safeHref(request.change_url);
   const approve = () => {
@@ -1798,6 +1829,14 @@ function AccessChangeRequestPanel({
               placeholder={t("policy.accessChange.requiredForDenial")}
               value={reason}
               onChange={(event) => onReasonChange((current) => ({ ...current, [request.id]: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.accessChange.decisionEvidenceRefs")}</span>
+            <input
+              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+              value={evidenceRefs}
+              onChange={(event) => onEvidenceRefsChange((current) => ({ ...current, [request.id]: event.target.value }))}
             />
           </label>
           <div className="flex flex-wrap gap-2">
