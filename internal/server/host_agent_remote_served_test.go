@@ -46,6 +46,7 @@ type servedHostRelayChannel struct {
 	lastOutcome, lastDetail   string
 	lastAccepted              bool
 	lastReportErr             error
+	lastRedeemErr             error
 	lastSignErr               error
 	lastCredentialFingerprint string
 	lastCustody               *custody.Record
@@ -63,8 +64,9 @@ func (c servedHostRelayChannel) ClaimJobs(ctx context.Context, kinds []string, l
 	return out, nil
 }
 
-func (c servedHostRelayChannel) RedeemJobCredential(ctx context.Context, jobID int64, attempt int) (map[string][]byte, error) {
+func (c *servedHostRelayChannel) RedeemJobCredential(ctx context.Context, jobID int64, attempt int) (map[string][]byte, error) {
 	resp, err := c.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{JobID: jobID, Attempt: attempt})
+	c.lastRedeemErr = err
 	if err != nil {
 		return nil, err
 	}
@@ -168,8 +170,8 @@ func TestAUD30HostAgentProcessHelper(t *testing.T) {
 	channel := &servedHostRelayChannel{client: transport.NewAgentClient(conn), identity: a}
 	executed, err := agentrelay.RunOnceWithHost(t.Context(), channel, http.DefaultClient, profile, 1, 60)
 	if err != nil || executed != 1 {
-		t.Fatalf("host pass = (%d, %v), report=%s/%q; want one verified deploy",
-			executed, err, channel.lastOutcome, channel.lastDetail)
+		t.Fatalf("host pass = (%d, %v), report=%s/%q redemption=%v; want one verified deploy",
+			executed, err, channel.lastOutcome, channel.lastDetail, channel.lastRedeemErr)
 	}
 	if !channel.lastAccepted || channel.lastReportErr != nil {
 		t.Fatalf("host receiver refused the shipping report: %v", channel.lastReportErr)
@@ -239,8 +241,8 @@ func TestAUD32HostAgentProcessHelper(t *testing.T) {
 		wantExecuted = 0
 	}
 	if executed != wantExecuted || channel.lastOutcome != wantOutcome {
-		t.Fatalf("cold-start host pass executed=%d outcome=%q detail=%q, want %d/%q",
-			executed, channel.lastOutcome, channel.lastDetail, wantExecuted, wantOutcome)
+		t.Fatalf("cold-start host pass executed=%d outcome=%q detail=%q redemption=%v, want %d/%q",
+			executed, channel.lastOutcome, channel.lastDetail, channel.lastRedeemErr, wantExecuted, wantOutcome)
 	}
 }
 
@@ -293,6 +295,13 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	targetConfig, err := json.Marshal(map[string]any{
 		"cert_path": certPath, "key_path": keyPath,
 		"verify_address": listener.Addr().String(), "verify_server_name": "host-aud30.test",
+		"executor": "agent", "required_agent_id": agentRowID(h.tenant, h.agent),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := h.srv.orch.UpsertDeploymentTarget(ctx, h.tenant, store.DeploymentTarget{
+		Name: "remote-host-aud30", Type: "nginx", Config: targetConfig, Enabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -308,8 +317,9 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	}
 	const idemKey = "aud30-host-deploy"
 	raw, err := json.Marshal(connector.DeployPayload{
-		Connector: "nginx", Target: "remote-host-aud30", TargetID: "target-aud30",
-		TargetConfig: targetConfig, CertPEM: newCert, KeyPEM: newKey,
+		Connector: "nginx", Target: "remote-host-aud30", TargetID: target.ID,
+		TargetRevision: target.RevisionID,
+		TargetConfig:   targetConfig, CertPEM: newCert, KeyPEM: newKey,
 		Fingerprint: connector.CertificateFingerprint(newCert),
 	})
 	if err != nil {
@@ -456,7 +466,7 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 		t.Fatalf("served delivery timeline = status %d body %s", statusCode, body)
 	}
 	statusCode, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/endpoints/verifications", tok, nil)
-	if statusCode != http.StatusOK || !jsonContains(t, body, "target-aud30") || !jsonContains(t, body, h.agent) {
+	if statusCode != http.StatusOK || !jsonContains(t, body, target.ID) || !jsonContains(t, body, h.agent) {
 		t.Fatalf("served verification timeline = status %d body %s", statusCode, body)
 	}
 
@@ -522,6 +532,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 			"cert_path": certPath, "key_path": keyPath,
 			"verify_address": listener.Addr().String(), "verify_server_name": "rollback-aud32.test",
 			"auto_rollback_on_verify_failure": auto,
+			"executor":                        "agent", "required_agent_id": agentRowID(h.tenant, h.agent),
 		})
 		if marshalErr != nil {
 			t.Fatal(marshalErr)
