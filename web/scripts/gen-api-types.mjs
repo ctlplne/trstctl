@@ -77,6 +77,7 @@ function propKey(name) {
 }
 
 function emitInterface(name, schema) {
+  if (schema.type !== "object") return `export type ${name} = ${tsType(schema)};`;
   const required = new Set(schema.required ?? []);
   const props = schema.properties ?? {};
   const lines = [`export interface ${name} {`];

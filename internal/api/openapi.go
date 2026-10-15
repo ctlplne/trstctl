@@ -241,8 +241,12 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 			op.Parameters = append(op.Parameters, Parameter{Name: q.name, In: "query", Required: q.required, Description: q.desc, Schema: schemaForParam(q)})
 		}
 		if r.reqSchema != "" {
+			contentType := r.reqContentType
+			if contentType == "" {
+				contentType = "application/json"
+			}
 			op.RequestBody = &RequestBody{Required: !r.reqOptional, Content: map[string]MediaType{
-				"application/json": {Schema: ref(r.reqSchema)},
+				contentType: {Schema: ref(r.reqSchema)},
 			}}
 		}
 		problemContent := map[string]MediaType{"application/problem+json": {Schema: ref("Problem")}}
@@ -5094,6 +5098,12 @@ func componentSchemas() map[string]*Schema {
 		"request": ref("IssuanceRequest"), "identity": ref("Identity"),
 		"csr_pem": str(), "issue_idempotency_key": str(),
 	}, "request", "identity", "issue_idempotency_key")
+	cmdbReconcileScheduleInput := object(map[string]*Schema{
+		"instance_url": str(), "token_ref": str(), "ci_query": str(),
+		"allow_private_endpoint": {Type: "boolean"},
+		"interval_seconds":       {Type: "integer"}, "enabled": {Type: "boolean"},
+		"execution": {Type: "string", Enum: []string{"relay"}},
+	}, "instance_url", "token_ref", "interval_seconds")
 	cmdbReconcileSchedule := object(map[string]*Schema{
 		// configured is separate from enabled: "never set up" and "set up and
 		// paused" are different operator states, and one flag merges them.
@@ -6866,10 +6876,12 @@ func componentSchemas() map[string]*Schema {
 		"GraphResponse":                            graphResponse,
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
+		"OwnershipCSV":                             {Type: "string", Description: "UTF-8 CSV with owner header and optional email, application_id, service, business_unit, environment, and source_ref columns; at most 8 MiB"},
 		"OwnershipImportResult":                    ownershipImportResult,
 		"OwnershipConflictList":                    ownershipConflictList,
 		"OwnershipResolveInput":                    ownershipResolveInput,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
+		"CMDBReconcileScheduleInput":               cmdbReconcileScheduleInput,
 		"IssuanceRequest":                          issuanceRequestSchema,
 		"Brand":                                    brandSchema,
 		"AgentUpgradeCampaign":                     agentUpgradeCampaignSchema,

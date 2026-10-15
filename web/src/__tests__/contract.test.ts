@@ -30,6 +30,10 @@ describe("FE↔BE contract (SURFACE-005)", () => {
     expect(body).toMatch(/\n\s*status\??:/);
   });
 
+  it("keeps a primitive CSV component a string instead of an empty object", () => {
+    expect(fresh).toContain("export type OwnershipCSV = string;");
+  });
+
   it("is not vacuous: an injected FE/BE mismatch is detected", () => {
     // Rename a Certificate field in a COPY of the generated source and assert the
     // equality check (the gate above) would now fail.

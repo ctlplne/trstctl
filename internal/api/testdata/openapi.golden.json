@@ -7667,6 +7667,40 @@
         ],
         "type": "object"
       },
+      "CMDBReconcileScheduleInput": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "ci_query": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "execution": {
+            "enum": [
+              "relay"
+            ],
+            "type": "string"
+          },
+          "instance_url": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_url",
+          "token_ref",
+          "interval_seconds"
+        ],
+        "type": "object"
+      },
       "CMPQualification": {
         "properties": {
           "binding_mode": {
@@ -24915,6 +24949,10 @@
           "name"
         ],
         "type": "object"
+      },
+      "OwnershipCSV": {
+        "description": "UTF-8 CSV with owner header and optional email, application_id, service, business_unit, environment, and source_ref columns; at most 8 MiB",
+        "type": "string"
       },
       "OwnershipConflict": {
         "properties": {
@@ -55408,6 +55446,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CMDBReconcileScheduleInput"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -55466,6 +55514,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "text/csv": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnershipCSV"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

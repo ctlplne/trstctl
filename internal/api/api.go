@@ -839,6 +839,7 @@ type route struct {
 	handlerOwnsPathIDs bool // the handler decides malformed path ids itself (AUD-77 tenant-safe 404); the registration guard is skipped
 	query              []param
 	reqSchema          string
+	reqContentType     string // empty defaults to application/json
 	reqOptional        bool
 	resSchema          string
 	successCode        string

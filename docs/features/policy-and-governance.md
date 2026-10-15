@@ -135,6 +135,13 @@ also carry `application_id`, `service`, `business_unit`, `environment`, and
 `trstctl owners resolve-conflict <id> -f request.json`. A CSV row cannot invent
 an owner or overwrite an attested field.
 
+The served OpenAPI declares this import as a required `text/csv` body (up to
+8 MiB). Scheduled ServiceNow reconciliation is configured with
+`PUT /api/v1/owners/cmdb-schedule` using JSON: an operator-approved instance
+URL, a `secret://` token reference, an interval of at least 300 seconds, and
+relay execution. `GET /api/v1/owners/cmdb-schedule` distinguishes never
+configured, paused, incomplete, failed, and completed coverage.
+
 ### NHI policy compliance
 
 `GET /api/v1/nhi/policy/compliance` (`nhi:read`) evaluates governed non-human

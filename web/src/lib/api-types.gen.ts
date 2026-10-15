@@ -1891,6 +1891,16 @@ export interface CMDBReconcileSchedule {
   token_ref?: string;
 }
 
+export interface CMDBReconcileScheduleInput {
+  allow_private_endpoint?: boolean;
+  ci_query?: string;
+  enabled?: boolean;
+  execution?: "relay";
+  instance_url: string;
+  interval_seconds: number;
+  token_ref: string;
+}
+
 export interface CMPQualification {
   binding_mode: "subject-bound" | "registration-authority";
   blockers: string[];
@@ -6053,6 +6063,8 @@ export interface OwnershipAttributionOwner {
   name: string;
   tenant_id: string;
 }
+
+export type OwnershipCSV = string;
 
 export interface OwnershipConflict {
   current_attested: boolean;

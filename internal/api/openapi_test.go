@@ -98,6 +98,30 @@ func TestOpenAPISpecGeneratedAndValid(t *testing.T) {
 	}
 }
 
+func TestOwnershipSourceWritesDescribeTheirRequestBodies(t *testing.T) {
+	doc := fetchSpec(t)
+	paths := doc["paths"].(map[string]any)
+	for _, test := range []struct {
+		method string
+		path   string
+		media  string
+	}{
+		{"post", "/api/v1/owners/import", "text/csv"},
+		{"put", "/api/v1/owners/cmdb-schedule", "application/json"},
+	} {
+		op := paths[test.path].(map[string]any)[test.method].(map[string]any)
+		body, ok := op["requestBody"].(map[string]any)
+		if !ok || body["required"] != true {
+			t.Errorf("%s %s: required request body missing", strings.ToUpper(test.method), test.path)
+			continue
+		}
+		content, ok := body["content"].(map[string]any)
+		if !ok || content[test.media] == nil {
+			t.Errorf("%s %s: %s body missing", strings.ToUpper(test.method), test.path, test.media)
+		}
+	}
+}
+
 func TestOpenAPIExactCertificateRevocationExplainsBoundedSelection(t *testing.T) {
 	doc := fetchSpec(t)
 	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
