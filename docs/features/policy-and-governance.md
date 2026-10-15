@@ -186,6 +186,10 @@ authenticated sessions. Optional body `requester_subject` and `approver_subject`
 claims must match those sessions. The approver must differ from the requester;
 a second decision by the same approver is rejected before an event is appended.
 The request reaches `approved` only at quorum (any denial moves it to `denied`).
+If an older build already appended a duplicate decision, cold replay retains
+the first decision by that approver, logs the ignored event ID and sequence,
+and continues serving. The duplicate remains in immutable event history;
+live decisions still reject it.
 An approval may leave its decision reason blank; a denial requires one.
 Create and decide are idempotent, so a retried
 `Idempotency-Key` returns the original result rather than duplicating an approval. The

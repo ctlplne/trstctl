@@ -185,6 +185,26 @@ func (s *Store) ApplyAccessChangeRequestDecidedTx(ctx context.Context, tx pgx.Tx
 	return err
 }
 
+// ApplyAccessChangeRequestDecidedReplayTx keeps the first recorded decision by
+// one approver when an older log contains a second event that the command side
+// appended before its pre-append authority fence existed. Only historical
+// projection callers use this method. Live commands still use the strict
+// ApplyAccessChangeRequestDecidedTx path and reject the duplicate.
+func (s *Store) ApplyAccessChangeRequestDecidedReplayTx(ctx context.Context, tx pgx.Tx, tenantID string, d AccessChangeDecision) (bool, error) {
+	var prior bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+		    SELECT 1 FROM access_change_request_decisions
+		     WHERE tenant_id = $1 AND request_id = $2 AND approver_subject = $3
+		)`, tenantID, d.RequestID, d.ApproverSubject).Scan(&prior); err != nil {
+		return false, err
+	}
+	if prior {
+		return true, nil
+	}
+	return false, s.ApplyAccessChangeRequestDecidedTx(ctx, tx, tenantID, d)
+}
+
 // GetAccessChangeRequest loads a request with its decisions under tenant RLS.
 func (s *Store) GetAccessChangeRequest(ctx context.Context, tenantID, id string) (AccessChangeRequest, error) {
 	var out AccessChangeRequest

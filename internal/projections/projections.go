@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
 	"sort"
@@ -3478,6 +3479,16 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 		return err
 	}
 	return p.applyEventProjections(ctx, e)
+}
+
+type accessDecisionHistoryReplayKey struct{}
+
+func accessDecisionHistoryReplay(ctx context.Context) context.Context {
+	return context.WithValue(ctx, accessDecisionHistoryReplayKey{}, true)
+}
+
+func isAccessDecisionHistoryReplay(ctx context.Context) bool {
+	return ctx.Value(accessDecisionHistoryReplayKey{}) == true
 }
 
 func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
@@ -7138,10 +7149,20 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if decidedAt.IsZero() {
 			decidedAt = e.Time
 		}
-		return p.store.ApplyAccessChangeRequestDecidedTx(ctx, tx, e.TenantID, store.AccessChangeDecision{
+		decision := store.AccessChangeDecision{
 			RequestID: pl.RequestID, Decision: pl.Decision, ApproverSubject: pl.ApproverSubject,
 			Reason: pl.Reason, DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
-		})
+		}
+		if isAccessDecisionHistoryReplay(ctx) {
+			skipped, err := p.store.ApplyAccessChangeRequestDecidedReplayTx(ctx, tx, e.TenantID, decision)
+			if skipped {
+				slog.Warn("historical access decision duplicate retained with first-writer authority",
+					"tenant_id", e.TenantID, "event_id", e.ID, "sequence", e.Sequence,
+					"request_id", pl.RequestID, "approver_subject", pl.ApproverSubject)
+			}
+			return err
+		}
+		return p.store.ApplyAccessChangeRequestDecidedTx(ctx, tx, e.TenantID, decision)
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model
@@ -7977,7 +7998,7 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 		if isTenantLifecycleEventType(e.Type) {
 			return p.ApplyRetainedTenantLifecycle(ctx, e)
 		}
-		return p.Apply(ctx, e)
+		return p.Apply(accessDecisionHistoryReplay(ctx), e)
 	}); err != nil {
 		return err
 	}
@@ -8108,7 +8129,7 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 					}
 					skip = skip || skipDynamicSecret
 					if !skip {
-						err = p.applyCore(readCtx, e)
+						err = p.applyCore(accessDecisionHistoryReplay(readCtx), e)
 					}
 					if err != nil {
 						return err
@@ -8519,7 +8540,7 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 		if err := p.store.SetTenantGUCTx(ctx, tx, storageTenant); err != nil {
 			return err
 		}
-		return p.ApplyTx(ctx, tx, e)
+		return p.ApplyTx(accessDecisionHistoryReplay(ctx), tx, e)
 	}
 }
 
