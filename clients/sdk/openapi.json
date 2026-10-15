@@ -45199,9 +45199,17 @@
             }
           },
           {
-            "description": "opaque pagination cursor from a prior page",
+            "description": "opaque cursor from a prior page using the same order",
             "in": "query",
             "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "id (default, legacy order) or recent (newest created run first)",
+            "in": "query",
+            "name": "order",
             "schema": {
               "type": "string"
             }

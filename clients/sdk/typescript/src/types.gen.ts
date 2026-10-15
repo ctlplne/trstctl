@@ -23292,8 +23292,10 @@ export interface operations {
             query?: {
                 /** @description maximum items per page (1-100, default 20) */
                 limit?: number;
-                /** @description opaque pagination cursor from a prior page */
+                /** @description opaque cursor from a prior page using the same order */
                 cursor?: string;
+                /** @description id (default, legacy order) or recent (newest created run first) */
+                order?: string;
             };
             header?: never;
             path?: never;
