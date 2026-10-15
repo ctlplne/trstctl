@@ -181,9 +181,12 @@ system from GitHub, GitLab, Bitbucket, ServiceNow, or Jira references; unknown s
 stay external, not a supported integration.
 
 Decisions are recorded with `POST /api/v1/access/requests/{id}/decisions`
-(`access:write`): the approver must differ from the requester, a second decision by the
-same approver is rejected, and the request reaches `approved` only at quorum (any
-denial moves it to `denied`). Create and decide are idempotent, so a retried
+(`access:write`): the requester and approver are derived from their respective
+authenticated sessions. Optional body `requester_subject` and `approver_subject`
+claims must match those sessions. The approver must differ from the requester;
+a second decision by the same approver is rejected before an event is appended.
+The request reaches `approved` only at quorum (any denial moves it to `denied`).
+Create and decide are idempotent, so a retried
 `Idempotency-Key` returns the original result rather than duplicating an approval. The
 read side is projected from `access.change_request.created` and
 `access.change_request.decided` events, available at `GET /api/v1/access/requests` and

@@ -521,7 +521,10 @@ trstctl-cli --idempotency-key access-4821-approval-1 access requests decide 7777
 
 The requester cannot approve their own request, and the same approver cannot be counted
 twice. Any denial makes the request terminal; approvals move it to `approved` only after
-the required count is met.
+the required count is met. The server derives both identities from the caller's
+authenticated session. If a request includes `requester_subject` or a decision includes
+`approver_subject`, it must match that authenticated subject. Sign in as each distinct
+approver before recording their decision.
 
 ## Ephemeral API keys
 

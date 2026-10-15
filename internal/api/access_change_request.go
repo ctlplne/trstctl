@@ -72,6 +72,9 @@ func (a *API) createAccessChangeRequest(w http.ResponseWriter, r *http.Request) 
 		}
 		created, err := a.orch.CreateAccessChangeRequest(ctx, tenantID, req)
 		if err != nil {
+			if errors.Is(err, store.ErrAccessChangeActorUnauthorized) {
+				return 0, nil, errStatus(http.StatusForbidden, err.Error())
+			}
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 		return http.StatusCreated, toAccessChangeRequestResponse(created, true), nil
@@ -144,6 +147,9 @@ func (a *API) decideAccessChangeRequest(w http.ResponseWriter, r *http.Request) 
 		}
 		updated, err := a.orch.DecideAccessChangeRequest(ctx, tenantID, requestID, req)
 		if err != nil {
+			if errors.Is(err, store.ErrAccessChangeActorUnauthorized) {
+				return 0, nil, errStatus(http.StatusForbidden, err.Error())
+			}
 			if errors.Is(err, store.ErrAccessChangeRequestTerminal) || errors.Is(err, store.ErrAccessChangeDecisionDuplicate) {
 				return 0, nil, errStatus(http.StatusConflict, err.Error())
 			}

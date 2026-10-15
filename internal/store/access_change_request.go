@@ -14,6 +14,7 @@ import (
 var (
 	ErrAccessChangeRequestTerminal   = errors.New("access change request is already terminal")
 	ErrAccessChangeDecisionDuplicate = errors.New("access change request decision already recorded")
+	ErrAccessChangeActorUnauthorized = errors.New("access change actor claim does not match the authenticated subject")
 )
 
 // AccessChangeRequest is an event-sourced approval / PR change-management request
@@ -52,6 +53,38 @@ type AccessChangeDecision struct {
 	Reason               string
 	DecisionEvidenceRefs []string
 	DecidedAt            time.Time
+}
+
+// CheckAccessChangeDecisionAuthorityTx serializes decisions for one request and
+// rejects unauthorized or duplicate actors before the decision event append.
+func (s *Store) CheckAccessChangeDecisionAuthorityTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, approver string) error {
+	var requester, status string
+	err := tx.QueryRow(ctx,
+		`SELECT requester_subject, status
+		   FROM access_change_requests
+		  WHERE tenant_id = $1 AND id = $2
+		  FOR UPDATE`, tenantID, requestID).Scan(&requester, &status)
+	if err != nil {
+		return err
+	}
+	if approver == "" || approver == requester {
+		return ErrAccessChangeActorUnauthorized
+	}
+	if status != "pending" {
+		return fmt.Errorf("%w: request %s is %s", ErrAccessChangeRequestTerminal, requestID, status)
+	}
+	var alreadyDecided bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+		    SELECT 1 FROM access_change_request_decisions
+		     WHERE tenant_id = $1 AND request_id = $2 AND approver_subject = $3
+		)`, tenantID, requestID, approver).Scan(&alreadyDecided); err != nil {
+		return err
+	}
+	if alreadyDecided {
+		return fmt.Errorf("%w: %s already decided request %s", ErrAccessChangeDecisionDuplicate, approver, requestID)
+	}
+	return nil
 }
 
 // ApplyAccessChangeRequestCreatedTx projects a request-created event. Replays are

@@ -73,7 +73,7 @@ func TestServedAccessChangeRequestCAPGOV05EndToEnd(t *testing.T) {
 		"decision": "approved",
 		"reason":   "self approval must fail",
 	}
-	if status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests/"+requestID+"/decisions", requesterTok, "cap-gov-05-self", selfDecision); status != http.StatusBadRequest {
+	if status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests/"+requestID+"/decisions", requesterTok, "cap-gov-05-self", selfDecision); status != http.StatusForbidden {
 		t.Fatalf("self decision status = %d body %s", status, body)
 	}
 
@@ -144,6 +144,62 @@ func TestServedAccessChangeRequestCAPGOV05EndToEnd(t *testing.T) {
 	}
 	if events := nhiReviewEvents(t, h.log, projections.EventAccessChangeRequestDecided, requestID); len(events) != 2 {
 		t.Fatalf("decision events = %d, want 2", len(events))
+	}
+}
+
+func TestServedAccessChangeActorClaimsRefusedBeforeAppend(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	creator := seedScopedTokenSubject(t, h.store, h.tenant, "qa-access-creator", "access:read", "access:write")
+	approver := seedScopedTokenSubject(t, h.store, h.tenant, "qa-access-approver", "access:read", "access:write")
+	create := func(id string) map[string]any {
+		return map[string]any{
+			"id": id, "requested_action": "revoke", "nhi_id": "spiffe://qa.local/access-actor-fence",
+			"nhi_kind": "workload", "resource": "qa-local-postgres", "entitlement": "schema:qa/read",
+			"change_ref": "jira:TRSTCTL-QA-ACTOR-FENCE", "reason": "QA-only identity binding proof",
+			"required_approvals": 2,
+		}
+	}
+	const spoofCreateID = "88888888-8888-4888-8888-888888888881"
+	spoofed := create(spoofCreateID)
+	spoofed["requester_subject"] = "qa-unlogged-in-requester"
+	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests", creator, "access-actor-spoof-create", spoofed)
+	if status != http.StatusForbidden {
+		t.Errorf("requester identity spoof = %d body %s, want 403", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventAccessChangeRequestCreated, spoofCreateID)); got != 0 {
+		t.Errorf("requester spoof appended %d create events, want zero", got)
+	}
+
+	const selfSpoofID = "88888888-8888-4888-8888-888888888882"
+	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests", creator, "access-actor-self-start", create(selfSpoofID))
+	if status != http.StatusCreated {
+		t.Fatalf("start self-spoof request = %d body %s", status, body)
+	}
+	path := "/api/v1/access/requests/" + selfSpoofID + "/decisions"
+	status, body = doBearer(t, h.ts, http.MethodPost, path, creator, "access-actor-self-spoof", map[string]any{
+		"decision": "approved", "approver_subject": "qa-unlogged-in-approver",
+	})
+	if status != http.StatusForbidden {
+		t.Errorf("creator approver spoof = %d body %s, want 403", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventAccessChangeRequestDecided, selfSpoofID)); got != 0 {
+		t.Errorf("creator spoof appended %d decision events, want zero", got)
+	}
+
+	const otherSpoofID = "88888888-8888-4888-8888-888888888883"
+	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests", creator, "access-actor-other-start", create(otherSpoofID))
+	if status != http.StatusCreated {
+		t.Fatalf("start other-spoof request = %d body %s", status, body)
+	}
+	path = "/api/v1/access/requests/" + otherSpoofID + "/decisions"
+	status, body = doBearer(t, h.ts, http.MethodPost, path, approver, "access-actor-other-spoof", map[string]any{
+		"decision": "approved", "approver_subject": "qa-unlogged-in-approver",
+	})
+	if status != http.StatusForbidden {
+		t.Errorf("different approver spoof = %d body %s, want 403", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventAccessChangeRequestDecided, otherSpoofID)); got != 0 {
+		t.Errorf("different approver spoof appended %d decision events, want zero", got)
 	}
 }
 

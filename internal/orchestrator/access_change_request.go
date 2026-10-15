@@ -95,6 +95,9 @@ func (o *Orchestrator) DecideAccessChangeRequest(ctx context.Context, tenantID, 
 	}
 	var ev events.Event
 	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := o.store.CheckAccessChangeDecisionAuthorityTx(ctx, tx, tenantID, req.ID, payload.ApproverSubject); err != nil {
+			return err
+		}
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestDecided, TenantID: tenantID, Data: evData})
 		if err != nil {
@@ -120,14 +123,13 @@ func normalizeAccessChangeRequest(ctx context.Context, in AccessChangeRequestCre
 	default:
 		return projections.AccessChangeRequestCreated{}, fmt.Errorf("requested_action must be grant, modify, revoke, rotate, deploy, or break_glass")
 	}
-	requester := trimBounded(in.RequesterSubject, 180)
-	if requester == "" {
-		if actor, ok := events.ActorFromContext(ctx); ok {
-			requester = trimBounded(actor.Subject, 180)
-		}
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || strings.TrimSpace(actor.Subject) == "" {
+		return projections.AccessChangeRequestCreated{}, store.ErrAccessChangeActorUnauthorized
 	}
-	if requester == "" {
-		return projections.AccessChangeRequestCreated{}, fmt.Errorf("requester_subject is required")
+	requester := trimBounded(actor.Subject, 180)
+	if claimed := trimBounded(in.RequesterSubject, 180); claimed != "" && claimed != requester {
+		return projections.AccessChangeRequestCreated{}, store.ErrAccessChangeActorUnauthorized
 	}
 	nhiID := trimBounded(in.NHIID, 240)
 	nhiKind := trimBounded(in.NHIKind, 80)
@@ -217,17 +219,16 @@ func normalizeAccessChangeDecision(ctx context.Context, req store.AccessChangeRe
 	default:
 		return projections.AccessChangeRequestDecided{}, fmt.Errorf("decision must be approved or denied")
 	}
-	approver := trimBounded(in.ApproverSubject, 180)
-	if approver == "" {
-		if actor, ok := events.ActorFromContext(ctx); ok {
-			approver = trimBounded(actor.Subject, 180)
-		}
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || strings.TrimSpace(actor.Subject) == "" {
+		return projections.AccessChangeRequestDecided{}, store.ErrAccessChangeActorUnauthorized
 	}
-	if approver == "" {
-		return projections.AccessChangeRequestDecided{}, fmt.Errorf("approver_subject is required")
+	approver := trimBounded(actor.Subject, 180)
+	if claimed := trimBounded(in.ApproverSubject, 180); claimed != "" && claimed != approver {
+		return projections.AccessChangeRequestDecided{}, store.ErrAccessChangeActorUnauthorized
 	}
 	if approver == req.RequesterSubject {
-		return projections.AccessChangeRequestDecided{}, fmt.Errorf("approver_subject must differ from requester_subject")
+		return projections.AccessChangeRequestDecided{}, store.ErrAccessChangeActorUnauthorized
 	}
 	reason := trimBounded(in.Reason, 500)
 	if decision == "denied" && reason == "" {
