@@ -667,7 +667,22 @@
             "type": "boolean"
           },
           "roster": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "public_der": {
+                  "type": "string"
+                },
+                "relying_party": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "relying_party",
+                "public_der"
+              ]
+            }
           },
           "status": {
             "type": "string"
@@ -703,7 +718,22 @@
             "type": "string"
           },
           "roster": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "public_der": {
+                  "type": "string"
+                },
+                "relying_party": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "relying_party",
+                "public_der"
+              ]
+            }
           },
           "threshold": {
             "type": "integer"
