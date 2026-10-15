@@ -14443,6 +14443,79 @@ export const messages = {
     defaultMessage: "Add channel",
     description: "Single primary action that opens bounded notification channel authoring.",
   },
+  "notifications.design.edit": {
+    defaultMessage: "Edit",
+    description: "Edit a saved notification channel or routing policy.",
+  },
+  "notifications.design.delete": {
+    defaultMessage: "Delete",
+    description: "Review removal of a saved notification channel or routing policy.",
+  },
+  "notifications.design.editNamed": {
+    defaultMessage: "Edit {name}",
+    description: "Accessible edit action identifying its exact notification target.",
+  },
+  "notifications.design.deleteNamed": {
+    defaultMessage: "Delete {name}",
+    description: "Accessible delete action identifying its exact notification target.",
+  },
+  "notifications.design.confirmName": {
+    defaultMessage: "Type {name} to confirm",
+    description: "Exact-name confirmation for notification configuration deletion.",
+  },
+  "notifications.channels.editHeading": {
+    defaultMessage: "Edit channel",
+    description: "Heading for editing a tenant-authored notification channel.",
+  },
+  "notifications.channels.reenterWriteOnly": {
+    defaultMessage:
+      "Endpoint URL and credential reference are write-only. Re-enter any configured value before saving; this update replaces the complete channel.",
+    description: "Prevents silently erasing a redacted endpoint or credential reference during a channel edit.",
+  },
+  "notifications.channels.deleteHeading": {
+    defaultMessage: "Delete channel",
+    description: "Heading for an exact-channel deletion review.",
+  },
+  "notifications.channels.deleteReview": {
+    defaultMessage: "Delete {name} ({id})? Alerts routed only to this channel will no longer reach a recipient.",
+    description: "Consequence and exact target for channel deletion.",
+  },
+  "notifications.channels.delete": {
+    defaultMessage: "Delete channel",
+    description: "Confirmed notification channel deletion action.",
+  },
+  "notifications.channels.deleted": {
+    defaultMessage: "Channel deleted",
+    description: "Success after notification channel deletion.",
+  },
+  "notifications.channels.deleteError": {
+    defaultMessage: "Could not delete notification channel",
+    description: "Failure to delete a notification channel.",
+  },
+  "notifications.routing.editing": {
+    defaultMessage: "Editing {name} ({id})",
+    description: "Exact saved routing policy selected for replacement.",
+  },
+  "notifications.routing.deleteHeading": {
+    defaultMessage: "Delete routing policy",
+    description: "Heading for an exact routing-policy deletion review.",
+  },
+  "notifications.routing.deleteReview": {
+    defaultMessage: "Delete {name} ({id})? Alerts that relied on this policy may become unrouted.",
+    description: "Consequence and exact target for routing policy deletion.",
+  },
+  "notifications.routing.delete": {
+    defaultMessage: "Delete policy",
+    description: "Confirmed routing policy deletion action.",
+  },
+  "notifications.routing.policyDeleted": {
+    defaultMessage: "Routing policy deleted",
+    description: "Success after routing policy deletion.",
+  },
+  "notifications.routing.deleteError": {
+    defaultMessage: "Could not delete notification routing policy",
+    description: "Failure to delete a routing policy.",
+  },
   "notifications.design.checking": {
     defaultMessage: "Checking alert delivery",
     description: "Summary title while channel, routing, and delivery state loads.",

@@ -130,6 +130,11 @@ export function Notifications() {
   const [statusFilter, setStatusFilter] = useState<"" | NotificationStatus>("");
   const [channelForm, setChannelForm] = useState<ChannelFormState>(initialChannelForm);
   const [policyForm, setPolicyForm] = useState<PolicyFormState>(initialPolicyForm);
+  const [editingChannel, setEditingChannel] = useState<NotificationChannel | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState<NotificationRoutingPolicy | null>(null);
+  const [deleteChannelTarget, setDeleteChannelTarget] = useState<NotificationChannel | null>(null);
+  const [deletePolicyTarget, setDeletePolicyTarget] = useState<NotificationRoutingPolicy | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [testForm, setTestForm] = useState<TestFormState>(initialTestForm);
   const [channelBusy, setChannelBusy] = useState(false);
   const [policyBusy, setPolicyBusy] = useState(false);
@@ -239,11 +244,15 @@ export function Notifications() {
     setPolicyBusy(true);
     setError(null);
     try {
-      const created = await api.createNotificationRoutingPolicy(notificationRoutingPolicyRequest(policyForm));
-      queryClient.setQueryData(policyQueryKey, { items: upsertPolicy(policies, created) });
+      const saved = editingPolicy
+        ? await api.updateNotificationRoutingPolicy(editingPolicy.id, notificationRoutingPolicyRequest(policyForm, editingPolicy))
+        : await api.createNotificationRoutingPolicy(notificationRoutingPolicyRequest(policyForm));
+      queryClient.setQueryData(policyQueryKey, { items: upsertPolicy(policies, saved) });
       void queryClient.invalidateQueries({ queryKey: policyQueryKey, refetchType: "none" });
       setRoutePreview(null);
-      toast({ kind: "success", title: t("notifications.routing.policyCreated"), description: created.name });
+      setEditingPolicy(null);
+      setPolicyForm(initialPolicyForm);
+      toast({ kind: "success", title: t("notifications.routing.policyCreated"), description: saved.name });
     } catch (err) {
       const detail = errorText(err, t("notifications.routing.createError"));
       setError({ title: t("notifications.routing.createError"), detail });
@@ -259,17 +268,19 @@ export function Notifications() {
     setError(null);
     const channelType = channelForm.channelType.trim();
     try {
-      const saved = await api.createNotificationChannel({
+      const request = {
         id: channelType,
         channel_type: channelType,
         label: channelForm.label.trim() || undefined,
         endpoint_url: channelForm.endpointUrl.trim(),
         credential_ref: channelForm.credentialRef.trim() || undefined,
         enabled: channelForm.enabled,
-      });
+      };
+      const saved = editingChannel ? await api.updateNotificationChannel(editingChannel.id, request) : await api.createNotificationChannel(request);
       queryClient.setQueryData(channelQueryKey, { items: upsertChannel(channels, saved) });
       void queryClient.invalidateQueries({ queryKey: channelQueryKey, refetchType: "none" });
-      setChannelForm((current) => ({ ...current, credentialRef: "" }));
+      setChannelForm(initialChannelForm);
+      setEditingChannel(null);
       setChannelDialogOpen(false);
       toast({ kind: "success", title: t("notifications.channels.saved"), description: saved.label });
     } catch (err) {
@@ -278,6 +289,65 @@ export function Notifications() {
       toast({ kind: "error", title: t("notifications.channels.saveError"), description: detail });
     } finally {
       setChannelBusy(false);
+    }
+  }
+
+  function editChannel(channel: NotificationChannel) {
+    setEditingChannel(channel);
+    setChannelForm({ channelType: channel.id, label: channel.label, endpointUrl: "", credentialRef: "", enabled: channel.enabled });
+    setChannelDialogOpen(true);
+  }
+
+  function editPolicy(policy: NotificationRoutingPolicy) {
+    setEditingPolicy(policy);
+    setPolicyForm({
+      name: policy.name,
+      scopeKind: policy.scope_kind,
+      scopeRef: policy.scope_ref ?? "",
+      ownerRef: policy.owner_ref ?? "",
+      ownerEmail: policy.owner_email ?? "",
+      digestInterval: String(policy.digest_interval_seconds),
+      defaultChannels: joinChannels(policy.default_channels),
+      criticalChannels: joinChannels(policyChannels(policy, "critical")),
+      warningChannels: joinChannels(policyChannels(policy, "warning")),
+      lowChannels: joinChannels(policyChannels(policy, "low")),
+    });
+    setRoutePreview(null);
+    setActiveView("routing");
+  }
+
+  async function deleteChannel() {
+    if (!deleteChannelTarget || deleteConfirmation !== deleteChannelTarget.label) return;
+    setChannelBusy(true);
+    setError(null);
+    try {
+      await api.deleteNotificationChannel(deleteChannelTarget.id);
+      await queryClient.invalidateQueries({ queryKey: channelQueryKey });
+      toast({ kind: "success", title: t("notifications.channels.deleted"), description: deleteChannelTarget.label });
+      setDeleteChannelTarget(null);
+      setDeleteConfirmation("");
+    } catch (err) {
+      setError({ title: t("notifications.channels.deleteError"), detail: errorText(err, t("notifications.channels.deleteError")) });
+    } finally {
+      setChannelBusy(false);
+    }
+  }
+
+  async function deletePolicy() {
+    if (!deletePolicyTarget || deleteConfirmation !== deletePolicyTarget.name) return;
+    setPolicyBusy(true);
+    setError(null);
+    try {
+      await api.deleteNotificationRoutingPolicy(deletePolicyTarget.id);
+      queryClient.setQueryData(policyQueryKey, { items: policies.filter((policy) => policy.id !== deletePolicyTarget.id) });
+      void queryClient.invalidateQueries({ queryKey: policyQueryKey, refetchType: "none" });
+      toast({ kind: "success", title: t("notifications.routing.policyDeleted"), description: deletePolicyTarget.name });
+      setDeletePolicyTarget(null);
+      setDeleteConfirmation("");
+    } catch (err) {
+      setError({ title: t("notifications.routing.deleteError"), detail: errorText(err, t("notifications.routing.deleteError")) });
+    } finally {
+      setPolicyBusy(false);
     }
   }
 
@@ -345,7 +415,7 @@ export function Notifications() {
     setPreviewBusy(true);
     setError(null);
     try {
-      const preview = await api.previewNotificationRoutingPolicy(notificationRoutingPolicyRequest(policyForm));
+      const preview = await api.previewNotificationRoutingPolicy(notificationRoutingPolicyRequest(policyForm, editingPolicy));
       setRoutePreview(preview);
     } catch (err) {
       setError({ title: t("notifications.routing.previewFailed"), detail: errorText(err, t("notifications.routing.previewFailedDetail")) });
@@ -362,7 +432,16 @@ export function Notifications() {
         description={t("notifications.design.answer")}
         technicalDetails={t("notifications.design.technicalDetails")}
         actions={
-          <Button type="button" aria-describedby="add-channel-action-help" disabled={loading || loadFailed} onClick={() => setChannelDialogOpen(true)}>
+          <Button
+            type="button"
+            aria-describedby="add-channel-action-help"
+            disabled={loading || loadFailed}
+            onClick={() => {
+              setEditingChannel(null);
+              setChannelForm(initialChannelForm);
+              setChannelDialogOpen(true);
+            }}
+          >
             {t("notifications.design.addChannel")}
           </Button>
         }
@@ -478,6 +557,17 @@ export function Notifications() {
                 }}
                 onSavePolicy={(event) => void savePolicy(event)}
                 onPreviewRoute={() => void previewRoute()}
+                editingPolicy={editingPolicy}
+                onEditPolicy={editPolicy}
+                onCancelEdit={() => {
+                  setEditingPolicy(null);
+                  setPolicyForm(initialPolicyForm);
+                  setRoutePreview(null);
+                }}
+                onDeletePolicy={(policy) => {
+                  setDeletePolicyTarget(policy);
+                  setDeleteConfirmation("");
+                }}
               />
             </div>
           </AlertCenterPanel>
@@ -487,7 +577,15 @@ export function Notifications() {
           <AlertCenterPanel view="channels">
             <div className="grid gap-4">
               <ViewIntroduction view="channels" />
-              <ChannelCatalog channels={channels} error={channelError} />
+              <ChannelCatalog
+                channels={channels}
+                error={channelError}
+                onEdit={editChannel}
+                onDelete={(channel) => {
+                  setDeleteChannelTarget(channel);
+                  setDeleteConfirmation("");
+                }}
+              />
               <ChannelTestForm
                 channels={channels}
                 form={testForm}
@@ -564,7 +662,10 @@ export function Notifications() {
 
       <Dialog
         open={channelDialogOpen}
-        onClose={() => setChannelDialogOpen(false)}
+        onClose={() => {
+          setChannelDialogOpen(false);
+          setEditingChannel(null);
+        }}
         titleId="add-notification-channel-heading"
         descriptionId="add-notification-channel-description"
         initialFocusRef={channelDialogHeadingRef}
@@ -574,7 +675,7 @@ export function Notifications() {
         <div className="grid min-w-0 gap-4">
           <div>
             <h2 ref={channelDialogHeadingRef} id="add-notification-channel-heading" className="text-title font-semibold" tabIndex={-1}>
-              {t("notifications.design.addChannel")}
+              {editingChannel ? t("notifications.channels.editHeading") : t("notifications.design.addChannel")}
             </h2>
             <p id="add-notification-channel-description" className="mt-1 max-w-3xl text-sm text-muted-foreground">
               {t("notifications.design.addDialogHelp")}
@@ -584,11 +685,69 @@ export function Notifications() {
             form={channelForm}
             busy={channelBusy}
             embedded
-            onCancel={() => setChannelDialogOpen(false)}
+            editing={editingChannel}
+            onCancel={() => {
+              setChannelDialogOpen(false);
+              setEditingChannel(null);
+            }}
             onFormChange={setChannelForm}
             onSaveChannel={(event) => void saveChannel(event)}
           />
         </div>
+      </Dialog>
+
+      <Dialog open={deleteChannelTarget !== null} onClose={() => setDeleteChannelTarget(null)} titleId="delete-notification-channel-heading">
+        {deleteChannelTarget ? (
+          <div className="grid gap-4 p-5">
+            <h2 id="delete-notification-channel-heading" className="text-title font-semibold">
+              {t("notifications.channels.deleteHeading")}
+            </h2>
+            <p>{t("notifications.channels.deleteReview", { name: deleteChannelTarget.label, id: deleteChannelTarget.id })}</p>
+            <Field label={t("notifications.design.confirmName", { name: deleteChannelTarget.label })}>
+              {(control) => <Input {...control} value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} />}
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDeleteChannelTarget(null)}>
+                {t("notifications.design.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={channelBusy || deleteConfirmation !== deleteChannelTarget.label}
+                onClick={() => void deleteChannel()}
+              >
+                {t("notifications.channels.delete")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
+
+      <Dialog open={deletePolicyTarget !== null} onClose={() => setDeletePolicyTarget(null)} titleId="delete-notification-policy-heading">
+        {deletePolicyTarget ? (
+          <div className="grid gap-4 p-5">
+            <h2 id="delete-notification-policy-heading" className="text-title font-semibold">
+              {t("notifications.routing.deleteHeading")}
+            </h2>
+            <p>{t("notifications.routing.deleteReview", { name: deletePolicyTarget.name, id: deletePolicyTarget.id })}</p>
+            <Field label={t("notifications.design.confirmName", { name: deletePolicyTarget.name })}>
+              {(control) => <Input {...control} value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} />}
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDeletePolicyTarget(null)}>
+                {t("notifications.design.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={policyBusy || deleteConfirmation !== deletePolicyTarget.name}
+                onClick={() => void deletePolicy()}
+              >
+                {t("notifications.routing.delete")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Dialog>
 
       {detail && (
@@ -772,7 +931,17 @@ export function Notifications() {
   );
 }
 
-function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; error: string | null }) {
+function ChannelCatalog({
+  channels,
+  error,
+  onEdit,
+  onDelete,
+}: {
+  channels: NotificationChannel[];
+  error: string | null;
+  onEdit: (channel: NotificationChannel) => void;
+  onDelete: (channel: NotificationChannel) => void;
+}) {
   const { t } = useTranslation();
   if (error) return <ErrorState title={t("notifications.channels.unavailableTitle")}>{error}</ErrorState>;
   if (channels.length === 0) return null;
@@ -802,6 +971,28 @@ function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; 
               <p className="mt-2 truncate text-xs text-muted-foreground" title={channel.delivery}>
                 {channel.delivery}
               </p>
+              {channel.source === "tenant" ? (
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={t("notifications.design.editNamed", { name: channel.label })}
+                    onClick={() => onEdit(channel)}
+                  >
+                    {t("notifications.design.edit")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={t("notifications.design.deleteNamed", { name: channel.label })}
+                    onClick={() => onDelete(channel)}
+                  >
+                    {t("notifications.design.delete")}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -887,6 +1078,7 @@ function ChannelAuthoring({
   form,
   busy,
   embedded = false,
+  editing,
   onCancel,
   onFormChange,
   onSaveChannel,
@@ -894,6 +1086,7 @@ function ChannelAuthoring({
   form: ChannelFormState;
   busy: boolean;
   embedded?: boolean;
+  editing?: NotificationChannel | null;
   onCancel?: () => void;
   onFormChange: (next: ChannelFormState) => void;
   onSaveChannel: (event: FormEvent<HTMLFormElement>) => void;
@@ -916,7 +1109,12 @@ function ChannelAuthoring({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Field label={t("notifications.channels.type")}>
           {(control) => (
-            <Select {...control} value={form.channelType} onChange={(event) => onFormChange({ ...form, channelType: event.target.value })}>
+            <Select
+              {...control}
+              value={form.channelType}
+              disabled={Boolean(editing)}
+              onChange={(event) => onFormChange({ ...form, channelType: event.target.value })}
+            >
               {channelTypeOptions.map((channelType) => (
                 <option key={channelType} value={channelType}>
                   {channelType}
@@ -931,14 +1129,16 @@ function ChannelAuthoring({
           value={form.endpointUrl}
           onChange={(value) => onFormChange({ ...form, endpointUrl: value })}
           type="url"
-          required={form.enabled}
+          required={form.enabled || Boolean(editing?.endpoint_configured)}
         />
         <TextInput
           label={t("notifications.channels.credentialRef")}
           value={form.credentialRef}
           onChange={(value) => onFormChange({ ...form, credentialRef: value })}
+          required={Boolean(editing?.credential_ref)}
         />
       </div>
+      {editing ? <p className="text-sm text-muted-foreground">{t("notifications.channels.reenterWriteOnly")}</p> : null}
       <div className="flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-2 text-sm font-medium">
           <input
@@ -1042,6 +1242,10 @@ function RoutingPolicyAuthoring({
   onPolicyFormChange,
   onSavePolicy,
   onPreviewRoute,
+  editingPolicy,
+  onEditPolicy,
+  onCancelEdit,
+  onDeletePolicy,
 }: {
   channels: NotificationChannel[];
   policies: NotificationRoutingPolicy[];
@@ -1052,6 +1256,10 @@ function RoutingPolicyAuthoring({
   onPolicyFormChange: (next: PolicyFormState) => void;
   onSavePolicy: (event: FormEvent<HTMLFormElement>) => void;
   onPreviewRoute: () => void;
+  editingPolicy: NotificationRoutingPolicy | null;
+  onEditPolicy: (policy: NotificationRoutingPolicy) => void;
+  onCancelEdit: () => void;
+  onDeletePolicy: (policy: NotificationRoutingPolicy) => void;
 }) {
   const { t, formatDateTime } = useTranslation();
   const configured = channels.filter(channelReady);
@@ -1087,6 +1295,9 @@ function RoutingPolicyAuthoring({
 
       <div className="grid gap-5">
         <form aria-label={t("notifications.design.routingFormLabel")} className="grid gap-4" onSubmit={onSavePolicy}>
+          {editingPolicy ? (
+            <p className="text-sm font-medium">{t("notifications.routing.editing", { name: editingPolicy.name, id: editingPolicy.id })}</p>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <TextInput
               label={t("notifications.routing.name")}
@@ -1212,6 +1423,11 @@ function RoutingPolicyAuthoring({
             <Button type="button" variant="outline" disabled={previewBusy || !draftReviewable} onClick={onPreviewRoute}>
               {previewBusy ? t("notifications.routing.previewing") : t("notifications.routing.preview")}
             </Button>
+            {editingPolicy ? (
+              <Button type="button" variant="outline" onClick={onCancelEdit}>
+                {t("notifications.design.cancel")}
+              </Button>
+            ) : null}
           </div>
           {routePreview ? (
             <div className="grid gap-4 rounded-control border border-border bg-muted/20 p-4" role="status">
@@ -1276,6 +1492,26 @@ function RoutingPolicyAuthoring({
                 <span>
                   {t("notifications.routing.nextDigest")}: {formatDateTime(policy.digest_preview.next_run_at)}
                 </span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={t("notifications.design.editNamed", { name: policy.name })}
+                  onClick={() => onEditPolicy(policy)}
+                >
+                  {t("notifications.design.edit")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={t("notifications.design.deleteNamed", { name: policy.name })}
+                  onClick={() => onDeletePolicy(policy)}
+                >
+                  {t("notifications.design.delete")}
+                </Button>
               </div>
             </div>
           ))
@@ -1482,7 +1718,7 @@ function splitChannels(value: string): string[] {
     .filter(Boolean);
 }
 
-function notificationRoutingPolicyRequest(form: PolicyFormState): NotificationRoutingPolicyRequest {
+function notificationRoutingPolicyRequest(form: PolicyFormState, existing?: NotificationRoutingPolicy | null): NotificationRoutingPolicyRequest {
   return {
     name: form.name.trim(),
     scope_kind: form.scopeKind,
@@ -1490,9 +1726,10 @@ function notificationRoutingPolicyRequest(form: PolicyFormState): NotificationRo
     owner_ref: form.ownerRef.trim() || undefined,
     owner_email: form.ownerEmail.trim() || undefined,
     digest_interval_seconds: Number(form.digestInterval),
-    digest_timezone: "UTC",
+    digest_timezone: existing?.digest_timezone ?? "UTC",
     default_channels: splitChannels(form.defaultChannels),
     channels_by_severity: {
+      ...existing?.channels_by_severity,
       critical: splitChannels(form.criticalChannels),
       warning: splitChannels(form.warningChannels),
       low: splitChannels(form.lowChannels),

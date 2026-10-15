@@ -457,6 +457,18 @@ registered channel workers. Tenant-scoped routing policy authoring and channel-t
 delivery are served from the console; channel secrets remain in operator-managed secret
 references or files.
 
+The Alerts and delivery console lets an operator edit or delete saved tenant channels
+and routing policies from their cards. A channel update replaces the entire channel.
+The API hides configured endpoint URLs and credential references on readback, so the
+edit form requires the operator to re-enter those write-only values when present;
+leaving them blank must not silently erase a working destination. Deletion shows the
+exact channel or policy ID, explains the routing consequence, and requires its display
+name before the API call. Read the channel and policy lists again after a change;
+the console cache alone is not delivery proof.
+When editing a routing policy, the console carries through existing severity mappings
+that its form does not display and the saved digest timezone in both the preview and
+replacement request.
+
 Renewal-failure alerts link to the exact identity and retain its owner name and
 contact at the failure. When a completed deployment or rollback receipt exists,
 the alert also captures that certificate's fingerprint, serial, expiry, receipt

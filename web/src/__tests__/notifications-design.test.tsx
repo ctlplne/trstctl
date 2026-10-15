@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -14,9 +14,14 @@ const { apiMock } = vi.hoisted(() => ({
     notification: vi.fn(),
     notificationChannels: vi.fn(),
     createNotificationChannel: vi.fn(),
+    updateNotificationChannel: vi.fn(),
+    deleteNotificationChannel: vi.fn(),
     notificationRoutingPolicies: vi.fn(),
     notificationRoutingPreview: vi.fn(),
+    previewNotificationRoutingPolicy: vi.fn(),
     createNotificationRoutingPolicy: vi.fn(),
+    updateNotificationRoutingPolicy: vi.fn(),
+    deleteNotificationRoutingPolicy: vi.fn(),
     testNotificationChannel: vi.fn(),
     markNotificationRead: vi.fn(),
     requeueNotification: vi.fn(),
@@ -203,6 +208,140 @@ describe("Global Alert Center", () => {
     expect(screen.getByText(/browser never calls the destination directly/i)).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Queue a safe delivery test" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Queue test" })).toBeDisabled();
+  });
+
+  it("lets an operator edit and remove a tenant channel and a routing policy from their saved cards", async () => {
+    const channel = {
+      ...catalog.find((item) => item.id === "webhook")!,
+      label: "QA webhook",
+      source: "tenant",
+      enabled: false,
+    };
+    const policy = {
+      id: "policy-qa",
+      tenant_id: "t1",
+      name: "QA manual route",
+      scope_kind: "manual" as const,
+      default_channels: ["email"],
+      channels_by_severity: { informational: ["email"] },
+      digest_interval_seconds: 86400,
+      digest_timezone: "America/New_York",
+      digest_preview: { next_run_at: "2026-10-15T12:00:00Z" },
+      created_at: "2026-10-15T00:00:00Z",
+      updated_at: "2026-10-15T00:00:00Z",
+    };
+    apiMock.notificationChannels.mockResolvedValue({
+      items: catalog.map((item) => (item.id === "webhook" ? channel : item.id === "email" ? { ...item, configured: true, enabled: true } : item)),
+    });
+    apiMock.notificationRoutingPolicies.mockResolvedValue({ items: [policy] });
+    apiMock.updateNotificationChannel.mockResolvedValue({ ...channel, label: "Edited QA webhook" });
+    apiMock.deleteNotificationChannel.mockResolvedValue(undefined);
+    apiMock.updateNotificationRoutingPolicy.mockResolvedValue({ ...policy, name: "Edited QA manual route" });
+    apiMock.deleteNotificationRoutingPolicy.mockResolvedValue(undefined);
+    apiMock.previewNotificationRoutingPolicy.mockResolvedValue({
+      ready: true,
+      blockers: [],
+      request_fingerprint: "qa-review",
+      execute_writes: [],
+      recovery_steps: [],
+      verification_steps: [],
+      secret_data_handling: "No secret values",
+    });
+    const user = userEvent.setup();
+    renderNotifications();
+
+    await user.click(await screen.findByRole("tab", { name: "Channels & test" }));
+    expect(screen.getByRole("button", { name: "Edit QA webhook" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete QA webhook" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit QA webhook" }));
+    const channelDialog = screen.getByRole("dialog");
+    await user.clear(within(channelDialog).getByLabelText("Display label"));
+    await user.type(within(channelDialog).getByLabelText("Display label"), "Edited QA webhook");
+    await user.click(within(channelDialog).getByRole("button", { name: "Save channel" }));
+    await waitFor(() =>
+      expect(apiMock.updateNotificationChannel).toHaveBeenCalledWith(
+        "webhook",
+        expect.objectContaining({
+          label: "Edited QA webhook",
+          enabled: false,
+          endpoint_url: "",
+        }),
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: "Delete Edited QA webhook" }));
+    const channelDelete = screen.getByRole("dialog");
+    await user.type(within(channelDelete).getByLabelText("Type Edited QA webhook to confirm"), "Edited QA webhook");
+    await user.click(within(channelDelete).getByRole("button", { name: "Delete channel" }));
+    await waitFor(() => expect(apiMock.deleteNotificationChannel).toHaveBeenCalledWith("webhook"));
+
+    await user.click(screen.getByRole("tab", { name: "Routing policies" }));
+    expect(screen.getByRole("button", { name: "Edit QA manual route" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete QA manual route" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit QA manual route" }));
+    await user.clear(screen.getByLabelText("Policy name"));
+    await user.type(screen.getByLabelText("Policy name"), "Edited QA manual route");
+    await user.click(screen.getByRole("button", { name: "Review exact route" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save policy" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Save policy" }));
+    await waitFor(() =>
+      expect(apiMock.updateNotificationRoutingPolicy).toHaveBeenCalledWith(
+        "policy-qa",
+        expect.objectContaining({
+          name: "Edited QA manual route",
+          scope_kind: "manual",
+          default_channels: ["email"],
+          channels_by_severity: expect.objectContaining({ informational: ["email"] }),
+          digest_timezone: "America/New_York",
+        }),
+      ),
+    );
+    expect(apiMock.previewNotificationRoutingPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channels_by_severity: expect.objectContaining({ informational: ["email"] }),
+        digest_timezone: "America/New_York",
+      }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Delete Edited QA manual route" }));
+    const policyDelete = screen.getByRole("dialog");
+    await user.type(within(policyDelete).getByLabelText("Type Edited QA manual route to confirm"), "Edited QA manual route");
+    await user.click(within(policyDelete).getByRole("button", { name: "Delete policy" }));
+    await waitFor(() => expect(apiMock.deleteNotificationRoutingPolicy).toHaveBeenCalledWith("policy-qa"));
+  });
+
+  it("requires re-entry of redacted channel fields before replacement", async () => {
+    const channel = {
+      ...catalog.find((item) => item.id === "webhook")!,
+      label: "Configured webhook",
+      source: "tenant",
+      enabled: true,
+      configured: true,
+      endpoint_configured: true,
+      credential_ref: "redacted",
+    };
+    apiMock.notificationChannels.mockResolvedValue({ items: catalog.map((item) => (item.id === "webhook" ? channel : item)) });
+    apiMock.updateNotificationChannel.mockResolvedValue(channel);
+    const user = userEvent.setup();
+    renderNotifications();
+    await user.click(await screen.findByRole("tab", { name: "Channels & test" }));
+    await user.click(screen.getByRole("button", { name: "Edit Configured webhook" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/write-only.*re-enter/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Endpoint URL")).toBeRequired();
+    expect(within(dialog).getByLabelText("Channel credential reference")).toBeRequired();
+    await user.click(within(dialog).getByRole("button", { name: "Save channel" }));
+    expect(apiMock.updateNotificationChannel).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByLabelText("Endpoint URL"), "https://qa.example.test/receiver");
+    await user.type(within(dialog).getByLabelText("Channel credential reference"), "secret://qa-fixture");
+    await user.click(within(dialog).getByRole("button", { name: "Save channel" }));
+    await waitFor(() =>
+      expect(apiMock.updateNotificationChannel).toHaveBeenCalledWith(
+        "webhook",
+        expect.objectContaining({
+          endpoint_url: "https://qa.example.test/receiver",
+          credential_ref: "secret://qa-fixture",
+        }),
+      ),
+    );
   });
 
   it("starts with newest alerts and navigates older pages without hiding the page scope", async () => {
