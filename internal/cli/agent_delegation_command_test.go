@@ -37,6 +37,16 @@ func TestAgentDelegationCommandsCoverServedRouteFamily(t *testing.T) {
 	}
 }
 
+func TestAgentDelegationRootRegisterHelpExplainsImmutableBinding(t *testing.T) {
+	code, stdout, stderr := run(t, []string{"agent-delegation", "roots", "register", "--help"}, cli.Env{}, "")
+	if code != 0 || stderr != "" {
+		t.Fatalf("root register help code=%d stderr=%q", code, stderr)
+	}
+	if !strings.Contains(stdout, "new key ID") || !strings.Contains(stdout, "immutable") || strings.Contains(stdout, "or update") {
+		t.Fatalf("root register help implies an in-place trust change: %q", stdout)
+	}
+}
+
 func TestAgentDelegationCommandsCarryTenantBodyAndRequiredReadIDs(t *testing.T) {
 	var registered capture
 	server := mockServer(t, http.StatusOK, `{"key_id":"qa-root"}`, &registered)

@@ -19,7 +19,7 @@ package cli
 // when its edition is unavailable; the CLI uses the served contract rather than
 // guessing the server's edition ahead of the call.
 var licensedRouteCommands = []Command{
-	{Name: []string{"agent-delegation", "roots", "register"}, Method: "POST", Path: "/api/v1/agent-delegation/root-anchors", Body: bodyFile, Summary: "Register or update a tenant delegation root anchor; the signer must also have its public trust floor"},
+	{Name: []string{"agent-delegation", "roots", "register"}, Method: "POST", Path: "/api/v1/agent-delegation/root-anchors", Body: bodyFile, Summary: "Register an immutable tenant delegation root anchor; use a new key ID to rotate"},
 	{Name: []string{"agent-delegation", "roots", "list"}, Method: "GET", Path: "/api/v1/agent-delegation/root-anchors", Summary: "List tenant delegation root anchors"},
 	{Name: []string{"agent-delegation", "issue"}, Method: "POST", Path: "/api/v1/agent-delegation/issuances", Body: bodyFile, Summary: "Queue signer-gated issuance of a chain-bound agent credential"},
 	{Name: []string{"agent-delegation", "revoke"}, Method: "POST", Path: "/api/v1/agent-delegation/revocations", Body: bodyFile, Summary: "Queue a cascaded delegation revocation; review the subject and use --force"},
