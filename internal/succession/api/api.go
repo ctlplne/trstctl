@@ -386,7 +386,7 @@ func Routes(svc Service) []api.LicensedRoute {
 			// identity_id is a query parameter, not a path segment, because stable
 			// identity identifiers (e.g. SPIFFE IDs) contain '/' and must not be split
 			// across path segments.
-			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Description: "stable identity identifier"}},
+			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true}},
 			ResponseSchema: "PCASSuccessionChain", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
@@ -470,7 +470,7 @@ func Routes(svc Service) []api.LicensedRoute {
 			Summary: "Fetch PCAS KEM re-wrap status for an identity",
 			Handler: func(a *api.API) http.HandlerFunc { return rewrapStatusHandler(a, svc) },
 			Query: []api.RouteParam{
-				{Name: "identity_id", Type: "string", Description: "stable identity identifier"},
+				{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true},
 				{Name: "predecessor_epoch", Type: "integer", Description: "predecessor epoch; 0 returns all stages"},
 			},
 			ResponseSchema: "PCASRewrapStatus", SuccessCode: "200", Permission: authz.CertsRead,
@@ -487,7 +487,7 @@ func Routes(svc Service) []api.LicensedRoute {
 			Summary: "Fetch PCAS retirement status for an identity epoch",
 			Handler: func(a *api.API) http.HandlerFunc { return retirementStatusHandler(a, svc) },
 			Query: []api.RouteParam{
-				{Name: "identity_id", Type: "string", Description: "stable identity identifier"},
+				{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true},
 				{Name: "predecessor_epoch", Type: "integer", Description: "predecessor epoch being retired"},
 			},
 			ResponseSchema: "PCASRetirementPolicy", SuccessCode: "200", Permission: authz.CertsRead,
@@ -496,14 +496,14 @@ func Routes(svc Service) []api.LicensedRoute {
 			Method: "GET", Path: "/api/v1/pcas/checkpoints", OperationID: "getPCASCheckpoint",
 			Summary:        "Fetch the latest signed PCAS epoch checkpoint for an identity",
 			Handler:        func(a *api.API) http.HandlerFunc { return checkpointHandler(a, svc) },
-			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Description: "stable identity identifier"}},
+			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true}},
 			ResponseSchema: "PCASCheckpoint", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
 			Method: "GET", Path: "/api/v1/pcas/posture", OperationID: "getPCASPostureReport",
 			Summary:        "Fetch a signed standalone PCAS posture report for an identity",
 			Handler:        func(a *api.API) http.HandlerFunc { return postureHandler(a, svc) },
-			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Description: "stable identity identifier"}},
+			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true}},
 			ResponseSchema: "PCASPostureReport", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
@@ -1158,18 +1158,24 @@ func schemas() map[string]*api.Schema {
 			"checked_at": api.TimestampSchema(),
 		}, "identity_id", "jobs", "complete", "checked_at"),
 		"PCASRetirementPolicyRequest": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":             api.StringSchema(),
-			"predecessor_epoch":       api.IntegerSchema(),
-			"threshold":               api.IntegerSchema(),
-			"roster":                  api.StringSchema(),
+			"identity_id":       api.StringSchema(),
+			"predecessor_epoch": api.IntegerSchema(),
+			"threshold":         api.IntegerSchema(),
+			"roster": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
+				"relying_party": api.StringSchema(),
+				"public_der":    api.StringSchema(),
+			}, "relying_party", "public_der")),
 			"validity_window_seconds": api.IntegerSchema(),
 			"predecessor_handle":      api.StringSchema(),
 		}, "identity_id", "predecessor_epoch", "threshold", "roster"),
 		"PCASRetirementPolicy": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":             api.StringSchema(),
-			"predecessor_epoch":       api.IntegerSchema(),
-			"threshold":               api.IntegerSchema(),
-			"roster":                  api.StringSchema(),
+			"identity_id":       api.StringSchema(),
+			"predecessor_epoch": api.IntegerSchema(),
+			"threshold":         api.IntegerSchema(),
+			"roster": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
+				"relying_party": api.StringSchema(),
+				"public_der":    api.StringSchema(),
+			}, "relying_party", "public_der")),
 			"validity_window_seconds": api.IntegerSchema(),
 			"predecessor_handle":      api.StringSchema(),
 			"status":                  api.StringSchema(),

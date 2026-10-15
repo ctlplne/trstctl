@@ -249,6 +249,7 @@ type RouteParam struct {
 	Type        string
 	Format      string
 	Description string
+	Required    bool
 }
 
 // PathStringParam describes a string path parameter for a licensed route.

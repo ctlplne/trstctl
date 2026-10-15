@@ -822,7 +822,7 @@ func routeParams(in []RouteParam) []param {
 	}
 	out := make([]param, 0, len(in))
 	for _, p := range in {
-		out = append(out, param{name: p.Name, typ: p.Type, format: p.Format, desc: p.Description})
+		out = append(out, param{name: p.Name, typ: p.Type, format: p.Format, desc: p.Description, required: p.Required})
 	}
 	return out
 }
