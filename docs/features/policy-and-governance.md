@@ -496,7 +496,9 @@ trstctl-cli compliance report-runs download RUN_ID > signed-report.json
 trstctl-cli --idempotency-key retry-run-1 compliance report-runs requeue FAILED_RUN_ID
 
 # start and decide an NHI access certification campaign
+# The start request assigns a reviewer distinct from this authenticated creator.
 trstctl-cli access reviews start -f nhi-review.json
+# Sign in as that assigned reviewer before making the decision.
 trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision.json
 
 # file and review data-subject privacy controls
@@ -596,7 +598,12 @@ auth:
 - **NHI access reviews:** `POST|GET /api/v1/access/reviews[/{id}]`, `POST
   /api/v1/access/reviews/{id}/items/{item_id}/decision`; decisions `certified`,
   `revoked`, `exception`; events `nhi.access_review.campaign.started` and
-  `nhi.access_review.item.decided`.
+  `nhi.access_review.item.decided`. The creator must assign a different
+  authenticated reviewer with `reviewer_subject`. Only that reviewer can decide
+  an item. The server records the authenticated subject as `decision_by`; a
+  supplied decision `reviewer_subject` must match it. Rejected decisions emit
+  no decision event. Sign in as the assigned reviewer before using the API,
+  CLI, or console to certify, revoke, or except an item.
 - **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
   `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
   `GET /api/v1/privacy/catalog`; operator-command events `privacy.subject.erased` and

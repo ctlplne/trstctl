@@ -1510,7 +1510,7 @@ func componentSchemas() map[string]*Schema {
 	nhiReviewCampaignStartReq := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "scope": str(), "reviewer_subject": str(),
 		"due_at": timestamp(), "items": {Type: "array", Items: ref("NHIReviewItemRequest")},
-	}, "name", "items")
+	}, "name", "reviewer_subject", "items")
 	nhiReviewDecisionReq := object(map[string]*Schema{
 		"decision":         {Type: "string", Enum: []string{"certified", "revoked", "exception"}},
 		"reviewer_subject": str(), "reason": str(),

@@ -12,6 +12,7 @@ import (
 )
 
 var ErrNHIReviewItemAlreadyDecided = errors.New("nhi access review item already decided")
+var ErrNHIReviewReviewerUnauthorized = errors.New("nhi access review decision requires the assigned reviewer")
 
 // NHIReviewCampaign is an IGA-style certification/access-review campaign for
 // non-human identities. It is a projection of nhi.access_review.* events.
@@ -66,6 +67,31 @@ type NHIReviewDecision struct {
 	Reason               string
 	DecisionEvidenceRefs []string
 	DecidedAt            time.Time
+}
+
+// CheckNHIReviewDecisionAuthorityTx locks the campaign and exact item before
+// the decision event is appended. The lock serializes competing decisions and
+// makes the assigned-reviewer check authoritative under tenant RLS.
+func (s *Store) CheckNHIReviewDecisionAuthorityTx(ctx context.Context, tx pgx.Tx, tenantID, campaignID, itemID, actor string) error {
+	var assigned, requester, campaignStatus, itemStatus string
+	err := tx.QueryRow(ctx,
+		`SELECT c.reviewer_subject, c.requested_by, c.status, i.status
+		   FROM nhi_access_review_campaigns c
+		   JOIN nhi_access_review_items i
+		     ON i.tenant_id = c.tenant_id AND i.campaign_id = c.id
+		  WHERE c.tenant_id = $1 AND c.id = $2 AND i.item_id = $3
+		  FOR UPDATE OF c, i`,
+		tenantID, campaignID, itemID).Scan(&assigned, &requester, &campaignStatus, &itemStatus)
+	if err != nil {
+		return err
+	}
+	if actor == "" || actor != assigned || actor == requester {
+		return ErrNHIReviewReviewerUnauthorized
+	}
+	if campaignStatus != "open" || itemStatus != "pending" {
+		return fmt.Errorf("%w: item %s is %s", ErrNHIReviewItemAlreadyDecided, itemID, itemStatus)
+	}
+	return nil
 }
 
 // ApplyNHIReviewCampaignStartedTx projects a campaign-started event. Replays are

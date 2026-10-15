@@ -16,7 +16,8 @@ import (
 
 func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedTokenSubject(t, h.store, h.tenant, "iga-reviewer", "access:read", "access:write")
+	creator := seedScopedTokenSubject(t, h.store, h.tenant, "iga-creator", "access:read", "access:write")
+	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "iga-reviewer", "access:read", "access:write")
 
 	campaignID := "44444444-4444-4444-8444-444444444444"
 	item1 := "55555555-5555-4555-8555-555555555555"
@@ -51,7 +52,7 @@ func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", tok, "cap-gov-02-start", request)
+	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", creator, "cap-gov-02-start", request)
 	if status != http.StatusCreated {
 		t.Fatalf("start NHI review = %d body %s", status, body)
 	}
@@ -76,7 +77,7 @@ func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 		t.Fatalf("decode campaign: %v", err)
 	}
 	if created.ID != campaignID || created.TenantID != h.tenant || created.ReviewerSubject != "iga-reviewer" ||
-		created.RequestedBy != "iga-reviewer" || created.Status != "open" || created.ItemCount != 2 ||
+		created.RequestedBy != "iga-creator" || created.Status != "open" || created.ItemCount != 2 ||
 		created.PendingCount != 2 || len(created.Items) != 2 {
 		t.Fatalf("bad campaign response: %+v", created)
 	}
@@ -88,7 +89,7 @@ func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 	if events := nhiReviewEvents(t, h.log, projections.EventNHIAccessReviewCampaignStarted, campaignID); len(events) != 1 {
 		t.Fatalf("campaign-start events = %d, want 1", len(events))
 	}
-	replayStatus, replayBody := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", tok, "cap-gov-02-start", request)
+	replayStatus, replayBody := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", creator, "cap-gov-02-start", request)
 	if replayStatus != http.StatusCreated || string(replayBody) != string(body) {
 		t.Fatalf("start replay status/body changed: %d %s", replayStatus, replayBody)
 	}
@@ -102,11 +103,11 @@ func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 		"reason":                 "workload owner confirmed production write access is still required",
 		"decision_evidence_refs": []string{"ticket:IGA-1024"},
 	}
-	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews/"+campaignID+"/items/"+item1+"/decision", tok, "cap-gov-02-item1", decision1)
+	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews/"+campaignID+"/items/"+item1+"/decision", reviewer, "cap-gov-02-item1", decision1)
 	if status != http.StatusOK {
 		t.Fatalf("decide first item = %d body %s", status, body)
 	}
-	replayStatus, replayBody = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews/"+campaignID+"/items/"+item1+"/decision", tok, "cap-gov-02-item1", decision1)
+	replayStatus, replayBody = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews/"+campaignID+"/items/"+item1+"/decision", reviewer, "cap-gov-02-item1", decision1)
 	if replayStatus != http.StatusOK || string(replayBody) != string(body) {
 		t.Fatalf("decision replay status/body changed: %d %s", replayStatus, replayBody)
 	}
@@ -120,7 +121,7 @@ func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 		"reason":                 "legacy deployer no longer has a system owner",
 		"decision_evidence_refs": []string{"ticket:IGA-1025", "graph:nhi:legacy-ci-deployer"},
 	}
-	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews/"+campaignID+"/items/"+item2+"/decision", tok, "cap-gov-02-item2", decision2)
+	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews/"+campaignID+"/items/"+item2+"/decision", reviewer, "cap-gov-02-item2", decision2)
 	if status != http.StatusOK {
 		t.Fatalf("decide second item = %d body %s", status, body)
 	}
@@ -151,12 +152,83 @@ func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
 		t.Fatalf("projected campaign = %+v", projected)
 	}
 
-	status, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/reviews/"+campaignID, tok, "", nil)
+	status, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/reviews/"+campaignID, creator, "", nil)
 	if status != http.StatusOK {
 		t.Fatalf("get campaign = %d body %s", status, body)
 	}
-	if status, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/reviews", tok, "", nil); status != http.StatusOK {
+	if status, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/reviews", creator, "", nil); status != http.StatusOK {
 		t.Fatalf("list campaigns = %d body %s", status, body)
+	}
+}
+
+func TestServedNHIAccessReviewReviewerAuthorityBeforeAppend(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	creator := seedScopedTokenSubject(t, h.store, h.tenant, "review-creator", "access:read", "access:write")
+	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "assigned-reviewer", "access:read", "access:write")
+	other := seedScopedTokenSubject(t, h.store, h.tenant, "other-writer", "access:read", "access:write")
+	const campaignID = "77777777-7777-4777-8777-777777777771"
+	const itemID = "77777777-7777-4777-8777-777777777772"
+	request := map[string]any{
+		"id": campaignID, "name": "reviewer authority fence", "reviewer_subject": "assigned-reviewer",
+		"items": []map[string]any{{
+			"item_id": itemID, "nhi_id": "spiffe://qa.local/reviewer-fence", "nhi_kind": "workload",
+			"resource": "qa-local-postgres", "entitlement": "schema:qa/read",
+		}},
+	}
+	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", creator, "reviewer-fence-start", request)
+	if status != http.StatusCreated {
+		t.Fatalf("start review = %d body %s", status, body)
+	}
+	var started struct {
+		RequestedBy     string `json:"requested_by"`
+		ReviewerSubject string `json:"reviewer_subject"`
+	}
+	if err := json.Unmarshal(body, &started); err != nil || started.RequestedBy != "review-creator" || started.ReviewerSubject != "assigned-reviewer" {
+		t.Fatalf("campaign actor binding = %+v err %v", started, err)
+	}
+	path := "/api/v1/access/reviews/" + campaignID + "/items/" + itemID + "/decision"
+	for _, attempt := range []struct {
+		name, token string
+		body        map[string]any
+	}{
+		{"creator-spoofs-reviewer", creator, map[string]any{"decision": "certified", "reviewer_subject": "assigned-reviewer"}},
+		{"other-writer-omits-reviewer", other, map[string]any{"decision": "certified"}},
+		{"reviewer-spoofs-other", reviewer, map[string]any{"decision": "certified", "reviewer_subject": "other-writer"}},
+	} {
+		status, body := doBearer(t, h.ts, http.MethodPost, path, attempt.token, "reviewer-fence-"+attempt.name, attempt.body)
+		if status != http.StatusForbidden {
+			t.Fatalf("%s = %d body %s, want 403 before append", attempt.name, status, body)
+		}
+		if got := len(nhiReviewEvents(t, h.log, projections.EventNHIAccessReviewItemDecided, itemID)); got != 0 {
+			t.Fatalf("%s appended %d decision events, want zero", attempt.name, got)
+		}
+	}
+	status, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/reviews/"+campaignID, creator, "", nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"status":"pending"`) {
+		t.Fatalf("refused decisions changed read state: %d %s", status, body)
+	}
+	status, body = doBearer(t, h.ts, http.MethodPost, path, reviewer, "reviewer-fence-valid", map[string]any{
+		"decision": "certified", "reason": "assigned reviewer checked the QA entitlement",
+	})
+	if status != http.StatusOK || !strings.Contains(string(body), `"decision_by":"assigned-reviewer"`) {
+		t.Fatalf("assigned reviewer decision = %d body %s", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventNHIAccessReviewItemDecided, itemID)); got != 1 {
+		t.Fatalf("valid decision events = %d, want one", got)
+	}
+	status, body = doBearer(t, h.ts, http.MethodPost, path, reviewer, "reviewer-fence-second", map[string]any{"decision": "revoked", "reason": "late decision"})
+	if status != http.StatusConflict {
+		t.Fatalf("second decision = %d body %s, want 409", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventNHIAccessReviewItemDecided, itemID)); got != 1 {
+		t.Fatalf("second decision appended %d events, want one", got)
+	}
+	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", creator, "reviewer-fence-self-assigned", map[string]any{
+		"name": "self assigned review", "reviewer_subject": "review-creator",
+		"items": request["items"],
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("self-assigned campaign = %d body %s, want 400", status, body)
 	}
 }
 

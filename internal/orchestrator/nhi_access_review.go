@@ -96,6 +96,9 @@ func (o *Orchestrator) DecideNHIReviewItem(ctx context.Context, tenantID, campai
 	}
 	var ev events.Event
 	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := o.store.CheckNHIReviewDecisionAuthorityTx(ctx, tx, tenantID, campaign.ID, item.ItemID, payload.ReviewerSubject); err != nil {
+			return err
+		}
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewItemDecided, TenantID: tenantID, Data: evData})
 		if err != nil {
@@ -125,16 +128,15 @@ func normalizeNHIReviewCampaign(ctx context.Context, in NHIReviewCampaignStartRe
 	}
 	reviewer := trimBounded(in.ReviewerSubject, 180)
 	if reviewer == "" {
-		if actor, ok := events.ActorFromContext(ctx); ok {
-			reviewer = trimBounded(actor.Subject, 180)
-		}
-	}
-	if reviewer == "" {
 		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("reviewer_subject is required")
 	}
-	requestedBy := reviewer
-	if actor, ok := events.ActorFromContext(ctx); ok && strings.TrimSpace(actor.Subject) != "" {
-		requestedBy = trimBounded(actor.Subject, 180)
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || strings.TrimSpace(actor.Subject) == "" {
+		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("authenticated requester is required")
+	}
+	requestedBy := trimBounded(actor.Subject, 180)
+	if reviewer == requestedBy {
+		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("reviewer_subject must differ from the requester")
 	}
 	if len(in.Items) == 0 {
 		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("at least one NHI access review item is required")
@@ -201,14 +203,13 @@ func normalizeNHIReviewDecision(ctx context.Context, campaignID, itemID string, 
 	default:
 		return projections.NHIAccessReviewItemDecided{}, fmt.Errorf("decision must be certified, revoked, or exception")
 	}
-	reviewer := trimBounded(in.ReviewerSubject, 180)
-	if reviewer == "" {
-		if actor, ok := events.ActorFromContext(ctx); ok {
-			reviewer = trimBounded(actor.Subject, 180)
-		}
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || strings.TrimSpace(actor.Subject) == "" {
+		return projections.NHIAccessReviewItemDecided{}, store.ErrNHIReviewReviewerUnauthorized
 	}
-	if reviewer == "" {
-		return projections.NHIAccessReviewItemDecided{}, fmt.Errorf("reviewer_subject is required")
+	reviewer := trimBounded(actor.Subject, 180)
+	if claimed := trimBounded(in.ReviewerSubject, 180); claimed != "" && claimed != reviewer {
+		return projections.NHIAccessReviewItemDecided{}, store.ErrNHIReviewReviewerUnauthorized
 	}
 	reason := trimBounded(in.Reason, 500)
 	if decision != "certified" && reason == "" {

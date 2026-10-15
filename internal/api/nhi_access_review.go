@@ -149,6 +149,9 @@ func (a *API) decideNHIReviewItem(w http.ResponseWriter, r *http.Request) {
 		}
 		campaign, err := a.orch.DecideNHIReviewItem(ctx, tenantID, campaignID, itemID, req)
 		if err != nil {
+			if errors.Is(err, store.ErrNHIReviewReviewerUnauthorized) {
+				return 0, nil, errStatus(http.StatusForbidden, err.Error())
+			}
 			if errors.Is(err, store.ErrNHIReviewItemAlreadyDecided) {
 				return 0, nil, errStatus(http.StatusConflict, err.Error())
 			}
