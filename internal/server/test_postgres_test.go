@@ -171,11 +171,13 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 	if _, err := st.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, browser_sessions, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
-		          agents, agent_cert_revocations, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
-		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
+		          agents, agent_cert_revocations, agent_removal_commands, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, oidc_session_locators, oidc_logout_receipts, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
+		          identity_terminal_commands, identity_terminal_receipts,
+		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals, ca_ceremony_cancel_commands,
+		          certificate_revocation_authority_commands, certificate_revocation_authority_fences,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
-		          secret_sync_workload_identity_sources, workload_attester_trust_sources,
+		          secret_sync_workload_identity_sources, workload_attester_trust_sources, workload_attester_trust_commands, workload_attester_trust_receipts,
 		          discovery_segments, discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
 		          notification_channels, notification_reads, notification_threshold_deliveries, notification_test_operations,
 		          notification_delivery_receipts, notification_routing_policies,
@@ -197,7 +199,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          acme_dns01_provider_configs,
 		          audit_feed_deliveries, audit_feed_destinations,
 		          mdm_scep_policies, mdm_poll_schedules, mdm_device_correlations, agent_upgrade_campaigns,
-		          provider_breakglass_grants, provider_tenants, provider_operator_delegations,
+		          provider_breakglass_grants, provider_tenants, provider_operator_delegations, provider_suspend_commands,
 		          provider_tenant_quotas, provider_usage_coverage, provider_usage_meters
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("reset shared server postgres: %v", err)
