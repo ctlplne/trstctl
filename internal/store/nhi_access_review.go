@@ -197,6 +197,35 @@ func (s *Store) ApplyNHIReviewItemDecidedTx(ctx context.Context, tx pgx.Tx, tena
 	return err
 }
 
+// ApplyNHIReviewItemDecidedReplayTx preserves the first accepted review when
+// retained history contains a second decision for the same item. The campaign
+// assignment remains authoritative even during recovery. Live commands use
+// the strict ApplyNHIReviewItemDecidedTx path and cannot call this replay path.
+func (s *Store) ApplyNHIReviewItemDecidedReplayTx(ctx context.Context, tx pgx.Tx, tenantID string, d NHIReviewDecision) (string, error) {
+	var assigned, requester, status, decisionBy string
+	err := tx.QueryRow(ctx,
+		`SELECT c.reviewer_subject, c.requested_by, i.status, i.decision_by
+		   FROM nhi_access_review_campaigns c
+		   JOIN nhi_access_review_items i
+		     ON i.tenant_id = c.tenant_id AND i.campaign_id = c.id
+		  WHERE c.tenant_id = $1 AND c.id = $2 AND i.item_id = $3
+		  FOR UPDATE OF c, i`,
+		tenantID, d.CampaignID, d.ItemID).Scan(&assigned, &requester, &status, &decisionBy)
+	if err != nil {
+		return "", err
+	}
+	if d.ReviewerSubject == "" || d.ReviewerSubject != assigned || d.ReviewerSubject == requester {
+		return "unauthorized_reviewer", nil
+	}
+	if status != "pending" {
+		if decisionBy == assigned {
+			return "duplicate", nil
+		}
+		return "", fmt.Errorf("%w: item %s is %s", ErrNHIReviewItemAlreadyDecided, d.ItemID, status)
+	}
+	return "", s.ApplyNHIReviewItemDecidedTx(ctx, tx, tenantID, d)
+}
+
 // GetNHIReviewCampaign loads a campaign and its items under tenant RLS.
 func (s *Store) GetNHIReviewCampaign(ctx context.Context, tenantID, id string) (NHIReviewCampaign, error) {
 	var out NHIReviewCampaign

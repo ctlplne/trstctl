@@ -3481,14 +3481,14 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 	return p.applyEventProjections(ctx, e)
 }
 
-type accessDecisionHistoryReplayKey struct{}
+type governanceDecisionHistoryReplayKey struct{}
 
-func accessDecisionHistoryReplay(ctx context.Context) context.Context {
-	return context.WithValue(ctx, accessDecisionHistoryReplayKey{}, true)
+func governanceDecisionHistoryReplay(ctx context.Context) context.Context {
+	return context.WithValue(ctx, governanceDecisionHistoryReplayKey{}, true)
 }
 
-func isAccessDecisionHistoryReplay(ctx context.Context) bool {
-	return ctx.Value(accessDecisionHistoryReplayKey{}) == true
+func isGovernanceDecisionHistoryReplay(ctx context.Context) bool {
+	return ctx.Value(governanceDecisionHistoryReplayKey{}) == true
 }
 
 func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
@@ -7102,15 +7102,35 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.CampaignID == "" || pl.ItemID == "" || pl.Decision == "" || pl.ReviewerSubject == "" {
 			return fmt.Errorf("projections: %s requires campaign_id, item_id, decision, and reviewer_subject", e.Type)
 		}
+		if e.Actor != nil && e.Actor.Subject != pl.ReviewerSubject {
+			if !isGovernanceDecisionHistoryReplay(ctx) {
+				return store.ErrNHIReviewReviewerUnauthorized
+			}
+			slog.Warn("historical NHI review actor mismatch excluded from decision state",
+				"tenant_id", e.TenantID, "event_id", e.ID, "sequence", e.Sequence,
+				"campaign_id", pl.CampaignID, "item_id", pl.ItemID,
+				"authenticated_actor", e.Actor.Subject, "claimed_reviewer", pl.ReviewerSubject)
+			return nil
+		}
 		decidedAt := pl.DecidedAt
 		if decidedAt.IsZero() {
 			decidedAt = e.Time
 		}
-		return p.store.ApplyNHIReviewItemDecidedTx(ctx, tx, e.TenantID, store.NHIReviewDecision{
+		decision := store.NHIReviewDecision{
 			CampaignID: pl.CampaignID, ItemID: pl.ItemID, Decision: pl.Decision,
 			ReviewerSubject: pl.ReviewerSubject, Reason: pl.Reason,
 			DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
-		})
+		}
+		if isGovernanceDecisionHistoryReplay(ctx) {
+			disposition, err := p.store.ApplyNHIReviewItemDecidedReplayTx(ctx, tx, e.TenantID, decision)
+			if disposition != "" {
+				slog.Warn("historical NHI review decision excluded from read state",
+					"tenant_id", e.TenantID, "event_id", e.ID, "sequence", e.Sequence,
+					"campaign_id", pl.CampaignID, "item_id", pl.ItemID, "reason", disposition)
+			}
+			return err
+		}
+		return p.store.ApplyNHIReviewItemDecidedTx(ctx, tx, e.TenantID, decision)
 	case EventAccessChangeRequestCreated:
 		var pl AccessChangeRequestCreated
 		if err := decode(e, &pl); err != nil {
@@ -7153,7 +7173,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			RequestID: pl.RequestID, Decision: pl.Decision, ApproverSubject: pl.ApproverSubject,
 			Reason: pl.Reason, DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
 		}
-		if isAccessDecisionHistoryReplay(ctx) {
+		if isGovernanceDecisionHistoryReplay(ctx) {
 			skipped, err := p.store.ApplyAccessChangeRequestDecidedReplayTx(ctx, tx, e.TenantID, decision)
 			if skipped {
 				slog.Warn("historical access decision duplicate retained with first-writer authority",
@@ -7998,7 +8018,7 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 		if isTenantLifecycleEventType(e.Type) {
 			return p.ApplyRetainedTenantLifecycle(ctx, e)
 		}
-		return p.Apply(accessDecisionHistoryReplay(ctx), e)
+		return p.Apply(governanceDecisionHistoryReplay(ctx), e)
 	}); err != nil {
 		return err
 	}
@@ -8129,7 +8149,7 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 					}
 					skip = skip || skipDynamicSecret
 					if !skip {
-						err = p.applyCore(accessDecisionHistoryReplay(readCtx), e)
+						err = p.applyCore(governanceDecisionHistoryReplay(readCtx), e)
 					}
 					if err != nil {
 						return err
@@ -8540,7 +8560,7 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 		if err := p.store.SetTenantGUCTx(ctx, tx, storageTenant); err != nil {
 			return err
 		}
-		return p.ApplyTx(accessDecisionHistoryReplay(ctx), tx, e)
+		return p.ApplyTx(governanceDecisionHistoryReplay(ctx), tx, e)
 	}
 }
 

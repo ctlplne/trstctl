@@ -624,6 +624,11 @@ auth:
   campaign form requires a reviewer other than the signed-in creator. A viewer
   who is not the assigned reviewer sees that identity and cannot use the
   decision controls; the API enforces the same rule before event append.
+  During cold recovery, the projector keeps the first valid decision for each
+  item and excludes older duplicate or actor-mismatched decision events from
+  the read model. The events remain in the append-only audit history. An
+  operator rebuilding a read model that was projected by an older build must
+  use the normal projection rebuild path to apply these recovery rules.
 - **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
   `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
   `GET /api/v1/privacy/catalog`; operator-command events `privacy.subject.erased` and
