@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -371,6 +372,11 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 	if err != nil {
 		return "", nil, nil, false, err
 	}
+	for _, name := range cmd.RequiredQuery {
+		if strings.TrimSpace(query.Get(name)) == "" {
+			return "", nil, nil, false, fmt.Errorf("%s requires --%s", strings.Join(cmd.Name, " "), name)
+		}
+	}
 
 	if cmd.Body == bodyCypher {
 		if len(positionals) == 0 {
@@ -650,7 +656,11 @@ func commandUsage(w io.Writer, cmd Command) {
 		_, _ = fmt.Fprint(w, " <query>")
 	}
 	for _, q := range cmd.Query {
-		_, _ = fmt.Fprintf(w, " [--%s value]", q)
+		if slices.Contains(cmd.RequiredQuery, q) {
+			_, _ = fmt.Fprintf(w, " --%s value", q)
+		} else {
+			_, _ = fmt.Fprintf(w, " [--%s value]", q)
+		}
 	}
 	if cmd.Destructive() {
 		_, _ = fmt.Fprint(w, " --force")
@@ -688,7 +698,11 @@ func commandExample(cmd Command) string {
 	if cmd.Body == bodyCypher {
 		parts = append(parts, "\"MATCH (n) RETURN n\"")
 	}
-	if len(cmd.Query) > 0 {
+	if len(cmd.RequiredQuery) > 0 {
+		for _, q := range cmd.RequiredQuery {
+			parts = append(parts, "--"+q, "value")
+		}
+	} else if len(cmd.Query) > 0 {
 		parts = append(parts, "--"+cmd.Query[0], "value")
 	}
 	if cmd.Destructive() {

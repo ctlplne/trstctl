@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1524 annotated sites across 26 rules. Each row is
+1525 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (317 sites)
+### G101 — CWE-798 Use of hardcoded credentials (318 sites)
 
 | Location | Reason |
 |---|---|
@@ -158,6 +158,7 @@ not this file.
 | `internal/cbom/coverage/envelope.go:42` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:45` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:46` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
 | `internal/cloudauth/azure.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -685,7 +686,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:278` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2571` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2578` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1218,8 +1219,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:79` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
 | `internal/cli/audit_verify.go:173` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
-| `internal/cli/cli.go:189` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `internal/cli/cli.go:542` | operator-passed local file argument on their own command line (CWE-22) |
+| `internal/cli/cli.go:190` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `internal/cli/cli.go:548` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:2035` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1612,7 +1613,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
-| `internal/cli/cli.go:550` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
+| `internal/cli/cli.go:556` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/sshkeys/property_test.go:100` | deterministic property-test stream, not security randomness (CWE-338) |

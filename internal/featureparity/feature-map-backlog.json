@@ -10074,7 +10074,8 @@
             "target_gui_mapping": "Delivered vertical slice: effect-free preview, explicit policy-gated issue, durable history, exact-command retry, guarded reset, exact shared revocation, audit/CRL verification, API/CLI automation, responsive browser readback, and preserved-volume restart. Roadmap residual: a broker-specific one-call revocation action; the delivered workflow deliberately reuses the shared certificate control plane.",
             "acceptance_test": "Served broker preview/history/recovery tests, TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph, OpenAPI/CLI parity, broker_identity_workflow.test.tsx, and revocation_center.test.tsx prove source behavior. Exact-candidate g126 receipts prove fresh-image browser preview/issue/history/shared revocation, empty-subject confirmation negatives, public API and native CLI parity, tenant/proof-time/idempotency controls, audit/CRL readback, Chromium and WebKit 390x844 containment, and preserved-volume restart. Firefox remains an explicit external supported-browser wall and is not claimed green.",
             "source_docs": [
-                "docs/features/workload-identity.md"
+                "docs/features/workload-identity.md",
+                "docs/features/agent-delegation.md"
             ],
             "source_backend": [
                 "internal/broker",
@@ -10082,7 +10083,8 @@
                 "internal/api/broker.go",
                 "internal/api/broker_history.go",
                 "internal/server/broker_preview.go",
-                "internal/store/broker_history.go"
+                "internal/store/broker_history.go",
+                "internal/agentid/api/api.go"
             ],
             "source_frontend": [
                 "web/src/pages/Workloads.tsx",
@@ -10096,14 +10098,30 @@
                 "previewBrokerAgentIdentity",
                 "listBrokerAgentIdentities",
                 "getBrokerAgentIdentity",
-                "issueBrokerAgentIdentity"
+                "issueBrokerAgentIdentity",
+                "registerAgentDelegationRootAnchor",
+                "listAgentDelegationRootAnchors",
+                "issueChainBoundCredential",
+                "revokeAgentDelegation",
+                "getAgentDelegationChain",
+                "getAgentDelegationCredential",
+                "getRevocationIncompleteJobs",
+                "getRevocationEvidence"
             ],
             "api_na": "",
             "cli_surface": [
                 "broker agent-identities preview",
                 "broker agent-identities list",
                 "broker agent-identities get",
-                "broker agent-identities issue"
+                "broker agent-identities issue",
+                "agent-delegation roots register",
+                "agent-delegation roots list",
+                "agent-delegation issue",
+                "agent-delegation revoke",
+                "agent-delegation chain get",
+                "agent-delegation credential get",
+                "agent-delegation revocations incomplete-jobs",
+                "agent-delegation revocations evidence"
             ],
             "cli_na": "",
             "facet_evidence": {

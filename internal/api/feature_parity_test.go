@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	agidapi "trstctl.com/trstctl/internal/agentid/api"
 	"trstctl.com/trstctl/internal/featureparity"
 	succapi "trstctl.com/trstctl/internal/succession/api"
 )
@@ -51,13 +52,19 @@ func TestEveryOpenAPIOperationMapsToFeature(t *testing.T) {
 	}
 }
 
-// The static OpenAPI fixture covers the base API. Core PCAS attaches through
-// the same route seam as the served runtime, so include those registered
+// The static OpenAPI fixture covers the base API. Core PCAS and AGID attach
+// through the same route seam as the served runtime, so include their registered
 // operations when checking the feature contract in both directions.
 func featureParityOperationIDs(t *testing.T) map[string]bool {
 	t.Helper()
 	operations := openAPIOperationIDs(t, fetchSpec(t))
 	for _, route := range succapi.Routes(nil) {
+		if operations[route.OperationID] {
+			t.Fatalf("duplicate attached OpenAPI operationId %q", route.OperationID)
+		}
+		operations[route.OperationID] = true
+	}
+	for _, route := range agidapi.Routes(nil) {
 		if operations[route.OperationID] {
 			t.Fatalf("duplicate attached OpenAPI operationId %q", route.OperationID)
 		}

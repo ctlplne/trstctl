@@ -24,17 +24,18 @@ const (
 // Command maps a CLI invocation to one API operation, so the command set is
 // data-driven and provably at parity with the API route table.
 type Command struct {
-	Name        []string // command words, e.g. ["certificates","list"]
-	Method      string   // HTTP method
-	Path        string   // API path template, with {param} placeholders
-	Query       []string // accepted query-parameter flag names
-	Body        bodyMode
-	ContentType string // request body media type; empty means application/json
-	ExampleFile string // shown for -f in help; empty means request.json
-	ReadOnly    bool   // true for POST-shaped reads that accept a structured body
-	RawResponse bool   // preserve exact signed/downloaded bytes; do not pretty-print JSON
-	Action      string // fixed action validated for bodyApprovalFile commands
-	Summary     string
+	Name          []string // command words, e.g. ["certificates","list"]
+	Method        string   // HTTP method
+	Path          string   // API path template, with {param} placeholders
+	Query         []string // accepted query-parameter flag names
+	RequiredQuery []string // query flags required before any request is sent
+	Body          bodyMode
+	ContentType   string // request body media type; empty means application/json
+	ExampleFile   string // shown for -f in help; empty means request.json
+	ReadOnly      bool   // true for POST-shaped reads that accept a structured body
+	RawResponse   bool   // preserve exact signed/downloaded bytes; do not pretty-print JSON
+	Action        string // fixed action validated for bodyApprovalFile commands
+	Summary       string
 	// RequestTimeout raises the default HTTP deadline for a command whose
 	// synchronous, recoverable server operation can legitimately take longer.
 	// Zero keeps the ordinary 30-second CLI bound.

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	agidapi "trstctl.com/trstctl/internal/agentid/api"
 	"trstctl.com/trstctl/internal/cli"
 	"trstctl.com/trstctl/internal/license"
 	succapi "trstctl.com/trstctl/internal/succession/api"
@@ -757,6 +758,12 @@ func TestFeatureLedgerSurfacesAreBackedByOpenAPIAndCLI(t *testing.T) {
 	// Core PCAS routes attach to the served API at runtime, so they are absent
 	// from the static base golden. Verify the registered route metadata too.
 	for _, route := range succapi.Routes(nil) {
+		if operations[route.OperationID] {
+			t.Fatalf("duplicate attached OpenAPI operationId %q", route.OperationID)
+		}
+		operations[route.OperationID] = true
+	}
+	for _, route := range agidapi.Routes(nil) {
 		if operations[route.OperationID] {
 			t.Fatalf("duplicate attached OpenAPI operationId %q", route.OperationID)
 		}

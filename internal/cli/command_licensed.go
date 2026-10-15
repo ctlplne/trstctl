@@ -19,6 +19,14 @@ package cli
 // when its edition is unavailable; the CLI uses the served contract rather than
 // guessing the server's edition ahead of the call.
 var licensedRouteCommands = []Command{
+	{Name: []string{"agent-delegation", "roots", "register"}, Method: "POST", Path: "/api/v1/agent-delegation/root-anchors", Body: bodyFile, Summary: "Register or update a tenant delegation root anchor; the signer must also have its public trust floor"},
+	{Name: []string{"agent-delegation", "roots", "list"}, Method: "GET", Path: "/api/v1/agent-delegation/root-anchors", Summary: "List tenant delegation root anchors"},
+	{Name: []string{"agent-delegation", "issue"}, Method: "POST", Path: "/api/v1/agent-delegation/issuances", Body: bodyFile, Summary: "Queue signer-gated issuance of a chain-bound agent credential"},
+	{Name: []string{"agent-delegation", "revoke"}, Method: "POST", Path: "/api/v1/agent-delegation/revocations", Body: bodyFile, Summary: "Queue a cascaded delegation revocation; review the subject and use --force"},
+	{Name: []string{"agent-delegation", "chain", "get"}, Method: "GET", Path: "/api/v1/agent-delegation/chain", Query: []string{"credential_id"}, RequiredQuery: []string{"credential_id"}, Summary: "Read the exact issued credential's delegation chain"},
+	{Name: []string{"agent-delegation", "credential", "get"}, Method: "GET", Path: "/api/v1/agent-delegation/credential", Query: []string{"credential_id"}, RequiredQuery: []string{"credential_id"}, Summary: "Read an issued credential's public material"},
+	{Name: []string{"agent-delegation", "revocations", "incomplete-jobs"}, Method: "GET", Path: "/api/v1/agent-delegation/revocations/incomplete-jobs", Query: []string{"directive_id"}, RequiredQuery: []string{"directive_id"}, Summary: "Read an exact directive's unfinished descendant jobs"},
+	{Name: []string{"agent-delegation", "revocations", "evidence"}, Method: "GET", Path: "/api/v1/agent-delegation/revocations/evidence", Query: []string{"directive_id"}, RequiredQuery: []string{"directive_id"}, Summary: "Read an exact directive's aggregate revocation evidence"},
 	{Name: []string{"pcas", "genesis", "register"}, Method: "POST", Path: "/api/v1/pcas/genesis", Body: bodyFile, Summary: "Register a tenant-scoped signer-held PCAS genesis key"},
 	{Name: []string{"pcas", "requests", "status"}, Method: "GET", Path: "/api/v1/pcas/requests/{request_id}", Summary: "Show durable PCAS genesis or succession progress"},
 	{Name: []string{"pcas", "succession", "request"}, Method: "POST", Path: "/api/v1/pcas/successions", Body: bodyFile, Summary: "Queue an algorithm succession after genesis is delivered"},

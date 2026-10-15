@@ -298,8 +298,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// PCAS first use adds registration, request status, succession, and chain readback.
 	// F2 adds one exact discovery schedule read and three event-sourced lifecycle controls.
 	// F34 adds matching headless recovery list and exact get commands for issues and CA results.
-	if len(out) != 510 {
-		t.Fatalf("CLI commands = %d, want 510", len(out))
+	// The eight attached Core agent-delegation routes now have matching
+	// headless commands; the static API-table parity test cannot see them.
+	if len(out) != 518 {
+		t.Fatalf("CLI commands = %d, want 518", len(out))
 	}
 	return out
 }

@@ -9,7 +9,8 @@ the signer checks the whole chain before any agent key is generated.
 
 Agent delegation is part of the core (`internal/agentid`, since 2026-09-20). Its
 `/api/v1/agent-delegation/*` routes attach in every build through
-`cmd/trstctl/attach_families.go` and are not part of the static OpenAPI document. The free single-hop attested workload credential path
+`cmd/trstctl/attach_families.go` and appear in the running server's OpenAPI document.
+The free single-hop attested workload credential path
 ([Workload identity](workload-identity.md), including the AI-agent broker at
 `POST /api/v1/broker/agent-identities`) is separate and unchanged.
 
@@ -108,6 +109,24 @@ GET  /api/v1/agent-delegation/chain?credential_id=...
 POST /api/v1/agent-delegation/revocations        # {"subject":"agent:...","reason":"compromise","publish_downstream":true}
 GET  /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...
 GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
+```
+
+The downloadable `trstctl-cli` exposes the same eight routes. Set
+`TRSTCTL_SERVER`, `TRSTCTL_TOKEN`, `TRSTCTL_TENANT`, and `TRSTCTL_CA_FILE` for
+the deployment, then use a stable idempotency key for each mutation. Request
+JSON can be supplied from a private file or standard input; the CLI does not
+store or print the bearer token. Query IDs are required locally before a read
+is sent, including IDs containing a slash:
+
+```sh
+trstctl-cli agent-delegation roots list
+trstctl-cli --idempotency-key root-qa-1 agent-delegation roots register -f root-anchor.json
+trstctl-cli --idempotency-key issue-qa-1 agent-delegation issue -f issuance.json
+trstctl-cli agent-delegation credential get --credential_id 'agent:qa/credential'
+trstctl-cli agent-delegation chain get --credential_id 'agent:qa/credential'
+trstctl-cli --idempotency-key revoke-qa-1 agent-delegation revoke -f revocation.json --force
+trstctl-cli agent-delegation revocations incomplete-jobs --directive_id directive-1
+trstctl-cli agent-delegation revocations evidence --directive_id directive-1
 ```
 
 ## Pitfalls & limits
