@@ -25,6 +25,7 @@ import (
 const MaxOwnershipExceptionTTL = 30 * 24 * time.Hour
 
 var ErrCMDBSweepInProgress = errors.New("orchestrator: CMDB schedule has an incomplete sweep")
+var ErrOwnershipConflictClosed = errors.New("orchestrator: ownership conflict was already resolved")
 
 var ownershipReattestationEventNamespace = uuid.MustParse("2d08f73a-3a9c-53a5-92f1-4d5b44aa0044")
 var cmdbSweepEventNamespace = uuid.MustParse("0f235a4f-5938-5bd4-a6a8-e26bf50856ab")
@@ -680,6 +681,15 @@ func (o *Orchestrator) ResolveOwnershipConflict(ctx context.Context, tenantID, i
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventOwnershipConflictResolved, tenantID, payload)
-	return err
+	return o.store.WithProjectionLock(ctx, func(locked context.Context) error {
+		open, err := o.store.OwnershipConflictOpen(locked, tenantID, id)
+		if err != nil {
+			return err
+		}
+		if !open {
+			return ErrOwnershipConflictClosed
+		}
+		_, err = o.emit(locked, projections.EventOwnershipConflictResolved, tenantID, payload)
+		return err
+	})
 }

@@ -133,7 +133,11 @@ also carry `application_id`, `service`, `business_unit`, `environment`, and
 `source_ref`. The CLI sends it as `text/csv`. An import records disagreements in
 `trstctl owners ownership-conflicts`; resolve each one with a reason using
 `trstctl owners resolve-conflict <id> -f request.json`. A CSV row cannot invent
-an owner or overwrite an attested field.
+an owner or overwrite an attested field. The decision target must be an
+existing, open disagreement in the caller's tenant: an unknown ID returns 404,
+and a second decision with a new idempotency key returns 409 rather than
+claiming to change or overwrite the first decision. Retrying the original
+idempotency key returns its original receipt.
 
 The served OpenAPI declares this import as a required `text/csv` body (up to
 8 MiB). Scheduled ServiceNow reconciliation is configured with

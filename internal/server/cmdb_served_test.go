@@ -155,7 +155,35 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 			"the change was refused")
 	}
 	if c.ID == "" {
-		t.Error("the served conflict has no id; an operator has nothing to resolve against")
+		t.Fatal("the served conflict has no id; an operator has nothing to resolve against")
+	}
+
+	// A decision is a statement about an existing, still-open disagreement.
+	// Returning 200 for an invented ID gives automation a false receipt and
+	// records a judgment nobody could have made from the served queue.
+	missingID := "11111111-1111-4111-8111-111111111111"
+	status, out = secretsReqKey(t, h, http.MethodPost,
+		"/api/v1/owners/ownership-conflicts/"+missingID+"/resolve", tok,
+		"ownership-resolve-missing", map[string]any{"resolution": "not a real conflict"})
+	if status != http.StatusNotFound {
+		t.Fatalf("invented ownership conflict resolved: status %d body %s; want 404 before append", status, out)
+	}
+
+	status, out = secretsReqKey(t, h, http.MethodPost,
+		"/api/v1/owners/ownership-conflicts/"+c.ID+"/resolve", tok,
+		"ownership-resolve-first", map[string]any{"resolution": "human attestation wins"})
+	if status != http.StatusOK {
+		t.Fatalf("real ownership conflict resolution: status %d body %s", status, out)
+	}
+	status, out = secretsReqKey(t, h, http.MethodPost,
+		"/api/v1/owners/ownership-conflicts/"+c.ID+"/resolve", tok,
+		"ownership-resolve-second", map[string]any{"resolution": "external source wins"})
+	if status != http.StatusConflict {
+		t.Fatalf("second ownership decision overwrote first: status %d body %s; want 409", status, out)
+	}
+	status, out = secretsReq(t, h, http.MethodGet, "/api/v1/owners/ownership-conflicts", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(out), `"items":[]`) {
+		t.Fatalf("resolved conflict still open: status %d body %s", status, out)
 	}
 }
 

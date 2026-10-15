@@ -559,6 +559,21 @@ func (s *Store) ListOpenOwnershipConflicts(ctx context.Context, tenantID string,
 	return out, err
 }
 
+// OwnershipConflictOpen reads one tenant-bound decision target. Missing IDs
+// return pgx.ErrNoRows; a closed row returns false. Callers that will append a
+// decision hold the projection advisory lock across this read and the append,
+// so another writer cannot make a second decision from the same open state.
+func (s *Store) OwnershipConflictOpen(ctx context.Context, tenantID, id string) (bool, error) {
+	var open bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT resolved_at IS NULL
+			   FROM owner_ownership_conflicts
+			  WHERE tenant_id = $1 AND id = $2`, tenantID, id).Scan(&open)
+	})
+	return open, err
+}
+
 // OwnershipConflict is one field two sources disagree about.
 type OwnershipConflict struct {
 	ID             string

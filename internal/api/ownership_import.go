@@ -4,11 +4,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -206,6 +208,12 @@ func (a *API) resolveOwnershipConflict(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := a.orch.ResolveOwnershipConflict(ctx, tenantID, r.PathValue("id"),
 			principalSubject(ctx), body.Resolution); err != nil {
+			if store.IsNotFound(err) {
+				return 0, nil, errStatus(http.StatusNotFound, "ownership disagreement not found")
+			}
+			if errors.Is(err, orchestrator.ErrOwnershipConflictClosed) {
+				return 0, nil, errStatus(http.StatusConflict, "ownership disagreement was already resolved")
+			}
 			return 0, nil, err
 		}
 		return http.StatusOK, map[string]string{"id": r.PathValue("id"), "resolution": body.Resolution}, nil

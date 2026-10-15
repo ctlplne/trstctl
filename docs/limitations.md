@@ -2584,16 +2584,17 @@ than sending an operator looking for a credential that was never there.
   One page is in flight per tenant; a second due tick leaves that incomplete
   checkpoint untouched instead of stacking an identical read. Scope, stated
   exactly: relay execution is mandatory; there is no run-now endpoint (a newly
-  enabled schedule is due immediately and fires within one scheduler tick);
-  resolving a conflict is a read surface only —
-  a disagreement is CLOSED through `POST /api/v1/owners/ownership-conflicts/{id}/resolve`
+  enabled schedule is due immediately and fires within one scheduler tick).
+  A disagreement is CLOSED through `POST /api/v1/owners/ownership-conflicts/{id}/resolve`
   (`trstctl owners resolve-conflict`), which REQUIRES both a reason and an
   attributed operator — "resolved" with no explanation tells the next reader
   nothing about which side was right, and an unattributed judgment cannot be
-  questioned later. The projection pins `resolved_at IS NULL` so a second
-  operator cannot overwrite the first one's judgment. The console lists
-  disagreements but has no resolve control yet;
-  and the CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
+  questioned later. The command checks the tenant-bound open row under the
+  projection lock before appending; unknown IDs return 404, and a second
+  decision returns 409. The projection also pins `resolved_at IS NULL` so a
+  second event cannot overwrite the first judgment. The console provides a
+  reason field and Resolve control for each open disagreement. The
+  CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
   labels do not match this estate's owner names reconciles nothing and says so.
 - Issuance requests as first-class objects (I3): the effect-free
   `POST /api/v1/issuance-requests/preview`, the mutating
