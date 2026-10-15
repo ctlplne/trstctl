@@ -50,7 +50,9 @@ func (d *issuanceDispatcher) handleIncidentMigrationRevoke(ctx context.Context, 
 	if cert.Status != "superseded" && cert.Status != "revoked" {
 		return fmt.Errorf("server: incident predecessor %s is %q before verified revocation", cert.ID, cert.Status)
 	}
-	reason := "incident migration " + intent.RunID + " revoked exact verified predecessor " + cert.ID
+	// The revocation reason is an RFC 5280 enum. The stable event ID and H2
+	// member receipt bind the incident/run/certificate details for audit.
+	reason := string(crypto.RevocationReasonKeyCompromise)
 	reasonCode := crypto.CRLReasonCode(crypto.RevocationReasonKeyCompromise)
 	if err := d.orch.RevokeCertificateForCAWithEventID(ctx, m.TenantID,
 		orchestrator.MigrationEventID(m.TenantID, intent.RunID, "predecessor-revoked:"+m.IdempotencyKey),

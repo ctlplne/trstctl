@@ -164,6 +164,21 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	if err := h.srv.obHandler.Deliver(ctx, revokeMessage); err != nil {
 		t.Fatalf("deliver exact predecessor revocation: %v", err)
 	}
+	revocationEventID := orchestrator.MigrationEventID(h.tenant, rehearsed.ID,
+		"predecessor-revoked:"+revokeMessage.IdempotencyKey)
+	revocationEvent, found, err := h.log.EventByID(ctx, revocationEventID)
+	if err != nil || !found || revocationEvent.Type != projections.EventCertificateRevoked {
+		t.Fatalf("incident revocation event = %+v found=%t err=%v", revocationEvent, found, err)
+	}
+	var revocation projections.CertificateRevoked
+	if err := json.Unmarshal(revocationEvent.Data, &revocation); err != nil {
+		t.Fatalf("decode incident revocation event: %v", err)
+	}
+	if revocation.Reason != string(crypto.RevocationReasonKeyCompromise) ||
+		revocation.ReasonCode != crypto.CRLReasonCode(crypto.RevocationReasonKeyCompromise) ||
+		revocation.Fingerprint != success.predecessor.Fingerprint {
+		t.Fatalf("incident revocation lost RFC 5280 reason or exact predecessor binding: %+v", revocation)
+	}
 	assertMigrationStatusAUD40(t, h, rehearsed.ID, migration.RunComplete, migration.PhaseComplete)
 	assertIncidentTerminalAUD41(t, h, gameDayToken, rehearsed.ID, success.identityID, "executed")
 	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), success.predecessor.Serial); err != nil || !found || !ledger.Revoked() {
