@@ -194,6 +194,7 @@ function PolicyContent() {
   const [reviewDecisionEvidenceRefs, setReviewDecisionEvidenceRefs] = useState<Record<string, string>>({});
   const [accessRequests, setAccessRequests] = useState<AccessChangeRequest[]>([]);
   const [activeAccessRequest, setActiveAccessRequest] = useState<AccessChangeRequest | null>(null);
+  const [accessReadError, setAccessReadError] = useState<string | null>(null);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessNotice, setAccessNotice] = useState<string | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
@@ -337,7 +338,7 @@ function PolicyContent() {
   useEffect(() => {
     let active = true;
     setAccessLoading(true);
-    setAccessError(null);
+    setAccessReadError(null);
     api
       .accessChangeRequests({ limit: 5 })
       .then(async (page) => {
@@ -352,7 +353,7 @@ function PolicyContent() {
         if (active) setActiveAccessRequest(detailed);
       })
       .catch((err: unknown) => {
-        if (active) setAccessError(describePolicyError(err, "access change requests unavailable"));
+        if (active) setAccessReadError(describePolicyError(err, "access change requests unavailable"));
       })
       .finally(() => {
         if (active) setAccessLoading(false);
@@ -564,7 +565,7 @@ function PolicyContent() {
 
   async function refreshAccessChangeRequests(preferredID?: string) {
     setAccessLoading(true);
-    setAccessError(null);
+    setAccessReadError(null);
     try {
       const page = await api.accessChangeRequests({ limit: 5 });
       const requests = page.items ?? [];
@@ -576,7 +577,7 @@ function PolicyContent() {
         setActiveAccessRequest(null);
       }
     } catch (err) {
-      setAccessError(describePolicyError(err, "access change requests unavailable"));
+      setAccessReadError(describePolicyError(err, "access change requests unavailable"));
     } finally {
       setAccessLoading(false);
     }
@@ -622,11 +623,11 @@ function PolicyContent() {
 
   async function selectAccessChangeRequest(id: string) {
     setAccessLoading(true);
-    setAccessError(null);
+    setAccessReadError(null);
     try {
       setActiveAccessRequest(await api.getAccessChangeRequest(id));
     } catch (err) {
-      setAccessError(describePolicyError(err, "access change request unavailable"));
+      setAccessReadError(describePolicyError(err, "access change request unavailable"));
     } finally {
       setAccessLoading(false);
     }
@@ -765,15 +766,12 @@ function PolicyContent() {
         }
       />
 
-      {policyVersionLoading || accessLoading ? (
+      {policyVersionLoading ? (
         <LoadingState>{t("policy.design.checking")}</LoadingState>
-      ) : policyVersionError || accessError || !enforcement || (enforcement.enabled && !verifiedEnforcement) ? (
+      ) : policyVersionError || !enforcement || (enforcement.enabled && !verifiedEnforcement) ? (
         <ErrorState title={t("policy.design.summaryUnavailable")}>
           <p>{t("policy.design.summaryUnavailableHelp")}</p>
-          <ul className="mt-2 list-disc ps-5">
-            {policyVersionError && <li>{policyVersionError}</li>}
-            {accessError && <li>{accessError}</li>}
-          </ul>
+          <ul className="mt-2 list-disc ps-5">{policyVersionError && <li>{policyVersionError}</li>}</ul>
         </ErrorState>
       ) : (
         <Card className="grid gap-3 p-comfortable" role="status" aria-live="polite">
@@ -793,11 +791,15 @@ function PolicyContent() {
             <Metric
               label={t("policy.design.approvalsLabel")}
               value={
-                accessRequests.filter((request) => request.status === "pending").length === 1
-                  ? t("policy.design.oneApproval")
-                  : t("policy.design.manyApprovals", {
-                      count: String(accessRequests.filter((request) => request.status === "pending").length),
-                    })
+                accessReadError
+                  ? t("policy.design.approvalsUnavailable")
+                  : accessLoading
+                    ? t("policy.design.approvalsChecking")
+                    : accessRequests.filter((request) => request.status === "pending").length === 1
+                      ? t("policy.design.oneApproval")
+                      : t("policy.design.manyApprovals", {
+                          count: String(accessRequests.filter((request) => request.status === "pending").length),
+                        })
               }
             />
             <Metric
@@ -1421,7 +1423,8 @@ function PolicyContent() {
             </form>
 
             {accessLoading && <LoadingState>{t("policy.accessChange.loading")}</LoadingState>}
-            {accessError && <ErrorState title={t("policy.accessChange.unavailableTitle")}>{accessError}</ErrorState>}
+            {accessReadError && <ErrorState title={t("policy.accessChange.unavailableTitle")}>{accessReadError}</ErrorState>}
+            {accessError && <ErrorState title={t("policy.accessChange.actionFailedTitle")}>{accessError}</ErrorState>}
             {accessNotice && (
               <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
                 {accessNotice}

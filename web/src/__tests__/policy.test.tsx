@@ -1240,6 +1240,31 @@ describe("policy governance surface", () => {
     expect(apiMock.decideAccessChangeRequest.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ decision: "approved", decision_evidence_refs: [] }));
   });
 
+  it("keeps lifecycle protection known when an access approval is refused", async () => {
+    apiMock.decideAccessChangeRequest.mockRejectedValue(new Error("self approval refused"));
+    const user = userEvent.setup();
+    renderPolicy();
+
+    expect(await screen.findByRole("heading", { name: "Lifecycle policy is enabled" })).toBeInTheDocument();
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Approve" }));
+    expect((await screen.findAllByText("self approval refused")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Lifecycle policy is enabled" })).toBeInTheDocument();
+    expect(screen.queryByText("Protection state is unknown", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText("1 request needs approval")).toBeInTheDocument();
+  });
+
+  it("keeps lifecycle protection known but marks approval count unavailable when its list read fails", async () => {
+    apiMock.accessChangeRequests.mockRejectedValue(new Error("access list read failed"));
+    renderPolicy();
+
+    expect(await screen.findByRole("heading", { name: "Lifecycle policy is enabled" })).toBeInTheDocument();
+    expect(await screen.findByText("Approval count unavailable")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText("Approval and access reviews", { exact: true }));
+    expect(await screen.findByText("access list read failed")).toBeInTheDocument();
+    expect(screen.queryByText("Protection state is unknown", { exact: true })).not.toBeInTheDocument();
+  });
+
   it("records only evidence entered for the access-change approval", async () => {
     const user = userEvent.setup();
     renderPolicy();

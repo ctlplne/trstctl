@@ -204,7 +204,10 @@ The Policy console shows recent requests, their PR/ticket/CAB evidence, approval
 and approve/deny actions, never displaying credential material. An approver enters
 their own decision evidence references in the decision panel. The console does not
 copy the request's evidence into an approval; the readback shows what that
-approver actually submitted.
+approver actually submitted. A refused decision appears beside that request;
+it does not change the independent lifecycle-policy protection summary. If the
+request list cannot be read, the approval count says unavailable rather than
+reporting zero.
 
 **Status:** served for PR/ticket/CAB-backed access-change requests with distinct-approver
 enforcement, idempotency, event projection, API, CLI, and console coverage.

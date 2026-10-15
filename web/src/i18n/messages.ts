@@ -12156,6 +12156,8 @@ export const messages = {
     description: "Truth boundary when no custom lifecycle policy version is active.",
   },
   "policy.design.approvalsLabel": { defaultMessage: "Waiting for approval", description: "Approval summary label." },
+  "policy.design.approvalsChecking": { defaultMessage: "Checking approval count", description: "Approval count while its separate request read is loading." },
+  "policy.design.approvalsUnavailable": { defaultMessage: "Approval count unavailable", description: "Approval count when its separate request read failed." },
   "policy.design.oneApproval": { defaultMessage: "1 request needs approval", description: "Pending approval summary for one request." },
   "policy.design.manyApprovals": { defaultMessage: "{count} requests need approval", description: "Pending approval summary for zero or multiple requests." },
   "policy.design.changesLabel": { defaultMessage: "Recorded rule changes", description: "Policy version summary label." },
@@ -12771,6 +12773,10 @@ export const messages = {
   "policy.accessChange.unavailableTitle": {
     defaultMessage: "Access-change requests unavailable",
     description: "Error title when access-change requests cannot load.",
+  },
+  "policy.accessChange.actionFailedTitle": {
+    defaultMessage: "Access-change action failed",
+    description: "Error title for a refused or failed access-change mutation while request reads remain available.",
   },
   "policy.accessChange.listLabel": {
     defaultMessage: "Access-change requests",
