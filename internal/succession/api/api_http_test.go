@@ -83,6 +83,7 @@ func openStore(t *testing.T) *corestore.Store {
 	if err != nil {
 		t.Fatalf("core open: %v", err)
 	}
+	t.Cleanup(cs.Close)
 	if err := cs.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
