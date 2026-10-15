@@ -12750,6 +12750,18 @@ export const messages = {
     defaultMessage: "Certification evidence refs",
     description: "Evidence references entered by the assigned NHI reviewer for this decision, separate from campaign evidence.",
   },
+  "policy.nhiReview.reviewerPlaceholder": {
+    defaultMessage: "Different custodian subject",
+    description: "Campaign form cue that the assigned reviewer must authenticate separately from its creator.",
+  },
+  "policy.nhiReview.distinctReviewerRequired": {
+    defaultMessage: "Assign a reviewer who signs in separately from you.",
+    description: "Campaign form requirement for a distinct authenticated reviewer.",
+  },
+  "policy.nhiReview.signInAsReviewer": {
+    defaultMessage: "Sign in as {subject} to decide this campaign.",
+    description: "Guidance when the current signed-in subject is not the campaign's assigned reviewer.",
+  },
   "policy.accessChange.decisionEvidenceRefs": {
     defaultMessage: "Approval evidence refs",
     description: "Evidence references entered by this approver for this decision, separate from request evidence.",
@@ -23556,10 +23568,6 @@ export const messages = {
   "source.current.rotation.version.ede128c23f": {
     defaultMessage: "Current rotation version:",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
-  "source.current.session.subject.1f6510ea4d": {
-    defaultMessage: "current session subject",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
   },
   "source.cypher.style.query.9e70f5d770": {
     defaultMessage: "Cypher-style query",

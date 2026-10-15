@@ -616,7 +616,10 @@ auth:
   CLI, or console to certify, revoke, or except an item. Certification may omit
   a reason; revoke and exception decisions require one. The console accepts
   separate decision evidence references and shows them after recording; it does
-  not reuse the campaign's evidence references as the reviewer's assertion.
+  not reuse the campaign's evidence references as the reviewer's assertion. Its
+  campaign form requires a reviewer other than the signed-in creator. A viewer
+  who is not the assigned reviewer sees that identity and cannot use the
+  decision controls; the API enforces the same rule before event append.
 - **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
   `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
   `GET /api/v1/privacy/catalog`; operator-command events `privacy.subject.erased` and

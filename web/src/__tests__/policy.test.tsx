@@ -5,7 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 import { Policy } from "@/pages/Policy";
 import type { AccessChangeRequest, ComplianceEvidencePack, PolicyVersion } from "@/lib/api";
 
-const { apiMock } = vi.hoisted(() => ({
+const { apiMock, authSubject } = vi.hoisted(() => ({
+  authSubject: { current: "ra@example.test" },
   apiMock: {
     accessChangeRequests: vi.fn(),
     complianceEvidencePack: vi.fn(),
@@ -38,6 +39,25 @@ const { apiMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: { ...actual.api, ...apiMock } };
+});
+
+vi.mock("@/auth/AuthProvider", async (orig) => {
+  const actual = await orig<typeof import("@/auth/AuthProvider")>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: { subject: authSubject.current, tenant_id: "tenant-1", roles: ["admin"], permissions: ["*"] },
+      loading: false,
+      error: null,
+      oidcAvailable: false,
+      samlAvailable: false,
+      ldapAvailable: false,
+      preview: false,
+      previewAvailable: false,
+      startPreview: () => {},
+      logout: async () => {},
+    }),
+  };
 });
 
 const complianceADCSEvidence = {
@@ -110,7 +130,7 @@ function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
     name: "Quarterly NHI access certification",
     scope: "quarterly_access",
     reviewer_subject: "ra@example.test",
-    requested_by: "ra@example.test",
+    requested_by: "creator@example.test",
     status: completed ? "completed" : "open",
     item_count: 1,
     pending_count: completed ? 0 : 1,
@@ -401,6 +421,7 @@ function nhiComplianceReport() {
 
 describe("policy governance surface", () => {
   beforeEach(() => {
+    authSubject.current = "ra@example.test";
     apiMock.accessChangeRequests.mockReset().mockResolvedValue({ items: [accessChangeRequest()] });
     apiMock.complianceEvidencePack.mockReset();
     apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
@@ -1168,6 +1189,7 @@ describe("policy governance surface", () => {
     expect(screen.getByRole("button", { name: "Revoke" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Exception" })).toBeDisabled();
 
+    await user.type(screen.getByLabelText("Reviewer"), "other-reviewer@example.test");
     await user.click(screen.getByRole("button", { name: "Start campaign" }));
     await waitFor(() =>
       expect(apiMock.startNHIReviewCampaign).toHaveBeenCalledWith(
@@ -1177,6 +1199,31 @@ describe("policy governance surface", () => {
         }),
       ),
     );
+  });
+
+  it("requires a distinct assigned reviewer before starting a campaign", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    expect(await screen.findByRole("button", { name: "Start campaign" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Reviewer"), "ra@example.test");
+    expect(screen.getByRole("button", { name: "Start campaign" })).toBeDisabled();
+    await user.clear(screen.getByLabelText("Reviewer"));
+    await user.type(screen.getByLabelText("Reviewer"), "other-reviewer@example.test");
+    expect(screen.getByRole("button", { name: "Start campaign" })).toBeEnabled();
+  });
+
+  it("shows the assigned reviewer and disables decisions for the campaign creator", async () => {
+    authSubject.current = "creator@example.test";
+    const user = userEvent.setup();
+    renderPolicy();
+
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    expect(await screen.findByRole("button", { name: "Certify" })).toBeDisabled();
+    expect(screen.getByText("Sign in as ra@example.test to decide this campaign.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Exception" })).toBeDisabled();
   });
 
   it("submits an NHI certification when its optional reason is blank", async () => {

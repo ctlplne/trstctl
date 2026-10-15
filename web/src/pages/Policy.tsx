@@ -496,6 +496,10 @@ function PolicyContent() {
 
   async function startNHIReviewCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!user?.subject || !reviewForm.reviewer.trim() || reviewForm.reviewer.trim() === user.subject) {
+      setReviewError(t("policy.nhiReview.distinctReviewerRequired"));
+      return;
+    }
     setReviewAction("start");
     setReviewError(null);
     setReviewNotice(null);
@@ -1180,7 +1184,7 @@ function PolicyContent() {
                 <span className="font-medium">{translateNow("source.reviewer.d29f46772c")}</span>
                 <input
                   className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-                  placeholder={translateNow("source.current.session.subject.1f6510ea4d")}
+                  placeholder={t("policy.nhiReview.reviewerPlaceholder")}
                   value={reviewForm.reviewer}
                   onChange={(event) => setReviewForm((current) => ({ ...current, reviewer: event.target.value }))}
                 />
@@ -1199,10 +1203,22 @@ function PolicyContent() {
                 </select>
               </label>
               <div className="flex items-end">
-                <Button className="w-full" type="submit" disabled={reviewAction === "start" || !reviewForm.name.trim() || !reviewForm.nhiId.trim()}>
+                <Button
+                  className="w-full"
+                  type="submit"
+                  disabled={
+                    reviewAction === "start" ||
+                    !user?.subject ||
+                    !reviewForm.name.trim() ||
+                    !reviewForm.nhiId.trim() ||
+                    !reviewForm.reviewer.trim() ||
+                    reviewForm.reviewer.trim() === user.subject
+                  }
+                >
                   {reviewAction === "start" ? translateNow("source.starting.82b93630a9") : translateNow("source.start.campaign.bfdb5d43fb")}
                 </Button>
               </div>
+              <p className="text-sm text-muted-foreground lg:col-span-6">{t("policy.nhiReview.distinctReviewerRequired")}</p>
               <label className="grid gap-1 lg:col-span-2">
                 <span className="font-medium">{translateNow("source.nhi.id.52919bf0d5")}</span>
                 <input
@@ -1280,6 +1296,7 @@ function PolicyContent() {
               {activeReview && (
                 <NHIReviewCampaignPanel
                   campaign={activeReview}
+                  viewerSubject={user?.subject ?? ""}
                   decisionEvidenceRefs={reviewDecisionEvidenceRefs}
                   decisionReasons={decisionReasons}
                   reviewAction={reviewAction}
@@ -1627,6 +1644,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
 
 function NHIReviewCampaignPanel({
   campaign,
+  viewerSubject,
   decisionEvidenceRefs,
   decisionReasons,
   onDecision,
@@ -1635,6 +1653,7 @@ function NHIReviewCampaignPanel({
   reviewAction,
 }: {
   campaign: NHIReviewCampaign;
+  viewerSubject: string;
   decisionEvidenceRefs: Record<string, string>;
   decisionReasons: Record<string, string>;
   onDecision: (item: NHIReviewItem, decision: NHIReviewDecisionRequest["decision"]) => Promise<void>;
@@ -1644,6 +1663,7 @@ function NHIReviewCampaignPanel({
 }) {
   const { t } = useTranslation();
   const items = campaign.items ?? [];
+  const canDecide = viewerSubject !== "" && viewerSubject === campaign.reviewer_subject && viewerSubject !== campaign.requested_by;
 
   return (
     <section aria-labelledby="nhi-access-review-detail-heading" className="ui-panel min-w-0 p-comfortable text-sm">
@@ -1667,6 +1687,11 @@ function NHIReviewCampaignPanel({
         <Metric label="Revoked" value={String(campaign.revoked_count)} />
         <Metric label="Exceptions" value={String(campaign.exception_count)} />
       </dl>
+      {!canDecide && campaign.pending_count > 0 && (
+        <p className="mt-4 rounded-md border border-border bg-muted p-3 text-sm">
+          {t("policy.nhiReview.signInAsReviewer", { subject: campaign.reviewer_subject })}
+        </p>
+      )}
 
       {items.length > 0 ? (
         <ScrollableTableRegion className="mt-4" label={translateNow("source.nhi.access.review.items.d360cac314")}>
@@ -1716,13 +1741,23 @@ function NHIReviewCampaignPanel({
                             />
                           </label>
                           <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" disabled={busy} onClick={() => void onDecision(item, "certified")}>
+                            <Button type="button" variant="outline" disabled={busy || !canDecide} onClick={() => void onDecision(item, "certified")}>
                               {translateNow("source.certify.c1567c2908")}
                             </Button>
-                            <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "revoked")}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={busy || !canDecide || !reason.trim()}
+                              onClick={() => void onDecision(item, "revoked")}
+                            >
                               {translateNow("source.revoke.87e6d00bbf")}
                             </Button>
-                            <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "exception")}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={busy || !canDecide || !reason.trim()}
+                              onClick={() => void onDecision(item, "exception")}
+                            >
                               {translateNow("source.exception.b4fe3d529d")}
                             </Button>
                           </div>
