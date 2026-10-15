@@ -9352,6 +9352,16 @@ export interface components {
             sweep_started_at?: string;
             token_ref?: string;
         };
+        CMDBReconcileScheduleInput: {
+            allow_private_endpoint?: boolean;
+            ci_query?: string;
+            enabled?: boolean;
+            /** @enum {string} */
+            execution?: "relay";
+            instance_url: string;
+            interval_seconds: number;
+            token_ref: string;
+        };
         CMPQualification: {
             /** @enum {string} */
             binding_mode: "subject-bound" | "registration-authority";
@@ -13817,6 +13827,8 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
         };
+        /** @description UTF-8 CSV with owner header and optional email, application_id, service, business_unit, environment, and source_ref columns; at most 8 MiB */
+        OwnershipCSV: string;
         OwnershipConflict: {
             current_attested: boolean;
             current_source?: string;
@@ -30359,7 +30371,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CMDBReconcileScheduleInput"];
+            };
+        };
         responses: {
             /** @description success */
             200: {
@@ -30400,7 +30416,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "text/csv": components["schemas"]["OwnershipCSV"];
+            };
+        };
         responses: {
             /** @description success */
             200: {

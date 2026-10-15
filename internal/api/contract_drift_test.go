@@ -32,6 +32,7 @@ import (
 // `  status: "active" | "revoked";` or `  id?: string;` — the identifier before the
 // optional `?` and the `:`.
 var genInterfaceField = regexp.MustCompile(`(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\??\s*:`)
+var genPrimitiveAlias = regexp.MustCompile(`(?m)^export type ([A-Za-z_][A-Za-z0-9_]*) = (string|number|boolean);$`)
 
 const genTypesPath = "../../web/src/lib/api-types.gen.ts"
 
@@ -44,6 +45,19 @@ func readGenInterfaces(t *testing.T) map[string][]string {
 		t.Fatalf("read generated FE types %s (run `npm run gen:api`): %v", genTypesPath, err)
 	}
 	return parseInterfaces(string(b))
+}
+
+func readGenPrimitiveAliases(t *testing.T) map[string]string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.FromSlash(genTypesPath))
+	if err != nil {
+		t.Fatalf("read generated FE types %s (run `npm run gen:api`): %v", genTypesPath, err)
+	}
+	out := map[string]string{}
+	for _, match := range genPrimitiveAlias.FindAllStringSubmatch(string(b), -1) {
+		out[match[1]] = match[2]
+	}
+	return out
 }
 
 // parseInterfaces extracts interface name -> sorted field names from TS source. It is a
@@ -212,11 +226,23 @@ func TestGeneratedFETypesMatchServedContract(t *testing.T) {
 		t.Fatal("served spec has no component schemas")
 	}
 	gen := readGenInterfaces(t)
+	aliases := readGenPrimitiveAliases(t)
 	if len(gen) == 0 {
 		t.Fatal("no interfaces parsed from the generated FE types (regenerate with `npm run gen:api`)")
 	}
 
-	for schema := range schemas {
+	for schema, raw := range schemas {
+		definition, _ := raw.(map[string]any)
+		if definition != nil && definition["properties"] == nil {
+			kind, _ := definition["type"].(string)
+			wantType := map[string]string{"string": "string", "integer": "number", "number": "number", "boolean": "boolean"}[kind]
+			if wantType != "" {
+				if got := aliases[schema]; got != wantType {
+					t.Errorf("SURFACE-005 contract drift: served primitive schema %q type %q != generated FE alias %q", schema, wantType, got)
+				}
+				continue
+			}
+		}
 		want := schemaPropNames(t, doc, schema)
 		got, ok := gen[schema]
 		if !ok {

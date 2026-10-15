@@ -2633,6 +2633,20 @@ CMDBReconcileSchedule = TypedDict(
     total=False,
 )
 
+CMDBReconcileScheduleInput = TypedDict(
+    'CMDBReconcileScheduleInput',
+    {
+        'allow_private_endpoint': bool,
+        'ci_query': str,
+        'enabled': bool,
+        'execution': str,
+        'instance_url': str,
+        'interval_seconds': int,
+        'token_ref': str,
+    },
+    total=False,
+)
+
 CMPQualification = TypedDict(
     'CMPQualification',
     {
@@ -8315,6 +8329,8 @@ OwnershipAttributionOwner = TypedDict(
     },
     total=False,
 )
+
+OwnershipCSV = str
 
 OwnershipConflict = TypedDict(
     'OwnershipConflict',
