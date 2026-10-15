@@ -127,6 +127,14 @@ through the outbox in the same tenant transaction.
 
 **Status:** served for managed identities plus discovery-fed NHIs.
 
+For a one-time ownership CSV import, create the owner record first, then run
+`trstctl owners import -f ownership.csv`. The file needs an `owner` column; it may
+also carry `application_id`, `service`, `business_unit`, `environment`, and
+`source_ref`. The CLI sends it as `text/csv`. An import records disagreements in
+`trstctl owners ownership-conflicts`; resolve each one with a reason using
+`trstctl owners resolve-conflict <id> -f request.json`. A CSV row cannot invent
+an owner or overwrite an attested field.
+
 ### NHI policy compliance
 
 `GET /api/v1/nhi/policy/compliance` (`nhi:read`) evaluates governed non-human

@@ -932,6 +932,26 @@ func TestCommandHelpIncludesExampleForEveryAPIOperation(t *testing.T) {
 	}
 }
 
+func TestOwnersImportUsesCSVContract(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK, `{"applied":1,"unchanged":0,"conflicts":[]}`, &captured)
+	input := "owner,service,source_ref\nqa-owner,qa-service,qa-row\n"
+	code, _, stderr := run(t, []string{"owners", "import", "-f", "-"},
+		cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, input)
+	if code != 0 {
+		t.Fatalf("owners import exit = %d, stderr = %q", code, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/owners/import" ||
+		captured.Header.Get("Content-Type") != "text/csv" || string(captured.Body) != input {
+		t.Errorf("owners import request = %s %s content-type=%q body=%q", captured.Method,
+			captured.Path, captured.Header.Get("Content-Type"), captured.Body)
+	}
+	code, help, stderr := run(t, []string{"owners", "import", "--help"}, cli.Env{}, "")
+	if code != 0 || stderr != "" || !strings.Contains(help, "-f ownership.csv") {
+		t.Errorf("owners import help = exit %d stdout=%q stderr=%q", code, help, stderr)
+	}
+}
+
 func TestRootHelpIsSuccessfulAndScriptFriendly(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}} {
 		code, stdout, stderr := run(t, args, cli.Env{}, "")

@@ -29,6 +29,8 @@ type Command struct {
 	Path        string   // API path template, with {param} placeholders
 	Query       []string // accepted query-parameter flag names
 	Body        bodyMode
+	ContentType string // request body media type; empty means application/json
+	ExampleFile string // shown for -f in help; empty means request.json
 	ReadOnly    bool   // true for POST-shaped reads that accept a structured body
 	RawResponse bool   // preserve exact signed/downloaded bytes; do not pretty-print JSON
 	Action      string // fixed action validated for bodyApprovalFile commands
@@ -425,7 +427,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
 	{Name: []string{"graph", "reachable"}, Method: "GET", Path: "/api/v1/graph/reachable/{id}", Summary: "Nodes reachable from a node"},
 	{Name: []string{"graph", "blast-radius"}, Method: "GET", Path: "/api/v1/graph/blast-radius/{id}", Summary: "Blast radius of a node"},
-	{Name: []string{"owners", "import"}, Method: "POST", Path: "/api/v1/owners/import", Body: bodyFile, Summary: "Import ownership from CSV; fills in what is unrecorded and refuses to overwrite what a human attested"},
+	{Name: []string{"owners", "import"}, Method: "POST", Path: "/api/v1/owners/import", Body: bodyFile, ContentType: "text/csv", ExampleFile: "ownership.csv", Summary: "Import ownership from CSV; fills in what is unrecorded and refuses to overwrite what a human attested"},
 	{Name: []string{"owners", "ownership-conflicts"}, Method: "GET", Path: "/api/v1/owners/ownership-conflicts", Summary: "List unresolved ownership disagreements between recorded owners and an external source"},
 	{Name: []string{"owners", "resolve-conflict"}, Method: "POST", Path: "/api/v1/owners/ownership-conflicts/{id}/resolve", Body: bodyFile, Summary: "Close an ownership disagreement with the reason it was decided"},
 	{Name: []string{"owners", "cmdb-schedule", "set"}, Method: "PUT", Path: "/api/v1/owners/cmdb-schedule", Body: bodyFile, Summary: "Configure scheduled read-only ownership reconciliation against a ServiceNow CMDB"},

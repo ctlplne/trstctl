@@ -148,7 +148,7 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		_, _ = fmt.Fprintf(stderr, "error: CA file: %v\n", err)
 		return 2
 	}
-	status, respBody, err := do(ctx, client, *server, cmd.Method, path, query, body, *token, *tenant, idemKey)
+	status, respBody, err := do(ctx, client, *server, cmd.Method, path, query, body, *token, *tenant, idemKey, cmd.ContentType)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
@@ -334,7 +334,7 @@ func (c secretAPIClient) Fetch(ctx context.Context, path string) ([]byte, error)
 	if c.resolve {
 		query.Set("resolve", "true")
 	}
-	status, body, err := do(ctx, c.client, c.server, http.MethodGet, secretStorePath(path), query, nil, c.token, c.tenant, "")
+	status, body, err := do(ctx, c.client, c.server, http.MethodGet, secretStorePath(path), query, nil, c.token, c.tenant, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -550,7 +550,7 @@ func generateIdempotencyKey() string {
 	return fmt.Sprintf("cli-%016x%016x", rand.Uint64(), rand.Uint64()) // #nosec G404 -- idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338)
 }
 
-func do(ctx context.Context, client *http.Client, server, method, path string, query url.Values, body []byte, token, tenant, idem string) (int, []byte, error) {
+func do(ctx context.Context, client *http.Client, server, method, path string, query url.Values, body []byte, token, tenant, idem, contentType string) (int, []byte, error) {
 	u := strings.TrimRight(server, "/") + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -573,7 +573,10 @@ func do(ctx context.Context, client *http.Client, server, method, path string, q
 		req.Header.Set("Idempotency-Key", idem)
 	}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
 
@@ -664,7 +667,11 @@ func commandExample(cmd Command) string {
 		parts = append(parts, "<"+p+">")
 	}
 	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
-		parts = append(parts, "-f", "request.json")
+		exampleFile := cmd.ExampleFile
+		if exampleFile == "" {
+			exampleFile = "request.json"
+		}
+		parts = append(parts, "-f", exampleFile)
 	}
 	if cmd.Body == bodyCertificateFile {
 		parts = append(parts, "-f", "server.pem")

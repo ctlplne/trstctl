@@ -206,7 +206,7 @@ var mcpToolInputSchema = map[string]any{
 }
 
 func (s *mcpStdioServer) listTools() (any, *jsonRPCError) {
-	status, body, err := do(s.ctx, s.client, s.server, http.MethodGet, "/api/v1/mcp/tools", nil, nil, s.token, s.tenant, "")
+	status, body, err := do(s.ctx, s.client, s.server, http.MethodGet, "/api/v1/mcp/tools", nil, nil, s.token, s.tenant, "", "")
 	if err != nil {
 		return nil, &jsonRPCError{Code: -32603, Message: "control plane unreachable: " + err.Error()}
 	}
@@ -243,7 +243,7 @@ func (s *mcpStdioServer) callTool(params json.RawMessage) (any, *jsonRPCError) {
 	if len(call.Arguments) > 0 && string(call.Arguments) != "null" {
 		body = call.Arguments
 	}
-	status, resp, err := do(s.ctx, s.client, s.server, http.MethodPost, "/api/v1/mcp/tools/"+url.PathEscape(call.Name), nil, body, s.token, s.tenant, generateIdempotencyKey())
+	status, resp, err := do(s.ctx, s.client, s.server, http.MethodPost, "/api/v1/mcp/tools/"+url.PathEscape(call.Name), nil, body, s.token, s.tenant, generateIdempotencyKey(), "")
 	if err != nil {
 		return nil, &jsonRPCError{Code: -32603, Message: "control plane unreachable: " + err.Error()}
 	}
