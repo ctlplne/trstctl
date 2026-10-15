@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -483,6 +484,9 @@ func (s *service) RewrapStatus(ctx context.Context, tenantID, identityID string,
 }
 
 func (s *service) ConfigureRetirementPolicy(ctx context.Context, tenantID string, req RetirementPolicyRequest) (RetirementPolicyResponse, error) {
+	if err := validateRetirementPolicyRequest(req); err != nil {
+		return RetirementPolicyResponse{}, err
+	}
 	updated := time.Now().UTC()
 	if s.repo != nil {
 		if err := s.repo.UpsertRetirementPolicy(ctx, tenantID, pcasstore.RetirementPolicy{
@@ -506,6 +510,43 @@ func (s *service) ConfigureRetirementPolicy(ctx context.Context, tenantID string
 		Roster: req.Roster, ValidityWindowSeconds: req.ValidityWindowSeconds,
 		PredecessorHandle: req.PredecessorHandle, Status: "active", UpdatedAt: updated, RewrapComplete: complete,
 	}, nil
+}
+
+var errInvalidRetirementPolicy = errors.New("pcas retirement: invalid policy")
+
+func validateRetirementPolicyRequest(req RetirementPolicyRequest) error {
+	if strings.TrimSpace(req.IdentityID) == "" || req.Threshold <= 0 {
+		return fmt.Errorf("%w: identity_id and positive threshold are required", errInvalidRetirementPolicy)
+	}
+	// The worker converts seconds to time.Duration. Reject overflow before a policy
+	// can be saved as active, or every later evaluation would fail permanently.
+	if req.ValidityWindowSeconds > uint64(math.MaxInt64/int64(time.Second)) {
+		return fmt.Errorf("%w: validity window exceeds the representable duration", errInvalidRetirementPolicy)
+	}
+	var roster []struct {
+		RelyingParty string `json:"relying_party"`
+		PublicDER    []byte `json:"public_der"`
+	}
+	if err := json.Unmarshal(req.Roster, &roster); err != nil || len(roster) == 0 {
+		return fmt.Errorf("%w: roster must be a nonempty array of relying-party public keys", errInvalidRetirementPolicy)
+	}
+	seen := make(map[string]struct{}, len(roster))
+	for _, member := range roster {
+		if member.RelyingParty == "" || strings.TrimSpace(member.RelyingParty) != member.RelyingParty {
+			return fmt.Errorf("%w: each relying party needs a nonblank, trimmed name", errInvalidRetirementPolicy)
+		}
+		if _, duplicate := seen[member.RelyingParty]; duplicate {
+			return fmt.Errorf("%w: duplicate relying party %q", errInvalidRetirementPolicy, member.RelyingParty)
+		}
+		seen[member.RelyingParty] = struct{}{}
+		if err := crypto.ValidatePublicKeyDER(member.PublicDER); err != nil {
+			return fmt.Errorf("%w: relying party %q has an unusable public key: %v", errInvalidRetirementPolicy, member.RelyingParty, err)
+		}
+	}
+	if req.Threshold > len(seen) {
+		return fmt.Errorf("%w: threshold %d exceeds the %d distinct relying parties", errInvalidRetirementPolicy, req.Threshold, len(seen))
+	}
+	return nil
 }
 
 func (s *service) RetirementStatus(ctx context.Context, tenantID, identityID string, predecessorEpoch uint64) (RetirementPolicyResponse, bool, error) {

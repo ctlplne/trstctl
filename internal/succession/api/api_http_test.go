@@ -180,6 +180,44 @@ func (f *fakeService) RetirementStatus(_ context.Context, _ string, identityID s
 	return succapi.RetirementPolicyResponse{IdentityID: identityID, PredecessorEpoch: predecessorEpoch, Threshold: 1, Status: "active", UpdatedAt: time.Now(), RewrapComplete: true}, true, nil
 }
 
+func TestRetirementPolicyRejectsUnreachableOrUnusableRoster(t *testing.T) {
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicDER := key.Public().DER
+	a := newAPI(t, succapi.NewService(nil, nil, nil))
+	for i, tc := range []struct {
+		name      string
+		threshold int
+		roster    []map[string]any
+		window    uint64
+	}{
+		{name: "quorum exceeds one member", threshold: 2, roster: []map[string]any{{"relying_party": "rp1", "public_der": publicDER}}},
+		{name: "duplicate names do not count twice", threshold: 2, roster: []map[string]any{{"relying_party": "rp1", "public_der": publicDER}, {"relying_party": "rp1", "public_der": publicDER}}},
+		{name: "invalid public key", threshold: 1, roster: []map[string]any{{"relying_party": "rp1", "public_der": []byte("not DER")}}},
+		{name: "blank relying party", threshold: 1, roster: []map[string]any{{"relying_party": " ", "public_der": publicDER}}},
+		{name: "unrepresentable window", threshold: 1, roster: []map[string]any{{"relying_party": "rp1", "public_der": publicDER}}, window: 9_223_372_037},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]any{
+				"identity_id": identity, "predecessor_epoch": 0, "threshold": tc.threshold,
+				"roster": tc.roster, "validity_window_seconds": tc.window,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/retirement/policies", bytes.NewReader(body))
+			r.Header.Set("Idempotency-Key", fmt.Sprintf("bad-policy-%d", i))
+			rr := httptest.NewRecorder()
+			a.ServeHTTP(rr, r)
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("invalid retirement policy HTTP %d, want 400: %s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
 func (f *fakeService) LatestCheckpoint(_ context.Context, _, identityID string) (succapi.CheckpointResponse, bool, error) {
 	return succapi.CheckpointResponse{IdentityID: identityID, Epoch: 1, IssuedAt: time.Now()}, true, nil
 }

@@ -805,6 +805,9 @@ func retirementPolicyHandler(a *api.API, svc Service) http.HandlerFunc {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id, positive threshold, and roster are required")
 		}
 		resp, err := svc.ConfigureRetirementPolicy(ctx, tenantID, req)
+		if errors.Is(err, errInvalidRetirementPolicy) {
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
 		return http.StatusOK, resp, err
 	})
 }

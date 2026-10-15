@@ -171,7 +171,9 @@ control plane and register the exact predecessor epoch and relying-party public
 keys through `POST /api/v1/pcas/retirement/policies`. The `roster` field is a
 JSON array of `{"relying_party":"rp1","public_der":"BASE64_SPKI_DER"}` objects, not
 a quoted JSON string. Set a positive `threshold` no greater than the roster
-size. Each relying party signs the domain-separated acknowledgment for the
+size. Relying-party names must be unique and each `public_der` must be a valid
+SubjectPublicKeyInfo public key; invalid or impossible quorums return 400 before
+the policy is saved. Each relying party signs the domain-separated acknowledgment for the
 tenant, identity, epoch and its own roster name, then posts it to
 `POST /api/v1/pcas/acks`. An active policy or accepted acknowledgment alone does
 not prove retirement. Read `status: retired`, check signed retirement evidence,
