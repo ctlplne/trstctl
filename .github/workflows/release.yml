@@ -138,7 +138,7 @@ jobs:
 
       - name: Upload embedded-postgres release evidence artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-embedded-postgres-security-evidence-linux-amd64
           path: dist/release-evidence/embedded-postgres-security-linux-amd64
@@ -170,14 +170,14 @@ jobs:
           make chaos 2>&1 | tee -a "$evidence"
 
       - name: Upload chaos release evidence artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-chaos-evidence
           path: dist/release-evidence/trstctl-chaos-evidence.txt
           if-no-files-found: error
 
       - name: Upload npm audit release evidence artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-npm-audit-evidence
           path: dist/release-evidence/npm-audit-dependency-surfaces.json
@@ -241,7 +241,7 @@ jobs:
           echo "encoded=$(scripts/release/slsa-subjects.sh encode "${RUNNER_TEMP}/trstctl-cli.subjects")" >> "$GITHUB_OUTPUT"
 
       - name: Upload exact CLI package evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trstctl-cli-release
           path: dist/cli/*
@@ -637,7 +637,7 @@ jobs:
           echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
 
       - name: Upload Kubernetes agent manifest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trstctl-agent-kubernetes
           path: dist/kubernetes/trstctl-agent-daemonset.yaml
@@ -650,7 +650,7 @@ jobs:
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-cyclonedx
           path: sbom.cyclonedx.json
@@ -1163,7 +1163,7 @@ jobs:
           cosign sign "${repo}@${digest}"
 
       - name: Upload packaged chart as a release artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trstctl-helm-chart
           path: |

@@ -99,7 +99,7 @@ jobs:
         run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"
 
       - name: Upload perf smoke SLO artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf-smoke-slo
           path: ${{ runner.temp }}/perf-smoke.json
@@ -109,7 +109,7 @@ jobs:
         run: scripts/perf/run-capacity-calibration.sh --out "${RUNNER_TEMP}/capacity-measurement-baseline.json"
 
       - name: Upload perf capacity artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf-capacity-calibration
           path: ${{ runner.temp }}/capacity-measurement-baseline.json
@@ -222,7 +222,7 @@ jobs:
 
       - name: Upload wiring census
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wiring-census
           path: wiring-census.json
@@ -269,7 +269,7 @@ jobs:
 
       - name: Upload captured soak artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: captured-soak-trend
           path: |
@@ -302,7 +302,7 @@ jobs:
 
       - name: Upload spine burst artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spine-burst-trend
           path: |
@@ -329,7 +329,7 @@ jobs:
 
       - name: Upload live branch-protection drift receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: branch-protection-live-drift-receipt
           path: ${{ runner.temp }}/branch-protection-drift-receipt.json
@@ -468,7 +468,7 @@ jobs:
 
       - name: Upload live perf SLO artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf-live-slo
           path: ${{ runner.temp }}/perf-live.json
@@ -591,7 +591,7 @@ jobs:
 
       - name: Upload ClusterFuzzLite artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: clusterfuzzlite-oss-fuzz-${{ matrix.sanitizer }}
           path: |
@@ -692,7 +692,7 @@ jobs:
         run: node scripts/accessibility/write-a11y-evidence-receipt.mjs --out "${RUNNER_TEMP}/accessibility-evidence-receipt.json"
 
       - name: Upload accessibility evidence receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: a11y-evidence-receipt
           path: ${{ runner.temp }}/accessibility-evidence-receipt.json
@@ -707,7 +707,7 @@ jobs:
             --release-notes-text "trstctl ci"
 
       - name: Upload first-run usability receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: first-run-usability-receipt
           path: ${{ runner.temp }}/first-run-receipt.json
@@ -826,7 +826,7 @@ jobs:
         run: make license-audit
 
       - name: Upload license audit receipts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: license-audit
           path: |
@@ -871,7 +871,7 @@ jobs:
 
       - name: Upload npm audit severity receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-audit-dependency-surfaces
           path: ${{ runner.temp }}/npm-audit-dependency-surfaces.json
@@ -883,7 +883,7 @@ jobs:
         run: make sbom
 
       - name: Upload module SBOM
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-module-cyclonedx
           path: dist/release-evidence/sbom.module.cyclonedx.json
@@ -908,7 +908,7 @@ jobs:
 
       - name: Upload embedded-postgres Trivy receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: embedded-postgres-trivy-receipt
           path: ${{ runner.temp }}/embedded-postgres-scan
@@ -937,7 +937,7 @@ jobs:
 
       - name: Upload embedded-postgres Trivy receipt
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: embedded-postgres-trivy-receipt-${{ matrix.embedded-postgres-arch }}
           path: ${{ runner.temp }}/embedded-postgres-scan-${{ matrix.embedded-postgres-arch }}
@@ -1175,7 +1175,7 @@ jobs:
 
       - name: Upload ACME certbot conformance transcripts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: acme-certbot-transcripts
           path: ${{ runner.temp }}/interop-transcripts
@@ -1215,7 +1215,7 @@ jobs:
 
       - name: Upload EST libest conformance transcripts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: est-libest-simpleenroll-transcripts
           path: ${{ runner.temp }}/interop-transcripts
@@ -1250,7 +1250,7 @@ jobs:
 
       - name: Upload CMP conformance transcripts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cmp-openssl-p10cr-transcripts
           path: ${{ runner.temp }}/interop-transcripts
@@ -1285,7 +1285,7 @@ jobs:
 
       - name: Upload TSA OpenSSL ts conformance transcripts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tsa-openssl-ts-transcripts
           path: ${{ runner.temp }}/interop-transcripts
@@ -1325,7 +1325,7 @@ jobs:
 
       - name: Upload SCEP conformance transcripts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scep-sscep-enroll-transcripts
           path: ${{ runner.temp }}/interop-transcripts
@@ -1361,7 +1361,7 @@ jobs:
 
       - name: Upload SPIFFE Workload API conformance transcripts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spiffe-workloadapi-transcripts
           path: ${{ runner.temp }}/interop-transcripts
@@ -1444,7 +1444,7 @@ jobs:
           bash scripts/ci/profile-zlint.sh served-ca.pem "${TRSTCTL_PROFILE_LINT_FIXTURE_DIR}" "${RUNNER_TEMP}/profile-lint-zlint"
       - name: Upload PKI profile zlint corpus
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pki-profile-zlint-corpus
           path: |
@@ -1628,7 +1628,7 @@ jobs:
             Tee-Object -FilePath dist\SHA256SUMS
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trstctl-agent-windows
           path: |
@@ -1638,7 +1638,7 @@ jobs:
 
       - name: Upload Windows lifecycle evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-msi-lifecycle
           path: ${{ runner.temp }}/windows-msi-lifecycle
@@ -1883,7 +1883,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: web/playwright-report
