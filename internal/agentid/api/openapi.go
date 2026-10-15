@@ -31,7 +31,7 @@ func OpenAPISpec() map[string]any {
 		}
 		for _, p := range rt.Query {
 			params = append(params, map[string]any{
-				"name": p.Name, "in": "query", "required": true,
+				"name": p.Name, "in": "query", "required": p.Required,
 				"description": p.Description,
 				"schema":      map[string]any{"type": "string"},
 			})

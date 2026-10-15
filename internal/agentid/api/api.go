@@ -269,28 +269,28 @@ func Routes(svc Service) []api.LicensedRoute {
 			// credential_id is a query parameter because stable credential identifiers may
 			// contain '/' and must not be split across path segments (the PCAS chain rule).
 			Handler:        func(a *api.API) http.HandlerFunc { return chainHandler(a, svc) },
-			Query:          []api.RouteParam{{Name: "credential_id", Type: "string", Description: "stable issued-credential identifier"}},
+			Query:          []api.RouteParam{{Name: "credential_id", Type: "string", Description: "stable issued-credential identifier", Required: true}},
 			ResponseSchema: "AGIDDelegationChain", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
 			Method: "GET", Path: "/api/v1/agent-delegation/credential", OperationID: "getAgentDelegationCredential",
 			Summary:        "Fetch a signer-minted AGID credential for offline relying-party presentation",
 			Handler:        func(a *api.API) http.HandlerFunc { return credentialHandler(a, svc) },
-			Query:          []api.RouteParam{{Name: "credential_id", Type: "string", Description: "stable issued-credential identifier"}},
+			Query:          []api.RouteParam{{Name: "credential_id", Type: "string", Description: "stable issued-credential identifier", Required: true}},
 			ResponseSchema: "AGIDCredential", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
 			Method: "GET", Path: "/api/v1/agent-delegation/revocations/incomplete-jobs", OperationID: "getRevocationIncompleteJobs",
 			Summary:        "Fetch a revocation directive's still-open descendant jobs (AGID-11 incomplete-jobs query)",
 			Handler:        func(a *api.API) http.HandlerFunc { return incompleteJobsHandler(a, svc) },
-			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id"}},
+			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id", Required: true}},
 			ResponseSchema: "AGIDIncompleteJobs", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
 			Method: "GET", Path: "/api/v1/agent-delegation/revocations/evidence", OperationID: "getRevocationEvidence",
 			Summary:        "Fetch a revocation directive's aggregate evidence artifact and terminal verdict (AGID-11)",
 			Handler:        func(a *api.API) http.HandlerFunc { return evidenceHandler(a, svc) },
-			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id"}},
+			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id", Required: true}},
 			ResponseSchema: "AGIDRevocationEvidence", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 	}

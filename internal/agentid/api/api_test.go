@@ -115,6 +115,58 @@ func TestOpenAPI_Surface(t *testing.T) {
 	}
 }
 
+func TestOpenAPIRequiredReadIdentifiers(t *testing.T) {
+	raw, err := json.Marshal(agidapi.OpenAPISpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]struct {
+			Get struct {
+				Parameters []struct {
+					Name     string `json:"name"`
+					In       string `json:"in"`
+					Required bool   `json:"required"`
+				} `json:"parameters"`
+			} `json:"get"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, route := range agidapi.Routes(nil) {
+		if route.Method != "GET" || len(route.Query) == 0 {
+			continue
+		}
+		checked++
+		item, ok := doc.Paths[route.Path]
+		if !ok {
+			t.Fatalf("GET %s is missing from OpenAPI", route.Path)
+		}
+		for _, declared := range route.Query {
+			if !declared.Required {
+				t.Errorf("GET %s query %s is optional in served OpenAPI but required by the handler", route.Path, declared.Name)
+			}
+			found := false
+			for _, param := range item.Get.Parameters {
+				if param.Name == declared.Name && param.In == "query" {
+					found = true
+					if !param.Required {
+						t.Errorf("GET %s query %s is optional in standalone OpenAPI but required by the handler", route.Path, declared.Name)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("GET %s query %s is missing from OpenAPI", route.Path, declared.Name)
+			}
+		}
+	}
+	if checked != 4 {
+		t.Errorf("keyed AGID read routes = %d, want 4", checked)
+	}
+}
+
 // TestDestinations_Stable asserts the AGID outbox destination constants have their exact
 // wire strings. These are the strings the orchestrator worker drains, duplicated there; a
 // drift would silently break the two journeys (an enqueued message no handler drains).
