@@ -26,7 +26,9 @@ import (
 func TestServedDirectCommandsCannotRecreateDeletedTenantState(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	registerServedTenant(t, h, "Direct command tenant")
-	ctx := t.Context()
+	// Direct worker calls still need the same authenticated actor binding as
+	// HTTP admission; the test then checks tenant shutdown at the append fence.
+	ctx := events.ContextWithActor(t.Context(), events.Actor{Subject: "owned-operator", Roles: []string{"admin"}})
 	actions := []struct {
 		name string
 		run  func() error
