@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	agidapi "trstctl.com/trstctl/internal/agentid/api"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/featureparity"
 	succapi "trstctl.com/trstctl/internal/succession/api"
@@ -14,7 +15,8 @@ import (
 func TestFeatureAuthzManifestEnumeratesAPIRoutes(t *testing.T) {
 	// Core families attach through the route seam at runtime. Include their
 	// actual metadata so a new operation cannot escape the feature/RBAC census.
-	routes := api.New(nil, nil, nil, api.WithCoreRoutes(succapi.Routes(nil)...)).Routes()
+	coreRoutes := append(succapi.Routes(nil), agidapi.Routes(nil)...)
+	routes := api.New(nil, nil, nil, api.WithCoreRoutes(coreRoutes...)).Routes()
 	var manifestInput []featureparity.APIRouteAuthz
 	for _, rt := range routes {
 		if rt.OperationID == "" {

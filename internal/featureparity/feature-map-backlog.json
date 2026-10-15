@@ -10205,10 +10205,11 @@
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/workload-identity.md"
+                        "documented in docs/features/workload-identity.md and docs/features/agent-delegation.md"
                     ],
                     "refs": [
-                        "docs/features/workload-identity.md"
+                        "docs/features/workload-identity.md",
+                        "docs/features/agent-delegation.md"
                     ]
                 },
                 "rbac": {
