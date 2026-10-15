@@ -1179,6 +1179,15 @@ describe("policy governance surface", () => {
     );
   });
 
+  it("submits an NHI certification when its optional reason is blank", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Certify" }));
+    await waitFor(() => expect(apiMock.decideNHIReviewItem).toHaveBeenCalled());
+  });
+
   it("serves access-change approval requests from the Policy surface", async () => {
     const user = userEvent.setup();
     renderPolicy();
@@ -1205,6 +1214,15 @@ describe("policy governance surface", () => {
       ),
     );
     expect(await screen.findByText("Prod deployer GitHub App grant request opened from github:org/prod-infra#4821.")).toBeInTheDocument();
+  });
+
+  it("submits an access-change approval when its optional reason is blank", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(apiMock.decideAccessChangeRequest).toHaveBeenCalled());
   });
 
   it("renders access-change links only when the URL is safe", async () => {

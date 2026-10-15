@@ -1883,8 +1883,8 @@ function plural(count: number, singular: string): string {
   return `${singular}s`;
 }
 
-function optionalText(value: string): string | undefined {
-  const trimmed = value.trim();
+function optionalText(value?: string): string | undefined {
+  const trimmed = value?.trim() ?? "";
   return trimmed === "" ? undefined : trimmed;
 }
 

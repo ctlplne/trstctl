@@ -186,6 +186,7 @@ authenticated sessions. Optional body `requester_subject` and `approver_subject`
 claims must match those sessions. The approver must differ from the requester;
 a second decision by the same approver is rejected before an event is appended.
 The request reaches `approved` only at quorum (any denial moves it to `denied`).
+An approval may leave its decision reason blank; a denial requires one.
 Create and decide are idempotent, so a retried
 `Idempotency-Key` returns the original result rather than duplicating an approval. The
 read side is projected from `access.change_request.created` and
@@ -606,7 +607,8 @@ auth:
   an item. The server records the authenticated subject as `decision_by`; a
   supplied decision `reviewer_subject` must match it. Rejected decisions emit
   no decision event. Sign in as the assigned reviewer before using the API,
-  CLI, or console to certify, revoke, or except an item.
+  CLI, or console to certify, revoke, or except an item. Certification may omit
+  a reason; revoke and exception decisions require one.
 - **Privacy controls:** `POST|GET /api/v1/privacy/subject-erasures`,
   `POST|GET /api/v1/privacy/retention-runs`, `POST /api/v1/privacy/subject-exports`,
   `GET /api/v1/privacy/catalog`; operator-command events `privacy.subject.erased` and
