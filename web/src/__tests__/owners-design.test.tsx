@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     updateOwner: vi.fn(),
     deleteOwner: vi.fn(),
     attestOwner: vi.fn(),
+    importOwnership: vi.fn(),
   },
 }));
 
@@ -224,6 +225,58 @@ describe("route 029 decision-first ownership design", () => {
     expect(technical).not.toHaveAttribute("open");
     await user.click(within(technical).getByText("Show exact evidence", { exact: true }));
     expect(technical).toHaveTextContent("Rules, inheritance, exceptions, review history.");
+  });
+
+  it("imports a reviewed CSV in the ownership sources disclosure and shows the refused count", async () => {
+    const user = userEvent.setup();
+    apiMock.importOwnership.mockResolvedValue({
+      applied: 1,
+      unchanged: 0,
+      conflicts: [{ field: "service" }],
+      detail: "",
+      guidance: "Review the disagreement.",
+    });
+    renderOwners();
+    await screen.findByRole("heading", { level: 1, name: "Ownership" });
+    await user.click(screen.getByText("Sources, disagreements, and review history", { exact: true }));
+    const csv = "owner,service,source_ref\nPlatform team,new-service,qa-row\n";
+    const file = new File([csv], "ownership.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText("Choose ownership CSV"), file);
+    expect(await screen.findByText(/ownership.csv/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Apply CSV import" }));
+    await waitFor(() => expect(apiMock.importOwnership).toHaveBeenCalledWith(csv, expect.any(String)));
+    expect(await screen.findByText(/1 applied, 0 unchanged, 1 disagreement/)).toBeInTheDocument();
+  });
+
+  it("does not offer the CSV write to a read-only owner viewer", async () => {
+    const user = userEvent.setup();
+    apiMock.me.mockResolvedValue({ permissions: ["owners:read"], subject: "viewer-29", tenant_id: "tenant-29" });
+    renderOwners();
+    await screen.findByRole("heading", { level: 1, name: "Ownership" });
+    await user.click(screen.getByText("Sources, disagreements, and review history", { exact: true }));
+    expect(screen.queryByLabelText("Choose ownership CSV")).not.toBeInTheDocument();
+  });
+
+  it("retries an uncertain import with the same reviewed bytes and key", async () => {
+    const user = userEvent.setup();
+    apiMock.importOwnership.mockRejectedValueOnce(new Error("response lost")).mockResolvedValueOnce({
+      applied: 1,
+      unchanged: 0,
+      conflicts: [],
+      detail: "",
+      guidance: "",
+    });
+    renderOwners();
+    await screen.findByRole("heading", { level: 1, name: "Ownership" });
+    await user.click(screen.getByText("Sources, disagreements, and review history", { exact: true }));
+    const csv = "owner,service\nPlatform team,new-service\n";
+    await user.upload(screen.getByLabelText("Choose ownership CSV"), new File([csv], "retry.csv", { type: "text/csv" }));
+    await screen.findByText(/retry.csv/);
+    await user.click(screen.getByRole("button", { name: "Apply CSV import" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("response lost");
+    await user.click(screen.getByRole("button", { name: "Apply CSV import" }));
+    await waitFor(() => expect(apiMock.importOwnership).toHaveBeenCalledTimes(2));
+    expect(apiMock.importOwnership.mock.calls[1]).toEqual(apiMock.importOwnership.mock.calls[0]);
   });
 
   it("does not turn an empty inventory into a success claim", async () => {

@@ -14183,6 +14183,35 @@ export const messages = {
     description: "Owner directory filtered-empty recovery guidance.",
   },
   "owners.readiness.add": { defaultMessage: "Add owner", description: "Button and dialog title for creating an owner." },
+  "owners.import.title": { defaultMessage: "Import ownership from CSV", description: "Ownership source import heading." },
+  "owners.import.description": {
+    defaultMessage:
+      "Use a CSV with an owner column and optional email, application_id, service, business_unit, environment, and source_ref columns. Existing owners must be created first; human-attested values become disagreements instead of being overwritten.",
+    description: "Ownership CSV import instructions.",
+  },
+  "owners.import.chooseFile": { defaultMessage: "Choose ownership CSV", description: "Ownership CSV file selector." },
+  "owners.import.tooLarge": { defaultMessage: "The CSV exceeds the 8 MiB import limit.", description: "Ownership CSV size refusal." },
+  "owners.import.empty": { defaultMessage: "The selected CSV is empty.", description: "Ownership CSV empty-file refusal." },
+  "owners.import.readFailed": { defaultMessage: "Could not read the selected CSV.", description: "Ownership CSV browser read failure." },
+  "owners.import.review": { defaultMessage: "Review {name} ({bytes} bytes)", description: "Selected ownership CSV before applying it." },
+  "owners.import.effect": {
+    defaultMessage: "Applying this file writes ownership changes now. A retry after an uncertain response uses the same request key.",
+    description: "Ownership import write and retry effect.",
+  },
+  "owners.import.apply": { defaultMessage: "Apply CSV import", description: "Submit a reviewed ownership CSV." },
+  "owners.import.applying": { defaultMessage: "Applying CSV…", description: "Ownership CSV import busy state." },
+  "owners.import.resultOne": {
+    defaultMessage: "{applied} applied, {unchanged} unchanged, 1 disagreement",
+    description: "Ownership CSV import result with one conflict.",
+  },
+  "owners.import.resultMany": {
+    defaultMessage: "{applied} applied, {unchanged} unchanged, {conflicts} disagreements",
+    description: "Ownership CSV import result with zero or multiple conflicts.",
+  },
+  "owners.import.reviewConflicts": {
+    defaultMessage: "Review disagreements below and record a reason for each resolution.",
+    description: "Follow-up for ownership import conflicts.",
+  },
   "owners.readiness.applicationID": { defaultMessage: "Application ID", description: "Owner application identifier field and column." },
   "owners.readiness.applicationPlaceholder": { defaultMessage: "APP-1042", description: "Example owner application identifier." },
   "owners.readiness.service": { defaultMessage: "Service", description: "Owner service field." },

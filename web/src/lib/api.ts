@@ -47,6 +47,7 @@ import type {
   TicketIntakeSchedule,
   AgentUpgradeCampaign,
   OwnershipConflictList,
+  OwnershipImportResult,
   DRPosture,
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
@@ -1637,6 +1638,7 @@ export interface Api {
   cryptoReadinessExport(): Promise<CryptoReadinessExport>;
   /** I2: ownership an import refused to overwrite, and changes it made and recorded. */
   ownershipConflicts(): Promise<OwnershipConflictList>;
+  importOwnership(csv: string, idempotencyKey: string): Promise<OwnershipImportResult>;
   /** I2: close a disagreement. The reason is required — see the route's own guard. */
   resolveOwnershipConflict(id: string, resolution: string): Promise<unknown>;
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
@@ -2200,6 +2202,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   cryptoReadinessExport: () => req<CryptoReadinessExport>("/api/v1/graph/crypto-readiness/export"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
+  importOwnership: (csv, idempotencyKey) =>
+    req<OwnershipImportResult>("/api/v1/owners/import", {
+      method: "POST",
+      headers: { "Content-Type": "text/csv", "Idempotency-Key": idempotencyKey },
+      body: csv,
+    }),
   // Through mutate(), not a hand-rolled req(): mutate is what attaches the
   // Idempotency-Key (AN-5). Rolling the request by hand skipped it, and a
   // retried resolve would have been a second decision on the same conflict

@@ -141,6 +141,12 @@ The served OpenAPI declares this import as a required `text/csv` body (up to
 URL, a `secret://` token reference, an interval of at least 300 seconds, and
 relay execution. `GET /api/v1/owners/cmdb-schedule` distinguishes never
 configured, paused, incomplete, failed, and completed coverage.
+In the console, open **Ownership → Sources, disagreements, and review history**
+to select a CSV, review its name and size, and apply it. The result separates
+applied values, unchanged values, and disagreements; resolve the latter from
+the queue below it. The browser retains the same idempotency key with the
+selected file after an uncertain response, so retrying does not make a second
+decision.
 
 ### NHI policy compliance
 

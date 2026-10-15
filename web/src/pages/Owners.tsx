@@ -2,6 +2,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
 import { OwnershipConflictsPanel } from "@/components/OwnershipConflictsPanel";
+import { OwnershipCSVImport } from "@/components/OwnershipCSVImport";
 import { OwnershipCockpit } from "@/components/ownership/OwnershipCockpit";
 import { CMDBSyncPanel } from "@/components/CMDBSyncPanel";
 import { useApiQuery, useQueryClient } from "@/lib/query";
@@ -513,6 +514,7 @@ export function Owners() {
         <div className="grid gap-4">
           <p className="max-w-3xl text-sm text-muted-foreground">{t("owners.design.evidenceRule")}</p>
           <CMDBSyncPanel />
+          <OwnershipCSVImport />
           <OwnershipConflictsPanel />
           {attribution.loading && <LoadingState>{t("owners.attribution.loading")}</LoadingState>}
           {attribution.error && <ErrorState title={t("owners.attribution.error")}>{attribution.error}</ErrorState>}
