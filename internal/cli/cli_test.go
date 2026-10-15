@@ -558,6 +558,20 @@ func TestACMEARIPostureCommandSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestDiscoveryRunListAcceptsRecentOrderAndCursor(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"items":[],"next_cursor":""}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-discovery", HTTPClient: srv.Client()}
+
+	code, _, stderr := run(t, []string{"discovery", "runs", "list", "--limit", "5", "--cursor", "recent-cursor", "--order", "recent"}, env, "")
+	if code != 0 {
+		t.Fatalf("recent discovery list exit = %d, stderr=%s", code, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/discovery/runs" || cap.Query != "cursor=recent-cursor&limit=5&order=recent" {
+		t.Fatalf("recent discovery request = %s %s?%s", cap.Method, cap.Path, cap.Query)
+	}
+}
+
 func TestACMEReadinessCommandIsAnAuthenticatedEffectFreeRead(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, http.StatusOK, `{"ready":true,"directory_path":"/directory","challenge_methods":["http-01"],"next_action":{"kind":"connect_acme_client"},"blockers":[],"warnings":[],"recovery_steps":["Retry without weakening validation."],"preview_writes":[],"preview_external_effects":[]}`, &cap)

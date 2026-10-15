@@ -263,7 +263,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "schedules", "resume"}, Method: "POST", Path: "/api/v1/discovery/schedules/{id}/resume", Summary: "Resume a paused discovery schedule"},
 	{Name: []string{"discovery", "schedules", "retire"}, Method: "POST", Path: "/api/v1/discovery/schedules/{id}/retire", Summary: "Permanently retire a discovery schedule"},
 	{Name: []string{"discovery", "runs", "start"}, Method: "POST", Path: "/api/v1/discovery/runs", Body: bodyFile, Summary: "Start a discovery run"},
-	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor"}, Summary: "List discovery runs"},
+	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor", "order"}, Summary: "List discovery runs by legacy ID or newest-first order"},
 	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
 	{Name: []string{"discovery", "runs", "retry"}, Method: "POST", Path: "/api/v1/discovery/runs/{id}/retry", Body: bodyNone, Summary: "Retry one terminal unsuccessful discovery run as a separate replacement"},
 	{Name: []string{"discovery", "ct-monitoring", "get"}, Method: "GET", Path: "/api/v1/discovery/ct-monitoring", Summary: "Get Certificate Transparency monitoring watchlist and finding status"},

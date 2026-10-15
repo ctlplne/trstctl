@@ -163,7 +163,9 @@ API, event replay, and a page reload still answer “which failure did this repl
 The console shows newest runs first; **Load older runs** follows the bounded
 history. API clients can request `GET /api/v1/discovery/runs?order=recent&limit=50`
 and pass each returned `next_cursor` with the same `order` to page by creation
-time and run ID. Omitting `order` keeps the original ID-order API contract.
+time and run ID. The CLI exposes the same mode with
+`trstctl discovery runs list --order recent --limit 50` and accepts the returned
+cursor with `--cursor`. Omitting `order` keeps the original ID-order contract.
 
 This is intentionally not available for `queued`, `running`, or `succeeded` runs. An
 active run must finish; a successful run can be repeated from its source as a fresh
