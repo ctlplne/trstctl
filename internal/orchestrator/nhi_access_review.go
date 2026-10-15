@@ -126,15 +126,21 @@ func normalizeNHIReviewCampaign(ctx context.Context, in NHIReviewCampaignStartRe
 	if scope == "" {
 		scope = "all_nhi"
 	}
-	reviewer := trimBounded(in.ReviewerSubject, 180)
-	if reviewer == "" {
-		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("reviewer_subject is required")
-	}
 	actor, ok := events.ActorFromContext(ctx)
 	if !ok || strings.TrimSpace(actor.Subject) == "" {
 		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("authenticated requester is required")
 	}
 	requestedBy := trimBounded(actor.Subject, 180)
+	reviewer := trimBounded(in.ReviewerSubject, 180)
+	if reviewer == store.NHIReviewAnyDistinctReviewer {
+		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("reviewer_subject uses a reserved assignment")
+	}
+	if reviewer == "" {
+		reviewer = store.NHIReviewAnyDistinctReviewer
+	}
+	if requestedBy == store.NHIReviewAnyDistinctReviewer {
+		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("authenticated requester uses a reserved subject")
+	}
 	if reviewer == requestedBy {
 		return projections.NHIAccessReviewCampaignStarted{}, fmt.Errorf("reviewer_subject must differ from the requester")
 	}

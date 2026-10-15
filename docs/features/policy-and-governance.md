@@ -612,18 +612,26 @@ auth:
 - **NHI access reviews:** `POST|GET /api/v1/access/reviews[/{id}]`, `POST
   /api/v1/access/reviews/{id}/items/{item_id}/decision`; decisions `certified`,
   `revoked`, `exception`; events `nhi.access_review.campaign.started` and
-  `nhi.access_review.item.decided`. The creator must assign a different
-  authenticated reviewer with `reviewer_subject`. Only that reviewer can decide
-  an item. The server records the authenticated subject as `decision_by`; a
+  `nhi.access_review.item.decided`. The console asks the creator to assign a
+  different authenticated reviewer with `reviewer_subject`. API and CLI callers
+  may omit that optional field; the campaign then enters the explicit
+  `urn:trstctl:access-review:any-distinct` reviewer queue. A different
+  authenticated operator with `access:write` can decide a queued item, while
+  the creator cannot. For an explicitly assigned campaign, only that reviewer
+  can decide. Supplying the queue marker as a reviewer subject is refused;
+  only omission selects this mode. The server records the authenticated subject as `decision_by`; a
   supplied decision `reviewer_subject` must match it. Rejected decisions emit
-  no decision event. Sign in as the assigned reviewer before using the API,
-  CLI, or console to certify, revoke, or except an item. Certification may omit
+  no decision event. Sign in as the assigned reviewer, or as a different
+  authorized operator for an unassigned campaign, before using the API, CLI,
+  or console to certify, revoke, or except an item. Certification may omit
   a reason; revoke and exception decisions require one. The console accepts
   separate decision evidence references and shows them after recording; it does
   not reuse the campaign's evidence references as the reviewer's assertion. Its
   campaign form requires a reviewer other than the signed-in creator. A viewer
   who is not the assigned reviewer sees that identity and cannot use the
-  decision controls; the API enforces the same rule before event append.
+  decision controls. In the unassigned queue, the console names that mode and
+  enables controls only for a signed-in operator other than the creator. The
+  API enforces both rules before event append.
   During cold recovery, the projector keeps the first valid decision for each
   item and excludes older duplicate or actor-mismatched decision events from
   the read model. The events remain in the append-only audit history. An

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ComplianceEvidencePackPanel } from "@/components/ComplianceEvidencePackPanel";
 import { PolicyRuleEditor } from "@/pages/policy/PolicyRuleEditor";
 import { useAuth } from "@/auth/AuthProvider";
+import { hasPermission } from "@/lib/access";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider, useQueryClient } from "@/lib/query";
 import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import { Card } from "@/components/ui/card";
@@ -37,6 +38,8 @@ type ComplianceFramework = ComplianceEvidencePack["framework"];
 type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
 type PolicyDryRunKind = "lifecycle" | "abac";
 type SafeHref = { href: string; external: boolean };
+
+const NHI_REVIEW_ANY_DISTINCT_REVIEWER = "urn:trstctl:access-review:any-distinct";
 
 const complianceFrameworks: Array<{ id: ComplianceFramework; labelKey: MessageKey }> = [
   { id: "pci-dss", labelKey: "policy.framework.pciDss" },
@@ -1297,6 +1300,7 @@ function PolicyContent() {
                 <NHIReviewCampaignPanel
                   campaign={activeReview}
                   viewerSubject={user?.subject ?? ""}
+                  viewerCanWrite={hasPermission(user, "access:write")}
                   decisionEvidenceRefs={reviewDecisionEvidenceRefs}
                   decisionReasons={decisionReasons}
                   reviewAction={reviewAction}
@@ -1645,6 +1649,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
 function NHIReviewCampaignPanel({
   campaign,
   viewerSubject,
+  viewerCanWrite,
   decisionEvidenceRefs,
   decisionReasons,
   onDecision,
@@ -1654,6 +1659,7 @@ function NHIReviewCampaignPanel({
 }: {
   campaign: NHIReviewCampaign;
   viewerSubject: string;
+  viewerCanWrite: boolean;
   decisionEvidenceRefs: Record<string, string>;
   decisionReasons: Record<string, string>;
   onDecision: (item: NHIReviewItem, decision: NHIReviewDecisionRequest["decision"]) => Promise<void>;
@@ -1663,7 +1669,9 @@ function NHIReviewCampaignPanel({
 }) {
   const { t } = useTranslation();
   const items = campaign.items ?? [];
-  const canDecide = viewerSubject !== "" && viewerSubject === campaign.reviewer_subject && viewerSubject !== campaign.requested_by;
+  const isUnassigned = campaign.reviewer_subject === NHI_REVIEW_ANY_DISTINCT_REVIEWER;
+  const canDecide =
+    viewerCanWrite && viewerSubject !== "" && viewerSubject !== campaign.requested_by && (isUnassigned || viewerSubject === campaign.reviewer_subject);
 
   return (
     <section aria-labelledby="nhi-access-review-detail-heading" className="ui-panel min-w-0 p-comfortable text-sm">
@@ -1674,7 +1682,7 @@ function NHIReviewCampaignPanel({
           </h3>
           <p className="mt-1 text-muted-foreground">
             {campaign.status} {translateNow("source.requested.by.42aea0b1dd")} {campaign.requested_by} {translateNow("source.reviewer.63c2827d64")}{" "}
-            {campaign.reviewer_subject}
+            {isUnassigned ? t("policy.nhiReview.anyDistinctReviewer") : campaign.reviewer_subject}
           </p>
         </div>
         <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{campaign.id}</span>
@@ -1689,7 +1697,11 @@ function NHIReviewCampaignPanel({
       </dl>
       {!canDecide && campaign.pending_count > 0 && (
         <p className="mt-4 rounded-md border border-border bg-muted p-3 text-sm">
-          {t("policy.nhiReview.signInAsReviewer", { subject: campaign.reviewer_subject })}
+          {!viewerCanWrite
+            ? t("policy.nhiReview.accessWriteRequired")
+            : isUnassigned
+              ? t("policy.nhiReview.signInAsDistinctReviewer")
+              : t("policy.nhiReview.signInAsReviewer", { subject: campaign.reviewer_subject })}
         </p>
       )}
 

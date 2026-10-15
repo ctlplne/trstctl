@@ -232,6 +232,48 @@ func TestServedNHIAccessReviewReviewerAuthorityBeforeAppend(t *testing.T) {
 	}
 }
 
+func TestServedNHIAccessReviewOmittedReviewerUsesDistinctQueue(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	creator := seedScopedTokenSubject(t, h.store, h.tenant, "queue-creator", "access:read", "access:write")
+	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "queue-reviewer", "access:read", "access:write")
+	const campaignID = "5cb47a1c-1e34-4e9e-8170-e149e0e083de"
+	const itemID = "aa86ab1e-29b4-4115-9fd8-3d463a6c8588"
+	request := map[string]any{
+		"id": campaignID, "name": "review queue compatibility",
+		"items": []map[string]any{{
+			"item_id": itemID, "nhi_id": "spiffe://qa.local/review-queue", "nhi_kind": "workload",
+			"resource": "qa-local-postgres", "entitlement": "schema:qa/read",
+		}},
+	}
+	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", creator, "review-queue-start", request)
+	if status != http.StatusCreated || !strings.Contains(string(body), `"reviewer_subject":"urn:trstctl:access-review:any-distinct"`) {
+		t.Fatalf("omitted reviewer queue = %d body %s, want unassigned campaign", status, body)
+	}
+	path := "/api/v1/access/reviews/" + campaignID + "/items/" + itemID + "/decision"
+	status, body = doBearer(t, h.ts, http.MethodPost, path, creator, "review-queue-self", map[string]any{"decision": "certified"})
+	if status != http.StatusForbidden {
+		t.Fatalf("creator decided unassigned campaign = %d body %s, want 403", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventNHIAccessReviewItemDecided, itemID)); got != 0 {
+		t.Fatalf("self review appended %d events, want zero", got)
+	}
+	status, body = doBearer(t, h.ts, http.MethodPost, path, reviewer, "review-queue-distinct", map[string]any{
+		"decision": "certified", "decision_evidence_refs": []string{"qa:independent-review"},
+	})
+	if status != http.StatusOK || !strings.Contains(string(body), `"decision_by":"queue-reviewer"`) {
+		t.Fatalf("distinct reviewer decision = %d body %s", status, body)
+	}
+	if got := len(nhiReviewEvents(t, h.log, projections.EventNHIAccessReviewItemDecided, itemID)); got != 1 {
+		t.Fatalf("distinct review appended %d events, want one", got)
+	}
+	request["reviewer_subject"] = "urn:trstctl:access-review:any-distinct"
+	request["id"] = "8a513db6-58ad-4b12-a8b4-5943d3c3e80f"
+	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/access/reviews", creator, "review-queue-marker-spoof", request)
+	if status != http.StatusBadRequest {
+		t.Fatalf("explicit queue marker = %d body %s, want 400", status, body)
+	}
+}
+
 func nhiReviewEvents(t *testing.T, log *events.Log, typ, needle string) []events.Event {
 	t.Helper()
 	var out []events.Event

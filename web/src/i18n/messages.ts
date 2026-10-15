@@ -12762,6 +12762,18 @@ export const messages = {
     defaultMessage: "Sign in as {subject} to decide this campaign.",
     description: "Guidance when the current signed-in subject is not the campaign's assigned reviewer.",
   },
+  "policy.nhiReview.anyDistinctReviewer": {
+    defaultMessage: "Any authorized reviewer other than the creator",
+    description: "Assignment shown for API-created NHI review campaigns without a named reviewer.",
+  },
+  "policy.nhiReview.signInAsDistinctReviewer": {
+    defaultMessage: "Sign in with a different authorized operator to decide this campaign.",
+    description: "Guidance when a campaign is unassigned and the current subject cannot review its own campaign.",
+  },
+  "policy.nhiReview.accessWriteRequired": {
+    defaultMessage: "Your session needs access:write to decide this campaign.",
+    description: "Guidance when a review campaign is visible but the operator lacks the decision permission.",
+  },
   "policy.accessChange.decisionEvidenceRefs": {
     defaultMessage: "Approval evidence refs",
     description: "Evidence references entered by this approver for this decision, separate from request evidence.",

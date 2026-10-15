@@ -153,3 +153,55 @@ func TestNHIReviewHistoricalForgedActorDoesNotBecomeReviewer(t *testing.T) {
 	}
 	read("live refusal")
 }
+
+func TestNHIReviewUnassignedQueueExcludesCreatorThroughColdReplay(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+	p := projections.New(s)
+	const campaignID = "81a0a541-adb8-4af8-830c-775c7f72b56b"
+	const itemID = "41e9011c-8652-4492-a3f5-08eaf9bf7a0a"
+	appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "nhi-review-queue"})
+	appendJSONEvent(t, log, projections.EventNHIAccessReviewCampaignStarted, tenantA, projections.NHIAccessReviewCampaignStarted{
+		ID: campaignID, Name: "QA distinct reviewer queue", Scope: "quarterly_access",
+		ReviewerSubject: store.NHIReviewAnyDistinctReviewer, RequestedBy: "queue-creator",
+		Items: []projections.NHIAccessReviewItem{{
+			ItemID: itemID, NHIID: "spiffe://qa.local/review-queue", NHIKind: "workload", DisplayName: "QA review queue workload",
+			Resource: "qa-local-postgres", Entitlement: "schema:qa/read",
+		}},
+	})
+	appendNHIReviewDecisionAs(t, log, "queue-creator", projections.NHIAccessReviewItemDecided{
+		CampaignID: campaignID, ItemID: itemID, Decision: "certified", ReviewerSubject: "queue-creator",
+		DecisionEvidenceRefs: []string{"qa:self-review-must-not-project"},
+	})
+	appendNHIReviewDecisionAs(t, log, "queue-reviewer", projections.NHIAccessReviewItemDecided{
+		CampaignID: campaignID, ItemID: itemID, Decision: "certified", ReviewerSubject: "queue-reviewer",
+		DecisionEvidenceRefs: []string{"qa:independent-review"},
+	})
+	appendNHIReviewDecisionAs(t, log, "later-reviewer", projections.NHIAccessReviewItemDecided{
+		CampaignID: campaignID, ItemID: itemID, Decision: "revoked", ReviewerSubject: "later-reviewer",
+		Reason: "late duplicate must not replace first", DecisionEvidenceRefs: []string{"qa:late-review"},
+	})
+	check := func(stage string) {
+		t.Helper()
+		campaign, err := s.GetNHIReviewCampaign(ctx, tenantA, campaignID)
+		if err != nil {
+			t.Fatalf("%s read campaign: %v", stage, err)
+		}
+		if campaign.Status != "completed" || campaign.ReviewerSubject != store.NHIReviewAnyDistinctReviewer ||
+			len(campaign.Items) != 1 || campaign.Items[0].Status != "certified" ||
+			campaign.Items[0].DecisionBy != "queue-reviewer" ||
+			len(campaign.Items[0].DecisionEvidenceRefs) != 1 ||
+			campaign.Items[0].DecisionEvidenceRefs[0] != "qa:independent-review" {
+			t.Fatalf("%s wrong queue decision: %+v", stage, campaign)
+		}
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("cold catch-up: %v", err)
+	}
+	check("catch-up")
+	if err := p.Rebuild(ctx, log); err != nil {
+		t.Fatalf("full rebuild: %v", err)
+	}
+	check("full rebuild")
+}

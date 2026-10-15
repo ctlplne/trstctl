@@ -5,8 +5,9 @@ import { MemoryRouter } from "react-router-dom";
 import { Policy } from "@/pages/Policy";
 import type { AccessChangeRequest, ComplianceEvidencePack, PolicyVersion } from "@/lib/api";
 
-const { apiMock, authSubject } = vi.hoisted(() => ({
+const { apiMock, authSubject, authPermissions } = vi.hoisted(() => ({
   authSubject: { current: "ra@example.test" },
+  authPermissions: { current: ["*"] as string[] },
   apiMock: {
     accessChangeRequests: vi.fn(),
     complianceEvidencePack: vi.fn(),
@@ -46,7 +47,7 @@ vi.mock("@/auth/AuthProvider", async (orig) => {
   return {
     ...actual,
     useAuth: () => ({
-      user: { subject: authSubject.current, tenant_id: "tenant-1", roles: ["admin"], permissions: ["*"] },
+      user: { subject: authSubject.current, tenant_id: "tenant-1", roles: ["admin"], permissions: authPermissions.current },
       loading: false,
       error: null,
       oidcAvailable: false,
@@ -422,6 +423,7 @@ function nhiComplianceReport() {
 describe("policy governance surface", () => {
   beforeEach(() => {
     authSubject.current = "ra@example.test";
+    authPermissions.current = ["*"];
     apiMock.accessChangeRequests.mockReset().mockResolvedValue({ items: [accessChangeRequest()] });
     apiMock.complianceEvidencePack.mockReset();
     apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
@@ -1224,6 +1226,43 @@ describe("policy governance surface", () => {
     expect(screen.getByText("Sign in as ra@example.test to decide this campaign.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Revoke" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Exception" })).toBeDisabled();
+  });
+
+  it("shows an unassigned review queue and allows only a different signed-in operator to decide", async () => {
+    const queue = { ...nhiReviewCampaign(), reviewer_subject: "urn:trstctl:access-review:any-distinct" };
+    apiMock.nhiReviewCampaigns.mockResolvedValue({ items: [queue] });
+    apiMock.getNHIReviewCampaign.mockResolvedValue(queue);
+    authSubject.current = "queue-reviewer@example.test";
+    renderPolicy();
+
+    await userEvent.setup().click(await screen.findByText("Approval and access reviews", { exact: true }));
+    expect(await screen.findByText(/Any authorized reviewer other than the creator/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Certify" })).toBeEnabled();
+  });
+
+  it("keeps the unassigned queue's creator out of its decision controls", async () => {
+    const queue = { ...nhiReviewCampaign(), reviewer_subject: "urn:trstctl:access-review:any-distinct" };
+    apiMock.nhiReviewCampaigns.mockResolvedValue({ items: [queue] });
+    apiMock.getNHIReviewCampaign.mockResolvedValue(queue);
+    authSubject.current = "creator@example.test";
+    renderPolicy();
+
+    await userEvent.setup().click(await screen.findByText("Approval and access reviews", { exact: true }));
+    expect(await screen.findByText("Sign in with a different authorized operator to decide this campaign.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Certify" })).toBeDisabled();
+  });
+
+  it("keeps review decisions disabled when a distinct viewer lacks access:write", async () => {
+    const queue = { ...nhiReviewCampaign(), reviewer_subject: "urn:trstctl:access-review:any-distinct" };
+    apiMock.nhiReviewCampaigns.mockResolvedValue({ items: [queue] });
+    apiMock.getNHIReviewCampaign.mockResolvedValue(queue);
+    authSubject.current = "queue-viewer@example.test";
+    authPermissions.current = ["access:read"];
+    renderPolicy();
+
+    await userEvent.setup().click(await screen.findByText("Approval and access reviews", { exact: true }));
+    expect(await screen.findByText("Your session needs access:write to decide this campaign.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Certify" })).toBeDisabled();
   });
 
   it("submits an NHI certification when its optional reason is blank", async () => {

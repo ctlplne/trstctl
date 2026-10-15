@@ -12,7 +12,13 @@ import (
 )
 
 var ErrNHIReviewItemAlreadyDecided = errors.New("nhi access review item already decided")
-var ErrNHIReviewReviewerUnauthorized = errors.New("nhi access review decision requires the assigned reviewer")
+var ErrNHIReviewReviewerUnauthorized = errors.New("nhi access review decision requires a distinct authorized reviewer")
+
+// NHIReviewAnyDistinctReviewer preserves the optional reviewer field in the
+// public campaign-start contract. The route permission still gates decisions;
+// this assignment additionally excludes the authenticated campaign creator.
+// Explicit assignments are always checked against the exact actor instead.
+const NHIReviewAnyDistinctReviewer = "urn:trstctl:access-review:any-distinct"
 
 // NHIReviewCampaign is an IGA-style certification/access-review campaign for
 // non-human identities. It is a projection of nhi.access_review.* events.
@@ -85,7 +91,7 @@ func (s *Store) CheckNHIReviewDecisionAuthorityTx(ctx context.Context, tx pgx.Tx
 	if err != nil {
 		return err
 	}
-	if actor == "" || actor != assigned || actor == requester {
+	if actor == "" || actor == requester || (assigned != NHIReviewAnyDistinctReviewer && actor != assigned) {
 		return ErrNHIReviewReviewerUnauthorized
 	}
 	if campaignStatus != "open" || itemStatus != "pending" {
@@ -214,11 +220,12 @@ func (s *Store) ApplyNHIReviewItemDecidedReplayTx(ctx context.Context, tx pgx.Tx
 	if err != nil {
 		return "", err
 	}
-	if d.ReviewerSubject == "" || d.ReviewerSubject != assigned || d.ReviewerSubject == requester {
+	if d.ReviewerSubject == "" || d.ReviewerSubject == requester ||
+		(assigned != NHIReviewAnyDistinctReviewer && d.ReviewerSubject != assigned) {
 		return "unauthorized_reviewer", nil
 	}
 	if status != "pending" {
-		if decisionBy == assigned {
+		if decisionBy != "" && (assigned == NHIReviewAnyDistinctReviewer || decisionBy == assigned) {
 			return "duplicate", nil
 		}
 		return "", fmt.Errorf("%w: item %s is %s", ErrNHIReviewItemAlreadyDecided, d.ItemID, status)
