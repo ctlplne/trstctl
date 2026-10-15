@@ -4155,6 +4155,14 @@ export const messages = {
     defaultMessage: "Retrying…",
     description: "F2: pending state while the server creates a replacement discovery run.",
   },
+  "discovery.run.loadOlder": {
+    defaultMessage: "Load older runs",
+    description: "F2: continue the newest-first discovery run history beyond the first page.",
+  },
+  "discovery.run.loadingOlder": {
+    defaultMessage: "Loading older runs…",
+    description: "F2: progress while the next discovery run history page loads.",
+  },
   "discovery.run.retryAria": {
     defaultMessage: "Retry run {id}",
     description: "F2: accessible name for the exact failed discovery run recovery action.",

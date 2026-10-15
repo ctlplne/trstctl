@@ -993,6 +993,40 @@ func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID str
 	return out, err
 }
 
+// ListDiscoveryRunsRecentPage lists a tenant's newest runs first. The cursor is
+// resolved inside the same tenant, so a cursor from another tenant reveals no
+// rows. The (created_at, id) keyset keeps ties stable across pages.
+func (s *Store) ListDiscoveryRunsRecentPage(ctx context.Context, tenantID, beforeID string, limit int) ([]DiscoveryRun, error) {
+	var out []DiscoveryRun
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text,
+		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
+		              requested_by, execution, segment, required_agent_role,
+		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
+		              target_results
+		         FROM discovery_runs
+		        WHERE tenant_id = $1
+		          AND ($2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR (created_at, id) <
+		               (SELECT created_at, id FROM discovery_runs WHERE tenant_id = $1 AND id = $2::uuid))
+		     ORDER BY created_at DESC, id DESC
+		        LIMIT $3`, tenantID, beforeID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var run DiscoveryRun
+			if err := scanDiscoveryRun(rows, &run); err != nil {
+				return err
+			}
+			out = append(out, run)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ListDiscoveryFindingsPage lists tenant findings, optionally scoped to one run.
 func (s *Store) ListDiscoveryFindingsPage(ctx context.Context, tenantID, runID, afterID string, limit int) ([]DiscoveryFinding, error) {
 	var out []DiscoveryFinding

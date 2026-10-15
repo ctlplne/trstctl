@@ -1762,7 +1762,7 @@ export interface Api {
   pauseDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
   resumeDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
   retireDiscoverySchedule(id: string): Promise<DiscoverySchedule>;
-  discoveryRuns(options?: { limit?: number; cursor?: string }): Promise<DiscoveryRunList>;
+  discoveryRuns(options?: { limit?: number; cursor?: string; order?: "id" | "recent" }): Promise<DiscoveryRunList>;
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   retryDiscoveryRun(id: string): Promise<DiscoveryRun>;
@@ -2905,10 +2905,11 @@ function brokerHistoryQueryString(options?: BrokerHistoryQuery): string {
   return query.size ? `?${query}` : "";
 }
 
-function pageQueryString(options?: { limit?: number; cursor?: string }, scopedId?: string, scopedKey = "identity_id"): string {
+function pageQueryString(options?: { limit?: number; cursor?: string; order?: "id" | "recent" }, scopedId?: string, scopedKey = "identity_id"): string {
   const qs = new URLSearchParams();
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
+  if (options?.order) qs.set("order", options.order);
   if (scopedId) qs.set(scopedKey, scopedId);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";

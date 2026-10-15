@@ -160,6 +160,10 @@ source is ready, `POST /api/v1/discovery/runs/{id}/retry` creates a new queued r
 with the same source, schedule binding, and dry-run mode. The original terminal run
 is never changed or deleted. The replacement stores `retry_of_run_id`, so the table,
 API, event replay, and a page reload still answer “which failure did this replace?”
+The console shows newest runs first; **Load older runs** follows the bounded
+history. API clients can request `GET /api/v1/discovery/runs?order=recent&limit=50`
+and pass each returned `next_cursor` with the same `order` to page by creation
+time and run ID. Omitting `order` keeps the original ID-order API contract.
 
 This is intentionally not available for `queued`, `running`, or `succeeded` runs. An
 active run must finish; a successful run can be repeated from its source as a fresh

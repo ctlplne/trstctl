@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1156,12 +1157,33 @@ func (a *API) listDiscoveryRuns(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	limit, after, err := a.pageParams(r)
+	order := r.URL.Query().Get("order")
+	if order != "" && order != "id" && order != "recent" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "order must be id or recent"))
+		return
+	}
+	var limit int
+	var after string
+	var err error
+	if order == "recent" {
+		limit, err = pageLimit(r)
+		after = store.ZeroUUID
+		if err == nil && r.URL.Query().Get("cursor") != "" {
+			after, err = decodeDiscoveryRecentCursor(r.URL.Query().Get("cursor"))
+		}
+	} else {
+		limit, after, err = a.pageParams(r)
+	}
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
 		return
 	}
-	rows, err := a.store.ListDiscoveryRunsPage(r.Context(), tenantID, after, limit)
+	var rows []store.DiscoveryRun
+	if order == "recent" {
+		rows, err = a.store.ListDiscoveryRunsRecentPage(r.Context(), tenantID, after, limit)
+	} else {
+		rows, err = a.store.ListDiscoveryRunsPage(r.Context(), tenantID, after, limit)
+	}
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -1172,9 +1194,33 @@ func (a *API) listDiscoveryRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	next := ""
 	if len(rows) == limit {
-		next = encodeCursor(rows[len(rows)-1].ID)
+		if order == "recent" {
+			next = encodeDiscoveryRecentCursor(rows[len(rows)-1].ID)
+		} else {
+			next = encodeCursor(rows[len(rows)-1].ID)
+		}
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+func encodeDiscoveryRecentCursor(id string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte("recent:" + id))
+}
+
+func decodeDiscoveryRecentCursor(cursor string) (string, error) {
+	if len(cursor) > 128 {
+		return "", errors.New("invalid cursor")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil || !strings.HasPrefix(string(raw), "recent:") {
+		return "", errors.New("invalid cursor")
+	}
+	id := strings.TrimPrefix(string(raw), "recent:")
+	parsed, err := googleuuid.Parse(id)
+	if err != nil || parsed.String() != id {
+		return "", errors.New("invalid cursor")
+	}
+	return id, nil
 }
 
 func (a *API) listDiscoveryMonitoring(w http.ResponseWriter, r *http.Request) {

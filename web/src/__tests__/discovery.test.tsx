@@ -1627,6 +1627,37 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/Recovery run run-retry queued/);
   });
 
+  it("keeps recent recovery runs visible and lets an operator reach older run pages", async () => {
+    const newest = {
+      id: "run-newest",
+      tenant_id: "tenant-1",
+      source_id: "source-1",
+      status: "succeeded",
+      dry_run: false,
+      execution: "relay",
+      targets: 1,
+      discovered: 1,
+      failed: 0,
+      rejected: 0,
+      blocked: 0,
+      created_at: "2026-06-20T12:00:00Z",
+      retry_of_run_id: "run-failed",
+    };
+    const older = { ...newest, id: "run-older", retry_of_run_id: undefined, created_at: "2026-06-20T10:00:00Z" };
+    apiMock.discoveryRuns.mockImplementation(async (options: { limit?: number; cursor?: string; order?: string }) => {
+      if (options.order !== "recent") throw new Error("runs must be requested newest first");
+      return options.cursor === "older-page" ? { items: [older], next_cursor: "" } : { items: [newest], next_cursor: "older-page" };
+    });
+
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=runs"]);
+    expect(await screen.findByText("Retries run-failed")).toBeInTheDocument();
+    expect(apiMock.discoveryRuns).toHaveBeenCalledWith({ limit: 50, order: "recent" });
+    await user.click(screen.getByRole("button", { name: "Load older runs" }));
+    expect(await screen.findByText("run-older")).toBeInTheDocument();
+    expect(apiMock.discoveryRuns).toHaveBeenCalledWith({ limit: 50, order: "recent", cursor: "older-page" });
+  });
+
   it("offers the enrolled network-role relays by name and fills the relay ID from the pick (DP2-015)", async () => {
     apiMock.agents.mockResolvedValue([
       { id: "11111111-2222-4333-8444-555555555555", name: "dmz-relay", status: "active", roles: ["network", "host"] },

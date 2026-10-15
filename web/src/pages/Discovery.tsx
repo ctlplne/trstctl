@@ -10,6 +10,7 @@ import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type Source
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
+import { RunTable } from "./discovery/DiscoveryRunTableParts";
 import { SourceSetup } from "./discovery/SourceSetup";
 import { suggestedIdentityName } from "./discovery/identityName";
 import { Button } from "@/components/ui/button";
@@ -595,6 +596,8 @@ export function Discovery() {
   const [sources, setSources] = useState<DiscoverySource[]>([]);
   const [schedules, setSchedules] = useState<DiscoverySchedule[]>([]);
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
+  const [runCursor, setRunCursor] = useState("");
+  const [runsLoadingMore, setRunsLoadingMore] = useState(false);
   const [findings, setFindings] = useState<DiscoveryFinding[]>([]);
   const [monitoring, setMonitoring] = useState<DiscoveryMonitoring | null>(null);
   const [coverageReport, setCoverageReport] = useState<DiscoveryCoverage | null>(null);
@@ -655,7 +658,7 @@ export function Discovery() {
     const [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult, coverageResult] = await Promise.allSettled([
       api.discoverySources({ limit: 50 }),
       api.discoverySchedules({ limit: 50 }),
-      api.discoveryRuns({ limit: 50 }),
+      api.discoveryRuns({ limit: 50, order: "recent" }),
       api.discoveryMonitoring(),
       api.nhiShadowPosture(),
       api.discoveryFindings({ limit: 50, ...(requestedRunID ? { runId: requestedRunID } : {}) }),
@@ -665,8 +668,13 @@ export function Discovery() {
     else setSources([]);
     if (scheduleResult.status === "fulfilled") setSchedules(scheduleResult.value.items ?? []);
     else setSchedules([]);
-    if (runResult.status === "fulfilled") setRuns(runResult.value.items ?? []);
-    else setRuns([]);
+    if (runResult.status === "fulfilled") {
+      setRuns(runResult.value.items ?? []);
+      setRunCursor(runResult.value.next_cursor ?? "");
+    } else {
+      setRuns([]);
+      setRunCursor("");
+    }
     if (monitoringResult.status === "fulfilled") setMonitoring(monitoringResult.value);
     else setMonitoring(null);
     if (shadowPostureResult.status === "fulfilled") setShadowPosture(shadowPostureResult.value);
@@ -692,6 +700,23 @@ export function Discovery() {
     await load();
     setCTRefreshToken((current) => current + 1);
   }, [load]);
+
+  const loadOlderRuns = useCallback(async () => {
+    if (!runCursor || runsLoadingMore) return;
+    setRunsLoadingMore(true);
+    try {
+      const page = await api.discoveryRuns({ limit: 50, order: "recent", cursor: runCursor });
+      setRuns((current) => {
+        const seen = new Set(current.map((run) => run.id));
+        return [...current, ...(page.items ?? []).filter((run) => !seen.has(run.id))];
+      });
+      setRunCursor(page.next_cursor ?? "");
+    } catch (err) {
+      setNotice(noticeForError(err, "Could not load older discovery runs"));
+    } finally {
+      setRunsLoadingMore(false);
+    }
+  }, [runCursor, runsLoadingMore]);
 
   useEffect(() => {
     if (!scheduleSourceID && sources[0]) setScheduleSourceID(sources[0].id);
@@ -1434,7 +1459,15 @@ export function Discovery() {
               {translateNow("source.runs.appear.here.after.a.source.is.created.da81c4a3c9")}
             </EmptyState>
           ) : (
-            <RunTable runs={runs} sourceByID={sourceByID} busy={busy} onRetry={retryRun} />
+            <RunTable
+              runs={runs}
+              sourceByID={sourceByID}
+              busy={busy}
+              onRetry={retryRun}
+              hasOlder={Boolean(runCursor)}
+              loadingOlder={runsLoadingMore}
+              onLoadOlder={loadOlderRuns}
+            />
           )}
         </section>
       )}
@@ -2003,127 +2036,6 @@ function SourceTable({
       getRowId={(source) => source.id}
       showColumnChooser
       viewStorageKey="discovery-sources"
-      toolbar={gridControlsToolbar}
-    />
-  );
-}
-
-function RunTable({
-  runs,
-  sourceByID,
-  busy,
-  onRetry,
-}: {
-  runs: DiscoveryRun[];
-  sourceByID: Map<string, DiscoverySource>;
-  busy: string | null;
-  onRetry: (run: DiscoveryRun) => void;
-}) {
-  const columns: Array<DataGridColumn<DiscoveryRun>> = [
-    {
-      id: "run",
-      header: "Run",
-      className: "font-mono text-xs",
-      cell: (run) => shortID(run.id),
-    },
-    {
-      id: "source",
-      header: "Source",
-      cell: (run) => sourceByID.get(run.source_id)?.name ?? <span className="font-mono text-xs">{run.source_id}</span>,
-    },
-    {
-      id: "status",
-      header: "Status",
-      cell: (run) => <StatusBadge vocabulary="lifecycle" value={run.status} />,
-    },
-    {
-      id: "targets",
-      header: "Targets",
-      cell: (run) => run.targets,
-    },
-    {
-      id: "discovered",
-      header: "Discovered",
-      cell: (run) => run.discovered,
-    },
-    {
-      id: "failed",
-      header: "Failed",
-      cell: (run) => run.failed + run.rejected + run.blocked,
-    },
-    {
-      id: "failure-detail",
-      header: "Failure detail",
-      cell: (run) => {
-        const unresolved = (run.target_results ?? []).filter((result) => result.status !== "succeeded");
-        if (!run.error && unresolved.length === 0) {
-          return <span className="text-muted-foreground">—</span>;
-        }
-        return (
-          <div className="max-w-[28rem] space-y-1 text-xs">
-            {run.error ? (
-              <span className="block break-words text-risk-critical" title={run.error}>
-                {run.error}
-              </span>
-            ) : null}
-            {unresolved.length > 0 ? (
-              <ul className="list-none space-y-0.5 pl-0 font-mono" aria-label={translateNow("discovery.run.targetOutcomes")}>
-                {unresolved.map((result) => (
-                  <li key={`${run.id}:${result.target}`} className="break-words">
-                    <span className="text-foreground">{result.target}</span> <StatusBadge vocabulary="lifecycle" value={result.status} />
-                    {result.error ? <span className="text-muted-foreground"> {result.error}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        );
-      },
-    },
-    {
-      id: "executor",
-      header: translateNow("discovery.run.executor"),
-      cell: (run) => runExecution(run),
-    },
-    {
-      id: "recovery",
-      header: translateNow("discovery.run.recoveryColumn"),
-      cell: (run) => {
-        if (run.retry_of_run_id) {
-          return <span className="text-xs text-muted-foreground">{translateNow("discovery.run.retries", { id: shortID(run.retry_of_run_id) })}</span>;
-        }
-        if (run.status !== "failed" && run.status !== "partial") {
-          return <span className="text-muted-foreground">—</span>;
-        }
-        return (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy === `retry:${run.id}`}
-            aria-label={translateNow("discovery.run.retryAria", { id: shortID(run.id) })}
-            onClick={() => onRetry(run)}
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            {busy === `retry:${run.id}` ? translateNow("discovery.run.retrying") : translateNow("discovery.run.retryAction")}
-          </Button>
-        );
-      },
-    },
-    {
-      id: "completed",
-      header: "Completed",
-      cell: (run) => formatDateTime(run.completed_at),
-    },
-  ];
-  return (
-    <DataGrid
-      ariaLabel="Discovery runs"
-      rows={runs}
-      columns={columns}
-      getRowId={(run) => run.id}
-      showColumnChooser
-      viewStorageKey="discovery-runs"
       toolbar={gridControlsToolbar}
     />
   );
@@ -3217,13 +3129,6 @@ function relayBinding(source: DiscoverySource): string {
   const segment = typeof source.config.segment === "string" ? source.config.segment : translateNow("discovery.run.unbound");
   const relay = typeof source.config.relay_agent_id === "string" ? ` · ${shortID(source.config.relay_agent_id)}` : "";
   return `${translateNow("discovery.run.relay")} · ${segment}${relay}`;
-}
-
-function runExecution(run: DiscoveryRun): string {
-  if (run.execution !== "relay") return translateNow("discovery.run.controlPlane");
-  const relay = run.executed_by_agent_id || run.required_agent_id;
-  const suffix = relay ? ` · ${shortID(relay)}` : "";
-  return `${translateNow("discovery.run.relay")} · ${run.segment || translateNow("discovery.run.unbound")}${suffix}`;
 }
 
 function renderNotice(notice: Notice) {
