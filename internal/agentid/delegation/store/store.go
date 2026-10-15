@@ -25,6 +25,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"errors"
@@ -160,20 +161,35 @@ type Repo struct {
 // New returns a Repo over the core store.
 func New(core *corestore.Store) *Repo { return &Repo{core: core} }
 
-// RegisterRootAnchor upserts a tenant root anchor. The row is bound to the RLS
-// tenant GUC, so a caller cannot register an anchor into another tenant even if
-// it tries to smuggle a tenant id through input.
+// RegisterRootAnchor binds a tenant/key ID to its first public key and auth
+// reference. An identical retry is safe, but replacing a trust root under the
+// same ID would silently widen every chain that names it.
 func (r *Repo) RegisterRootAnchor(ctx context.Context, tenantID string, anchor RootAnchor) error {
 	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
+		var inserted int
+		err := tx.QueryRow(ctx,
 			`INSERT INTO agent_root_anchors
 			   (tenant_id, key_id, public_der, auth_ref)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3)
 			 ON CONFLICT (tenant_id, key_id)
-			 DO UPDATE SET public_der = EXCLUDED.public_der, auth_ref = EXCLUDED.auth_ref`,
-			anchor.KeyID, anchor.PublicDER, anchor.AuthRef)
-		if err != nil {
+			 DO NOTHING RETURNING 1`,
+			anchor.KeyID, anchor.PublicDER, anchor.AuthRef).Scan(&inserted)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("agid store: register root anchor: %w", err)
+		}
+		var existingDER []byte
+		var existingAuthRef string
+		if err := tx.QueryRow(ctx,
+			`SELECT public_der, auth_ref FROM agent_root_anchors
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND key_id = $1`, anchor.KeyID).Scan(&existingDER, &existingAuthRef); err != nil {
+			return fmt.Errorf("agid store: read existing root anchor: %w", err)
+		}
+		if !bytes.Equal(existingDER, anchor.PublicDER) || existingAuthRef != anchor.AuthRef {
+			return fmt.Errorf("agid store: root anchor key id already binds different trust material: %w", corestore.ErrIdempotencyConflict)
 		}
 		return nil
 	})

@@ -31,6 +31,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // IssueChainBoundRequest asks to issue a chain-bound agent credential. The delegation
@@ -162,7 +164,8 @@ type RevocationEvidenceResponse struct {
 	Artifact        []byte   `json:"artifact,omitempty"`
 }
 
-// RootAnchorRequest registers or updates one tenant-scoped AGID root anchor. public_der
+// RootAnchorRequest registers one tenant-scoped AGID root anchor. Its key ID binds
+// the first public key and auth reference; a changed binding needs a new key ID. public_der
 // is base64 in JSON (Go's []byte encoding); public_pem is accepted as the operator-friendly
 // form. Exactly one public-key form is required. auth_ref is non-secret phishing-resistant
 // enrollment evidence (for example a FIDO2 credential id or hardware-token reference).
@@ -325,6 +328,9 @@ func registerRootAnchorHandler(a *api.API, svc Service) http.HandlerFunc {
 			resp, err := svc.RegisterRootAnchor(ctx, tenantID, req)
 			if err != nil {
 				opErr = err
+				if errors.Is(err, store.ErrIdempotencyConflict) {
+					return 0, nil, api.ErrStatus(http.StatusConflict, "root-anchor key_id already binds different trust material; register a new key_id")
+				}
 				return 0, nil, err
 			}
 			return http.StatusOK, resp, nil

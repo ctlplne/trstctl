@@ -61,7 +61,9 @@ signer restart.
 
 ## Use it
 
-Register (or update) a tenant root anchor. `public_der` as base64 JSON bytes
+Register a tenant root anchor. A `key_id` is bound to its first public key and
+authentication reference: an identical request can be retried, while a changed
+binding returns 409 and needs a new key ID. `public_der` as base64 JSON bytes
 is also accepted; replaying the same `Idempotency-Key` returns the original
 result, and when `TRSTCTL_SIGNER_KEY_STORE_DIR` is configured the anchor is
 mirrored into the signer floor:

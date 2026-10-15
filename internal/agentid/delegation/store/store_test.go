@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -239,6 +240,81 @@ func TestRootAnchor_RegisterAndList_RLS(t *testing.T) {
 	}
 	if len(gotB) != 1 || gotB[0].AuthRef != bAnchor.AuthRef || string(gotB[0].PublicDER) != string(bAnchor.PublicDER) {
 		t.Fatalf("tenantB anchor = %+v, want %+v", gotB, bAnchor)
+	}
+}
+
+func TestRootAnchor_FirstWriterBindsTenantAndKey(t *testing.T) {
+	repo := newRepoOn(t, "agid_root_anchor_first_writer")
+	ctx := context.Background()
+	first := agidstore.RootAnchor{KeyID: "root-key", PublicDER: []byte{1, 2, 3}, AuthRef: "webauthn:first"}
+	if err := repo.RegisterRootAnchor(ctx, tenantA, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RegisterRootAnchor(ctx, tenantA, first); err != nil {
+		t.Fatalf("same binding should replay: %v", err)
+	}
+	for _, changed := range []agidstore.RootAnchor{
+		{KeyID: first.KeyID, PublicDER: []byte{4, 5, 6}, AuthRef: first.AuthRef},
+		{KeyID: first.KeyID, PublicDER: first.PublicDER, AuthRef: "webauthn:other"},
+	} {
+		if err := repo.RegisterRootAnchor(ctx, tenantA, changed); !errors.Is(err, corestore.ErrIdempotencyConflict) {
+			t.Fatalf("changed root binding error = %v, want conflict", err)
+		}
+	}
+	got, err := repo.ListRootAnchors(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || string(got[0].PublicDER) != string(first.PublicDER) || got[0].AuthRef != first.AuthRef {
+		t.Fatalf("original binding changed: %+v", got)
+	}
+}
+
+func TestRootAnchor_ConcurrentFirstWriter(t *testing.T) {
+	repo := newRepoOn(t, "agid_root_anchor_concurrent_writer")
+	anchors := []agidstore.RootAnchor{
+		{KeyID: "root-key", PublicDER: []byte{1, 2, 3}, AuthRef: "webauthn:first"},
+		{KeyID: "root-key", PublicDER: []byte{4, 5, 6}, AuthRef: "webauthn:second"},
+	}
+	var start sync.WaitGroup
+	start.Add(1)
+	var work sync.WaitGroup
+	work.Add(len(anchors))
+	errs := make([]error, len(anchors))
+	for i := range anchors {
+		go func(i int) {
+			defer work.Done()
+			start.Wait()
+			errs[i] = repo.RegisterRootAnchor(context.Background(), tenantA, anchors[i])
+		}(i)
+	}
+	start.Done()
+	work.Wait()
+	success, conflict := 0, 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			success++
+		case errors.Is(err, corestore.ErrIdempotencyConflict):
+			conflict++
+		default:
+			t.Fatalf("unexpected concurrent registration error: %v", err)
+		}
+	}
+	if success != 1 || conflict != 1 {
+		t.Fatalf("concurrent outcomes = %v, want one success and one conflict", errs)
+	}
+	got, err := repo.ListRootAnchors(context.Background(), tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("registered anchors = %+v, want exactly one", got)
+	}
+	for i, err := range errs {
+		if err == nil && (string(got[0].PublicDER) != string(anchors[i].PublicDER) || got[0].AuthRef != anchors[i].AuthRef) {
+			t.Fatalf("stored root does not match winner %d: %+v", i, got[0])
+		}
 	}
 }
 
