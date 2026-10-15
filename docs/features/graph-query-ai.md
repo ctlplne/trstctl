@@ -127,6 +127,12 @@ then answers using only that evidence — every claim carries a citation (`sourc
 with no evidence it says "insufficient evidence" rather than inventing one. Retrieved data
 is treated as untrusted (a hostile string in a SAN can't become an instruction), the
 pipeline is strictly read-only, and every gather is recorded as an immutable audit event.
+For a cause question, event IDs or event types alone are context, not a cause: the
+answer is marked sufficient only when a cited record contains an explicit failure
+reason. Renewal-failure reasons are read from the tenant's allowlisted lifecycle
+events and redacted before they enter an answer. If no reason is present, the
+response asks the operator to inspect the exact identity's renewal job and audit
+history; it does not infer a cause from unrelated certificate events.
 **Served** at `POST /api/v1/ai/rca` when `ai.enable_api` is on.
 
 ### The trstctl MCP server (F78)

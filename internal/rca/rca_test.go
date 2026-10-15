@@ -56,10 +56,42 @@ func TestSynthesizeInsufficientEvidence(t *testing.T) {
 	}
 }
 
+func TestCausalQuestionNeedsCauseBearingEvidence(t *testing.T) {
+	s := NewSynthesizer(aimodel.New(nil, nil))
+	ans, err := s.Answer(context.Background(), Evidence{
+		Question: "What caused the last certificate renewal failure?",
+		Subject:  "certificate",
+		Items: []EvidenceItem{
+			{Citation: "log#recorded", Summary: "event type=certificate.recorded"},
+			{Citation: "log#expired", Summary: "event type=certificate.expiring"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ans.Sufficient || !strings.Contains(strings.ToLower(ans.Text), "insufficient evidence") {
+		t.Fatalf("unrelated event types claimed a root cause: %+v", ans)
+	}
+}
+
+func TestCausalQuestionDoesNotTreatRedactionAsAReason(t *testing.T) {
+	s := NewSynthesizer(aimodel.New(nil, nil))
+	ans, err := s.Answer(context.Background(), Evidence{
+		Question: "Why did the renewal fail?",
+		Items:    []EvidenceItem{{Citation: "log#failure", Summary: "event type=identity.renewal_failed reason=[REDACTED]"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ans.Sufficient {
+		t.Fatalf("redacted diagnostic claimed a cause: %+v", ans)
+	}
+}
+
 func TestSynthesizeGroundedAndCited(t *testing.T) {
 	s := NewSynthesizer(aimodel.New(nil, nil)) // no model: grounding still works
 	ev := Evidence{Question: "why", Items: []EvidenceItem{
-		{Citation: "audit#e9", Summary: "renewal failed"},
+		{Citation: "audit#e9", Summary: "renewal failed: CAA mismatch"},
 		{Citation: "graph#n3", Summary: "credential reaches 4 workloads"},
 	}}
 	ans, _ := s.Answer(context.Background(), ev)

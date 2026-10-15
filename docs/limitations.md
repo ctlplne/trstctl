@@ -3343,7 +3343,9 @@ off, so an upgrade does not silently expose it):
   declares when more matches may exist.
 - `POST /api/v1/ai/rca` answers a grounded root-cause / NL question from
   cited real records gathered through the tenant-then-RBAC scoping seam,
-  preferring "insufficient evidence" to a guess (F77).
+  preferring "insufficient evidence" to a guess (F77). A cause question needs
+  a cited failure reason; event types alone are marked insufficient. The
+  allowlisted renewal-failure reason is redacted before it enters the answer.
 - `GET /api/v1/mcp/tools` + `POST /api/v1/mcp/tools/{tool}` expose the
   tenant-scoped MCP tools an external AI agent can list and invoke (F78).
   Investigation tools are read-only by default; guarded write tools

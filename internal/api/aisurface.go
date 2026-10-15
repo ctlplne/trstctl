@@ -254,7 +254,11 @@ func recordID(row query.Row) string {
 func rowSummary(row query.Row) string {
 	switch row.Surface {
 	case query.SurfaceLog:
-		return "event type=" + row.Columns["type"]
+		summary := "event type=" + row.Columns["type"]
+		if reason := row.Columns["reason"]; reason != "" {
+			summary += " reason=" + reason
+		}
+		return summary
 	case query.SurfaceGraph:
 		return "graph node kind=" + row.Columns["kind"] + " name=" + row.Columns["name"]
 	case query.SurfaceCBOM:

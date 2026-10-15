@@ -4,9 +4,12 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/store"
@@ -153,9 +156,11 @@ func (e *Engine) readLog(ctx context.Context, tenant string, eq map[Field]string
 			if filter && ev.Type != want {
 				return nil
 			}
-			if !add(Row{Surface: SurfaceLog, Columns: map[string]string{
-				"id": ev.ID, "type": ev.Type, "tenant_id": ev.TenantID,
-			}}) {
+			columns := map[string]string{"id": ev.ID, "type": ev.Type, "tenant_id": ev.TenantID}
+			if reason := renewalFailureReason(ev); reason != "" {
+				columns["reason"] = reason
+			}
+			if !add(Row{Surface: SurfaceLog, Columns: columns}) {
 				return errEnough
 			}
 			return nil
@@ -165,4 +170,26 @@ func (e *Engine) readLog(ctx context.Context, tenant string, eq map[Field]string
 		return nil
 	}
 	return err
+}
+
+// renewalFailureReason exposes only the recorded reason of a renewal failure,
+// never arbitrary event payload. Audit readers already have access to this
+// tenant's event, but the query/RCA seam must keep its evidence small and redact
+// accidental key material before it can reach an answer or model prompt.
+func renewalFailureReason(ev events.Event) string {
+	if ev.Type != "identity.renewal_failed" && ev.Type != "credential.renewal.failed" {
+		return ""
+	}
+	var payload struct {
+		Reason string `json:"reason"`
+	}
+	if json.Unmarshal(ev.Data, &payload) != nil {
+		return ""
+	}
+	reason := aimodel.DefaultRedactor(strings.Join(strings.Fields(payload.Reason), " "))
+	runes := []rune(reason)
+	if len(runes) > 200 {
+		reason = string(runes[:200]) + "…"
+	}
+	return reason
 }

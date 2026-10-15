@@ -116,7 +116,7 @@ func seedTenantAIData(t *testing.T, st *store.Store, log *events.Log, tenant, ow
 		t.Fatalf("seed crypto asset for %s: %v", tenant, err)
 	}
 	// An audit event in the log so the "what happened" (audit) evidence kind has a row.
-	if _, err := log.Append(ctx, events.Event{Type: "credential.renewal.failed", TenantID: tenant, Data: []byte(`{"owner":"` + ownerName + `"}`)}); err != nil {
+	if _, err := log.Append(ctx, events.Event{Type: "credential.renewal.failed", TenantID: tenant, Data: []byte(`{"owner":"` + ownerName + `","reason":"CA unreachable"}`)}); err != nil {
 		t.Fatalf("seed event for %s: %v", tenant, err)
 	}
 }
@@ -338,6 +338,9 @@ func TestServedRCAGroundedAndCited(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(ans.Citations, " "), "log#") {
 		t.Errorf("RCA citations do not reference a real event-log record: %v", ans.Citations)
+	}
+	if !strings.Contains(ans.Text, "CA unreachable") {
+		t.Errorf("RCA answer omitted the recorded renewal failure cause: %q", ans.Text)
 	}
 }
 
