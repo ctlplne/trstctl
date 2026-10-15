@@ -10153,12 +10153,12 @@ export const messages = {
     description: "Heading while public machine certificate request responders are being checked.",
   },
   "protocols.readiness.unavailable": {
-    defaultMessage: "Method readiness is unavailable.",
-    description: "Heading when machine certificate request responder readiness cannot be loaded.",
+    defaultMessage: "Public responder status is unavailable.",
+    description: "Heading when machine certificate request responder probes cannot be loaded.",
   },
   "protocols.readiness.summary": {
-    defaultMessage: "{ready} of {total} methods are ready.",
-    description: "Summary count of machine certificate request methods whose public responders are ready.",
+    defaultMessage: "{ready} of {total} public responders answered.",
+    description: "Summary count of machine certificate request methods whose public responders answered an exact probe; this is not enrollment readiness.",
   },
   "protocols.readiness.checkingBody": {
     defaultMessage: "trstctl is probing the same public responders that machines use.",
@@ -10169,12 +10169,13 @@ export const messages = {
     description: "Fail-closed explanation when request method status cannot be checked.",
   },
   "protocols.readiness.next": {
-    defaultMessage: "{method} is the next method that needs setup or repair.",
-    description: "Names the next machine certificate request method needing operator attention.",
+    defaultMessage:
+      "{method} is the next responder needing setup or repair. An answered responder does not prove client trust, signing, or enrollment; run its readiness check and a stock client.",
+    description: "Names the next responder needing attention and explains the limit of a public probe.",
   },
   "protocols.readiness.allReady": {
-    defaultMessage: "Every shipped method is enabled, tenant-bound, and answering its public probe.",
-    description: "Confirmation shown when all machine certificate request methods are ready.",
+    defaultMessage: "Every shipped public responder answered its probe. Run each method's readiness check and a stock client before enrolling machines.",
+    description: "Public-probe result when all responders answer; it does not assert full enrollment readiness.",
   },
   "protocols.acmePlan.heading": {
     defaultMessage: "ACME readiness and next step",
@@ -10631,8 +10632,9 @@ export const messages = {
     description: "Plain-language heading for the protocol method guide.",
   },
   "protocols.guide.description": {
-    defaultMessage: "Start with the system that needs a credential. The technical setup and exact responder evidence stay one level deeper.",
-    description: "Outcome-first introduction to the protocol method guide.",
+    defaultMessage:
+      "Start with the system that needs a credential. These statuses show public responder reachability; open setup for trust, policy, signer, and stock-client proof.",
+    description: "Outcome-first introduction that distinguishes public responder probes from enrollment qualification.",
   },
   "protocols.guide.listLabel": {
     defaultMessage: "Credential request methods",
@@ -10647,10 +10649,13 @@ export const messages = {
     defaultMessage: "Status unavailable",
     description: "Protocol guide state when readiness cannot be read.",
   },
-  "protocols.guide.status.ready": { defaultMessage: "Ready", description: "Protocol guide state when the method is enabled and served." },
+  "protocols.guide.status.ready": {
+    defaultMessage: "Responder answered",
+    description: "Protocol guide state when the public responder answered its exact probe; enrollment readiness is checked separately.",
+  },
   "protocols.guide.status.needsAttention": {
-    defaultMessage: "Needs attention",
-    description: "Protocol guide state when a method is enabled but its responder is not serving.",
+    defaultMessage: "Responder needs attention",
+    description: "Protocol guide state when a method is enabled but its public responder is not serving.",
   },
   "protocols.guide.status.notSetUp": {
     defaultMessage: "Not set up",

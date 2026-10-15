@@ -652,6 +652,17 @@ describe("protocol surface", () => {
     expect(within(operations).getByRole("heading", { name: "Protocol responder status" })).toBeInTheDocument();
   });
 
+  it("does not call a mounted CMP responder ready before client trust is checked", async () => {
+    mountProtocols(null, false);
+
+    expect(await screen.findByRole("heading", { name: "6 of 7 public responders answered." })).toBeInTheDocument();
+    const cmp = screen.getByRole("list", { name: "Credential request methods" }).querySelectorAll("li")[3];
+    expect(within(cmp).getByText("Existing PKI enrollment")).toBeInTheDocument();
+    expect(within(cmp).getByText("Responder answered")).toBeInTheDocument();
+    expect(within(cmp).queryByText("Ready")).not.toBeInTheDocument();
+    expect(screen.getByText(/An answered responder does not prove client trust, signing, or enrollment/i)).toBeInTheDocument();
+  });
+
   it("lands View setup on the requested operator workspace", async () => {
     mountProtocols(null, false);
     await screen.findByRole("heading", { name: "Choose how each machine asks" });

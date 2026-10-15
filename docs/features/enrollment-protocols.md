@@ -152,8 +152,15 @@ registration-authority enrollment is possible only when
 
 #### Check CMP safely before connecting a client
 
-Open **Certificates → Enrollment methods**, expand **Set up and operate methods**,
-then find **CMP readiness check**. Before any request, the page explains the four
+The method list's public-responder count proves only that an exact unauthenticated
+probe reached each named doorway. A mounted `/cmp` can answer that probe while
+client protection trust is absent. The list therefore says **Responder answered**;
+it does not call CMP ready for enrollment. Run the CMP readiness check below and
+then use a stock CMP client for the wire proof.
+
+Open **Certificates → How machines request credentials**, select **View setup** on
+**Existing PKI enrollment (CMP)**, then find **CMP readiness check**. Before any
+request, the page explains the four
 groups it will inspect: endpoint and tenant, protection identity and trust, issuing
 profile and isolated signer, and bounded worker capacity.
 
