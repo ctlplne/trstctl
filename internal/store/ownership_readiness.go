@@ -222,15 +222,38 @@ func (s *Store) ApplyOwnershipExceptionRevokedTx(
 	tag, err := tx.Exec(ctx, `
 		UPDATE ownership_readiness_exceptions
 		   SET revoked_by = $3, revoked_at = $4, revocation_reason = $5, last_event_seq = $6
-		 WHERE tenant_id = $1 AND id = $2 AND last_event_seq < $6`,
+		 WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL AND last_event_seq < $6`,
 		tenantID, id, revokedBy, at, reason, int64(sequence)) // #nosec G115 -- event sequences fit PostgreSQL bigint
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() != 1 {
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	// The persisted projection checkpoint can lag an already committed row.
+	// A warm catch-up then replays the same revoke. Accept only its exact
+	// sequence and event time, and never rewrite an already revoked row: a
+	// privacy operation may have erased its free-text actor and reason.
+	var priorBy, priorReason string
+	var priorAt *time.Time
+	var priorSeq int64
+	err = tx.QueryRow(ctx, `
+		SELECT coalesce(revoked_by, ''), revoked_at, coalesce(revocation_reason, ''), last_event_seq
+		  FROM ownership_readiness_exceptions
+		 WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, id).Scan(
+		&priorBy, &priorAt, &priorReason, &priorSeq)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("store: ownership exception %s cannot be revoked before its grant projection", id)
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	if priorAt != nil && priorAt.Equal(at) && priorSeq == int64(sequence) && // #nosec G115 -- persisted event sequences fit PostgreSQL bigint
+		((priorBy == revokedBy && priorReason == reason) ||
+			(priorReason == "" && (priorBy == revokedBy || strings.HasPrefix(priorBy, "retained:") || strings.HasPrefix(priorBy, "erased:")))) {
+		return nil
+	}
+	return fmt.Errorf("store: ownership exception %s has conflicting immutable revocation evidence", id)
 }
 
 func (s *Store) GetOwnershipException(ctx context.Context, tenantID, id string) (OwnershipException, error) {

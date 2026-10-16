@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1525 annotated sites across 26 rules. Each row is
+1526 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -407,7 +407,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (250 sites)
+### G115 — CWE-190 Integer overflow or wraparound (251 sites)
 
 | Location | Reason |
 |---|---|
@@ -601,7 +601,8 @@ not this file.
 | `internal/store/ownership_assignment.go:65` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:205` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:226` | event sequences fit PostgreSQL bigint |
-| `internal/store/ownership_readiness.go:286` | database constraint/event writer keeps sequence non-negative |
+| `internal/store/ownership_readiness.go:251` | persisted event sequences fit PostgreSQL bigint |
+| `internal/store/ownership_readiness.go:309` | database constraint/event writer keeps sequence non-negative |
 | `internal/store/pam.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:697` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:759` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
