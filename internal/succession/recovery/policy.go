@@ -12,7 +12,7 @@ import (
 )
 
 // Policy is the tenant and identity scoped recovery policy read from the
-// event-derived serving projection. It carries public verification material only.
+// serving store. It carries public verification material only.
 type Policy struct {
 	TrustRootDER []byte
 	Threshold    int
