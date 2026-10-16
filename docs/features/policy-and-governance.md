@@ -130,7 +130,11 @@ and temporary exceptions**, select the exact identity, and review any existing
 exception before granting another. The panel reads the attributed reason,
 grantor, expiry and state from the server. An active exception can be revoked
 there with a required reason; the console then reads the server's revoked
-record. API and CLI equivalents are `GET` and `POST`
+record. To inspect a past exception after the identity leaves the gap queue,
+enter its inventory or incident **Identity ID** in the same panel and choose
+**Inspect exception history**. That lookup is read-only for grants but still
+allows a reasoned revocation if the server reports an active exception. API and
+CLI equivalents are `GET` and `POST`
 `/api/v1/identities/{id}/ownership-exceptions` and `POST`
 `/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke`, or
 `trstctl owners exceptions list|grant|revoke`. The CLI requires `--force` for

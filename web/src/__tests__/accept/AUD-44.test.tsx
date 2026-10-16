@@ -227,4 +227,32 @@ describe("AUD-44 ownership readiness console", () => {
 
     expect(apiMock.revokeOwnershipException).toHaveBeenCalledWith("identity-44", "exception-44", { reason: "Owner record repaired" });
   });
+
+  it("reads a revoked exception by identity ID after the owner gap closes", async () => {
+    const user = userEvent.setup();
+    const identityID = "f33fe995-3b07-4d9a-8f35-766a07d63c02";
+    apiMock.ownershipExceptions.mockResolvedValue([
+      {
+        id: "2fedc682-d5cc-43fd-be8e-3f93cfc8b9c7",
+        identity_id: identityID,
+        reason: "Urgent deployment",
+        granted_by: "operator-44",
+        granted_at: "2026-10-15T23:00:00Z",
+        expires_at: "2026-10-16T23:00:00Z",
+        active: false,
+        revoked_by: "operator-44",
+        revoked_at: "2026-10-16T00:19:46Z",
+        revocation_reason: "Owner record repaired",
+      },
+    ]);
+    renderOwners();
+
+    await user.click(await screen.findByText("Coverage gaps and temporary exceptions"));
+    await user.type(screen.getByRole("textbox", { name: "Identity ID" }), identityID);
+    await user.click(screen.getByRole("button", { name: "Inspect exception history" }));
+
+    expect(await screen.findByRole("region", { name: "Exception 2fedc682-d5cc-43fd-be8e-3f93cfc8b9c7" })).toHaveTextContent("Owner record repaired");
+    expect(apiMock.ownershipExceptions).toHaveBeenCalledWith(identityID);
+    expect(screen.queryByRole("button", { name: "Grant exception" })).not.toBeInTheDocument();
+  });
 });

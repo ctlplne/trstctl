@@ -14326,6 +14326,21 @@ export const messages = {
   "owners.readiness.editTitle": { defaultMessage: "Edit {name}", description: "Owner editor title." },
   "owners.readiness.staleCount": { defaultMessage: "Stale attestations: {count}.", description: "Count of identities whose owner attestation is stale." },
   "owners.readiness.grantTemporary": { defaultMessage: "Grant temporary exception", description: "Open a bounded ownership-exception dialog." },
+  "owners.readiness.lookupIdentity": { defaultMessage: "Identity ID", description: "Exact managed identity to inspect for past ownership exceptions." },
+  "owners.readiness.lookupHelp": {
+    defaultMessage: "Use the identity ID from inventory or an incident, including after its owner gap is closed.",
+    description: "Why ownership-exception history can be looked up outside the current gap queue.",
+  },
+  "owners.readiness.lookupHistory": {
+    defaultMessage: "Inspect exception history",
+    description: "Read retained ownership exception decisions for a known identity.",
+  },
+  "owners.readiness.lookupInvalid": { defaultMessage: "Enter a valid identity ID.", description: "Validation for ownership-exception history lookup." },
+  "owners.readiness.noGaps": { defaultMessage: "No managed identities currently have an ownership gap.", description: "Empty ownership-readiness queue." },
+  "owners.readiness.noHistory": {
+    defaultMessage: "No exceptions are recorded for this identity.",
+    description: "Empty ownership-exception history for a known identity.",
+  },
   "owners.readiness.exceptionTitle": { defaultMessage: "Temporary exception for {name}", description: "Ownership-exception dialog title." },
   "owners.readiness.exceptionDescription": {
     defaultMessage: "This attributed exception bypasses ownership readiness only until its expiry.",

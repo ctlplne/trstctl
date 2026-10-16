@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { z } from "zod";
 import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem, type OwnershipException } from "@/lib/api";
 import { OwnershipConflictsPanel } from "@/components/OwnershipConflictsPanel";
 import { OwnershipCSVImport } from "@/components/OwnershipCSVImport";
@@ -42,7 +43,9 @@ function UnownedQueuePanel() {
   const queue = useApiQuery(["unowned-identities"], api.unownedIdentities);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [exceptionTarget, setExceptionTarget] = useState<{ identity_id: string; name: string } | null>(null);
+  const [exceptionTarget, setExceptionTarget] = useState<{ identity_id: string; name: string; allowGrant: boolean } | null>(null);
+  const [identityLookup, setIdentityLookup] = useState("");
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [exceptionReason, setExceptionReason] = useState("");
   const [exceptionHours, setExceptionHours] = useState("24");
   const [exceptionBusy, setExceptionBusy] = useState(false);
@@ -60,8 +63,18 @@ function UnownedQueuePanel() {
   // like, and reading .slice on it takes down the whole Owners page rather than
   // hiding one panel.
   const items = data?.items ?? [];
-  if (!data || items.length === 0) return null;
+  if (!data) return null;
   const activeExceptions = exceptionHistory.data?.filter((entry) => entry.active) ?? [];
+  function inspectExceptionHistory() {
+    const parsed = z.string().trim().uuid().safeParse(identityLookup);
+    if (!parsed.success) {
+      setLookupError(t("owners.readiness.lookupInvalid"));
+      return;
+    }
+    setLookupError(null);
+    setExceptionError(null);
+    setExceptionTarget({ identity_id: parsed.data, name: parsed.data, allowGrant: false });
+  }
   async function submitException() {
     if (!exceptionTarget) return;
     const reason = exceptionReason.trim();
@@ -129,6 +142,35 @@ function UnownedQueuePanel() {
           })}{" "}
           {t("owners.readiness.staleCount", { count: String(data.counts?.ownership_attestation_stale ?? 0) })}
         </p>
+        <form
+          className="grid gap-2 rounded-panel border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            inspectExceptionHistory();
+          }}
+        >
+          <div className="grid gap-1">
+            <label className="text-body font-medium" htmlFor="ownership-exception-identity-lookup">
+              {t("owners.readiness.lookupIdentity")}
+            </label>
+            <Input
+              id="ownership-exception-identity-lookup"
+              value={identityLookup}
+              onChange={(event) => setIdentityLookup(event.target.value)}
+              autoComplete="off"
+            />
+            <p className="text-caption text-muted-foreground">{t("owners.readiness.lookupHelp")}</p>
+            {lookupError && (
+              <p role="alert" className="text-caption text-risk-critical">
+                {lookupError}
+              </p>
+            )}
+          </div>
+          <Button type="submit" variant="outline">
+            {t("owners.readiness.lookupHistory")}
+          </Button>
+        </form>
+        {items.length === 0 && <p className="text-sm text-muted-foreground">{t("owners.readiness.noGaps")}</p>}
         <ul className="space-y-2 text-sm">
           {items.slice(0, 25).map((item) => (
             <li key={item.identity_id} className="border-b border-border pb-2 last:border-0">
@@ -140,7 +182,7 @@ function UnownedQueuePanel() {
                 variant="outline"
                 className="mt-2"
                 onClick={() => {
-                  setExceptionTarget({ identity_id: item.identity_id, name: item.name });
+                  setExceptionTarget({ identity_id: item.identity_id, name: item.name, allowGrant: true });
                   setExceptionError(null);
                 }}
               >
@@ -149,7 +191,7 @@ function UnownedQueuePanel() {
             </li>
           ))}
         </ul>
-        <p className="text-caption text-muted-foreground">{data.guidance}</p>
+        {items.length > 0 && <p className="text-caption text-muted-foreground">{data.guidance}</p>}
       </section>
       <Dialog
         open={exceptionTarget !== null}
@@ -237,7 +279,10 @@ function UnownedQueuePanel() {
                 )}
               </section>
             ))}
-            {exceptionHistory.data && activeExceptions.length === 0 && (
+            {exceptionHistory.data?.length === 0 && !exceptionTarget.allowGrant && (
+              <p className="text-sm text-muted-foreground">{t("owners.readiness.noHistory")}</p>
+            )}
+            {exceptionTarget.allowGrant && exceptionHistory.data && activeExceptions.length === 0 && (
               <form
                 className="grid gap-4"
                 onSubmit={(event) => {
