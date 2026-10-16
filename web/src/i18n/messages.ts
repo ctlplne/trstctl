@@ -2347,8 +2347,7 @@ export const messages = {
   "pcas.delegation.reviewFloor": { defaultMessage: "Review floor increase", description: "PCAS delegation floor review action." },
   "pcas.delegation.readScopes": { defaultMessage: "Read tenant scopes", description: "PCAS delegation readback action." },
   "pcas.delegation.effect": {
-    defaultMessage:
-      "The signer will durably enforce this tenant scope and sign its applied state. Read the request until delivery, then verify the served scope and receipt.",
+    defaultMessage: "The signer will enforce this tenant scope and sign a receipt. Wait for delivery, then compare the active scope with the receipt.",
     description: "PCAS delegation effect preview.",
   },
   "pcas.delegation.root": { defaultMessage: "root", description: "PCAS delegation root label." },
