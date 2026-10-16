@@ -300,8 +300,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F34 adds matching headless recovery list and exact get commands for issues and CA results.
 	// The eight attached Core agent-delegation routes now have matching
 	// headless commands; the static API-table parity test cannot see them.
-	if len(out) != 518 {
-		t.Fatalf("CLI commands = %d, want 518", len(out))
+	// PCAS predecessor retirement adds one exact status read and one reviewed
+	// quorum-policy write, keeping the attached Core API usable headlessly.
+	if len(out) != 520 {
+		t.Fatalf("CLI commands = %d, want 520", len(out))
 	}
 	return out
 }

@@ -5,7 +5,15 @@ import { IntlProvider } from "@/i18n/I18nProvider";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 
 const { pcasMock } = vi.hoisted(() => ({
-  pcasMock: { registerGenesis: vi.fn(), requestSuccession: vi.fn(), requestStatus: vi.fn(), chain: vi.fn(), checkpoint: vi.fn() },
+  pcasMock: {
+    registerGenesis: vi.fn(),
+    requestSuccession: vi.fn(),
+    requestStatus: vi.fn(),
+    chain: vi.fn(),
+    checkpoint: vi.fn(),
+    retirementStatus: vi.fn(),
+    configureRetirement: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/pcasApi", () => ({ pcasApi: pcasMock }));
@@ -81,5 +89,63 @@ describe("PCAS first-use console", () => {
     expect(screen.getByText(/Log entries: 3/)).toBeInTheDocument();
     expect(screen.getByText(/Log root \(base64\):/)).toHaveTextContent("AQID");
     expect(screen.getByText(/Compare this fingerprint/)).toBeInTheDocument();
+  });
+
+  it("reads and reviews a bound retirement quorum before changing it", async () => {
+    const user = userEvent.setup();
+    pcasMock.retirementStatus.mockResolvedValue({
+      identity_id: "spiffe://example.test/workload/api",
+      predecessor_epoch: 0,
+      threshold: 1,
+      roster: [{ relying_party: "rp-a", public_der: "AQID" }],
+      validity_window_seconds: 3600,
+      predecessor_handle: "pcas-key-a",
+      status: "active",
+      rewrap_complete: false,
+      updated_at: "2026-10-15T00:00:00Z",
+    });
+    pcasMock.configureRetirement.mockResolvedValue({
+      identity_id: "spiffe://example.test/workload/api",
+      predecessor_epoch: 0,
+      threshold: 1,
+      roster: [{ relying_party: "rp-a", public_der: "AQID" }],
+      validity_window_seconds: 7200,
+      predecessor_handle: "pcas-key-a",
+      status: "active",
+      rewrap_complete: false,
+      updated_at: "2026-10-15T00:01:00Z",
+    });
+    render(
+      <IntlProvider>
+        <PCASSuccessionWorkflow />
+      </IntlProvider>,
+    );
+    await user.type(screen.getByLabelText("Stable identity ID"), "spiffe://example.test/workload/api");
+    await user.click(screen.getByRole("button", { name: "Read retirement policy" }));
+    await waitFor(() => expect(pcasMock.retirementStatus).toHaveBeenCalledWith("spiffe://example.test/workload/api", 0));
+    expect(screen.getByText(/Rewrap complete: No/)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Acknowledgment window (seconds)"));
+    await user.type(screen.getByLabelText("Acknowledgment window (seconds)"), "7200");
+    await user.click(screen.getByRole("button", { name: "Review retirement policy" }));
+    expect(screen.getByRole("button", { name: "Save reviewed retirement policy" })).toBeInTheDocument();
+    expect(screen.getByText("rp-a: AQID")).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Public key DER (base64) 1"));
+    await user.type(screen.getByLabelText("Public key DER (base64) 1"), "AQIE");
+    expect(screen.queryByRole("button", { name: "Save reviewed retirement policy" })).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Public key DER (base64) 1"));
+    await user.type(screen.getByLabelText("Public key DER (base64) 1"), "AQID");
+    await user.click(screen.getByRole("button", { name: "Review retirement policy" }));
+    await user.click(screen.getByRole("button", { name: "Save reviewed retirement policy" }));
+    await waitFor(() =>
+      expect(pcasMock.configureRetirement).toHaveBeenCalledWith({
+        identity_id: "spiffe://example.test/workload/api",
+        predecessor_epoch: 0,
+        threshold: 1,
+        roster: [{ relying_party: "rp-a", public_der: "AQID" }],
+        validity_window_seconds: 7200,
+        predecessor_handle: "pcas-key-a",
+      }),
+    );
+    expect(screen.getByText(/Updated at: 2026-10-15T00:01:00Z/)).toBeInTheDocument();
   });
 });

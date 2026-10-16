@@ -83,6 +83,40 @@ or algorithm to recover an error: the anchor is immutable. A previously used
 unscoped signer handle requires an explicit custody migration, as described in
 [PCAS key custody](../pcas-key-custody.md).
 
+## Retiring a predecessor epoch
+
+Before an old signing key can retire, record which relying parties must attest
+that they have advanced. Open **Algorithms and future readiness → Compatibility,
+PQC policy, and upgrade planning → Proof-carrying key succession**. Enter the
+stable identity and predecessor epoch, then read the current policy. The form
+shows the exact relying-party names and public keys, quorum, acknowledgment
+window, optional predecessor signer handle, rewrap state, and last update.
+Compare each public key through a separate trusted channel. Review the exact
+draft before saving it; changing an input cancels that review.
+
+The same operation works through the Core API and CLI. The `public_der` values
+are base64-encoded DER public keys, not private keys. Keep the policy JSON in a
+protected operator file and do not place private key material in it.
+
+```bash
+trstctl pcas retirement show \
+  --identity_id spiffe://example.test/workload/api \
+  --predecessor_epoch 0
+trstctl pcas retirement policy set -f /secure/retirement-policy.json
+trstctl pcas retirement show \
+  --identity_id spiffe://example.test/workload/api \
+  --predecessor_epoch 0
+```
+
+`retirement-policy.json` contains `identity_id`, `predecessor_epoch`, a positive
+`threshold`, a nonempty `roster` of distinct `relying_party` and `public_der`
+entries, `validity_window_seconds`, and optionally `predecessor_handle`.
+The server rejects duplicate relying parties, invalid public keys, or a
+threshold above the roster size. A successful policy read means the quorum is
+configured; `rewrap_complete` and the signed acknowledgment evidence must
+also be checked before treating retirement as safe. Do not infer that a
+relying party changed trust stores just because it appears in the roster.
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the

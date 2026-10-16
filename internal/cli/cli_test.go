@@ -392,6 +392,32 @@ func TestCARetirementCommandRequiresForceAndCarriesExactCommandAUD42(t *testing.
 	}
 }
 
+func TestPCASRetirementCommandsBindIdentityAndPolicy(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK,
+		`{"identity_id":"spiffe://qa.local/workload","predecessor_epoch":1,"threshold":1,"roster":[],"status":"active"}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: "pcas-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, _, stderr := run(t, []string{"pcas", "retirement", "show", "--identity_id", "spiffe://qa.local/workload", "--predecessor_epoch", "1"}, env, "")
+	if code != 0 || captured.Method != http.MethodGet || captured.Path != "/api/v1/pcas/retirement" ||
+		captured.Query != "identity_id=spiffe%3A%2F%2Fqa.local%2Fworkload&predecessor_epoch=1" {
+		t.Fatalf("retirement read = exit %d, %s %s?%s, stderr=%q", code, captured.Method, captured.Path, captured.Query, stderr)
+	}
+	code, _, stderr = run(t, []string{"pcas", "retirement", "show"}, env, "")
+	if code == 0 || !strings.Contains(stderr, "identity_id") {
+		t.Fatalf("missing identity_id = exit %d stderr=%q", code, stderr)
+	}
+
+	body := `{"identity_id":"spiffe://qa.local/workload","predecessor_epoch":1,"threshold":1,"roster":[{"relying_party":"rp-a","public_der":"AQID"}]}`
+	code, _, stderr = run(t, []string{"pcas", "retirement", "policy", "set", "-f", "-"}, env, body)
+	if code != 0 || captured.Method != http.MethodPost || captured.Path != "/api/v1/pcas/retirement/policies" ||
+		captured.Header.Get("Idempotency-Key") == "" || !sameJSON(captured.Body, []byte(body)) {
+		t.Fatalf("retirement policy write = exit %d, %s %s key=%q body=%s stderr=%q", code,
+			captured.Method, captured.Path, captured.Header.Get("Idempotency-Key"), captured.Body, stderr)
+	}
+}
+
 // capture records the request the CLI sent.
 type capture struct {
 	Method  string

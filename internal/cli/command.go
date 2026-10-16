@@ -46,6 +46,9 @@ type Command struct {
 // offboard, or otherwise run irreversible/destructive work and therefore needs
 // an explicit --force acknowledgment in the CLI.
 func (c Command) Destructive() bool {
+	if c.Method == "GET" {
+		return false
+	}
 	if c.Method == "DELETE" {
 		return true
 	}
@@ -71,6 +74,14 @@ func (c Command) Destructive() bool {
 		"revoke",
 		"zeroize",
 	} {
+		if marker == "retire" {
+			for _, part := range c.Name {
+				if part == "retire" {
+					return true
+				}
+			}
+			continue
+		}
 		if strings.Contains(name, marker) {
 			return true
 		}

@@ -32,6 +32,8 @@ var licensedRouteCommands = []Command{
 	{Name: []string{"pcas", "succession", "request"}, Method: "POST", Path: "/api/v1/pcas/successions", Body: bodyFile, Summary: "Queue an algorithm succession after genesis is delivered"},
 	{Name: []string{"pcas", "chain", "get"}, Method: "GET", Path: "/api/v1/pcas/chain", Query: []string{"identity_id"}, Summary: "Read the signed genesis and successor chain"},
 	{Name: []string{"pcas", "checkpoints", "get"}, Method: "GET", Path: "/api/v1/pcas/checkpoints", Query: []string{"identity_id"}, Summary: "Read the latest signed epoch checkpoint and its historical signer public key"},
+	{Name: []string{"pcas", "retirement", "show"}, Method: "GET", Path: "/api/v1/pcas/retirement", Query: []string{"identity_id", "predecessor_epoch"}, RequiredQuery: []string{"identity_id"}, Summary: "Read the predecessor epoch's relying-party acknowledgment policy and rewrap status"},
+	{Name: []string{"pcas", "retirement", "policy", "set"}, Method: "POST", Path: "/api/v1/pcas/retirement/policies", Body: bodyFile, Summary: "Set the relying-party acknowledgment quorum for predecessor-key retirement"},
 	{Name: []string{"ca", "keys", "retire"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", Body: bodyFile, Summary: "Irreversibly retire a superseded CA key through the isolated signer and retain its signed destruction record"},
 	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
 	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a Core PQC migration run over selected CBOM assets"},

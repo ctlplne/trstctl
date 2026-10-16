@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { pcasApi, type PCASAcceptedRequest, type PCASChain, type PCASCheckpoint, type PCASRequestStatus } from "@/lib/pcasApi";
+import { PCASRetirementPanel } from "@/pages/posture/PCASRetirementPanel";
 
 const genesisAlgorithms = ["ECDSA-P256", "ECDSA-P384", "Ed25519"];
 const successorAlgorithms = ["ECDSA-P384", "ECDSA-P521", "ML-DSA-65"];
@@ -343,6 +344,7 @@ export function PCASSuccessionWorkflow() {
           ) : null}
         </div>
       ) : null}
+      <PCASRetirementPanel key={identityID.trim()} identityID={identityID.trim()} />
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
