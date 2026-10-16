@@ -66,7 +66,8 @@ The **Install an agent** step polls for the agent to appear. If it does not:
 The event log is the source notebook; PostgreSQL read tables are its lookup
 index. A healthy database and NATS connection are not enough if that index stopped
 at one immutable event, so `/readyz` returns 503 while the persisted failed
-sequence is still ahead of the projection checkpoint.
+sequence is unresolved. The JetStream consumer can lag behind the relational
+checkpoint when a live request projected an event before the consumer ACKed it.
 
 1. Read `/readyz` and note the safe failed sequence and lag. The endpoint does not
    expose the stored SQL error or event payload.

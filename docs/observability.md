@@ -21,8 +21,8 @@ checks the event stream's durability: fewer JetStream replicas than
 configured. Projection readiness reads the persisted projection checkpoint. If
 the tail cannot apply a sequence, it records that failed sequence before it
 retries and `/readyz` returns 503. A normal short-lived positive lag does not flap
-readiness; only a recorded failure that still lies ahead of the applied
-checkpoint degrades it. The response contains safe sequence and lag numbers, not
+readiness; an unresolved failed consumer sequence degrades it even when live
+command projection has moved the relational checkpoint ahead. The response contains safe sequence and lag numbers, not
 the stored database error or event payload. Set `TRSTCTL_CA_FILE` to the inspected
 public evaluation CA or the operator-managed production CA before probing HTTPS;
 do not train monitors to disable certificate verification.

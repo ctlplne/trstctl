@@ -608,13 +608,13 @@ not this file.
 | `internal/store/projection.go:759` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:918` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:932` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:162` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
-| `internal/store/projection_checkpoint.go:218` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:244` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:297` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:306` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:328` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:335` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:163` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
+| `internal/store/projection_checkpoint.go:219` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:245` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:298` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:307` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:329` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:336` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/secret_rotation_schedule.go:235` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:248` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:275` | checked against MaxInt64 above (CWE-190). |

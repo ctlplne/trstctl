@@ -145,9 +145,11 @@ func (s *Store) ProjectionTailHealth(ctx context.Context) (ProjectionTailHealth,
 }
 
 // RecordProjectionTailFailure persists the earliest unresolved event sequence
-// before TailWorker returns. A stale replica cannot paint a sequence at or below
-// the already-applied checkpoint as failed, and a later failure cannot hide an
-// earlier poison that still blocks the ordered stream.
+// before TailWorker returns. The shared JetStream consumer can lag behind this
+// relational checkpoint when a live command projected an event before its ACK,
+// so even an older sequence is an unresolved failure until that consumer replays
+// it. Once a failure is recorded, another sequence cannot replace it: with
+// MaxAckPending=1 a second sequence is a stale or later replica observation.
 func (s *Store) RecordProjectionTailFailure(ctx context.Context, seq uint64, cause error) error {
 	if seq == 0 {
 		return errors.New("store: projection tail failure sequence must be positive")
@@ -157,8 +159,7 @@ func (s *Store) RecordProjectionTailFailure(ctx context.Context, seq uint64, cau
 		`UPDATE projection_checkpoint
 		    SET failed_seq = $1, last_error = $2, failed_at = now(), updated_at = now()
 		  WHERE id = 1
-		    AND applied_seq < $1
-		    AND (failed_seq IS NULL OR failed_seq >= $1)`,
+		    AND (failed_seq IS NULL OR failed_seq = $1)`,
 		int64(seq), detail) // #nosec G115 -- event sequence fits the PostgreSQL bigint used by the event log (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: record projection tail failure at seq %d: %w", seq, err)
@@ -203,15 +204,15 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 		`UPDATE projection_checkpoint
 		    SET applied_seq = GREATEST(applied_seq, $1),
 		        failed_seq = CASE
-		            WHEN failed_seq <= GREATEST(applied_seq, $1) THEN NULL
+		            WHEN failed_seq <= $1 THEN NULL
 		            ELSE failed_seq
 		        END,
 		        last_error = CASE
-		            WHEN failed_seq <= GREATEST(applied_seq, $1) THEN NULL
+		            WHEN failed_seq <= $1 THEN NULL
 		            ELSE last_error
 		        END,
 		        failed_at = CASE
-		            WHEN failed_seq <= GREATEST(applied_seq, $1) THEN NULL
+		            WHEN failed_seq <= $1 THEN NULL
 		            ELSE failed_at
 		        END,
 		        updated_at = now()

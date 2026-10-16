@@ -144,6 +144,67 @@ func TestProjectionTailFailureDegradesServedReadinessUntilCheckpointCoversIt(t *
 	}
 }
 
+// Inline command projection can move the relational checkpoint beyond a
+// JetStream consumer that still has an older message to ACK. An apply failure
+// for that older message must remain visible until the consumer replays it.
+func TestProjectionTailFailureBehindReadModelCheckpointDegradesReadiness(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "projection-behind-checkpoint"}); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	srv, err := Build(ctx, Deps{Store: st, Log: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	older, err := log.Append(ctx, events.Event{Type: "qa.projection.older", TenantID: tenantID, Data: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer, err := log.Append(ctx, events.Event{Type: "qa.projection.newer", TenantID: tenantID, Data: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AdvanceProjectionCheckpoint(ctx, newer.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordProjectionTailFailure(ctx, older.Sequence, errors.New("retained event cannot be applied")); err != nil {
+		t.Fatal(err)
+	}
+	health, err := st.ProjectionTailHealth(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.AppliedSequence != newer.Sequence || health.FailedSequence != older.Sequence {
+		t.Fatalf("checkpoint ahead of failed durable consumer = %+v, want applied=%d failed=%d", health, newer.Sequence, older.Sequence)
+	}
+	code, checks := projectionReadiness(t, srv.Handler())
+	if code != http.StatusServiceUnavailable || !strings.Contains(checks["projection"], fmt.Sprintf("failed_sequence=%d", older.Sequence)) {
+		t.Fatalf("readiness during older consumer failure = %d, %+v", code, checks)
+	}
+	// The tail has now replayed that exact old message. Advancing with its
+	// sequence clears the marker even though the relational checkpoint was
+	// already ahead; a mere newer checkpoint never counted as this ACK.
+	if err := st.AdvanceProjectionCheckpoint(ctx, older.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	health, err = st.ProjectionTailHealth(ctx)
+	if err != nil || health.FailedSequence != 0 || health.AppliedSequence != newer.Sequence {
+		t.Fatalf("older consumer recovery = %+v, %v", health, err)
+	}
+	code, checks = projectionReadiness(t, srv.Handler())
+	if code != http.StatusOK || checks["projection"] != "ok" {
+		t.Fatalf("readiness after exact replay = %d, %+v", code, checks)
+	}
+}
+
 func projectionReadiness(t *testing.T, handler http.Handler) (int, map[string]string) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

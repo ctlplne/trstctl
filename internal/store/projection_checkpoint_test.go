@@ -192,11 +192,10 @@ func TestProjectionCheckpointReplacementResetsBreakglassReceiptCursorsAtomically
 	}
 }
 
-// TestProjectionTailHealthOldWriterAdvanceNormalizesFailure proves a migrated
-// database remains safe while an older process is still running. That process
-// knows only applied_seq and issues raw SQL; PostgreSQL itself must retain a poison
-// below the cursor and clear it when that old writer advances through the poison.
-func TestProjectionTailHealthOldWriterAdvanceNormalizesFailure(t *testing.T) {
+// An old writer knows only applied_seq. Its raw update cannot prove that the
+// shared JetStream consumer ACKed a failed message, even when it raises the
+// relational checkpoint past the failure. New replay must clear it explicitly.
+func TestProjectionTailHealthOldWriterCannotClearConsumerFailure(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	resetProjectionTailHealthFixture(t, s)
@@ -230,9 +229,16 @@ func TestProjectionTailHealthOldWriterAdvanceNormalizesFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if health.AppliedSequence != 8 || health.FailedSequence != 0 ||
-		health.LastError != "" || health.FailedAt != nil {
-		t.Fatalf("database left applied>=failed stale after old-writer advance: %+v", health)
+	if health.AppliedSequence != 8 || health.FailedSequence != 8 ||
+		health.LastError == "" || health.FailedAt == nil {
+		t.Fatalf("old writer erased unresolved consumer failure: %+v", health)
+	}
+	if err := s.AdvanceProjectionCheckpoint(ctx, 8); err != nil {
+		t.Fatal(err)
+	}
+	health, err = s.ProjectionTailHealth(ctx)
+	if err != nil || health.FailedSequence != 0 || health.LastError != "" || health.FailedAt != nil {
+		t.Fatalf("exact replay did not clear consumer failure: %+v, %v", health, err)
 	}
 }
 
