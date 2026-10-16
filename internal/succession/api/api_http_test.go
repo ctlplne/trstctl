@@ -280,7 +280,45 @@ func (f *fakeService) ListMisissuance(context.Context, string) (succapi.Misissua
 	return succapi.MisissuanceListResponse{Findings: []succapi.MisissuanceResponse{}, Count: 0}, nil
 }
 
-var pcasRole = authz.Role{Name: "pcas-operator", Permissions: []authz.Permission{authz.CertsWrite, authz.CertsRead, authz.KeysWrite}}
+var pcasRole = authz.Role{Name: "pcas-operator", Permissions: []authz.Permission{authz.CertsWrite, authz.CertsIssue, authz.CertsRead, authz.KeysWrite}}
+
+func TestPCASManagedLeafRoutesRequireCertsIssue(t *testing.T) {
+	for _, route := range succapi.Routes(&fakeService{}) {
+		if route.OperationID != "issuePCASIssuerLeaf" && route.OperationID != "issuePCASStapledLeaf" {
+			continue
+		}
+		if route.Permission != authz.CertsIssue {
+			t.Errorf("%s permission = %s, want certs:issue like the managed CA leaf route", route.OperationID, route.Permission)
+		}
+	}
+}
+
+func TestPCASManagedLeafRoutesDenyCertsWriteOnlyPrincipal(t *testing.T) {
+	cs := openStore(t)
+	writer := authz.Role{Name: "pcas-writer-only", Permissions: []authz.Permission{authz.CertsWrite}}
+	issuer := authz.Role{Name: "pcas-issuer", Permissions: []authz.Permission{authz.CertsIssue}}
+	principal := authz.Principal{TenantID: tenantA, Subject: "writer", Grants: []authz.Grant{{Role: writer, Scope: authz.Scope{TenantID: tenantA}}}}
+	a := api.New(cs, orchestrator.NewIdempotency(cs), nil,
+		api.WithLicensedRoutes(succapi.Routes(&fakeService{})...), api.WithRoles(writer, issuer),
+		api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }))
+	for _, path := range []string{"/api/v1/pcas/issuers/leaf", "/api/v1/pcas/staple/leaf"} {
+		request := func(key string) *httptest.ResponseRecorder {
+			r := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"issuer_id":"qa","csr_der":"Y3Ny"}`))
+			r.Header.Set("Idempotency-Key", key)
+			rr := httptest.NewRecorder()
+			a.ServeHTTP(rr, r)
+			return rr
+		}
+		if got := request("writer-" + path); got.Code != http.StatusForbidden {
+			t.Fatalf("%s writer-only response = %d: %s", path, got.Code, got.Body.String())
+		}
+		principal = authz.Principal{TenantID: tenantA, Subject: "issuer", Grants: []authz.Grant{{Role: issuer, Scope: authz.Scope{TenantID: tenantA}}}}
+		if got := request("issuer-" + path); got.Code != http.StatusCreated {
+			t.Fatalf("%s issuer response = %d: %s", path, got.Code, got.Body.String())
+		}
+		principal = authz.Principal{TenantID: tenantA, Subject: "writer", Grants: []authz.Grant{{Role: writer, Scope: authz.Scope{TenantID: tenantA}}}}
+	}
+}
 
 func newAPI(t *testing.T, svc succapi.Service) *api.API {
 	t.Helper()

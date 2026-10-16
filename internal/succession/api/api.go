@@ -485,14 +485,14 @@ func Routes(svc Service) []api.LicensedRoute {
 			Summary:       "Issue a real X.509 leaf carrying the issuer PCAS epoch tuple",
 			Handler:       func(a *api.API) http.HandlerFunc { return issueLeafHandler(a, svc) },
 			RequestSchema: "PCASIssueLeafRequest", ResponseSchema: "PCASIssuedLeaf",
-			SuccessCode: "201", Mutation: true, Permission: authz.CertsWrite,
+			SuccessCode: "201", Mutation: true, Permission: authz.CertsIssue,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/staple/leaf", OperationID: "issuePCASStapledLeaf",
 			Summary:       "Issue a real X.509 leaf carrying a PCAS succession attachment",
 			Handler:       func(a *api.API) http.HandlerFunc { return issueStapledLeafHandler(a, svc) },
 			RequestSchema: "PCASIssueStapledLeafRequest", ResponseSchema: "PCASIssuedLeaf",
-			SuccessCode: "201", Mutation: true, Permission: authz.CertsWrite,
+			SuccessCode: "201", Mutation: true, Permission: authz.CertsIssue,
 		},
 		{
 			Method: "GET", Path: "/api/v1/pcas/rewrap", OperationID: "getPCASRewrapStatus",

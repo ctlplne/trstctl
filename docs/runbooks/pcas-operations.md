@@ -209,6 +209,8 @@ approval step and must not claim that such a CA is ready. Use a managed CA key
 whose policy permits direct CA signing for these routes. The refusal is a 409
 at registration; older registrations of a protected key are refused at leaf
 issuance too. The signer enforces the token requirement independently.
+Both leaf routes require `certs:issue`, the same permission as the managed CA
+hierarchy's leaf-issue route. `certs:write` alone cannot mint a certificate.
 Leaf issuance rechecks the managed CA's active state and the PCAS epoch; a
 superseded authority or a newer succession stops issuance from the stale issuer
 registration until the operator binds the active authority and epoch.
