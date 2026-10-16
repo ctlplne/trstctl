@@ -615,12 +615,20 @@ func (st *int20Stack) recoveryMint(t *testing.T) {
 
 func (st *int20Stack) federationImportAndQuarantine(t *testing.T) {
 	t.Helper()
-	localHandle := "int20-federation-local-authority"
-	localAuthority, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, localHandle)
-	if err != nil {
-		t.Fatalf("local federation authority: %v", err)
+	const localDeploymentID = "spiffe://int20.example/federation-authority"
+	if _, err := st.svc.RegisterGenesis(st.ctx, st.tenantID, succapi.GenesisRegistrationRequest{
+		IdentityID: localDeploymentID, DeploymentScope: "spiffe://int20.example",
+		Algorithm: string(crypto.ECDSAP256),
+	}); err != nil {
+		t.Fatalf("register tenant federation authority genesis: %v", err)
 	}
-	_ = localAuthority
+	st.dispatchAll(t)
+	const otherTenant = "22222222-2222-4222-8222-222222222222"
+	foreignHandle := succession.TenantKeyHandle(otherTenant, "spiffe://other.example/federation-authority", 0)
+	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, foreignHandle); err != nil {
+		t.Fatalf("provision another tenant's local authority key: %v", err)
+	}
+	localHandle := succession.TenantKeyHandle(st.tenantID, localDeploymentID, 0)
 	foreign, err := succession.BuildSampleChain(crypto.NewSoftwareBackend(), "spiffe://foreign.example", "spiffe://foreign.example/workload", "22222222-2222-2222-2222-222222222222")
 	if err != nil {
 		t.Fatalf("foreign sample chain: %v", err)
@@ -631,7 +639,15 @@ func (st *int20Stack) federationImportAndQuarantine(t *testing.T) {
 		foreignChain = append(foreignChain, mustJSON(t, rec))
 	}
 	if _, err := st.svc.RequestFederationImport(st.ctx, st.tenantID, succapi.FederationImportRequest{
-		ForeignDeploymentID: foreign.Genesis.DeploymentScope, LocalDeploymentID: "spiffe://int20.example",
+		ForeignDeploymentID: foreign.Genesis.DeploymentScope, LocalDeploymentID: localDeploymentID,
+		LocalAuthorityHandle: foreignHandle, IdentityID: foreign.Genesis.IdentityID,
+		ForeignTrustRootDER: foreign.TrustRootPubDER, LocalBaseEpoch: 100,
+		ForeignGenesis: foreignGenesis, ForeignChain: foreignChain,
+	}); err == nil {
+		t.Fatal("federation import accepted another tenant's signer-held authority handle")
+	}
+	if _, err := st.svc.RequestFederationImport(st.ctx, st.tenantID, succapi.FederationImportRequest{
+		ForeignDeploymentID: foreign.Genesis.DeploymentScope, LocalDeploymentID: localDeploymentID,
 		LocalAuthorityHandle: localHandle, IdentityID: foreign.Genesis.IdentityID,
 		ForeignTrustRootDER: foreign.TrustRootPubDER, LocalBaseEpoch: 100,
 		ForeignGenesis: foreignGenesis, ForeignChain: foreignChain,
@@ -684,7 +700,7 @@ func (st *int20Stack) federationImportAndQuarantine(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := st.svc.RequestFederationImport(st.ctx, st.tenantID, succapi.FederationImportRequest{
-		ForeignDeploymentID: "foreign-bad", LocalDeploymentID: "spiffe://int20.example",
+		ForeignDeploymentID: "foreign-bad", LocalDeploymentID: localDeploymentID,
 		LocalAuthorityHandle: localHandle, IdentityID: "foreign-bad/id",
 		ForeignTrustRootDER: badRoot.Public().DER, LocalBaseEpoch: 100,
 		ForeignGenesis: foreignGenesis, ForeignChain: foreignChain,

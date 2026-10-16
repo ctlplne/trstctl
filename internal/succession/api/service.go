@@ -456,6 +456,20 @@ func (s *service) RequestFederationImport(ctx context.Context, tenantID string, 
 	if err := validateForeignTrustRoot(req.ForeignTrustRootDER); err != nil {
 		return AsyncRequestResponse{}, err
 	}
+	localGenesis, found, err := s.repo.GetGenesis(ctx, tenantID, req.LocalDeploymentID)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if !found || localGenesis.Genesis.TenantID != tenantID ||
+		localGenesis.Genesis.IdentityID != req.LocalDeploymentID {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict, "local federation authority has no tenant-bound PCAS genesis")
+	}
+	if err := succession.VerifyGenesis(localGenesis.TrustRootPublicDER, localGenesis.Genesis); err != nil {
+		return AsyncRequestResponse{}, fmt.Errorf("pcas federation: local authority genesis is invalid: %w", err)
+	}
+	if req.LocalAuthorityHandle != succession.TenantKeyHandle(tenantID, req.LocalDeploymentID, 0) {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict, "local_authority_handle does not name this tenant's registered federation authority")
+	}
 	// A queued command has not verified the foreign chain. Only the worker may
 	// publish a bridge after it has produced a signed import proof.
 	return s.enqueue(ctx, tenantID, topicOr(s.federationTopic, FederationImportDestination), req.ForeignDeploymentID, req)

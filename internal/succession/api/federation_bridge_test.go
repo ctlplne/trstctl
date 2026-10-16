@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/succession"
 	succapi "trstctl.com/trstctl/internal/succession/api"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -46,6 +47,16 @@ func TestFederationBridge_UnverifiedImportNotServed(t *testing.T) {
 	if err := cs.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	local, err := succession.BuildSampleChain(crypto.NewSoftwareBackend(), "deploy-east", "deploy-east", tenantA)
+	if err != nil {
+		t.Fatalf("local federation genesis fixture: %v", err)
+	}
+	if err := pcasstore.New(cs).PutGenesis(ctx, tenantA, pcasstore.GenesisAnchor{
+		Genesis: local.Genesis, TrustRootPublicDER: local.TrustRootPubDER,
+		EventID: "test-local-federation-genesis", RequestID: "test-local-federation-genesis",
+	}); err != nil {
+		t.Fatalf("store local federation genesis fixture: %v", err)
+	}
 
 	factory := succapi.NewAPIOptionsFactory()
 	licensed, err := factory(editionseam.LicensedAPIOptionsDeps{Store: cs, Outbox: orchestrator.NewOutbox(cs)})
@@ -71,7 +82,7 @@ func TestFederationBridge_UnverifiedImportNotServed(t *testing.T) {
 	body, err := json.Marshal(map[string]any{
 		"foreign_deployment_id":  "deploy-west",
 		"local_deployment_id":    "deploy-east",
-		"local_authority_handle": "auth-1",
+		"local_authority_handle": succession.TenantKeyHandle(tenantA, "deploy-east", 0),
 		"identity_id":            "spiffe://d/id",
 		"foreign_trust_root_der": base64.StdEncoding.EncodeToString(trustRoot),
 		"foreign_genesis":        base64.StdEncoding.EncodeToString([]byte("genesis-record")),

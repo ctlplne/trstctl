@@ -312,6 +312,20 @@ func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID str
 	if env.RequestID == "" {
 		return errors.New("pcas federation: request id is required")
 	}
+	if p.LocalAuthorityHandle != succession.TenantKeyHandle(tenantID, p.LocalDeploymentID, 0) {
+		return errors.New("pcas federation: local authority handle is not tenant-bound")
+	}
+	localGenesis, found, err := w.repo.GetGenesis(ctx, tenantID, p.LocalDeploymentID)
+	if err != nil {
+		return err
+	}
+	if !found || localGenesis.Genesis.TenantID != tenantID ||
+		localGenesis.Genesis.IdentityID != p.LocalDeploymentID {
+		return errors.New("pcas federation: local authority has no tenant-bound genesis")
+	}
+	if err := succession.VerifyGenesis(localGenesis.TrustRootPublicDER, localGenesis.Genesis); err != nil {
+		return fmt.Errorf("pcas federation: local authority genesis: %w", err)
+	}
 	canonical, err := json.Marshal(p)
 	if err != nil {
 		return err
@@ -341,6 +355,9 @@ func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID str
 	localRemote, err := w.kem.SignerForHandle(ctx, p.LocalAuthorityHandle)
 	if err != nil {
 		return fmt.Errorf("pcas federation: bind local authority handle: %w", err)
+	}
+	if !bytes.Equal(localRemote.Public().DER, localGenesis.Genesis.PublicKey) {
+		return errors.New("pcas federation: isolated local authority key differs from tenant genesis")
 	}
 	localAuthority := crypto.SignerFromDigestSigner(localRemote)
 	var genesis succession.GenesisRecord

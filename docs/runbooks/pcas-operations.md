@@ -214,7 +214,11 @@ Retry an uncertain registration response with the same `Idempotency-Key`.
 
 `POST /api/v1/pcas/federation/imports` queues verification of a foreign
 genesis and succession chain. The `202` response means only that the import
-was queued. `GET /api/v1/pcas/federation/bridges` must show a bridge only after
+was queued. Before import, register a tenant PCAS genesis whose `identity_id`
+equals the request's `local_deployment_id`; use its epoch-zero signer handle as
+`local_authority_handle`. A handle from another tenant or an unregistered local
+authority is refused, and the worker rechecks the exact public key against the
+tenant genesis before signing. `GET /api/v1/pcas/federation/bridges` shows a bridge only after
 the worker verifies the foreign trust root and chain and signs the local bridge
 record. The foreign deployment and identity in the request must match the
 signed foreign genesis. The verified bridge is then appended as a tenant-bound
