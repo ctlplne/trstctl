@@ -565,8 +565,8 @@ not this file.
 | `internal/store/breakglass_issue_receipt.go:35` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:93` | MaxInt64 bound above rejects narrowing (CWE-190). |
 | `internal/store/breakglass_issue_receipt.go:136` | MaxInt64 bound above rejects narrowing (CWE-190). |
-| `internal/store/ca.go:509` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/ca.go:589` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:525` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:605` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/compliance_report_run.go:280` | event sequence is a positive PostgreSQL bigint. |
 | `internal/store/compliance_report_run_lock.go:33` | advisory-lock keys intentionally use all 64 hash bits, including the sign bit. |
 | `internal/store/connector_lifecycle.go:463` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
@@ -919,7 +919,7 @@ not this file.
 | `internal/signing/supervisor.go:235` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
 | `internal/succession/conformance/edition_test.go:44` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/succession/conformance/edition_test.go:128` | fixed argv, no user input (CWE-78) |
-| `internal/succession/conformance/int20_fullstack_test.go:788` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
+| `internal/succession/conformance/int20_fullstack_test.go:816` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
 | `internal/testutil/openssltest/openssltest.go:97` | test-support helper running the system openssl found above; not linked into served binaries (CWE-78) |
 | `internal/tsa/http_test.go:48` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/tsa/http_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |

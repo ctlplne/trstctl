@@ -97,6 +97,22 @@ func (s *Store) GetCAAuthority(ctx context.Context, tenantID, id string) (CAAuth
 	return c, err
 }
 
+// GetCAAuthorityBySignerHandle binds a public signer handle to one tenant's
+// managed CA. The tenant/handle lookup uses the unique partial index created
+// with signer-backed authorities; issuer registration must not search all CAs.
+func (s *Store) GetCAAuthorityBySignerHandle(ctx context.Context, tenantID, handle string) (CAAuthority, error) {
+	var c CAAuthority
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanCAAuthority(tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len,
+			        permitted_dns_names, ekus, replaces_id::text, created_at
+			   FROM ca_authorities
+			  WHERE tenant_id = $1 AND signer_handle = $2`, tenantID, handle), &c)
+	})
+	return c, err
+}
+
 // CAAuthorityCertificateTx returns only the public certificate needed to
 // verify a managed leaf event against its claimed issuing authority. It uses
 // the caller's tenant transaction and does not lock the authority row, keeping

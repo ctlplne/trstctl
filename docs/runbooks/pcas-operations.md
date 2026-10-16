@@ -191,6 +191,20 @@ stale authority. Inspect its request status and independently verify the resulti
 recovery record before trusting a successor. A queued response alone is not
 proof of minting, signer custody or relying-party acceptance.
 
+## PCAS issuer registration
+
+Before `POST /api/v1/pcas/issuers`, complete the managed-CA ceremony and
+confirm the CA authority is active in this tenant. Use that authority's exact
+signer handle and public CA certificate. The named PCAS identity must have a
+verified tenant-bound genesis, and `current_epoch` must equal its recorded
+algorithm epoch (zero before its first succession). Registration checks the
+tenant-owned CA row, the isolated signer's live key, and the exact certificate
+public key before storing an issuer. A foreign, superseded, absent or mismatched
+CA returns a refusal at registration instead of failing during leaf issuance.
+Leaf issuance rechecks the managed CA's active state and the PCAS epoch; a
+superseded authority or a newer succession stops issuance from the stale issuer
+registration until the operator binds the active authority and epoch.
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the

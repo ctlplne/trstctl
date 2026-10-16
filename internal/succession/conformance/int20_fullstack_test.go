@@ -444,6 +444,34 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 	if err != nil {
 		t.Fatalf("self-sign CA: %v", err)
 	}
+	if _, err := st.store.InsertCAAuthority(st.ctx, corestore.CAAuthority{
+		TenantID: st.tenantID, CommonName: "trstctl INT20 PCAS CA", Kind: "root", Serial: "int20-issuer-ca-serial",
+		CertificatePEM: string(crypto.EncodeCertificatePEM(caDER)), SignerHandle: caHandle,
+	}); err != nil {
+		t.Fatalf("seed tenant-bound CA authority: %v", err)
+	}
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+		IssuerID: "int20-unobserved-epoch", IdentityID: checkpointIdentity, CurrentEpoch: 99,
+		CAKeyHandle: caHandle, CACertDER: caDER,
+	}); err == nil {
+		t.Fatal("issuer registration accepted an epoch absent from the PCAS chain")
+	}
+	otherCert, err := crypto.SelfSignedCACert(ca, "different certificate for same key", time.Hour)
+	if err != nil {
+		t.Fatalf("make mismatched CA certificate: %v", err)
+	}
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+		IssuerID: "int20-wrong-ca-certificate", IdentityID: checkpointIdentity, CurrentEpoch: 1,
+		CAKeyHandle: caHandle, CACertDER: otherCert,
+	}); err == nil {
+		t.Fatal("issuer registration accepted a CA certificate outside its tenant authority row")
+	}
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, "22222222-2222-4222-8222-222222222222", succapi.IssuerAuthorityRequest{
+		IssuerID: "int20-other-tenant", IdentityID: checkpointIdentity, CurrentEpoch: 1,
+		CAKeyHandle: caHandle, CACertDER: caDER,
+	}); err == nil {
+		t.Fatal("issuer registration accepted another tenant's identity and CA handle")
+	}
 	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
 		IssuerID: "int20-ca", IdentityID: checkpointIdentity, CurrentEpoch: 1,
 		CAKeyHandle: caHandle, CACertDER: caDER,

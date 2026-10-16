@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -32,6 +33,70 @@ func openStorePCAS(t *testing.T) *corestore.Store {
 		t.Fatalf("migrate: %v", err)
 	}
 	return cs
+}
+
+func TestService_RegisterIssuerRefusesUnavailableCustodyBeforePersist(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer signer.Destroy()
+	caDER, err := crypto.SelfSignedCACert(signer, "qa issuer", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := succapi.NewService(cs, nil, nil)
+	const issuerID = "qa-unbound-issuer"
+	if _, err := cs.InsertCAAuthority(ctx, corestore.CAAuthority{
+		TenantID: tenantA, CommonName: "qa issuer", Kind: "root", Serial: "qa-issuer-serial",
+		CertificatePEM: string(crypto.EncodeCertificatePEM(caDER)), SignerHandle: "missing-signer-handle",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RegisterIssuerAuthority(ctx, tenantA, succapi.IssuerAuthorityRequest{
+		IssuerID: issuerID, IdentityID: "spiffe://qa.local/unbound-ca", CurrentEpoch: 1,
+		CAKeyHandle: "missing-signer-handle", CACertDER: caDER,
+	}); err == nil {
+		t.Fatal("issuer registration accepted a key handle with no isolated signer custody")
+	}
+	if _, found, err := pcasstore.New(cs).GetIssuerAuthority(ctx, tenantA, issuerID); err != nil || found {
+		t.Fatalf("refused issuer persisted: found=%t err=%v", found, err)
+	}
+}
+
+func TestService_IssuerLeafRefusesSupersededManagedCA(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer signer.Destroy()
+	caDER, err := crypto.SelfSignedCACert(signer, "retired QA CA", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const handle = "qa-superseded-ca-handle"
+	if _, err := cs.InsertCAAuthority(ctx, corestore.CAAuthority{
+		TenantID: tenantA, CommonName: "retired QA CA", Kind: "root", Status: "superseded",
+		Serial: "qa-superseded-serial", CertificatePEM: string(crypto.EncodeCertificatePEM(caDER)),
+		SignerHandle: handle,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const issuerID = "qa-superseded-pcas-issuer"
+	if err := pcasstore.New(cs).UpsertIssuerAuthority(ctx, tenantA, pcasstore.IssuerAuthority{
+		IssuerID: issuerID, IdentityID: "spiffe://qa.local/superseded-ca", CurrentEpoch: 0,
+		CAKeyHandle: handle, CACertDER: caDER,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := succapi.NewService(cs, nil, nil)
+	if _, err := svc.IssueIssuerLeaf(ctx, tenantA, succapi.IssueLeafRequest{IssuerID: issuerID}); err == nil || !strings.Contains(err.Error(), "not active") {
+		t.Fatalf("superseded CA issuer request = %v, want authority refusal before signer", err)
+	}
 }
 
 // A retirement policy must target the key the tenant's signer actually minted.

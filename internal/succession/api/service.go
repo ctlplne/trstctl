@@ -16,6 +16,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
@@ -508,18 +510,83 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 }
 
 func (s *service) RegisterIssuerAuthority(ctx context.Context, tenantID string, req IssuerAuthorityRequest) (IssuerAuthorityResponse, error) {
+	if s.store == nil || s.repo == nil || s.kem == nil {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS issuer store or isolated signer is unavailable")
+	}
+	if strings.TrimSpace(req.CAKeyHandle) == "" {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusBadRequest, "ca_key_handle is required")
+	}
+	if err := s.verifyIssuerEpoch(ctx, tenantID, req.IdentityID, req.CurrentEpoch); err != nil {
+		return IssuerAuthorityResponse{}, err
+	}
+	if err := s.requireManagedIssuerCA(ctx, tenantID, req.CAKeyHandle, req.CACertDER); err != nil {
+		return IssuerAuthorityResponse{}, err
+	}
+	ca, err := s.caSigner(ctx, req.CAKeyHandle)
+	if status.Code(err) == codes.NotFound {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusConflict, "managed CA key is absent from isolated signer custody")
+	}
+	if status.Code(err) == codes.Unavailable {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "isolated CA signer is unavailable")
+	}
+	if err != nil {
+		return IssuerAuthorityResponse{}, err
+	}
+	if err := crypto.VerifyCertificateSigner(req.CACertDER, ca.Public()); err != nil {
+		return IssuerAuthorityResponse{}, api.ErrWithStatus(http.StatusConflict, fmt.Errorf("issuer certificate and signer custody mismatch: %w", err))
+	}
 	updated := time.Now().UTC()
-	if s.repo != nil {
-		if err := s.repo.UpsertIssuerAuthority(ctx, tenantID, pcasstore.IssuerAuthority{
-			IssuerID: req.IssuerID, IdentityID: req.IdentityID, CurrentEpoch: req.CurrentEpoch, CAKeyHandle: req.CAKeyHandle, CACertDER: req.CACertDER,
-		}); err != nil {
-			return IssuerAuthorityResponse{}, err
-		}
+	if err := s.repo.UpsertIssuerAuthority(ctx, tenantID, pcasstore.IssuerAuthority{
+		IssuerID: req.IssuerID, IdentityID: req.IdentityID, CurrentEpoch: req.CurrentEpoch, CAKeyHandle: req.CAKeyHandle, CACertDER: req.CACertDER,
+	}); err != nil {
+		return IssuerAuthorityResponse{}, err
 	}
 	return IssuerAuthorityResponse{
 		IssuerID: req.IssuerID, IdentityID: req.IdentityID, CurrentEpoch: req.CurrentEpoch,
 		CAKeyHandle: req.CAKeyHandle, Status: "registered", UpdatedAt: updated,
 	}, nil
+}
+
+func (s *service) verifyIssuerEpoch(ctx context.Context, tenantID, identityID string, epoch uint64) error {
+	genesis, found, err := s.repo.GetGenesis(ctx, tenantID, identityID)
+	if err != nil {
+		return err
+	}
+	if !found || genesis.Genesis.TenantID != tenantID || genesis.Genesis.IdentityID != identityID {
+		return api.ErrStatus(http.StatusConflict, "PCAS issuer identity has no tenant-bound genesis")
+	}
+	if err := succession.VerifyGenesis(genesis.TrustRootPublicDER, genesis.Genesis); err != nil {
+		return fmt.Errorf("pcas issuer: stored genesis is invalid: %w", err)
+	}
+	observedEpoch, hasEpoch, err := s.repo.GetHighWater(ctx, tenantID, identityID)
+	if err != nil {
+		return err
+	}
+	if (hasEpoch && observedEpoch != epoch) || (!hasEpoch && epoch != 0) {
+		return api.ErrStatus(http.StatusConflict, "issuer epoch does not match this identity's recorded PCAS epoch")
+	}
+	return nil
+}
+
+func (s *service) requireManagedIssuerCA(ctx context.Context, tenantID, handle string, certDER []byte) error {
+	managedCA, err := s.store.GetCAAuthorityBySignerHandle(ctx, tenantID, handle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return api.ErrStatus(http.StatusConflict, "CA key handle is not a managed authority in this tenant")
+	}
+	if err != nil {
+		return err
+	}
+	if managedCA.Status != "active" {
+		return api.ErrStatus(http.StatusConflict, "CA authority is not active for issuer use")
+	}
+	storedDER, err := crypto.NormalizeCertificateDER([]byte(managedCA.CertificatePEM))
+	if err != nil {
+		return fmt.Errorf("pcas issuer: stored managed CA certificate is invalid: %w", err)
+	}
+	if !bytes.Equal(storedDER, certDER) {
+		return api.ErrStatus(http.StatusConflict, "issuer certificate does not match this tenant's managed CA authority")
+	}
+	return nil
 }
 
 func (s *service) IssueIssuerLeaf(ctx context.Context, tenantID string, req IssueLeafRequest) (IssueLeafResponse, error) {
@@ -843,7 +910,7 @@ func (s *service) enqueue(ctx context.Context, tenantID, destination, target str
 }
 
 func (s *service) issuerAuthority(ctx context.Context, tenantID, issuerID string) (pcasstore.IssuerAuthority, error) {
-	if s.repo == nil {
+	if s.repo == nil || s.store == nil {
 		return pcasstore.IssuerAuthority{}, ErrIssuerNotFound
 	}
 	authority, found, err := s.repo.GetIssuerAuthority(ctx, tenantID, issuerID)
@@ -855,6 +922,12 @@ func (s *service) issuerAuthority(ctx context.Context, tenantID, issuerID string
 	}
 	if authority.CAKeyHandle == "" || len(authority.CACertDER) == 0 {
 		return pcasstore.IssuerAuthority{}, ErrIssuerNotFound
+	}
+	if err := s.requireManagedIssuerCA(ctx, tenantID, authority.CAKeyHandle, authority.CACertDER); err != nil {
+		return pcasstore.IssuerAuthority{}, err
+	}
+	if err := s.verifyIssuerEpoch(ctx, tenantID, authority.IdentityID, authority.CurrentEpoch); err != nil {
+		return pcasstore.IssuerAuthority{}, err
 	}
 	return authority, nil
 }
