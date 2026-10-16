@@ -147,12 +147,17 @@ trstctl pcas retirement show \
 
 `retirement-policy.json` contains `identity_id`, `predecessor_epoch`, a positive
 `threshold`, a nonempty `roster` of distinct `relying_party` and `public_der`
-entries, `validity_window_seconds`, and optionally `predecessor_handle`.
-The server rejects duplicate relying parties, invalid public keys, or a
-threshold above the roster size. A successful policy read means the quorum is
-configured; `rewrap_complete` and the signed acknowledgment evidence must
-also be checked before treating retirement as safe. Do not infer that a
-relying party changed trust stores just because it appears in the roster.
+entries and `validity_window_seconds`. Omit `predecessor_handle`: the server
+derives it from the authenticated tenant, identity and predecessor epoch, and
+rejects a supplied value unless it matches that exact key. The console does
+not ask an operator to copy an internal signer handle. The server rejects
+duplicate relying parties, invalid public keys, or a threshold above the
+roster size. A successful policy read means the quorum is configured. After
+the signed acknowledgment, verify `retired` with the API and CLI, then confirm
+the exact predecessor signer key refuses signing; the status alone is not proof
+of zeroization. `rewrap_complete` is false when there are no rewrap jobs; in
+that case there is no ciphertext to rewrap. Do not infer that a relying party
+changed trust stores just because it appears in the roster.
 
 ## Health Signals
 

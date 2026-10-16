@@ -11,7 +11,21 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/retirement"
+	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
+
+func TestRetirementWorkerUsesTenantBoundPredecessorForLegacyBlankPolicy(t *testing.T) {
+	policy := pcasstore.RetirementPolicy{IdentityID: "spiffe://qa.local/db", PredecessorEpoch: 0}
+	want := succession.TenantKeyHandle("tenant-a", policy.IdentityID, 0)
+	handle, err := retirementPredecessorHandle("tenant-a", policy)
+	if err != nil || handle != want {
+		t.Fatalf("blank legacy policy resolved to %q, err=%v; want %q", handle, err, want)
+	}
+	policy.PredecessorHandle = succession.TenantKeyHandle("tenant-b", policy.IdentityID, 0)
+	if _, err := retirementPredecessorHandle("tenant-a", policy); err == nil {
+		t.Fatal("worker accepted another tenant's predecessor handle")
+	}
+}
 
 func TestRetirementWorkerIndexedEvidenceAcrossColdRestart(t *testing.T) {
 	ctx := t.Context()

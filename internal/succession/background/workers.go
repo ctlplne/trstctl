@@ -358,6 +358,16 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 		}
 		for _, policy := range policies {
 			if alreadyRetired(ledgerEvents, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch) {
+				// A retirement event can commit before the status projection does.
+				// Reconcile signer custody first: status must never get ahead of the
+				// exact tenant-bound predecessor key's destruction.
+				handle, err := retirementPredecessorHandle(tenant.TenantID, policy)
+				if err != nil {
+					return err
+				}
+				if err := client.ZeroizeKey(ctx, handle); err != nil {
+					return fmt.Errorf("pcas retirement worker: reconcile predecessor zeroization: %w", err)
+				}
 				if err := w.repo.MarkRetirementRetired(ctx, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch); err != nil {
 					return err
 				}
@@ -402,9 +412,9 @@ func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.C
 	if err != nil || !found {
 		return err
 	}
-	predecessorHandle := policy.PredecessorHandle
-	if predecessorHandle == "" {
-		predecessorHandle = succession.KeyHandle(policy.IdentityID, policy.PredecessorEpoch)
+	predecessorHandle, err := retirementPredecessorHandle(tenantID, policy)
+	if err != nil {
+		return err
 	}
 	worker := retirement.NewWorker(ctrl)
 	_, err = worker.EvaluateCutover(ctx,
@@ -444,6 +454,14 @@ func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.C
 		return err
 	}
 	return w.repo.MarkRetirementRetired(ctx, tenantID, policy.IdentityID, policy.PredecessorEpoch)
+}
+
+func retirementPredecessorHandle(tenantID string, policy pcasstore.RetirementPolicy) (string, error) {
+	bound := succession.TenantKeyHandle(tenantID, policy.IdentityID, policy.PredecessorEpoch)
+	if policy.PredecessorHandle != "" && policy.PredecessorHandle != bound {
+		return "", fmt.Errorf("pcas retirement worker: predecessor handle is not bound to tenant identity epoch")
+	}
+	return bound, nil
 }
 
 type rpRosterEntry struct {

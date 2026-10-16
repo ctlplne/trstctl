@@ -2440,7 +2440,10 @@ export const messages = {
   "pcas.retirement.savedQuorum": { defaultMessage: "{threshold} of {count} distinct relying parties", description: "PCAS retirement approval quorum." },
   "pcas.retirement.threshold": { defaultMessage: "Required acknowledgments", description: "PCAS retirement quorum threshold." },
   "pcas.retirement.window": { defaultMessage: "Acknowledgment window (seconds)", description: "PCAS retirement proof validity window." },
-  "pcas.retirement.handle": { defaultMessage: "Predecessor signer handle (optional)", description: "PCAS retirement signer key handle." },
+  "pcas.retirement.handle": {
+    defaultMessage: "The predecessor key is selected from this tenant, identity and epoch. You do not need a signer handle.",
+    description: "PCAS retirement tenant-bound signer key selection.",
+  },
   "pcas.retirement.rosterHelp": {
     defaultMessage: "Each relying party needs a unique name and the base64 DER of its public key. The server validates the key before saving.",
     description: "PCAS retirement roster guidance.",

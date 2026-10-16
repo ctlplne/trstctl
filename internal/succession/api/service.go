@@ -534,6 +534,14 @@ func (s *service) ConfigureRetirementPolicy(ctx context.Context, tenantID string
 	if err := validateRetirementPolicyRequest(req); err != nil {
 		return RetirementPolicyResponse{}, err
 	}
+	// Operator-registered PCAS keys live under a tenant-bound signer handle.
+	// Never let a caller redirect a valid RP quorum to another key, and never
+	// leave an empty handle for the worker to interpret as a legacy key.
+	boundHandle := succession.TenantKeyHandle(tenantID, req.IdentityID, req.PredecessorEpoch)
+	if req.PredecessorHandle != "" && req.PredecessorHandle != boundHandle {
+		return RetirementPolicyResponse{}, fmt.Errorf("%w: predecessor_handle does not match the tenant-bound identity epoch", errInvalidRetirementPolicy)
+	}
+	req.PredecessorHandle = boundHandle
 	updated := time.Now().UTC()
 	if s.repo != nil {
 		if err := s.repo.UpsertRetirementPolicy(ctx, tenantID, pcasstore.RetirementPolicy{

@@ -8,7 +8,6 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
   const [epoch, setEpoch] = useState(0);
   const [threshold, setThreshold] = useState(1);
   const [windowSeconds, setWindowSeconds] = useState(0);
-  const [predecessorHandle, setPredecessorHandle] = useState("");
   const [roster, setRoster] = useState<PCASRetirementMember[]>([{ relying_party: "", public_der: "" }]);
   const [saved, setSaved] = useState<PCASRetirementPolicy | null>(null);
   const [reviewedTuple, setReviewedTuple] = useState("");
@@ -21,7 +20,6 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
     threshold,
     roster: roster.map((member) => ({ relying_party: member.relying_party.trim(), public_der: member.public_der.trim() })),
     validity_window_seconds: windowSeconds,
-    ...(predecessorHandle.trim() ? { predecessor_handle: predecessorHandle.trim() } : {}),
   };
   const tuple = JSON.stringify(draft);
   const valid =
@@ -51,7 +49,6 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
       setSaved(policy);
       setThreshold(policy.threshold);
       setWindowSeconds(policy.validity_window_seconds);
-      setPredecessorHandle(policy.predecessor_handle ?? "");
       setRoster(policy.roster.map((member) => ({ ...member })));
     } catch (cause) {
       setSaved(null);
@@ -100,7 +97,6 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
             setReviewedTuple("");
             setThreshold(1);
             setWindowSeconds(0);
-            setPredecessorHandle("");
             setRoster([{ relying_party: "", public_der: "" }]);
           }}
         />
@@ -123,7 +119,7 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
           <p>{t("pcas.retirement.savedQuorum", { threshold: saved.threshold, count: saved.roster.length })}</p>
         </div>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-sm">
           <span>{t("pcas.retirement.threshold")}</span>
           <input
@@ -152,18 +148,8 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
             }}
           />
         </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t("pcas.retirement.handle")}</span>
-          <input
-            className="ui-input"
-            value={predecessorHandle}
-            onChange={(event) => {
-              setPredecessorHandle(event.target.value);
-              setReviewedTuple("");
-            }}
-          />
-        </label>
       </div>
+      <p className="text-sm text-muted-foreground">{t("pcas.retirement.handle")}</p>
       <p className="text-sm text-muted-foreground">{t("pcas.retirement.rosterHelp")}</p>
       {roster.map((member, index) => (
         <div key={index} className="grid gap-2 rounded-panel border border-border p-3 md:grid-cols-[1fr_2fr_auto]">
@@ -216,11 +202,6 @@ export function PCASRetirementPanel({ identityID }: { identityID: string }) {
           <code className="break-all">
             {identityID} · {t("pcas.epoch")}: {epoch} · {t("pcas.retirement.savedQuorum", { threshold, count: roster.length })} · {windowSeconds}s
           </code>
-          {predecessorHandle.trim() ? (
-            <code className="break-all">
-              {t("pcas.retirement.handle")}: {predecessorHandle.trim()}
-            </code>
-          ) : null}
           <ul className="grid gap-1">
             {draft.roster.map((member) => (
               <li key={member.relying_party} className="break-all font-mono">

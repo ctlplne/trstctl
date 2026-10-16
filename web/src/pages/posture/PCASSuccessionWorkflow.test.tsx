@@ -124,6 +124,8 @@ describe("PCAS first-use console", () => {
     await user.click(screen.getByRole("button", { name: "Read retirement policy" }));
     await waitFor(() => expect(pcasMock.retirementStatus).toHaveBeenCalledWith("spiffe://example.test/workload/api", 0));
     expect(screen.getByText(/Rewrap complete: No/)).toBeInTheDocument();
+    expect(screen.getByText(/predecessor key is selected from this tenant/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Predecessor signer handle (optional)")).not.toBeInTheDocument();
     await user.clear(screen.getByLabelText("Acknowledgment window (seconds)"));
     await user.type(screen.getByLabelText("Acknowledgment window (seconds)"), "7200");
     await user.click(screen.getByRole("button", { name: "Review retirement policy" }));
@@ -143,7 +145,6 @@ describe("PCAS first-use console", () => {
         threshold: 1,
         roster: [{ relying_party: "rp-a", public_der: "AQID" }],
         validity_window_seconds: 7200,
-        predecessor_handle: "pcas-key-a",
       }),
     );
     expect(screen.getByText(/Updated at: 2026-10-15T00:01:00Z/)).toBeInTheDocument();

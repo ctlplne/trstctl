@@ -34,6 +34,42 @@ func openStorePCAS(t *testing.T) *corestore.Store {
 	return cs
 }
 
+// A retirement policy must target the key the tenant's signer actually minted.
+// A blank operator handle cannot silently select the old unscoped test handle,
+// and an explicit handle cannot name another tenant's signer key.
+func TestConfigureRetirementPolicyBindsTenantPredecessorHandle(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	svc := succapi.NewService(cs, nil, nil)
+	rpKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roster, err := json.Marshal([]map[string]any{{"relying_party": "rp1", "public_der": rpKey.Public().DER}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "spiffe://d/retirement-bound"
+	req := succapi.RetirementPolicyRequest{IdentityID: id, PredecessorEpoch: 0,
+		Threshold: 1, Roster: roster, ValidityWindowSeconds: 3600}
+	want := succession.TenantKeyHandle(tenantA, id, 0)
+	got, err := svc.ConfigureRetirementPolicy(ctx, tenantA, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PredecessorHandle != want {
+		t.Fatalf("policy targeted %q; tenant-bound predecessor is %q", got.PredecessorHandle, want)
+	}
+	stored, found, err := svc.RetirementStatus(ctx, tenantA, id, 0)
+	if err != nil || !found || stored.PredecessorHandle != want {
+		t.Fatalf("stored policy handle = %q, found=%t, err=%v; want %q", stored.PredecessorHandle, found, err, want)
+	}
+	req.PredecessorHandle = succession.TenantKeyHandle("22222222-2222-4222-8222-222222222222", id, 0)
+	if _, err := svc.ConfigureRetirementPolicy(ctx, tenantA, req); err == nil {
+		t.Fatal("another tenant's predecessor handle was accepted")
+	}
+}
+
 // TestService_FetchChain_Verifiable: the concrete service reads the RLS store and
 // returns a chain that verifies offline (PCAS-07) — acceptance 2.
 func TestService_FetchChain_Verifiable(t *testing.T) {
