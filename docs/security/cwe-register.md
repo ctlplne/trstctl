@@ -601,8 +601,8 @@ not this file.
 | `internal/store/ownership_assignment.go:65` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:205` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:226` | event sequences fit PostgreSQL bigint |
-| `internal/store/ownership_readiness.go:251` | persisted event sequences fit PostgreSQL bigint |
-| `internal/store/ownership_readiness.go:309` | database constraint/event writer keeps sequence non-negative |
+| `internal/store/ownership_readiness.go:254` | persisted event sequences fit PostgreSQL bigint |
+| `internal/store/ownership_readiness.go:312` | database constraint/event writer keeps sequence non-negative |
 | `internal/store/pam.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:697` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:759` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

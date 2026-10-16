@@ -17,7 +17,8 @@ func TestOwnershipExceptionRevocationReplaysAcrossCheckpointOverlap(t *testing.T
 	ctx := t.Context()
 	seedTenant(t, s, tenantA)
 	grantedAt := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
-	revokedAt := grantedAt.Add(time.Minute)
+	// Go events retain nanoseconds; PostgreSQL timestamptz stores microseconds.
+	revokedAt := grantedAt.Add(time.Minute).Add(734 * time.Nanosecond)
 	grant := store.OwnershipException{
 		ID: "41a69078-4c8a-45a9-8945-bb39372337a9", TenantID: tenantA,
 		IdentityID: uuid(tenantA, 2), Reason: "temporary QA exception",

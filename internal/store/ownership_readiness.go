@@ -248,7 +248,10 @@ func (s *Store) ApplyOwnershipExceptionRevokedTx(
 	if err != nil {
 		return err
 	}
-	if priorAt != nil && priorAt.Equal(at) && priorSeq == int64(sequence) && // #nosec G115 -- persisted event sequences fit PostgreSQL bigint
+	// PostgreSQL timestamptz and pgx's binary encoder preserve microseconds;
+	// the retained event keeps Go's nanoseconds. Normalize only for this
+	// comparison, without changing the immutable event or stored timestamp.
+	if priorAt != nil && priorAt.Equal(at.Truncate(time.Microsecond)) && priorSeq == int64(sequence) && // #nosec G115 -- persisted event sequences fit PostgreSQL bigint
 		((priorBy == revokedBy && priorReason == reason) ||
 			(priorReason == "" && (priorBy == revokedBy || strings.HasPrefix(priorBy, "retained:") || strings.HasPrefix(priorBy, "erased:")))) {
 		return nil
