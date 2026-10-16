@@ -82,7 +82,6 @@ func TestFederationBridge_UnverifiedImportNotServed(t *testing.T) {
 	body, err := json.Marshal(map[string]any{
 		"foreign_deployment_id":  "deploy-west",
 		"local_deployment_id":    "deploy-east",
-		"local_authority_handle": succession.TenantKeyHandle(tenantA, "deploy-east", 0),
 		"identity_id":            "spiffe://d/id",
 		"foreign_trust_root_der": base64.StdEncoding.EncodeToString(trustRoot),
 		"foreign_genesis":        base64.StdEncoding.EncodeToString([]byte("genesis-record")),

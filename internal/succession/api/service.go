@@ -479,7 +479,11 @@ func (s *service) RequestFederationImport(ctx context.Context, tenantID string, 
 	if err := succession.VerifyGenesis(localGenesis.TrustRootPublicDER, localGenesis.Genesis); err != nil {
 		return AsyncRequestResponse{}, fmt.Errorf("pcas federation: local authority genesis is invalid: %w", err)
 	}
-	if req.LocalAuthorityHandle != succession.TenantKeyHandle(tenantID, req.LocalDeploymentID, 0) {
+	expectedHandle := succession.TenantKeyHandle(tenantID, req.LocalDeploymentID, 0)
+	if req.LocalAuthorityHandle == "" {
+		req.LocalAuthorityHandle = expectedHandle
+	}
+	if req.LocalAuthorityHandle != expectedHandle {
 		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict, "local_authority_handle does not name this tenant's registered federation authority")
 	}
 	// A queued command has not verified the foreign chain. Only the worker may

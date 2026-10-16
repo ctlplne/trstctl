@@ -748,8 +748,8 @@ func federationImportHandler(a *api.API, svc Service) http.HandlerFunc {
 		if err := api.DecodeJSON(r, &req); err != nil {
 			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
 		}
-		if req.ForeignDeploymentID == "" || req.LocalDeploymentID == "" || req.LocalAuthorityHandle == "" || req.IdentityID == "" || len(req.ForeignTrustRootDER) == 0 || len(req.ForeignGenesis) == 0 {
-			return 0, nil, api.ErrStatus(http.StatusBadRequest, "foreign_deployment_id, local_deployment_id, local_authority_handle, identity_id, foreign_trust_root_der, and foreign_genesis are required")
+		if req.ForeignDeploymentID == "" || req.LocalDeploymentID == "" || req.IdentityID == "" || len(req.ForeignTrustRootDER) == 0 || len(req.ForeignGenesis) == 0 {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "foreign_deployment_id, local_deployment_id, identity_id, foreign_trust_root_der, and foreign_genesis are required")
 		}
 		resp, err := svc.RequestFederationImport(ctx, tenantID, req)
 		return http.StatusAccepted, resp, err
@@ -1166,7 +1166,7 @@ func schemas() map[string]*api.Schema {
 			"local_base_epoch":       api.IntegerSchema(),
 			"foreign_genesis":        api.StringSchema(),
 			"foreign_chain":          api.ArraySchema(api.StringSchema()),
-		}, "foreign_deployment_id", "local_deployment_id", "local_authority_handle", "identity_id", "foreign_trust_root_der", "foreign_genesis"),
+		}, "foreign_deployment_id", "local_deployment_id", "identity_id", "foreign_trust_root_der", "foreign_genesis"),
 		"PCASKEMRewrapRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":           api.StringSchema(),
 			"predecessor_handle":    api.StringSchema(),

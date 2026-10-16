@@ -349,7 +349,6 @@
         "required": [
           "foreign_deployment_id",
           "local_deployment_id",
-          "local_authority_handle",
           "identity_id",
           "foreign_trust_root_der",
           "foreign_genesis"
