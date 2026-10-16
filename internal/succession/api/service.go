@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/succession"
 	pcasdelegation "trstctl.com/trstctl/internal/succession/delegation"
 	pcasissuer "trstctl.com/trstctl/internal/succession/issuer"
+	pcasrecovery "trstctl.com/trstctl/internal/succession/recovery"
 	pcasstaple "trstctl.com/trstctl/internal/succession/staple"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -333,15 +334,54 @@ func (s *service) ListDelegationScopes(ctx context.Context, tenantID string) (De
 }
 
 func (s *service) ConfigureRecoveryPolicy(ctx context.Context, tenantID string, req RecoveryPolicyRequest) (RecoveryPolicyResponse, error) {
+	if err := validateRecoveryPolicyRequest(req); err != nil {
+		return RecoveryPolicyResponse{}, err
+	}
+	if s.repo == nil {
+		return RecoveryPolicyResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS recovery policy store unavailable")
+	}
 	updated := time.Now().UTC()
-	if s.repo != nil {
-		if err := s.repo.UpsertRecoveryPolicy(ctx, tenantID, pcasstore.RecoveryPolicy{
-			IdentityID: req.IdentityID, Threshold: req.Threshold, RosterJSON: req.Roster, TrustRootDER: req.TrustRootDER,
-		}); err != nil {
-			return RecoveryPolicyResponse{}, err
-		}
+	if err := s.repo.UpsertRecoveryPolicy(ctx, tenantID, pcasstore.RecoveryPolicy{
+		IdentityID: req.IdentityID, Threshold: req.Threshold, RosterJSON: req.Roster, TrustRootDER: req.TrustRootDER,
+	}); err != nil {
+		return RecoveryPolicyResponse{}, err
 	}
 	return RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: updated}, nil
+}
+
+func validateRecoveryPolicyRequest(req RecoveryPolicyRequest) error {
+	if strings.TrimSpace(req.IdentityID) == "" || req.Threshold < 1 {
+		return api.ErrStatus(http.StatusBadRequest, "identity_id and positive threshold are required")
+	}
+	if err := crypto.ValidatePublicKeyDER(req.TrustRootDER); err != nil {
+		return api.ErrStatus(http.StatusBadRequest, "trust_root_der must be a usable public key")
+	}
+	var roster []pcasrecovery.Approver
+	if err := json.Unmarshal(req.Roster, &roster); err != nil || len(roster) == 0 {
+		return api.ErrStatus(http.StatusBadRequest, "roster must be a nonempty array of approvers")
+	}
+	seen := make(map[string]struct{}, len(roster))
+	seenKeys := make(map[string]struct{}, len(roster))
+	for _, approver := range roster {
+		if strings.TrimSpace(approver.ID) == "" || strings.TrimSpace(approver.ID) != approver.ID {
+			return api.ErrStatus(http.StatusBadRequest, "each recovery approver needs a canonical nonempty ID")
+		}
+		if _, exists := seen[approver.ID]; exists {
+			return api.ErrStatus(http.StatusBadRequest, "recovery approver IDs must be distinct")
+		}
+		seen[approver.ID] = struct{}{}
+		if err := crypto.ValidatePublicKeyDER(approver.PubDER); err != nil {
+			return api.ErrStatus(http.StatusBadRequest, "each recovery approver needs a usable public key")
+		}
+		if _, exists := seenKeys[string(approver.PubDER)]; exists {
+			return api.ErrStatus(http.StatusBadRequest, "recovery approver public keys must be distinct")
+		}
+		seenKeys[string(approver.PubDER)] = struct{}{}
+	}
+	if req.Threshold > len(seen) {
+		return api.ErrStatus(http.StatusBadRequest, "threshold exceeds the distinct recovery approvers")
+	}
+	return nil
 }
 
 func (s *service) RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error) {

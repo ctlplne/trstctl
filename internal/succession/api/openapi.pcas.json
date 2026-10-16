@@ -656,7 +656,22 @@
             "type": "string"
           },
           "roster": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ID": {
+                  "type": "string"
+                },
+                "PubDER": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ID",
+                "PubDER"
+              ]
+            }
           },
           "threshold": {
             "type": "integer"
@@ -668,7 +683,8 @@
         "required": [
           "identity_id",
           "threshold",
-          "roster"
+          "roster",
+          "trust_root_der"
         ]
       },
       "PCASRecoveryRequest": {

@@ -223,6 +223,47 @@ func TestRetirementPolicyRejectsUnreachableOrUnusableRoster(t *testing.T) {
 	}
 }
 
+func TestRecoveryPolicyRejectsMissingRootAndUnreachableRoster(t *testing.T) {
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicDER := key.Public().DER
+	member := map[string]any{"ID": "custodian-1", "PubDER": publicDER}
+	a := newAPI(t, succapi.NewService(nil, nil, nil))
+	for i, tc := range []struct {
+		name      string
+		threshold int
+		roster    any
+		root      []byte
+	}{
+		{name: "missing trust root", threshold: 1, roster: []any{member}},
+		{name: "empty roster", threshold: 2, roster: []any{}, root: publicDER},
+		{name: "duplicate identities do not form quorum", threshold: 2, roster: []any{member, member}, root: publicDER},
+		{name: "duplicate keys do not form quorum", threshold: 2, roster: []any{member, map[string]any{"ID": "custodian-2", "PubDER": publicDER}}, root: publicDER},
+		{name: "invalid approver key", threshold: 1, roster: []any{map[string]any{"ID": "custodian-1", "PubDER": []byte("not DER")}}, root: publicDER},
+		{name: "invalid trust root", threshold: 1, roster: []any{member}, root: []byte("not DER")},
+		{name: "malformed roster", threshold: 1, roster: map[string]any{"member": member}, root: publicDER},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]any{
+				"identity_id": identity, "threshold": tc.threshold,
+				"roster": tc.roster, "trust_root_der": tc.root,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/recovery/policies", bytes.NewReader(body))
+			r.Header.Set("Idempotency-Key", fmt.Sprintf("bad-recovery-policy-%d", i))
+			rr := httptest.NewRecorder()
+			a.ServeHTTP(rr, r)
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("invalid recovery policy HTTP %d, want 400: %s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
 func (f *fakeService) LatestCheckpoint(_ context.Context, _, identityID string) (succapi.CheckpointResponse, bool, error) {
 	return succapi.CheckpointResponse{IdentityID: identityID, Epoch: 1, IssuedAt: time.Now()}, true, nil
 }

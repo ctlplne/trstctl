@@ -1118,11 +1118,13 @@ func schemas() map[string]*api.Schema {
 			"count": api.IntegerSchema(),
 		}, "scopes", "count"),
 		"PCASRecoveryPolicyRequest": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":    api.StringSchema(),
-			"threshold":      api.IntegerSchema(),
-			"roster":         api.StringSchema(),
+			"identity_id": api.StringSchema(),
+			"threshold":   api.IntegerSchema(),
+			"roster": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
+				"ID": api.StringSchema(), "PubDER": api.StringSchema(),
+			}, "ID", "PubDER")),
 			"trust_root_der": api.StringSchema(),
-		}, "identity_id", "threshold", "roster"),
+		}, "identity_id", "threshold", "roster", "trust_root_der"),
 		"PCASRecoveryPolicy": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id": api.StringSchema(),
 			"status":      api.StringSchema(),
