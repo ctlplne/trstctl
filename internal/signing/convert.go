@@ -32,6 +32,22 @@ func algorithmFromProto(a signerpb.Algorithm) (crypto.Algorithm, error) {
 		return crypto.ECDSAP384, nil
 	case signerpb.Algorithm_ALGORITHM_ECDSA_P521:
 		return crypto.ECDSAP521, nil
+	// These historical wire enum names predate PQC moving into the free core.
+	// Keep their numbers stable for persisted signer keys and older clients.
+	case signerpb.Algorithm_ALGORITHM_LICENSED_1:
+		return crypto.Algorithm("ML-DSA-44"), nil
+	case signerpb.Algorithm_ALGORITHM_LICENSED_2:
+		return crypto.Algorithm("ML-DSA-65"), nil
+	case signerpb.Algorithm_ALGORITHM_LICENSED_3:
+		return crypto.Algorithm("ML-DSA-87"), nil
+	case signerpb.Algorithm_ALGORITHM_LICENSED_4:
+		return crypto.Algorithm("SLH-DSA-SHA2-128s"), nil
+	case signerpb.Algorithm_ALGORITHM_LICENSED_5:
+		return crypto.Algorithm("SLH-DSA-SHA2-128f"), nil
+	case signerpb.Algorithm_ALGORITHM_LICENSED_6:
+		return crypto.Algorithm("SLH-DSA-SHA2-192s"), nil
+	case signerpb.Algorithm_ALGORITHM_LICENSED_7:
+		return crypto.Algorithm("SLH-DSA-SHA2-256s"), nil
 	default:
 		return "", status.Errorf(codes.InvalidArgument, "unsupported algorithm %v", a)
 	}
@@ -51,6 +67,20 @@ func algorithmToProto(a crypto.Algorithm) signerpb.Algorithm {
 		return signerpb.Algorithm_ALGORITHM_ECDSA_P384
 	case crypto.ECDSAP521:
 		return signerpb.Algorithm_ALGORITHM_ECDSA_P521
+	case crypto.Algorithm("ML-DSA-44"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_1
+	case crypto.Algorithm("ML-DSA-65"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_2
+	case crypto.Algorithm("ML-DSA-87"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_3
+	case crypto.Algorithm("SLH-DSA-SHA2-128s"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_4
+	case crypto.Algorithm("SLH-DSA-SHA2-128f"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_5
+	case crypto.Algorithm("SLH-DSA-SHA2-192s"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_6
+	case crypto.Algorithm("SLH-DSA-SHA2-256s"):
+		return signerpb.Algorithm_ALGORITHM_LICENSED_7
 	default:
 		return signerpb.Algorithm_ALGORITHM_UNSPECIFIED
 	}

@@ -25,6 +25,30 @@ func TestAlgorithmConversionRoundTrip(t *testing.T) {
 	}
 }
 
+// PCAS carries the core PQC algorithms over the same isolated signer RPC used
+// for classical successor keys. A missing mapping silently encodes UNSPECIFIED.
+func TestPCASPQCAlgorithmConversionRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		algorithm crypto.Algorithm
+		wire      signerpb.Algorithm
+	}{
+		{"ML-DSA-44", signerpb.Algorithm_ALGORITHM_LICENSED_1},
+		{"ML-DSA-65", signerpb.Algorithm_ALGORITHM_LICENSED_2},
+		{"ML-DSA-87", signerpb.Algorithm_ALGORITHM_LICENSED_3},
+		{"SLH-DSA-SHA2-128s", signerpb.Algorithm_ALGORITHM_LICENSED_4},
+		{"SLH-DSA-SHA2-128f", signerpb.Algorithm_ALGORITHM_LICENSED_5},
+		{"SLH-DSA-SHA2-192s", signerpb.Algorithm_ALGORITHM_LICENSED_6},
+		{"SLH-DSA-SHA2-256s", signerpb.Algorithm_ALGORITHM_LICENSED_7},
+	} {
+		if got := algorithmToProto(tc.algorithm); got != tc.wire {
+			t.Errorf("%s encodes to %v, want %v", tc.algorithm, got, tc.wire)
+		}
+		if got, err := algorithmFromProto(tc.wire); err != nil || got != tc.algorithm {
+			t.Errorf("%v decodes to %s, %v; want %s", tc.wire, got, err, tc.algorithm)
+		}
+	}
+}
+
 func TestHashConversion(t *testing.T) {
 	cases := []struct {
 		p signerpb.Hash
