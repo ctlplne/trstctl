@@ -167,6 +167,22 @@ unscoped handle. A missing retirement event is an error; the worker will not
 destroy a key based only on a mutable status row. After recovery, independently
 check that the exact predecessor handle cannot sign.
 
+## Recovery request admission
+
+`POST /api/v1/pcas/recovery/policies` requires `identity_id`, a positive
+`threshold`, a nonempty `roster` array and `trust_root_der`. Each roster member
+uses the JSON fields `ID` and `PubDER`; the latter is a base64-encoded public-key
+DER value. The server refuses duplicate IDs or public keys, unusable keys and a
+threshold greater than the distinct roster size. Keep the trust-root private key
+and every approver private key outside the policy document.
+
+`POST /api/v1/pcas/recovery/requests` refuses a request unless its tenant and
+identity have a configured policy and its trust root, quorum, roster, statement
+and signatures match that policy. An accepted response means the request was
+queued; inspect its request status and independently verify the resulting
+recovery record before trusting a successor. A queued response alone is not
+proof of minting, signer custody or relying-party acceptance.
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the

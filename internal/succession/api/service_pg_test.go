@@ -139,6 +139,78 @@ func TestService_RequestSuccession_RefusesMissingGenesis(t *testing.T) {
 	}
 }
 
+func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	outbox := orchestrator.NewOutbox(cs)
+	svc := succapi.NewService(cs, nil, outbox)
+	root, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRoot, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approver, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "spiffe://d/recovery-policy-bound"
+	request := succapi.RecoveryRequest{IdentityID: id, TargetAlgorithm: "ECDSA-P256",
+		SuccessorHandle: "qa-recovery-successor", Epoch: 2,
+		TrustRootDER: root.Public().DER, Authorization: json.RawMessage(`{}`)}
+	if _, err := svc.RequestRecovery(ctx, tenantA, request); err == nil || !strings.Contains(err.Error(), "recovery policy") {
+		t.Fatalf("missing recovery policy request = %v, want refusal before outbox", err)
+	}
+	roster, err := json.Marshal([]map[string]any{{"ID": "custodian-1", "PubDER": approver.Public().DER}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, succapi.RecoveryPolicyRequest{
+		IdentityID: id, Threshold: 1, Roster: roster, TrustRootDER: root.Public().DER,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request.TrustRootDER = otherRoot.Public().DER
+	if _, err := svc.RequestRecovery(ctx, tenantA, request); err == nil || !strings.Contains(err.Error(), "trust root") {
+		t.Fatalf("mismatched recovery trust root request = %v, want refusal before outbox", err)
+	}
+	request.TrustRootDER = root.Public().DER
+	if _, err := svc.RequestRecovery(ctx, "22222222-2222-4222-8222-222222222222", request); err == nil || !strings.Contains(err.Error(), "recovery policy") {
+		t.Fatalf("another tenant's recovery policy request = %v, want refusal before outbox", err)
+	}
+	request.Authorization, err = json.Marshal(map[string]any{
+		"Threshold": 1, "Roster": []map[string]any{{"ID": "wrong-custodian", "PubDER": approver.Public().DER}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RequestRecovery(ctx, tenantA, request); err == nil || !strings.Contains(err.Error(), "roster") {
+		t.Fatalf("mismatched recovery roster request = %v, want refusal before outbox", err)
+	}
+	request.Authorization, err = json.Marshal(map[string]any{
+		"Threshold": 1, "Roster": []map[string]any{{"ID": "custodian-1", "PubDER": approver.Public().DER}},
+		"Statement": map[string]any{"DeploymentScope": "", "IdentityID": id, "TenantID": tenantA,
+			"Epoch": 2, "SuccessorAlg": "ECDSA-P256", "SuccessorPub": approver.Public().DER},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RequestRecovery(ctx, tenantA, request); err == nil || !strings.Contains(err.Error(), "signatures") {
+		t.Fatalf("unsigned recovery request = %v, want refusal before outbox", err)
+	}
+	var n int
+	if err := cs.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE destination = $1`,
+		succapi.RecoveryRequestDestination).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("recovery outbox rows after refused requests = %d, want 0", n)
+	}
+}
+
 // TestService_RecordAck_LedgerCountable: the concrete service appends a signed ack to
 // the AN-2 ledger and the PCAS-10 quorum counts the ledger-sourced ack (acceptance 3).
 // Skipped if an embedded event log cannot start in this environment.

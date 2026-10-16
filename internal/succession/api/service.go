@@ -385,7 +385,53 @@ func validateRecoveryPolicyRequest(req RecoveryPolicyRequest) error {
 }
 
 func (s *service) RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error) {
+	if s.repo == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS recovery policy store unavailable")
+	}
+	policy, found, err := s.repo.GetRecoveryPolicy(ctx, tenantID, req.IdentityID)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if !found {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict, "recovery policy is not configured for this identity")
+	}
+	if err := validateRecoveryRequestPolicy(tenantID, req, policy); err != nil {
+		return AsyncRequestResponse{}, err
+	}
 	return s.enqueue(ctx, tenantID, topicOr(s.recoveryTopic, RecoveryRequestDestination), req.IdentityID, req)
+}
+
+func validateRecoveryRequestPolicy(tenantID string, req RecoveryRequest, policy pcasstore.RecoveryPolicy) error {
+	if !bytes.Equal(req.TrustRootDER, policy.TrustRootDER) {
+		return api.ErrStatus(http.StatusConflict, "recovery request trust root does not match the configured policy")
+	}
+	var configured []pcasrecovery.Approver
+	if err := json.Unmarshal(policy.RosterJSON, &configured); err != nil {
+		return fmt.Errorf("pcas recovery: decode configured roster: %w", err)
+	}
+	var auth pcasrecovery.RecoveryAuthorization
+	if err := json.Unmarshal(req.Authorization, &auth); err != nil {
+		return api.ErrStatus(http.StatusBadRequest, "recovery authorization must be valid JSON")
+	}
+	if auth.Threshold != policy.Threshold || len(auth.Roster) != len(configured) {
+		return api.ErrStatus(http.StatusConflict, "recovery authorization does not match the configured quorum")
+	}
+	for i, approver := range configured {
+		if auth.Roster[i].ID != approver.ID || !bytes.Equal(auth.Roster[i].PubDER, approver.PubDER) {
+			return api.ErrStatus(http.StatusConflict, "recovery authorization does not match the configured roster")
+		}
+	}
+	if auth.Statement.DeploymentScope != req.DeploymentScope ||
+		auth.Statement.IdentityID != req.IdentityID || auth.Statement.TenantID != tenantID ||
+		auth.Statement.Epoch != req.Epoch || auth.Statement.SuccessorAlg != req.TargetAlgorithm {
+		return api.ErrStatus(http.StatusBadRequest, "recovery authorization statement does not match the request")
+	}
+	expected := pcasrecovery.Expected{IdentityID: req.IdentityID, TenantID: tenantID,
+		Epoch: req.Epoch, SuccessorAlg: req.TargetAlgorithm, SuccessorPub: auth.Statement.SuccessorPub}
+	if err := pcasrecovery.VerifyAuthorization(auth, policy.TrustRootDER, expected); err != nil {
+		return api.ErrStatus(http.StatusBadRequest, "recovery authorization signatures are invalid for the configured policy")
+	}
+	return nil
 }
 
 func (s *service) RequestFederationImport(ctx context.Context, tenantID string, req FederationImportRequest) (AsyncRequestResponse, error) {
