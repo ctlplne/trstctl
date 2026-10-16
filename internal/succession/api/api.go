@@ -201,6 +201,8 @@ type IssuerAuthorityRequest struct {
 	CurrentEpoch uint64 `json:"current_epoch"`
 	CAKeyHandle  string `json:"ca_key_handle"`
 	CACertDER    []byte `json:"ca_cert_der,omitempty"`
+	// OperationID is supplied by the handler from Idempotency-Key, not JSON.
+	OperationID string `json:"-"`
 }
 
 type IssuerAuthorityResponse struct {
@@ -777,6 +779,7 @@ func issuerAuthorityHandler(a *api.API, svc Service) http.HandlerFunc {
 		if req.IssuerID == "" || req.IdentityID == "" || req.CAKeyHandle == "" || len(req.CACertDER) == 0 {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "issuer_id, identity_id, ca_key_handle, and ca_cert_der are required")
 		}
+		req.OperationID = r.Header.Get("Idempotency-Key")
 		resp, err := svc.RegisterIssuerAuthority(ctx, tenantID, req)
 		return http.StatusOK, resp, err
 	})

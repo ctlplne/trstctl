@@ -472,11 +472,56 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 	}); err == nil {
 		t.Fatal("issuer registration accepted another tenant's identity and CA handle")
 	}
-	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+	issuerCommand := succapi.IssuerAuthorityRequest{
 		IssuerID: "int20-ca", IdentityID: checkpointIdentity, CurrentEpoch: 1,
-		CAKeyHandle: caHandle, CACertDER: caDER,
-	}); err != nil {
+		CAKeyHandle: caHandle, CACertDER: caDER, OperationID: "int20-issuer-registration",
+	}
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, issuerCommand); err != nil {
 		t.Fatalf("register issuer: %v", err)
+	}
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, issuerCommand); err != nil {
+		t.Fatalf("retry issuer after uncertain response: %v", err)
+	}
+	conflictingCommand := issuerCommand
+	conflictingCommand.IssuerID = "int20-reused-command-id"
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, conflictingCommand); err == nil {
+		t.Fatal("issuer command idempotency key accepted a different issuer")
+	}
+	var sourceEvent bool
+	var sourceEvents int
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error {
+		if ev.Type == "nhi.issuer.authority.registered" && ev.TenantID == st.tenantID {
+			sourceEvents++
+			var payload struct {
+				IssuerID string `json:"issuer_id"`
+			}
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				return err
+			}
+			sourceEvent = payload.IssuerID == "int20-ca"
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !sourceEvent {
+		t.Fatal("issuer authority was served without an immutable source event")
+	}
+	if sourceEvents != 1 {
+		t.Fatalf("issuer retry appended %d source events, want one", sourceEvents)
+	}
+	proj := pcasstore.NewIssuerAuthorityProjection(st.store)
+	if err := proj.Reset(st.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := st.repo.GetIssuerAuthority(st.ctx, st.tenantID, "int20-ca"); err != nil || found {
+		t.Fatalf("issuer after projection reset: found=%t err=%v", found, err)
+	}
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error { return proj.Apply(st.ctx, ev) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := st.repo.GetIssuerAuthority(st.ctx, st.tenantID, "int20-ca"); err != nil || !found {
+		t.Fatalf("issuer after source replay: found=%t err=%v", found, err)
 	}
 	leaf, err := st.svc.IssueIssuerLeaf(st.ctx, st.tenantID, succapi.IssueLeafRequest{
 		IssuerID: "int20-ca", CSRDER: leafCSR(t), RotationVersion: 7, TTLSeconds: 3600,

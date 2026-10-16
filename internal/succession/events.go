@@ -43,6 +43,8 @@ const (
 	TypeDelegationApplied = "nhi.delegation.applied"
 	// TypeRecoveryPolicyConfigured records public, tenant-bound recovery authority.
 	TypeRecoveryPolicyConfigured = "nhi.recovery.policy.configured"
+	// TypeIssuerAuthorityRegistered binds a tenant's managed CA to one PCAS epoch.
+	TypeIssuerAuthorityRegistered = "nhi.issuer.authority.registered"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -50,17 +52,18 @@ const (
 // (Type, SchemaVersion) and treats an unknown or newer-than-known version as a
 // skip (Unknown), so replay is forward-compatible and never mis-projects.
 const (
-	GenesisSchemaV1                  = 1
-	FindingSchemaV1                  = 1
-	SuccessionSchemaV1               = 1
-	RetirementSchemaV1               = 1
-	RPAckSchemaV1                    = 1
-	RefusalSchemaV1                  = 1
-	RewrapStageSchemaV1              = 1
-	RewrapCompletedSchemaV1          = 1
-	MisissuanceSchemaV1              = 1
-	DelegationAppliedSchemaV1        = 1
-	RecoveryPolicyConfiguredSchemaV1 = 1
+	GenesisSchemaV1                   = 1
+	FindingSchemaV1                   = 1
+	SuccessionSchemaV1                = 1
+	RetirementSchemaV1                = 1
+	RPAckSchemaV1                     = 1
+	RefusalSchemaV1                   = 1
+	RewrapStageSchemaV1               = 1
+	RewrapCompletedSchemaV1           = 1
+	MisissuanceSchemaV1               = 1
+	DelegationAppliedSchemaV1         = 1
+	RecoveryPolicyConfiguredSchemaV1  = 1
+	IssuerAuthorityRegisteredSchemaV1 = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -110,6 +113,20 @@ type RecoveryPolicyConfiguredV1 struct {
 }
 
 func (RecoveryPolicyConfiguredV1) isSuccessionPayload() {}
+
+// IssuerAuthorityRegisteredV1 is public CA and signer-handle metadata. The
+// isolated signer retains the private key; replay rebuilds only this serving
+// registration from the immutable tenant-bound source event.
+type IssuerAuthorityRegisteredV1 struct {
+	TenantID     string `json:"tenant_id"`
+	IssuerID     string `json:"issuer_id"`
+	IdentityID   string `json:"identity_id"`
+	CurrentEpoch uint64 `json:"current_epoch"`
+	CAKeyHandle  string `json:"ca_key_handle"`
+	CACertDER    []byte `json:"ca_cert_der"`
+}
+
+func (IssuerAuthorityRegisteredV1) isSuccessionPayload() {}
 
 func (GenesisV1) isSuccessionPayload() {}
 
@@ -249,6 +266,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeDelegationApplied, DelegationAppliedSchemaV1, v.TenantID, v)
 	case RecoveryPolicyConfiguredV1:
 		return marshalEvent(TypeRecoveryPolicyConfigured, RecoveryPolicyConfiguredSchemaV1, v.TenantID, v)
+	case IssuerAuthorityRegisteredV1:
+		return marshalEvent(TypeIssuerAuthorityRegistered, IssuerAuthorityRegisteredSchemaV1, v.TenantID, v)
 	case FindingV1:
 		return marshalEvent(TypeFinding, FindingSchemaV1, v.TenantID, v)
 	case SuccessionV1:
@@ -311,6 +330,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RecoveryPolicyConfiguredV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeIssuerAuthorityRegistered:
+		if ver > IssuerAuthorityRegisteredSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p IssuerAuthorityRegisteredV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

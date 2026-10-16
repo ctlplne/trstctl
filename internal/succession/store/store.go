@@ -720,23 +720,11 @@ func (r *Repo) ListMisissuance(ctx context.Context, tenantID string) ([]Misissua
 	return out, nil
 }
 
-func (r *Repo) UpsertIssuerAuthority(ctx context.Context, tenantID string, authority IssuerAuthority) error {
-	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO pcas_issuer_authority
-			    (tenant_id, issuer_id, identity_id, current_epoch, ca_key_handle, ca_cert_der)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5)
-			 ON CONFLICT (tenant_id, issuer_id)
-			 DO UPDATE SET identity_id = EXCLUDED.identity_id,
-			               current_epoch = EXCLUDED.current_epoch,
-			               ca_key_handle = EXCLUDED.ca_key_handle,
-			               ca_cert_der = EXCLUDED.ca_cert_der,
-			               updated_at = now()`,
-			authority.IssuerID, authority.IdentityID, authority.CurrentEpoch, authority.CAKeyHandle, authority.CACertDER)
-		if err != nil {
-			return fmt.Errorf("succession store: upsert issuer authority: %w", err)
-		}
-		return nil
+// ApplyIssuerAuthorityEvent materializes only a previously appended source
+// event. It cannot create issuer authority from a direct serving-table write.
+func (r *Repo) ApplyIssuerAuthorityEvent(ctx context.Context, ev eventspec.Event) error {
+	return r.core.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+		return ApplyIssuerAuthorityEventTx(ctx, tx, ev)
 	})
 }
 
@@ -746,7 +734,8 @@ func (r *Repo) GetIssuerAuthority(ctx context.Context, tenantID, issuerID string
 		e := tx.QueryRow(ctx,
 			`SELECT issuer_id, identity_id, current_epoch, ca_key_handle, ca_cert_der, updated_at
 			   FROM pcas_issuer_authority
-			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND issuer_id = $1`, issuerID).
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND issuer_id = $1
+			    AND source_sequence > 0`, issuerID).
 			Scan(&authority.IssuerID, &authority.IdentityID, &authority.CurrentEpoch, &authority.CAKeyHandle, &authority.CACertDER, &authority.UpdatedAt)
 		if errors.Is(e, pgx.ErrNoRows) {
 			return nil

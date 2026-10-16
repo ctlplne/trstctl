@@ -70,6 +70,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		rejectingEntry("nhi.algorithm.genesis"),
 		rejectingEntry("nhi.delegation.applied"),
 		rejectingEntry("nhi.recovery.policy.configured"),
+		rejectingEntry("nhi.issuer.authority.registered"),
 		entry("acme.account.upserted",
 			catalogPrivacyRule("/seq", opaque), catalogPrivacyRule("/id", opaque),
 			catalogPrivacyRule("/url", opaque), catalogPrivacyRule("/jwk", opaque),

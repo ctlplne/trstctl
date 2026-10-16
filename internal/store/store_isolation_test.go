@@ -330,6 +330,9 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// reset or tenant offboard. Normal configuration and replay enter the
 		// tenant's RLS transaction; payload tenant and source sequence are checked.
 		"internal/succession/store/recovery_policy_projection.go": 1,
+		// Issuer authority uses the system pool only to reset the derived view
+		// or remove an offboarded tenant; normal event writes enter tenant RLS.
+		"internal/succession/store/issuer_authority_projection.go": 1,
 	}
 	found := map[string]int{}
 

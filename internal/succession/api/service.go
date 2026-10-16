@@ -510,8 +510,8 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 }
 
 func (s *service) RegisterIssuerAuthority(ctx context.Context, tenantID string, req IssuerAuthorityRequest) (IssuerAuthorityResponse, error) {
-	if s.store == nil || s.repo == nil || s.kem == nil {
-		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS issuer store or isolated signer is unavailable")
+	if s.store == nil || s.repo == nil || s.kem == nil || s.log == nil {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS issuer store, event log or isolated signer is unavailable")
 	}
 	if strings.TrimSpace(req.CAKeyHandle) == "" {
 		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusBadRequest, "ca_key_handle is required")
@@ -535,15 +535,44 @@ func (s *service) RegisterIssuerAuthority(ctx context.Context, tenantID string, 
 	if err := crypto.VerifyCertificateSigner(req.CACertDER, ca.Public()); err != nil {
 		return IssuerAuthorityResponse{}, api.ErrWithStatus(http.StatusConflict, fmt.Errorf("issuer certificate and signer custody mismatch: %w", err))
 	}
-	updated := time.Now().UTC()
-	if err := s.repo.UpsertIssuerAuthority(ctx, tenantID, pcasstore.IssuerAuthority{
-		IssuerID: req.IssuerID, IdentityID: req.IdentityID, CurrentEpoch: req.CurrentEpoch, CAKeyHandle: req.CAKeyHandle, CACertDER: req.CACertDER,
-	}); err != nil {
+	encoded, err := succession.Encode(succession.IssuerAuthorityRegisteredV1{
+		TenantID: tenantID, IssuerID: req.IssuerID, IdentityID: req.IdentityID,
+		CurrentEpoch: req.CurrentEpoch, CAKeyHandle: req.CAKeyHandle, CACertDER: req.CACertDER,
+	})
+	if err != nil {
+		return IssuerAuthorityResponse{}, err
+	}
+	if req.OperationID != "" {
+		encoded.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("pcas.issuer.authority.v1\x00"+tenantID+"\x00"+req.OperationID)).String()
+		if prior, found, err := s.log.EventByID(ctx, encoded.ID); err != nil {
+			return IssuerAuthorityResponse{}, err
+		} else if found {
+			if prior.TenantID != tenantID || prior.Type != encoded.Type ||
+				prior.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(prior.Data, encoded.Data) {
+				return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusConflict, "idempotency key belongs to another issuer authority command")
+			}
+			if err := s.repo.ApplyIssuerAuthorityEvent(ctx, prior); err != nil {
+				return IssuerAuthorityResponse{}, err
+			}
+			return IssuerAuthorityResponse{IssuerID: req.IssuerID, IdentityID: req.IdentityID,
+				CurrentEpoch: req.CurrentEpoch, CAKeyHandle: req.CAKeyHandle,
+				Status: "registered", UpdatedAt: prior.Time}, nil
+		}
+	}
+	recorded, err := s.log.Append(ctx, encoded)
+	if err != nil {
+		return IssuerAuthorityResponse{}, err
+	}
+	if recorded.TenantID != tenantID || recorded.Type != encoded.Type ||
+		recorded.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(recorded.Data, encoded.Data) {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusConflict, "idempotency key belongs to another issuer authority event")
+	}
+	if err := s.repo.ApplyIssuerAuthorityEvent(ctx, recorded); err != nil {
 		return IssuerAuthorityResponse{}, err
 	}
 	return IssuerAuthorityResponse{
 		IssuerID: req.IssuerID, IdentityID: req.IdentityID, CurrentEpoch: req.CurrentEpoch,
-		CAKeyHandle: req.CAKeyHandle, Status: "registered", UpdatedAt: updated,
+		CAKeyHandle: req.CAKeyHandle, Status: "registered", UpdatedAt: recorded.Time,
 	}, nil
 }
 

@@ -87,15 +87,59 @@ func TestService_IssuerLeafRefusesSupersededManagedCA(t *testing.T) {
 		t.Fatal(err)
 	}
 	const issuerID = "qa-superseded-pcas-issuer"
-	if err := pcasstore.New(cs).UpsertIssuerAuthority(ctx, tenantA, pcasstore.IssuerAuthority{
-		IssuerID: issuerID, IdentityID: "spiffe://qa.local/superseded-ca", CurrentEpoch: 0,
-		CAKeyHandle: handle, CACertDER: caDER,
-	}); err != nil {
+	fixtureEvent, err := succession.Encode(succession.IssuerAuthorityRegisteredV1{
+		TenantID: tenantA, IssuerID: issuerID, IdentityID: "spiffe://qa.local/superseded-ca",
+		CurrentEpoch: 0, CAKeyHandle: handle, CACertDER: caDER,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureEvent.Sequence, fixtureEvent.Time = 1, time.Now().UTC()
+	if err := pcasstore.New(cs).ApplyIssuerAuthorityEvent(ctx, fixtureEvent); err != nil {
 		t.Fatal(err)
 	}
 	svc := succapi.NewService(cs, nil, nil)
 	if _, err := svc.IssueIssuerLeaf(ctx, tenantA, succapi.IssueLeafRequest{IssuerID: issuerID}); err == nil || !strings.Contains(err.Error(), "not active") {
 		t.Fatalf("superseded CA issuer request = %v, want authority refusal before signer", err)
+	}
+}
+
+func TestIssuerProjectionDelayedPredecessorCannotReplaceCurrentBinding(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	repo := pcasstore.New(cs)
+	const issuerID = "qa-issuer-replay-order"
+	event := func(sequence uint64, handle string) events.Event {
+		t.Helper()
+		key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer key.Destroy()
+		cert, err := crypto.SelfSignedCACert(key, handle, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ev, err := succession.Encode(succession.IssuerAuthorityRegisteredV1{
+			TenantID: tenantA, IssuerID: issuerID, IdentityID: "spiffe://qa.local/issuer-order",
+			CurrentEpoch: 1, CAKeyHandle: handle, CACertDER: cert,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ev.Sequence, ev.Time = sequence, time.Now().UTC()
+		return ev
+	}
+	old := event(1, "qa-issuer-old")
+	current := event(2, "qa-issuer-current")
+	for _, ev := range []events.Event{old, current, old} {
+		if err := repo.ApplyIssuerAuthorityEvent(ctx, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, found, err := repo.GetIssuerAuthority(ctx, tenantA, issuerID)
+	if err != nil || !found || got.CAKeyHandle != "qa-issuer-current" {
+		t.Fatalf("delayed predecessor replaced issuer: found=%t handle=%q err=%v", found, got.CAKeyHandle, err)
 	}
 }
 

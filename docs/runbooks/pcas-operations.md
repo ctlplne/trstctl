@@ -204,6 +204,11 @@ CA returns a refusal at registration instead of failing during leaf issuance.
 Leaf issuance rechecks the managed CA's active state and the PCAS epoch; a
 superseded authority or a newer succession stops issuance from the stale issuer
 registration until the operator binds the active authority and epoch.
+The accepted registration is appended as a tenant-bound source event before its
+serving copy is updated. Event replay restores it after a crash. Registrations
+from an older direct-write build have no source event and are not served after
+this upgrade; re-register them through the supported API before issuing leaves.
+Retry an uncertain registration response with the same `Idempotency-Key`.
 
 ## Health Signals
 
