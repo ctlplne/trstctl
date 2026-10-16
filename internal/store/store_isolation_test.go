@@ -333,6 +333,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// Issuer authority uses the system pool only to reset the derived view
 		// or remove an offboarded tenant; normal event writes enter tenant RLS.
 		"internal/succession/store/issuer_authority_projection.go": 1,
+		// Federation bridge projection uses the system pool only for a full
+		// derived-table reset or tenant offboard. Verified bridge events enter
+		// tenant RLS; payload tenant and signed proof are checked before writes.
+		"internal/succession/store/federation_bridge_projection.go": 1,
 	}
 	found := map[string]int{}
 

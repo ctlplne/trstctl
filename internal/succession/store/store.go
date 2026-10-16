@@ -470,23 +470,9 @@ func (r *Repo) GetRecoveryPolicy(ctx context.Context, tenantID, identityID strin
 	return policy, policy.IdentityID != "", nil
 }
 
-func (r *Repo) UpsertFederationBridge(ctx context.Context, tenantID string, bridge FederationBridge) error {
-	bridgeJSON := jsonPayload(bridge.BridgeJSON, "{}")
-	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO pcas_federation_bridge
-			    (tenant_id, foreign_deployment_id, identity_id, foreign_trust_root_der, local_base_epoch, bridge_json)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5::jsonb)
-			 ON CONFLICT (tenant_id, foreign_deployment_id, identity_id)
-			 DO UPDATE SET foreign_trust_root_der = EXCLUDED.foreign_trust_root_der,
-			               local_base_epoch = EXCLUDED.local_base_epoch,
-			               bridge_json = EXCLUDED.bridge_json,
-			               updated_at = now()`,
-			bridge.ForeignDeploymentID, bridge.IdentityID, bridge.ForeignTrustRootDER, bridge.LocalBaseEpoch, bridgeJSON)
-		if err != nil {
-			return fmt.Errorf("succession store: upsert federation bridge: %w", err)
-		}
-		return nil
+func (r *Repo) ApplyFederationBridgeEvent(ctx context.Context, ev eventspec.Event) error {
+	return r.core.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+		return ApplyFederationBridgeEventTx(ctx, tx, ev)
 	})
 }
 
@@ -501,6 +487,7 @@ func (r *Repo) ListFederationBridges(ctx context.Context, tenantID string) ([]Fe
 			`SELECT foreign_deployment_id, identity_id, foreign_trust_root_der, local_base_epoch, bridge_json, updated_at
 			   FROM pcas_federation_bridge
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND source_sequence > 0
 			  ORDER BY foreign_deployment_id ASC, identity_id ASC`)
 		if err != nil {
 			return fmt.Errorf("succession store: list federation bridges: %w", err)

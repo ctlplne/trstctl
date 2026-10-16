@@ -39,7 +39,7 @@ func NewLicensedOutboxFactory(opts ...FactoryOption) editionseam.LicensedOutboxF
 			orch:       New(d.Store, d.Minter),
 			genesis:    NewGenesisWorker(d.Store, d.Log, d.KEMCustody),
 			delegation: NewDelegationWorker(d.Store, d.Log, delegationCustody),
-			breadth:    NewBreadthWorker(d.Store, d.KEMCustody),
+			breadth:    NewBreadthWorker(d.Store, d.KEMCustody, d.Log),
 			hasMinter:  d.Minter != nil,
 			hasKEM:     d.KEMCustody != nil,
 			observer:   d.FeatureObserver,

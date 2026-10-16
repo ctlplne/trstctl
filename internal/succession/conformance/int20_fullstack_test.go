@@ -631,8 +631,8 @@ func (st *int20Stack) federationImportAndQuarantine(t *testing.T) {
 		foreignChain = append(foreignChain, mustJSON(t, rec))
 	}
 	if _, err := st.svc.RequestFederationImport(st.ctx, st.tenantID, succapi.FederationImportRequest{
-		ForeignDeploymentID: "foreign-valid", LocalDeploymentID: "spiffe://int20.example",
-		LocalAuthorityHandle: localHandle, IdentityID: "foreign-valid/id",
+		ForeignDeploymentID: foreign.Genesis.DeploymentScope, LocalDeploymentID: "spiffe://int20.example",
+		LocalAuthorityHandle: localHandle, IdentityID: foreign.Genesis.IdentityID,
 		ForeignTrustRootDER: foreign.TrustRootPubDER, LocalBaseEpoch: 100,
 		ForeignGenesis: foreignGenesis, ForeignChain: foreignChain,
 	}); err != nil {
@@ -644,12 +644,39 @@ func (st *int20Stack) federationImportAndQuarantine(t *testing.T) {
 		return tx.QueryRow(st.ctx,
 			`SELECT count(*) FROM pcas_federation_bridge
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND foreign_deployment_id = $1`,
-			"foreign-valid").Scan(&bridgeCount)
+			foreign.Genesis.DeploymentScope).Scan(&bridgeCount)
 	}); err != nil {
 		t.Fatalf("count federation bridges: %v", err)
 	}
 	if bridgeCount != 1 {
 		t.Fatalf("federation bridge count = %d, want 1", bridgeCount)
+	}
+	var bridgeEvents int
+	var bridgeEvent events.Event
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error {
+		if ev.Type == "nhi.federation.bridge.imported" && ev.TenantID == st.tenantID {
+			bridgeEvents++
+			bridgeEvent = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if bridgeEvents != 1 {
+		t.Fatalf("verified bridge has %d immutable source events, want 1", bridgeEvents)
+	}
+	projection := pcasstore.NewFederationBridgeProjection(st.store)
+	if err := projection.Reset(st.ctx); err != nil {
+		t.Fatalf("reset federation serving projection: %v", err)
+	}
+	if bridges, err := st.repo.ListFederationBridges(st.ctx, st.tenantID); err != nil || len(bridges) != 0 {
+		t.Fatalf("bridge remained after read-model reset: count=%d err=%v", len(bridges), err)
+	}
+	if err := projection.Apply(st.ctx, bridgeEvent); err != nil {
+		t.Fatalf("replay verified bridge event: %v", err)
+	}
+	if bridges, err := st.repo.ListFederationBridges(st.ctx, st.tenantID); err != nil || len(bridges) != 1 {
+		t.Fatalf("verified bridge not restored by replay: count=%d err=%v", len(bridges), err)
 	}
 
 	badRoot, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)

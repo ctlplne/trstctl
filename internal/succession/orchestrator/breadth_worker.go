@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/events"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	eepqc "trstctl.com/trstctl/internal/pqc"
 	"trstctl.com/trstctl/internal/signing"
@@ -30,14 +32,15 @@ type BreadthWorker struct {
 	core *corestore.Store
 	repo *pcasstore.Repo
 	kem  editionseam.KEMCustody
+	log  *events.Log
 }
 
-func NewBreadthWorker(core *corestore.Store, kem editionseam.KEMCustody) *BreadthWorker {
+func NewBreadthWorker(core *corestore.Store, kem editionseam.KEMCustody, log *events.Log) *BreadthWorker {
 	var repo *pcasstore.Repo
 	if core != nil {
 		repo = pcasstore.New(core)
 	}
-	return &BreadthWorker{core: core, repo: repo, kem: kem}
+	return &BreadthWorker{core: core, repo: repo, kem: kem, log: log}
 }
 
 func (w *BreadthWorker) Deliver(ctx context.Context, m coreorch.Message) error {
@@ -298,14 +301,43 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 }
 
 func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID string, payload []byte) error {
-	if w.kem == nil {
-		return errors.New("pcas federation: no signer custody configured")
+	if w.kem == nil || w.log == nil || w.repo == nil {
+		return errors.New("pcas federation: signer custody, event log and store are required")
 	}
 	var env requestEnvelope[federationImportPayload]
 	if err := json.Unmarshal(payload, &env); err != nil {
 		return fmt.Errorf("pcas federation: decode payload: %w", err)
 	}
 	p := env.Request
+	if env.RequestID == "" {
+		return errors.New("pcas federation: request id is required")
+	}
+	canonical, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	requestDigest := crypto.SHA256Sum(canonical)
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("pcas.federation.bridge.v1\x00"+tenantID+"\x00"+env.RequestID)).String()
+	applyPrior := func(ev events.Event) error {
+		if ev.TenantID != tenantID || ev.Type != succession.TypeFederationBridgeImported {
+			return errors.New("pcas federation: request id belongs to another event")
+		}
+		decoded, err := succession.Decode(ev)
+		if err != nil {
+			return err
+		}
+		prior, ok := decoded.(succession.FederationBridgeImportedV1)
+		if !ok || prior.RequestID != env.RequestID ||
+			!bytes.Equal(prior.RequestDigest, requestDigest) {
+			return errors.New("pcas federation: request id belongs to another import")
+		}
+		return w.repo.ApplyFederationBridgeEvent(ctx, ev)
+	}
+	if prior, found, err := w.log.EventByID(ctx, eventID); err != nil {
+		return err
+	} else if found {
+		return applyPrior(prior)
+	}
 	localRemote, err := w.kem.SignerForHandle(ctx, p.LocalAuthorityHandle)
 	if err != nil {
 		return fmt.Errorf("pcas federation: bind local authority handle: %w", err)
@@ -327,18 +359,36 @@ func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID str
 	if err != nil && !errors.Is(err, federation.ErrImportVerification) {
 		return fmt.Errorf("pcas federation: import: %w", err)
 	}
-	if w.repo == nil {
-		return err
-	}
 	if result.Bridge != nil {
-		bridgeJSON, _ := json.Marshal(result.Bridge)
-		return w.repo.UpsertFederationBridge(ctx, tenantID, pcasstore.FederationBridge{
-			ForeignDeploymentID: p.ForeignDeploymentID,
-			IdentityID:          p.IdentityID,
-			ForeignTrustRootDER: p.ForeignTrustRootDER,
-			LocalBaseEpoch:      p.LocalBaseEpoch,
-			BridgeJSON:          bridgeJSON,
+		if result.Bridge.ForeignDeployment != p.ForeignDeploymentID ||
+			result.Bridge.LocalDeployment != p.LocalDeploymentID ||
+			result.Bridge.IdentityID != p.IdentityID ||
+			result.Bridge.LocalBaseEpoch != p.LocalBaseEpoch {
+			return errors.New("pcas federation: signed bridge does not match requested deployments or identity")
+		}
+		if err := federation.VerifyBridge(localRemote.Public().DER, nil, *result.Bridge, false); err != nil {
+			return fmt.Errorf("pcas federation: signed bridge verification: %w", err)
+		}
+		bridgeJSON, err := json.Marshal(result.Bridge)
+		if err != nil {
+			return err
+		}
+		ev, err := succession.Encode(succession.FederationBridgeImportedV1{
+			TenantID: tenantID, RequestID: env.RequestID, RequestDigest: requestDigest,
+			ForeignDeploymentID: p.ForeignDeploymentID, LocalDeploymentID: p.LocalDeploymentID,
+			IdentityID: p.IdentityID, ForeignTrustRootDER: p.ForeignTrustRootDER,
+			LocalAuthorityPublicDER: localRemote.Public().DER,
+			LocalBaseEpoch:          p.LocalBaseEpoch, Bridge: bridgeJSON,
 		})
+		if err != nil {
+			return err
+		}
+		ev.ID = eventID
+		recorded, err := w.log.Append(ctx, ev)
+		if err != nil {
+			return err
+		}
+		return applyPrior(recorded)
 	}
 	if result.Quarantine != nil {
 		proofJSON, _ := json.Marshal(result.Quarantine)

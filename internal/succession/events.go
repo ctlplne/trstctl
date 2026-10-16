@@ -45,6 +45,8 @@ const (
 	TypeRecoveryPolicyConfigured = "nhi.recovery.policy.configured"
 	// TypeIssuerAuthorityRegistered binds a tenant's managed CA to one PCAS epoch.
 	TypeIssuerAuthorityRegistered = "nhi.issuer.authority.registered"
+	// TypeFederationBridgeImported records a verified, locally signed foreign trust bridge.
+	TypeFederationBridgeImported = "nhi.federation.bridge.imported"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -64,6 +66,7 @@ const (
 	DelegationAppliedSchemaV1         = 1
 	RecoveryPolicyConfiguredSchemaV1  = 1
 	IssuerAuthorityRegisteredSchemaV1 = 1
+	FederationBridgeImportedSchemaV1  = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -127,6 +130,23 @@ type IssuerAuthorityRegisteredV1 struct {
 }
 
 func (IssuerAuthorityRegisteredV1) isSuccessionPayload() {}
+
+// FederationBridgeImportedV1 contains only public proof. RequestDigest binds
+// crash retries to the exact import command that produced the signed bridge.
+type FederationBridgeImportedV1 struct {
+	TenantID                string          `json:"tenant_id"`
+	RequestID               string          `json:"request_id"`
+	RequestDigest           []byte          `json:"request_digest"`
+	ForeignDeploymentID     string          `json:"foreign_deployment_id"`
+	LocalDeploymentID       string          `json:"local_deployment_id"`
+	IdentityID              string          `json:"identity_id"`
+	ForeignTrustRootDER     []byte          `json:"foreign_trust_root_der"`
+	LocalAuthorityPublicDER []byte          `json:"local_authority_public_der"`
+	LocalBaseEpoch          uint64          `json:"local_base_epoch"`
+	Bridge                  json.RawMessage `json:"bridge"`
+}
+
+func (FederationBridgeImportedV1) isSuccessionPayload() {}
 
 func (GenesisV1) isSuccessionPayload() {}
 
@@ -268,6 +288,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeRecoveryPolicyConfigured, RecoveryPolicyConfiguredSchemaV1, v.TenantID, v)
 	case IssuerAuthorityRegisteredV1:
 		return marshalEvent(TypeIssuerAuthorityRegistered, IssuerAuthorityRegisteredSchemaV1, v.TenantID, v)
+	case FederationBridgeImportedV1:
+		return marshalEvent(TypeFederationBridgeImported, FederationBridgeImportedSchemaV1, v.TenantID, v)
 	case FindingV1:
 		return marshalEvent(TypeFinding, FindingSchemaV1, v.TenantID, v)
 	case SuccessionV1:
@@ -339,6 +361,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p IssuerAuthorityRegisteredV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeFederationBridgeImported:
+		if ver > FederationBridgeImportedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p FederationBridgeImportedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

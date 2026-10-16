@@ -165,6 +165,9 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"tenant_id":"","identity_id":"","threshold":1,"roster":[{"ID":"","PubDER":""}],"trust_root_der":""}`), true
 	case "nhi.issuer.authority.registered":
 		return shape(`{"tenant_id":"","issuer_id":"","identity_id":"","current_epoch":0,"ca_key_handle":"","ca_cert_der":""}`), true
+	case "nhi.federation.bridge.imported":
+		return shape(`{"tenant_id":"","request_id":"","request_digest":"","foreign_deployment_id":"","local_deployment_id":"","identity_id":"","foreign_trust_root_der":"","local_authority_public_der":"","local_base_epoch":0,"bridge":{"ForeignDeployment":"","LocalDeployment":"","IdentityID":"","ForeignHeadDigest":"","ForeignHeadEpoch":0,"LocalBaseEpoch":0,"LocalAuthoritySig":"","ForeignAuthoritySig":""}}`,
+			catalogPrivacyShapeOptions{Nullable: []string{"/bridge/ForeignAuthoritySig"}}), true
 	case "acme.account.upserted":
 		return shape(`{"seq":1,"id":"","url":"","jwk":{},"contact":[""],"status":"","eab_key_id":""}`,
 			catalogPrivacyShapeOptions{
