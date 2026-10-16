@@ -1391,13 +1391,23 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	if d.AuditSigningKey != nil {
 		defaults = append(defaults, api.WithPQCCampaignClosureSigner(d.AuditSigningKey))
 	}
+	// Construct the managed-CA service before attaching PCAS routes so their
+	// exact-authority leaf bridge is available during route composition. Keep
+	// the public CA API option in its existing position below.
+	hierarchySvc := s.buildCAHierarchyService(d)
+	var pcasLeafIssuer editionseam.PCASLeafIssuer
+	if hierarchySvc != nil {
+		s.caHierarchy, _ = hierarchySvc.(*caHierarchyService)
+		pcasLeafIssuer = s.caHierarchy
+	}
 	// Remediation is part of Core; authentication, RBAC and policy still apply.
 	defaults = append(defaults, api.WithRemediation())
 	if d.LicensedAPIOptionsFactory != nil {
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
 			DefaultProfile: d.DefaultProfile,
-			KEMCustody:     s.kemCustody(), TLSPostureDeployer: d.ConnectorRegistry,
+			KEMCustody:     s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
+			TLSPostureDeployer: d.ConnectorRegistry,
 			OutboxIntegrityKey: d.KEK,
 			TenantCrypto:       d.TenantCrypto,
 		})
@@ -1461,8 +1471,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 		s.ctSubmit = ctSubmit
 		defaults = append(defaults, api.WithCTSubmission(ctSubmit))
 	}
-	if hierarchySvc := s.buildCAHierarchyService(d); hierarchySvc != nil {
-		s.caHierarchy, _ = hierarchySvc.(*caHierarchyService)
+	if hierarchySvc != nil {
 		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))
 	}
 	if edgeSvc := s.buildEdgeDelegationService(d, orch); edgeSvc != nil {

@@ -203,12 +203,15 @@ algorithm epoch (zero before its first succession). Registration checks the
 tenant-owned CA row, the isolated signer's live key, and the exact certificate
 public key before storing an issuer. A foreign, superseded, absent or mismatched
 CA returns a refusal at registration instead of failing during leaf issuance.
-The direct issuer-leaf and stapled-leaf routes also refuse a CA key whose sealed
-signer policy requires a per-sign dual-control token: these routes have no
-approval step and must not claim that such a CA is ready. Use a managed CA key
-whose policy permits direct CA signing for these routes. The refusal is a 409
-at registration; older registrations of a protected key are refused at leaf
-issuance too. The signer enforces the token requirement independently.
+The issuer-leaf and stapled-leaf routes use the same managed-CA issuance path as
+the hierarchy API. That path binds this tenant's exact active CA handle and
+first public certificate, applies the CA's leaf profile and revocation pointers,
+obtains the signer's per-sign authorization through the configured CA authority,
+and appends the issued certificate to the event-sourced inventory. It does not
+silently follow a CA rotation; re-register the PCAS issuer with the new handle
+and certificate after the intended epoch change. If the managed-CA issuer is
+unavailable, a protected signer key is refused at registration (409), and an
+older registration cannot bypass the signer policy during leaf issuance.
 Both leaf routes require `certs:issue`, the same permission as the managed CA
 hierarchy's leaf-issue route. `certs:write` alone cannot mint a certificate.
 Leaf issuance rechecks the managed CA's active state and the PCAS epoch; a

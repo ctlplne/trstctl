@@ -53,6 +53,16 @@ type LicensedAPIOptionsDeps struct {
 	TenantCrypto       tenantseal.Access
 	SignerKeyStoreDir  string
 	KEMCustody         KEMCustody
+	PCASLeafIssuer     PCASLeafIssuer
+}
+
+// PCASLeafIssuer is the existing managed-CA issuance path, narrowed to one
+// exact tenant-owned signer handle and public CA certificate. The implementation
+// enforces the CA profile and signer authorization, then records the issued
+// certificate in the event-sourced inventory before returning it.
+type PCASLeafIssuer interface {
+	IssuePCASLeaf(ctx context.Context, tenantID, caHandle string, expectedCACertDER, csrDER []byte,
+		ttl time.Duration, extension crypto.CertificateExtension) ([]byte, error)
 }
 
 type ProtocolLeafIssuer func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error)

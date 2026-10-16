@@ -54,11 +54,12 @@ const (
 // ledger. HTTP-level idempotency (api.Mutate) makes a replayed Idempotency-Key
 // return the original result without re-invoking these methods (PCAS-claim-6).
 type service struct {
-	store  *corestore.Store
-	repo   *pcasstore.Repo
-	log    *events.Log
-	outbox *orchestrator.Outbox
-	kem    editionseam.KEMCustody
+	store      *corestore.Store
+	repo       *pcasstore.Repo
+	log        *events.Log
+	outbox     *orchestrator.Outbox
+	kem        editionseam.KEMCustody
+	leafIssuer editionseam.PCASLeafIssuer
 	// Breadth outbox topics, resolved from pcas.{recovery,federation,kem}.
 	// outbox_topic (AUD-7: the config was validated and never read — an operator
 	// who re-pointed a topic still enqueued to the hardcoded constant). Empty
@@ -73,6 +74,10 @@ type ServiceOption func(*service)
 
 func WithKEMCustody(kem editionseam.KEMCustody) ServiceOption {
 	return func(s *service) { s.kem = kem }
+}
+
+func WithManagedLeafIssuer(issuer editionseam.PCASLeafIssuer) ServiceOption {
+	return func(s *service) { s.leafIssuer = issuer }
 }
 
 // WithOutboxTopics resolves the breadth destinations from operator
@@ -558,9 +563,13 @@ func (s *service) RegisterIssuerAuthority(ctx context.Context, tenantID string, 
 	if err != nil {
 		return IssuerAuthorityResponse{}, err
 	}
-	if ca.RequiresAuthorization() {
+	if ca.RequiresAuthorization() && s.leafIssuer == nil {
 		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusConflict,
 			"dual-control managed CA requires a separate approval path; select a CA authorized for direct PCAS leaf issuance")
+	}
+	if s.leafIssuer == nil {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusServiceUnavailable,
+			"managed CA issuance path is unavailable; PCAS issuer registration cannot promise leaf issuance")
 	}
 	if err := crypto.VerifyCertificateSigner(req.CACertDER, ca.Public()); err != nil {
 		return IssuerAuthorityResponse{}, api.ErrWithStatus(http.StatusConflict, fmt.Errorf("issuer certificate and signer custody mismatch: %w", err))
@@ -652,25 +661,20 @@ func (s *service) IssueIssuerLeaf(ctx context.Context, tenantID string, req Issu
 	if err != nil {
 		return IssueLeafResponse{}, err
 	}
-	ca, err := s.caSigner(ctx, authority.CAKeyHandle)
-	if err != nil {
-		return IssueLeafResponse{}, err
-	}
-	if ca.RequiresAuthorization() {
-		return IssueLeafResponse{}, api.ErrStatus(http.StatusConflict,
-			"dual-control managed CA cannot issue through the direct PCAS leaf route")
-	}
 	ttl := leafTTL(req.TTLSeconds)
 	rotation := req.RotationVersion
 	if rotation == 0 {
 		rotation = 1
 	}
-	certDER, err := pcasissuer.IssueLeafCertificate(authority.CACertDER, ca, req.CSRDER, pcasissuer.IssuerPosture{
-		IssuerID:  authority.IssuerID,
-		Epoch:     authority.CurrentEpoch,
-		Algorithm: string(ca.Algorithm()),
-		PublicDER: ca.Public().DER,
-	}, rotation, ttl)
+	if s.leafIssuer == nil {
+		return IssueLeafResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "managed CA issuance path is unavailable")
+	}
+	ext, err := pcasissuer.AuthorityEpochExtension(authority.IssuerID, authority.CurrentEpoch, rotation)
+	if err != nil {
+		return IssueLeafResponse{}, err
+	}
+	certDER, err := s.leafIssuer.IssuePCASLeaf(ctx, tenantID, authority.CAKeyHandle,
+		authority.CACertDER, req.CSRDER, ttl, ext)
 	if err != nil {
 		return IssueLeafResponse{}, err
 	}
@@ -707,15 +711,16 @@ func (s *service) IssueStapledLeaf(ctx context.Context, tenantID string, req Iss
 			LogRootHash: cp.LogRoot, Signature: cp.Signature,
 		}
 	}
-	ca, err := s.caSigner(ctx, authority.CAKeyHandle)
+	attachment := pcasstaple.Attachment{Checkpoint: &signed}
+	if s.leafIssuer == nil {
+		return IssueLeafResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "managed CA issuance path is unavailable")
+	}
+	ext, err := pcasstaple.AttachmentCertExtension(attachment)
 	if err != nil {
 		return IssueLeafResponse{}, err
 	}
-	if ca.RequiresAuthorization() {
-		return IssueLeafResponse{}, api.ErrStatus(http.StatusConflict,
-			"dual-control managed CA cannot issue through the direct PCAS stapled-leaf route")
-	}
-	certDER, err := pcasstaple.IssueStapledLeaf(authority.CACertDER, ca, req.CSRDER, pcasstaple.Attachment{Checkpoint: &signed}, leafTTL(req.TTLSeconds))
+	certDER, err := s.leafIssuer.IssuePCASLeaf(ctx, tenantID, authority.CAKeyHandle,
+		authority.CACertDER, req.CSRDER, leafTTL(req.TTLSeconds), ext)
 	if err != nil {
 		return IssueLeafResponse{}, err
 	}

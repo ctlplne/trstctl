@@ -367,7 +367,7 @@ type Service interface {
 // server-provided store, event log, and outbox.
 func NewAPIOptionsFactory(opts ...ServiceOption) editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		serviceOpts := append([]ServiceOption{WithKEMCustody(d.KEMCustody)}, opts...)
+		serviceOpts := append([]ServiceOption{WithKEMCustody(d.KEMCustody), WithManagedLeafIssuer(d.PCASLeafIssuer)}, opts...)
 		svc := NewService(d.Store, d.Log, d.Outbox, serviceOpts...)
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),

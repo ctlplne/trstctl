@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	pcasissuer "trstctl.com/trstctl/internal/succession/issuer"
 )
 
 func TestCAIssueLeafRejectsUnrepresentableTTLBeforeAuthorityLookup(t *testing.T) {
@@ -783,6 +784,46 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	}
 	if rec, found, err := h.store.LookupIssuedCert(t.Context(), h.tenant, inter.ID, issued.Serial); err != nil || !found || !rec.Revoked() {
 		t.Fatalf("rebuild lost the authority's revoked serial: found=%v record=%+v error=%v", found, rec, err)
+	}
+	pcasExtension, err := pcasissuer.AuthorityEpochExtension("int20-served-issuer", 2, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcasLeafDER, err := h.srv.caHierarchy.IssuePCASLeaf(t.Context(), h.tenant,
+		inter.SignerHandle, caCertDER(t, []byte(inter.CertificatePEM)), csrDER,
+		time.Hour, pcasExtension)
+	if err != nil {
+		t.Fatalf("managed CA refused the PCAS extension through its authorized signer path: %v", err)
+	}
+	if err := crypto.VerifyLeafSignedByCA(pcasLeafDER, caCertDER(t, []byte(inter.CertificatePEM))); err != nil {
+		t.Fatalf("PCAS leaf signature: %v", err)
+	}
+	issuerID, epoch, rotation, err := pcasissuer.ParseAuthorityEpoch(pcasLeafDER)
+	if err != nil || issuerID != "int20-served-issuer" || epoch != 2 || rotation != 7 {
+		t.Fatalf("PCAS leaf tuple = %q/%d/%d, err=%v", issuerID, epoch, rotation, err)
+	}
+	pcasInfo, err := certinfo.Inspect(pcasLeafDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcasInventory, err := h.store.GetCertificateByFingerprint(t.Context(), h.tenant, pcasInfo.SHA256Fingerprint)
+	if err != nil || pcasInventory.IssuanceEventID == "" || pcasInventory.KeyOrigin != "requester" {
+		t.Fatalf("PCAS managed CA leaf missing tenant-bound source inventory: %+v err=%v", pcasInventory, err)
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("PCAS managed CA leaf cold projection rebuild: %v", err)
+	}
+	pcasReplayed, err := h.store.GetCertificateByFingerprint(t.Context(), h.tenant, pcasInfo.SHA256Fingerprint)
+	if err != nil || pcasReplayed.IssuanceEventID != pcasInventory.IssuanceEventID {
+		t.Fatalf("PCAS leaf source inventory did not survive replay: %+v err=%v", pcasReplayed, err)
+	}
+	if _, err := h.store.GetCertificateByFingerprint(t.Context(), "11111111-1111-4111-8111-111111111112", pcasInfo.SHA256Fingerprint); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("another tenant read the PCAS managed CA leaf: %v", err)
+	}
+	if _, err := h.srv.caHierarchy.IssuePCASLeaf(t.Context(), h.tenant,
+		inter.SignerHandle, caCertDER(t, []byte(root.CertificatePEM)), csrDER,
+		time.Hour, pcasExtension); err == nil {
+		t.Fatal("PCAS leaf accepted a different public CA certificate for the bound handle")
 	}
 }
 

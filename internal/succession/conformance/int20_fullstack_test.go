@@ -39,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/succession"
 	succapi "trstctl.com/trstctl/internal/succession/api"
 	"trstctl.com/trstctl/internal/succession/background"
+	pcasissuer "trstctl.com/trstctl/internal/succession/issuer"
 	pcaskem "trstctl.com/trstctl/internal/succession/kem"
 	"trstctl.com/trstctl/internal/succession/minter"
 	pcasmonitor "trstctl.com/trstctl/internal/succession/monitor"
@@ -71,6 +72,13 @@ type int20Stack struct {
 type staticSignerProvider struct{ c *signing.Client }
 
 func (p staticSignerProvider) Client() *signing.Client { return p.c }
+
+type int20PCASLeafIssuer func(context.Context, string, string, []byte, []byte, time.Duration, crypto.CertificateExtension) ([]byte, error)
+
+func (f int20PCASLeafIssuer) IssuePCASLeaf(ctx context.Context, tenantID, handle string,
+	expectedCACertDER, csrDER []byte, ttl time.Duration, extension crypto.CertificateExtension) ([]byte, error) {
+	return f(ctx, tenantID, handle, expectedCACertDER, csrDER, ttl, extension)
+}
 
 // TestINT20_FullStackPCASUserJourneys is the PCAS release-gate spine from
 // PCAS-WIRING-DESIGN §7: user-facing API requests write tenant-scoped Postgres
@@ -273,7 +281,22 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 	if err != nil {
 		t.Fatalf("licensed outbox factory: %v", err)
 	}
-	svc := succapi.NewService(cs, log, outbox, succapi.WithKEMCustody(signer))
+	// Test-only bridge exercises the API's extension routing over the real
+	// isolated signer. The served hierarchy test separately proves profile,
+	// source event and inventory behavior of the production bridge.
+	bridge := int20PCASLeafIssuer(func(ctx context.Context, _ string, handle string,
+		expectedCACertDER, csrDER []byte, ttl time.Duration, extension crypto.CertificateExtension) ([]byte, error) {
+		ca, err := signer.SignerForDualControlHandle(ctx, handle, signing.PurposeCASign, signAuthz)
+		if err != nil {
+			return nil, err
+		}
+		if err := crypto.VerifyCertificateSigner(expectedCACertDER, ca.Public()); err != nil {
+			return nil, err
+		}
+		return crypto.SignLeafFromCSRWithProfile(expectedCACertDER, ca, csrDER, ttl,
+			crypto.LeafProfile{ExtraExtensions: []crypto.CertificateExtension{extension}})
+	})
+	svc := succapi.NewService(cs, log, outbox, succapi.WithKEMCustody(signer), succapi.WithManagedLeafIssuer(bridge))
 
 	st := &int20Stack{
 		ctx: ctx, store: cs, repo: pcasstore.New(cs), log: log, outbox: outbox,
@@ -436,9 +459,10 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 
 func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity string) {
 	t.Helper()
-	// An offline/dual-control CA can be valid and tenant-owned, but this direct
-	// leaf route cannot obtain its per-sign approval. Refuse registration before
-	// claiming an issuer is ready; the signer still enforces the rule itself.
+	// An offline/dual-control CA can be valid and tenant-owned, but a PCAS API
+	// instance without the managed-CA bridge cannot obtain its per-sign approval.
+	// Refuse registration before claiming an issuer is ready; the signer also
+	// enforces the rule independently.
 	protectedHandle := "int20-protected-issuer-ca"
 	protected, err := st.signer.GenerateDualControlKeyHandle(st.ctx, crypto.ECDSAP256,
 		protectedHandle, []signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, st.signAuthz)
@@ -455,7 +479,8 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 	}); err != nil {
 		t.Fatalf("seed protected CA authority: %v", err)
 	}
-	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+	noBridge := succapi.NewService(st.store, st.log, st.outbox, succapi.WithKEMCustody(st.signer))
+	if _, err := noBridge.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
 		IssuerID: "int20-protected-ca", IdentityID: checkpointIdentity, CurrentEpoch: 1,
 		CAKeyHandle: protectedHandle, CACertDER: protectedDER,
 	}); err == nil || !strings.Contains(err.Error(), "dual-control") {
@@ -478,6 +503,12 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 		CertificatePEM: string(append(crypto.EncodeCertificatePEM(caDER), crypto.EncodeCertificatePEM(caDER)...)), SignerHandle: caHandle,
 	}); err != nil {
 		t.Fatalf("seed tenant-bound CA authority: %v", err)
+	}
+	if _, err := noBridge.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+		IssuerID: "int20-no-managed-path", IdentityID: checkpointIdentity, CurrentEpoch: 1,
+		CAKeyHandle: caHandle, CACertDER: caDER,
+	}); err == nil || !strings.Contains(err.Error(), "managed CA issuance path is unavailable") {
+		t.Fatalf("issuer registration promised leaf issuance without a managed-CA path: %v", err)
 	}
 	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
 		IssuerID: "int20-unobserved-epoch", IdentityID: checkpointIdentity, CurrentEpoch: 99,
@@ -624,15 +655,55 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 	if err := st.repo.ApplyIssuerAuthorityEvent(st.ctx, recorded); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.svc.IssueIssuerLeaf(st.ctx, st.tenantID, succapi.IssueLeafRequest{
+	if _, err := noBridge.IssueIssuerLeaf(st.ctx, st.tenantID, succapi.IssueLeafRequest{
 		IssuerID: "int20-legacy-protected-ca", CSRDER: leafCSR(t),
-	}); err == nil || !strings.Contains(err.Error(), "dual-control") {
+	}); err == nil || !strings.Contains(err.Error(), "managed CA issuance path is unavailable") {
 		t.Fatalf("legacy protected issuer direct leaf was not refused: %v", err)
 	}
-	if _, err := st.svc.IssueStapledLeaf(st.ctx, st.tenantID, succapi.IssueStapledLeafRequest{
+	if _, err := noBridge.IssueStapledLeaf(st.ctx, st.tenantID, succapi.IssueStapledLeafRequest{
 		IssuerID: "int20-legacy-protected-ca", CSRDER: leafCSR(t), CheckpointIdentityID: checkpointIdentity,
-	}); err == nil || !strings.Contains(err.Error(), "dual-control") {
+	}); err == nil || !strings.Contains(err.Error(), "managed CA issuance path is unavailable") {
 		t.Fatalf("legacy protected issuer stapled leaf was not refused: %v", err)
+	}
+	var bridgedCalls int
+	bridge := int20PCASLeafIssuer(func(_ context.Context, tenantID, handle string,
+		expectedCACertDER, csrDER []byte, ttl time.Duration, extension crypto.CertificateExtension) ([]byte, error) {
+		if tenantID != st.tenantID || handle != protectedHandle || !bytes.Equal(expectedCACertDER, protectedDER) {
+			return nil, errors.New("PCAS bridge received an unbound CA")
+		}
+		bridgedCalls++
+		return crypto.SignLeafFromCSRWithProfile(protectedDER, protected, csrDER, ttl,
+			crypto.LeafProfile{ExtraExtensions: []crypto.CertificateExtension{extension}})
+	})
+	bridged := succapi.NewService(st.store, st.log, st.outbox,
+		succapi.WithKEMCustody(st.signer), succapi.WithManagedLeafIssuer(bridge))
+	if _, err := bridged.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+		IssuerID: "int20-protected-with-bridge", IdentityID: checkpointIdentity, CurrentEpoch: 1,
+		CAKeyHandle: protectedHandle, CACertDER: protectedDER,
+	}); err != nil {
+		t.Fatalf("managed-CA bridge did not permit the protected issuer: %v", err)
+	}
+	bridgedLeaf, err := bridged.IssueIssuerLeaf(st.ctx, st.tenantID, succapi.IssueLeafRequest{
+		IssuerID: "int20-protected-with-bridge", CSRDER: leafCSR(t), RotationVersion: 7, TTLSeconds: 600,
+	})
+	if err != nil {
+		t.Fatalf("protected issuer leaf through managed-CA bridge: %v", err)
+	}
+	issuerID, epoch, rotation, err := pcasissuer.ParseAuthorityEpoch(bridgedLeaf.CertDER)
+	if err != nil || issuerID != "int20-protected-with-bridge" || epoch != 1 || rotation != 7 {
+		t.Fatalf("bridged issuer tuple = %q/%d/%d, err=%v", issuerID, epoch, rotation, err)
+	}
+	bridgedStapled, err := bridged.IssueStapledLeaf(st.ctx, st.tenantID, succapi.IssueStapledLeafRequest{
+		IssuerID: "int20-protected-with-bridge", CSRDER: leafCSR(t), CheckpointIdentityID: checkpointIdentity,
+	})
+	if err != nil {
+		t.Fatalf("protected stapled leaf through managed-CA bridge: %v", err)
+	}
+	if _, found, err := staple.AttachmentFromCertificate(bridgedStapled.CertDER); err != nil || !found {
+		t.Fatalf("bridged stapled leaf lacks inline attachment: found=%t err=%v", found, err)
+	}
+	if bridgedCalls != 2 {
+		t.Fatalf("managed-CA bridge calls = %d, want issuer and stapled leaves", bridgedCalls)
 	}
 }
 

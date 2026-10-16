@@ -919,7 +919,7 @@ not this file.
 | `internal/signing/supervisor.go:235` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
 | `internal/succession/conformance/edition_test.go:44` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/succession/conformance/edition_test.go:128` | fixed argv, no user input (CWE-78) |
-| `internal/succession/conformance/int20_fullstack_test.go:959` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
+| `internal/succession/conformance/int20_fullstack_test.go:1030` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
 | `internal/testutil/openssltest/openssltest.go:97` | test-support helper running the system openssl found above; not linked into served binaries (CWE-78) |
 | `internal/tsa/http_test.go:48` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/tsa/http_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -988,7 +988,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2560` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2537` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2546` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1357,8 +1357,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2464` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2541` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2473` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2550` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1541,7 +1541,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2547` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2556` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

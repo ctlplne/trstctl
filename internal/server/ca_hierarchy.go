@@ -225,6 +225,48 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	profile crypto.LeafProfile,
 	keyOrigin custody.KeyOrigin,
 ) (crypto.IssuedLeaf, []byte, string, error) {
+	return h.issueLeafForExactAuthority(ctx, tenantID, authorityID, csrDER, ttl, profile, keyOrigin,
+		exactAuthorityLeafOptions{migration: true})
+}
+
+type exactAuthorityLeafOptions struct {
+	expectedSignerHandle string
+	expectedCACertDER    []byte
+	migration            bool
+}
+
+// IssuePCASLeaf reuses the managed-CA profile, dual-control signer binding,
+// source event and revocation inventory for a PCAS extension. It never selects
+// a successor authority implicitly: the PCAS registration pins one handle and
+// public certificate until its own epoch and authority are re-registered.
+func (h *caHierarchyService) IssuePCASLeaf(ctx context.Context, tenantID, caHandle string,
+	expectedCACertDER, csrDER []byte, ttl time.Duration, extension crypto.CertificateExtension) ([]byte, error) {
+	if h == nil || h.store == nil || h.signer == nil || h.signAuthz == nil {
+		return nil, api.ErrCAHierarchyUnavailable
+	}
+	ca, err := h.store.GetCAAuthorityBySignerHandle(ctx, tenantID, caHandle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: PCAS signer handle is not a tenant-managed CA", api.ErrCAHierarchyConflict)
+	}
+	if err != nil {
+		return nil, err
+	}
+	profile := h.leafProfile
+	profile.ExtraExtensions = append(append([]crypto.CertificateExtension(nil), profile.ExtraExtensions...), extension)
+	issued, _, _, err := h.issueLeafForExactAuthority(ctx, tenantID, ca.ID, csrDER, ttl,
+		profile, custody.OriginRequester, exactAuthorityLeafOptions{
+			expectedSignerHandle: caHandle, expectedCACertDER: expectedCACertDER,
+		})
+	if err != nil {
+		return nil, err
+	}
+	return issued.DER, nil
+}
+
+func (h *caHierarchyService) issueLeafForExactAuthority(
+	ctx context.Context, tenantID, authorityID string, csrDER []byte, ttl time.Duration,
+	profile crypto.LeafProfile, keyOrigin custody.KeyOrigin, opts exactAuthorityLeafOptions,
+) (crypto.IssuedLeaf, []byte, string, error) {
 	if len(csrDER) == 0 || ttl <= 0 {
 		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: CSR and positive TTL are required", api.ErrCAHierarchyInvalid)
 	}
@@ -236,7 +278,10 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
 	if authority.Status != "active" {
-		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: migration authority %s is no longer active", api.ErrCAHierarchyConflict, authority.ID)
+		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: exact authority %s is no longer active", api.ErrCAHierarchyConflict, authority.ID)
+	}
+	if opts.expectedSignerHandle != "" && authority.SignerHandle != opts.expectedSignerHandle {
+		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: PCAS signer handle changed", api.ErrCAHierarchyConflict)
 	}
 	signer, err := h.signerForAuthority(ctx, authority)
 	if err != nil {
@@ -245,6 +290,9 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	caDER, err := firstCertDER(authority.CertificatePEM)
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
+	}
+	if len(opts.expectedCACertDER) != 0 && !bytes.Equal(caDER, opts.expectedCACertDER) {
+		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: PCAS issuer certificate changed", api.ErrCAHierarchyConflict)
 	}
 	profile, err = h.leafProfileForAuthority(tenantID, authority, profile)
 	if err != nil {
@@ -265,7 +313,7 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
 	evidence := managedCALeafEvent(authority.ID, issued.DER, info)
-	evidence.MigrationExactAuthority = true
+	evidence.MigrationExactAuthority = opts.migration
 	evidence.KeyOrigin = string(keyOrigin)
 	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAEndEntityInventorySchemaVersion, evidence)
 	if err != nil {
