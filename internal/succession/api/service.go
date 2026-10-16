@@ -162,8 +162,8 @@ func (s *service) RegisterGenesis(ctx context.Context, tenantID string, req Gene
 		QueuedAt: queuedAt, StatusURL: "/api/v1/pcas/requests/" + requestID}, nil
 }
 
-// GetRequestStatus reads only this tenant's PCAS genesis, delegation, and
-// succession outbox destinations.
+// GetRequestStatus reads only this tenant's PCAS outbox destinations, including
+// configured breadth topics and canonical rows left by an earlier config.
 // Raw worker errors stay in the operator outbox ledger, outside this public
 // response, because they may include upstream data.
 func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID string) (RequestStatus, bool, error) {
@@ -172,12 +172,18 @@ func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID stri
 	}
 	var result RequestStatus
 	var found bool
+	recoveryTopic := topicOr(s.recoveryTopic, RecoveryRequestDestination)
+	federationTopic := topicOr(s.federationTopic, FederationImportDestination)
+	kemTopic := topicOr(s.kemTopic, KEMRewrapDestination)
 	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		var destination string
 		err := tx.QueryRow(ctx, `SELECT destination, status, attempts, created_at, delivered_at FROM outbox
 			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND idempotency_key = $1
-			AND destination IN ($2, $3, $4, $5)`, requestID, GenesisRequestDestination, SuccessionRequestDestination,
-			DelegationScopeDestination, DelegationFloorDestination).
+			AND destination IN ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			requestID, GenesisRequestDestination, SuccessionRequestDestination,
+			DelegationScopeDestination, DelegationFloorDestination,
+			RecoveryRequestDestination, FederationImportDestination, KEMRewrapDestination,
+			recoveryTopic, federationTopic, kemTopic).
 			Scan(&destination, &result.Status, &result.Attempts, &result.CreatedAt, &result.DeliveredAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -196,6 +202,12 @@ func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID stri
 			result.Kind = "delegation_scope"
 		case DelegationFloorDestination:
 			result.Kind = "delegation_floor"
+		case recoveryTopic, RecoveryRequestDestination:
+			result.Kind = "recovery"
+		case federationTopic, FederationImportDestination:
+			result.Kind = "federation_import"
+		case kemTopic, KEMRewrapDestination:
+			result.Kind = "kem_rewrap"
 		}
 		return nil
 	})
@@ -926,6 +938,9 @@ func (s *service) ListFederationBridges(ctx context.Context, tenantID string) (F
 }
 
 func (s *service) enqueue(ctx context.Context, tenantID, destination, target string, req any) (AsyncRequestResponse, error) {
+	if s.store == nil || s.outbox == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS outbox is unavailable")
+	}
 	requestID := events.NewID()
 	payload, err := json.Marshal(struct {
 		RequestID string `json:"request_id"`
@@ -934,17 +949,16 @@ func (s *service) enqueue(ctx context.Context, tenantID, destination, target str
 	if err != nil {
 		return AsyncRequestResponse{}, err
 	}
-	if s.store != nil && s.outbox != nil {
-		if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-				TenantID: tenantID, Destination: destination, IdempotencyKey: requestID, Payload: payload,
-			})
-			return err
-		}); err != nil {
-			return AsyncRequestResponse{}, fmt.Errorf("pcas api: enqueue %s: %w", destination, err)
-		}
+	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID: tenantID, Destination: destination, IdempotencyKey: requestID, Payload: payload,
+		})
+		return err
+	}); err != nil {
+		return AsyncRequestResponse{}, fmt.Errorf("pcas api: enqueue %s: %w", destination, err)
 	}
-	return AsyncRequestResponse{RequestID: requestID, Status: "queued", QueuedAt: time.Now().UTC(), Target: target}, nil
+	return AsyncRequestResponse{RequestID: requestID, Status: "queued", QueuedAt: time.Now().UTC(),
+		Target: target, StatusURL: "/api/v1/pcas/requests/" + requestID}, nil
 }
 
 func (s *service) issuerAuthority(ctx context.Context, tenantID, issuerID string) (pcasstore.IssuerAuthority, error) {

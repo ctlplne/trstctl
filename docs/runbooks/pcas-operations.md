@@ -228,6 +228,14 @@ A failed or still-pending import is not a trust relationship. Compare the listed
 `trust_root_sha256` with the foreign deployment's public root before using the
 bridge.
 
+The recovery, federation and KEM mutation responses include a `status_url` to
+`GET /api/v1/pcas/requests/{request_id}`. That read reports this tenant's
+outbox state even when the operator has configured custom PCAS breadth topics;
+it also recognizes canonical topics left queued before a configuration change.
+`delivered` means the worker finished its call. For KEM, use the separate
+`GET /api/v1/pcas/rewrap` stage readback and verify the paired public record
+before treating a rewrap as complete.
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the

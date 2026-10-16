@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -33,6 +35,61 @@ func openStorePCAS(t *testing.T) *corestore.Store {
 		t.Fatalf("migrate: %v", err)
 	}
 	return cs
+}
+
+func TestKEMRequestStatusResolvesConfiguredOutboxTopic(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	svc := succapi.NewService(cs, nil, orchestrator.NewOutbox(cs),
+		succapi.WithOutboxTopics("", "", "qa.pcas.kem-rewrap"))
+	queued, err := svc.RequestKEMRewrap(ctx, tenantA, succapi.KEMRewrapRequest{
+		IdentityID: "spiffe://qa.local/kem-status", PredecessorHandle: "test-predecessor",
+		SuccessorSignHandle: "test-successor", SuccessorKEMHandle: "test-kem",
+		SigningAlgorithm: string(crypto.ECDSAP384), KEMAlgorithm: "ML-KEM-768",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queued.StatusURL != "/api/v1/pcas/requests/"+queued.RequestID {
+		t.Fatalf("queued KEM status URL = %q, want followable request status", queued.StatusURL)
+	}
+	status, found, err := svc.GetRequestStatus(ctx, tenantA, queued.RequestID)
+	if err != nil || !found || status.Kind != "kem_rewrap" || status.Status != "pending" {
+		t.Fatalf("configured KEM request readback: found=%t status=%+v err=%v", found, status, err)
+	}
+}
+
+func TestPCASBreadthStatusReadsConfiguredAndCanonicalTopics(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	outbox := orchestrator.NewOutbox(cs)
+	svc := succapi.NewService(cs, nil, outbox,
+		succapi.WithOutboxTopics("qa.recovery.topic", "qa.federation.topic", "qa.kem.topic"))
+	for _, tc := range []struct{ id, destination, kind string }{
+		{"qa-status-recovery-custom", "qa.recovery.topic", "recovery"},
+		{"qa-status-federation-custom", "qa.federation.topic", "federation_import"},
+		{"qa-status-kem-canonical", succapi.KEMRewrapDestination, "kem_rewrap"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			if err := cs.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				_, err := outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+					TenantID: tenantA, Destination: tc.destination,
+					IdempotencyKey: tc.id, Payload: []byte(`{}`),
+				})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			status, found, err := svc.GetRequestStatus(ctx, tenantA, tc.id)
+			if err != nil || !found || status.Kind != tc.kind || status.Status != "pending" {
+				t.Fatalf("status: found=%t answer=%+v err=%v", found, status, err)
+			}
+			if _, found, err := svc.GetRequestStatus(ctx,
+				"22222222-2222-4222-8222-222222222222", tc.id); err != nil || found {
+				t.Fatalf("another tenant read request: found=%t err=%v", found, err)
+			}
+		})
+	}
 }
 
 func TestService_RegisterIssuerRefusesUnavailableCustodyBeforePersist(t *testing.T) {
