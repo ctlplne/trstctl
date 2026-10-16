@@ -93,7 +93,7 @@ type CommitmentFields struct {
 	PredecessorEpoch uint64
 	Epoch            uint64
 	PredecessorAlg   crypto.Algorithm
-	PredecessorPub   []byte // SubjectPublicKeyInfo (PKIX/DER)
+	PredecessorPub   []byte // SPKI DER for classical keys; canonical raw public encoding for PQC
 	SuccessorAlg     crypto.Algorithm
 	SuccessorPub     []byte
 	PolicyRef        string

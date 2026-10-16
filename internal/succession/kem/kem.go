@@ -135,7 +135,7 @@ func VerifyInteractiveRecord(rec succession.SuccessionRecord, challengerSecret [
 	if len(rec.PredecessorAtt) == 0 {
 		return succession.ErrPredecessorAttestation
 	}
-	if err := crypto.VerifyMessage(rec.Fields.PredecessorPub, commitment, rec.PredecessorAtt); err != nil {
+	if err := crypto.VerifyAlgorithmMessage(crypto.PublicKey{Algorithm: rec.Fields.PredecessorAlg, DER: rec.Fields.PredecessorPub}, commitment, rec.PredecessorAtt); err != nil {
 		return fmt.Errorf("%w: %v", succession.ErrPredecessorAttestation, err)
 	}
 	tr, err := decodeTranscript(rec.Possession.Transcript)
@@ -196,7 +196,7 @@ func VerifyPaired(rec PairedRecord) error {
 		return fmt.Errorf("%w: missing KEM public key", ErrBinding)
 	}
 	// The paired signing key (the commitment's successor key) signs the KEM binding.
-	if err := crypto.VerifyMessage(rec.Base.Fields.SuccessorPub, bindingMessage(commitment, rec.KEMAlg, rec.KEMPub), rec.Binding); err != nil {
+	if err := crypto.VerifyAlgorithmMessage(crypto.PublicKey{Algorithm: rec.Base.Fields.SuccessorAlg, DER: rec.Base.Fields.SuccessorPub}, bindingMessage(commitment, rec.KEMAlg, rec.KEMPub), rec.Binding); err != nil {
 		return fmt.Errorf("%w: %v", ErrBinding, err)
 	}
 	return nil

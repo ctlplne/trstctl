@@ -20,6 +20,13 @@ chain, and the expected head epoch. Verification is **offline**: no algorithm
 negotiation, no runtime cryptographic-provider load, and no network fetch — the caller
 supplies the chain (independent claim 13).
 
+For a signer-held ML-DSA or SLH-DSA successor, the signed commitment names the
+exact algorithm and carries that algorithm's canonical public-key bytes. The
+isolated signer signs the SHA-256 commitment digest. Offline verification checks
+both signatures against the named algorithms; it rejects an algorithm label that
+does not match its key or a changed signature. Older classical chains continue
+to use SubjectPublicKeyInfo DER and the same commitment format.
+
 ## Differential conformance
 
 `TestConformance_ChainVector` verifies each vector with `internal/rpverify` **and** with an

@@ -31,7 +31,7 @@ var (
 // limb alone suffices (PCAS-claim-25). It negotiates no algorithm and loads no
 // runtime provider — it verifies with the algorithms the keys already carry
 // (INV-6 building block). Signature verification routes through the core AN-3
-// boundary (crypto.VerifyMessage).
+// boundary and checks the bound algorithm as well as the public key bytes.
 //
 // It is the relying-party limb of the independent method claim (PCAS-claim-1):
 // both signatures over the commitment are verified offline, without invoking a
@@ -48,7 +48,7 @@ func VerifyRecord(rec SuccessionRecord) error {
 	if len(rec.PredecessorAtt) == 0 {
 		return ErrPredecessorAttestation
 	}
-	if err := crypto.VerifyMessage(rec.Fields.PredecessorPub, commitment, rec.PredecessorAtt); err != nil {
+	if err := crypto.VerifyAlgorithmMessage(crypto.PublicKey{Algorithm: rec.Fields.PredecessorAlg, DER: rec.Fields.PredecessorPub}, commitment, rec.PredecessorAtt); err != nil {
 		return fmt.Errorf("%w: %v", ErrPredecessorAttestation, err)
 	}
 	// Successor possession-proof limb.
@@ -57,7 +57,7 @@ func VerifyRecord(rec SuccessionRecord) error {
 		if len(rec.Possession.Signature) == 0 {
 			return ErrPossessionProof
 		}
-		if err := crypto.VerifyMessage(rec.Fields.SuccessorPub, commitment, rec.Possession.Signature); err != nil {
+		if err := crypto.VerifyAlgorithmMessage(crypto.PublicKey{Algorithm: rec.Fields.SuccessorAlg, DER: rec.Fields.SuccessorPub}, commitment, rec.Possession.Signature); err != nil {
 			return fmt.Errorf("%w: %v", ErrPossessionProof, err)
 		}
 	case ProofDecapTranscript, ProofNIZKPoP:

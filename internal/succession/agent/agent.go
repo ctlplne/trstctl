@@ -144,7 +144,7 @@ func MintWorkloadHeld(fields succession.CommitmentFields, agent PredecessorCoSig
 	if err != nil {
 		return succession.SuccessionRecord{}, fmt.Errorf("agent co-sign: %w", err)
 	}
-	if err := crypto.VerifyMessage(fields.PredecessorPub, commitment, resp.Signature); err != nil {
+	if err := crypto.VerifyAlgorithmMessage(crypto.PublicKey{Algorithm: fields.PredecessorAlg, DER: fields.PredecessorPub}, commitment, resp.Signature); err != nil {
 		return succession.SuccessionRecord{}, fmt.Errorf("%w: %v", ErrCoSignInvalid, err)
 	}
 	succSig, err := successor.Sign(commitment, crypto.SignOptions{Hash: crypto.SHA256})

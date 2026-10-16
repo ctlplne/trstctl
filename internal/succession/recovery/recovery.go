@@ -222,7 +222,7 @@ func VerifyRecord(rec RecoveryRecord, trustRootPubDER []byte) error {
 	if rec.Possession.Kind != succession.ProofSuccessorSignature || len(rec.Possession.Signature) == 0 {
 		return ErrPossession
 	}
-	if err := crypto.VerifyMessage(rec.Fields.SuccessorPub, commitment, rec.Possession.Signature); err != nil {
+	if err := crypto.VerifyAlgorithmMessage(crypto.PublicKey{Algorithm: rec.Fields.SuccessorAlg, DER: rec.Fields.SuccessorPub}, commitment, rec.Possession.Signature); err != nil {
 		return fmt.Errorf("%w: %v", ErrPossession, err)
 	}
 	exp := Expected{rec.Fields.IdentityID, rec.Fields.TenantID, rec.Fields.Epoch, string(rec.Fields.SuccessorAlg), rec.Fields.SuccessorPub}
