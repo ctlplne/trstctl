@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1527 annotated sites across 26 rules. Each row is
+1528 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -407,7 +407,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (251 sites)
+### G115 — CWE-190 Integer overflow or wraparound (252 sites)
 
 | Location | Reason |
 |---|---|
@@ -629,6 +629,7 @@ not this file.
 | `internal/store/upsert_arbiter_race_test.go:94` | small fixture counters (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:105` | small fixture counter (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:220` | small fixture counter (CWE-190) |
+| `internal/succession/background/workers_retirement_legacy_test.go:80` | TCP port was checked against [0, 65535] above. |
 | `internal/tenantseal/idempotency.go:96` | length framing of short bounded fields (CWE-190) |
 | `internal/tsa/fuzz_test.go:133` | crafted DER length byte for fuzz corpus; truncation is the crafted input (CWE-190) |
 | `internal/tsa/fuzz_test.go:135` | crafted DER length byte for fuzz corpus (CWE-190) |

@@ -352,26 +352,43 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 		return fmt.Errorf("pcas retirement worker: list tenants: %w", err)
 	}
 	for _, tenant := range tenants {
-		policies, err := w.repo.ListRetirementPolicies(ctx, tenant.TenantID, true)
+		// Include historical retired policies. Earlier builds could project
+		// "retired" after deleting a legacy unscoped handle while the real
+		// tenant-bound predecessor was still held by the signer. Recheck signer
+		// custody after every cold start, not just while a policy is active.
+		policies, err := w.repo.ListRetirementPolicies(ctx, tenant.TenantID, false)
 		if err != nil {
 			return err
 		}
 		for _, policy := range policies {
-			if alreadyRetired(ledgerEvents, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch) {
+			retirementRecorded := alreadyRetired(ledgerEvents, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch)
+			if policy.Status == "retired" && !retirementRecorded {
+				return fmt.Errorf("pcas retirement worker: retired policy has no matching tenant-bound retirement event for identity %s epoch %d", policy.IdentityID, policy.PredecessorEpoch)
+			}
+			if retirementRecorded {
 				// A retirement event can commit before the status projection does.
 				// Reconcile signer custody first: status must never get ahead of the
-				// exact tenant-bound predecessor key's destruction.
-				handle, err := retirementPredecessorHandle(tenant.TenantID, policy)
-				if err != nil {
-					return err
+				// exact tenant-bound predecessor key's destruction. A retired
+				// historical policy can contain a blank or wrong legacy handle;
+				// the event's tenant, identity, and epoch bind the actual target.
+				if policy.Status == "active" {
+					if _, err := retirementPredecessorHandle(tenant.TenantID, policy); err != nil {
+						return err
+					}
 				}
-				if err := client.ZeroizeKey(ctx, handle); err != nil {
+				handle := succession.TenantKeyHandle(tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch)
+				if err := ensureRetiredPredecessorAbsent(ctx, client, handle); err != nil {
 					return fmt.Errorf("pcas retirement worker: reconcile predecessor zeroization: %w", err)
 				}
-				if err := w.repo.MarkRetirementRetired(ctx, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch); err != nil {
-					return err
+				if policy.Status == "active" {
+					if err := w.repo.MarkRetirementRetired(ctx, tenant.TenantID, policy.IdentityID, policy.PredecessorEpoch); err != nil {
+						return err
+					}
 				}
 				continue
+			}
+			if policy.Status != "active" {
+				return fmt.Errorf("pcas retirement worker: unknown policy status %q for identity %s epoch %d", policy.Status, policy.IdentityID, policy.PredecessorEpoch)
 			}
 			if err := w.evaluatePolicy(ctx, client, tenant.TenantID, policy, ledgerEvents); err != nil && !errors.Is(err, retirement.ErrQuorumNotMet) {
 				return err
@@ -379,6 +396,30 @@ func (w *retirementWorker) runOnce(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// The signer is the source of truth for key custody. A successful delete alone
+// is insufficient because deletion is idempotent for an unknown handle, and a
+// lost response can occur after the signer has already destroyed the key.
+func ensureRetiredPredecessorAbsent(ctx context.Context, client *signing.Client, handle string) error {
+	_, err := client.SignerForHandle(ctx, handle)
+	if status.Code(err) == codes.NotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := client.ZeroizeKey(ctx, handle); err != nil {
+		return err
+	}
+	_, err = client.SignerForHandle(ctx, handle)
+	if status.Code(err) == codes.NotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("signer still holds predecessor key after zeroization")
 }
 
 func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.Client, tenantID string, policy pcasstore.RetirementPolicy, ledgerEvents []events.Event) error {

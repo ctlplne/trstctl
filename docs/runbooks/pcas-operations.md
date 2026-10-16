@@ -127,7 +127,8 @@ that they have advanced. Open **Algorithms and future readiness → Compatibilit
 PQC policy, and upgrade planning → Proof-carrying key succession**. Enter the
 stable identity and predecessor epoch, then read the current policy. The form
 shows the exact relying-party names and public keys, quorum, acknowledgment
-window, optional predecessor signer handle, rewrap state, and last update.
+window, rewrap state, and last update. The server derives the predecessor
+signer handle; the console does not ask the operator to enter it.
 Compare each public key through a separate trusted channel. Review the exact
 draft before saving it; changing an input cancels that review.
 
@@ -158,6 +159,13 @@ the exact predecessor signer key refuses signing; the status alone is not proof
 of zeroization. `rewrap_complete` is false when there are no rewrap jobs; in
 that case there is no ciphertext to rewrap. Do not infer that a relying party
 changed trust stores just because it appears in the roster.
+
+On restart, the retirement worker checks previously retired policies against
+the signed retirement event and the tenant-bound signer handle. This also
+repairs older policies that were marked retired after deleting a different,
+unscoped handle. A missing retirement event is an error; the worker will not
+destroy a key based only on a mutable status row. After recovery, independently
+check that the exact predecessor handle cannot sign.
 
 ## Health Signals
 
