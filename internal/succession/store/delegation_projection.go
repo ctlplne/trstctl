@@ -58,7 +58,7 @@ func (p *DelegationProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("pcas delegation: projection store unavailable")
 	}
-	//trstctl:system-query — a full replay resets this derived table for every tenant before replaying exact tenant-bound events.
+	//trstctl:system-query — cross-tenant system replay resets only this derived table; tenant_id-bound events then rebuild each tenant's scope.
 	_, err := tx.Exec(ctx, `DELETE FROM pcas_delegation_scope`)
 	return err
 }
