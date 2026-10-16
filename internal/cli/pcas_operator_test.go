@@ -66,3 +66,53 @@ func TestPCASOperatorCommandsPreserveBodyTenantAndStatusURL(t *testing.T) {
 		t.Fatalf("network calls=%d, want four authenticated operator calls", calls)
 	}
 }
+
+func TestPCASBreadthCommandsReachTheirServedRoutes(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		method string
+		path   string
+		query  string
+	}{
+		{"federation bridges list", []string{"pcas", "federation", "bridges", "list"}, "GET", "/api/v1/pcas/federation/bridges", ""},
+		{"federation import", []string{"pcas", "federation", "imports", "request", "-f", "-"}, "POST", "/api/v1/pcas/federation/imports", ""},
+		{"KEM rewrap", []string{"pcas", "kem", "rewrap", "request", "-f", "-"}, "POST", "/api/v1/pcas/kem/rewraps", ""},
+		{"KEM status", []string{"pcas", "rewrap", "status", "--identity_id", "spiffe://qa/id"}, "GET", "/api/v1/pcas/rewrap", "spiffe://qa/id"},
+		{"recovery policy", []string{"pcas", "recovery", "policy", "set", "-f", "-", "--force"}, "POST", "/api/v1/pcas/recovery/policies", ""},
+		{"recovery request", []string{"pcas", "recovery", "request", "-f", "-", "--force"}, "POST", "/api/v1/pcas/recovery/requests", ""},
+		{"issuer register", []string{"pcas", "issuers", "register", "-f", "-"}, "POST", "/api/v1/pcas/issuers", ""},
+		{"issuer leaf", []string{"pcas", "issuers", "leaf", "issue", "-f", "-"}, "POST", "/api/v1/pcas/issuers/leaf", ""},
+		{"stapled leaf", []string{"pcas", "staple", "leaf", "issue", "-f", "-"}, "POST", "/api/v1/pcas/staple/leaf", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.Method != tc.method || r.URL.Path != tc.path ||
+					r.Header.Get("Authorization") != "Bearer qa-token" || r.Header.Get("X-Tenant-ID") != "tenant-a" {
+					t.Errorf("routed request = %s %s with missing tenant auth", r.Method, r.URL.Path)
+				}
+				if tc.query != "" && r.URL.Query().Get("identity_id") != tc.query {
+					t.Errorf("identity_id query = %q", r.URL.Query().Get("identity_id"))
+				}
+				if tc.method == "POST" {
+					body, _ := io.ReadAll(r.Body)
+					if r.Header.Get("Idempotency-Key") == "" || !sameJSON(body, []byte(`{"qa":"public"}`)) {
+						t.Errorf("mutation missing idempotency or JSON body")
+					}
+				}
+				_, _ = io.WriteString(w, `{}`)
+			}))
+			t.Cleanup(srv.Close)
+			env := cli.Env{Server: srv.URL, Token: "qa-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+			stdin := ""
+			if tc.method == "POST" {
+				stdin = `{"qa":"public"}`
+			}
+			if code, _, stderr := run(t, tc.args, env, stdin); code != 0 || stderr != "" || calls != 1 {
+				t.Fatalf("command code=%d calls=%d stderr=%q", code, calls, stderr)
+			}
+		})
+	}
+}

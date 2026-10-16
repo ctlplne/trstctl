@@ -236,6 +236,18 @@ it also recognizes canonical topics left queued before a configuration change.
 `GET /api/v1/pcas/rewrap` stage readback and verify the paired public record
 before treating a rewrap as complete.
 
+The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
+`trstctl pcas federation imports request -f import.json`,
+`trstctl pcas kem rewrap request -f rewrap.json`, and
+`trstctl pcas rewrap status --identity_id <identity>`.
+Recovery uses `trstctl pcas recovery policy set -f policy.json --force` and
+`trstctl pcas recovery request -f request.json --force`; the force flag makes
+the operator acknowledge the authority change or mint. Issuer registration and
+leaf issuance use `trstctl pcas issuers register`,
+`trstctl pcas issuers leaf issue`, and `trstctl pcas staple leaf issue`, each
+with `-f` and the reviewed JSON body. These commands use the same tenant and
+idempotency headers as the API.
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the

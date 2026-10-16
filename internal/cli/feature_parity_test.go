@@ -304,8 +304,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// quorum-policy write, keeping the attached Core API usable headlessly.
 	// PCAS delegation adds signer-confirmed scope readback and two reviewed
 	// commands for scope creation and monotonic floor raises.
-	if len(out) != 523 {
-		t.Fatalf("CLI commands = %d, want 523", len(out))
+	// PCAS breadth adds recovery, federation, KEM, issuer and staple operator paths.
+	if len(out) != 532 {
+		t.Fatalf("CLI commands = %d, want 532", len(out))
 	}
 	return out
 }
