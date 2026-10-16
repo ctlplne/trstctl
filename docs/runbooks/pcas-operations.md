@@ -179,7 +179,9 @@ and every approver private key outside the policy document.
 `POST /api/v1/pcas/recovery/requests` refuses a request unless its tenant and
 identity have a configured policy and its trust root, quorum, roster, statement
 and signatures match that policy. An accepted response means the request was
-queued; inspect its request status and independently verify the resulting
+queued. The worker checks the same policy again at delivery; changing the root
+or roster after queueing makes the old request fail instead of minting under
+stale authority. Inspect its request status and independently verify the resulting
 recovery record before trusting a successor. A queued response alone is not
 proof of minting, signer custody or relying-party acceptance.
 

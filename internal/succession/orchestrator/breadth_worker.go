@@ -225,17 +225,38 @@ func (w *BreadthWorker) proveSignerDecapsulation(ctx context.Context, handle, ke
 }
 
 func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, payload []byte) error {
-	if w.kem == nil {
-		return errors.New("pcas recovery: no signer custody configured")
-	}
 	var env requestEnvelope[recoveryPayload]
 	if err := json.Unmarshal(payload, &env); err != nil {
 		return fmt.Errorf("pcas recovery: decode payload: %w", err)
 	}
 	p := env.Request
+	if w.repo == nil {
+		return errors.New("pcas recovery: recovery policy store unavailable")
+	}
+	policy, found, err := w.repo.GetRecoveryPolicy(ctx, tenantID, p.IdentityID)
+	if err != nil {
+		return fmt.Errorf("pcas recovery: read recovery policy: %w", err)
+	}
+	if !found {
+		return errors.New("pcas recovery: recovery policy not configured for this tenant identity")
+	}
+	var configured []recovery.Approver
+	if err := json.Unmarshal(policy.RosterJSON, &configured); err != nil {
+		return fmt.Errorf("pcas recovery: decode configured roster: %w", err)
+	}
 	var auth recovery.RecoveryAuthorization
 	if err := json.Unmarshal(p.Authorization, &auth); err != nil {
 		return fmt.Errorf("pcas recovery: decode authorization: %w", err)
+	}
+	expected := recovery.Expected{IdentityID: p.IdentityID, TenantID: tenantID,
+		Epoch: p.Epoch, SuccessorAlg: p.TargetAlgorithm, SuccessorPub: auth.Statement.SuccessorPub}
+	if err := recovery.VerifyConfiguredPolicy(recovery.Policy{
+		TrustRootDER: policy.TrustRootDER, Threshold: policy.Threshold, Roster: configured,
+	}, p.TrustRootDER, auth, expected, p.DeploymentScope); err != nil {
+		return fmt.Errorf("pcas recovery: configured policy refusal: %w", err)
+	}
+	if w.kem == nil {
+		return errors.New("pcas recovery: no signer custody configured")
 	}
 	successorRemote, err := w.kem.SignerForHandle(ctx, p.SuccessorHandle)
 	if err != nil {

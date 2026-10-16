@@ -353,33 +353,14 @@ func validateRecoveryPolicyRequest(req RecoveryPolicyRequest) error {
 	if strings.TrimSpace(req.IdentityID) == "" || req.Threshold < 1 {
 		return api.ErrStatus(http.StatusBadRequest, "identity_id and positive threshold are required")
 	}
-	if err := crypto.ValidatePublicKeyDER(req.TrustRootDER); err != nil {
-		return api.ErrStatus(http.StatusBadRequest, "trust_root_der must be a usable public key")
-	}
 	var roster []pcasrecovery.Approver
 	if err := json.Unmarshal(req.Roster, &roster); err != nil || len(roster) == 0 {
 		return api.ErrStatus(http.StatusBadRequest, "roster must be a nonempty array of approvers")
 	}
-	seen := make(map[string]struct{}, len(roster))
-	seenKeys := make(map[string]struct{}, len(roster))
-	for _, approver := range roster {
-		if strings.TrimSpace(approver.ID) == "" || strings.TrimSpace(approver.ID) != approver.ID {
-			return api.ErrStatus(http.StatusBadRequest, "each recovery approver needs a canonical nonempty ID")
-		}
-		if _, exists := seen[approver.ID]; exists {
-			return api.ErrStatus(http.StatusBadRequest, "recovery approver IDs must be distinct")
-		}
-		seen[approver.ID] = struct{}{}
-		if err := crypto.ValidatePublicKeyDER(approver.PubDER); err != nil {
-			return api.ErrStatus(http.StatusBadRequest, "each recovery approver needs a usable public key")
-		}
-		if _, exists := seenKeys[string(approver.PubDER)]; exists {
-			return api.ErrStatus(http.StatusBadRequest, "recovery approver public keys must be distinct")
-		}
-		seenKeys[string(approver.PubDER)] = struct{}{}
-	}
-	if req.Threshold > len(seen) {
-		return api.ErrStatus(http.StatusBadRequest, "threshold exceeds the distinct recovery approvers")
+	if err := pcasrecovery.ValidatePolicy(pcasrecovery.Policy{
+		TrustRootDER: req.TrustRootDER, Threshold: req.Threshold, Roster: roster,
+	}); err != nil {
+		return api.ErrWithStatus(http.StatusBadRequest, err)
 	}
 	return nil
 }
@@ -402,9 +383,6 @@ func (s *service) RequestRecovery(ctx context.Context, tenantID string, req Reco
 }
 
 func validateRecoveryRequestPolicy(tenantID string, req RecoveryRequest, policy pcasstore.RecoveryPolicy) error {
-	if !bytes.Equal(req.TrustRootDER, policy.TrustRootDER) {
-		return api.ErrStatus(http.StatusConflict, "recovery request trust root does not match the configured policy")
-	}
 	var configured []pcasrecovery.Approver
 	if err := json.Unmarshal(policy.RosterJSON, &configured); err != nil {
 		return fmt.Errorf("pcas recovery: decode configured roster: %w", err)
@@ -413,22 +391,21 @@ func validateRecoveryRequestPolicy(tenantID string, req RecoveryRequest, policy 
 	if err := json.Unmarshal(req.Authorization, &auth); err != nil {
 		return api.ErrStatus(http.StatusBadRequest, "recovery authorization must be valid JSON")
 	}
-	if auth.Threshold != policy.Threshold || len(auth.Roster) != len(configured) {
-		return api.ErrStatus(http.StatusConflict, "recovery authorization does not match the configured quorum")
-	}
-	for i, approver := range configured {
-		if auth.Roster[i].ID != approver.ID || !bytes.Equal(auth.Roster[i].PubDER, approver.PubDER) {
-			return api.ErrStatus(http.StatusConflict, "recovery authorization does not match the configured roster")
-		}
-	}
-	if auth.Statement.DeploymentScope != req.DeploymentScope ||
-		auth.Statement.IdentityID != req.IdentityID || auth.Statement.TenantID != tenantID ||
-		auth.Statement.Epoch != req.Epoch || auth.Statement.SuccessorAlg != req.TargetAlgorithm {
-		return api.ErrStatus(http.StatusBadRequest, "recovery authorization statement does not match the request")
-	}
 	expected := pcasrecovery.Expected{IdentityID: req.IdentityID, TenantID: tenantID,
 		Epoch: req.Epoch, SuccessorAlg: req.TargetAlgorithm, SuccessorPub: auth.Statement.SuccessorPub}
-	if err := pcasrecovery.VerifyAuthorization(auth, policy.TrustRootDER, expected); err != nil {
+	err := pcasrecovery.VerifyConfiguredPolicy(pcasrecovery.Policy{
+		TrustRootDER: policy.TrustRootDER, Threshold: policy.Threshold, Roster: configured,
+	}, req.TrustRootDER, auth, expected, req.DeploymentScope)
+	switch {
+	case errors.Is(err, pcasrecovery.ErrPolicyRootMismatch):
+		return api.ErrStatus(http.StatusConflict, "recovery request trust root does not match the configured policy")
+	case errors.Is(err, pcasrecovery.ErrPolicyQuorumMismatch):
+		return api.ErrStatus(http.StatusConflict, "recovery authorization does not match the configured quorum")
+	case errors.Is(err, pcasrecovery.ErrPolicyRosterMismatch):
+		return api.ErrStatus(http.StatusConflict, "recovery authorization does not match the configured roster")
+	case errors.Is(err, pcasrecovery.ErrStatementMismatch):
+		return api.ErrStatus(http.StatusBadRequest, "recovery authorization statement does not match the request")
+	case err != nil:
 		return api.ErrStatus(http.StatusBadRequest, "recovery authorization signatures are invalid for the configured policy")
 	}
 	return nil
