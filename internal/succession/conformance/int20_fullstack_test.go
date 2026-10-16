@@ -61,6 +61,7 @@ type int20Stack struct {
 	handler   editionseam.LicensedOutboxHandler
 	svc       succapi.Service
 	signer    *signing.Client
+	signAuthz *crypto.SignAuthorizer
 	keyDir    string
 	tenantID  string
 	features  *featureRecorder
@@ -257,7 +258,7 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 		t.Fatalf("open embedded JetStream: %v", err)
 	}
 
-	signer, stopSign, keyDir := startLicensedSignerSubprocess(t)
+	signer, stopSign, keyDir, signAuthz := startLicensedSignerSubprocess(t)
 	features := &featureRecorder{}
 	outbox := coreorch.NewOutbox(cs,
 		coreorch.WithWorkerID("pcas-int20"),
@@ -276,7 +277,7 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 
 	st := &int20Stack{
 		ctx: ctx, store: cs, repo: pcasstore.New(cs), log: log, outbox: outbox,
-		handler: handler, svc: svc, signer: signer, keyDir: keyDir, tenantID: int20Tenant,
+		handler: handler, svc: svc, signer: signer, signAuthz: signAuthz, keyDir: keyDir, tenantID: int20Tenant,
 		features: features, closeSign: stopSign,
 	}
 	t.Cleanup(func() {
@@ -435,6 +436,31 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 
 func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity string) {
 	t.Helper()
+	// An offline/dual-control CA can be valid and tenant-owned, but this direct
+	// leaf route cannot obtain its per-sign approval. Refuse registration before
+	// claiming an issuer is ready; the signer still enforces the rule itself.
+	protectedHandle := "int20-protected-issuer-ca"
+	protected, err := st.signer.GenerateDualControlKeyHandle(st.ctx, crypto.ECDSAP256,
+		protectedHandle, []signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, st.signAuthz)
+	if err != nil {
+		t.Fatalf("generate protected issuer CA: %v", err)
+	}
+	protectedDER, err := crypto.SelfSignedCACert(protected, "trstctl INT20 protected PCAS CA", time.Hour)
+	if err != nil {
+		t.Fatalf("self-sign protected CA: %v", err)
+	}
+	if _, err := st.store.InsertCAAuthority(st.ctx, corestore.CAAuthority{
+		TenantID: st.tenantID, CommonName: "trstctl INT20 protected PCAS CA", Kind: "root", Serial: "int20-protected-issuer-ca-serial",
+		CertificatePEM: string(crypto.EncodeCertificatePEM(protectedDER)), SignerHandle: protectedHandle,
+	}); err != nil {
+		t.Fatalf("seed protected CA authority: %v", err)
+	}
+	if _, err := st.svc.RegisterIssuerAuthority(st.ctx, st.tenantID, succapi.IssuerAuthorityRequest{
+		IssuerID: "int20-protected-ca", IdentityID: checkpointIdentity, CurrentEpoch: 1,
+		CAKeyHandle: protectedHandle, CACertDER: protectedDER,
+	}); err == nil || !strings.Contains(err.Error(), "dual-control") {
+		t.Fatalf("direct issuer registration accepted a dual-control key without an approval path: %v", err)
+	}
 	caHandle := "int20-issuer-ca"
 	ca, err := st.signer.GenerateConstrainedKeyHandle(st.ctx, crypto.ECDSAP256, caHandle, []signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
 	if err != nil {
@@ -581,6 +607,32 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 	}
 	if res.Epoch != 1 {
 		t.Fatalf("stapled posture epoch = %d, want 1", res.Epoch)
+	}
+	// A source event from an older build may already name a protected CA. Cold
+	// replay must not make either direct leaf path bypass its signer policy.
+	legacy, err := succession.Encode(succession.IssuerAuthorityRegisteredV1{
+		TenantID: st.tenantID, IssuerID: "int20-legacy-protected-ca", IdentityID: checkpointIdentity,
+		CurrentEpoch: 1, CAKeyHandle: protectedHandle, CACertDER: protectedDER,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded, err := st.log.Append(st.ctx, legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.repo.ApplyIssuerAuthorityEvent(st.ctx, recorded); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.svc.IssueIssuerLeaf(st.ctx, st.tenantID, succapi.IssueLeafRequest{
+		IssuerID: "int20-legacy-protected-ca", CSRDER: leafCSR(t),
+	}); err == nil || !strings.Contains(err.Error(), "dual-control") {
+		t.Fatalf("legacy protected issuer direct leaf was not refused: %v", err)
+	}
+	if _, err := st.svc.IssueStapledLeaf(st.ctx, st.tenantID, succapi.IssueStapledLeafRequest{
+		IssuerID: "int20-legacy-protected-ca", CSRDER: leafCSR(t), CheckpointIdentityID: checkpointIdentity,
+	}); err == nil || !strings.Contains(err.Error(), "dual-control") {
+		t.Fatalf("legacy protected issuer stapled leaf was not refused: %v", err)
 	}
 }
 
@@ -880,7 +932,7 @@ func startEmbeddedPostgres(t *testing.T) (string, func()) {
 	return dsn, func() { _ = pg.Stop() }
 }
 
-func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), string) {
+func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), string, *crypto.SignAuthorizer) {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()
 	if err != nil {
@@ -917,7 +969,12 @@ func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), strin
 	socket := filepath.Join(socketDir, "s.sock")
 	keyDir := filepath.Join(dir, "keys")
 	kekFile := filepath.Join(dir, "kek.bin")
-	args := []string{"--license", licFile, "--keystore", keyDir, "--kek", kekFile}
+	authFile := filepath.Join(dir, "sign-auth.bin")
+	authz, err := signing.LoadOrCreateAuthorizer(authFile)
+	if err != nil {
+		t.Fatalf("create test-only dual-control authorizer: %v", err)
+	}
+	args := []string{"--license", licFile, "--keystore", keyDir, "--kek", kekFile, "--auth-secret", authFile}
 	if runtime.GOOS != "linux" {
 		args = append(args, "--allow-insecure-dev-nonlinux")
 	}
@@ -930,9 +987,10 @@ func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), strin
 	return client, func() {
 		_ = client.Close()
 		stop()
+		authz.Destroy()
 		_ = os.RemoveAll(dir)
 		_ = os.RemoveAll(socketDir)
-	}, keyDir
+	}, keyDir, authz
 }
 
 // freeTCPPort returns an unused loopback port as a uint32 — the type

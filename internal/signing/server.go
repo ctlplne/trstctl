@@ -278,8 +278,9 @@ func (s *Server) GetPublicKey(_ context.Context, req *signerpb.GetPublicKeyReque
 		return nil, err
 	}
 	return &signerpb.GetPublicKeyResponse{
-		Algorithm: s.keyspec.ProtoFromAlgorithm(held.signer.Algorithm()),
-		PublicKey: held.signer.Public().DER,
+		Algorithm:             s.keyspec.ProtoFromAlgorithm(held.signer.Algorithm()),
+		PublicKey:             held.signer.Public().DER,
+		RequiresAuthorization: held.constraints.requireAuth,
 	}, nil
 }
 

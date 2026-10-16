@@ -632,11 +632,14 @@ func (x *GetPublicKeyRequest) GetHandle() *KeyHandle {
 }
 
 type GetPublicKeyResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Algorithm     Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
-	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Algorithm Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	PublicKey []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	// Read-only capability bit from the signer's sealed key constraints. A caller
+	// without an approval flow must refuse this key before claiming it is usable.
+	RequiresAuthorization bool `protobuf:"varint,3,opt,name=requires_authorization,json=requiresAuthorization,proto3" json:"requires_authorization,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *GetPublicKeyResponse) Reset() {
@@ -681,6 +684,13 @@ func (x *GetPublicKeyResponse) GetPublicKey() []byte {
 		return x.PublicKey
 	}
 	return nil
+}
+
+func (x *GetPublicKeyResponse) GetRequiresAuthorization() bool {
+	if x != nil {
+		return x.RequiresAuthorization
+	}
+	return false
 }
 
 type SignRequest struct {
@@ -2751,11 +2761,12 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\n" +
 	"public_key\x18\x03 \x01(\fR\tpublicKey\"L\n" +
 	"\x13GetPublicKeyRequest\x125\n" +
-	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\"r\n" +
+	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\"\xa9\x01\n" +
 	"\x14GetPublicKeyResponse\x12;\n" +
 	"\talgorithm\x18\x01 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
 	"\n" +
-	"public_key\x18\x02 \x01(\fR\tpublicKey\"\xd9\x02\n" +
+	"public_key\x18\x02 \x01(\fR\tpublicKey\x125\n" +
+	"\x16requires_authorization\x18\x03 \x01(\bR\x15requiresAuthorization\"\xd9\x02\n" +
 	"\vSignRequest\x125\n" +
 	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\x12\x16\n" +
 	"\x06digest\x18\x02 \x01(\fR\x06digest\x12,\n" +

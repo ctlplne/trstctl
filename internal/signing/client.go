@@ -370,12 +370,13 @@ func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm cry
 		return nil, err
 	}
 	return &RemoteSigner{
-		client:     c,
-		handle:     resp.GetHandle(),
-		algorithm:  algorithm,
-		public:     crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
-		purpose:    declaredPurpose,
-		authorizer: authorizer,
+		client:                c,
+		handle:                resp.GetHandle(),
+		algorithm:             algorithm,
+		public:                crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
+		purpose:               declaredPurpose,
+		requiresAuthorization: true,
+		authorizer:            authorizer,
 	}, nil
 }
 
@@ -415,11 +416,12 @@ func (c *Client) SignerForHandleWithPurpose(ctx context.Context, handle string, 
 		return nil, err
 	}
 	return &RemoteSigner{
-		client:    c,
-		handle:    &signerpb.KeyHandle{Id: handle},
-		algorithm: alg,
-		public:    crypto.PublicKey{Algorithm: alg, DER: resp.GetPublicKey()},
-		purpose:   declaredPurpose,
+		client:                c,
+		handle:                &signerpb.KeyHandle{Id: handle},
+		algorithm:             alg,
+		public:                crypto.PublicKey{Algorithm: alg, DER: resp.GetPublicKey()},
+		purpose:               declaredPurpose,
+		requiresAuthorization: resp.GetRequiresAuthorization(),
 	}, nil
 }
 
@@ -432,6 +434,9 @@ type RemoteSigner struct {
 	algorithm crypto.Algorithm
 	public    crypto.PublicKey
 	purpose   KeyPurpose
+	// The signer reports this from the sealed key constraint on readback. It is
+	// informational only: Sign still enforces authorization independently.
+	requiresAuthorization bool
 	// authorizer, when non-nil, mints the dual-control authorization token attached
 	// to every Sign (RED-003). It is set only for a dual-control key; production
 	// must source it from an independent approval authority, not from the digest
@@ -447,6 +452,10 @@ func (r *RemoteSigner) Algorithm() crypto.Algorithm { return r.algorithm }
 
 // Purpose reports the usage class this signer asserts on every Sign.
 func (r *RemoteSigner) Purpose() KeyPurpose { return r.purpose }
+
+// RequiresAuthorization reports whether the held key needs an approval token
+// for each Sign. A direct-sign workflow can refuse it before accepting work.
+func (r *RemoteSigner) RequiresAuthorization() bool { return r.requiresAuthorization }
 
 // SignDigest signs digest by calling the signer's Sign RPC over the UDS. It
 // asserts the signer's bound purpose; if the key is purpose-constrained and the

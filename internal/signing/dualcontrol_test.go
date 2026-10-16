@@ -57,6 +57,35 @@ func serveDualControl(t *testing.T, authz *crypto.SignAuthorizer) *signing.Clien
 	return waitReady(t, socket)
 }
 
+func TestSignerReadbackReportsSealedDualControlRequirement(t *testing.T) {
+	authz := dualControlAuthorizer(t)
+	client := serveDualControl(t, authz)
+	defer func() { _ = client.Close() }()
+	ctx := context.Background()
+	if _, err := client.GenerateDualControlKeyHandle(ctx, crypto.ECDSAP256, "readback-dual-control",
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, authz); err != nil {
+		t.Fatal(err)
+	}
+	protected, err := client.SignerForHandleWithPurpose(ctx, "readback-dual-control", signing.PurposeCASign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !protected.RequiresAuthorization() {
+		t.Fatal("signer readback concealed the sealed dual-control requirement")
+	}
+	if _, err := client.GenerateConstrainedKeyHandle(ctx, crypto.ECDSAP256, "readback-direct",
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign); err != nil {
+		t.Fatal(err)
+	}
+	direct, err := client.SignerForHandleWithPurpose(ctx, "readback-direct", signing.PurposeCASign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if direct.RequiresAuthorization() {
+		t.Fatal("signer readback marked a direct CA key as dual-control")
+	}
+}
+
 // TestDualControlBlocksDigestBlindForgeryOverUDS is the RED-003 end-to-end
 // acceptance test and the headline of this finding's closure.
 //

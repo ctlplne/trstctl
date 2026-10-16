@@ -558,6 +558,10 @@ func (s *service) RegisterIssuerAuthority(ctx context.Context, tenantID string, 
 	if err != nil {
 		return IssuerAuthorityResponse{}, err
 	}
+	if ca.RequiresAuthorization() {
+		return IssuerAuthorityResponse{}, api.ErrStatus(http.StatusConflict,
+			"dual-control managed CA requires a separate approval path; select a CA authorized for direct PCAS leaf issuance")
+	}
 	if err := crypto.VerifyCertificateSigner(req.CACertDER, ca.Public()); err != nil {
 		return IssuerAuthorityResponse{}, api.ErrWithStatus(http.StatusConflict, fmt.Errorf("issuer certificate and signer custody mismatch: %w", err))
 	}
@@ -652,6 +656,10 @@ func (s *service) IssueIssuerLeaf(ctx context.Context, tenantID string, req Issu
 	if err != nil {
 		return IssueLeafResponse{}, err
 	}
+	if ca.RequiresAuthorization() {
+		return IssueLeafResponse{}, api.ErrStatus(http.StatusConflict,
+			"dual-control managed CA cannot issue through the direct PCAS leaf route")
+	}
 	ttl := leafTTL(req.TTLSeconds)
 	rotation := req.RotationVersion
 	if rotation == 0 {
@@ -702,6 +710,10 @@ func (s *service) IssueStapledLeaf(ctx context.Context, tenantID string, req Iss
 	ca, err := s.caSigner(ctx, authority.CAKeyHandle)
 	if err != nil {
 		return IssueLeafResponse{}, err
+	}
+	if ca.RequiresAuthorization() {
+		return IssueLeafResponse{}, api.ErrStatus(http.StatusConflict,
+			"dual-control managed CA cannot issue through the direct PCAS stapled-leaf route")
 	}
 	certDER, err := pcasstaple.IssueStapledLeaf(authority.CACertDER, ca, req.CSRDER, pcasstaple.Attachment{Checkpoint: &signed}, leafTTL(req.TTLSeconds))
 	if err != nil {

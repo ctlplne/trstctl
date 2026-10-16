@@ -212,6 +212,9 @@ message GetPublicKeyRequest {
 message GetPublicKeyResponse {
   Algorithm algorithm = 1;
   bytes public_key = 2;
+  // Read-only capability bit from the signer's sealed key constraints. A caller
+  // without an approval flow must refuse this key before claiming it is usable.
+  bool requires_authorization = 3;
 }
 
 message SignRequest {
