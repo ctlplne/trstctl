@@ -124,7 +124,10 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		} else if isTenantLifecycleEventType(e.Type) {
 			err = w.proj.ApplyRetainedTenantLifecycle(runCtx, e)
 		} else {
-			err = w.proj.Apply(runCtx, e)
+			// The command side can project before this durable consumer ACKs the
+			// same event. Use retained-history replay semantics for the tail only;
+			// direct command projection still refuses a duplicate decision.
+			err = w.proj.Apply(governanceDecisionHistoryReplay(runCtx), e)
 		}
 		if err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)

@@ -82,6 +82,12 @@ If every retry reports the same immutable binding mismatch, preserve PostgreSQL
 and JetStream and collect a support bundle. That is a code or history-compatibility
 incident, not a transient health check to silence.
 
+The durable JetStream consumer can lag behind a decision already projected by the
+live request. On replay, the first recorded decision by that approver remains
+authoritative and the tail advances to later events. A different approver's new
+decision after a terminal request still fails closed. Never acknowledge the
+consumer message or move the checkpoint by hand to clear this condition.
+
 ## CLI commands return 401 or 403
 
 - **401** — the token is missing or unknown. Set `TRSTCTL_TOKEN` (or `--token`)
