@@ -446,7 +446,10 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 	}
 	if _, err := st.store.InsertCAAuthority(st.ctx, corestore.CAAuthority{
 		TenantID: st.tenantID, CommonName: "trstctl INT20 PCAS CA", Kind: "root", Serial: "int20-issuer-ca-serial",
-		CertificatePEM: string(crypto.EncodeCertificatePEM(caDER)), SignerHandle: caHandle,
+		// A managed authority can retain a public PEM chain. Registration must
+		// bind its first certificate to signer custody without treating the
+		// remaining public certificate blocks as a private or ambiguous root.
+		CertificatePEM: string(append(crypto.EncodeCertificatePEM(caDER), crypto.EncodeCertificatePEM(caDER)...)), SignerHandle: caHandle,
 	}); err != nil {
 		t.Fatalf("seed tenant-bound CA authority: %v", err)
 	}

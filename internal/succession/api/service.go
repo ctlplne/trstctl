@@ -21,6 +21,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -633,12 +634,11 @@ func (s *service) requireManagedIssuerCA(ctx context.Context, tenantID, handle s
 	if managedCA.Status != "active" {
 		return api.ErrStatus(http.StatusConflict, "CA authority is not active for issuer use")
 	}
-	storedDER, err := crypto.NormalizeCertificateDER([]byte(managedCA.CertificatePEM))
-	if err != nil {
-		return fmt.Errorf("pcas issuer: stored managed CA certificate is invalid: %w", err)
-	}
-	if !bytes.Equal(storedDER, certDER) {
-		return api.ErrStatus(http.StatusConflict, "issuer certificate does not match this tenant's managed CA authority")
+	// Managed authorities may retain a leaf-first public PEM chain. Parse the
+	// whole bounded public-only envelope and require its first certificate to
+	// match the exact requested CA DER; never select a later block as authority.
+	if _, err := certinfo.ParsePublicPEMChain([]byte(managedCA.CertificatePEM), certDER); err != nil {
+		return api.ErrStatus(http.StatusConflict, "issuer certificate does not match this tenant's managed CA public chain")
 	}
 	return nil
 }

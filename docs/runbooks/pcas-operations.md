@@ -195,7 +195,9 @@ proof of minting, signer custody or relying-party acceptance.
 
 Before `POST /api/v1/pcas/issuers`, complete the managed-CA ceremony and
 confirm the CA authority is active in this tenant. Use that authority's exact
-signer handle and public CA certificate. The named PCAS identity must have a
+signer handle and the DER encoding of the **first** public CA certificate in
+its `certificate_pem` chain. The server parses the full public-only chain but
+binds only that first certificate to the signer-held key. The named PCAS identity must have a
 verified tenant-bound genesis, and `current_epoch` must equal its recorded
 algorithm epoch (zero before its first succession). Registration checks the
 tenant-owned CA row, the isolated signer's live key, and the exact certificate
@@ -214,10 +216,11 @@ Retry an uncertain registration response with the same `Idempotency-Key`.
 
 `POST /api/v1/pcas/federation/imports` queues verification of a foreign
 genesis and succession chain. The `202` response means only that the import
-was queued. Send `foreign_genesis` as a JSON genesis record object and each
-`foreign_chain` entry as a JSON succession record object, as returned by the
-foreign deployment's chain endpoint; base64-encoded record strings are refused
-before queueing. `foreign_trust_root_der` is a base64-encoded DER byte string.
+was queued. Send `foreign_genesis` as the JSON `genesis` object from the
+foreign deployment's chain response. Decode each base64 `records` entry from
+that response into a JSON succession record object before putting it in
+`foreign_chain`; base64-encoded record strings are refused before queueing.
+Pass its `trust_root_public_der` as `foreign_trust_root_der` (a base64 SPKI byte string).
 Before import, register a tenant PCAS genesis whose `identity_id`
 equals the request's `local_deployment_id`. Omit `local_authority_handle` and
 the server derives that tenant identity's epoch-zero signer handle. An explicit
