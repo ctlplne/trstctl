@@ -24,6 +24,15 @@ on behalf of a tenant. A pre-existing unscoped chain requires an explicit custod
 migration before it can be advanced through this worker; the worker must not guess
 which tenant owns a signer handle.
 
+The signer also stores a sealed mint intent and exact public result in
+`pcas-mint-operations/` under the same custody directory and key wrapper. It
+fsyncs the first-writer intent before key generation, then the completed record
+before advancing the epoch floor or returning the RPC response. An identical
+request after a lost response or a control-plane database failure returns the
+record already minted. A changed request for that epoch is refused. Keep this
+directory with the signer keystore and epoch floors in backup and restore; losing
+only one of those three makes recovery ambiguous and must fail closed.
+
 ## Claim 16 — locked, non-dumpable, zeroized buffers (DELIVERED)
 
 The default key factory returns `crypto.GenerateLockedKey`, a `*crypto.LockedSigner`

@@ -155,7 +155,7 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 		os.Exit(1)
 	}
 	m, err := signerwiring.NewProductionMinter(signerwiring.Config{
-		SignerID: "trstctl-signer", FloorDir: floorDir, Delegation: delegationConstraint,
+		SignerID: "trstctl-signer", FloorDir: floorDir, JournalWrapper: wrapper, Delegation: delegationConstraint,
 		BreakGlassAuthorityPubDER: breakGlassPub,
 	})
 	if err != nil {

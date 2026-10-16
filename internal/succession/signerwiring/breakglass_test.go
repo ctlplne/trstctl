@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 )
 
 // The key is generated through internal/crypto rather than crypto/ed25519
@@ -67,11 +68,20 @@ func TestLoadBreakGlassAuthority(t *testing.T) {
 // keeps its fail-closed downgrade refusal instead of failing to start.
 func TestProductionMinterBuildsWithAndWithoutBreakGlass(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := NewProductionMinter(Config{SignerID: "s", FloorDir: dir}); err != nil {
+	raw, err := seal.GenerateKEK()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper, err := seal.NewLocalKEK(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrapper.Destroy()
+	if _, err := NewProductionMinter(Config{SignerID: "s", FloorDir: dir, JournalWrapper: wrapper}); err != nil {
 		t.Fatalf("unconfigured break-glass must still build a minter: %v", err)
 	}
 	der := writeAuthorityPEM(t, dir)
-	if _, err := NewProductionMinter(Config{SignerID: "s", FloorDir: dir, BreakGlassAuthorityPubDER: der}); err != nil {
+	if _, err := NewProductionMinter(Config{SignerID: "s", FloorDir: dir, JournalWrapper: wrapper, BreakGlassAuthorityPubDER: der}); err != nil {
 		t.Fatalf("configured break-glass must build a minter: %v", err)
 	}
 }

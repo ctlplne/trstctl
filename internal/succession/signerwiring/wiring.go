@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/succession/minter"
 )
@@ -29,6 +30,9 @@ type Config struct {
 	// file-backed epoch floor under this directory within the signer custody boundary
 	// (INT-05, PCAS-claim-21). Empty (and Floors nil) => interim in-memory floor.
 	FloorDir string
+	// JournalWrapper seals request-bound mint intents and exact results under the
+	// same signer-local KEK as the private key store. Required with FloorDir.
+	JournalWrapper seal.KeyWrapper
 	// AttestSigner, when set, countersigns every minted record with the signer's
 	// attestation key. INT-11 makes attestation mandatory with a frozen vector.
 	AttestSigner crypto.Signer
@@ -98,6 +102,13 @@ func NewProductionMinter(cfg Config) (*ProductionMinter, error) {
 	}
 	if cfg.Delegation != nil {
 		opts = append(opts, minter.WithDelegation(cfg.Delegation))
+	}
+	if cfg.FloorDir != "" {
+		journal, err := minter.NewDurableMintJournal(cfg.FloorDir, cfg.JournalWrapper)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, minter.WithMintJournal(journal))
 	}
 	m, err := minter.New(unboundResolver{}, keygen, floors, opts...)
 	if err != nil {

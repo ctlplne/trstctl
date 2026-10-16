@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -89,6 +90,7 @@ type Minter struct {
 	resolver    KeyResolver
 	keygen      crypto.KeyGenerator
 	succStore   signing.SuccessorKeyStore // optional; when set (INT-03) successors persist in the signer keystore under a per-epoch handle instead of being ephemeral
+	journal     MintJournal               // optional; production signer persists request-bound mint intent/result before keygen/floor advance
 	floors      FloorStore
 	policy      PolicyVerifier // optional
 	auth        AuthVerifier   // optional
@@ -128,6 +130,10 @@ type PlanProvenanceVerifier interface {
 
 // Option configures a Minter.
 type Option func(*Minter)
+
+// WithMintJournal makes a signer mint replayable after a lost RPC response or a
+// failed control-plane record transaction. The journal is sealed signer state.
+func WithMintJournal(j MintJournal) Option { return func(m *Minter) { m.journal = j } }
 
 // WithPolicy requires a policy-authority-signed decision on every mint (PCAS-claim-23).
 func WithPolicy(v PolicyVerifier) Option { return func(m *Minter) { m.policy = v } }
@@ -271,6 +277,57 @@ func (m *Minter) SetSuccessorKeyStore(s signing.SuccessorKeyStore) { m.succStore
 func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (signing.MintResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if req.AssertedPredecessorEpoch == math.MaxUint64 {
+		return signing.MintResult{}, m.refuse(succession.RefusalEpoch, req, ErrEpochNotCurrent)
+	}
+	epoch := req.AssertedPredecessorEpoch + 1
+	floorKey := succession.TenantIdentityKey(req.TenantID, req.IdentityID)
+	journalKey := succession.TenantKeyHandle(req.TenantID, req.IdentityID, epoch)
+	var journalEntry MintJournalEntry
+	var resume bool
+	if m.journal != nil {
+		requestHash, err := MintRequestHash(req)
+		if err != nil {
+			return signing.MintResult{}, err
+		}
+		entry, found, err := m.journal.Load(journalKey)
+		if err != nil {
+			return signing.MintResult{}, err
+		}
+		if found {
+			if entry.RequestHash != requestHash {
+				return signing.MintResult{}, errors.New("minter: epoch already bound to a different mint request")
+			}
+			if entry.State == "completed" {
+				rec, err := DecodeRecord(entry.Result.EncodedRecord)
+				if err != nil {
+					return signing.MintResult{}, fmt.Errorf("minter: decode completed mint: %w", err)
+				}
+				if rec.Fields.TenantID != req.TenantID || rec.Fields.IdentityID != req.IdentityID ||
+					rec.Fields.Epoch != epoch || rec.Fields.PredecessorEpoch != req.AssertedPredecessorEpoch ||
+					rec.Fields.DeploymentScope != req.DeploymentScope || rec.Fields.PolicyRef != req.PolicyRef ||
+					rec.Fields.SuccessorAlg != req.TargetAlgorithm ||
+					entry.Result.Epoch != epoch || entry.Result.SuccessorAlgorithm != req.TargetAlgorithm ||
+					!bytes.Equal(entry.Result.SuccessorPublicDER, rec.Fields.SuccessorPub) {
+					return signing.MintResult{}, errors.New("minter: completed mint result binding mismatch")
+				}
+				if err := succession.VerifyRecord(rec); err != nil {
+					return signing.MintResult{}, fmt.Errorf("minter: completed mint signature invalid: %w", err)
+				}
+				if m.floor[floorKey] < epoch {
+					if err := m.floors.Advance(floorKey, epoch); err != nil {
+						return signing.MintResult{}, fmt.Errorf("%w: %v", ErrFloorPersist, err)
+					}
+					m.floor[floorKey] = epoch
+				}
+				return entry.Result, nil
+			}
+			resume = true
+			journalEntry = entry
+		} else {
+			journalEntry.RequestHash = requestHash
+		}
+	}
 
 	// Resolve the predecessor handle (its private key stays in the signer).
 	pred, err := m.resolver.Resolve(req.PredecessorHandle)
@@ -281,83 +338,99 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// Epoch monotonicity: the asserted predecessor epoch must equal the recorded
 	// floor. Stale, equal-but-already-advanced, or skipped epochs are refused
 	// (PCAS-claim-12 / INV-3).
-	floorKey := succession.TenantIdentityKey(req.TenantID, req.IdentityID)
 	floor := m.floor[floorKey]
 	if req.AssertedPredecessorEpoch != floor {
 		return signing.MintResult{}, m.refuse(succession.RefusalEpoch, req, ErrEpochNotCurrent)
 	}
-	epoch := floor + 1
 	paramsDigest := RequestParamsDigest(req)
-
-	// Strength ordering: refuse a FORWARD succession to a strictly weaker
-	// algorithm class absent a valid, single-use break-glass token verified inside
-	// the signer (PCAS-claim-17 / INV-8). This is distinct from epoch rollback (INV-3).
 	var breakGlassUsed bool
-	if m.enforceStrength && succession.IsStrengthDowngrade(pred.Algorithm(), req.TargetAlgorithm) {
-		if m.breakGlass == nil || len(req.BreakGlass) == 0 {
-			return signing.MintResult{}, m.refuse(succession.RefusalStrength, req, ErrStrengthDowngrade)
-		}
-		if err := m.breakGlass.VerifyAndConsume(req.BreakGlass, req); err != nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalStrength, req, ErrStrengthDowngrade)
-		}
-		breakGlassUsed = true
-	}
-
-	// Delegated-authority effective constraint BEFORE successor-key generation (claim
-	// 33, INT-13): refuse a succession whose target epoch violates the effective
-	// ancestor floor of the scope, and capture the delegation path to bind in the v2
-	// commitment. A weaker local floor can never undercut an ancestor's.
 	var delegationPath string
-	if req.DelegationScope != "" {
-		if m.delegation == nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrDelegation)
-		}
-		dp, derr := m.delegation.CheckAndBind(req.TenantID, req.DelegationScope, epoch)
-		if derr != nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrDelegation, derr))
-		}
-		delegationPath = dp
-	}
-
-	// Policy verification BEFORE successor-key generation (PCAS-claim-23).
-	if m.policy != nil {
-		if len(req.PolicyDecision) == 0 {
-			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyRequired)
-		}
-		if err := m.policy.Verify(req.PolicyDecision, req); err != nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyInvalid)
-		}
-	}
-
-	// Policy-decision provenance verification BEFORE successor-key generation (claims
-	// 24, 40): the finding⟵plan⟵decision chain, its digest bindings, and the
-	// policy_ref = recorded-decision digest are checked in-signer.
-	if m.provenance != nil {
-		if err := m.provenance.Verify(req); err != nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrPolicyInvalid, err))
-		}
-	}
-
-	// Custody-attestation verification BEFORE successor-key generation (PCAS-claim-35): the
-	// successor-custodian evidence is verified and class-gated in-signer; a failing or
-	// absent attestation prevents keygen entirely.
 	var attestEvidenceDigest []byte
 	var attestType string
-	if m.attestGate != nil {
-		d, ty, err := m.attestGate.Verify(req)
-		if err != nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrAttestation, err))
-		}
-		attestEvidenceDigest, attestType = d, ty
-	}
+	if resume {
+		// An executing intent was sealed only AFTER every signer-side gate passed.
+		// Resume its exact request without consuming one-time authorization again.
+		breakGlassUsed = journalEntry.BreakGlassUsed
+		delegationPath = journalEntry.DelegationPath
+		attestEvidenceDigest = journalEntry.AttestDigest
+		attestType = journalEntry.AttestType
+	} else {
 
-	// Dual-control verification BEFORE successor-key generation (PCAS-claim-5).
-	if m.requireAuth {
-		if len(req.Authorization) == 0 {
-			return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationRequired)
+		// Strength ordering: refuse a FORWARD succession to a strictly weaker
+		// algorithm class absent a valid, single-use break-glass token verified inside
+		// the signer (PCAS-claim-17 / INV-8). This is distinct from epoch rollback (INV-3).
+		if m.enforceStrength && succession.IsStrengthDowngrade(pred.Algorithm(), req.TargetAlgorithm) {
+			if m.breakGlass == nil || len(req.BreakGlass) == 0 {
+				return signing.MintResult{}, m.refuse(succession.RefusalStrength, req, ErrStrengthDowngrade)
+			}
+			if err := m.breakGlass.VerifyAndConsume(req.BreakGlass, req); err != nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalStrength, req, ErrStrengthDowngrade)
+			}
+			breakGlassUsed = true
 		}
-		if err := m.auth.VerifyAndConsume(req.Authorization, req, paramsDigest); err != nil {
-			return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationInvalid)
+
+		// Delegated-authority effective constraint BEFORE successor-key generation (claim
+		// 33, INT-13): refuse a succession whose target epoch violates the effective
+		// ancestor floor of the scope, and capture the delegation path to bind in the v2
+		// commitment. A weaker local floor can never undercut an ancestor's.
+		if req.DelegationScope != "" {
+			if m.delegation == nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrDelegation)
+			}
+			dp, derr := m.delegation.CheckAndBind(req.TenantID, req.DelegationScope, epoch)
+			if derr != nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrDelegation, derr))
+			}
+			delegationPath = dp
+		}
+
+		// Policy verification BEFORE successor-key generation (PCAS-claim-23).
+		if m.policy != nil {
+			if len(req.PolicyDecision) == 0 {
+				return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyRequired)
+			}
+			if err := m.policy.Verify(req.PolicyDecision, req); err != nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrPolicyInvalid)
+			}
+		}
+
+		// Policy-decision provenance verification BEFORE successor-key generation (claims
+		// 24, 40): the finding⟵plan⟵decision chain, its digest bindings, and the
+		// policy_ref = recorded-decision digest are checked in-signer.
+		if m.provenance != nil {
+			if err := m.provenance.Verify(req); err != nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrPolicyInvalid, err))
+			}
+		}
+
+		// Custody-attestation verification BEFORE successor-key generation (PCAS-claim-35): the
+		// successor-custodian evidence is verified and class-gated in-signer; a failing or
+		// absent attestation prevents keygen entirely.
+		if m.attestGate != nil {
+			d, ty, err := m.attestGate.Verify(req)
+			if err != nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrAttestation, err))
+			}
+			attestEvidenceDigest, attestType = d, ty
+		}
+
+		// Dual-control verification BEFORE successor-key generation (PCAS-claim-5).
+		if m.requireAuth {
+			if len(req.Authorization) == 0 {
+				return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationRequired)
+			}
+			if err := m.auth.VerifyAndConsume(req.Authorization, req, paramsDigest); err != nil {
+				return signing.MintResult{}, m.refuse(succession.RefusalDualControl, req, ErrAuthorizationInvalid)
+			}
+		}
+		if m.journal != nil {
+			journalEntry.BreakGlassUsed = breakGlassUsed
+			journalEntry.DelegationPath = delegationPath
+			journalEntry.AttestDigest = attestEvidenceDigest
+			journalEntry.AttestType = attestType
+			if err := m.journal.Begin(journalKey, journalEntry); err != nil {
+				return signing.MintResult{}, err
+			}
 		}
 	}
 
@@ -368,12 +441,20 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// (library/test use) it is generated ephemerally by the injected keygen.
 	var succ crypto.Signer
 	if m.succStore != nil {
-		succ, err = m.succStore.GenerateSuccessorKey(succession.TenantKeyHandle(req.TenantID, req.IdentityID, epoch), req.TargetAlgorithm)
+		if resume {
+			succ, err = m.resolver.Resolve(journalKey)
+		}
+		if succ == nil {
+			succ, err = m.succStore.GenerateSuccessorKey(journalKey, req.TargetAlgorithm)
+		}
 	} else {
 		succ, err = m.keygen.GenerateKey(req.TargetAlgorithm)
 	}
 	if err != nil {
 		return signing.MintResult{}, fmt.Errorf("%w: %v", ErrKeygen, err)
+	}
+	if succ.Algorithm() != req.TargetAlgorithm {
+		return signing.MintResult{}, fmt.Errorf("%w: resumed key algorithm mismatch", ErrKeygen)
 	}
 
 	// Form the commitment (PCAS-04) and dual-sign it.
@@ -455,19 +536,26 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 		return signing.MintResult{}, err
 	}
 
-	// Record-then-activate: durably advance the sealed floor before returning, so
-	// no succession can exist that the signer's own record does not evidence.
+	result := signing.MintResult{
+		Epoch:              epoch,
+		SuccessorAlgorithm: succ.Algorithm(),
+		SuccessorPublicDER: succ.Public().DER,
+		EncodedRecord:      encoded,
+	}
+	if m.journal != nil {
+		journalEntry.Result = result
+		if err := m.journal.Complete(journalKey, journalEntry); err != nil {
+			return signing.MintResult{}, fmt.Errorf("minter: persist completed mint: %w", err)
+		}
+	}
+	// Record-then-activate: durably advance the sealed floor after the exact
+	// public result is recoverable and before the RPC response can escape.
 	if err := m.floors.Advance(floorKey, epoch); err != nil {
 		return signing.MintResult{}, fmt.Errorf("%w: %v", ErrFloorPersist, err)
 	}
 	m.floor[floorKey] = epoch
 
-	return signing.MintResult{
-		Epoch:              epoch,
-		SuccessorAlgorithm: succ.Algorithm(),
-		SuccessorPublicDER: succ.Public().DER,
-		EncodedRecord:      encoded,
-	}, nil
+	return result, nil
 }
 
 type paramsForDigest struct {
