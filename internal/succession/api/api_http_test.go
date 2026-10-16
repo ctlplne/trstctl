@@ -295,6 +295,29 @@ func newAPI(t *testing.T, svc succapi.Service) *api.API {
 	return api.New(cs, idem, nil, opts...)
 }
 
+func TestFederationImportRejectsStringEncodedRecords(t *testing.T) {
+	a := newAPI(t, &fakeService{})
+	for _, tc := range []struct {
+		name string
+		body string
+		want int
+	}{
+		{"genesis string", `{"foreign_deployment_id":"west","local_deployment_id":"east","identity_id":"spiffe://d/id","foreign_trust_root_der":"cm9vdA==","foreign_genesis":"e30="}`, http.StatusBadRequest},
+		{"chain string", `{"foreign_deployment_id":"west","local_deployment_id":"east","identity_id":"spiffe://d/id","foreign_trust_root_der":"cm9vdA==","foreign_genesis":{},"foreign_chain":["e30="]}`, http.StatusBadRequest},
+		{"record objects", `{"foreign_deployment_id":"west","local_deployment_id":"east","identity_id":"spiffe://d/id","foreign_trust_root_der":"cm9vdA==","foreign_genesis":{},"foreign_chain":[{}]}`, http.StatusAccepted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/federation/imports", bytes.NewBufferString(tc.body))
+			r.Header.Set("Idempotency-Key", "federation-shape-"+tc.name)
+			rr := httptest.NewRecorder()
+			a.ServeHTTP(rr, r)
+			if rr.Code != tc.want {
+				t.Fatalf("HTTP %d, want %d: %s", rr.Code, tc.want, rr.Body.String())
+			}
+		})
+	}
+}
+
 func TestGenesisRegistration_IdempotencyRBACAndStatus(t *testing.T) {
 	svc := &fakeService{}
 	a := newAPI(t, svc)

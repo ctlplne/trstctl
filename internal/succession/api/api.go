@@ -11,6 +11,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -751,9 +752,22 @@ func federationImportHandler(a *api.API, svc Service) http.HandlerFunc {
 		if req.ForeignDeploymentID == "" || req.LocalDeploymentID == "" || req.IdentityID == "" || len(req.ForeignTrustRootDER) == 0 || len(req.ForeignGenesis) == 0 {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "foreign_deployment_id, local_deployment_id, identity_id, foreign_trust_root_der, and foreign_genesis are required")
 		}
+		if !jsonObject(req.ForeignGenesis) {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "foreign_genesis must be a JSON genesis record object")
+		}
+		for _, record := range req.ForeignChain {
+			if !jsonObject(record) {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "foreign_chain entries must be JSON succession record objects")
+			}
+		}
 		resp, err := svc.RequestFederationImport(ctx, tenantID, req)
 		return http.StatusAccepted, resp, err
 	})
+}
+
+func jsonObject(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) > 0 && trimmed[0] == '{'
 }
 
 func kemRewrapHandler(a *api.API, svc Service) http.HandlerFunc {
@@ -1164,8 +1178,8 @@ func schemas() map[string]*api.Schema {
 			"identity_id":            api.StringSchema(),
 			"foreign_trust_root_der": api.StringSchema(),
 			"local_base_epoch":       api.IntegerSchema(),
-			"foreign_genesis":        api.StringSchema(),
-			"foreign_chain":          api.ArraySchema(api.StringSchema()),
+			"foreign_genesis":        api.ObjectSchema(nil),
+			"foreign_chain":          api.ArraySchema(api.ObjectSchema(nil)),
 		}, "foreign_deployment_id", "local_deployment_id", "identity_id", "foreign_trust_root_der", "foreign_genesis"),
 		"PCASKEMRewrapRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":           api.StringSchema(),

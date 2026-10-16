@@ -214,7 +214,11 @@ Retry an uncertain registration response with the same `Idempotency-Key`.
 
 `POST /api/v1/pcas/federation/imports` queues verification of a foreign
 genesis and succession chain. The `202` response means only that the import
-was queued. Before import, register a tenant PCAS genesis whose `identity_id`
+was queued. Send `foreign_genesis` as a JSON genesis record object and each
+`foreign_chain` entry as a JSON succession record object, as returned by the
+foreign deployment's chain endpoint; base64-encoded record strings are refused
+before queueing. `foreign_trust_root_der` is a base64-encoded DER byte string.
+Before import, register a tenant PCAS genesis whose `identity_id`
 equals the request's `local_deployment_id`. Omit `local_authority_handle` and
 the server derives that tenant identity's epoch-zero signer handle. An explicit
 handle must match the same value. A handle from another tenant or an unregistered local

@@ -84,7 +84,7 @@ func TestFederationBridge_UnverifiedImportNotServed(t *testing.T) {
 		"local_deployment_id":    "deploy-east",
 		"identity_id":            "spiffe://d/id",
 		"foreign_trust_root_der": base64.StdEncoding.EncodeToString(trustRoot),
-		"foreign_genesis":        base64.StdEncoding.EncodeToString([]byte("genesis-record")),
+		"foreign_genesis":        map[string]any{"identity_id": "spiffe://d/id"},
 		"local_base_epoch":       7,
 	})
 	if err != nil {

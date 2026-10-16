@@ -321,14 +321,14 @@
           "foreign_chain": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object"
             }
           },
           "foreign_deployment_id": {
             "type": "string"
           },
           "foreign_genesis": {
-            "type": "string"
+            "type": "object"
           },
           "foreign_trust_root_der": {
             "type": "string"

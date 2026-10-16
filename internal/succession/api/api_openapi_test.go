@@ -56,6 +56,14 @@ func TestOpenAPI_Golden(t *testing.T) {
 		t.Fatalf("checkpoint response schema = %v", got)
 	}
 	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	federation := schemas["PCASFederationImportRequest"].(map[string]any)["properties"].(map[string]any)
+	if got := federation["foreign_genesis"].(map[string]any)["type"]; got != "object" {
+		t.Fatalf("federation genesis schema type = %v, want object record", got)
+	}
+	chain := federation["foreign_chain"].(map[string]any)["items"].(map[string]any)
+	if got := chain["type"]; got != "object" {
+		t.Fatalf("federation chain item schema type = %v, want object record", got)
+	}
 	checkpoint := schemas["PCASCheckpoint"].(map[string]any)["properties"].(map[string]any)
 	if _, ok := checkpoint["signer_public_der"]; !ok {
 		t.Fatal("checkpoint signer public key absent from published schema")
