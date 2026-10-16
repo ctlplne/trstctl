@@ -67,7 +67,7 @@ func (p *FederationBridgeProjection) ResetTx(ctx context.Context, tx pgx.Tx) err
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("pcas federation: projection store unavailable")
 	}
-	//trstctl:system-query — full replay resets only this derived bridge table.
+	//trstctl:system-query — cross-tenant full replay uses a system transaction to reset only this derived bridge table; tenant-bound source events rebuild each owning tenant's rows.
 	_, err := tx.Exec(ctx, `DELETE FROM pcas_federation_bridge`)
 	return err
 }

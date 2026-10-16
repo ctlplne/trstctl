@@ -65,7 +65,7 @@ func (p *IssuerAuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) erro
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("pcas issuer: projection store unavailable")
 	}
-	//trstctl:system-query — explicit full replay resets only this derived table; tenant-bound source events rebuild it.
+	//trstctl:system-query — cross-tenant full replay uses a system transaction to reset only this derived issuer table; tenant-bound source events rebuild each owning tenant's rows.
 	_, err := tx.Exec(ctx, `DELETE FROM pcas_issuer_authority`)
 	return err
 }

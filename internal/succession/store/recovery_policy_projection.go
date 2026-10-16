@@ -67,7 +67,7 @@ func (p *RecoveryPolicyProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("pcas recovery policy: projection store unavailable")
 	}
-	//trstctl:system-query — an explicit full replay resets this derived table and reapplies tenant-bound source events.
+	//trstctl:system-query — cross-tenant full replay uses a system transaction to reset only this derived policy table; tenant-bound source events rebuild each owning tenant's rows.
 	_, err := tx.Exec(ctx, `DELETE FROM pcas_recovery_policy`)
 	return err
 }
