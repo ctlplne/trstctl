@@ -195,11 +195,10 @@ type FederationPeer struct {
 	NATSURL string `json:"nats_url,omitempty"`
 }
 
-// PCAS configures production wiring for patent-covered credential algorithm
-// succession mechanisms. It is off by default and is enabled by the EE attach
-// seam only when the licensed feature is present.
+// PCAS configures optional workers for core credential algorithm succession.
+// The PCAS API and signer transport attach in every build; individual scheduled
+// workers retain their own explicit startup settings.
 type PCAS struct {
-	Delegation  PCASDelegation  `json:"delegation"`
 	Recovery    PCASRecovery    `json:"recovery"`
 	Federation  PCASFederation  `json:"federation"`
 	KEM         PCASKEM         `json:"kem"`
@@ -208,12 +207,6 @@ type PCAS struct {
 	Retirement  PCASRetirement  `json:"retirement"`
 	Issuer      PCASIssuer      `json:"issuer"`
 	Staple      PCASStaple      `json:"staple"`
-}
-
-type PCASDelegation struct {
-	Enabled         bool   `json:"enabled,omitempty"`
-	RefreshInterval string `json:"refresh_interval,omitempty"`
-	SignerStoreDir  string `json:"signer_store_dir,omitempty"`
 }
 
 // PCASRecovery configures the threshold-recovery breadth surface. OutboxTopic is
@@ -2369,7 +2362,6 @@ func Default() *Config {
 			CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 		},
 		PCAS: PCAS{
-			Delegation:  PCASDelegation{Enabled: false, RefreshInterval: "30s", SignerStoreDir: "data/signer/pcas"},
 			Recovery:    PCASRecovery{Enabled: false, OutboxTopic: "pcas.recovery-request"},
 			Federation:  PCASFederation{Enabled: false, OutboxTopic: "pcas.federation-import"},
 			KEM:         PCASKEM{Enabled: false, OutboxTopic: "pcas.kem-rewrap"},
@@ -2417,6 +2409,19 @@ func Default() *Config {
 // Parse overlays a JSON document onto the defaults. Keys absent from the
 // document keep their default values.
 func Parse(data []byte) (*Config, error) {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	if raw := root["pcas"]; len(raw) > 0 {
+		var pcasFields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &pcasFields); err != nil {
+			return nil, fmt.Errorf("parse pcas config: %w", err)
+		}
+		if _, old := pcasFields["delegation"]; old {
+			return nil, errors.New("pcas.delegation control-plane settings are retired; configure the isolated signer --keystore and use the delegation API")
+		}
+	}
 	cfg := Default()
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -2428,6 +2433,15 @@ func Parse(data []byte) (*Config, error) {
 // named by TRSTCTL_CONFIG_FILE, then environment overrides, and validates it.
 // getenv is injected (pass os.Getenv) for testability.
 func Load(getenv func(string) string) (*Config, error) {
+	for _, old := range []string{
+		"TRSTCTL_PCAS_DELEGATION_ENABLED",
+		"TRSTCTL_PCAS_DELEGATION_REFRESH_INTERVAL",
+		"TRSTCTL_PCAS_DELEGATION_SIGNER_STORE_DIR",
+	} {
+		if getenv(old) != "" {
+			return nil, fmt.Errorf("%s is retired; configure the isolated signer --keystore and use the delegation API", old)
+		}
+	}
 	cfg := Default()
 	if path := getenv("TRSTCTL_CONFIG_FILE"); path != "" {
 		data, err := os.ReadFile(path) // #nosec G304 -- the config loader reading the operator's own config file (CWE-22)
@@ -2722,9 +2736,6 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 }
 
 func applyPCASEnv(getenv func(string) string, p *PCAS) {
-	setBool(getenv, "TRSTCTL_PCAS_DELEGATION_ENABLED", &p.Delegation.Enabled)
-	setString(getenv, "TRSTCTL_PCAS_DELEGATION_REFRESH_INTERVAL", &p.Delegation.RefreshInterval)
-	setString(getenv, "TRSTCTL_PCAS_DELEGATION_SIGNER_STORE_DIR", &p.Delegation.SignerStoreDir)
 	setBool(getenv, "TRSTCTL_PCAS_RECOVERY_ENABLED", &p.Recovery.Enabled)
 	setString(getenv, "TRSTCTL_PCAS_RECOVERY_OUTBOX_TOPIC", &p.Recovery.OutboxTopic)
 	setBool(getenv, "TRSTCTL_PCAS_FEDERATION_ENABLED", &p.Federation.Enabled)
@@ -4379,14 +4390,10 @@ func validatePCASConfig(c *Config) []error {
 			errs = append(errs, fmt.Errorf("%s must be positive", name))
 		}
 	}
-	parsePositive("pcas.delegation.refresh_interval", c.PCAS.Delegation.RefreshInterval, c.PCAS.Delegation.Enabled)
 	parsePositive("pcas.checkpoints.interval", c.PCAS.Checkpoints.Interval, c.PCAS.Checkpoints.Enabled)
 	parsePositive("pcas.monitors.interval", c.PCAS.Monitors.Interval, c.PCAS.Monitors.Enabled)
 	parsePositive("pcas.retirement.interval", c.PCAS.Retirement.Interval, c.PCAS.Retirement.Enabled)
 	parsePositive("pcas.retirement.validity_window", c.PCAS.Retirement.ValidityWindow, c.PCAS.Retirement.Enabled)
-	if c.PCAS.Delegation.Enabled && strings.TrimSpace(c.PCAS.Delegation.SignerStoreDir) == "" {
-		errs = append(errs, errors.New("pcas.delegation.signer_store_dir is required when pcas.delegation.enabled is true"))
-	}
 	if c.PCAS.Checkpoints.Enabled {
 		if strings.TrimSpace(c.PCAS.Checkpoints.SigningKeyHandle) == "" {
 			errs = append(errs, errors.New("pcas.checkpoints.signing_key_handle is required when pcas.checkpoints.enabled is true"))

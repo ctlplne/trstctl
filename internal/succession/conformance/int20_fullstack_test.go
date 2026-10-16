@@ -95,6 +95,146 @@ func TestINT20_FullStackPCASUserJourneys(t *testing.T) {
 	}
 }
 
+// The deployed control plane cannot write into the signer's nested key-store
+// volume. A configured delegation must still be usable by the isolated signer.
+func TestINT20_DelegationScopeCrossesIsolatedSignerBoundary(t *testing.T) {
+	st := startINT20Stack(t)
+	defer st.close()
+	const scopeID = "int20-isolated-scope"
+	svc := succapi.NewService(st.store, st.log, st.outbox,
+		succapi.WithKEMCustody(st.signer))
+	accepted, err := svc.ConfigureDelegationScope(st.ctx, st.tenantID,
+		succapi.DelegationScopeRequest{ScopeID: scopeID, EpochFloor: 1})
+	if err != nil {
+		t.Fatalf("configure isolated delegation scope: %v", err)
+	}
+	if accepted.Status != "queued" || accepted.RequestID == "" {
+		t.Fatalf("unconfirmed signer state was reported as ready: %+v", accepted)
+	}
+	st.dispatchAll(t)
+	status, found, err := svc.GetRequestStatus(st.ctx, st.tenantID, accepted.RequestID)
+	if err != nil || !found || status.Status != "delivered" || status.Kind != "delegation_scope" {
+		t.Fatalf("signer-confirmed request status: %+v found=%v err=%v", status, found, err)
+	}
+	var queuedPayload []byte
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(st.ctx, `SELECT payload FROM outbox
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			  AND destination = $1 AND idempotency_key = $2`, pcasorch.DelegationScopeDestination, accepted.RequestID).
+			Scan(&queuedPayload)
+	}); err != nil {
+		t.Fatalf("read queued command for lost-response replay: %v", err)
+	}
+	if err := pcasorch.NewDelegationWorker(st.store, st.log, st.signer).Deliver(st.ctx, coreorch.Message{
+		TenantID: st.tenantID, Destination: pcasorch.DelegationScopeDestination, Payload: queuedPayload,
+	}); err != nil {
+		t.Fatalf("exact lost-response replay: %v", err)
+	}
+	projected, err := st.repo.ListDelegationScopes(st.ctx, st.tenantID)
+	if err != nil || len(projected) != 1 || projected[0].ScopeID != scopeID || projected[0].EpochFloor != 1 {
+		t.Fatalf("signer-confirmed serving projection: %+v err=%v", projected, err)
+	}
+	view, err := svc.ListDelegationScopes(st.ctx, st.tenantID)
+	if err != nil || view.Count != 1 || !view.Scopes[0].SignerConfirmed || len(view.Scopes[0].SignerReceipt) == 0 {
+		t.Fatalf("operator signer-confirmed readback: %+v err=%v", view, err)
+	}
+	projection := pcasstore.NewDelegationProjection(st.store)
+	if err := projection.Reset(st.ctx); err != nil {
+		t.Fatalf("reset projection before cold replay: %v", err)
+	}
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error { return projection.Apply(st.ctx, ev) }); err != nil {
+		t.Fatalf("replay signed delegation receipt: %v", err)
+	}
+	projected, err = st.repo.ListDelegationScopes(st.ctx, st.tenantID)
+	if err != nil || len(projected) != 1 || projected[0].EpochFloor != 1 {
+		t.Fatalf("cold projection readback: %+v err=%v", projected, err)
+	}
+	const identity = "spiffe://int20.example/workload/isolated-delegation"
+	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(identity, 0)); err != nil {
+		t.Fatalf("generate predecessor key: %v", err)
+	}
+	if _, err := st.signer.MintSuccessor(st.ctx, signing.MintRequest{
+		IdentityID: identity, TenantID: st.tenantID, DeploymentScope: "spiffe://int20.example",
+		PredecessorHandle: succession.KeyHandle(identity, 0), AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:int20-isolated-delegation",
+		DelegationScope: scopeID,
+	}); err != nil {
+		t.Fatalf("isolated signer did not enforce configured delegation: %v", err)
+	}
+	const otherTenant = "22222222-2222-2222-2222-222222222222"
+	if err := st.store.UpsertTenant(st.ctx, corestore.Tenant{TenantID: otherTenant, Name: "INT20 Other Tenant", EventSeq: 1}); err != nil {
+		t.Fatal(err)
+	}
+	otherView, err := svc.ListDelegationScopes(st.ctx, otherTenant)
+	if err != nil || otherView.Count != 0 {
+		t.Fatalf("other tenant saw delegation scope: %+v err=%v", otherView, err)
+	}
+	const otherIdentity = "spiffe://int20.example/workload/other-tenant"
+	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(otherIdentity, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.signer.MintSuccessor(st.ctx, signing.MintRequest{
+		IdentityID: otherIdentity, TenantID: otherTenant, DeploymentScope: "spiffe://int20.example",
+		PredecessorHandle: succession.KeyHandle(otherIdentity, 0), AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:int20-cross-tenant",
+		DelegationScope: scopeID,
+	}); err == nil || !strings.Contains(err.Error(), "unknown scope") {
+		t.Fatalf("cross-tenant scope reuse was accepted: %v", err)
+	}
+	if _, err := svc.ConfigureDelegationScope(st.ctx, otherTenant,
+		succapi.DelegationScopeRequest{ScopeID: scopeID, EpochFloor: 0}); err != nil {
+		t.Fatalf("configure same scope for distinct tenant: %v", err)
+	}
+	st.dispatchAll(t)
+	if _, err := st.signer.MintSuccessor(st.ctx, signing.MintRequest{
+		IdentityID: otherIdentity, TenantID: otherTenant, DeploymentScope: "spiffe://int20.example",
+		PredecessorHandle: succession.KeyHandle(otherIdentity, 0), AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:int20-other-tenant",
+		DelegationScope: scopeID,
+	}); err != nil {
+		t.Fatalf("other tenant scope did not enforce its independent floor: %v", err)
+	}
+	raised, err := svc.RaiseDelegationFloor(st.ctx, st.tenantID, succapi.DelegationFloorRequest{ScopeID: scopeID, EpochFloor: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.dispatchAll(t)
+	status, found, err = svc.GetRequestStatus(st.ctx, st.tenantID, raised.RequestID)
+	if err != nil || !found || status.Status != "delivered" || status.Kind != "delegation_floor" {
+		t.Fatalf("raised floor status: %+v found=%v err=%v", status, found, err)
+	}
+	var firstScopeEvent events.Event
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error {
+		if ev.Type == succession.TypeDelegationApplied && firstScopeEvent.ID == "" {
+			firstScopeEvent = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if firstScopeEvent.ID == "" {
+		t.Fatal("signed delegation event absent")
+	}
+	if err := projection.Apply(st.ctx, firstScopeEvent); err != nil {
+		t.Fatalf("old tail event after newer floor: %v", err)
+	}
+	projected, err = st.repo.ListDelegationScopes(st.ctx, st.tenantID)
+	if err != nil || len(projected) != 1 || projected[0].EpochFloor != 3 {
+		t.Fatalf("old tail event regressed signer floor: %+v err=%v", projected, err)
+	}
+	const blockedIdentity = "spiffe://int20.example/workload/below-floor"
+	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(blockedIdentity, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.signer.MintSuccessor(st.ctx, signing.MintRequest{
+		IdentityID: blockedIdentity, TenantID: st.tenantID, DeploymentScope: "spiffe://int20.example",
+		PredecessorHandle: succession.KeyHandle(blockedIdentity, 0), AssertedPredecessorEpoch: 0,
+		TargetAlgorithm: crypto.ECDSAP384, PolicyRef: "policy:int20-below-floor", DelegationScope: scopeID,
+	}); err == nil || !strings.Contains(err.Error(), "delegated-authority") {
+		t.Fatalf("signer ignored raised floor: %v", err)
+	}
+}
+
 func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack {
 	t.Helper()
 	ctx := context.Background()
@@ -132,7 +272,7 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 	if err != nil {
 		t.Fatalf("licensed outbox factory: %v", err)
 	}
-	svc := succapi.NewService(cs, log, outbox, succapi.WithSignerStoreDir(keyDir), succapi.WithKEMCustody(signer))
+	svc := succapi.NewService(cs, log, outbox, succapi.WithKEMCustody(signer))
 
 	st := &int20Stack{
 		ctx: ctx, store: cs, repo: pcasstore.New(cs), log: log, outbox: outbox,
@@ -203,9 +343,11 @@ func (st *int20Stack) delegationIsEnforcedBySigner(t *testing.T) {
 	if _, err := st.svc.ConfigureDelegationScope(st.ctx, st.tenantID, succapi.DelegationScopeRequest{ScopeID: "root", EpochFloor: 2}); err != nil {
 		t.Fatalf("configure root delegation scope: %v", err)
 	}
+	st.dispatchAll(t)
 	if _, err := st.svc.ConfigureDelegationScope(st.ctx, st.tenantID, succapi.DelegationScopeRequest{ScopeID: "app", ParentScopeID: "root"}); err != nil {
 		t.Fatalf("configure app delegation scope: %v", err)
 	}
+	st.dispatchAll(t)
 	const id = "spiffe://int20.example/workload/delegated"
 	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, succession.KeyHandle(id, 0)); err != nil {
 		t.Fatalf("delegation genesis: %v", err)

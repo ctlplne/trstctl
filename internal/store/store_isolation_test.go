@@ -321,6 +321,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// which enters the tenant's RLS context; nothing tenant-owned is returned
 		// to a caller from the system pool.
 		"internal/decommission/retirement/projection.go": 2,
+		// PCAS delegation's standalone projection opens one system transaction
+		// for full-replay reset or one event. Reset removes only derived scope
+		// rows; ApplyTx checks payload tenant against the event and scopes every
+		// write to that tenant. Tenant readback uses RLS through Repo.
+		"internal/succession/store/delegation_projection.go": 1,
 	}
 	found := map[string]int{}
 

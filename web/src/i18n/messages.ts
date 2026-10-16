@@ -2334,6 +2334,36 @@ export const messages = {
     description: "Accessible label for the post-quantum migration progress meter.",
   },
   "pcas.title": { defaultMessage: "Proof-carrying key succession", description: "PCAS operator workflow title." },
+  "pcas.delegation.title": { defaultMessage: "Signer-enforced delegation scopes", description: "PCAS delegation section title." },
+  "pcas.delegation.description": {
+    defaultMessage:
+      "Queue a tenant scope or raise its epoch floor. The request is pending until the isolated signer returns a signed receipt; a scope's parent cannot change and its floor cannot fall.",
+    description: "PCAS delegation operator guidance.",
+  },
+  "pcas.delegation.scope": { defaultMessage: "Scope ID", description: "PCAS delegation scope identifier." },
+  "pcas.delegation.parent": { defaultMessage: "Parent scope ID (blank for root)", description: "PCAS delegation parent identifier." },
+  "pcas.delegation.floor": { defaultMessage: "Minimum successor epoch", description: "PCAS delegation monotonic floor." },
+  "pcas.delegation.reviewScope": { defaultMessage: "Review scope", description: "PCAS delegation scope review action." },
+  "pcas.delegation.reviewFloor": { defaultMessage: "Review floor increase", description: "PCAS delegation floor review action." },
+  "pcas.delegation.readScopes": { defaultMessage: "Read tenant scopes", description: "PCAS delegation readback action." },
+  "pcas.delegation.effect": {
+    defaultMessage:
+      "The signer will durably enforce this tenant scope and sign its applied state. Read the request until delivery, then verify the served scope and receipt.",
+    description: "PCAS delegation effect preview.",
+  },
+  "pcas.delegation.root": { defaultMessage: "root", description: "PCAS delegation root label." },
+  "pcas.delegation.existingParent": { defaultMessage: "existing parent", description: "PCAS delegation floor preview parent label." },
+  "pcas.delegation.queue": { defaultMessage: "Queue signer command", description: "PCAS delegation mutation action." },
+  "pcas.delegation.refresh": { defaultMessage: "Refresh command and scopes", description: "PCAS delegation status readback action." },
+  "pcas.delegation.confirmed": { defaultMessage: "Signer confirmed", description: "PCAS delegation confirmed state." },
+  "pcas.delegation.unconfirmed": { defaultMessage: "Legacy row: signer confirmation absent", description: "PCAS delegation unconfirmed state." },
+  "pcas.delegation.receipt": { defaultMessage: "Signed operation", description: "PCAS delegation signed receipt reference." },
+  "pcas.delegation.publicKey": {
+    defaultMessage: "Signer public key (base64 DER)",
+    description: "PCAS delegation receipt signer public key for out-of-band pinning.",
+  },
+  "pcas.delegation.error": { defaultMessage: "Could not read or queue signer delegation state", description: "PCAS delegation error fallback." },
+  "pcas.delegation.empty": { defaultMessage: "No delegation scopes are configured for this tenant.", description: "PCAS delegation empty state." },
   "pcas.description": {
     defaultMessage: "Register a signer-held first key, pin its tenant trust-root fingerprint, then advance the algorithm epoch with a signed chain.",
     description: "PCAS workflow explanation.",

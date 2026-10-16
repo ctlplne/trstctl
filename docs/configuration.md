@@ -1633,6 +1633,13 @@ of the core build and does not require an Enterprise or Provider license. The
 [PCAS operations](runbooks/pcas-operations.md) runbook documents first use and
 the checkpoint worker's exact startup settings. Other optional PCAS workers
 require configured trust and custody inputs before a positive operator journey.
+Delegation scope commands use the isolated signer transport and its persistent
+keystore. The old `pcas.delegation` block and
+`TRSTCTL_PCAS_DELEGATION_*` control-plane settings are rejected with a migration
+hint because they never configured the separate signer. The
+[PCAS operations](runbooks/pcas-operations.md#delegation-scopes-and-signer-floor)
+runbook shows queued commands, signer-confirmed readback, and how to handle
+older unconfirmed rows.
 
 ## Conditional managed-key adapters (six served providers)
 

@@ -39,6 +39,8 @@ const (
 	RecoveryRequestDestination   = "pcas.recovery-request"
 	FederationImportDestination  = "pcas.federation-import"
 	KEMRewrapDestination         = "pcas.kem-rewrap"
+	DelegationScopeDestination   = "pcas.delegation-scope"
+	DelegationFloorDestination   = "pcas.delegation-floor"
 )
 
 // service is the store/log/outbox-backed PCAS API Service. Request-succession
@@ -47,12 +49,11 @@ const (
 // ledger. HTTP-level idempotency (api.Mutate) makes a replayed Idempotency-Key
 // return the original result without re-invoking these methods (PCAS-claim-6).
 type service struct {
-	store          *corestore.Store
-	repo           *pcasstore.Repo
-	log            *events.Log
-	outbox         *orchestrator.Outbox
-	signerStoreDir string
-	kem            editionseam.KEMCustody
+	store  *corestore.Store
+	repo   *pcasstore.Repo
+	log    *events.Log
+	outbox *orchestrator.Outbox
+	kem    editionseam.KEMCustody
 	// Breadth outbox topics, resolved from pcas.{recovery,federation,kem}.
 	// outbox_topic (AUD-7: the config was validated and never read — an operator
 	// who re-pointed a topic still enqueued to the hardcoded constant). Empty
@@ -64,10 +65,6 @@ type service struct {
 }
 
 type ServiceOption func(*service)
-
-func WithSignerStoreDir(dir string) ServiceOption {
-	return func(s *service) { s.signerStoreDir = dir }
-}
 
 func WithKEMCustody(kem editionseam.KEMCustody) ServiceOption {
 	return func(s *service) { s.kem = kem }
@@ -161,7 +158,8 @@ func (s *service) RegisterGenesis(ctx context.Context, tenantID string, req Gene
 		QueuedAt: queuedAt, StatusURL: "/api/v1/pcas/requests/" + requestID}, nil
 }
 
-// GetRequestStatus reads only this tenant's two first-use outbox destinations.
+// GetRequestStatus reads only this tenant's PCAS genesis, delegation, and
+// succession outbox destinations.
 // Raw worker errors stay in the operator outbox ledger, outside this public
 // response, because they may include upstream data.
 func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID string) (RequestStatus, bool, error) {
@@ -174,7 +172,8 @@ func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID stri
 		var destination string
 		err := tx.QueryRow(ctx, `SELECT destination, status, attempts, created_at, delivered_at FROM outbox
 			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND idempotency_key = $1
-			AND destination IN ($2, $3)`, requestID, GenesisRequestDestination, SuccessionRequestDestination).
+			AND destination IN ($2, $3, $4, $5)`, requestID, GenesisRequestDestination, SuccessionRequestDestination,
+			DelegationScopeDestination, DelegationFloorDestination).
 			Scan(&destination, &result.Status, &result.Attempts, &result.CreatedAt, &result.DeliveredAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -184,10 +183,15 @@ func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID stri
 		}
 		found = true
 		result.RequestID = requestID
-		if destination == GenesisRequestDestination {
+		switch destination {
+		case GenesisRequestDestination:
 			result.Kind = "genesis"
-		} else {
+		case SuccessionRequestDestination:
 			result.Kind = "succession"
+		case DelegationScopeDestination:
+			result.Kind = "delegation_scope"
+		case DelegationFloorDestination:
+			result.Kind = "delegation_floor"
 		}
 		return nil
 	})
@@ -246,43 +250,86 @@ func (s *service) RequestSuccession(ctx context.Context, tenantID string, req Re
 }
 
 func (s *service) ConfigureDelegationScope(ctx context.Context, tenantID string, req DelegationScopeRequest) (DelegationScopeResponse, error) {
-	updated := time.Now().UTC()
-	if s.repo != nil {
-		if err := s.repo.UpsertDelegationScope(ctx, tenantID, pcasstore.DelegationScope{
-			ScopeID: req.ScopeID, ParentScopeID: req.ParentScopeID, EpochFloor: req.EpochFloor,
-		}); err != nil {
-			return DelegationScopeResponse{}, err
-		}
-	}
-	if s.signerStoreDir != "" {
-		ds := pcasdelegation.NewDurableScopeStore(s.signerStoreDir)
-		if err := ds.UpsertScope(pcasdelegation.Scope{
-			ID: req.ScopeID, Parent: req.ParentScopeID,
-			Constraint: pcasdelegation.Constraint{EpochFloor: req.EpochFloor},
-		}); err != nil {
-			return DelegationScopeResponse{}, fmt.Errorf("pcas api: provision signer delegation scope: %w", err)
-		}
-	}
-	return DelegationScopeResponse{
-		ScopeID: req.ScopeID, ParentScopeID: req.ParentScopeID, EpochFloor: req.EpochFloor,
-		Status: "configured", UpdatedAt: updated,
-	}, nil
+	return s.enqueueDelegation(ctx, tenantID, DelegationScopeDestination, pcasdelegation.Command{
+		Kind: "scope", ScopeID: req.ScopeID, ParentScopeID: req.ParentScopeID, EpochFloor: req.EpochFloor,
+	})
 }
 
 func (s *service) RaiseDelegationFloor(ctx context.Context, tenantID string, req DelegationFloorRequest) (DelegationScopeResponse, error) {
-	updated := time.Now().UTC()
-	if s.repo != nil {
-		if err := s.repo.RaiseDelegationFloor(ctx, tenantID, req.ScopeID, req.EpochFloor); err != nil {
-			return DelegationScopeResponse{}, err
-		}
+	return s.enqueueDelegation(ctx, tenantID, DelegationFloorDestination, pcasdelegation.Command{
+		Kind: "floor", ScopeID: req.ScopeID, EpochFloor: req.EpochFloor,
+	})
+}
+
+func (s *service) enqueueDelegation(ctx context.Context, tenantID, destination string, cmd pcasdelegation.Command) (DelegationScopeResponse, error) {
+	if s.store == nil || s.outbox == nil || s.kem == nil {
+		return DelegationScopeResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "isolated PCAS signer outbox is unavailable")
 	}
-	if s.signerStoreDir != "" {
-		ds := pcasdelegation.NewDurableScopeStore(s.signerStoreDir)
-		if err := ds.RaiseFloor(req.ScopeID, req.EpochFloor); err != nil {
-			return DelegationScopeResponse{}, fmt.Errorf("pcas api: provision signer delegation floor: %w", err)
-		}
+	if _, ok := s.kem.(interface {
+		ApplyDelegation(context.Context, pcasdelegation.Command) (pcasdelegation.Receipt, error)
+	}); !ok {
+		return DelegationScopeResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "isolated PCAS delegation custody is unavailable")
 	}
-	return DelegationScopeResponse{ScopeID: req.ScopeID, EpochFloor: req.EpochFloor, Status: "raised", UpdatedAt: updated}, nil
+	if cmd.ScopeID == "" || cmd.ScopeID == cmd.ParentScopeID {
+		return DelegationScopeResponse{}, api.ErrStatus(http.StatusBadRequest, "delegation scope and parent must differ")
+	}
+	cmd.TenantID, cmd.OperationID = tenantID, events.NewID()
+	queuedAt := time.Now().UTC()
+	var actor *events.Actor
+	if attributed, ok := events.ActorFromContext(ctx); ok {
+		actor = &attributed
+	}
+	payload, err := json.Marshal(struct {
+		Command  pcasdelegation.Command `json:"command"`
+		QueuedAt time.Time              `json:"queued_at"`
+		Actor    *events.Actor          `json:"actor,omitempty"`
+	}{Command: cmd, QueuedAt: queuedAt, Actor: actor})
+	if err != nil {
+		return DelegationScopeResponse{}, err
+	}
+	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID: tenantID, Destination: destination, IdempotencyKey: cmd.OperationID, Payload: payload,
+		})
+		return err
+	}); err != nil {
+		return DelegationScopeResponse{}, err
+	}
+	return DelegationScopeResponse{RequestID: cmd.OperationID, ScopeID: cmd.ScopeID,
+		ParentScopeID: cmd.ParentScopeID, EpochFloor: cmd.EpochFloor, Status: "queued",
+		UpdatedAt: queuedAt, StatusURL: "/api/v1/pcas/requests/" + cmd.OperationID}, nil
+}
+
+func (s *service) ListDelegationScopes(ctx context.Context, tenantID string) (DelegationListResponse, error) {
+	if s.repo == nil {
+		return DelegationListResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS delegation store unavailable")
+	}
+	rows, err := s.repo.ListDelegationScopes(ctx, tenantID)
+	if err != nil {
+		return DelegationListResponse{}, err
+	}
+	resp := DelegationListResponse{Scopes: make([]DelegationScopeState, 0, len(rows)), Count: len(rows)}
+	for _, row := range rows {
+		state := DelegationScopeState{ScopeID: row.ScopeID, ParentScopeID: row.ParentScopeID,
+			EpochFloor: row.EpochFloor, UpdatedAt: row.UpdatedAt}
+		if len(row.SignerReceiptJSON) > 0 {
+			var receipt pcasdelegation.Receipt
+			if err := json.Unmarshal(row.SignerReceiptJSON, &receipt); err != nil {
+				return DelegationListResponse{}, err
+			}
+			if receipt.TenantID != tenantID || receipt.ScopeID != row.ScopeID ||
+				receipt.AppliedParentScopeID != row.ParentScopeID || receipt.AppliedFloor != row.EpochFloor {
+				return DelegationListResponse{}, errors.New("pcas api: stored delegation receipt does not bind serving row")
+			}
+			if err := receipt.Verify(); err != nil {
+				return DelegationListResponse{}, err
+			}
+			state.SignerConfirmed = true
+			state.SignerReceipt = append(json.RawMessage(nil), row.SignerReceiptJSON...)
+		}
+		resp.Scopes = append(resp.Scopes, state)
+	}
+	return resp, nil
 }
 
 func (s *service) ConfigureRecoveryPolicy(ctx context.Context, tenantID string, req RecoveryPolicyRequest) (RecoveryPolicyResponse, error) {

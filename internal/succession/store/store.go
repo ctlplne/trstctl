@@ -15,12 +15,14 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	corestore "trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
+	"trstctl.com/trstctl/internal/succession/delegation"
 )
 
 //go:embed migrations/*.sql
@@ -122,10 +124,12 @@ type Record struct {
 }
 
 type DelegationScope struct {
-	ScopeID       string
-	ParentScopeID string
-	EpochFloor    uint64
-	UpdatedAt     time.Time
+	ScopeID           string
+	ParentScopeID     string
+	EpochFloor        uint64
+	UpdatedAt         time.Time
+	SignerReceiptJSON []byte
+	SourceSequence    uint64
 }
 
 type RecoveryPolicy struct {
@@ -353,28 +357,65 @@ func (r *Repo) GetHighWater(ctx context.Context, tenantID, identityID string) (e
 	return epoch, found, err
 }
 
-func (r *Repo) UpsertDelegationScope(ctx context.Context, tenantID string, scope DelegationScope) error {
+// ApplyDelegationReceipt projects only an already appended, signer-confirmed
+// receipt. A conflicting parent or a signer floor below the serving floor is a
+// custody divergence, never an ordinary update.
+func (r *Repo) ApplyDelegationReceipt(ctx context.Context, tenantID string, sequence uint64, receipt delegation.Receipt) error {
 	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO pcas_delegation_scope (tenant_id, scope_id, parent_scope_id, epoch_floor)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3)
-			 ON CONFLICT (tenant_id, scope_id)
-			 DO UPDATE SET parent_scope_id = EXCLUDED.parent_scope_id,
-			               epoch_floor = EXCLUDED.epoch_floor,
-			               updated_at = now()`,
-			scope.ScopeID, scope.ParentScopeID, scope.EpochFloor)
-		if err != nil {
-			return fmt.Errorf("succession store: upsert delegation scope: %w", err)
-		}
-		return nil
+		return ApplyDelegationReceiptTx(ctx, tx, tenantID, sequence, receipt)
 	})
+}
+
+// ApplyDelegationReceiptTx joins a full replay's transaction so reset and
+// rebuild cannot leave a partially restored scope table.
+func ApplyDelegationReceiptTx(ctx context.Context, tx pgx.Tx, tenantID string, sequence uint64, receipt delegation.Receipt) error {
+	if receipt.TenantID != tenantID || receipt.AppliedFloor != receipt.EpochFloor {
+		return errors.New("succession store: delegation receipt tenant or floor mismatch")
+	}
+	if sequence == 0 || sequence > math.MaxInt64 {
+		return errors.New("succession store: delegation event sequence is invalid")
+	}
+	if err := receipt.Verify(); err != nil {
+		return fmt.Errorf("succession store: verify delegation receipt: %w", err)
+	}
+	receiptJSON, err := json.Marshal(receipt)
+	if err != nil {
+		return err
+	}
+	ct, err := tx.Exec(ctx,
+		`INSERT INTO pcas_delegation_scope (tenant_id, scope_id, parent_scope_id, epoch_floor, signer_receipt_json, source_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+			 ON CONFLICT (tenant_id, scope_id) DO UPDATE
+		 SET epoch_floor = EXCLUDED.epoch_floor,
+		     signer_receipt_json = EXCLUDED.signer_receipt_json,
+		     source_sequence = EXCLUDED.source_sequence, updated_at = now()
+			 WHERE pcas_delegation_scope.parent_scope_id = EXCLUDED.parent_scope_id
+		   AND pcas_delegation_scope.epoch_floor <= EXCLUDED.epoch_floor
+		   AND pcas_delegation_scope.source_sequence <= EXCLUDED.source_sequence`,
+		tenantID, receipt.ScopeID, receipt.AppliedParentScopeID, receipt.AppliedFloor, receiptJSON, int64(sequence))
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() != 1 {
+		var parent string
+		var floor uint64
+		var currentSequence uint64
+		if err := tx.QueryRow(ctx, `SELECT parent_scope_id, epoch_floor, source_sequence
+			FROM pcas_delegation_scope WHERE tenant_id = $1 AND scope_id = $2`, tenantID, receipt.ScopeID).
+			Scan(&parent, &floor, &currentSequence); err == nil &&
+			parent == receipt.AppliedParentScopeID && currentSequence > sequence && floor >= receipt.AppliedFloor {
+			return nil // an older tail event arrived after the worker applied a newer receipt
+		}
+		return errors.New("succession store: signer delegation receipt conflicts with projected parent or floor")
+	}
+	return nil
 }
 
 func (r *Repo) ListDelegationScopes(ctx context.Context, tenantID string) ([]DelegationScope, error) {
 	var out []DelegationScope
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT scope_id, parent_scope_id, epoch_floor, updated_at
+			`SELECT scope_id, parent_scope_id, epoch_floor, updated_at, signer_receipt_json, source_sequence
 			   FROM pcas_delegation_scope
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 			  ORDER BY scope_id ASC`)
@@ -384,7 +425,7 @@ func (r *Repo) ListDelegationScopes(ctx context.Context, tenantID string) ([]Del
 		defer rows.Close()
 		for rows.Next() {
 			var scope DelegationScope
-			if err := rows.Scan(&scope.ScopeID, &scope.ParentScopeID, &scope.EpochFloor, &scope.UpdatedAt); err != nil {
+			if err := rows.Scan(&scope.ScopeID, &scope.ParentScopeID, &scope.EpochFloor, &scope.UpdatedAt, &scope.SignerReceiptJSON, &scope.SourceSequence); err != nil {
 				return fmt.Errorf("succession store: scan delegation scope: %w", err)
 			}
 			out = append(out, scope)
@@ -395,23 +436,6 @@ func (r *Repo) ListDelegationScopes(ctx context.Context, tenantID string) ([]Del
 		return nil, err
 	}
 	return out, nil
-}
-
-func (r *Repo) RaiseDelegationFloor(ctx context.Context, tenantID, scopeID string, epochFloor uint64) error {
-	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		ct, err := tx.Exec(ctx,
-			`UPDATE pcas_delegation_scope
-			    SET epoch_floor = GREATEST(epoch_floor, $2), updated_at = now()
-			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND scope_id = $1`,
-			scopeID, epochFloor)
-		if err != nil {
-			return fmt.Errorf("succession store: raise delegation floor: %w", err)
-		}
-		if ct.RowsAffected() == 0 {
-			return pgx.ErrNoRows
-		}
-		return nil
-	})
 }
 
 func (r *Repo) UpsertRecoveryPolicy(ctx context.Context, tenantID string, policy RecoveryPolicy) error {

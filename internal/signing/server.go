@@ -46,7 +46,8 @@ type Server struct {
 	// succession semantics (commitment forming, dual-signing, epoch discipline)
 	// live in an edition implementation. nil = the signer mints no successions
 	// (core-only build).
-	minter SuccessionMinter
+	minter          SuccessionMinter
+	delegationStore DelegationStore
 
 	// issuanceGate, when non-nil, is the attached generic issuance-precondition
 	// extension (WithIssuanceGate). The core defines only the seam; the concrete

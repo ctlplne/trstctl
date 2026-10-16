@@ -96,16 +96,32 @@ type DelegationScopeRequest struct {
 }
 
 type DelegationScopeResponse struct {
+	RequestID     string    `json:"request_id"`
 	ScopeID       string    `json:"scope_id"`
 	ParentScopeID string    `json:"parent_scope_id,omitempty"`
 	EpochFloor    uint64    `json:"epoch_floor"`
 	Status        string    `json:"status"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	StatusURL     string    `json:"status_url"`
 }
 
 type DelegationFloorRequest struct {
 	ScopeID    string `json:"scope_id"`
 	EpochFloor uint64 `json:"epoch_floor"`
+}
+
+type DelegationListResponse struct {
+	Scopes []DelegationScopeState `json:"scopes"`
+	Count  int                    `json:"count"`
+}
+
+type DelegationScopeState struct {
+	ScopeID         string          `json:"scope_id"`
+	ParentScopeID   string          `json:"parent_scope_id,omitempty"`
+	EpochFloor      uint64          `json:"epoch_floor"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	SignerConfirmed bool            `json:"signer_confirmed"`
+	SignerReceipt   json.RawMessage `json:"signer_receipt,omitempty"`
 }
 
 type RecoveryPolicyRequest struct {
@@ -323,6 +339,7 @@ type Service interface {
 	RecordAck(ctx context.Context, tenantID string, req AckRequest) (AckResponse, error)
 	ConfigureDelegationScope(ctx context.Context, tenantID string, req DelegationScopeRequest) (DelegationScopeResponse, error)
 	RaiseDelegationFloor(ctx context.Context, tenantID string, req DelegationFloorRequest) (DelegationScopeResponse, error)
+	ListDelegationScopes(ctx context.Context, tenantID string) (DelegationListResponse, error)
 	ConfigureRecoveryPolicy(ctx context.Context, tenantID string, req RecoveryPolicyRequest) (RecoveryPolicyResponse, error)
 	RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error)
 	RequestFederationImport(ctx context.Context, tenantID string, req FederationImportRequest) (AsyncRequestResponse, error)
@@ -344,7 +361,7 @@ type Service interface {
 // server-provided store, event log, and outbox.
 func NewAPIOptionsFactory(opts ...ServiceOption) editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		serviceOpts := append([]ServiceOption{WithSignerStoreDir(d.SignerKeyStoreDir), WithKEMCustody(d.KEMCustody)}, opts...)
+		serviceOpts := append([]ServiceOption{WithKEMCustody(d.KEMCustody)}, opts...)
 		svc := NewService(d.Store, d.Log, d.Outbox, serviceOpts...)
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
@@ -397,18 +414,24 @@ func Routes(svc Service) []api.LicensedRoute {
 			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
 		},
 		{
+			Method: "GET", Path: "/api/v1/pcas/delegation/scopes", OperationID: "listPCASDelegationScopes",
+			Summary:        "Read tenant delegation scopes and signer-signed applied receipts",
+			Handler:        func(a *api.API) http.HandlerFunc { return delegationScopesListHandler(a, svc) },
+			ResponseSchema: "PCASDelegationScopeList", SuccessCode: "200", Permission: authz.CertsRead,
+		},
+		{
 			Method: "POST", Path: "/api/v1/pcas/delegation/scopes", OperationID: "configurePCASDelegationScope",
 			Summary:       "Configure a signer-enforced PCAS delegation scope",
 			Handler:       func(a *api.API) http.HandlerFunc { return delegationScopeHandler(a, svc) },
 			RequestSchema: "PCASDelegationScopeRequest", ResponseSchema: "PCASDelegationScope",
-			SuccessCode: "200", Mutation: true, Permission: authz.CertsWrite,
+			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/delegation/floors", OperationID: "raisePCASDelegationFloor",
 			Summary:       "Raise a signer-enforced PCAS delegation epoch floor",
 			Handler:       func(a *api.API) http.HandlerFunc { return delegationFloorHandler(a, svc) },
 			RequestSchema: "PCASDelegationFloorRequest", ResponseSchema: "PCASDelegationScope",
-			SuccessCode: "200", Mutation: true, Permission: authz.CertsWrite,
+			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/recovery/policies", OperationID: "configurePCASRecoveryPolicy",
@@ -651,8 +674,24 @@ func delegationScopeHandler(a *api.API, svc Service) http.HandlerFunc {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "scope_id is required")
 		}
 		resp, err := svc.ConfigureDelegationScope(ctx, tenantID, req)
-		return http.StatusOK, resp, err
+		return http.StatusAccepted, resp, err
 	})
+}
+
+func delegationScopesListHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		resp, err := svc.ListDelegationScopes(r.Context(), tenantID)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to read signer-confirmed delegation scopes")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
 }
 
 func delegationFloorHandler(a *api.API, svc Service) http.HandlerFunc {
@@ -665,7 +704,7 @@ func delegationFloorHandler(a *api.API, svc Service) http.HandlerFunc {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "scope_id is required")
 		}
 		resp, err := svc.RaiseDelegationFloor(ctx, tenantID, req)
-		return http.StatusOK, resp, err
+		return http.StatusAccepted, resp, err
 	})
 }
 
@@ -1054,12 +1093,30 @@ func schemas() map[string]*api.Schema {
 			"epoch_floor": api.IntegerSchema(),
 		}, "scope_id", "epoch_floor"),
 		"PCASDelegationScope": api.ObjectSchema(map[string]*api.Schema{
+			"request_id":      api.StringSchema(),
 			"scope_id":        api.StringSchema(),
 			"parent_scope_id": api.StringSchema(),
 			"epoch_floor":     api.IntegerSchema(),
 			"status":          api.StringSchema(),
 			"updated_at":      api.TimestampSchema(),
-		}, "scope_id", "epoch_floor", "status"),
+			"status_url":      api.StringSchema(),
+		}, "request_id", "scope_id", "epoch_floor", "status", "status_url"),
+		"PCASDelegationScopeList": api.ObjectSchema(map[string]*api.Schema{
+			"scopes": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
+				"scope_id": api.StringSchema(), "parent_scope_id": api.StringSchema(),
+				"epoch_floor": api.IntegerSchema(), "updated_at": api.TimestampSchema(),
+				"signer_confirmed": api.BooleanSchema(),
+				"signer_receipt": api.ObjectSchema(map[string]*api.Schema{
+					"tenant_id": api.StringSchema(), "operation_id": api.StringSchema(),
+					"kind": api.StringSchema(), "scope_id": api.StringSchema(),
+					"parent_scope_id": api.StringSchema(), "epoch_floor": api.IntegerSchema(),
+					"applied_parent_scope_id": api.StringSchema(), "applied_floor": api.IntegerSchema(),
+					"public_key_der": api.StringSchema(), "signature": api.StringSchema(),
+				}, "tenant_id", "operation_id", "kind", "scope_id", "epoch_floor",
+					"applied_parent_scope_id", "applied_floor", "public_key_der", "signature"),
+			}, "scope_id", "epoch_floor", "signer_confirmed")),
+			"count": api.IntegerSchema(),
+		}, "scopes", "count"),
 		"PCASRecoveryPolicyRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":    api.StringSchema(),
 			"threshold":      api.IntegerSchema(),

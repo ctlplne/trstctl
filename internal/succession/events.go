@@ -39,6 +39,8 @@ const (
 	// emits it, binding both record commitments and the named minting signers, so the
 	// misissuance is durable and attributable on the ledger.
 	TypeMisissuance = "nhi.algorithm.misissuance"
+	// TypeDelegationApplied records the isolated signer's signed state readback.
+	TypeDelegationApplied = "nhi.delegation.applied"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -46,15 +48,16 @@ const (
 // (Type, SchemaVersion) and treats an unknown or newer-than-known version as a
 // skip (Unknown), so replay is forward-compatible and never mis-projects.
 const (
-	GenesisSchemaV1         = 1
-	FindingSchemaV1         = 1
-	SuccessionSchemaV1      = 1
-	RetirementSchemaV1      = 1
-	RPAckSchemaV1           = 1
-	RefusalSchemaV1         = 1
-	RewrapStageSchemaV1     = 1
-	RewrapCompletedSchemaV1 = 1
-	MisissuanceSchemaV1     = 1
+	GenesisSchemaV1           = 1
+	FindingSchemaV1           = 1
+	SuccessionSchemaV1        = 1
+	RetirementSchemaV1        = 1
+	RPAckSchemaV1             = 1
+	RefusalSchemaV1           = 1
+	RewrapStageSchemaV1       = 1
+	RewrapCompletedSchemaV1   = 1
+	MisissuanceSchemaV1       = 1
+	DelegationAppliedSchemaV1 = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -83,6 +86,15 @@ type GenesisV1 struct {
 	TrustRootAtt       []byte `json:"trust_root_att"`
 	TrustRootPublicDER []byte `json:"trust_root_public_der"`
 }
+
+// DelegationAppliedV1 carries signed public signer state; the serving table is
+// rebuilt from this immutable evidence after a projection crash.
+type DelegationAppliedV1 struct {
+	TenantID    string `json:"tenant_id"`
+	ReceiptJSON []byte `json:"receipt_json"`
+}
+
+func (DelegationAppliedV1) isSuccessionPayload() {}
 
 func (GenesisV1) isSuccessionPayload() {}
 
@@ -218,6 +230,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 	switch v := p.(type) {
 	case GenesisV1:
 		return marshalEvent(TypeGenesis, GenesisSchemaV1, v.TenantID, v)
+	case DelegationAppliedV1:
+		return marshalEvent(TypeDelegationApplied, DelegationAppliedSchemaV1, v.TenantID, v)
 	case FindingV1:
 		return marshalEvent(TypeFinding, FindingSchemaV1, v.TenantID, v)
 	case SuccessionV1:
@@ -262,6 +276,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p GenesisV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeDelegationApplied:
+		if ver > DelegationAppliedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p DelegationAppliedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

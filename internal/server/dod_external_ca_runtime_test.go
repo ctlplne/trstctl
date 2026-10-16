@@ -361,7 +361,6 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 	cfg.Secrets.KEKFile = filepath.Join(secretDir, "control-plane-kek.bin")
 	cfg.Signer.KeyStoreDir = filepath.Join(secretDir, "control-plane-signer-keys")
 	cfg.Signer.AuthSecretFile = filepath.Join(secretDir, "control-plane-sign-auth.bin")
-	cfg.PCAS.Delegation.SignerStoreDir = filepath.Join(secretDir, "control-plane-pcas")
 	cases := make([]dodExternalCARuntimeCase, 0, len(selected))
 	addCase := func(entryID, caID string, external *proof.ExternalSubstrate, caConfig config.ExternalCAConfig, rootPEM []byte) {
 		if external == nil {

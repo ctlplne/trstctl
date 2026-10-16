@@ -11543,6 +11543,7 @@
                 "web/src/pages/Posture.tsx",
                 "web/src/pages/posture/CBOMScanWorkflow.tsx",
                 "web/src/pages/posture/PCASSuccessionWorkflow.tsx",
+                "web/src/pages/posture/PCASDelegationPanel.tsx",
                 "web/src/pages/posture/PCASRetirementPanel.tsx"
             ],
             "status": "closed",
@@ -11558,6 +11559,7 @@
                 "requestSuccession",
                 "getSuccessionChain",
                 "recordRPAck",
+                "listPCASDelegationScopes",
                 "configurePCASDelegationScope",
                 "raisePCASDelegationFloor",
                 "configurePCASRecoveryPolicy",
@@ -11587,6 +11589,9 @@
                 "profiles list",
                 "pcas genesis register",
                 "pcas requests status",
+                "pcas delegation scopes list",
+                "pcas delegation scopes set",
+                "pcas delegation floors raise",
                 "pcas succession request",
                 "pcas chain get",
                 "pcas checkpoints get",
@@ -11617,7 +11622,7 @@
                     "evidence": [
                         "Profiles guided builder exposes RSA/ECDSA/Ed25519 profile-selection choices in the MPL core.",
                         "Posture at /posture shows CBOM algorithm inventory, disallowed/quantum-vulnerable state, and remediation handoff.",
-                        "Posture shows reviewed core PQC migration, PCAS genesis registration, request progress, signed-chain readback, a checkpoint signer fingerprint for out-of-band pinning, and reviewed predecessor-retirement quorum setup with readback."
+                        "Posture shows reviewed core PQC migration, PCAS genesis registration, delegation scope and floor commands with signer-confirmed readback, request progress, signed-chain readback, a checkpoint signer fingerprint for out-of-band pinning, and reviewed predecessor-retirement quorum setup with readback."
                     ],
                     "refs": [
                         "web/src/pages/Profiles.tsx",
@@ -11635,7 +11640,7 @@
                         "CLI command: profiles get-version",
                         "CLI command: cbom scan",
                         "CLI command: cbom assets",
-                        "CLI commands: pcas genesis register, pcas requests status, pcas succession request, pcas chain get, pcas checkpoints get, pcas retirement show, pcas retirement policy set"
+                        "CLI commands: pcas genesis register, pcas requests status, pcas delegation scopes list/set, pcas delegation floors raise, pcas succession request, pcas chain get, pcas checkpoints get, pcas retirement show, pcas retirement policy set"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -11650,7 +11655,7 @@
                         "OpenAPI operationId: getProfileVersion",
                         "OpenAPI operationId: startCBOMScan",
                         "OpenAPI operationId: listCBOMAssets",
-                        "Core attached operationIds: registerPCASGenesis, getPCASRequestStatus, requestSuccession, getSuccessionChain, getPCASCheckpoint, configurePCASRetirementPolicy, getPCASRetirementStatus"
+                        "Core attached operationIds: registerPCASGenesis, getPCASRequestStatus, listPCASDelegationScopes, configurePCASDelegationScope, raisePCASDelegationFloor, requestSuccession, getSuccessionChain, getPCASCheckpoint, configurePCASRetirementPolicy, getPCASRetirementStatus"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",

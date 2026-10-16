@@ -83,6 +83,43 @@ or algorithm to recover an error: the anchor is immutable. A previously used
 unscoped signer handle requires an explicit custody migration, as described in
 [PCAS key custody](../pcas-key-custody.md).
 
+## Delegation scopes and signer floor
+
+A delegation scope limits which algorithm epoch the signer may mint. Configure
+it before requesting a succession with `delegation_scope`. The isolated signer
+must have its persistent keystore mounted; the control plane does not write the
+signer's scope file. A scope belongs to one tenant. Its parent cannot change,
+and its floor can only rise. Create a root before its children. Use `certs:write`
+for commands and `certs:read` for readback.
+
+```bash
+cat > /secure/pcas-root-scope.json <<'JSON'
+{"scope_id":"qa-root","epoch_floor":1}
+JSON
+trstctl pcas delegation scopes set -f /secure/pcas-root-scope.json
+trstctl pcas requests status REQUEST_ID
+trstctl pcas delegation scopes list
+```
+
+The POST returns HTTP 202 and `queued`; only the outbox command is durable at
+that point. Wait until request status is `delivered`, then read
+`GET /api/v1/pcas/delegation/scopes` or use the CLI/console. The matching row
+must say `signer_confirmed: true` and include a signed receipt binding tenant,
+operation ID, scope, parent, and applied floor. Verify that signature with the
+included signer public key, then compare its fingerprint with a key obtained
+through an independent trusted channel. A key returned alongside its own
+signature is not an independently trusted anchor.
+
+To raise a floor, send `{"scope_id":"qa-root","epoch_floor":3}` through
+`trstctl pcas delegation floors raise -f /secure/pcas-floor.json`. The signer
+refuses a lower floor, unknown scope, unknown parent, or changed parent. A lost
+worker response reuses the same operation ID and signed receipt. In the
+Posture console, open **Proof-carrying key succession → Signer-enforced
+delegation scopes**, review the exact scope/parent/floor, queue the command,
+and refresh status and scope readback. Older rows without signer receipts are
+marked unconfirmed. Re-provision them through this command path before relying
+on them; a control-plane-local scope file cannot establish signer custody.
+
 ## Retiring a predecessor epoch
 
 Before an old signing key can retire, record which relying parties must attest
@@ -124,6 +161,7 @@ shared feature metrics:
 
 - `trstctl_feature_operations_total{feature="pcas_succession",action="mint",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_succession",action="genesis",outcome="success"}`
+- `trstctl_feature_operations_total{feature="pcas_delegation",action="apply",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_kem",action="rewrap",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_retirement",action="worker",outcome="success"}`
 - `trstctl_feature_operations_total{feature="pcas_checkpoint",action="worker",outcome="success"}`

@@ -3,115 +3,256 @@
 package delegation
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
-const durableScopesFile = "pcas-delegation-scopes.json"
+const durableScopesFile = "pcas-delegation-scopes-v2.json"
 
-// DurableScopeStore stores signer-enforced delegation scopes in the signer
-// custody directory. It is intentionally file-backed: the signer process owns the
-// enforcement view and needs no SQL driver or control-plane callback (AN-4).
-type DurableScopeStore struct {
-	mu   sync.Mutex
-	path string
+// Command is the public, tenant-bound instruction sent to the isolated signer.
+// OperationID is the outbox request ID. Exact retries return the original receipt.
+type Command struct {
+	TenantID      string `json:"tenant_id"`
+	OperationID   string `json:"operation_id"`
+	Kind          string `json:"kind"`
+	ScopeID       string `json:"scope_id"`
+	ParentScopeID string `json:"parent_scope_id,omitempty"`
+	EpochFloor    uint64 `json:"epoch_floor"`
+}
+
+// Receipt is the signer's durable, signed readback of the applied scope state.
+type Receipt struct {
+	Command
+	AppliedParentScopeID string `json:"applied_parent_scope_id"`
+	AppliedFloor         uint64 `json:"applied_floor"`
+	PublicKeyDER         []byte `json:"public_key_der"`
+	Signature            []byte `json:"signature"`
+}
+
+func (r Receipt) SignedBody() ([]byte, error) {
+	return json.Marshal(struct {
+		Domain string `json:"domain"`
+		Command
+		AppliedParentScopeID string `json:"applied_parent_scope_id"`
+		AppliedFloor         uint64 `json:"applied_floor"`
+	}{Domain: "trstctl/pcas/delegation/receipt/v1", Command: r.Command,
+		AppliedParentScopeID: r.AppliedParentScopeID, AppliedFloor: r.AppliedFloor})
+}
+
+func (r Receipt) Verify() error {
+	body, err := r.SignedBody()
+	if err != nil {
+		return err
+	}
+	return crypto.VerifyMessage(r.PublicKeyDER, body, r.Signature)
+}
+
+type persistedScope struct {
+	TenantID string `json:"tenant_id"`
+	Scope
+}
+
+type persistedOperation struct {
+	Digest  string  `json:"digest"`
+	Receipt Receipt `json:"receipt"`
 }
 
 type durableScopes struct {
-	Scopes []Scope `json:"scopes"`
+	Scopes     []persistedScope              `json:"scopes"`
+	Operations map[string]persistedOperation `json:"operations"`
+}
+
+// DurableScopeStore is signer-owned enforcement state; it has no SQL access.
+// The scope and operation receipt are atomically replaced in one fsynced file.
+type DurableScopeStore struct {
+	mu   sync.Mutex
+	path string
 }
 
 func NewDurableScopeStore(dir string) *DurableScopeStore {
 	return &DurableScopeStore{path: filepath.Join(dir, durableScopesFile)}
 }
 
-func (s *DurableScopeStore) UpsertScope(scope Scope) error {
-	if scope.ID == "" {
-		return errors.New("delegation: scope id required")
+func scopeKey(tenantID, id string) string { return tenantID + "\x00" + id }
+
+// Apply invokes sign only after validating the resulting tenant tree. The sign
+// callback must journal a signature by operation ID, so a crash between signing
+// and the scope-file rename replays byte-identical evidence.
+func (s *DurableScopeStore) Apply(cmd Command, sign func(string, []byte) ([]byte, []byte, error)) (Receipt, error) {
+	if cmd.TenantID == "" || cmd.OperationID == "" || cmd.ScopeID == "" ||
+		(cmd.Kind != "scope" && cmd.Kind != "floor") || cmd.ScopeID == cmd.ParentScopeID {
+		return Receipt{}, errors.New("delegation: invalid tenant, operation, kind or scope")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tree, err := s.loadTreeLocked()
+	if cmd.Kind == "floor" && cmd.ParentScopeID != "" {
+		return Receipt{}, errors.New("delegation: floor command cannot change parent")
+	}
+	body, err := json.Marshal(cmd)
 	if err != nil {
-		return err
+		return Receipt{}, err
 	}
-	tree.AddScope(scope.ID, scope.Parent, scope.Constraint)
-	return s.saveTreeLocked(tree)
-}
-
-func (s *DurableScopeStore) RaiseFloor(scopeID string, epochFloor uint64) error {
-	if scopeID == "" {
-		return errors.New("delegation: scope id required")
-	}
+	digest := crypto.SHA256Sum(body)
+	digestHex := hex.EncodeToString(digest[:])
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tree, err := s.loadTreeLocked()
+	state, err := s.loadLocked()
 	if err != nil {
-		return err
+		return Receipt{}, err
 	}
-	scope, ok := tree.scopes[scopeID]
-	if !ok {
-		return fmt.Errorf("delegation: unknown scope %q", scopeID)
+	opKey := scopeKey(cmd.TenantID, cmd.OperationID)
+	if old, exists := state.Operations[opKey]; exists {
+		if old.Digest != digestHex {
+			return Receipt{}, errors.New("delegation: operation id reused with different command")
+		}
+		if err := old.Receipt.Verify(); err != nil {
+			return Receipt{}, fmt.Errorf("delegation: corrupt stored receipt: %w", err)
+		}
+		return old.Receipt, nil
 	}
-	if epochFloor > scope.Constraint.EpochFloor {
-		scope.Constraint.EpochFloor = epochFloor
-		tree.scopes[scopeID] = scope
+	index := -1
+	for i := range state.Scopes {
+		if scopeKey(state.Scopes[i].TenantID, state.Scopes[i].ID) == scopeKey(cmd.TenantID, cmd.ScopeID) {
+			index = i
+			break
+		}
 	}
-	return s.saveTreeLocked(tree)
+	if cmd.Kind == "floor" && index < 0 {
+		return Receipt{}, fmt.Errorf("delegation: unknown scope %q", cmd.ScopeID)
+	}
+	if index >= 0 {
+		current := state.Scopes[index]
+		if cmd.Kind == "scope" && current.Parent != cmd.ParentScopeID {
+			return Receipt{}, errors.New("delegation: scope parent is immutable")
+		}
+		if cmd.EpochFloor < current.Constraint.EpochFloor {
+			return Receipt{}, errors.New("delegation: epoch floor cannot decrease")
+		}
+		state.Scopes[index].Constraint.EpochFloor = cmd.EpochFloor
+	} else {
+		state.Scopes = append(state.Scopes, persistedScope{TenantID: cmd.TenantID,
+			Scope: Scope{ID: cmd.ScopeID, Parent: cmd.ParentScopeID, Constraint: Constraint{EpochFloor: cmd.EpochFloor}}})
+		index = len(state.Scopes) - 1
+	}
+	if _, err := treeForTenant(state.Scopes, cmd.TenantID).Path(cmd.ScopeID); err != nil {
+		return Receipt{}, err // missing ancestor or cycle
+	}
+	receipt := Receipt{Command: cmd, AppliedParentScopeID: state.Scopes[index].Parent,
+		AppliedFloor: state.Scopes[index].Constraint.EpochFloor}
+	signedBody, err := receipt.SignedBody()
+	if err != nil {
+		return Receipt{}, err
+	}
+	if sign == nil {
+		return Receipt{}, errors.New("delegation: signer receipt callback unavailable")
+	}
+	receipt.PublicKeyDER, receipt.Signature, err = sign(cmd.OperationID, signedBody)
+	if err != nil {
+		return Receipt{}, err
+	}
+	if err := receipt.Verify(); err != nil {
+		return Receipt{}, fmt.Errorf("delegation: invalid signer receipt: %w", err)
+	}
+	state.Operations[opKey] = persistedOperation{Digest: digestHex, Receipt: receipt}
+	if err := s.saveLocked(state); err != nil {
+		return Receipt{}, err
+	}
+	return receipt, nil
 }
 
-func (s *DurableScopeStore) LoadTree() (*Tree, error) {
+func treeForTenant(scopes []persistedScope, tenantID string) *Tree {
+	tree := NewTree()
+	for _, scope := range scopes {
+		if scope.TenantID == tenantID {
+			tree.AddScope(scope.ID, scope.Parent, scope.Constraint)
+		}
+	}
+	return tree
+}
+
+// CheckAndBind reads the signer's durable tenant tree on every mint.
+func (s *DurableScopeStore) CheckAndBind(tenantID, scope string, targetEpoch uint64) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.loadTreeLocked()
-}
-
-func (s *DurableScopeStore) CheckAndBind(scope string, targetEpoch uint64) (string, error) {
-	tree, err := s.LoadTree()
+	state, err := s.loadLocked()
 	if err != nil {
 		return "", err
 	}
-	return NewMinterConstraint(tree).CheckAndBind(scope, targetEpoch)
+	return NewMinterConstraint(treeForTenant(state.Scopes, tenantID)).CheckAndBind(tenantID, scope, targetEpoch)
 }
 
-func (s *DurableScopeStore) loadTreeLocked() (*Tree, error) {
-	tree := NewTree()
+func (s *DurableScopeStore) loadLocked() (durableScopes, error) {
+	state := durableScopes{Operations: map[string]persistedOperation{}}
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
-		return tree, nil
+		return state, nil
 	}
 	if err != nil {
-		return nil, err
+		return state, err
 	}
-	var persisted durableScopes
-	if err := json.Unmarshal(data, &persisted); err != nil {
-		return nil, fmt.Errorf("delegation: read durable scopes: %w", err)
+	if err := json.Unmarshal(data, &state); err != nil {
+		return state, fmt.Errorf("delegation: read durable scopes: %w", err)
 	}
-	for _, scope := range persisted.Scopes {
-		tree.AddScope(scope.ID, scope.Parent, scope.Constraint)
+	if state.Operations == nil {
+		return state, errors.New("delegation: missing operation journal")
 	}
-	return tree, nil
+	seen := map[string]bool{}
+	for _, scope := range state.Scopes {
+		key := scopeKey(scope.TenantID, scope.ID)
+		if scope.TenantID == "" || scope.ID == "" || seen[key] {
+			return state, errors.New("delegation: invalid or duplicate persisted scope")
+		}
+		seen[key] = true
+	}
+	for _, op := range state.Operations {
+		if err := op.Receipt.Verify(); err != nil {
+			return state, fmt.Errorf("delegation: invalid persisted receipt: %w", err)
+		}
+	}
+	return state, nil
 }
 
-func (s *DurableScopeStore) saveTreeLocked(tree *Tree) error {
-	persisted := durableScopes{Scopes: make([]Scope, 0, len(tree.scopes))}
-	for _, scope := range tree.scopes {
-		persisted.Scopes = append(persisted.Scopes, scope)
-	}
-	data, err := json.MarshalIndent(persisted, "", "  ")
+func (s *DurableScopeStore) saveLocked(state durableScopes) error {
+	sort.Slice(state.Scopes, func(i, j int) bool {
+		return scopeKey(state.Scopes[i].TenantID, state.Scopes[i].ID) < scopeKey(state.Scopes[j].TenantID, state.Scopes[j].ID)
+	})
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	f, err := os.CreateTemp(dir, ".pcas-delegation-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	defer func() { _ = os.Remove(f.Name()) }()
+	if err := f.Chmod(0o600); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	if _, err := f.Write(data); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	if err := f.Sync(); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(f.Name(), s.path); err != nil {
+		return err
+	}
+	d, err := os.Open(dir) // #nosec G304 -- signer-owned keystore directory selected at signer startup; fsync makes the scope rename durable (CWE-22)
+	if err != nil {
+		return err
+	}
+	return errors.Join(d.Sync(), d.Close())
 }

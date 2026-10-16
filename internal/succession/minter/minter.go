@@ -144,7 +144,7 @@ func WithCommitmentV2() Option { return func(m *Minter) { m.commitmentV2 = true 
 // on success, returns the canonical delegation-path representation to bind in the
 // commitment. internal/succession/delegation.MinterConstraint implements it.
 type DelegationConstraint interface {
-	CheckAndBind(scope string, targetEpoch uint64) (delegationPath string, err error)
+	CheckAndBind(tenantID, scope string, targetEpoch uint64) (delegationPath string, err error)
 }
 
 // WithDelegation enforces delegated-authority succession domains at the signer (claim
@@ -308,8 +308,11 @@ func (m *Minter) MintSuccessor(ctx context.Context, req signing.MintRequest) (si
 	// ancestor floor of the scope, and capture the delegation path to bind in the v2
 	// commitment. A weaker local floor can never undercut an ancestor's.
 	var delegationPath string
-	if m.delegation != nil && req.DelegationScope != "" {
-		dp, derr := m.delegation.CheckAndBind(req.DelegationScope, epoch)
+	if req.DelegationScope != "" {
+		if m.delegation == nil {
+			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, ErrDelegation)
+		}
+		dp, derr := m.delegation.CheckAndBind(req.TenantID, req.DelegationScope, epoch)
 		if derr != nil {
 			return signing.MintResult{}, m.refuse(succession.RefusalPolicy, req, fmt.Errorf("%w: %v", ErrDelegation, derr))
 		}

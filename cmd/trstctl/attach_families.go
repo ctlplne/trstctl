@@ -27,6 +27,7 @@ import (
 	pqccbom "trstctl.com/trstctl/internal/pqc/cbomposture"
 	pqcmigration "trstctl.com/trstctl/internal/pqcmigration"
 	pqcruntime "trstctl.com/trstctl/internal/pqcruntime"
+	"trstctl.com/trstctl/internal/projections"
 	reconcile "trstctl.com/trstctl/internal/reconcile"
 	reconcileapi "trstctl.com/trstctl/internal/reconcile/api"
 	reconcileplanremediation "trstctl.com/trstctl/internal/reconcile/plan/remediation"
@@ -74,6 +75,8 @@ func attachFamilies(cfg *config.Config, log *slog.Logger, deps *server.Deps) err
 // deps.EnablePCAS.
 func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	deps.EnablePCAS = true
+	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions,
+		projections.WithEventProjection(successionstore.NewDelegationProjection(deps.Store)))
 	// Attach the PCAS external API (request-succession, chain fetch, RP acks)
 	// through the feature-neutral route seam, composing with any other API routes
 	// (e.g. PQC migration) already registered.

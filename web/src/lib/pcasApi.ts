@@ -81,6 +81,30 @@ export interface PCASRetirementPolicy extends PCASRetirementPolicyRequest {
   rewrap_complete: boolean;
 }
 
+export interface PCASDelegationScope {
+  scope_id: string;
+  parent_scope_id?: string;
+  epoch_floor: number;
+  updated_at: string;
+  signer_confirmed: boolean;
+  signer_receipt?: {
+    operation_id: string;
+    applied_floor: number;
+    applied_parent_scope_id: string;
+    public_key_der: string;
+    signature: string;
+  };
+}
+
+export interface PCASDelegationAccepted {
+  request_id: string;
+  scope_id: string;
+  parent_scope_id?: string;
+  epoch_floor: number;
+  status: string;
+  status_url: string;
+}
+
 export const pcasApi = {
   registerGenesis: (body: PCASGenesisRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/genesis", body),
   requestSuccession: (body: PCASSuccessionRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/successions", body),
@@ -90,4 +114,8 @@ export const pcasApi = {
   retirementStatus: (identityId: string, predecessorEpoch: number) =>
     req<PCASRetirementPolicy>(`/api/v1/pcas/retirement?identity_id=${encodeURIComponent(identityId)}&predecessor_epoch=${predecessorEpoch}`),
   configureRetirement: (body: PCASRetirementPolicyRequest) => mutate<PCASRetirementPolicy>("POST", "/api/v1/pcas/retirement/policies", body),
+  delegationScopes: () => req<{ scopes: PCASDelegationScope[]; count: number }>("/api/v1/pcas/delegation/scopes"),
+  configureDelegationScope: (body: { scope_id: string; parent_scope_id?: string; epoch_floor: number }) =>
+    mutate<PCASDelegationAccepted>("POST", "/api/v1/pcas/delegation/scopes", body),
+  raiseDelegationFloor: (body: { scope_id: string; epoch_floor: number }) => mutate<PCASDelegationAccepted>("POST", "/api/v1/pcas/delegation/floors", body),
 };

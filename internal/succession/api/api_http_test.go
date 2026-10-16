@@ -134,11 +134,15 @@ func (f *fakeService) RecordAck(_ context.Context, _ string, req succapi.AckRequ
 }
 
 func (f *fakeService) ConfigureDelegationScope(_ context.Context, _ string, req succapi.DelegationScopeRequest) (succapi.DelegationScopeResponse, error) {
-	return succapi.DelegationScopeResponse{ScopeID: req.ScopeID, ParentScopeID: req.ParentScopeID, EpochFloor: req.EpochFloor, Status: "configured", UpdatedAt: time.Now()}, nil
+	return succapi.DelegationScopeResponse{RequestID: "delegation-scope-1", ScopeID: req.ScopeID, ParentScopeID: req.ParentScopeID, EpochFloor: req.EpochFloor, Status: "queued", UpdatedAt: time.Now(), StatusURL: "/api/v1/pcas/requests/delegation-scope-1"}, nil
 }
 
 func (f *fakeService) RaiseDelegationFloor(_ context.Context, _ string, req succapi.DelegationFloorRequest) (succapi.DelegationScopeResponse, error) {
-	return succapi.DelegationScopeResponse{ScopeID: req.ScopeID, EpochFloor: req.EpochFloor, Status: "raised", UpdatedAt: time.Now()}, nil
+	return succapi.DelegationScopeResponse{RequestID: "delegation-floor-1", ScopeID: req.ScopeID, EpochFloor: req.EpochFloor, Status: "queued", UpdatedAt: time.Now(), StatusURL: "/api/v1/pcas/requests/delegation-floor-1"}, nil
+}
+
+func (f *fakeService) ListDelegationScopes(_ context.Context, _ string) (succapi.DelegationListResponse, error) {
+	return succapi.DelegationListResponse{Scopes: []succapi.DelegationScopeState{}, Count: 0}, nil
 }
 
 func (f *fakeService) ConfigureRecoveryPolicy(_ context.Context, _ string, req succapi.RecoveryPolicyRequest) (succapi.RecoveryPolicyResponse, error) {

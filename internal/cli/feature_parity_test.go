@@ -302,8 +302,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// headless commands; the static API-table parity test cannot see them.
 	// PCAS predecessor retirement adds one exact status read and one reviewed
 	// quorum-policy write, keeping the attached Core API usable headlessly.
-	if len(out) != 520 {
-		t.Fatalf("CLI commands = %d, want 520", len(out))
+	// PCAS delegation adds signer-confirmed scope readback and two reviewed
+	// commands for scope creation and monotonic floor raises.
+	if len(out) != 523 {
+		t.Fatalf("CLI commands = %d, want 523", len(out))
 	}
 	return out
 }

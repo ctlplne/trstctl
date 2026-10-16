@@ -31,14 +31,19 @@ func NewLicensedOutboxFactory(opts ...FactoryOption) editionseam.LicensedOutboxF
 		if d.Store == nil {
 			return nil, errors.New("pcas outbox: nil store")
 		}
+		var delegationCustody DelegationCustody
+		if c, ok := d.KEMCustody.(DelegationCustody); ok {
+			delegationCustody = c
+		}
 		return &licensedOutboxHandler{
-			orch:      New(d.Store, d.Minter),
-			genesis:   NewGenesisWorker(d.Store, d.Log, d.KEMCustody),
-			breadth:   NewBreadthWorker(d.Store, d.KEMCustody),
-			hasMinter: d.Minter != nil,
-			hasKEM:    d.KEMCustody != nil,
-			observer:  d.FeatureObserver,
-			topics:    cfg.topics.resolved(),
+			orch:       New(d.Store, d.Minter),
+			genesis:    NewGenesisWorker(d.Store, d.Log, d.KEMCustody),
+			delegation: NewDelegationWorker(d.Store, d.Log, delegationCustody),
+			breadth:    NewBreadthWorker(d.Store, d.KEMCustody),
+			hasMinter:  d.Minter != nil,
+			hasKEM:     d.KEMCustody != nil,
+			observer:   d.FeatureObserver,
+			topics:     cfg.topics.resolved(),
 		}, nil
 	}
 }
@@ -84,13 +89,14 @@ func (t BreadthTopics) resolved() BreadthTopics {
 }
 
 type licensedOutboxHandler struct {
-	orch      *Orchestrator
-	genesis   *GenesisWorker
-	breadth   *BreadthWorker
-	hasMinter bool
-	hasKEM    bool
-	observer  func(feature, action, outcome string, seconds float64)
-	topics    BreadthTopics
+	orch       *Orchestrator
+	genesis    *GenesisWorker
+	delegation *DelegationWorker
+	breadth    *BreadthWorker
+	hasMinter  bool
+	hasKEM     bool
+	observer   func(feature, action, outcome string, seconds float64)
+	topics     BreadthTopics
 }
 
 // DeliverLicensed routes the PCAS outbox destinations. It returns handled=false for a
@@ -106,6 +112,10 @@ func (h *licensedOutboxHandler) DeliverLicensed(ctx context.Context, m coreorch.
 	switch {
 	case m.Destination == GenesisDestination:
 		err := h.genesis.Deliver(ctx, m)
+		observe(err)
+		return true, err
+	case m.Destination == DelegationScopeDestination || m.Destination == DelegationFloorDestination:
+		err := h.delegation.Deliver(ctx, m)
 		observe(err)
 		return true, err
 	case m.Destination == RequestDestination: // pcas.succession-request
@@ -169,6 +179,8 @@ func (h *licensedOutboxHandler) featureAction(destination string) (feature, acti
 	switch destination {
 	case GenesisDestination:
 		return "pcas_succession", "genesis", true
+	case DelegationScopeDestination, DelegationFloorDestination:
+		return "pcas_delegation", "apply", true
 	case RequestDestination:
 		return "pcas_succession", "mint", true
 	case PublishDestination:

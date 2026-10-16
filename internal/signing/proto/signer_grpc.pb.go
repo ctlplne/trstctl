@@ -41,6 +41,7 @@ const (
 	SignerService_SignManagedKey_FullMethodName       = "/trstctl.signing.v1.SignerService/SignManagedKey"
 	SignerService_Health_FullMethodName               = "/trstctl.signing.v1.SignerService/Health"
 	SignerService_MintSuccessor_FullMethodName        = "/trstctl.signing.v1.SignerService/MintSuccessor"
+	SignerService_ApplyDelegation_FullMethodName      = "/trstctl.signing.v1.SignerService/ApplyDelegation"
 	SignerService_GenerateSuccessorKEM_FullMethodName = "/trstctl.signing.v1.SignerService/GenerateSuccessorKEM"
 	SignerService_Decapsulate_FullMethodName          = "/trstctl.signing.v1.SignerService/Decapsulate"
 	SignerService_ZeroizeKey_FullMethodName           = "/trstctl.signing.v1.SignerService/ZeroizeKey"
@@ -110,6 +111,10 @@ type SignerServiceClient interface {
 	// control plane requests a succession without ever obtaining private key
 	// material (claims 1/12/49): the control plane can request, but cannot forge.
 	MintSuccessor(ctx context.Context, in *MintSuccessorRequest, opts ...grpc.CallOption) (*MintSuccessorResponse, error)
+	// ApplyDelegation durably enforces a tenant-bound PCAS scope or floor inside
+	// signer custody and returns a signed readback. Operation ID makes retries
+	// exact after a lost worker response.
+	ApplyDelegation(ctx context.Context, in *ApplyDelegationRequest, opts ...grpc.CallOption) (*ApplyDelegationResponse, error)
 	// GenerateSuccessorKEM creates a KEM private key inside the signer and returns
 	// only the encapsulation public key. The KEM private key is not a signing key:
 	// it is held in a signer-side KEM custody store and can be used only through the
@@ -258,6 +263,16 @@ func (c *signerServiceClient) MintSuccessor(ctx context.Context, in *MintSuccess
 	return out, nil
 }
 
+func (c *signerServiceClient) ApplyDelegation(ctx context.Context, in *ApplyDelegationRequest, opts ...grpc.CallOption) (*ApplyDelegationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyDelegationResponse)
+	err := c.cc.Invoke(ctx, SignerService_ApplyDelegation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *signerServiceClient) GenerateSuccessorKEM(ctx context.Context, in *GenerateSuccessorKEMRequest, opts ...grpc.CallOption) (*GenerateSuccessorKEMResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GenerateSuccessorKEMResponse)
@@ -361,6 +376,10 @@ type SignerServiceServer interface {
 	// control plane requests a succession without ever obtaining private key
 	// material (claims 1/12/49): the control plane can request, but cannot forge.
 	MintSuccessor(context.Context, *MintSuccessorRequest) (*MintSuccessorResponse, error)
+	// ApplyDelegation durably enforces a tenant-bound PCAS scope or floor inside
+	// signer custody and returns a signed readback. Operation ID makes retries
+	// exact after a lost worker response.
+	ApplyDelegation(context.Context, *ApplyDelegationRequest) (*ApplyDelegationResponse, error)
 	// GenerateSuccessorKEM creates a KEM private key inside the signer and returns
 	// only the encapsulation public key. The KEM private key is not a signing key:
 	// it is held in a signer-side KEM custody store and can be used only through the
@@ -431,6 +450,9 @@ func (UnimplementedSignerServiceServer) Health(context.Context, *HealthRequest) 
 }
 func (UnimplementedSignerServiceServer) MintSuccessor(context.Context, *MintSuccessorRequest) (*MintSuccessorResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MintSuccessor not implemented")
+}
+func (UnimplementedSignerServiceServer) ApplyDelegation(context.Context, *ApplyDelegationRequest) (*ApplyDelegationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplyDelegation not implemented")
 }
 func (UnimplementedSignerServiceServer) GenerateSuccessorKEM(context.Context, *GenerateSuccessorKEMRequest) (*GenerateSuccessorKEMResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GenerateSuccessorKEM not implemented")
@@ -663,6 +685,24 @@ func _SignerService_MintSuccessor_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_ApplyDelegation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyDelegationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).ApplyDelegation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_ApplyDelegation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).ApplyDelegation(ctx, req.(*ApplyDelegationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SignerService_GenerateSuccessorKEM_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GenerateSuccessorKEMRequest)
 	if err := dec(in); err != nil {
@@ -785,6 +825,10 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MintSuccessor",
 			Handler:    _SignerService_MintSuccessor_Handler,
+		},
+		{
+			MethodName: "ApplyDelegation",
+			Handler:    _SignerService_ApplyDelegation_Handler,
 		},
 		{
 			MethodName: "GenerateSuccessorKEM",

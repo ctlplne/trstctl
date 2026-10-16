@@ -141,10 +141,16 @@
           "parent_scope_id": {
             "type": "string"
           },
+          "request_id": {
+            "type": "string"
+          },
           "scope_id": {
             "type": "string"
           },
           "status": {
+            "type": "string"
+          },
+          "status_url": {
             "type": "string"
           },
           "updated_at": {
@@ -153,9 +159,98 @@
           }
         },
         "required": [
+          "request_id",
           "scope_id",
           "epoch_floor",
-          "status"
+          "status",
+          "status_url"
+        ]
+      },
+      "PCASDelegationScopeList": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "epoch_floor": {
+                  "type": "integer"
+                },
+                "parent_scope_id": {
+                  "type": "string"
+                },
+                "scope_id": {
+                  "type": "string"
+                },
+                "signer_confirmed": {
+                  "type": "boolean"
+                },
+                "signer_receipt": {
+                  "type": "object",
+                  "properties": {
+                    "applied_floor": {
+                      "type": "integer"
+                    },
+                    "applied_parent_scope_id": {
+                      "type": "string"
+                    },
+                    "epoch_floor": {
+                      "type": "integer"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "operation_id": {
+                      "type": "string"
+                    },
+                    "parent_scope_id": {
+                      "type": "string"
+                    },
+                    "public_key_der": {
+                      "type": "string"
+                    },
+                    "scope_id": {
+                      "type": "string"
+                    },
+                    "signature": {
+                      "type": "string"
+                    },
+                    "tenant_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tenant_id",
+                    "operation_id",
+                    "kind",
+                    "scope_id",
+                    "epoch_floor",
+                    "applied_parent_scope_id",
+                    "applied_floor",
+                    "public_key_der",
+                    "signature"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "scope_id",
+                "epoch_floor",
+                "signer_confirmed"
+              ]
+            }
+          }
+        },
+        "required": [
+          "scopes",
+          "count"
         ]
       },
       "PCASDelegationScopeRequest": {
@@ -1105,7 +1200,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1120,6 +1215,22 @@
       }
     },
     "/api/v1/pcas/delegation/scopes": {
+      "get": {
+        "operationId": "listPCASDelegationScopes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASDelegationScopeList"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "Read tenant delegation scopes and signer-signed applied receipts"
+      },
       "post": {
         "operationId": "configurePCASDelegationScope",
         "parameters": [
@@ -1144,7 +1255,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {

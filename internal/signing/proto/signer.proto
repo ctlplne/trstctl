@@ -84,6 +84,11 @@ service SignerService {
   // material (claims 1/12/49): the control plane can request, but cannot forge.
   rpc MintSuccessor(MintSuccessorRequest) returns (MintSuccessorResponse);
 
+  // ApplyDelegation durably enforces a tenant-bound PCAS scope or floor inside
+  // signer custody and returns a signed readback. Operation ID makes retries
+  // exact after a lost worker response.
+  rpc ApplyDelegation(ApplyDelegationRequest) returns (ApplyDelegationResponse);
+
   // GenerateSuccessorKEM creates a KEM private key inside the signer and returns
   // only the encapsulation public key. The KEM private key is not a signing key:
   // it is held in a signer-side KEM custody store and can be used only through the
@@ -413,6 +418,19 @@ message MintSuccessorResponse {
   Algorithm successor_algorithm = 2;
   bytes successor_public_key = 3; // PKIX/DER (SubjectPublicKeyInfo)
   bytes encoded_record = 4;       // opaque dual-signed succession record
+}
+
+message ApplyDelegationRequest {
+  string tenant_id = 1;
+  string operation_id = 2;
+  string kind = 3; // scope or floor
+  string scope_id = 4;
+  string parent_scope_id = 5;
+  uint64 epoch_floor = 6;
+}
+
+message ApplyDelegationResponse {
+  bytes signed_receipt_json = 1;
 }
 
 message GenerateSuccessorKEMRequest {

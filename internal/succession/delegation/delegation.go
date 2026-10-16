@@ -110,7 +110,7 @@ func NewMinterConstraint(tree *Tree) *MinterConstraint { return &MinterConstrain
 // CheckAndBind refuses a succession of scope whose target epoch is below the effective
 // ancestor floor (ErrConstraintViolation), and otherwise returns the delegation-path
 // representation (DelegationPolicyRef of the root→scope path) to bind in the commitment.
-func (c *MinterConstraint) CheckAndBind(scope string, targetEpoch uint64) (string, error) {
+func (c *MinterConstraint) CheckAndBind(_ string, scope string, targetEpoch uint64) (string, error) {
 	if err := c.tree.CheckSuccession(scope, targetEpoch); err != nil {
 		return "", err
 	}

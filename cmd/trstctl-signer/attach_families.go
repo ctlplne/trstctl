@@ -138,10 +138,12 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 		opts = append(opts, signing.WithKEMCustody(kems))
 	}
 	var delegationConstraint interface {
-		CheckAndBind(scope string, targetEpoch uint64) (string, error)
+		CheckAndBind(tenantID, scope string, targetEpoch uint64) (string, error)
 	}
 	if floorDir != "" {
-		delegationConstraint = pcasdelegation.NewDurableScopeStore(floorDir)
+		store := pcasdelegation.NewDurableScopeStore(floorDir)
+		delegationConstraint = store
+		opts = append(opts, signing.WithDelegationStore(store))
 	}
 	// Break-glass authority (claim 17): operator-provisioned PUBLIC key
 	// inside the signer custody dir, never a control-plane input. Absent
