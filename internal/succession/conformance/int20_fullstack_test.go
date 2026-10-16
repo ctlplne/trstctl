@@ -366,13 +366,13 @@ func (st *int20Stack) delegationIsEnforcedBySigner(t *testing.T) {
 func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	t.Helper()
 	const id = "spiffe://int20.example/workload/kem"
-	predHandle := succession.KeyHandle(id, 0)
+	predHandle := succession.TenantKeyHandle(st.tenantID, id, 0)
 	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, predHandle); err != nil {
 		t.Fatalf("KEM predecessor: %v", err)
 	}
 	resp, err := st.svc.RequestKEMRewrap(st.ctx, st.tenantID, succapi.KEMRewrapRequest{
 		IdentityID: id, PredecessorHandle: predHandle, PredecessorEpoch: 0,
-		SuccessorSignHandle: succession.KeyHandle(id, 1), SuccessorKEMHandle: "kem:" + id + ":1",
+		SuccessorSignHandle: succession.TenantKeyHandle(st.tenantID, id, 1), SuccessorKEMHandle: "kem:" + id + ":1",
 		SigningAlgorithm: string(crypto.ECDSAP384), KEMAlgorithm: string(eepqc.MLKEM768),
 		Stages: []string{"stage-a", "stage-b"},
 	})
