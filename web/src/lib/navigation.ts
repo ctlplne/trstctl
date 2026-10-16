@@ -428,7 +428,7 @@ const routePermissionAny: Record<string, string[]> = {
   "/": ["certs:read", "identities:read", "risk:read"],
   "/trust-operations": ["risk:read", "incidents:read", "owners:read", "notifications:read", "audit:read", "access:read"],
   "/agents": ["agents:read"],
-  "/approvals": ["certs:issue"],
+  "/approvals": ["certs:issue", "secrets:write", "keys:approve", "access:approve", "profiles:read"],
   "/assistant": ["graph:read"],
   "/audit": ["audit:read"],
   "/ca-hierarchy": ["issuers:read"],

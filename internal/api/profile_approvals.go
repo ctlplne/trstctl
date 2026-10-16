@@ -4,13 +4,17 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -29,17 +33,22 @@ type profileEditApprovalDecision struct {
 }
 
 type profileEditApprovalRecord struct {
-	ID                string                        `json:"id"`
-	Kind              string                        `json:"kind"`
-	Resource          string                        `json:"resource"`
-	ProfileName       string                        `json:"profile_name"`
-	Requester         string                        `json:"requester"`
-	RequiredApprovals int                           `json:"required_approvals"`
-	Approvals         []profileEditApprovalDecision `json:"approvals"`
-	State             string                        `json:"state"`
-	ProfileID         string                        `json:"profile_id,omitempty"`
-	CreatedAt         string                        `json:"created_at"`
-	ExpiresAt         string                        `json:"expires_at"`
+	ID                    string                        `json:"id"`
+	Kind                  string                        `json:"kind"`
+	Resource              string                        `json:"resource"`
+	ProfileName           string                        `json:"profile_name"`
+	Spec                  json.RawMessage               `json:"spec"`
+	SpecSHA256            string                        `json:"spec_sha256"`
+	Requester             string                        `json:"requester"`
+	RequiredApprovals     int                           `json:"required_approvals"`
+	Approvals             []profileEditApprovalDecision `json:"approvals"`
+	State                 string                        `json:"state"`
+	ProfileID             string                        `json:"profile_id,omitempty"`
+	RestoredFromVersion   int                           `json:"restored_from_version,omitempty"`
+	RestoreReason         string                        `json:"restore_reason,omitempty"`
+	ExpectedActiveVersion int                           `json:"expected_active_version,omitempty"`
+	CreatedAt             string                        `json:"created_at"`
+	ExpiresAt             string                        `json:"expires_at"`
 }
 
 type profileEditApprovalList struct {
@@ -50,22 +59,33 @@ type profileEditApprovalDecisionRequest struct {
 	Reason string `json:"reason"`
 }
 
-func toProfileEditApprovalRecord(r store.ProfileEditApproval, now time.Time) profileEditApprovalRecord {
+func toProfileEditApprovalRecord(r store.ProfileEditApproval, now time.Time) (profileEditApprovalRecord, error) {
+	// RawMessage is compacted by the HTTP JSON encoder. Hash those same bytes so
+	// a reviewer can independently verify the exact spec returned on the wire.
+	spec, err := json.Marshal(json.RawMessage(r.Spec))
+	if err != nil {
+		return profileEditApprovalRecord{}, fmt.Errorf("encode profile approval spec: %w", err)
+	}
 	rec := profileEditApprovalRecord{
 		ID: r.ID, Kind: string(approval.KindProfileEdit), Resource: "profile:" + r.Name,
-		ProfileName:       r.Name,
-		Requester:         r.Requester,
-		RequiredApprovals: r.RequiredApprovals,
-		Approvals:         make([]profileEditApprovalDecision, 0, len(r.Approvals)),
-		State:             orchestrator.ProfileEditApprovalState(r, now),
-		ProfileID:         r.ProfileID,
-		CreatedAt:         r.CreatedAt.UTC().Format(time.RFC3339),
-		ExpiresAt:         r.ExpiresAt.UTC().Format(time.RFC3339),
+		ProfileName:           r.Name,
+		Spec:                  spec,
+		SpecSHA256:            "sha256:" + hex.EncodeToString(crypto.SHA256Sum(spec)),
+		Requester:             r.Requester,
+		RequiredApprovals:     r.RequiredApprovals,
+		Approvals:             make([]profileEditApprovalDecision, 0, len(r.Approvals)),
+		State:                 orchestrator.ProfileEditApprovalState(r, now),
+		ProfileID:             r.ProfileID,
+		RestoredFromVersion:   r.RestoredFromVersion,
+		RestoreReason:         r.RestoreReason,
+		ExpectedActiveVersion: r.ExpectedActiveVersion,
+		CreatedAt:             r.CreatedAt.UTC().Format(time.RFC3339),
+		ExpiresAt:             r.ExpiresAt.UTC().Format(time.RFC3339),
 	}
 	for _, a := range r.Approvals {
 		rec.Approvals = append(rec.Approvals, profileEditApprovalDecision{Approver: a.Approver, Decision: a.Decision, At: a.At.UTC().Format(time.RFC3339)})
 	}
-	return rec
+	return rec, nil
 }
 
 // profileEditApprovalError maps the orchestrator's typed refusals to problems:
@@ -107,7 +127,12 @@ func (a *API) listProfileEditApprovals(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	out := profileEditApprovalList{Items: make([]profileEditApprovalRecord, 0, len(items))}
 	for _, it := range items {
-		out.Items = append(out.Items, toProfileEditApprovalRecord(it, now))
+		record, err := toProfileEditApprovalRecord(it, now)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		out.Items = append(out.Items, record)
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -123,7 +148,12 @@ func (a *API) getProfileEditApproval(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, profileEditApprovalError(err))
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toProfileEditApprovalRecord(parked, time.Now().UTC()))
+	record, err := toProfileEditApprovalRecord(parked, time.Now().UTC())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, record)
 }
 
 //trstctl:mutation
@@ -145,6 +175,10 @@ func (a *API) approveProfileEdit(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, profileEditApprovalError(err)
 		}
-		return http.StatusOK, toProfileEditApprovalRecord(parked, time.Now().UTC()), nil
+		record, err := toProfileEditApprovalRecord(parked, time.Now().UTC())
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, record, nil
 	})
 }

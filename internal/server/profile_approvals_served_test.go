@@ -3,6 +3,7 @@
 package server
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // DP2-057: a profile whose spec carries requires_approval parks its create/edit
@@ -45,6 +47,16 @@ func TestServedGovernedProfileCreateIsApprovedByADistinctReviewer(t *testing.T) 
 	st, resp = secretsReq(t, h, http.MethodGet, "/api/v1/profiles/approvals/"+accepted.ApprovalID, reviewer, nil)
 	if st != http.StatusOK || !strings.Contains(string(resp), `"state":"awaiting_approval"`) {
 		t.Fatalf("get profile approval: %d %s", st, resp)
+	}
+	var review struct {
+		Spec       json.RawMessage `json:"spec"`
+		SpecSHA256 string          `json:"spec_sha256"`
+	}
+	if err := json.Unmarshal(resp, &review); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(review.Spec), `"requires_approval":true`) || !strings.Contains(string(review.Spec), `"max_validity":"24h"`) || review.SpecSHA256 != "sha256:"+hex.EncodeToString(crypto.SHA256Sum(review.Spec)) {
+		t.Fatalf("review record omits exact proposed spec or digest: %+v", review)
 	}
 
 	// Dual control: the requester cannot approve their own edit.

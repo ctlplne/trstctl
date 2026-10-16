@@ -6770,6 +6770,7 @@ export interface ProfileEditApprovalList {
 export interface ProfileEditApprovalRecord {
   approvals: ProfileEditApprovalDecision[];
   created_at: string;
+  expected_active_version?: number;
   expires_at: string;
   id: string;
   kind: "profile_edit";
@@ -6778,6 +6779,10 @@ export interface ProfileEditApprovalRecord {
   requester: string;
   required_approvals: number;
   resource: string;
+  restore_reason?: string;
+  restored_from_version?: number;
+  spec: CertificateProfileSpec;
+  spec_sha256: string;
   state: "awaiting_approval" | "approved" | "issued" | "denied" | "expired";
 }
 

@@ -9318,6 +9318,7 @@ ProfileEditApprovalRecord = TypedDict(
     {
         'approvals': list[dict[str, Any]],
         'created_at': str,
+        'expected_active_version': int,
         'expires_at': str,
         'id': str,
         'kind': str,
@@ -9326,6 +9327,10 @@ ProfileEditApprovalRecord = TypedDict(
         'requester': str,
         'required_approvals': int,
         'resource': str,
+        'restore_reason': str,
+        'restored_from_version': int,
+        'spec': dict[str, Any],
+        'spec_sha256': str,
         'state': str,
     },
     total=False,

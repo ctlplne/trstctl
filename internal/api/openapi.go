@@ -5484,11 +5484,13 @@ func componentSchemas() map[string]*Schema {
 	}, Required: []string{"approver", "decision", "at"}}
 	profileEditApprovalRecord := &Schema{Type: "object", Properties: map[string]*Schema{
 		"id": uuid(), "kind": {Type: "string", Enum: []string{"profile_edit"}}, "resource": str(), "profile_name": str(),
+		"spec": ref("CertificateProfileSpec"), "spec_sha256": str(),
 		"requester": str(), "required_approvals": {Type: "integer"},
 		"approvals":  {Type: "array", Items: ref("ProfileEditApprovalDecision")},
 		"state":      {Type: "string", Enum: []string{"awaiting_approval", "approved", "issued", "denied", "expired"}},
 		"profile_id": uuid(), "created_at": timestamp(), "expires_at": timestamp(),
-	}, Required: []string{"id", "kind", "resource", "profile_name", "requester", "required_approvals", "approvals", "state", "created_at", "expires_at"}}
+		"restored_from_version": {Type: "integer"}, "restore_reason": str(), "expected_active_version": {Type: "integer"},
+	}, Required: []string{"id", "kind", "resource", "profile_name", "spec", "spec_sha256", "requester", "required_approvals", "approvals", "state", "created_at", "expires_at"}}
 	profileEditApprovalDecisionReq := &Schema{Type: "object", Properties: map[string]*Schema{"reason": str()}}
 	profileApproval := object(map[string]*Schema{
 		"approval_id": uuid(), "state": str(), "resource": str(),

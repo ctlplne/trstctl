@@ -425,7 +425,14 @@ A profile create or edit that falls under `requires_approval` answers **202**
 with an `approval_id` and `state: awaiting_approval` instead of a new version.
 A distinct reviewer holding `profiles:write` finds the parked request with
 `GET /api/v1/profiles/approvals` (or `GET /api/v1/profiles/approvals/{id}`) and
-approves it with `POST /api/v1/profiles/approvals/{id}/approvals`; quorum (one
+reviews the exact proposed `spec`, its `spec_sha256` digest, requester, expiry,
+and any restore source/reason in the console's **Requests waiting for approval**
+page or in the API/CLI. The console counts these requests alongside other
+pending approvals. A reviewer with only `profiles:read` and `profiles:write`
+can use this inbox without access to certificate, secret, or managed-key
+decisions; the console disables the decision for the requester. Approval takes
+effect immediately: the reviewer confirms it with
+`POST /api/v1/profiles/approvals/{id}/approvals`; quorum (one
 non-requester approval) applies the queued spec as the new active version and the
 record reads `state: issued` with the created `profile_id`. The requester's own
 approval is refused with **403** (dual control). Identical retries of the
@@ -435,6 +442,8 @@ projected into `profile_edit_approvals`), so it survives a control-plane
 restart and is visible to every replica; it expires 24 hours after the 202
 (`state: expired`, approval answers **409**) and the requester resubmits the
 change to open a new request.
+The digest is SHA-256 of the compact JSON `spec` bytes returned by the review
+record, so an API or CLI reviewer can verify what was displayed before deciding.
 
 ### Telling clients when to renew: ARI (F46)
 

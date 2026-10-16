@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     identities: vi.fn(),
     approvalRequests: vi.fn(),
+    profileEditApprovals: vi.fn(),
+    approveProfileEditApproval: vi.fn(),
     issuanceRequests: vi.fn(),
     ticketIntakeSchedule: vi.fn(),
     approveApprovalRequest: vi.fn(),
@@ -76,6 +78,7 @@ describe("dedicated approvals inbox", () => {
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
     apiMock.approvalRequests.mockResolvedValue([]);
+    apiMock.profileEditApprovals.mockResolvedValue({ items: [] });
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
     apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
       configured: false,
@@ -144,6 +147,134 @@ describe("dedicated approvals inbox", () => {
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "sealed" });
   });
 
+  it("offers exact governed profile changes to an independent reviewer", async () => {
+    apiMock.profileEditApprovals.mockResolvedValue({
+      items: [
+        {
+          id: "profile-approval-1",
+          kind: "profile_edit",
+          resource: "profile:qa-rule",
+          profile_name: "qa-rule",
+          requester: "requester@example.test",
+          spec: { requires_approval: true, max_validity: "24h", key_algorithm: "ecdsa-p256" },
+          spec_sha256: "sha256:1234abcd",
+          required_approvals: 1,
+          approvals: [],
+          state: "awaiting_approval",
+          created_at: "2026-06-19T17:00:00Z",
+          expires_at: "2026-06-19T18:00:00Z",
+        },
+      ],
+    });
+    apiMock.approveProfileEditApproval.mockResolvedValue({
+      id: "profile-approval-1",
+      state: "issued",
+      profile_name: "qa-rule",
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    expect(await screen.findByText("1 request is waiting for a decision")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    expect(within(dialog).getByText("qa-rule")).toBeInTheDocument();
+    expect(within(dialog).getByText("requester@example.test")).toBeInTheDocument();
+    expect(within(dialog).getByText(/sha256:1234abcd/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/"max_validity": "24h"/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
+    await waitFor(() => expect(apiMock.approveProfileEditApproval).toHaveBeenCalledWith("profile-approval-1"));
+  });
+
+  it("shows a requester's governed profile change without offering self approval", async () => {
+    apiMock.profileEditApprovals.mockResolvedValue({
+      items: [
+        {
+          id: "profile-approval-own",
+          kind: "profile_edit",
+          resource: "profile:qa-own",
+          profile_name: "qa-own",
+          requester: "ra-1",
+          spec: { requires_approval: true },
+          spec_sha256: "sha256:abcd",
+          required_approvals: 1,
+          approvals: [],
+          state: "awaiting_approval",
+          created_at: "2026-06-19T17:00:00Z",
+          expires_at: "2026-06-19T18:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+    expect(await screen.findByText("1 request is waiting for a decision")).toBeInTheDocument();
+    expect(screen.getByTestId("page-depth-operate").querySelector("button")).toBeDisabled();
+    await user.click(screen.getByText("All pending requests and evidence"));
+    const queue = screen.getByRole("region", { name: "Certificate rule changes waiting for review" });
+    await user.click(within(queue).getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    expect(within(dialog).getByText(/A different person must approve or reject it/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
+    expect(apiMock.approveProfileEditApproval).not.toHaveBeenCalled();
+  });
+
+  it("lets a profile-only reviewer use the inbox without reading unrelated approval domains", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["profiles:read", "profiles:write"], subject: "profile-reviewer", tenant_id: "t1" });
+    apiMock.profileEditApprovals.mockResolvedValue({
+      items: [
+        {
+          id: "profile-approval-scoped",
+          kind: "profile_edit",
+          resource: "profile:qa-scoped",
+          profile_name: "qa-scoped",
+          requester: "profile-requester",
+          spec: { requires_approval: true },
+          spec_sha256: "sha256:abcd",
+          required_approvals: 1,
+          approvals: [],
+          state: "awaiting_approval",
+          created_at: "2026-06-19T17:00:00Z",
+          expires_at: "2026-06-19T18:00:00Z",
+        },
+      ],
+    });
+    renderAt("/approvals");
+    expect(await screen.findByText("1 request is waiting for a decision")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review request" })).toBeEnabled();
+    expect(apiMock.approvalRequests).not.toHaveBeenCalled();
+    expect(apiMock.issuanceRequests).not.toHaveBeenCalled();
+  });
+
+  it("lets a profile reader inspect a request but does not offer a decision", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["profiles:read"], subject: "profile-reader", tenant_id: "t1" });
+    apiMock.profileEditApprovals.mockResolvedValue({
+      items: [
+        {
+          id: "profile-approval-read-only",
+          kind: "profile_edit",
+          resource: "profile:qa-read-only",
+          profile_name: "qa-read-only",
+          requester: "profile-requester",
+          spec: { requires_approval: true },
+          spec_sha256: "sha256:abcd",
+          required_approvals: 1,
+          approvals: [],
+          state: "awaiting_approval",
+          created_at: "2026-06-19T17:00:00Z",
+          expires_at: "2026-06-19T18:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+    expect(await screen.findByText("1 request is waiting for a decision")).toBeInTheDocument();
+    expect(screen.getByText(/profiles:write is required to decide it/)).toBeInTheDocument();
+    await user.click(screen.getByText("All pending requests and evidence"));
+    const queue = screen.getByRole("region", { name: "Certificate rule changes waiting for review" });
+    await user.click(within(queue).getByRole("button", { name: "Review request" }));
+    expect(within(screen.getByRole("dialog", { name: "Review request" })).getByRole("button", { name: "Approve request" })).toBeDisabled();
+    expect(apiMock.approveProfileEditApproval).not.toHaveBeenCalled();
+  });
+
   it("answers what needs approval before revealing request history and specialized tools", async () => {
     apiMock.issuanceRequests.mockResolvedValue({
       items: [
@@ -180,11 +311,11 @@ describe("dedicated approvals inbox", () => {
     expect(document.querySelectorAll("main input, main select, main textarea")).toHaveLength(0);
     expect(apiMock.ticketIntakeSchedule).not.toHaveBeenCalled();
 
-    for (const title of ["All pending requests and evidence", "Issuance request lifecycle and history", "Specialized approval tools"]) {
+    for (const title of ["All pending requests and evidence", "Decision lifecycle and history", "Specialized approval tools"]) {
       expect(screen.getByText(title, { exact: true }).closest("details")).not.toHaveAttribute("open");
     }
 
-    await user.click(screen.getByText("Issuance request lifecycle and history", { exact: true }));
+    await user.click(screen.getByText("Decision lifecycle and history", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Issuance requests" })).toBeInTheDocument();
     expect(screen.getByText("qa-design-partner-mtls", { exact: true })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.ticketIntakeSchedule).toHaveBeenCalledTimes(2));
@@ -229,7 +360,7 @@ describe("dedicated approvals inbox", () => {
     await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
     await waitFor(() => expect(apiMock.approveIssuanceRequest).toHaveBeenCalledWith("issuance-request-jit-1"));
     expect(await screen.findByRole("status")).toHaveTextContent(/issue approval recorded/i);
-    expect(screen.getByText("Issuance request lifecycle and history", { exact: true }).closest("details")).toHaveAttribute("open");
+    expect(screen.getByText("Decision lifecycle and history", { exact: true }).closest("details")).toHaveAttribute("open");
   });
 
   it("requires a reason before denying a first-class JIT certificate request", async () => {

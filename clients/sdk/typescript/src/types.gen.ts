@@ -14575,6 +14575,7 @@ export interface components {
             approvals: components["schemas"]["ProfileEditApprovalDecision"][];
             /** Format: date-time */
             created_at: string;
+            expected_active_version?: number;
             /** Format: date-time */
             expires_at: string;
             /** Format: uuid */
@@ -14587,6 +14588,10 @@ export interface components {
             requester: string;
             required_approvals: number;
             resource: string;
+            restore_reason?: string;
+            restored_from_version?: number;
+            spec: components["schemas"]["CertificateProfileSpec"];
+            spec_sha256: string;
             /** @enum {string} */
             state: "awaiting_approval" | "approved" | "issued" | "denied" | "expired";
         };

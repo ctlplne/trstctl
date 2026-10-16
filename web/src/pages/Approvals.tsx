@@ -13,20 +13,35 @@ import { Eyebrow, Num } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
-import { ApiError, UnauthorizedError, api, type EphemeralApproval, type IssuanceRequest, type PendingApprovalRequest } from "@/lib/api";
+import {
+  ApiError,
+  UnauthorizedError,
+  api,
+  type EphemeralApproval,
+  type IssuanceRequest,
+  type PendingApprovalRequest,
+  type ProfileEditApprovalRecord,
+} from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { hasPermission } from "@/lib/access";
 import { approvalAuditHref, approvalRequestsQueryKey, approvalRows, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type OpenSections = { queue: boolean; history: boolean; specialized: boolean };
+const profileApprovalsQueryKey = ["profile-edit-approvals"] as const;
 
 export function Approvals() {
   const { formatDate, t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const requests = useApiQuery(approvalRequestsQueryKey, api.approvalRequests);
-  const issuanceRequests = useApiQuery(issuanceRequestsQueryKey, readIssuanceRequests);
+  const canReadGeneral = ["certs:issue", "secrets:write", "keys:approve", "access:approve"].some((permission) => hasPermission(user, permission));
+  const canReadIssuance = hasPermission(user, "certs:read");
+  const canReadProfiles = hasPermission(user, "profiles:read");
+  const canApproveProfiles = hasPermission(user, "profiles:write");
+  const requests = useApiQuery(approvalRequestsQueryKey, api.approvalRequests, { enabled: canReadGeneral });
+  const issuanceRequests = useApiQuery(issuanceRequestsQueryKey, readIssuanceRequests, { enabled: canReadIssuance });
+  const profileApprovals = useApiQuery(profileApprovalsQueryKey, api.profileEditApprovals, { enabled: canReadProfiles });
   const [error, setError] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -38,6 +53,8 @@ export function Approvals() {
   const [issuanceReviewOpen, setIssuanceReviewOpen] = useState(false);
   const [issuanceRejectionOpen, setIssuanceRejectionOpen] = useState(false);
   const [issuanceRejectionReason, setIssuanceRejectionReason] = useState("");
+  const [selectedProfile, setSelectedProfile] = useState<ProfileEditApprovalRecord | null>(null);
+  const profileReviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const [open, setOpen] = useState<OpenSections>({ queue: false, history: false, specialized: false });
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const issuanceReviewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -49,14 +66,19 @@ export function Approvals() {
   const rows = useMemo(() => approvalRows(requests.data ?? []), [requests.data]);
   const issuanceItems = issuanceRequests.data?.items ?? [];
   const waitingIssuance = issuanceItems.filter((request) => request.status === "requested");
-  const waitingCount = rows.length + waitingIssuance.length;
+  const profileItems = profileApprovals.data?.items ?? [];
+  const waitingProfiles = profileItems.filter((request) => request.state === "awaiting_approval");
+  const waitingCount = rows.length + waitingIssuance.length + waitingProfiles.length;
   const reviewableRequest = rows.find((row) => !requesterMatchesPrincipal(row, user)) ?? null;
   const reviewableIssuance = waitingIssuance.find((request) => !issuanceRequesterMatchesPrincipal(request, user)) ?? null;
-  const ownOnly = waitingCount > 0 && !reviewableRequest && !reviewableIssuance;
-  const queryError = requests.errorValue ? noticeForError(requests.errorValue) : null;
-  const issuanceQueryError = issuanceRequests.errorValue ? noticeForError(issuanceRequests.errorValue) : null;
-  const visibleError = error ?? queryError ?? issuanceQueryError;
-  const summaryLoading = requests.loading || issuanceRequests.loading;
+  const reviewableProfile = canApproveProfiles ? (waitingProfiles.find((request) => !profileRequesterMatchesPrincipal(request, user)) ?? null) : null;
+  const ownOnly = waitingCount > 0 && !reviewableRequest && !reviewableIssuance && !reviewableProfile;
+  const profileWriteNeeded = ownOnly && !canApproveProfiles && waitingProfiles.some((request) => !profileRequesterMatchesPrincipal(request, user));
+  const queryError = canReadGeneral && requests.errorValue ? noticeForError(requests.errorValue) : null;
+  const issuanceQueryError = canReadIssuance && issuanceRequests.errorValue ? noticeForError(issuanceRequests.errorValue) : null;
+  const profileQueryError = canReadProfiles && profileApprovals.errorValue ? noticeForError(profileApprovals.errorValue) : null;
+  const visibleError = error ?? queryError ?? issuanceQueryError ?? profileQueryError;
+  const summaryLoading = (canReadGeneral && requests.loading) || (canReadIssuance && issuanceRequests.loading) || (canReadProfiles && profileApprovals.loading);
 
   const closeReview = useCallback(() => {
     setReviewDialogOpen(false);
@@ -89,6 +111,30 @@ export function Approvals() {
     setNotice(null);
     setIssuanceReviewOpen(true);
   }, []);
+
+  const approveProfile = useCallback(
+    async (request: ProfileEditApprovalRecord) => {
+      setBusyKey(`profile:${request.id}`);
+      setError(null);
+      setNotice(null);
+      try {
+        const updated = await api.approveProfileEditApproval(request.id);
+        queryClient.setQueryData<{ items: ProfileEditApprovalRecord[] }>(profileApprovalsQueryKey, (current) =>
+          current ? { ...current, items: current.items.map((item) => (item.id === updated.id ? updated : item)) } : current,
+        );
+        setNotice(t("approvals.profile.applied", { name: request.profile_name }));
+        setSelectedProfile(null);
+        setOpen((current) => ({ ...current, history: true }));
+        void queryClient.invalidateQueries({ queryKey: profileApprovalsQueryKey });
+      } catch (err) {
+        setError({ kind: "error", message: approvalErrorMessage(err) });
+        void queryClient.invalidateQueries({ queryKey: profileApprovalsQueryKey });
+      } finally {
+        setBusyKey(null);
+      }
+    },
+    [queryClient, t],
+  );
 
   const retainDecision = useCallback(
     (row: ApprovalQueueRow, result: { approval_count: number; required_approvals: number; status: PendingApprovalRequest["status"] }) => {
@@ -209,7 +255,9 @@ export function Approvals() {
     }
     if (reviewableIssuance) {
       openIssuanceReview(reviewableIssuance);
+      return;
     }
+    if (reviewableProfile) setSelectedProfile(reviewableProfile);
   }
 
   async function approveEphemeralCredential(event: FormEvent<HTMLFormElement>) {
@@ -322,8 +370,10 @@ export function Approvals() {
       : waitingCount === 0
         ? t("approvals.design.reviewEmpty")
         : ownOnly
-          ? t("approvals.design.reviewOwn")
-          : t("approvals.design.reviewHelp");
+          ? t(profileWriteNeeded ? "approvals.profile.permissionNeeded" : "approvals.design.reviewOwn")
+          : reviewableProfile && !reviewableRequest && !reviewableIssuance
+            ? t("approvals.profile.reviewActionHelp")
+            : t("approvals.design.reviewHelp");
 
   return (
     <section aria-labelledby="approvals-heading" className="space-y-4">
@@ -357,6 +407,9 @@ export function Approvals() {
 
         {!summaryLoading && !visibleError && reviewableRequest ? <GenericRequestSummary row={reviewableRequest} /> : null}
         {!summaryLoading && !visibleError && !reviewableRequest && reviewableIssuance ? <IssuanceRequestSummary request={reviewableIssuance} /> : null}
+        {!summaryLoading && !visibleError && !reviewableRequest && !reviewableIssuance && reviewableProfile ? (
+          <ProfileRequestSummary request={reviewableProfile} />
+        ) : null}
       </section>
 
       {notice && (
@@ -379,6 +432,24 @@ export function Approvals() {
           {requests.data && !visibleError && rows.length > 0 && (
             <DataGrid ariaLabel={t("approvals.design.queueLabel")} rows={rows} columns={columns} getRowId={rowKey} />
           )}
+          {canReadProfiles && waitingProfiles.length > 0 ? (
+            <section className="grid gap-2" aria-label={t("approvals.profile.queueTitle")}>
+              <h3 className="font-semibold">{t("approvals.profile.queueTitle")}</h3>
+              {waitingProfiles.map((request) => (
+                <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border p-3">
+                  <div>
+                    <span className="font-medium">{request.profile_name}</span>
+                    <p className="text-caption text-muted-foreground">
+                      {request.requester} · {formatDate(request.expires_at)}
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => setSelectedProfile(request)}>
+                    {t("approvals.design.review")}
+                  </Button>
+                </div>
+              ))}
+            </section>
+          ) : null}
         </div>
       </ApprovalDetails>
 
@@ -389,9 +460,26 @@ export function Approvals() {
       >
         <div className="grid gap-4">
           <p className="max-w-3xl text-sm text-muted-foreground">{t("approvals.design.historyHelp")}</p>
-          {open.history ? <IssuanceRequestsPanel currentPrincipal={user} /> : null}
-          {open.history && !issuanceRequests.loading && !issuanceRequests.errorValue && issuanceItems.length === 0 ? (
+          {open.history && canReadIssuance ? <IssuanceRequestsPanel currentPrincipal={user} /> : null}
+          {open.history &&
+          canReadIssuance &&
+          !issuanceRequests.loading &&
+          !issuanceRequests.errorValue &&
+          issuanceItems.length === 0 &&
+          profileItems.every((request) => request.state === "awaiting_approval") ? (
             <EmptyState title={t("approvals.design.emptyHistory")} />
+          ) : null}
+          {canReadProfiles && profileItems.some((request) => request.state !== "awaiting_approval") ? (
+            <section className="grid gap-2" aria-label={t("approvals.profile.historyTitle")}>
+              <h3 className="font-semibold">{t("approvals.profile.historyTitle")}</h3>
+              {profileItems
+                .filter((request) => request.state !== "awaiting_approval")
+                .map((request) => (
+                  <p key={request.id} className="rounded-control border border-border p-3 text-sm">
+                    {request.profile_name} · {request.state} · {request.id}
+                  </p>
+                ))}
+            </section>
           ) : null}
         </div>
       </ApprovalDetails>
@@ -547,6 +635,75 @@ export function Approvals() {
                 </Button>
               </div>
             )}
+          </div>
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(selectedProfile)}
+        onClose={() => setSelectedProfile(null)}
+        titleId="profile-review-request-heading"
+        descriptionId="profile-review-request-description"
+        initialFocusRef={profileReviewHeadingRef}
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(94vw,48rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {selectedProfile ? (
+          <div className="grid gap-4 text-sm">
+            <div>
+              <h2 ref={profileReviewHeadingRef} id="profile-review-request-heading" className="text-title font-semibold" tabIndex={-1}>
+                {t("approvals.design.review")}
+              </h2>
+              <p id="profile-review-request-description" className="mt-1 text-muted-foreground">
+                {t("approvals.profile.reviewHelp")}
+              </p>
+            </div>
+            <ProfileRequestSummary request={selectedProfile} />
+            <dl className="grid gap-3 rounded-control border border-border bg-muted/20 p-4 sm:grid-cols-2">
+              <ReviewFact label={t("approvals.design.requester")} value={selectedProfile.requester} />
+              <ReviewFact label={t("approvals.design.approvalProgress")} value={`${selectedProfile.approvals.length}/${selectedProfile.required_approvals}`} />
+              <ReviewFact label={t("approvals.design.expires")} value={formatDate(selectedProfile.expires_at)} />
+              <ReviewFact label={t("approvals.design.requestId")} value={selectedProfile.id} mono />
+              <ReviewFact label={t("approvals.profile.specDigest")} value={selectedProfile.spec_sha256} mono className="sm:col-span-2" />
+              {selectedProfile.restored_from_version ? (
+                <ReviewFact label={t("approvals.profile.restoreVersion")} value={String(selectedProfile.restored_from_version)} />
+              ) : null}
+              {selectedProfile.restore_reason ? <ReviewFact label={t("approvals.profile.restoreReason")} value={selectedProfile.restore_reason} /> : null}
+            </dl>
+            <section className="grid gap-2">
+              <h3 className="font-semibold">{t("approvals.profile.proposedSpec")}</h3>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-control border border-border bg-muted/20 p-3 font-mono text-xs">
+                {JSON.stringify(selectedProfile.spec, null, 2)}
+              </pre>
+              <Link className="w-fit text-brand-accent underline" to={`/audit?q=${encodeURIComponent(selectedProfile.id)}`}>
+                {t("source.audit.trail.c1ada08ce1")}
+              </Link>
+            </section>
+            {profileRequesterMatchesPrincipal(selectedProfile, user) ? (
+              <p className="rounded-control border border-warning-border bg-warning-subtle p-3 text-warning-foreground">{t("approvals.design.selfApproval")}</p>
+            ) : null}
+            {error ? (
+              <p role="alert" className="text-destructive">
+                {error.message}
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setSelectedProfile(null)}>
+                {t("source.cancel.19766ed6cc")}
+              </Button>
+              <Button
+                type="button"
+                disabled={
+                  busyKey === `profile:${selectedProfile.id}` ||
+                  !canApproveProfiles ||
+                  profileRequesterMatchesPrincipal(selectedProfile, user) ||
+                  selectedProfile.state !== "awaiting_approval"
+                }
+                onClick={() => void approveProfile(selectedProfile)}
+              >
+                {t("approvals.design.approve")}
+              </Button>
+            </div>
           </div>
         ) : null}
       </Dialog>
@@ -768,6 +925,23 @@ function issuanceRequesterMatchesPrincipal(request: IssuanceRequest, principal: 
   if (!principal) return false;
   const requester = request.requester.trim().toLowerCase();
   return Boolean(requester && [principal.subject, principal.email].some((candidate) => candidate?.trim().toLowerCase() === requester));
+}
+
+function profileRequesterMatchesPrincipal(request: ProfileEditApprovalRecord, principal: { subject: string; email?: string } | null): boolean {
+  if (!principal) return false;
+  const requester = request.requester.trim().toLowerCase();
+  return Boolean(requester && [principal.subject, principal.email].some((candidate) => candidate?.trim().toLowerCase() === requester));
+}
+
+function ProfileRequestSummary({ request }: { request: ProfileEditApprovalRecord }) {
+  const { t } = useTranslation();
+  return (
+    <section aria-label={t("approvals.design.nextRequest")} className="grid gap-2 rounded-control border border-border bg-muted/20 p-4">
+      <Eyebrow as="p">{t("approvals.design.change")}</Eyebrow>
+      <h3 className="text-lg font-semibold">{request.profile_name}</h3>
+      <p>{t("approvals.profile.consequence")}</p>
+    </section>
+  );
 }
 
 function ApprovalQuorum({ have, need }: { have: number; need: number }) {

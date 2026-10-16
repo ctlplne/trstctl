@@ -436,6 +436,8 @@ import type {
   PendingApprovalRequest as GenPendingApprovalRequest,
   Profile as GenProfile,
   ProfileApprovalResponse,
+  ProfileEditApprovalList,
+  ProfileEditApprovalRecord,
   ProfileRequest,
   ProfileRestorePreview,
   ProfileRestoreRequest,
@@ -854,6 +856,7 @@ export type SecretApprovalAction = GenSecretApprovalRequest["action"];
 export type AuditEvent = GenAuditEvent;
 export type AuditWindow = AuditEventList;
 export type Profile = GenProfile;
+export type { ProfileEditApprovalList, ProfileEditApprovalRecord };
 export type ProfileMutationResult = Profile | ProfileApprovalResponse;
 export type IssueCertificateInput = {
   name: string;
@@ -1832,6 +1835,9 @@ export interface Api {
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   contextualRiskPriorities(): Promise<ContextualRiskPriorities>;
   profiles(): Promise<Profile[]>;
+  profileEditApprovals(): Promise<ProfileEditApprovalList>;
+  getProfileEditApproval(id: string): Promise<ProfileEditApprovalRecord>;
+  approveProfileEditApproval(id: string): Promise<ProfileEditApprovalRecord>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<ProfileMutationResult>;
   previewProfileRestore(name: string, version: number, input: ProfileRestoreRequest): Promise<ProfileRestorePreview>;
@@ -2494,6 +2500,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   contextualRiskPriorities: () => req<ContextualRiskPriorities>("/api/v1/risk/contextual-priorities"),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
+  profileEditApprovals: () => req<ProfileEditApprovalList>("/api/v1/profiles/approvals"),
+  getProfileEditApproval: (id) => req<ProfileEditApprovalRecord>(`/api/v1/profiles/approvals/${encodeURIComponent(id)}`),
+  approveProfileEditApproval: (id) => mutate<ProfileEditApprovalRecord>("POST", `/api/v1/profiles/approvals/${encodeURIComponent(id)}/approvals`, {}),
   getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<ProfileMutationResult>("POST", "/api/v1/profiles", input),
   previewProfileRestore: (name, version, input) =>

@@ -11937,8 +11937,8 @@ export const messages = {
     description: "Progressive disclosure for the complete generic approval queue.",
   },
   "approvals.design.disclosure.history": {
-    defaultMessage: "Issuance request lifecycle and history",
-    description: "Progressive disclosure for issuance decisions and outcomes.",
+    defaultMessage: "Decision lifecycle and history",
+    description: "Progressive disclosure for issuance and profile decisions and outcomes.",
   },
   "approvals.design.disclosure.specialized": {
     defaultMessage: "Specialized approval tools",
@@ -11951,8 +11951,8 @@ export const messages = {
   },
   "approvals.design.historyHelp": {
     defaultMessage:
-      "Issuance history keeps approval and certificate issuance separate. Approved does not mean issued, and a denied request is different from one that expired without a decision.",
-    description: "Technical ELI5 issuance lifecycle boundary.",
+      "Issuance approval and certificate issuance are separate steps. A certificate rule approval applies that rule immediately. A denied request is different from one that expired without a decision.",
+    description: "Technical ELI5 decision lifecycle boundary.",
   },
   "approvals.design.specializedHelp": {
     defaultMessage:
@@ -11960,8 +11960,41 @@ export const messages = {
     description: "Technical ELI5 specialized approval tool boundary.",
   },
   "approvals.design.emptyQueue": { defaultMessage: "No general approval requests are waiting", description: "Empty generic approval queue state." },
-  "approvals.design.emptyHistory": { defaultMessage: "No issuance request history is recorded", description: "Empty issuance history state." },
+  "approvals.design.emptyHistory": { defaultMessage: "No completed approval history is recorded", description: "Empty decision history state." },
   "approvals.design.queueLabel": { defaultMessage: "Pending approval requests", description: "Accessible label for the generic approval table." },
+  "approvals.profile.queueTitle": { defaultMessage: "Certificate rule changes waiting for review", description: "Governed profile approval queue title." },
+  "approvals.profile.historyTitle": {
+    defaultMessage: "Certificate rule decision history",
+    description: "Completed profile decisions in the approval history.",
+  },
+  "approvals.profile.reviewHelp": {
+    defaultMessage:
+      "Check the exact proposed certificate rule and its digest before deciding. Approval makes this version active immediately. A requester cannot approve their own change.",
+    description: "Operator consequence and dual-control boundary for profile approval.",
+  },
+  "approvals.profile.reviewActionHelp": {
+    defaultMessage: "Review the proposed certificate rule. An independent approval activates it immediately.",
+    description: "Profile approval primary action consequence.",
+  },
+  "approvals.profile.permissionNeeded": {
+    defaultMessage: "You can inspect this certificate rule request, but profiles:write is required to decide it.",
+    description: "Read-only profile reviewer guidance.",
+  },
+  "approvals.profile.consequence": {
+    defaultMessage: "Approval applies the proposed certificate rule as the active version.",
+    description: "Immediate effect of a governed profile approval.",
+  },
+  "approvals.profile.specDigest": { defaultMessage: "Proposed rule digest", description: "SHA-256 digest of the server-held proposed profile specification." },
+  "approvals.profile.proposedSpec": {
+    defaultMessage: "Exact proposed certificate rule",
+    description: "Full proposed profile specification for independent review.",
+  },
+  "approvals.profile.restoreVersion": { defaultMessage: "Restore from version", description: "Source version of a governed profile restore." },
+  "approvals.profile.restoreReason": { defaultMessage: "Restore reason", description: "Operator reason for a governed profile restore." },
+  "approvals.profile.applied": {
+    defaultMessage: "Certificate rule {name} is active after independent approval.",
+    description: "Successful governed profile decision and application notice.",
+  },
   "approvals.design.issueSubject": { defaultMessage: "Issue a credential for {subject}", description: "Human-readable issuance request change." },
   "approvals.design.action.issue": { defaultMessage: "Issue a credential for {resource}", description: "Human-readable generic issue action." },
   "approvals.design.action.create": { defaultMessage: "Create {resource}", description: "Human-readable generic create action." },

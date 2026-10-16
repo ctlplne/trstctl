@@ -27763,6 +27763,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "expected_active_version": {
+            "type": "integer"
+          },
           "expires_at": {
             "format": "date-time",
             "type": "string"
@@ -27793,6 +27796,18 @@
           "resource": {
             "type": "string"
           },
+          "restore_reason": {
+            "type": "string"
+          },
+          "restored_from_version": {
+            "type": "integer"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CertificateProfileSpec"
+          },
+          "spec_sha256": {
+            "type": "string"
+          },
           "state": {
             "enum": [
               "awaiting_approval",
@@ -27809,6 +27824,8 @@
           "kind",
           "resource",
           "profile_name",
+          "spec",
+          "spec_sha256",
           "requester",
           "required_approvals",
           "approvals",
