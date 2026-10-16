@@ -175,6 +175,12 @@ uses the JSON fields `ID` and `PubDER`; the latter is a base64-encoded public-ke
 DER value. The server refuses duplicate IDs or public keys, unusable keys and a
 threshold greater than the distinct roster size. Keep the trust-root private key
 and every approver private key outside the policy document.
+The accepted public policy is appended as a tenant-bound event before its serving
+copy is updated. If the control plane stops between those steps, event replay
+restores the serving policy. Policies written by an older build without a source
+event are not accepted as recovery authority after this upgrade; reconfigure
+them through the API, CLI, or console before requesting recovery. Reuse the
+same `Idempotency-Key` when retrying an uncertain configuration response.
 
 `POST /api/v1/pcas/recovery/requests` refuses a request unless its tenant and
 identity have a configured policy and its trust root, quorum, roster, statement

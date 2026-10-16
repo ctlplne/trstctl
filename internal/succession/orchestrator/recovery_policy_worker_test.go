@@ -8,9 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
+	succapi "trstctl.com/trstctl/internal/succession/api"
 	"trstctl.com/trstctl/internal/succession/orchestrator"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -26,6 +29,12 @@ func TestRecoveryWorkerRefusesMissingOrChangedPolicyBeforeSigner(t *testing.T) {
 	if err := cs.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	svc := succapi.NewService(cs, log, nil)
 	worker := orchestrator.NewBreadthWorker(cs, nil)
 	const id = "spiffe://d/worker-policy-fence"
 	root, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
@@ -58,15 +67,15 @@ func TestRecoveryWorkerRefusesMissingOrChangedPolicyBeforeSigner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pcasstore.New(cs).UpsertRecoveryPolicy(ctx, tenantA, pcasstore.RecoveryPolicy{
-		IdentityID: id, Threshold: 1, RosterJSON: roster, TrustRootDER: root.Public().DER,
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, succapi.RecoveryPolicyRequest{
+		IdentityID: id, Threshold: 1, Roster: roster, TrustRootDER: root.Public().DER,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// The queued request still names root A; the operator changed the policy to
 	// root B before delivery. The worker must reject the stale payload.
-	if err := pcasstore.New(cs).UpsertRecoveryPolicy(ctx, tenantA, pcasstore.RecoveryPolicy{
-		IdentityID: id, Threshold: 1, RosterJSON: roster, TrustRootDER: otherRoot.Public().DER,
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, succapi.RecoveryPolicyRequest{
+		IdentityID: id, Threshold: 1, Roster: roster, TrustRootDER: otherRoot.Public().DER,
 	}); err != nil {
 		t.Fatal(err)
 	}

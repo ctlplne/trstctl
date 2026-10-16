@@ -326,6 +326,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// rows; ApplyTx checks payload tenant against the event and scopes every
 		// write to that tenant. Tenant readback uses RLS through Repo.
 		"internal/succession/store/delegation_projection.go": 1,
+		// Recovery policy uses the system pool only for a full derived-table
+		// reset or tenant offboard. Normal configuration and replay enter the
+		// tenant's RLS transaction; payload tenant and source sequence are checked.
+		"internal/succession/store/recovery_policy_projection.go": 1,
 	}
 	found := map[string]int{}
 

@@ -20,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/eventspec"
 	corestore "trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/delegation"
@@ -438,22 +439,11 @@ func (r *Repo) ListDelegationScopes(ctx context.Context, tenantID string) ([]Del
 	return out, nil
 }
 
-func (r *Repo) UpsertRecoveryPolicy(ctx context.Context, tenantID string, policy RecoveryPolicy) error {
-	roster := jsonPayload(policy.RosterJSON, "[]")
-	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO pcas_recovery_policy (tenant_id, identity_id, threshold, roster_json, trust_root_der)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3::jsonb, $4)
-			 ON CONFLICT (tenant_id, identity_id)
-			 DO UPDATE SET threshold = EXCLUDED.threshold,
-			               roster_json = EXCLUDED.roster_json,
-			               trust_root_der = EXCLUDED.trust_root_der,
-			               updated_at = now()`,
-			policy.IdentityID, policy.Threshold, roster, policy.TrustRootDER)
-		if err != nil {
-			return fmt.Errorf("succession store: upsert recovery policy: %w", err)
-		}
-		return nil
+// ApplyRecoveryPolicyEvent materializes an already durable source event. No
+// caller may mutate recovery authority through a read-table-only write.
+func (r *Repo) ApplyRecoveryPolicyEvent(ctx context.Context, ev eventspec.Event) error {
+	return r.core.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+		return ApplyRecoveryPolicyEventTx(ctx, tx, ev)
 	})
 }
 
@@ -463,7 +453,8 @@ func (r *Repo) GetRecoveryPolicy(ctx context.Context, tenantID, identityID strin
 		e := tx.QueryRow(ctx,
 			`SELECT identity_id, threshold, roster_json, trust_root_der, updated_at
 			   FROM pcas_recovery_policy
-			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, identityID).
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1
+			    AND source_sequence > 0`, identityID).
 			Scan(&policy.IdentityID, &policy.Threshold, &policy.RosterJSON, &policy.TrustRootDER, &policy.UpdatedAt)
 		if errors.Is(e, pgx.ErrNoRows) {
 			return nil

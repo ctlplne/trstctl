@@ -41,6 +41,8 @@ const (
 	TypeMisissuance = "nhi.algorithm.misissuance"
 	// TypeDelegationApplied records the isolated signer's signed state readback.
 	TypeDelegationApplied = "nhi.delegation.applied"
+	// TypeRecoveryPolicyConfigured records public, tenant-bound recovery authority.
+	TypeRecoveryPolicyConfigured = "nhi.recovery.policy.configured"
 )
 
 // Baseline (v1) payload-shape versions for each type (SCHEMA-001). Bump the
@@ -48,16 +50,17 @@ const (
 // (Type, SchemaVersion) and treats an unknown or newer-than-known version as a
 // skip (Unknown), so replay is forward-compatible and never mis-projects.
 const (
-	GenesisSchemaV1           = 1
-	FindingSchemaV1           = 1
-	SuccessionSchemaV1        = 1
-	RetirementSchemaV1        = 1
-	RPAckSchemaV1             = 1
-	RefusalSchemaV1           = 1
-	RewrapStageSchemaV1       = 1
-	RewrapCompletedSchemaV1   = 1
-	MisissuanceSchemaV1       = 1
-	DelegationAppliedSchemaV1 = 1
+	GenesisSchemaV1                  = 1
+	FindingSchemaV1                  = 1
+	SuccessionSchemaV1               = 1
+	RetirementSchemaV1               = 1
+	RPAckSchemaV1                    = 1
+	RefusalSchemaV1                  = 1
+	RewrapStageSchemaV1              = 1
+	RewrapCompletedSchemaV1          = 1
+	MisissuanceSchemaV1              = 1
+	DelegationAppliedSchemaV1        = 1
+	RecoveryPolicyConfiguredSchemaV1 = 1
 )
 
 // Coarse algorithm-class hints carried on a succession event for posture only.
@@ -95,6 +98,18 @@ type DelegationAppliedV1 struct {
 }
 
 func (DelegationAppliedV1) isSuccessionPayload() {}
+
+// RecoveryPolicyConfiguredV1 is the public recovery policy source event. A
+// projected policy can be rebuilt from this event after a read-model reset.
+type RecoveryPolicyConfiguredV1 struct {
+	TenantID     string          `json:"tenant_id"`
+	IdentityID   string          `json:"identity_id"`
+	Threshold    int             `json:"threshold"`
+	Roster       json.RawMessage `json:"roster"`
+	TrustRootDER []byte          `json:"trust_root_der"`
+}
+
+func (RecoveryPolicyConfiguredV1) isSuccessionPayload() {}
 
 func (GenesisV1) isSuccessionPayload() {}
 
@@ -232,6 +247,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeGenesis, GenesisSchemaV1, v.TenantID, v)
 	case DelegationAppliedV1:
 		return marshalEvent(TypeDelegationApplied, DelegationAppliedSchemaV1, v.TenantID, v)
+	case RecoveryPolicyConfiguredV1:
+		return marshalEvent(TypeRecoveryPolicyConfigured, RecoveryPolicyConfiguredSchemaV1, v.TenantID, v)
 	case FindingV1:
 		return marshalEvent(TypeFinding, FindingSchemaV1, v.TenantID, v)
 	case SuccessionV1:
@@ -285,6 +302,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p DelegationAppliedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRecoveryPolicyConfigured:
+		if ver > RecoveryPolicyConfiguredSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RecoveryPolicyConfiguredV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

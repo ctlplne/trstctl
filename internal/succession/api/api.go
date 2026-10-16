@@ -129,6 +129,9 @@ type RecoveryPolicyRequest struct {
 	Threshold    int             `json:"threshold"`
 	Roster       json.RawMessage `json:"roster"`
 	TrustRootDER []byte          `json:"trust_root_der,omitempty"`
+	// OperationID is set from the HTTP Idempotency-Key by the handler. It is
+	// never accepted from the JSON body or exposed in OpenAPI.
+	OperationID string `json:"-"`
 }
 
 type RecoveryPolicyResponse struct {
@@ -717,6 +720,7 @@ func recoveryPolicyHandler(a *api.API, svc Service) http.HandlerFunc {
 		if req.IdentityID == "" || req.Threshold <= 0 {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id and positive threshold are required")
 		}
+		req.OperationID = r.Header.Get("Idempotency-Key")
 		resp, err := svc.ConfigureRecoveryPolicy(ctx, tenantID, req)
 		return http.StatusOK, resp, err
 	})

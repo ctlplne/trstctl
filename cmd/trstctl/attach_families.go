@@ -76,7 +76,8 @@ func attachFamilies(cfg *config.Config, log *slog.Logger, deps *server.Deps) err
 func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	deps.EnablePCAS = true
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions,
-		projections.WithEventProjection(successionstore.NewDelegationProjection(deps.Store)))
+		projections.WithEventProjection(successionstore.NewDelegationProjection(deps.Store)),
+		projections.WithEventProjection(successionstore.NewRecoveryPolicyProjection(deps.Store)))
 	// Attach the PCAS external API (request-succession, chain fetch, RP acks)
 	// through the feature-neutral route seam, composing with any other API routes
 	// (e.g. PQC migration) already registered.

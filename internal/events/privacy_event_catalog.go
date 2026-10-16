@@ -69,6 +69,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		// refuse the signed artifact instead of silently breaking its signature.
 		rejectingEntry("nhi.algorithm.genesis"),
 		rejectingEntry("nhi.delegation.applied"),
+		rejectingEntry("nhi.recovery.policy.configured"),
 		entry("acme.account.upserted",
 			catalogPrivacyRule("/seq", opaque), catalogPrivacyRule("/id", opaque),
 			catalogPrivacyRule("/url", opaque), catalogPrivacyRule("/jwk", opaque),

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
@@ -337,16 +338,43 @@ func (s *service) ConfigureRecoveryPolicy(ctx context.Context, tenantID string, 
 	if err := validateRecoveryPolicyRequest(req); err != nil {
 		return RecoveryPolicyResponse{}, err
 	}
-	if s.repo == nil {
-		return RecoveryPolicyResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS recovery policy store unavailable")
+	if s.repo == nil || s.log == nil {
+		return RecoveryPolicyResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS recovery policy event log or store unavailable")
 	}
-	updated := time.Now().UTC()
-	if err := s.repo.UpsertRecoveryPolicy(ctx, tenantID, pcasstore.RecoveryPolicy{
-		IdentityID: req.IdentityID, Threshold: req.Threshold, RosterJSON: req.Roster, TrustRootDER: req.TrustRootDER,
-	}); err != nil {
+	encoded, err := succession.Encode(succession.RecoveryPolicyConfiguredV1{
+		TenantID: tenantID, IdentityID: req.IdentityID, Threshold: req.Threshold,
+		Roster: req.Roster, TrustRootDER: req.TrustRootDER,
+	})
+	if err != nil {
 		return RecoveryPolicyResponse{}, err
 	}
-	return RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: updated}, nil
+	if req.OperationID != "" {
+		encoded.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("pcas.recovery.policy.v1\x00"+tenantID+"\x00"+req.OperationID)).String()
+		if prior, found, err := s.log.EventByID(ctx, encoded.ID); err != nil {
+			return RecoveryPolicyResponse{}, err
+		} else if found {
+			if prior.TenantID != tenantID || prior.Type != encoded.Type ||
+				prior.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(prior.Data, encoded.Data) {
+				return RecoveryPolicyResponse{}, api.ErrStatus(http.StatusConflict, "idempotency key belongs to another recovery policy command")
+			}
+			if err := s.repo.ApplyRecoveryPolicyEvent(ctx, prior); err != nil {
+				return RecoveryPolicyResponse{}, err
+			}
+			return RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: prior.Time}, nil
+		}
+	}
+	recorded, err := s.log.Append(ctx, encoded)
+	if err != nil {
+		return RecoveryPolicyResponse{}, err
+	}
+	if recorded.TenantID != tenantID || recorded.Type != encoded.Type ||
+		recorded.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(recorded.Data, encoded.Data) {
+		return RecoveryPolicyResponse{}, api.ErrStatus(http.StatusConflict, "idempotency key belongs to another recovery policy event")
+	}
+	if err := s.repo.ApplyRecoveryPolicyEvent(ctx, recorded); err != nil {
+		return RecoveryPolicyResponse{}, err
+	}
+	return RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: recorded.Time}, nil
 }
 
 func validateRecoveryPolicyRequest(req RecoveryPolicyRequest) error {

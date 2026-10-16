@@ -143,7 +143,12 @@ func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *
 	ctx := context.Background()
 	cs := openStorePCAS(t)
 	outbox := orchestrator.NewOutbox(cs)
-	svc := succapi.NewService(cs, nil, outbox)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	svc := succapi.NewService(cs, log, outbox)
 	root, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
@@ -208,6 +213,108 @@ func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *
 	}
 	if n != 0 {
 		t.Fatalf("recovery outbox rows after refused requests = %d, want 0", n)
+	}
+}
+
+func TestService_RecoveryPolicyAppendsPublicEventBeforeServing(t *testing.T) {
+	ctx := context.Background()
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	cs := openStorePCAS(t)
+	svc := succapi.NewService(cs, log, nil)
+	root, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roster, err := json.Marshal([]map[string]any{{"ID": "custodian-1", "PubDER": member.Public().DER}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "spiffe://d/recovery-event-source"
+	command := succapi.RecoveryPolicyRequest{
+		IdentityID: id, Threshold: 1, Roster: roster, TrustRootDER: root.Public().DER,
+		OperationID: "qa-recovery-policy-lost-response",
+	}
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, command); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, command); err != nil {
+		t.Fatalf("retry of same operation after event append: %v", err)
+	}
+	differentRoot, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflict := command
+	conflict.TrustRootDER = differentRoot.Public().DER
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, conflict); err == nil {
+		t.Fatal("changed payload reused the recovery-policy idempotency key")
+	}
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, command); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	var first events.Event
+	var eventCount int
+	if err := log.Replay(ctx, 0, func(ev events.Event) error {
+		if ev.Type == "nhi.recovery.policy.configured" && ev.TenantID == tenantA {
+			eventCount++
+			first = ev
+			var payload struct {
+				IdentityID string `json:"identity_id"`
+				Threshold  int    `json:"threshold"`
+			}
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				return err
+			}
+			found = payload.IdentityID == id && payload.Threshold == 1
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("recovery policy was served without an immutable tenant-bound event")
+	}
+	if eventCount != 1 {
+		t.Fatalf("same operation emitted %d policy events, want one", eventCount)
+	}
+	proj := pcasstore.NewRecoveryPolicyProjection(cs)
+	if err := proj.Reset(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := pcasstore.New(cs).GetRecoveryPolicy(ctx, tenantA, id); err != nil || found {
+		t.Fatalf("policy after projection reset: found=%t err=%v", found, err)
+	}
+	if err := log.Replay(ctx, 0, func(ev events.Event) error { return proj.Apply(ctx, ev) }); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := pcasstore.New(cs).GetRecoveryPolicy(ctx, tenantA, id)
+	if err != nil || !found || got.Threshold != 1 || string(got.TrustRootDER) != string(root.Public().DER) {
+		t.Fatalf("policy after event replay: found=%t threshold=%d err=%v", found, got.Threshold, err)
+	}
+	newRoot, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, succapi.RecoveryPolicyRequest{
+		IdentityID: id, Threshold: 1, Roster: roster, TrustRootDER: newRoot.Public().DER,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := proj.Apply(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err = pcasstore.New(cs).GetRecoveryPolicy(ctx, tenantA, id)
+	if err != nil || !found || string(got.TrustRootDER) != string(newRoot.Public().DER) {
+		t.Fatalf("delayed predecessor replaced newer policy: found=%t err=%v", found, err)
 	}
 }
 
