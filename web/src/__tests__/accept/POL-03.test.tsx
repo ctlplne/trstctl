@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     profiles: vi.fn(),
     createIdentity: vi.fn(),
     approvalRequests: vi.fn(),
+    profileEditApprovals: vi.fn(),
     approveIdentityAction: vi.fn(),
   },
 }));
@@ -163,6 +164,7 @@ describe("POL-03 polish fixes", () => {
     });
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
+    apiMock.profileEditApprovals.mockResolvedValue({ items: [] });
     apiMock.owners.mockResolvedValue([]);
     apiMock.profiles.mockResolvedValue([{ id: "prof-1", name: "web-server", version: 2, active: true }]);
   });

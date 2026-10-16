@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     me: vi.fn(),
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     approvalRequests: vi.fn(),
+    profileEditApprovals: vi.fn(),
     issuanceRequests: vi.fn(),
     approveApprovalRequest: vi.fn(),
     auditEvents: vi.fn(),
@@ -61,6 +62,7 @@ beforeEach(() => {
   for (const mock of Object.values(apiMock)) mock.mockReset();
   apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
   apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
+  apiMock.profileEditApprovals.mockResolvedValue({ items: [] });
   apiMock.approveApprovalRequest.mockResolvedValue({
     id: pending.id,
     intent_digest: pending.intent_digest,
