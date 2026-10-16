@@ -125,6 +125,18 @@ neither exists. The configurable cadence scheduler requests re-attestation once
 per stale verification edge and writes the owner/escalation notification intent
 through the outbox in the same tenant transaction.
 
+For an urgent identity with incomplete ownership, open **Ownership → Coverage gaps
+and temporary exceptions**, select the exact identity, and review any existing
+exception before granting another. The panel reads the attributed reason,
+grantor, expiry and state from the server. An active exception can be revoked
+there with a required reason; the console then reads the server's revoked
+record. API and CLI equivalents are `GET` and `POST`
+`/api/v1/identities/{id}/ownership-exceptions` and `POST`
+`/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke`, or
+`trstctl owners exceptions list|grant|revoke`. The CLI requires `--force` for
+revocation. Expiry or revocation removes this temporary admission proof; it
+does not repair the owner record or provide a permanent waiver.
+
 **Status:** served for managed identities plus discovery-fed NHIs.
 
 For a one-time ownership CSV import, create the owner record first, then run

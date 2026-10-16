@@ -18,7 +18,9 @@ const { apiMock } = vi.hoisted(() => ({
     updateOwner: vi.fn(),
     deleteOwner: vi.fn(),
     attestOwner: vi.fn(),
+    ownershipExceptions: vi.fn(),
     grantOwnershipException: vi.fn(),
+    revokeOwnershipException: vi.fn(),
   },
 }));
 
@@ -67,6 +69,7 @@ describe("AUD-44 ownership readiness console", () => {
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "operator-44", tenant_id: "t1", email: "operator@example.test" });
     apiMock.owners.mockResolvedValue([owner]);
+    apiMock.ownershipExceptions.mockResolvedValue([]);
     apiMock.ownershipAttribution.mockResolvedValue({
       generated_at: "2026-08-12T10:00:00Z",
       summary: {},
@@ -173,5 +176,55 @@ describe("AUD-44 ownership readiness console", () => {
       reason: "Incident recovery",
       expires_at: expect.any(String),
     });
+  });
+
+  it("shows an active exception and revokes it with an attributed reason", async () => {
+    const user = userEvent.setup();
+    apiMock.unownedIdentities.mockResolvedValue({
+      items: [
+        {
+          identity_id: "identity-44",
+          name: "payments-deployer",
+          reason: "ownership_attestation_stale",
+          detail: "Payments team must re-attest this application model.",
+        },
+      ],
+      counts: { no_owner: 0, owner_missing_application_model: 0, ownership_never_attested: 0, ownership_attestation_stale: 1 },
+      guidance: "Resolve the ownership record or grant a short-lived exception.",
+    });
+    apiMock.ownershipExceptions.mockResolvedValue([
+      {
+        id: "exception-44",
+        identity_id: "identity-44",
+        reason: "Incident recovery",
+        granted_by: "operator-44",
+        granted_at: "2026-08-12T10:00:00Z",
+        expires_at: "2026-08-13T10:00:00Z",
+        active: true,
+      },
+    ]);
+    apiMock.revokeOwnershipException.mockResolvedValue({
+      id: "exception-44",
+      identity_id: "identity-44",
+      reason: "Incident recovery",
+      granted_by: "operator-44",
+      granted_at: "2026-08-12T10:00:00Z",
+      expires_at: "2026-08-13T10:00:00Z",
+      active: false,
+      revoked_by: "operator-44",
+      revoked_at: "2026-08-12T11:00:00Z",
+      revocation_reason: "Owner record repaired",
+    });
+    renderOwners();
+    await user.click(await screen.findByText("Coverage gaps and temporary exceptions"));
+    await user.click(await screen.findByRole("button", { name: "Grant temporary exception" }));
+
+    expect(await screen.findByText("Incident recovery")).toBeInTheDocument();
+    expect(apiMock.ownershipExceptions).toHaveBeenCalledWith("identity-44");
+    await user.click(screen.getByRole("button", { name: "Revoke exception" }));
+    await user.type(screen.getByLabelText("Revocation reason"), "Owner record repaired");
+    await user.click(screen.getByRole("button", { name: "Confirm revocation" }));
+
+    expect(apiMock.revokeOwnershipException).toHaveBeenCalledWith("identity-44", "exception-44", { reason: "Owner record repaired" });
   });
 });

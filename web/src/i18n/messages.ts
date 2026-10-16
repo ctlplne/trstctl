@@ -14306,6 +14306,30 @@ export const messages = {
     defaultMessage: "Enter a reason and an expiry between 1 and 720 hours.",
     description: "Ownership-exception client validation error.",
   },
+  "owners.readiness.exceptionsLoading": { defaultMessage: "Checking existing exceptions…", description: "Ownership exception readback loading state." },
+  "owners.readiness.exceptionRecord": { defaultMessage: "Exception {id}", description: "Accessible label for one ownership exception record." },
+  "owners.readiness.exceptionActive": { defaultMessage: "Active exception", description: "Ownership exception state during its validity window." },
+  "owners.readiness.exceptionInactive": { defaultMessage: "Inactive exception", description: "Ownership exception state after revocation or expiry." },
+  "owners.readiness.exceptionEvidence": {
+    defaultMessage: "Granted by {actor}; expires {date}",
+    description: "Attribution and expiry of an ownership exception.",
+  },
+  "owners.readiness.revocationEvidence": {
+    defaultMessage: "Revoked by {actor} on {date}: {reason}",
+    description: "Attribution and reason for an ownership exception revocation.",
+  },
+  "owners.readiness.unknownActor": { defaultMessage: "unknown actor", description: "Fallback when a legacy ownership exception lacks revocation attribution." },
+  "owners.readiness.revokeException": { defaultMessage: "Revoke exception", description: "Start ownership exception revocation." },
+  "owners.readiness.revocationReason": { defaultMessage: "Revocation reason", description: "Required reason for ownership exception revocation." },
+  "owners.readiness.revocationReasonRequired": {
+    defaultMessage: "Enter a revocation reason.",
+    description: "Ownership exception revocation validation error.",
+  },
+  "owners.readiness.confirmRevocation": { defaultMessage: "Confirm revocation", description: "Submit an ownership exception revocation." },
+  "owners.readiness.exceptionRevoked": {
+    defaultMessage: "Temporary ownership exception revoked",
+    description: "Successful ownership exception revocation toast.",
+  },
   "owners.governance.referenceCoverage": {
     defaultMessage: "Owner reference coverage",
     description: "Credentials with a live owner reference; not an attestation claim.",

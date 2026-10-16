@@ -163,6 +163,12 @@ browser sends one idempotency-protected command; the server appends one immutabl
 and certificates, the native lifecycle owner changes in that same projection, so
 admission checks and the browser cannot disagree. Retrying the same command returns
 the first result rather than writing a second decision.
+**Coverage gaps and temporary exceptions** opens the exact identity's existing
+exception history before another grant is offered. An active exception shows
+its reason, grantor and expiry, and can be revoked with a recorded reason.
+Reopen the identity to confirm the server reports it inactive. This removes
+the temporary ownership-readiness bypass; the underlying owner gap still needs
+an owner update or attestation.
 The queue searches by asset name, exact inventory ID, kind, or current owner, and
 shows 25 rows per page with the filtered result count and page controls. A gap
 beyond the first page remains reachable for individual or bulk assignment.

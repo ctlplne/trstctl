@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
+import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem, type OwnershipException } from "@/lib/api";
 import { OwnershipConflictsPanel } from "@/components/OwnershipConflictsPanel";
 import { OwnershipCSVImport } from "@/components/OwnershipCSVImport";
 import { OwnershipCockpit } from "@/components/ownership/OwnershipCockpit";
@@ -38,7 +38,7 @@ function readOwnershipAttribution(): Promise<OwnershipAttribution> {
 // middle one is the one people miss — it looks owned until somebody needs a
 // blast radius.
 function UnownedQueuePanel() {
-  const { t } = useTranslation();
+  const { t, formatDate } = useTranslation();
   const queue = useApiQuery(["unowned-identities"], api.unownedIdentities);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -47,6 +47,13 @@ function UnownedQueuePanel() {
   const [exceptionHours, setExceptionHours] = useState("24");
   const [exceptionBusy, setExceptionBusy] = useState(false);
   const [exceptionError, setExceptionError] = useState<string | null>(null);
+  const [revokeTargetID, setRevokeTargetID] = useState<string | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
+  const exceptionHistory = useApiQuery(
+    ["ownership-exceptions", exceptionTarget?.identity_id ?? "none"],
+    () => api.ownershipExceptions(exceptionTarget!.identity_id),
+    { enabled: exceptionTarget !== null },
+  );
   const data = queue.data;
   // Guard the array, not just the object. A response whose shape is present but
   // whose items are absent is exactly what a fixture or a partial payload looks
@@ -54,6 +61,7 @@ function UnownedQueuePanel() {
   // hiding one panel.
   const items = data?.items ?? [];
   if (!data || items.length === 0) return null;
+  const activeExceptions = exceptionHistory.data?.filter((entry) => entry.active) ?? [];
   async function submitException() {
     if (!exceptionTarget) return;
     const reason = exceptionReason.trim();
@@ -70,9 +78,36 @@ function UnownedQueuePanel() {
         expires_at: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
       });
       void queryClient.invalidateQueries({ queryKey: ["unowned-identities"] });
+      void queryClient.invalidateQueries({ queryKey: ["ownership-exceptions", exceptionTarget.identity_id] });
       toast({ kind: "success", title: t("owners.readiness.exceptionGranted"), description: exceptionTarget.name });
       setExceptionTarget(null);
       setExceptionReason("");
+    } catch (err) {
+      setExceptionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExceptionBusy(false);
+    }
+  }
+
+  async function submitRevocation(exceptionID: string) {
+    if (!exceptionTarget) return;
+    const reason = revokeReason.trim();
+    if (!reason) {
+      setExceptionError(t("owners.readiness.revocationReasonRequired"));
+      return;
+    }
+    setExceptionBusy(true);
+    setExceptionError(null);
+    try {
+      const revoked = await api.revokeOwnershipException(exceptionTarget.identity_id, exceptionID, { reason });
+      queryClient.setQueryData<OwnershipException[]>(["ownership-exceptions", exceptionTarget.identity_id], (prior) =>
+        prior?.map((entry) => (entry.id === revoked.id ? revoked : entry)),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["ownership-exceptions", exceptionTarget.identity_id] });
+      void queryClient.invalidateQueries({ queryKey: ["unowned-identities"] });
+      toast({ kind: "success", title: t("owners.readiness.exceptionRevoked"), description: exceptionTarget.name });
+      setRevokeTargetID(null);
+      setRevokeReason("");
     } catch (err) {
       setExceptionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -128,50 +163,125 @@ function UnownedQueuePanel() {
         panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
       >
         {exceptionTarget && (
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitException();
-            }}
-          >
+          <div className="grid gap-4">
             <h2 id="ownership-exception-title" className="text-title font-semibold">
               {t("owners.readiness.exceptionTitle", { name: exceptionTarget.name })}
             </h2>
             <p className="text-sm text-muted-foreground">{t("owners.readiness.exceptionDescription")}</p>
-            <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-reason">
-              {t("owners.readiness.reason")}
-              <Textarea
-                id="ownership-exception-reason"
-                className="min-h-24 font-normal"
-                value={exceptionReason}
-                onChange={(event) => setExceptionReason(event.target.value)}
-                required
-              />
-            </label>
-            <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-hours">
-              {t("owners.readiness.expiryHours")}
-              <Input
-                id="ownership-exception-hours"
-                type="number"
-                min="1"
-                max="720"
-                className="font-normal"
-                value={exceptionHours}
-                onChange={(event) => setExceptionHours(event.target.value)}
-                required
-              />
-            </label>
+            {exceptionHistory.loading && <p role="status">{t("owners.readiness.exceptionsLoading")}</p>}
+            {exceptionHistory.error && <p role="alert">{exceptionHistory.error}</p>}
+            {exceptionHistory.data?.map((entry) => (
+              <section
+                key={entry.id}
+                className="grid gap-2 rounded-panel border border-border p-3"
+                aria-label={t("owners.readiness.exceptionRecord", { id: entry.id })}
+              >
+                <p className="font-medium">{entry.active ? t("owners.readiness.exceptionActive") : t("owners.readiness.exceptionInactive")}</p>
+                <p>{entry.reason}</p>
+                <p className="text-caption text-muted-foreground">
+                  {t("owners.readiness.exceptionEvidence", {
+                    actor: entry.granted_by,
+                    date: formatDate(entry.expires_at),
+                  })}
+                </p>
+                {entry.revoked_at && (
+                  <p className="text-caption text-muted-foreground">
+                    {t("owners.readiness.revocationEvidence", {
+                      actor: entry.revoked_by ?? t("owners.readiness.unknownActor"),
+                      date: formatDate(entry.revoked_at),
+                      reason: entry.revocation_reason ?? "",
+                    })}
+                  </p>
+                )}
+                <p className="font-mono text-xs">{entry.id}</p>
+                {entry.active && revokeTargetID !== entry.id && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={exceptionBusy}
+                    onClick={() => {
+                      setRevokeTargetID(entry.id);
+                      setRevokeReason("");
+                      setExceptionError(null);
+                    }}
+                  >
+                    {t("owners.readiness.revokeException")}
+                  </Button>
+                )}
+                {entry.active && revokeTargetID === entry.id && (
+                  <form
+                    className="grid gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitRevocation(entry.id);
+                    }}
+                  >
+                    <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-revoke-reason">
+                      {t("owners.readiness.revocationReason")}
+                      <Textarea
+                        id="ownership-exception-revoke-reason"
+                        value={revokeReason}
+                        onChange={(event) => setRevokeReason(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="ghost" disabled={exceptionBusy} onClick={() => setRevokeTargetID(null)}>
+                        {translateNow("source.cancel.19766ed6cc")}
+                      </Button>
+                      <Button type="submit" disabled={exceptionBusy}>
+                        {t("owners.readiness.confirmRevocation")}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </section>
+            ))}
+            {exceptionHistory.data && activeExceptions.length === 0 && (
+              <form
+                className="grid gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitException();
+                }}
+              >
+                <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-reason">
+                  {t("owners.readiness.reason")}
+                  <Textarea
+                    id="ownership-exception-reason"
+                    className="min-h-24 font-normal"
+                    value={exceptionReason}
+                    onChange={(event) => setExceptionReason(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-hours">
+                  {t("owners.readiness.expiryHours")}
+                  <Input
+                    id="ownership-exception-hours"
+                    type="number"
+                    min="1"
+                    max="720"
+                    className="font-normal"
+                    value={exceptionHours}
+                    onChange={(event) => setExceptionHours(event.target.value)}
+                    required
+                  />
+                </label>
+                <div className="flex justify-end gap-2">
+                  <Button type="submit" disabled={exceptionBusy}>
+                    {t("owners.readiness.grant")}
+                  </Button>
+                </div>
+              </form>
+            )}
             {exceptionError && <p className="text-sm font-medium text-risk-critical">{exceptionError}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" disabled={exceptionBusy} onClick={() => setExceptionTarget(null)}>
                 {translateNow("source.cancel.19766ed6cc")}
               </Button>
-              <Button type="submit" disabled={exceptionBusy}>
-                {t("owners.readiness.grant")}
-              </Button>
             </div>
-          </form>
+          </div>
         )}
       </Dialog>
     </>
