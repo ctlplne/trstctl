@@ -873,7 +873,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:74` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/ssh/krl_binary_test.go:193` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/ssh_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/rpverify/verifier_test.go:380` | fixed argv, no user input (CWE-78) |
+| `internal/rpverify/verifier_test.go:369` | fixed argv, no user input (CWE-78) |
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscan/gitleaks.go:218` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |

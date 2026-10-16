@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/pqc"
 	"trstctl.com/trstctl/internal/rpverify"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/succession"
@@ -246,19 +247,6 @@ func TestRPVerify_WASMParity(t *testing.T) {
 
 // --- strength-refusal mirror (PCAS-15) -------------------------------------
 
-type rpClassSigner struct {
-	inner crypto.Signer
-	alg   crypto.Algorithm
-}
-
-func (c rpClassSigner) Public() crypto.PublicKey {
-	return crypto.PublicKey{Algorithm: c.alg, DER: c.inner.Public().DER}
-}
-func (c rpClassSigner) Algorithm() crypto.Algorithm { return c.alg }
-func (c rpClassSigner) Sign(m []byte, o crypto.SignOptions) ([]byte, error) {
-	return c.inner.Sign(m, o)
-}
-
 type mapResolverRP map[string]crypto.Signer
 
 func (r mapResolverRP) Resolve(h string) (crypto.Signer, error) {
@@ -304,11 +292,12 @@ func TestRPVerify_MirrorsStrengthRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	predInner, err := be.GenerateKey(crypto.ECDSAP256)
+	predKey, err := pqc.GenerateKey(pqc.MLDSA65)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pred := rpClassSigner{inner: predInner, alg: "ML-DSA-65"} // PQ predecessor
+	defer predKey.Destroy()
+	pred := crypto.SignerFromDigestSigner(predKey)
 
 	// Mint a PQ->classical downgrade record with a valid break-glass token.
 	bg := minter.NewSignedBreakGlassAuthorizer(authority.Public().DER)
@@ -342,7 +331,7 @@ func TestRPVerify_MirrorsStrengthRefusal(t *testing.T) {
 
 	genesis := succession.GenesisRecord{
 		DeploymentScope: "spiffe://td", IdentityID: "spiffe://td/db", TenantID: tenant,
-		Algorithm: "ML-DSA-65", PublicKey: predInner.Public().DER, Epoch: 0,
+		Algorithm: pred.Algorithm(), PublicKey: pred.Public().DER, Epoch: 0,
 	}
 	gd, err := succession.GenesisDigest(genesis)
 	if err != nil {
