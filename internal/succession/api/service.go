@@ -442,6 +442,9 @@ func validateRecoveryRequestPolicy(tenantID string, req RecoveryRequest, policy 
 }
 
 func (s *service) RequestFederationImport(ctx context.Context, tenantID string, req FederationImportRequest) (AsyncRequestResponse, error) {
+	if s.store == nil || s.outbox == nil || s.repo == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS federation outbox is unavailable")
+	}
 	// Validate the foreign trust root BEFORE persisting it. The HTTP handler
 	// checks that the field is non-empty; nothing checked that the bytes are a
 	// certificate. This value is a TRUST ANCHOR — a bridge row records what a
@@ -453,16 +456,8 @@ func (s *service) RequestFederationImport(ctx context.Context, tenantID string, 
 	if err := validateForeignTrustRoot(req.ForeignTrustRootDER); err != nil {
 		return AsyncRequestResponse{}, err
 	}
-	if s.repo != nil {
-		if err := s.repo.UpsertFederationBridge(ctx, tenantID, pcasstore.FederationBridge{
-			ForeignDeploymentID: req.ForeignDeploymentID,
-			IdentityID:          req.IdentityID,
-			ForeignTrustRootDER: req.ForeignTrustRootDER,
-			LocalBaseEpoch:      req.LocalBaseEpoch,
-		}); err != nil {
-			return AsyncRequestResponse{}, err
-		}
-	}
+	// A queued command has not verified the foreign chain. Only the worker may
+	// publish a bridge after it has produced a signed import proof.
 	return s.enqueue(ctx, tenantID, topicOr(s.federationTopic, FederationImportDestination), req.ForeignDeploymentID, req)
 }
 

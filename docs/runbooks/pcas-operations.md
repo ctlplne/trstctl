@@ -210,6 +210,16 @@ from an older direct-write build have no source event and are not served after
 this upgrade; re-register them through the supported API before issuing leaves.
 Retry an uncertain registration response with the same `Idempotency-Key`.
 
+## Federation bridge imports
+
+`POST /api/v1/pcas/federation/imports` queues verification of a foreign
+genesis and succession chain. The `202` response means only that the import
+was queued. `GET /api/v1/pcas/federation/bridges` must show a bridge only after
+the worker verifies the foreign trust root and chain and signs the local bridge
+record. A failed or still-pending import is not a trust relationship. Compare
+the listed `trust_root_sha256` with the foreign deployment's public root before
+using the bridge.
+
 ## Health Signals
 
 Scrape `/metrics` on the control plane. PCAS feature work is exposed through the

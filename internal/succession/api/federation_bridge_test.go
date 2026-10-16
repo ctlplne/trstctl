@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -23,14 +22,9 @@ import (
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
 
-// TestFederationBridge_ImportThenListRoundTrip is the AUD-9 regression:
-// pcas_federation_bridge was WRITE-ONLY state — POST persisted the foreign
-// deployment id, trust root and base epoch under RLS, and the only SELECT in
-// the tree was a test row count. This drives the SERVED routes end to end:
-// import a bridge, then assert the served list returns it with the foreign
-// deployment id and the trust-root digest. A store-level round trip would pass
-// on the pre-fix tree and prove nothing about reachability.
-func TestFederationBridge_ImportThenListRoundTrip(t *testing.T) {
+// Queuing an import is not proof that the foreign chain verified. Only the
+// worker's signed bridge result may appear in the trusted bridge list.
+func TestFederationBridge_UnverifiedImportNotServed(t *testing.T) {
 	ctx := context.Background()
 	base, err := corestore.Open(ctx, testDSN)
 	if err != nil {
@@ -103,18 +97,7 @@ func TestFederationBridge_ImportThenListRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
 		t.Fatalf("decode bridge list: %v", err)
 	}
-	if list.Count != 1 || len(list.Bridges) != 1 {
-		t.Fatalf("bridge list count=%d bridges=%d, want exactly the imported bridge (body=%s)", list.Count, len(list.Bridges), rr.Body.String())
-	}
-	got := list.Bridges[0]
-	if got.ForeignDeploymentID != "deploy-west" || got.IdentityID != "spiffe://d/id" || got.LocalBaseEpoch != 7 {
-		t.Fatalf("served bridge = %+v, want deploy-west/spiffe://d/id/epoch 7", got)
-	}
-	wantDigest := hex.EncodeToString(crypto.SHA256Sum(trustRoot))
-	if got.TrustRootSHA256 != wantDigest {
-		t.Fatalf("served trust-root digest = %q, want %q — the operator must be able to compare the imported root against the foreign deployment's published one", got.TrustRootSHA256, wantDigest)
-	}
-	if got.UpdatedAt.IsZero() {
-		t.Fatal("served bridge carries no updated_at timestamp")
+	if list.Count != 0 || len(list.Bridges) != 0 {
+		t.Fatalf("queued unverified import is already trusted: count=%d bridges=%d body=%s", list.Count, len(list.Bridges), rr.Body.String())
 	}
 }
