@@ -15,6 +15,17 @@ const recoveryRecordDomain = "trstctl/pcas/recovery-record/v1\x00"
 const recoveryProofDomain = "trstctl/pcas/recovery-proof/v1\x00"
 const kemRewrapRecordDomain = "trstctl/pcas/kem-rewrap-record/v1\x00"
 const kemRewrapRequestDomain = "trstctl/pcas/kem-rewrap-request/v1\x00"
+const kemRewrapOperationDomain = "trstctl/pcas/kem-rewrap-operation/v1\x00"
+
+// KEMRewrapOperationRequestID makes an authenticated operation retry recover
+// the same outbox row and event after a response is lost between those writes.
+func KEMRewrapOperationRequestID(tenantID, operationID string) string {
+	bound, _ := json.Marshal(struct {
+		TenantID    string `json:"tenant_id"`
+		OperationID string `json:"operation_id"`
+	}{tenantID, operationID})
+	return recoveryEventID(kemRewrapOperationDomain, bound)
+}
 
 func KEMRewrapRequestEventID(tenantID, requestID string) string {
 	bound, _ := json.Marshal(struct {

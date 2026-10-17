@@ -368,7 +368,11 @@ before treating a rewrap as complete. Queued stage rows come from an immutable,
 tenant-bound accepted-request event. The signed paired signing/KEM record is
 appended to the tenant event log before its SQL chain, epoch, and completed-stage
 rows are projected in one transaction. An outbox retry repairs a lost response
-between enqueue, event append, and SQL projection. Event-only replay restores
+between enqueue, event append, and SQL projection. The KEM request ID is derived
+from the authenticated tenant and `Idempotency-Key`; a retry with the same key
+and body returns the original outbox creation time and restores a missing queued
+projection. Reusing that key with a changed body is rejected by the outbox's
+exact command comparison. Event-only replay restores
 the accepted stage set and its completion status. Its
 tenant, identity, epoch and exact request have a first-writer event ID; a
 projection rebuild restores the same signed record from that event. A second

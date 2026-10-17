@@ -66,6 +66,56 @@ func TestKEMRequestStatusResolvesConfiguredOutboxTopic(t *testing.T) {
 	}
 }
 
+func TestKEMRequestRecoversLostResponseAndProjection(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	svc := succapi.NewService(cs, log, orchestrator.NewOutbox(cs))
+	req := succapi.KEMRewrapRequest{
+		IdentityID: "spiffe://qa.local/kem-retry", PredecessorHandle: "pred",
+		SuccessorSignHandle: "sig", SuccessorKEMHandle: "kem",
+		SigningAlgorithm: string(crypto.ECDSAP384), KEMAlgorithm: "ML-KEM-768",
+		Stages: []string{"first", "second"}, OperationID: "kem-lost-response-1",
+	}
+	first, err := svc.RequestKEMRewrap(ctx, tenantA, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cs.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND job_id = $1`, first.RequestID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A new API service has no in-process response cache. The durable outbox
+	// command and event identity must recover the original result on its own.
+	svc = succapi.NewService(cs, log, orchestrator.NewOutbox(cs))
+	second, err := svc.RequestKEMRewrap(ctx, tenantA, req)
+	if err != nil || first.RequestID != second.RequestID || !first.QueuedAt.Equal(second.QueuedAt) {
+		t.Fatalf("same operation did not recover original receipt: first=%+v second=%+v err=%v", first, second, err)
+	}
+	status, err := svc.RewrapStatus(ctx, tenantA, req.IdentityID, 0)
+	if err != nil || len(status.Jobs) != 2 || status.Complete {
+		t.Fatalf("lost stage projection was not restored from source: status=%+v err=%v", status, err)
+	}
+	var count int
+	if err := cs.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM outbox
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND idempotency_key = $1`, first.RequestID).Scan(&count)
+	}); err != nil || count != 1 {
+		t.Fatalf("retry created duplicate outbox work: count=%d err=%v", count, err)
+	}
+	req.Stages = []string{"changed"}
+	if _, err := svc.RequestKEMRewrap(ctx, tenantA, req); err == nil {
+		t.Fatal("same operation ID accepted a different KEM stage set")
+	}
+}
+
 func TestPCASBreadthStatusReadsConfiguredAndCanonicalTopics(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)

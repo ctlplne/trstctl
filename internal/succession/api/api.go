@@ -226,6 +226,8 @@ type KEMRewrapRequest struct {
 	SigningAlgorithm    string   `json:"signing_algorithm"`
 	KEMAlgorithm        string   `json:"kem_algorithm"`
 	Stages              []string `json:"stages,omitempty"`
+	// OperationID is the authenticated Idempotency-Key. It is never read from JSON.
+	OperationID string `json:"-"`
 }
 
 type IssuerAuthorityRequest struct {
@@ -902,6 +904,7 @@ func kemRewrapHandler(a *api.API, svc Service) http.HandlerFunc {
 		if req.IdentityID == "" || req.PredecessorHandle == "" || req.SuccessorSignHandle == "" || req.SuccessorKEMHandle == "" || req.SigningAlgorithm == "" || req.KEMAlgorithm == "" {
 			return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id, predecessor_handle, successor handles, signing_algorithm, and kem_algorithm are required")
 		}
+		req.OperationID = r.Header.Get("Idempotency-Key")
 		resp, err := svc.RequestKEMRewrap(ctx, tenantID, req)
 		return http.StatusAccepted, resp, err
 	})

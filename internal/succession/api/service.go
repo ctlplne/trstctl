@@ -771,7 +771,11 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 	if s.repo == nil || s.log == nil {
 		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS KEM event log or projection store is unavailable")
 	}
-	resp, err := s.enqueue(ctx, tenantID, topicOr(s.kemTopic, KEMRewrapDestination), req.IdentityID, req)
+	requestID := ""
+	if req.OperationID != "" {
+		requestID = succession.KEMRewrapOperationRequestID(tenantID, req.OperationID)
+	}
+	resp, err := s.enqueueWithRequestID(ctx, tenantID, topicOr(s.kemTopic, KEMRewrapDestination), req.IdentityID, req, requestID)
 	if err != nil {
 		return AsyncRequestResponse{}, err
 	}
@@ -787,9 +791,16 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 		return AsyncRequestResponse{}, err
 	}
 	encoded.ID = succession.KEMRewrapRequestEventID(tenantID, resp.RequestID)
-	recorded, err := s.log.Append(ctx, encoded)
-	if err != nil {
+	var recorded events.Event
+	if prior, found, err := s.log.EventByID(ctx, encoded.ID); err != nil {
 		return AsyncRequestResponse{}, err
+	} else if found {
+		recorded = prior
+	} else {
+		recorded, err = s.log.Append(ctx, encoded)
+		if err != nil {
+			return AsyncRequestResponse{}, err
+		}
 	}
 	if recorded.TenantID != tenantID || recorded.Type != encoded.Type ||
 		recorded.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(recorded.Data, encoded.Data) {
@@ -1220,10 +1231,17 @@ func (s *service) ListFederationBridges(ctx context.Context, tenantID string) (F
 }
 
 func (s *service) enqueue(ctx context.Context, tenantID, destination, target string, req any) (AsyncRequestResponse, error) {
+	return s.enqueueWithRequestID(ctx, tenantID, destination, target, req, "")
+}
+
+func (s *service) enqueueWithRequestID(ctx context.Context, tenantID, destination, target string, req any, requestID string) (AsyncRequestResponse, error) {
 	if s.store == nil || s.outbox == nil {
 		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS outbox is unavailable")
 	}
-	requestID := events.NewID()
+	stableRequest := requestID != ""
+	if !stableRequest {
+		requestID = events.NewID()
+	}
 	payload, err := json.Marshal(struct {
 		RequestID string `json:"request_id"`
 		Request   any    `json:"request"`
@@ -1239,7 +1257,18 @@ func (s *service) enqueue(ctx context.Context, tenantID, destination, target str
 	}); err != nil {
 		return AsyncRequestResponse{}, fmt.Errorf("pcas api: enqueue %s: %w", destination, err)
 	}
-	return AsyncRequestResponse{RequestID: requestID, Status: "queued", QueuedAt: time.Now().UTC(),
+	queuedAt := time.Now().UTC()
+	if stableRequest {
+		status, found, err := s.GetRequestStatus(ctx, tenantID, requestID)
+		if err != nil {
+			return AsyncRequestResponse{}, err
+		}
+		if !found {
+			return AsyncRequestResponse{}, errors.New("pcas api: accepted KEM request has no tenant outbox receipt")
+		}
+		queuedAt = status.CreatedAt
+	}
+	return AsyncRequestResponse{RequestID: requestID, Status: "queued", QueuedAt: queuedAt,
 		Target: target, StatusURL: "/api/v1/pcas/requests/" + requestID}, nil
 }
 
