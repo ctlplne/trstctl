@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"trstctl.com/trstctl/internal/signing"
 )
 
 const durableAnchorDir = "agid-root-anchors"
@@ -79,7 +81,7 @@ func (s *DurableAnchorStore) PutRootAnchor(_ context.Context, tenantID, keyID st
 	if pemErr == nil {
 		storedDER, err := DecodeRootAnchorPEM(existingPEM)
 		if err != nil || !bytes.Equal(storedDER, anchor.PublicDER) {
-			return errors.New("delegation: root-anchor public key is already bound to another authority")
+			return fmt.Errorf("delegation: root-anchor public key is already bound to another authority: %w", signing.ErrAgentRootConflict)
 		}
 	}
 	existingAuth, authErr := root.ReadFile(relAuthRef)
@@ -87,7 +89,7 @@ func (s *DurableAnchorStore) PutRootAnchor(_ context.Context, tenantID, keyID st
 		return fmt.Errorf("delegation: read first-writer auth ref: %w", authErr)
 	}
 	if authErr == nil && strings.TrimSpace(string(existingAuth)) != anchor.AuthRef {
-		return errors.New("delegation: root-anchor auth ref is already bound to another authority")
+		return fmt.Errorf("delegation: root-anchor auth ref is already bound to another authority: %w", signing.ErrAgentRootConflict)
 	}
 	// A crash after the first of the two public files leaves a partial anchor
 	// that the gate cannot read. An exact retry completes that same binding;
@@ -114,6 +116,20 @@ func (s *DurableAnchorStore) Anchor(tenantID, keyID string) (RootAnchor, bool) {
 		return RootAnchor{}, false
 	}
 	return anchor, true
+}
+
+// ProvisionAgentRootAnchor and ReadAgentRootAnchor satisfy the signer's narrow
+// public-anchor transport seam. The same store instance also feeds its gate.
+func (s *DurableAnchorStore) ProvisionAgentRootAnchor(ctx context.Context, tenantID, keyID string, publicDER []byte, authRef string) error {
+	return s.PutRootAnchor(ctx, tenantID, keyID, RootAnchor{PublicDER: publicDER, AuthRef: authRef})
+}
+
+func (s *DurableAnchorStore) ReadAgentRootAnchor(_ context.Context, tenantID, keyID string) ([]byte, string, error) {
+	anchor, err := s.GetRootAnchor(tenantID, keyID)
+	if err != nil {
+		return nil, "", err
+	}
+	return append([]byte(nil), anchor.PublicDER...), anchor.AuthRef, nil
 }
 
 // GetRootAnchor reads one tenant-scoped anchor from disk.
@@ -228,6 +244,10 @@ func safeAnchorSegment(s string) bool {
 	}
 	return true
 }
+
+// ValidRootAnchorID reports whether a key ID can be represented in the
+// signer's durable tenant floor without path ambiguity.
+func ValidRootAnchorID(s string) bool { return safeAnchorSegment(s) }
 
 // readUnderRoot reads a file through a handle on its parent directory instead of
 // by name. The path segments here are already validated, so this is not about

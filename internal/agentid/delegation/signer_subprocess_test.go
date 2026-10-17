@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/agentid/reach"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
@@ -41,10 +44,6 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	kekFile := filepath.Join(dir, "signer.kek")
 
 	envs, anchors, _ := singleAnchorChain(t, nil, tenantID, "fido2:root-authenticator")
-	anchorStore := NewDurableAnchorStore(keystore)
-	if err := anchorStore.PutRootAnchor(context.Background(), tenantID, "root-key", anchors["root-key"]); err != nil {
-		t.Fatalf("PutRootAnchor: %v", err)
-	}
 	verdictSigner, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatalf("verdict signer: %v", err)
@@ -121,6 +120,20 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	}
 
 	client1, stop1 := start(t)
+	wantAnchor := anchors["root-key"]
+	if err := client1.ProvisionAgentRootAnchor(context.Background(), tenantID, "root-key", wantAnchor.PublicDER, wantAnchor.AuthRef); err != nil {
+		t.Fatalf("provision signer root over authenticated transport: %v", err)
+	}
+	if err := client1.ProvisionAgentRootAnchor(context.Background(), tenantID, "root-key", wantAnchor.PublicDER, wantAnchor.AuthRef); err != nil {
+		t.Fatalf("exact signer retry: %v", err)
+	}
+	if err := client1.ProvisionAgentRootAnchor(context.Background(), tenantID, "root-key", wantAnchor.PublicDER, "other-authenticator"); status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("changed signer binding = %v, want AlreadyExists", err)
+	}
+	gotDER, gotAuthRef, err := client1.ReadAgentRootAnchor(context.Background(), tenantID, "root-key")
+	if err != nil || string(gotDER) != string(wantAnchor.PublicDER) || gotAuthRef != wantAnchor.AuthRef {
+		t.Fatalf("signer root readback differs: der=%x auth_ref=%q err=%v", gotDER, gotAuthRef, err)
+	}
 	first := issue(t, client1, "leaf-first")
 	stop1()
 

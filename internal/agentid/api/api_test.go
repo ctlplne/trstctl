@@ -5,11 +5,13 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	agidapi "trstctl.com/trstctl/internal/agentid/api"
 	"trstctl.com/trstctl/internal/agentid/delegation"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // TestRoutes_Surface asserts the AGID REST surface: the root-anchor provisioning routes,
@@ -247,7 +249,11 @@ func TestService_RegisterRootAnchorProvisionsSignerFloor(t *testing.T) {
 	dir := t.TempDir()
 	provisioner := delegation.NewDurableAnchorStore(dir)
 	svc := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, provisioner)
-	publicDER := []byte{1, 2, 3, 4}
+	rootKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate public root for fixture: %v", err)
+	}
+	publicDER := rootKey.Public().DER
 
 	resp, err := svc.RegisterRootAnchor(context.Background(), "tenant-1", agidapi.RootAnchorRequest{
 		KeyID:     "root-key",
@@ -266,6 +272,54 @@ func TestService_RegisterRootAnchorProvisionsSignerFloor(t *testing.T) {
 	}
 	if string(anchor.PublicDER) != string(publicDER) || anchor.AuthRef != "webauthn:credential-1" {
 		t.Fatalf("provisioned anchor = %+v, want DER %v and auth ref", anchor, publicDER)
+	}
+}
+
+type rootReadbackProbe struct {
+	publicDER       []byte
+	authRef         string
+	overrideAuthRef string
+	readErr         error
+}
+
+func (p *rootReadbackProbe) ProvisionAgentRootAnchor(_ context.Context, _, _ string, publicDER []byte, authRef string) error {
+	p.publicDER = append([]byte(nil), publicDER...)
+	p.authRef = authRef
+	return nil
+}
+
+func (p *rootReadbackProbe) ReadAgentRootAnchor(_ context.Context, _, _ string) ([]byte, string, error) {
+	if p.readErr != nil {
+		return nil, "", p.readErr
+	}
+	if p.overrideAuthRef != "" {
+		return append([]byte(nil), p.publicDER...), p.overrideAuthRef, nil
+	}
+	return append([]byte(nil), p.publicDER...), p.authRef, nil
+}
+
+func TestService_RegisterRootAnchorNeedsExactSignerReadback(t *testing.T) {
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := agidapi.RootAnchorRequest{KeyID: "root", PublicDER: key.Public().DER, AuthRef: "webauthn:credential"}
+	if _, err := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, nil).RegisterRootAnchor(t.Context(), "tenant", req); !errors.Is(err, agidapi.ErrRootAnchorSignerUnavailable) {
+		t.Fatalf("missing signer = %v, want unavailable", err)
+	}
+	probe := &rootReadbackProbe{readErr: errors.New("signer floor unreachable")}
+	svc := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, probe)
+	if _, err := svc.RegisterRootAnchor(t.Context(), "tenant", req); err == nil {
+		t.Fatal("signer readback outage reported a provisioned root")
+	}
+	probe.readErr = nil
+	probe.overrideAuthRef = "other-authenticator"
+	if _, err := svc.RegisterRootAnchor(t.Context(), "tenant", req); !errors.Is(err, agidapi.ErrRootAnchorSignerReadback) {
+		t.Fatalf("different signer binding = %v, want mismatch", err)
+	}
+	probe.overrideAuthRef = ""
+	if resp, err := svc.RegisterRootAnchor(t.Context(), "tenant", req); err != nil || !resp.Provisioned {
+		t.Fatalf("exact signer readback: %v", err)
 	}
 }
 

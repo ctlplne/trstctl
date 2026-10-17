@@ -41,9 +41,13 @@ credential material. The signer refuses before keygen if the root anchor is
 absent, a hop widens authority, attestation fails, reachability is outside
 the ceiling, or the requested TTL exceeds the sub-hour ceiling.
 
-The signer's public-trust floors live under the signer key store
-(`TRSTCTL_SIGNER_KEY_STORE_DIR`, default `data/signer/keys`; for an external
-signer, provision the same files where the signer can read them):
+The signer’s public-trust floors live under the **signer process's** key store
+(`TRSTCTL_SIGNER_KEY_STORE_DIR`, default `data/signer/keys`). The root-anchor API
+sends the tenant-bound public key to that signer over the authenticated signer
+transport; the control plane does not write a local copy and assume it reached
+the signer. For an external signer, configure its durable key store on the
+signer host. Its reachability and attestor trust floors still need operator
+provisioning at that signer:
 
 ```text
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.pem      # root anchor, public key DER wrapped as PEM
@@ -65,8 +69,11 @@ Register a tenant root anchor. A `key_id` is bound to its first public key and
 authentication reference: an identical request can be retried, while a changed
 binding returns 409 and needs a new key ID. `public_der` as base64 JSON bytes
 is also accepted; replaying the same `Idempotency-Key` returns the original
-result, and when `TRSTCTL_SIGNER_KEY_STORE_DIR` is configured the anchor is
-mirrored into the signer floor:
+result. A successful response reports `provisioned: true` only after an
+independent read of the exact public key and authentication reference from the
+signer. If the signer is unavailable, retry the same request after it returns;
+the tenant registry may already hold the first binding. A list response marks
+an anchor unprovisioned when the signer readback is absent or differs:
 
 ```http
 POST /api/v1/agent-delegation/root-anchors

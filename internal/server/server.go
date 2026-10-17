@@ -1405,8 +1405,9 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	if d.LicensedAPIOptionsFactory != nil {
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
-			DefaultProfile: d.DefaultProfile,
-			KEMCustody:     s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
+			AGIDRootAnchors: s.agidRootAnchors(),
+			DefaultProfile:  d.DefaultProfile,
+			KEMCustody:      s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
 			TLSPostureDeployer: d.ConnectorRegistry,
 			OutboxIntegrityKey: d.KEK,
 			TenantCrypto:       d.TenantCrypto,
@@ -2010,6 +2011,13 @@ func (s *Server) featureObserver() func(feature, action, outcome string, seconds
 // case a PCAS handler mints nothing and fails closed. The control plane never obtains
 // key material: minting crosses the signer transport (claims 1/12/49).
 func (s *Server) successionMinter() SuccessionMinter {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) agidRootAnchors() editionseam.AgentRootAnchorProvisioner {
 	if s.signer == nil {
 		return nil
 	}

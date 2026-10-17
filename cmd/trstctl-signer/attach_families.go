@@ -40,7 +40,9 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	var reachabilityTrust reach.VerdictTrustLookup
 	var attestor agiddelegation.AttestationVerifier
 	if floorDir != "" {
-		anchorSource = agiddelegation.NewDurableAnchorStore(floorDir)
+		anchorStore := agiddelegation.NewDurableAnchorStore(floorDir)
+		anchorSource = anchorStore
+		opts = append(opts, signing.WithAgentRootAnchorStore(anchorStore))
 		reachabilityTrust = agiddelegation.NewDurableReachabilityTrustStore(floorDir).TrustLookup
 		attestor = agiddelegation.NewDurableAttestationTrustStore(floorDir)
 	}

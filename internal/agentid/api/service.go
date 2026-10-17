@@ -3,16 +3,19 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agentid/delegation"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
@@ -35,12 +38,17 @@ const (
 	RevocationDirectiveDestination = "agentid.revoke-directive"
 )
 
-// RootAnchorProvisioner mirrors the signer's durable local root-anchor floor. The
-// delegation.DurableAnchorStore satisfies it. It is an interface so tests can prove the
-// API writes the signer's provisioning path without linking the API to process control.
+// RootAnchorProvisioner reaches the isolated signer's public trust floor over
+// its authenticated transport. Local filesystem state in the control-plane
+// process is not evidence of what a separately mounted signer can read.
 type RootAnchorProvisioner interface {
-	PutRootAnchor(ctx context.Context, tenantID, keyID string, anchor delegation.RootAnchor) error
+	ProvisionAgentRootAnchor(context.Context, string, string, []byte, string) error
+	ReadAgentRootAnchor(context.Context, string, string) ([]byte, string, error)
 }
+
+var ErrRootAnchorSignerUnavailable = errors.New("agentid api: signer root-anchor floor is unavailable")
+var ErrRootAnchorSignerReadback = errors.New("agentid api: signer root-anchor readback differs from registered authority")
+var ErrInvalidRootAnchorRequest = errors.New("agentid api: invalid root-anchor request")
 
 // service is the store/log/outbox-backed AGID API Service. IssueChainBound and Revoke
 // enqueue an idempotent outbox job through the core outbox (the AGID mechanisms run
@@ -69,9 +77,8 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 }
 
 // NewServiceWithRootAnchorProvisioner builds the AGID API service with an optional signer
-// root-anchor provisioner. Production supplies a DurableAnchorStore rooted at the signer
-// keystore/floor directory, so a root anchor registered in the control plane is also
-// visible to the out-of-process signer after restart.
+// root-anchor provisioner. Production supplies the authenticated signer client;
+// the signer writes and reads its own durable floor in its own address space.
 func NewServiceWithRootAnchorProvisioner(store *corestore.Store, log *events.Log, outbox *orchestrator.Outbox, provisioner RootAnchorProvisioner) Service {
 	svc := NewService(store, log, outbox)
 	if s, ok := svc.(*service); ok {
@@ -82,30 +89,40 @@ func NewServiceWithRootAnchorProvisioner(store *corestore.Store, log *events.Log
 
 var _ Service = (*service)(nil)
 
-// RegisterRootAnchor persists one tenant root anchor in the RLS store and mirrors it into
-// the signer's durable local anchor floor when that floor is configured. Both writes are
-// idempotent upserts, so replaying the API idempotency key returns the same public result
-// and retrying after a transient provisioning error is safe.
+// RegisterRootAnchor binds the tenant root in the RLS store, then sends its public
+// binding to the signer and reads the exact result back. The RLS and signer floors
+// each enforce first writer; a lost response can be retried without replacing a
+// different authority. Success means the signer has independently returned the
+// same tenant/key/public-key/authentication-reference tuple.
 func (s *service) RegisterRootAnchor(ctx context.Context, tenantID string, req RootAnchorRequest) (RootAnchorResponse, error) {
+	if s.anchorProvisioner == nil {
+		return RootAnchorResponse{}, ErrRootAnchorSignerUnavailable
+	}
 	if len(req.PublicDER) != 0 && req.PublicPEM != "" {
-		return RootAnchorResponse{}, errors.New("agentid api: provide only one of public_der or public_pem")
+		return RootAnchorResponse{}, fmt.Errorf("provide only one of public_der or public_pem: %w", ErrInvalidRootAnchorRequest)
 	}
 	publicDER := append([]byte(nil), req.PublicDER...)
 	if req.PublicPEM != "" {
 		decoded, err := delegation.DecodeRootAnchorPEM([]byte(req.PublicPEM))
 		if err != nil {
-			return RootAnchorResponse{}, err
+			return RootAnchorResponse{}, fmt.Errorf("decode public_pem: %w", ErrInvalidRootAnchorRequest)
 		}
 		publicDER = decoded
 	}
-	if req.KeyID == "" {
-		return RootAnchorResponse{}, errors.New("agentid api: key_id is required")
+	if !delegation.ValidRootAnchorID(req.KeyID) {
+		return RootAnchorResponse{}, fmt.Errorf("key_id contains an unsafe path character: %w", ErrInvalidRootAnchorRequest)
 	}
 	if len(publicDER) == 0 {
-		return RootAnchorResponse{}, errors.New("agentid api: root-anchor public key is required")
+		return RootAnchorResponse{}, fmt.Errorf("root-anchor public key is required: %w", ErrInvalidRootAnchorRequest)
 	}
 	if req.AuthRef == "" {
-		return RootAnchorResponse{}, errors.New("agentid api: auth_ref is required")
+		return RootAnchorResponse{}, fmt.Errorf("auth_ref is required: %w", ErrInvalidRootAnchorRequest)
+	}
+	if strings.TrimSpace(req.AuthRef) != req.AuthRef {
+		return RootAnchorResponse{}, fmt.Errorf("auth_ref must be canonical: %w", ErrInvalidRootAnchorRequest)
+	}
+	if err := crypto.ValidatePublicKeyDER(publicDER); err != nil {
+		return RootAnchorResponse{}, fmt.Errorf("root-anchor public key is invalid (%v): %w", err, ErrInvalidRootAnchorRequest)
 	}
 	row := agidstore.RootAnchor{
 		KeyID:     req.KeyID,
@@ -117,21 +134,21 @@ func (s *service) RegisterRootAnchor(ctx context.Context, tenantID string, req R
 			return RootAnchorResponse{}, err
 		}
 	}
-	provisioned := false
-	if s.anchorProvisioner != nil {
-		if err := s.anchorProvisioner.PutRootAnchor(ctx, tenantID, req.KeyID, delegation.RootAnchor{
-			PublicDER: publicDER,
-			AuthRef:   req.AuthRef,
-		}); err != nil {
-			return RootAnchorResponse{}, err
-		}
-		provisioned = true
+	if err := s.anchorProvisioner.ProvisionAgentRootAnchor(ctx, tenantID, req.KeyID, publicDER, req.AuthRef); err != nil {
+		return RootAnchorResponse{}, fmt.Errorf("agentid api: provision signer root anchor: %w", err)
+	}
+	readDER, readAuthRef, err := s.anchorProvisioner.ReadAgentRootAnchor(ctx, tenantID, req.KeyID)
+	if err != nil {
+		return RootAnchorResponse{}, fmt.Errorf("agentid api: read signer root anchor: %w", err)
+	}
+	if !bytes.Equal(readDER, publicDER) || readAuthRef != req.AuthRef {
+		return RootAnchorResponse{}, ErrRootAnchorSignerReadback
 	}
 	return RootAnchorResponse{
 		KeyID:       req.KeyID,
 		PublicDER:   publicDER,
 		AuthRef:     req.AuthRef,
-		Provisioned: provisioned,
+		Provisioned: true,
 	}, nil
 }
 
@@ -142,17 +159,21 @@ func (s *service) ListRootAnchors(ctx context.Context, tenantID string) (RootAnc
 	if s.repo == nil {
 		return resp, nil
 	}
+	if s.anchorProvisioner == nil {
+		return RootAnchorsResponse{}, ErrRootAnchorSignerUnavailable
+	}
 	anchors, err := s.repo.ListRootAnchors(ctx, tenantID)
 	if err != nil {
 		return RootAnchorsResponse{}, err
 	}
 	for _, a := range anchors {
+		readDER, readAuthRef, readErr := s.anchorProvisioner.ReadAgentRootAnchor(ctx, tenantID, a.KeyID)
 		resp.Anchors = append(resp.Anchors, RootAnchorResponse{
 			KeyID:       a.KeyID,
 			PublicDER:   append([]byte(nil), a.PublicDER...),
 			AuthRef:     a.AuthRef,
 			CreatedAt:   a.CreatedAt,
-			Provisioned: s.anchorProvisioner != nil,
+			Provisioned: readErr == nil && bytes.Equal(readDER, a.PublicDER) && readAuthRef == a.AuthRef,
 		})
 	}
 	resp.Count = len(resp.Anchors)

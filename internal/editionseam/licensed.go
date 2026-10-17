@@ -52,8 +52,17 @@ type LicensedAPIOptionsDeps struct {
 	OutboxIntegrityKey seal.KeyWrapper
 	TenantCrypto       tenantseal.Access
 	SignerKeyStoreDir  string
+	AGIDRootAnchors    AgentRootAnchorProvisioner
 	KEMCustody         KEMCustody
 	PCASLeafIssuer     PCASLeafIssuer
+}
+
+// AgentRootAnchorProvisioner writes and reads only public tenant-bound trust
+// material through the authenticated signer channel. The control plane cannot
+// infer signer state from its own filesystem, which may be a different volume.
+type AgentRootAnchorProvisioner interface {
+	ProvisionAgentRootAnchor(context.Context, string, string, []byte, string) error
+	ReadAgentRootAnchor(context.Context, string, string) ([]byte, string, error)
 }
 
 // PCASLeafIssuer is the existing managed-CA issuance path, narrowed to one

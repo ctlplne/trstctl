@@ -35,7 +35,9 @@ import (
 	"net/http"
 	"time"
 
-	"trstctl.com/trstctl/internal/agentid/delegation"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
@@ -221,11 +223,7 @@ type Service interface {
 // NewAPIOptionsFactory.
 func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		var provisioner RootAnchorProvisioner
-		if d.SignerKeyStoreDir != "" {
-			provisioner = delegation.NewDurableAnchorStore(d.SignerKeyStoreDir)
-		}
-		svc := NewServiceWithRootAnchorProvisioner(d.Store, d.Log, d.Outbox, provisioner)
+		svc := NewServiceWithRootAnchorProvisioner(d.Store, d.Log, d.Outbox, d.AGIDRootAnchors)
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
@@ -328,8 +326,20 @@ func registerRootAnchorHandler(a *api.API, svc Service) http.HandlerFunc {
 			resp, err := svc.RegisterRootAnchor(ctx, tenantID, req)
 			if err != nil {
 				opErr = err
+				if errors.Is(err, ErrInvalidRootAnchorRequest) {
+					return 0, nil, api.ErrStatus(http.StatusBadRequest, "root-anchor key ID, public key or authentication reference is invalid")
+				}
 				if errors.Is(err, store.ErrIdempotencyConflict) {
 					return 0, nil, api.ErrStatus(http.StatusConflict, "root-anchor key_id already binds different trust material; register a new key_id")
+				}
+				if status.Code(err) == codes.AlreadyExists || errors.Is(err, ErrRootAnchorSignerReadback) {
+					return 0, nil, api.ErrStatus(http.StatusConflict, "signer root-anchor key_id already binds different trust material; inspect the signer floor before retrying")
+				}
+				if status.Code(err) == codes.InvalidArgument {
+					return 0, nil, api.ErrStatus(http.StatusBadRequest, "root-anchor key_id or public key is invalid")
+				}
+				if errors.Is(err, ErrRootAnchorSignerUnavailable) || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.Unavailable {
+					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "signer root-anchor floor is unavailable; retry the same request after signer recovery")
 				}
 				return 0, nil, err
 			}
@@ -349,6 +359,10 @@ func listRootAnchorsHandler(a *api.API, svc Service) http.HandlerFunc {
 		resp, err := svc.ListRootAnchors(r.Context(), tenantID)
 		a.ObserveFeature("agentid", "root-anchors", start, err)
 		if err != nil {
+			if errors.Is(err, ErrRootAnchorSignerUnavailable) {
+				writeProblem(w, http.StatusServiceUnavailable, "signer root-anchor floor is unavailable")
+				return
+			}
 			writeProblem(w, http.StatusInternalServerError, "failed to list root anchors")
 			return
 		}

@@ -120,6 +120,16 @@ service SignerService {
   // requests a chain-bound issuance without ever obtaining private key material: it can
   // request, but cannot forge.
   rpc GatedIssue(GatedIssueRequest) returns (GatedIssueResponse);
+
+  // ProvisionAgentRootAnchor stores a tenant-authorized, PUBLIC
+  // AGID delegation root inside the signer floor. The signer refuses a changed
+  // first-writer binding and returns its exact durable readback. This removes
+  // any need to expose the signer's private keystore to the control plane.
+  rpc ProvisionAgentRootAnchor(ProvisionAgentRootAnchorRequest) returns (ProvisionAgentRootAnchorResponse);
+
+  // GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
+  // compare it with the tenant registry before reporting provisioned=true.
+  rpc GetAgentRootAnchor(GetAgentRootAnchorRequest) returns (GetAgentRootAnchorResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -514,4 +524,26 @@ message GatedIssueResponse {
   // encoded_record is the opaque encoded issuance record the key op produced (for example
   // the issued certificate DER carrying the binding extension). Empty on a refusal.
   bytes encoded_record = 5;
+}
+
+message ProvisionAgentRootAnchorRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  bytes public_der = 3;
+  string auth_ref = 4;
+}
+
+message ProvisionAgentRootAnchorResponse {
+  bytes public_der = 1;
+  string auth_ref = 2;
+}
+
+message GetAgentRootAnchorRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+}
+
+message GetAgentRootAnchorResponse {
+  bytes public_der = 1;
+  string auth_ref = 2;
 }
