@@ -111,6 +111,122 @@ func TestKeyCompromiseQueuesCAAndExactHostFromOneLifecycleEvent(t *testing.T) {
 	if err != nil || replayed.OutboxID == nil || *replayed.OutboxID != *receipt.OutboxID {
 		t.Fatalf("cold replay lost exact host receipt: %+v %v", replayed, err)
 	}
+	// Delivered outbox rows are short lived. A historical command that predates
+	// durable CA effect receipts must still expose its retained host outcome and
+	// say that CA completion evidence is unavailable, never disappear as 404 or
+	// manufacture a delivered result from the lifecycle state.
+	if tag, err := st.SystemPool().Exec(ctx, `DELETE FROM outbox WHERE tenant_id=$1 AND destination='revocation.publish' AND idempotency_key=$2`,
+		tenantA, "transition:"+key); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("prune historical CA outbox: rows=%d err=%v", tag.RowsAffected(), err)
+	}
+	caAfterPrune, hostAfterPrune, err := orch.KeyCompromiseStatus(ctx, tenantA, identity.ID, key)
+	if err != nil || caAfterPrune.Status != "evidence_unavailable" || hostAfterPrune.ID != receipt.ID {
+		t.Fatalf("historical compound after outbox GC = ca:%+v host:%+v err:%v", caAfterPrune, hostAfterPrune, err)
+	}
+	if _, err := orch.TransitionKeyCompromise(ctx, tenantA, identity.ID, key, &version,
+		orchestrator.EndpointContainmentRequest{
+			TargetID: target.ID, TargetRevision: target.RevisionID,
+			IdentityID: identity.ID, ExpectedFingerprint: fingerprint,
+			RequiredAgentID: agentID, Connector: target.Type, Target: target.Name,
+			Reason: "keyCompromise", RequestedBy: "incident-commander", IdempotencyKey: key,
+		}); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("historical ambiguous retry = %v, want closed CA-effect fence", err)
+	}
+	if got := countOutbox(t, ctx, st.SystemPool(), tenantA, "transition:"+key); got != 0 {
+		t.Fatalf("historical ambiguous retry requeued %d CA effects", got)
+	}
+}
+
+func TestKeyCompromiseCACompletionReceiptSurvivesOutboxGCAndColdReplay(t *testing.T) {
+	ctx := t.Context()
+	st, log := newStore(t), openLog(t)
+	mustRegisterTenant(t, st, tenantA)
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
+	owner, err := orch.CreateOwner(ctx, tenantA, "workload", "durable compromise owner", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := orch.CreateIdentity(ctx, tenantA, store.Identity{
+		Kind: store.KindX509Certificate, Name: "durable-compromise.example.test", OwnerID: owner.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const issueKey = "durable-compromise-issue"
+	if err := orch.TransitionWithIdempotency(ctx, tenantA, identity.ID,
+		orchestrator.StateIssued, "fixture issue", issueKey); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := strings.Repeat("d", 64)
+	if _, err := orch.RecordCertificate(ctx, tenantA, store.Certificate{
+		Fingerprint: fingerprint, Serial: "09", Source: "issued",
+		IssuanceIdempotencyKey: "issue:transition:" + issueKey,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	agentID := uuid.NewString()
+	config, err := json.Marshal(map[string]any{"executor": "agent", "required_agent_id": agentID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := orch.UpsertDeploymentTarget(ctx, tenantA, store.DeploymentTarget{
+		Name: "durable-compromise-apache", Type: "apache", Config: config,
+		Enabled: false, EnabledSet: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := orch.Transition(ctx, tenantA, identity.ID, orchestrator.StateDeployed,
+		"fixture host served the recorded leaf"); err != nil {
+		t.Fatal(err)
+	}
+	_, version, err := st.IdentityApprovalTarget(ctx, tenantA, identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const key = "durable-reviewed-compromise"
+	host, err := orch.TransitionKeyCompromise(ctx, tenantA, identity.ID, key, &version,
+		orchestrator.EndpointContainmentRequest{
+			TargetID: target.ID, TargetRevision: target.RevisionID,
+			IdentityID: identity.ID, ExpectedFingerprint: fingerprint,
+			RequiredAgentID: agentID, Connector: target.Type, Target: target.Name,
+			Reason: "keyCompromise", RequestedBy: "incident-commander", IdempotencyKey: key,
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, _, err := orch.KeyCompromiseStatus(ctx, tenantA, identity.ID, key)
+	if err != nil || ca.ID <= 0 {
+		t.Fatalf("queued CA command = %+v %v", ca, err)
+	}
+	if err := orch.RecordKeyCompromiseCAEffectCompleted(ctx, tenantA, identity.ID, key, ca.ID, 2); err != nil {
+		t.Fatalf("record exact CA worker success: %v", err)
+	}
+	if err := orch.RecordKeyCompromiseCAEffectCompleted(ctx, tenantA, identity.ID, key, ca.ID, 2); err != nil {
+		t.Fatalf("same terminal result retry: %v", err)
+	}
+	if err := orch.RecordKeyCompromiseCAEffectCompleted(ctx, tenantA, identity.ID, key, ca.ID, 3); err != nil {
+		t.Fatalf("lost ACK retry with later attempt count: %v", err)
+	}
+	if tag, err := st.SystemPool().Exec(ctx, `DELETE FROM outbox WHERE tenant_id=$1 AND destination='revocation.publish' AND idempotency_key=$2`,
+		tenantA, "transition:"+key); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("prune delivered CA row: rows=%d err=%v", tag.RowsAffected(), err)
+	}
+	for _, stage := range []string{"after GC", "after cold replay"} {
+		if stage == "after cold replay" {
+			if err := projections.New(st).Rebuild(ctx, log); err != nil {
+				t.Fatal(err)
+			}
+		}
+		readCA, readHost, err := orch.KeyCompromiseStatus(ctx, tenantA, identity.ID, key)
+		if err != nil || readCA.ID != ca.ID || readCA.Status != "delivered" || readCA.Attempts != 2 ||
+			readHost.ID != host.ID {
+			t.Fatalf("%s: ca:%+v host:%+v err:%v", stage, readCA, readHost, err)
+		}
+	}
+	if err := orch.RecordKeyCompromiseCAEffectCompleted(ctx, tenantA, identity.ID, key, ca.ID+1, 2); err == nil {
+		t.Fatal("changed outbox identity replaced completed CA effect")
+	}
 }
 
 // An ordinary revocation only queues CA publication. For a serving X.509

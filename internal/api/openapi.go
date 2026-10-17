@@ -3132,7 +3132,7 @@ func componentSchemas() map[string]*Schema {
 		"identity": ref("Identity"), "revocation": ref("KeyCompromiseRevocationAttempt"), "containment": ref("ConnectorDelivery"),
 	}, "identity", "revocation", "containment")
 	keyCompromiseRevocationAttempt := object(map[string]*Schema{
-		"id": {Type: "integer"}, "destination": str(), "status": str(),
+		"id": {Type: "integer"}, "destination": str(), "status": {Type: "string", Description: "Outbox status or delivered from the exact retained CA worker receipt after outbox cleanup. evidence_unavailable means a historical row expired without that receipt; CA outcome is unknown and must be checked at the issuing authority."},
 		"attempts": {Type: "integer"}, "last_error": str(), "delivered_at": timestamp(),
 	}, "id", "destination", "status", "attempts")
 	alertRecipient := object(map[string]*Schema{

@@ -54,9 +54,13 @@ export function KeyCompromiseEffects({ identityID, requestKey, initial }: { iden
                 ? t("certificates.revocation.compromiseCADelivered")
                 : read.revocation.status === "failed"
                   ? t("certificates.revocation.compromiseCAFailed")
-                  : t("certificates.revocation.compromiseCAPending")}
+                  : read.revocation.status === "evidence_unavailable"
+                    ? t("certificates.revocation.compromiseCAEvidenceUnavailable")
+                    : t("certificates.revocation.compromiseCAPending")}
             </p>
-            <p className="mt-1 text-xs">{t("certificates.revocation.compromiseAttempts", { count: read.revocation.attempts })}</p>
+            {read.revocation.status !== "evidence_unavailable" ? (
+              <p className="mt-1 text-xs">{t("certificates.revocation.compromiseAttempts", { count: read.revocation.attempts })}</p>
+            ) : null}
             {read.revocation.last_error ? (
               <p role="alert" className="mt-2 break-words text-sm text-status-warning">
                 {read.revocation.last_error}

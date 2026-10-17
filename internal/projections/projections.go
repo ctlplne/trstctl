@@ -161,6 +161,7 @@ const (
 	// CertificateObservationEventSchemaVersion records imports without claiming a mint.
 	CertificateObservationEventSchemaVersion      = 5
 	EventCertificateRevoked                       = "certificate.revoked"
+	EventKeyCompromiseCAEffectCompleted           = "identity.key_compromise_ca_effect_completed"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCAIssuedCertificate                      = "ca.certificate.issued"
 	EventCACertificateRevoked                     = "ca.certificate.revoked"
@@ -1294,6 +1295,26 @@ type CertificateRevoked struct {
 	Reason      string    `json:"reason"`
 	ReasonCode  int       `json:"reason_code,omitempty"`
 	RevokedAt   time.Time `json:"revoked_at"`
+}
+
+// KeyCompromiseCAEffectCompleted is a retained terminal worker receipt for one
+// exact compound command. It records worker completion, not relying-party CRL
+// enforcement or host containment. The event ID is derived from SourceEventID;
+// an indexed EventByID read remains possible after outbox retention cleanup.
+type KeyCompromiseCAEffectCompleted struct {
+	SourceEventID string `json:"source_event_id"`
+	OutboxID      int64  `json:"outbox_id"`
+	Destination   string `json:"destination"`
+	Status        string `json:"status"`
+	Attempts      int    `json:"attempts"`
+}
+
+func ValidateKeyCompromiseCAEffectCompleted(value KeyCompromiseCAEffectCompleted) error {
+	if _, err := uuid.Parse(value.SourceEventID); err != nil || value.OutboxID <= 0 ||
+		value.Destination != "revocation.publish" || value.Status != "delivered" || value.Attempts < 1 {
+		return fmt.Errorf("projections: key-compromise CA effect receipt has no exact completed command")
+	}
+	return nil
 }
 
 // PrivacySubjectErased is the payload of a privacy.subject.erased event. It
@@ -3813,6 +3834,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true, CertificateObservationEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
+	EventKeyCompromiseCAEffectCompleted:           {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
 	EventCertificateSuperseded:                    {1: true},
 	EventCAIssuedCertificate:                      {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CASecretInventorySchemaVersion: true},
@@ -7183,6 +7205,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyAccessChangeRequestDecidedTx(ctx, tx, e.TenantID, decision)
+	case EventKeyCompromiseCAEffectCompleted:
+		var pl KeyCompromiseCAEffectCompleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return ValidateKeyCompromiseCAEffectCompleted(pl)
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model

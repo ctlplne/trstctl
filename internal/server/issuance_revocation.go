@@ -105,10 +105,20 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 	if surfaceErr != nil {
 		return errors.Join(err, surfaceErr)
 	}
-	if !localSurface {
+	if localSurface {
+		err = errors.Join(err, d.publishTenantCRL(ctx, m.TenantID))
+	}
+	if err != nil {
 		return err
 	}
-	return errors.Join(err, d.publishTenantCRL(ctx, m.TenantID))
+	if reason == "keyCompromise" && trigger.IdempotencyKey != "" {
+		if m.IdempotencyKey != "transition:"+trigger.IdempotencyKey {
+			return errors.New("server: key-compromise CA command key differs from retained request")
+		}
+		return d.orch.RecordKeyCompromiseCAEffectCompleted(ctx, m.TenantID,
+			trigger.IdentityID, trigger.IdempotencyKey, m.ID, m.Attempts)
+	}
+	return nil
 }
 
 // Resolve origin from retained issuance facts, not mutable inventory source or

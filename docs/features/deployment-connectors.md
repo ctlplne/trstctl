@@ -459,12 +459,19 @@ trstctl connector target compromise-status \
 API clients use `POST /api/v1/identities/{id}/compromise/preview`, then echo the
 reviewed bindings to `POST /api/v1/identities/{id}/compromise` with the stable
 `Idempotency-Key`. `GET /api/v1/identities/{id}/compromise?request_key=…` reads
-the CA outbox attempt and exact host receipt separately; it requires
+the CA outbox attempt or retained completed-worker receipt and the exact host
+receipt separately; it requires
 `identities:read` and `connectors:read`. A delivered CA command still needs
 signed CRL/OCSP and a stock client that enforces revocation. A stopped host
 receipt still needs an independent fresh-client TLS check. If one job fails,
 inspect Jobs and queues, its exact receipt, and the live endpoint before a
-new reviewed attempt. Reusing the original key with changed bindings is refused.
+new reviewed attempt. Historical commands whose delivered outbox row expired
+before completion receipts were introduced report `evidence_unavailable` for
+the CA effect while retaining the host result. This means the CA outcome is
+unknown, even if the identity says revoked. Check every serial with its issuing
+CA and signed status service before any new reviewed command; retrying the
+ambiguous old key is refused. Reusing the original key with changed bindings is
+also refused.
 
 The ordinary probe runs first. If a direct TLS handshake fails, the configured
 native probe attempts TLS 1.3 within the same deadline and reports the exact

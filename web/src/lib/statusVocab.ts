@@ -298,6 +298,13 @@ export const discoveryStatus: Record<string, StatusDescriptor> = {
 };
 
 export const deliveryStatus: Record<string, StatusDescriptor> = {
+  evidence_unavailable: {
+    get label() {
+      return translateNow("certificates.revocation.compromiseCAEvidenceBadge");
+    },
+    tone: "warning",
+    order: 0,
+  },
   pending: {
     get label() {
       return translateNow("source.pending.62a2fed3d6");

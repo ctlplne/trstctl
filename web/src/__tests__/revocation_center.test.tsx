@@ -153,6 +153,51 @@ describe("RevocationCenter", () => {
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
   });
 
+  it("shows historical CA evidence loss separately from the retained host result", async () => {
+    apiMock.readKeyCompromise.mockReset().mockResolvedValue({
+      identity: { ...identities[0], status: "revoked" },
+      revocation: {
+        id: 0,
+        destination: "revocation.publish",
+        status: "evidence_unavailable",
+        attempts: 0,
+        last_error: "historical CA delivery evidence expired",
+      },
+      containment: {
+        id: "receipt-historical",
+        tenant_id: "tenant-a",
+        identity_id: identities[0].id,
+        outbox_id: 92,
+        destination: "endpoint.contain",
+        connector: "apache",
+        target: "payments-apache",
+        fingerprint: "b".repeat(64),
+        status: "containment_stopped",
+        attempts: 1,
+        detail: "signed exact-leaf stop",
+        created_at: "2026-10-06T00:00:00Z",
+        updated_at: "2026-10-06T00:01:00Z",
+      },
+    });
+    apiMock.executeKeyCompromise.mockReset();
+    const user = userEvent.setup();
+    renderWithApp(
+      <MemoryRouter>
+        <RevocationCenter identities={[]} distributions={[]} health={null} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByText("Resume a key-compromise response"));
+    await user.type(screen.getByLabelText("Compromised identity ID"), identities[0].id);
+    await user.type(screen.getByLabelText("Original incident request key"), "historical-incident-92");
+    await user.click(screen.getByRole("button", { name: "Read both incident results" }));
+    const caJob = await screen.findByRole("region", { name: "Issuing CA revocation job" });
+    expect(caJob).toHaveTextContent("CA evidence unavailable");
+    expect(caJob).toHaveTextContent("Completion is unknown");
+    expect(caJob).not.toHaveTextContent("Delivery attempts");
+    expect(screen.getByRole("region", { name: "Exact host containment job" })).toHaveTextContent("signed exact-leaf stop");
+    expect(apiMock.executeKeyCompromise).not.toHaveBeenCalled();
+  });
+
   it("reviews one exact host and keeps both compromise effects pending after acceptance", async () => {
     const fingerprint = "a".repeat(64);
     const target = {

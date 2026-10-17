@@ -45,6 +45,10 @@ func keyCompromiseEventID(tenantID, identityID, key string) string {
 		[]byte("identity-key-compromise\x00"+tenantID+"\x00"+identityID+"\x00"+key)).String()
 }
 
+func keyCompromiseCAEffectEventID(sourceEventID string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("key-compromise-ca-effect\x00"+sourceEventID)).String()
+}
+
 func keyCompromiseContainmentKey(identityID, key string) string {
 	return "compromise-contain:" + identityID + ":" + key
 }
@@ -133,17 +137,38 @@ func (o *Orchestrator) replayKeyCompromise(ctx context.Context, tenantID, identi
 		return store.ConnectorDeliveryReceipt{}, err
 	}
 	c := retained.CompromiseContainment
+	_, hostExistsErr := o.store.GetConnectorDeliveryReceipt(ctx, tenantID, c.ReceiptID)
+	if hostExistsErr != nil && !errors.Is(hostExistsErr, pgx.ErrNoRows) {
+		return store.ConnectorDeliveryReceipt{}, hostExistsErr
+	}
+	_, caExistsErr := o.store.GetOutboxAttemptByKey(ctx, tenantID, "revocation.publish", caKey)
+	if caExistsErr != nil && !errors.Is(caExistsErr, pgx.ErrNoRows) {
+		return store.ConnectorDeliveryReceipt{}, caExistsErr
+	}
+	enqueueCA := true
+	if errors.Is(caExistsErr, pgx.ErrNoRows) && hostExistsErr == nil {
+		_, completed, err := o.retainedKeyCompromiseCAEffect(ctx, tenantID, ev)
+		if err != nil {
+			return store.ConnectorDeliveryReceipt{}, err
+		}
+		if !completed {
+			return store.ConnectorDeliveryReceipt{}, fmt.Errorf("orchestrator: historical CA outcome has no durable receipt; verify exact revocation before retry: %w", store.ErrIdempotencyConflict)
+		}
+		enqueueCA = false
+	}
 	hostCommand, err := json.Marshal(c.request())
 	if err != nil {
 		return store.ConnectorDeliveryReceipt{}, err
 	}
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-			TenantID: tenantID, Destination: "revocation.publish",
-			IdempotencyKey: caKey, Payload: caPayload,
-			EffectLane: lifecycleEffectLane("revocation.publish", identityID, caPayload),
-		}); err != nil {
-			return err
+		if enqueueCA {
+			if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+				TenantID: tenantID, Destination: "revocation.publish",
+				IdempotencyKey: caKey, Payload: caPayload,
+				EffectLane: lifecycleEffectLane("revocation.publish", identityID, caPayload),
+			}); err != nil {
+				return err
+			}
 		}
 		_, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 			ReservedID: c.OutboxID, TenantID: tenantID,
@@ -189,6 +214,113 @@ func (o *Orchestrator) retainedKeyCompromise(ctx context.Context, tenantID, iden
 	return ev, retained, nil
 }
 
+// RecordKeyCompromiseCAEffectCompleted is called only after the CA worker has
+// returned success. The retained receipt survives delivered-outbox GC; it is
+// bound to the original reviewed event and the exact outbox command. Ordinary
+// non-compound revocations have no matching v8 event and need no such receipt.
+func (o *Orchestrator) RecordKeyCompromiseCAEffectCompleted(ctx context.Context,
+	tenantID, identityID, key string, outboxID int64, attempts int) error {
+	if outboxID <= 0 || key == "" {
+		return store.ErrIdempotencyConflict
+	}
+	sourceID := keyCompromiseEventID(tenantID, identityID, key)
+	_, found, err := o.log.EventByID(ctx, sourceID)
+	if err != nil || !found {
+		return err
+	}
+	source, retained, err := o.retainedKeyCompromise(ctx, tenantID, identityID, key)
+	if err != nil {
+		return err
+	}
+	caKey, _, err := lifecycleOutboxIntentFromEvent(source, retained, "revocation.publish")
+	if err != nil {
+		return err
+	}
+	row, err := o.store.GetOutboxAttemptByKey(ctx, tenantID, "revocation.publish", caKey)
+	if err != nil || row.ID != outboxID {
+		if err != nil {
+			return err
+		}
+		return store.ErrIdempotencyConflict
+	}
+	if attempts < 1 {
+		attempts = 1
+	}
+	value := projections.KeyCompromiseCAEffectCompleted{
+		SourceEventID: source.ID, OutboxID: outboxID,
+		Destination: "revocation.publish", Status: "delivered", Attempts: attempts,
+	}
+	if err := projections.ValidateKeyCompromiseCAEffectCompleted(value); err != nil {
+		return err
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	receiptID := keyCompromiseCAEffectEventID(source.ID)
+	if prior, found, err := o.log.EventByID(ctx, receiptID); err != nil {
+		return err
+	} else if found {
+		if prior.TenantID != tenantID || prior.Type != projections.EventKeyCompromiseCAEffectCompleted ||
+			prior.SchemaVersion != 1 || !json.Valid(prior.Data) {
+			return store.ErrIdempotencyConflict
+		}
+		var priorValue projections.KeyCompromiseCAEffectCompleted
+		if json.Unmarshal(prior.Data, &priorValue) != nil ||
+			projections.ValidateKeyCompromiseCAEffectCompleted(priorValue) != nil ||
+			priorValue.SourceEventID != value.SourceEventID ||
+			priorValue.OutboxID != value.OutboxID ||
+			priorValue.Destination != value.Destination || priorValue.Status != value.Status {
+			return store.ErrIdempotencyConflict
+		}
+		// The worker can complete and append this receipt, then lose its ACK.
+		// A retry of the same command has a later attempt count; the first
+		// terminal receipt stays authoritative and the retry may ACK.
+		return nil
+	}
+	appended, err := o.log.Append(ctx, events.Event{
+		ID: receiptID, TenantID: tenantID, Type: projections.EventKeyCompromiseCAEffectCompleted,
+		SchemaVersion: 1, Data: data,
+	})
+	if err != nil {
+		return err
+	}
+	// A second worker may have won the deterministic event ID between the
+	// indexed read and append. JetStream returns that canonical first receipt.
+	var canonical projections.KeyCompromiseCAEffectCompleted
+	if appended.TenantID != tenantID || appended.Type != projections.EventKeyCompromiseCAEffectCompleted ||
+		appended.SchemaVersion != 1 || json.Unmarshal(appended.Data, &canonical) != nil ||
+		projections.ValidateKeyCompromiseCAEffectCompleted(canonical) != nil ||
+		canonical.SourceEventID != value.SourceEventID || canonical.OutboxID != value.OutboxID ||
+		canonical.Destination != value.Destination || canonical.Status != value.Status {
+		return store.ErrIdempotencyConflict
+	}
+	return nil
+}
+
+func (o *Orchestrator) retainedKeyCompromiseCAEffect(ctx context.Context,
+	tenantID string, source events.Event) (store.OutboxAttempt, bool, error) {
+	receipt, found, err := o.log.EventByID(ctx, keyCompromiseCAEffectEventID(source.ID))
+	if err != nil || !found {
+		return store.OutboxAttempt{}, found, err
+	}
+	if receipt.TenantID != tenantID || receipt.Type != projections.EventKeyCompromiseCAEffectCompleted ||
+		receipt.SchemaVersion != 1 {
+		return store.OutboxAttempt{}, false, store.ErrIdempotencyConflict
+	}
+	var value projections.KeyCompromiseCAEffectCompleted
+	if json.Unmarshal(receipt.Data, &value) != nil ||
+		projections.ValidateKeyCompromiseCAEffectCompleted(value) != nil ||
+		value.SourceEventID != source.ID {
+		return store.OutboxAttempt{}, false, store.ErrIdempotencyConflict
+	}
+	at := receipt.Time
+	return store.OutboxAttempt{
+		ID: value.OutboxID, Destination: value.Destination, Status: value.Status,
+		Attempts: value.Attempts, DeliveredAt: &at,
+	}, true, nil
+}
+
 // KeyCompromiseStatus reads both independently advancing effects of one
 // retained command. It never creates or retries work; missing projected state
 // remains an error instead of being reported as completed.
@@ -202,7 +334,18 @@ func (o *Orchestrator) KeyCompromiseStatus(ctx context.Context, tenantID, identi
 		return store.OutboxAttempt{}, store.ConnectorDeliveryReceipt{}, err
 	}
 	ca, err := o.store.GetOutboxAttemptByKey(ctx, tenantID, "revocation.publish", caKey)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
+		if retainedCA, found, receiptErr := o.retainedKeyCompromiseCAEffect(ctx, tenantID, ev); receiptErr != nil {
+			return store.OutboxAttempt{}, store.ConnectorDeliveryReceipt{}, receiptErr
+		} else if found {
+			ca = retainedCA
+		} else {
+			ca = store.OutboxAttempt{
+				Destination: "revocation.publish", Status: "evidence_unavailable",
+				LastError: "historical CA delivery evidence expired; verify exact serials against the issuing CA and signed CRL or OCSP",
+			}
+		}
+	} else if err != nil {
 		return store.OutboxAttempt{}, store.ConnectorDeliveryReceipt{}, err
 	}
 	c := retained.CompromiseContainment

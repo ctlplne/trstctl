@@ -7819,6 +7819,15 @@ export const messages = {
     defaultMessage: "CA job failed. Recover it; host stop can continue independently.",
     description: "Recovery guidance for one failed effect of a compound command.",
   },
+  "certificates.revocation.compromiseCAEvidenceBadge": {
+    defaultMessage: "CA evidence unavailable",
+    description: "Historical key-compromise CA command whose delivered outbox row aged out before durable worker receipts existed.",
+  },
+  "certificates.revocation.compromiseCAEvidenceUnavailable": {
+    defaultMessage:
+      "The historical CA delivery record expired. Completion is unknown; check every exact serial with the issuing CA and a signed CRL or OCSP response before retrying. The host result remains separate.",
+    description: "Do not infer CA revocation from the identity's revoked state when an old outbox row was reclaimed.",
+  },
   "certificates.revocation.compromiseAttempts": {
     defaultMessage: "Delivery attempts: {count}",
     description: "Attempt count for the CA revocation outbox job.",

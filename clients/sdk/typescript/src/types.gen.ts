@@ -12038,6 +12038,7 @@ export interface components {
             destination: string;
             id: number;
             last_error?: string;
+            /** @description Outbox status or delivered from the exact retained CA worker receipt after outbox cleanup. evidence_unavailable means a historical row expired without that receipt; CA outcome is unknown and must be checked at the issuing authority. */
             status: string;
         };
         KubernetesCSRSupport: {
