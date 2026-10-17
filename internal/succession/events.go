@@ -46,6 +46,12 @@ const (
 	// TypeRecoverySuccessorPrepared records a signer-held key before custodians
 	// sign a recovery statement naming that exact public key.
 	TypeRecoverySuccessorPrepared = "nhi.recovery.successor.prepared"
+	// TypeRecoveryRecorded is the immutable source for one threshold-recovery
+	// record. The SQL chain row and high-water are projections of this event.
+	TypeRecoveryRecorded = "nhi.recovery.recorded"
+	// TypeRecoveryProofIssued binds a record's commitment to a signer-signed
+	// append-only per-identity recovery log before the worker reports delivery.
+	TypeRecoveryProofIssued = "nhi.recovery.proof.issued"
 	// TypeIssuerAuthorityRegistered binds a tenant's managed CA to one PCAS epoch.
 	TypeIssuerAuthorityRegistered = "nhi.issuer.authority.registered"
 	// TypeFederationBridgeImported records a verified, locally signed foreign trust bridge.
@@ -69,6 +75,8 @@ const (
 	DelegationAppliedSchemaV1         = 1
 	RecoveryPolicyConfiguredSchemaV1  = 1
 	RecoverySuccessorPreparedSchemaV1 = 1
+	RecoveryRecordedSchemaV1          = 1
+	RecoveryProofIssuedSchemaV1       = 1
 	IssuerAuthorityRegisteredSchemaV1 = 1
 	FederationBridgeImportedSchemaV1  = 1
 )
@@ -136,6 +144,36 @@ type RecoverySuccessorPreparedV1 struct {
 }
 
 func (RecoverySuccessorPreparedV1) isSuccessionPayload() {}
+
+// RecoveryRecordedV1 keeps the exact signed record and the public verification
+// root in the source log. RequestID and epoch are first-writer bound; neither a
+// retry nor a different request can replace an accepted recovery record.
+type RecoveryRecordedV1 struct {
+	TenantID      string `json:"tenant_id"`
+	IdentityID    string `json:"identity_id"`
+	Epoch         uint64 `json:"epoch"`
+	RequestID     string `json:"request_id"`
+	RequestDigest []byte `json:"request_digest"`
+	TrustRootDER  []byte `json:"trust_root_der"`
+	RecordJSON    []byte `json:"record_json"`
+}
+
+func (RecoveryRecordedV1) isSuccessionPayload() {}
+
+// RecoveryProofIssuedV1 is a separately durable result of transparency
+// inclusion. The predecessor record event stays immutable; replay applies the
+// first proof event to its serving copy after validating the signed tree head.
+type RecoveryProofIssuedV1 struct {
+	TenantID        string `json:"tenant_id"`
+	IdentityID      string `json:"identity_id"`
+	Epoch           uint64 `json:"epoch"`
+	RequestID       string `json:"request_id"`
+	RecordEventID   string `json:"record_event_id"`
+	LogPublicKeyDER []byte `json:"log_public_key_der"`
+	ProofBytes      []byte `json:"proof_bytes"`
+}
+
+func (RecoveryProofIssuedV1) isSuccessionPayload() {}
 
 // IssuerAuthorityRegisteredV1 is public CA and signer-handle metadata. The
 // isolated signer retains the private key; replay rebuilds only this serving
@@ -308,6 +346,10 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeRecoveryPolicyConfigured, RecoveryPolicyConfiguredSchemaV1, v.TenantID, v)
 	case RecoverySuccessorPreparedV1:
 		return marshalEvent(TypeRecoverySuccessorPrepared, RecoverySuccessorPreparedSchemaV1, v.TenantID, v)
+	case RecoveryRecordedV1:
+		return marshalEvent(TypeRecoveryRecorded, RecoveryRecordedSchemaV1, v.TenantID, v)
+	case RecoveryProofIssuedV1:
+		return marshalEvent(TypeRecoveryProofIssued, RecoveryProofIssuedSchemaV1, v.TenantID, v)
 	case IssuerAuthorityRegisteredV1:
 		return marshalEvent(TypeIssuerAuthorityRegistered, IssuerAuthorityRegisteredSchemaV1, v.TenantID, v)
 	case FederationBridgeImportedV1:
@@ -383,6 +425,24 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RecoverySuccessorPreparedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRecoveryRecorded:
+		if ver > RecoveryRecordedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RecoveryRecordedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRecoveryProofIssued:
+		if ver > RecoveryProofIssuedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RecoveryProofIssuedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

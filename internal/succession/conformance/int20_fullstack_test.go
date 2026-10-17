@@ -751,12 +751,13 @@ func (st *int20Stack) recoveryMint(t *testing.T) {
 		t.Fatalf("unsupported isolated-signer Ed25519 preparation = %v, want admission refusal", err)
 	}
 	rawAuth := mustJSON(t, auth)
-	if _, err := st.svc.RequestRecovery(st.ctx, st.tenantID, succapi.RecoveryRequest{
+	accepted, err := st.svc.RequestRecovery(st.ctx, st.tenantID, succapi.RecoveryRequest{
 		IdentityID: id, DeploymentScope: "spiffe://int20.example", TargetAlgorithm: string(successor.Algorithm()),
 		SuccessorHandle: successorHandle, PredecessorEpoch: 0, Epoch: 1,
 		PredecessorAlgorithm: string(chain.Genesis.Algorithm), PredecessorPublicDER: chain.Genesis.PublicKey,
 		TrustRootDER: trustRoot.Public().DER, Authorization: rawAuth,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("request recovery: %v", err)
 	}
 	st.dispatchAll(t)
@@ -770,6 +771,112 @@ func (st *int20Stack) recoveryMint(t *testing.T) {
 	}
 	if err := recovery.VerifyRecord(rec, trustRoot.Public().DER); err != nil {
 		t.Fatalf("verify recovery record: %v", err)
+	}
+	if err := rpverify.VerifyRecovery(rec, rpverify.RecoveryOptions{
+		TrustRootPubDER: trustRoot.Public().DER, MinThreshold: 2,
+		STHVerifyKeyDER: chain.TrustRootPublicDER,
+	}); err != nil {
+		t.Fatalf("relying party refused produced recovery proof: %v", err)
+	}
+	var recoverySources int
+	var recoverySource events.Event
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error {
+		if ev.Type == "nhi.recovery.recorded" && ev.TenantID == st.tenantID {
+			recoverySources++
+			recoverySource = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if recoverySources != 1 {
+		t.Fatalf("recovery source events = %d, want one immutable first-writer record", recoverySources)
+	}
+	var proofSources int
+	var recoveryProofEvent events.Event
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error {
+		if ev.Type == succession.TypeRecoveryProofIssued && ev.TenantID == st.tenantID {
+			proofSources++
+			recoveryProofEvent = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if proofSources != 1 {
+		t.Fatalf("recovery proof events = %d, want one first-writer proof", proofSources)
+	}
+	var recoveryPayload []byte
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(st.ctx, `SELECT payload FROM outbox
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			AND destination = $1 AND idempotency_key = $2`,
+			succapi.RecoveryRequestDestination, accepted.RequestID).Scan(&recoveryPayload)
+	}); err != nil {
+		t.Fatalf("read durable recovery command for lost-response drill: %v", err)
+	}
+	projection := pcasstore.NewRecoveryRecordProjection(st.store)
+	if err := projection.Reset(st.ctx); err != nil {
+		t.Fatalf("reset recovery serving projection: %v", err)
+	}
+	if rows, err := st.repo.FetchChain(st.ctx, st.tenantID, id); err != nil || len(rows) != 0 {
+		t.Fatalf("recovery row survived projection reset: rows=%d err=%v", len(rows), err)
+	}
+	if handled, err := st.handler.DeliverLicensed(st.ctx, coreorch.Message{
+		TenantID: st.tenantID, Destination: succapi.RecoveryRequestDestination,
+		IdempotencyKey: accepted.RequestID, Payload: recoveryPayload,
+	}); err != nil || !handled {
+		t.Fatalf("lost-response recovery redelivery: handled=%t err=%v", handled, err)
+	}
+	if recovered, err := st.repo.FetchChain(st.ctx, st.tenantID, id); err != nil || len(recovered) != 1 ||
+		!bytes.Equal(recovered[0].Encoded, rows[0].Encoded) {
+		t.Fatalf("redelivery did not restore exact proved record: rows=%d err=%v", len(recovered), err)
+	}
+	if err := projection.Reset(st.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error { return projection.Apply(st.ctx, ev) }); err != nil {
+		t.Fatalf("replay recovery source events: %v", err)
+	}
+	rebuilt, err := st.repo.FetchChain(st.ctx, st.tenantID, id)
+	if err != nil || len(rebuilt) != 1 || !bytes.Equal(rebuilt[0].Encoded, rows[0].Encoded) {
+		t.Fatalf("recovery record not rebuilt byte-for-byte: rows=%d err=%v", len(rebuilt), err)
+	}
+	var replayed recovery.RecoveryRecord
+	if err := json.Unmarshal(rebuilt[0].Encoded, &replayed); err != nil {
+		t.Fatal(err)
+	}
+	if err := rpverify.VerifyRecovery(replayed, rpverify.RecoveryOptions{
+		TrustRootPubDER: trustRoot.Public().DER, MinThreshold: 2,
+		STHVerifyKeyDER: chain.TrustRootPublicDER,
+	}); err != nil {
+		t.Fatalf("replayed recovery proof failed independent RP verification: %v", err)
+	}
+	if err := projection.Apply(st.ctx, recoverySource); err != nil {
+		t.Fatalf("idempotent source redelivery: %v", err)
+	}
+	if err := projection.Apply(st.ctx, recoveryProofEvent); err != nil {
+		t.Fatalf("idempotent proof redelivery: %v", err)
+	}
+	tamperedProof := recoveryProofEvent
+	var alteredProof succession.RecoveryProofIssuedV1
+	if err := json.Unmarshal(tamperedProof.Data, &alteredProof); err != nil {
+		t.Fatal(err)
+	}
+	alteredProof.ProofBytes[0] ^= 1
+	tamperedProof.Data = mustJSON(t, alteredProof)
+	if err := projection.Apply(st.ctx, tamperedProof); err == nil {
+		t.Fatal("tampered signed proof replaced the first recovery proof")
+	}
+	conflicting := recoverySource
+	var changed succession.RecoveryRecordedV1
+	if err := json.Unmarshal(conflicting.Data, &changed); err != nil {
+		t.Fatal(err)
+	}
+	changed.RequestID = "different-approved-command"
+	conflicting.Data = mustJSON(t, changed)
+	if err := projection.Apply(st.ctx, conflicting); err == nil {
+		t.Fatal("conflicting source event replaced first recovery writer")
 	}
 }
 

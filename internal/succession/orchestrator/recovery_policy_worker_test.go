@@ -36,7 +36,7 @@ func TestRecoveryWorkerRefusesMissingOrChangedPolicyBeforeSigner(t *testing.T) {
 	}
 	defer func() { _ = log.Close() }()
 	svc := succapi.NewService(cs, log, nil)
-	worker := orchestrator.NewBreadthWorker(cs, nil, nil)
+	worker := orchestrator.NewBreadthWorker(cs, nil, log)
 	const id = "spiffe://d/worker-policy-fence"
 	root, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	if err != nil {

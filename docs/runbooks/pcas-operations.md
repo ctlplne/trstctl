@@ -204,9 +204,17 @@ chain, and its trust root, quorum, roster, signed statement and signatures
 match the policy and prepared public key. An accepted response means the
 request was queued. The worker checks the same policy, chain and signer receipt
 again at delivery; changing authority after queueing makes the old request fail
-closed. Inspect its request status and independently verify the resulting
-recovery record before trusting a successor. A queued response alone is not
-proof of minting, signer custody or relying-party acceptance.
+closed. The worker reports delivery only after the signed recovery record is an
+immutable event, its tenant-scoped chain row has been projected, and a separate
+event has attached a signer-signed RFC-6962 inclusion proof. The transparency
+tree contains every event-sourced recovery commitment for this identity in
+epoch order; its signing key is the tenant root public key already pinned from
+genesis. A crash after either append can replay the same outbox command without
+changing the record or its first proof. Fetch the chain with the API or
+`trstctl pcas chain get --identity_id ID`, and verify the recovery record with
+the pinned genesis root and `rpverify.VerifyRecovery` (including its minimum
+approval threshold and signed tree head). A queued response or SQL status alone
+is not proof of minting, signer custody or relying-party acceptance.
 
 ## PCAS issuer registration
 

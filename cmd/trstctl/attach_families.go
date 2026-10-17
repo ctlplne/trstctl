@@ -78,6 +78,7 @@ func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions,
 		projections.WithEventProjection(successionstore.NewDelegationProjection(deps.Store)),
 		projections.WithEventProjection(successionstore.NewRecoveryPolicyProjection(deps.Store)),
+		projections.WithEventProjection(successionstore.NewRecoveryRecordProjection(deps.Store)),
 		projections.WithEventProjection(successionstore.NewIssuerAuthorityProjection(deps.Store)),
 		projections.WithEventProjection(successionstore.NewFederationBridgeProjection(deps.Store)))
 	// Attach the PCAS external API (request-succession, chain fetch, RP acks)

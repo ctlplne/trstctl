@@ -31,3 +31,10 @@ func TenantIdentityKey(tenantID, identityID string) string {
 func TenantKeyHandle(tenantID, identityID string, epoch uint64) string {
 	return fmt.Sprintf("%s:%d", TenantIdentityKey(tenantID, identityID), epoch)
 }
+
+// TenantRootHandle names the signer-held trust root shared by this tenant's
+// first-use anchors and recovery transparency heads. The root never leaves
+// isolated custody; relying parties pin its public key from the genesis.
+func TenantRootHandle(tenantID string) string {
+	return fmt.Sprintf("pcas:tenant-root:v1:%x", crypto.SHA256Sum([]byte("trstctl/pcas/root/v1:"+tenantID)))
+}

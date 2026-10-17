@@ -75,7 +75,7 @@ func (w *GenesisWorker) Deliver(ctx context.Context, m coreorch.Message) error {
 		return succession.VerifyGenesis(anchor.TrustRootPublicDER, anchor.Genesis)
 	}
 
-	rootHandle := fmt.Sprintf("pcas:tenant-root:v1:%x", crypto.SHA256Sum([]byte("trstctl/pcas/root/v1:"+m.TenantID)))
+	rootHandle := succession.TenantRootHandle(m.TenantID)
 	root, err := w.signerForOrGenerate(ctx, rootHandle, crypto.ECDSAP256)
 	if err != nil {
 		return fmt.Errorf("pcas genesis: tenant trust root: %w", err)

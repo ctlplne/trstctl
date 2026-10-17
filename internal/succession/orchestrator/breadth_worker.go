@@ -28,6 +28,7 @@ import (
 	pcaskem "trstctl.com/trstctl/internal/succession/kem"
 	"trstctl.com/trstctl/internal/succession/recovery"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
+	"trstctl.com/trstctl/internal/translog"
 )
 
 type BreadthWorker struct {
@@ -362,6 +363,20 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 	if p.SuccessorHandle != succession.TenantKeyHandle(tenantID, p.IdentityID, p.Epoch) {
 		return errors.New("pcas recovery: successor handle is not bound to tenant, identity and epoch")
 	}
+	if env.RequestID == "" || w.log == nil {
+		return errors.New("pcas recovery: request id and event log are required")
+	}
+	requestBytes, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	requestDigest := crypto.SHA256Sum(requestBytes)
+	recordEventID := succession.RecoveryRecordEventID(tenantID, p.IdentityID, p.Epoch)
+	if prior, found, err := w.log.EventByID(ctx, recordEventID); err != nil {
+		return err
+	} else if found {
+		return w.applyExistingRecovery(ctx, prior, tenantID, p.IdentityID, p.Epoch, env.RequestID, requestDigest)
+	}
 	if w.repo == nil {
 		return errors.New("pcas recovery: recovery policy store unavailable")
 	}
@@ -386,9 +401,6 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 		TrustRootDER: policy.TrustRootDER, Threshold: policy.Threshold, Roster: configured,
 	}, p.TrustRootDER, auth, expected, p.DeploymentScope); err != nil {
 		return fmt.Errorf("pcas recovery: configured policy refusal: %w", err)
-	}
-	if w.log == nil {
-		return errors.New("pcas recovery: event log unavailable")
 	}
 	preparedID := succession.RecoverySuccessorEventID(tenantID, p.IdentityID, p.Epoch)
 	preparedEvent, preparedFound, err := w.log.EventByID(ctx, preparedID)
@@ -466,7 +478,127 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 	if err != nil {
 		return err
 	}
-	return w.recordOpaque(ctx, tenantID, rec.Fields, encoded, env.RequestID)
+	source, err := succession.Encode(succession.RecoveryRecordedV1{
+		TenantID: tenantID, IdentityID: p.IdentityID, Epoch: p.Epoch,
+		RequestID: env.RequestID, RequestDigest: requestDigest,
+		TrustRootDER: p.TrustRootDER, RecordJSON: encoded,
+	})
+	if err != nil {
+		return err
+	}
+	source.ID = recordEventID
+	recorded, err := w.log.Append(ctx, source)
+	if err != nil {
+		return fmt.Errorf("pcas recovery: append immutable record: %w", err)
+	}
+	return w.applyExistingRecovery(ctx, recorded, tenantID, p.IdentityID, p.Epoch, env.RequestID, requestDigest)
+}
+
+func (w *BreadthWorker) applyExistingRecovery(ctx context.Context, ev events.Event,
+	tenantID, identityID string, epoch uint64, requestID string, requestDigest []byte) error {
+	if ev.TenantID != tenantID || ev.Type != succession.TypeRecoveryRecorded ||
+		ev.ID != succession.RecoveryRecordEventID(tenantID, identityID, epoch) {
+		return errors.New("pcas recovery: first-writer event is not the requested tenant identity epoch")
+	}
+	decoded, err := succession.Decode(ev)
+	if err != nil {
+		return err
+	}
+	prior, ok := decoded.(succession.RecoveryRecordedV1)
+	if !ok || prior.TenantID != tenantID || prior.IdentityID != identityID ||
+		prior.Epoch != epoch || prior.RequestID != requestID ||
+		!bytes.Equal(prior.RequestDigest, requestDigest) {
+		return errors.New("pcas recovery: immutable record belongs to a different request")
+	}
+	if w.repo == nil {
+		return errors.New("pcas recovery: projection store unavailable")
+	}
+	if err := w.repo.ApplyRecoveryRecordEvent(ctx, ev); err != nil {
+		return err
+	}
+	return w.ensureRecoveryProof(ctx, tenantID, identityID, epoch, requestID)
+}
+
+// ensureRecoveryProof signs an RFC-6962 head over the indexed, per-identity
+// recovery leaf projection. The leaf order is epoch order, so new recoveries
+// extend rather than reorder the tree. The proof is a second immutable event;
+// a crash after either append is recovered by the same outbox retry.
+func (w *BreadthWorker) ensureRecoveryProof(ctx context.Context, tenantID, identityID string,
+	epoch uint64, requestID string) error {
+	if w.repo == nil || w.log == nil || w.kem == nil {
+		return errors.New("pcas recovery proof: event log, store and signer are required")
+	}
+	proofID := succession.RecoveryProofEventID(tenantID, identityID, epoch)
+	if prior, found, err := w.log.EventByID(ctx, proofID); err != nil {
+		return err
+	} else if found {
+		return w.applyExistingRecoveryProof(ctx, prior, tenantID, identityID, epoch, requestID)
+	}
+	anchor, found, err := w.repo.GetGenesis(ctx, tenantID, identityID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.New("pcas recovery proof: tenant genesis is absent")
+	}
+	root, err := w.kem.SignerForHandle(ctx, succession.TenantRootHandle(tenantID))
+	if err != nil {
+		return fmt.Errorf("pcas recovery proof: isolated log signer: %w", err)
+	}
+	if !bytes.Equal(root.Public().DER, anchor.TrustRootPublicDER) {
+		return errors.New("pcas recovery proof: isolated log signer differs from tenant genesis")
+	}
+	leaves, index, err := w.repo.RecoveryLogLeaves(ctx, tenantID, identityID, epoch)
+	if err != nil {
+		return err
+	}
+	log := translog.New(crypto.SignerFromDigestSigner(root))
+	for _, leaf := range leaves {
+		if _, _, err := log.Append(leaf); err != nil {
+			return err
+		}
+	}
+	proof, err := log.Prove(index)
+	if err != nil {
+		return err
+	}
+	encoded := translog.EncodeProof(proof)
+	if err := translog.VerifyEncodedInclusion(leaves[index], encoded, root.Public().DER); err != nil {
+		return fmt.Errorf("pcas recovery proof: signer head readback: %w", err)
+	}
+	source, err := succession.Encode(succession.RecoveryProofIssuedV1{
+		TenantID: tenantID, IdentityID: identityID, Epoch: epoch, RequestID: requestID,
+		RecordEventID:   succession.RecoveryRecordEventID(tenantID, identityID, epoch),
+		LogPublicKeyDER: root.Public().DER, ProofBytes: encoded,
+	})
+	if err != nil {
+		return err
+	}
+	source.ID = proofID
+	recorded, err := w.log.Append(ctx, source)
+	if err != nil {
+		return fmt.Errorf("pcas recovery proof: append signed proof: %w", err)
+	}
+	return w.applyExistingRecoveryProof(ctx, recorded, tenantID, identityID, epoch, requestID)
+}
+
+func (w *BreadthWorker) applyExistingRecoveryProof(ctx context.Context, ev events.Event,
+	tenantID, identityID string, epoch uint64, requestID string) error {
+	if ev.TenantID != tenantID || ev.Type != succession.TypeRecoveryProofIssued ||
+		ev.ID != succession.RecoveryProofEventID(tenantID, identityID, epoch) {
+		return errors.New("pcas recovery proof: first-writer event is not this recovery")
+	}
+	decoded, err := succession.Decode(ev)
+	if err != nil {
+		return err
+	}
+	p, ok := decoded.(succession.RecoveryProofIssuedV1)
+	if !ok || p.TenantID != tenantID || p.IdentityID != identityID ||
+		p.Epoch != epoch || p.RequestID != requestID ||
+		p.RecordEventID != succession.RecoveryRecordEventID(tenantID, identityID, epoch) {
+		return errors.New("pcas recovery proof: immutable proof belongs to another request")
+	}
+	return w.repo.ApplyRecoveryProofEvent(ctx, ev)
 }
 
 func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID string, payload []byte) error {

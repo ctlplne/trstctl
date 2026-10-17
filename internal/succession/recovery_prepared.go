@@ -13,6 +13,30 @@ import (
 )
 
 const recoverySuccessorDomain = "trstctl/pcas/recovery-successor/v1\x00"
+const recoveryRecordDomain = "trstctl/pcas/recovery-record/v1\x00"
+const recoveryProofDomain = "trstctl/pcas/recovery-proof/v1\x00"
+
+// RecoveryProofEventID is the unique proof decision for one recovery record.
+func RecoveryProofEventID(tenantID, identityID string, epoch uint64) string {
+	bound, _ := json.Marshal(struct {
+		TenantID   string `json:"tenant_id"`
+		IdentityID string `json:"identity_id"`
+		Epoch      uint64 `json:"epoch"`
+	}{tenantID, identityID, epoch})
+	return uuid.NewSHA1(uuid.NameSpaceOID, append([]byte(recoveryProofDomain), bound...)).String()
+}
+
+// RecoveryRecordEventID fences a recovery record by its authenticated tenant,
+// stable identity and epoch, independent of request ID. Competing approved
+// requests cannot both become the source of the same succession epoch.
+func RecoveryRecordEventID(tenantID, identityID string, epoch uint64) string {
+	bound, _ := json.Marshal(struct {
+		TenantID   string `json:"tenant_id"`
+		IdentityID string `json:"identity_id"`
+		Epoch      uint64 `json:"epoch"`
+	}{tenantID, identityID, epoch})
+	return uuid.NewSHA1(uuid.NameSpaceOID, append([]byte(recoveryRecordDomain), bound...)).String()
+}
 
 // RecoverySuccessorEventID is a first-writer fence for one tenant identity's
 // epoch. The event log's indexed ID lookup makes admission and crash retries
