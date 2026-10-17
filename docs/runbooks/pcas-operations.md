@@ -398,6 +398,10 @@ The KEM request takes `identity_id`, `predecessor_epoch`, `signing_algorithm`,
 handles from the authenticated tenant, identity and epoch. An optional supplied
 handle must match that exact derived value; a cross-tenant or different-epoch
 handle is rejected before the outbox command or authority event is created.
+If the signer persists the successor KEM key but its reply is lost, the same
+handle and algorithm return that existing public key on retry, including after a
+signer restart. A different algorithm at the same handle is refused. This
+recovers custody without minting a second, incompatible successor.
 
 The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
 `trstctl pcas federation imports request -f import.json`,

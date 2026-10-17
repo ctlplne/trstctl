@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pqc"
@@ -47,31 +48,46 @@ func (s *Store) GenerateSuccessorKEM(_ context.Context, handle string, protoAlg 
 	if err != nil {
 		return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, ok := s.keys[handle]; ok {
+		return existingKEMResult(handle, protoAlg, alg, existing)
+	}
+	if s.dir != "" {
+		if exists, err := s.fileExists(handle); err != nil {
+			return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
+		} else if exists {
+			existing, err := s.loadLocked(handle)
+			if err != nil {
+				return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
+			}
+			if existing == nil {
+				return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, fmt.Errorf("kem custody: handle %q vanished during replay", handle)
+			}
+			s.keys[handle] = existing
+			return existingKEMResult(handle, protoAlg, alg, existing)
+		}
+	}
 	key, err := pqc.GenerateKEMKey(alg)
 	if err != nil {
 		return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.keys[handle]; ok {
-		key.Destroy()
-		return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, fmt.Errorf("kem custody: handle %q already exists", handle)
-	}
 	if s.dir != "" {
-		if exists, err := s.fileExists(handle); err != nil {
-			key.Destroy()
-			return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
-		} else if exists {
-			key.Destroy()
-			return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, fmt.Errorf("kem custody: handle %q already exists", handle)
-		}
 		if err := s.saveLocked(handle, protoAlg, key); err != nil {
 			key.Destroy()
 			return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
 		}
 	}
 	s.keys[handle] = key
-	return protoAlg, key.Public().DER, nil
+	return protoAlg, append([]byte(nil), key.Public().DER...), nil
+}
+
+func existingKEMResult(handle string, requestedProto signerpb.Algorithm, requestedAlg crypto.Algorithm, key *pqc.KEMPrivateKey) (signerpb.Algorithm, []byte, error) {
+	if key.Algorithm() != requestedAlg {
+		return signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil,
+			fmt.Errorf("kem custody: handle %q already exists with a different algorithm", handle)
+	}
+	return requestedProto, append([]byte(nil), key.Public().DER...), nil
 }
 
 func (s *Store) Decapsulate(_ context.Context, handle string, ciphertext []byte) ([]byte, error) {
@@ -156,7 +172,42 @@ func (s *Store) saveLocked(handle string, protoAlg signerpb.Algorithm, key *pqc.
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(s.path(handle), sealed, 0o600)
+	// Publish a complete, synced sealed key only after its temp file is durable.
+	// Link is an atomic no-replace operation: a second signer cannot overwrite
+	// the first writer's key at the same handle after a lost response.
+	tmp, err := os.CreateTemp(s.dir, ".kem-tmp-")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(sealed); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(tmpPath, s.path(handle)); err != nil {
+		return err
+	}
+	dir, err := os.Open(s.dir)
+	if err != nil {
+		return err
+	}
+	if err := dir.Sync(); err != nil {
+		_ = dir.Close()
+		return err
+	}
+	return dir.Close()
 }
 
 // algorithmByte narrows a proto algorithm to the single byte used by the sealed
