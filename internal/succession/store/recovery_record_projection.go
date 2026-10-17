@@ -56,11 +56,11 @@ func (p *RecoveryRecordProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("pcas recovery record: projection store unavailable")
 	}
-	//trstctl:system-query — cross-tenant full replay removes only event-sourced recovery and KEM rows; legacy and ordinary succession rows remain.
+	//trstctl:system-query — cross-tenant system replay must clear only source_sequence > 0 recovery and KEM rows; legacy and ordinary succession rows remain.
 	if _, err := tx.Exec(ctx, `DELETE FROM succession_records WHERE source_sequence > 0`); err != nil {
 		return err
 	}
-	//trstctl:system-query — a full event replay resets only event-sourced KEM job rows across tenants.
+	//trstctl:system-query — cross-tenant system replay clears only source_sequence > 0 KEM job rows; ordinary rows remain outside this projection reset.
 	if _, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job WHERE source_sequence > 0`); err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 		if _, err := tx.Exec(ctx, `DELETE FROM succession_records WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID); err != nil {
 			return err
 		}
-		//trstctl:system-query — tenant offboard removes only that tenant's event-sourced KEM job projection.
+		//trstctl:system-query — the system transaction sees cross-tenant rows, but tenant_id = $1 limits offboard deletion to the owning tenant's event-sourced KEM jobs.
 		_, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID)
 		return err
 	}
