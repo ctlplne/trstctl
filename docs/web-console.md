@@ -202,7 +202,10 @@ operator does not have to decode two large tables before learning whether there 
 a problem:
 
 - **Owner records, inheritance, and attestations** searches and filters accountable
-  records and exposes edit, re-attest, and exact-name-confirmed delete controls. The
+  records across the tenant's paged owner directory, including records beyond the
+  API's first page, and exposes edit, re-attest, and exact-name-confirmed delete
+  controls. If a directory page fails, the console reports the error rather than
+  showing a partial roster as though it were complete. The
   application ID, service, business unit, environment, escalation recipients, and
   provenance show whether the precise application/environment model is current.
   Review due dates and source observation dates use the console's selected time zone.

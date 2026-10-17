@@ -2187,6 +2187,26 @@ async function allPendingApprovalRequests(): Promise<PendingApprovalRequest[]> {
   return items;
 }
 
+// Owner pickers and the Ownership directory need a complete tenant directory.
+// A single GET silently hid every owner after the API's first 20 UUIDs, so an
+// operator could not edit or remove a newly created record in a populated tenant.
+async function allOwners(): Promise<Owner[]> {
+  const owners: Owner[] = [];
+  const seen = new Set<string>();
+  let cursor = "";
+  do {
+    const query = new URLSearchParams({ limit: "100" });
+    if (cursor) query.set("cursor", cursor);
+    const page = await req<{ items: Owner[]; next_cursor?: string }>(`/api/v1/owners?${query.toString()}`);
+    owners.push(...(page.items ?? []));
+    const next = page.next_cursor ?? "";
+    if (next && seen.has(next)) throw new Error("owner directory returned a repeated cursor");
+    if (next) seen.add(next);
+    cursor = next;
+  } while (cursor);
+  return owners;
+}
+
 function managedKeyAction(
   action: "rotate" | "revoke" | "zeroize" | "verify-custody",
   keyId: string,
@@ -2311,7 +2331,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
-  owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),
+  owners: allOwners,
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
   assignOwnership: (input) => mutate<OwnershipAssignmentResult>("POST", "/api/v1/ownership/assignments", input),
   attestOwner: (id) => mutate<Owner>("POST", `/api/v1/owners/${encodeURIComponent(id)}/attest`, {}),
