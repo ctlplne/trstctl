@@ -16974,6 +16974,9 @@
           },
           "next_cursor": {
             "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/IdentityStatusSummary"
           }
         },
         "required": [
@@ -17013,6 +17016,26 @@
           "kind",
           "name",
           "owner_id"
+        ],
+        "type": "object"
+      },
+      "IdentityStatusSummary": {
+        "properties": {
+          "by_status": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_status"
         ],
         "type": "object"
       },
@@ -47825,6 +47848,14 @@
             "name": "kind",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "description": "When true, include complete authenticated-tenant lifecycle status counts and total, independent of q, kind, cursor and page limit. Omitted by default.",
+            "in": "query",
+            "name": "include_summary",
+            "schema": {
+              "type": "boolean"
             }
           },
           {

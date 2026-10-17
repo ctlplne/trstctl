@@ -11737,6 +11737,7 @@ export interface components {
         IdentityList: {
             items: components["schemas"]["Identity"][];
             next_cursor?: string;
+            summary?: components["schemas"]["IdentityStatusSummary"];
         };
         IdentityRequest: {
             attributes?: Record<string, never>;
@@ -11747,6 +11748,13 @@ export interface components {
             name: string;
             /** Format: uuid */
             owner_id: string;
+        };
+        IdentityStatusSummary: {
+            by_status: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            total: number;
         };
         IdentityTransitionPreview: {
             capability: string;
@@ -25116,6 +25124,8 @@ export interface operations {
                 q?: string;
                 /** @description Optional exact identity kind: x509_certificate, ssh_certificate, ssh_key, secret, api_key or workload_identity. */
                 kind?: string;
+                /** @description When true, include complete authenticated-tenant lifecycle status counts and total, independent of q, kind, cursor and page limit. Omitted by default. */
+                include_summary?: boolean;
                 /** @description maximum items per page (1-100, default 20) */
                 limit?: number;
                 /** @description opaque pagination cursor from a prior page */

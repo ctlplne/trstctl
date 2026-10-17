@@ -28984,6 +28984,12 @@ export const messages = {
     defaultMessage: "Current lifecycle stages for managed machine identities.",
     description: "ELI5 explanation for identity lifecycle counts.",
   },
+  "identities.health.loading": { defaultMessage: "Loading complete identity counts…", description: "Identity health summary is being read from the tenant." },
+  "identities.health.unavailable": {
+    defaultMessage: "Complete identity counts are unavailable. No partial page is shown as the total.",
+    description: "Identity health summary read failed.",
+  },
+  "identities.health.retry": { defaultMessage: "Check counts again", description: "Retry the complete tenant identity summary read." },
   "privacy.review.erasureAction": { defaultMessage: "Review erasure", description: "Request an effect-free exact subject-erasure review." },
   "privacy.review.retentionAction": { defaultMessage: "Review retention", description: "Request an effect-free exact retention review." },
   "privacy.review.reviewing": { defaultMessage: "Reviewing…", description: "Busy label while a privacy preview is requested." },

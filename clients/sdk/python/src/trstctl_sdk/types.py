@@ -5675,6 +5675,7 @@ IdentityList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+        'summary': dict[str, Any],
     },
     total=False,
 )
@@ -5687,6 +5688,15 @@ IdentityRequest = TypedDict(
         'kind': str,
         'name': str,
         'owner_id': str,
+    },
+    total=False,
+)
+
+IdentityStatusSummary = TypedDict(
+    'IdentityStatusSummary',
+    {
+        'by_status': dict[str, Any],
+        'total': int,
     },
     total=False,
 )

@@ -661,6 +661,10 @@ export type ExternalCA = GenExternalCA;
 export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
 export type IdentityTransitionPreview = GenIdentityTransitionPreview;
+export interface IdentityStatusCounts {
+  total: number;
+  by_status: Record<string, number>;
+}
 export type ADCSPosture = GenADCSPosture;
 export type ADCSDriftHistory = GenADCSDriftHistory;
 export type ADCSInventorySource = GenADCSInventorySource;
@@ -1711,6 +1715,7 @@ export interface Api {
   issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
+  identityStatusSummary(): Promise<IdentityStatusCounts>;
   identityPage(options?: { limit?: number; cursor?: string; query?: string; kind?: string; signal?: AbortSignal }): Promise<IdentityList>;
   /** AUD-77: real pending intents only; lifecycle inventory is not an approval queue. */
   approvalRequests(): Promise<PendingApprovalRequest[]>;
@@ -2329,6 +2334,22 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
+  identityStatusSummary: async () => {
+    const page = await req<IdentityList>("/api/v1/identities?limit=1&include_summary=true", { signal: AbortSignal.timeout(15_000) });
+    const summary = page.summary;
+    if (!summary || !Number.isSafeInteger(summary.total) || summary.total < 0 || !summary.by_status || typeof summary.by_status !== "object") {
+      throw new Error("Identity status summary is missing or invalid");
+    }
+    const byStatus: Record<string, number> = {};
+    for (const [status, count] of Object.entries(summary.by_status)) {
+      if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw new Error("Identity status summary is missing or invalid");
+      byStatus[status] = count;
+    }
+    if (Object.values(byStatus).reduce((total, count) => total + count, 0) !== summary.total) {
+      throw new Error("Identity status summary is missing or invalid");
+    }
+    return { total: summary.total, by_status: byStatus };
+  },
   identityPage: (options) =>
     req<IdentityList>(`/api/v1/identities${pageQueryString(options)}`, {
       signal: options?.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),

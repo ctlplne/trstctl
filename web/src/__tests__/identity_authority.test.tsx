@@ -19,6 +19,12 @@ vi.mock("@/lib/api", async (original) => {
       ...actual.api,
       identities: fixture.identities,
       identityPage: vi.fn(async () => ({ items: await fixture.identities(), next_cursor: "" })),
+      identityStatusSummary: vi.fn(async () => {
+        const items = await fixture.identities();
+        const by_status: Record<string, number> = {};
+        for (const identity of items) by_status[identity.status] = (by_status[identity.status] ?? 0) + 1;
+        return { total: items.length, by_status };
+      }),
       owners: vi.fn(async () => []),
       connectorDeliveries: vi.fn(async () => ({ items: [] })),
       rotationRuns: vi.fn(async () => ({ items: [] })),

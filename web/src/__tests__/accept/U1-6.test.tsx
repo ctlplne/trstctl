@@ -18,8 +18,10 @@ describe("U1-6 issuance pipeline", () => {
   });
 
   it("renders a stage tile per lifecycle stage", () => {
-    render(<IssuancePipeline identities={[identity("issued", "a"), identity("deployed", "b")]} />);
+    render(<IssuancePipeline counts={{ issued: 20, deployed: 10 }} />);
     expect(screen.getByText("Issued")).toBeInTheDocument();
     expect(screen.getByText("Deployed")).toBeInTheDocument();
+    expect(screen.getByText("20")).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
   });
 });

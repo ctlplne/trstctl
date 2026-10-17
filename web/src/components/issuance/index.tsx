@@ -24,8 +24,11 @@ export function pipelineStages(identities: Identity[]): Array<{ stage: string; c
   return [...counts.entries()].map(([stage, count]) => ({ stage, count })).sort((a, b) => orderIndex(a.stage) - orderIndex(b.stage));
 }
 
-export function IssuancePipeline({ identities }: { identities: Identity[] }) {
-  const stages = pipelineStages(identities);
+export function IssuancePipeline({ counts }: { counts: Record<string, number> }) {
+  const stages = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([stage, count]) => ({ stage, count }))
+    .sort((a, b) => orderIndex(a.stage) - orderIndex(b.stage));
   if (stages.length === 0) return null;
   return (
     <SectionCard title={translateNow("identities.health.title")} description={translateNow("identities.health.description")} className="mb-4">

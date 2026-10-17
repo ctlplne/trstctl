@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     identities: vi.fn(),
     identityPage: vi.fn(),
+    identityStatusSummary: vi.fn(),
     issuers: vi.fn(),
     owners: vi.fn(),
     getIdentity: vi.fn(),
@@ -585,6 +586,12 @@ describe("lifecycle actions from the UI", () => {
       ),
       next_cursor: "",
     }));
+    apiMock.identityStatusSummary.mockReset().mockImplementation(async () => {
+      const items = await apiMock.identities();
+      const by_status: Record<string, number> = {};
+      for (const identity of items) by_status[identity.status] = (by_status[identity.status] ?? 0) + 1;
+      return { total: items.length, by_status };
+    });
   });
 
   it("keeps each identity row to one review action and moves lifecycle choices into detail", async () => {
@@ -1300,6 +1307,24 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
     await user.type(screen.getByRole("searchbox", { name: "Find identities" }), "second");
     await waitFor(() => expect(apiMock.identityPage).toHaveBeenCalledWith(expect.objectContaining({ query: "second", cursor: undefined })));
+  });
+
+  it("renders complete tenant health counts instead of the first identity page", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "first", name: "first", kind: "x509_certificate", status: "issued" }]);
+    apiMock.identityStatusSummary.mockResolvedValue({ total: 41, by_status: { requested: 9, issued: 10, deployed: 8, renewing: 1, revoked: 11, retired: 2 } });
+    renderIdentities();
+    const health = (await screen.findByText("Identity health")).closest("section")!;
+    expect(await within(health).findByText("10")).toBeInTheDocument();
+    expect(within(health).getByText("11")).toBeInTheDocument();
+    expect(within(health).getByText("9")).toBeInTheDocument();
+  });
+
+  it("reports unavailable health counts instead of showing a partial page as complete", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "first", name: "first", kind: "x509_certificate", status: "issued" }]);
+    apiMock.identityStatusSummary.mockRejectedValue(new Error("summary read failed"));
+    renderIdentities();
+    expect(await screen.findByText("Complete identity counts are unavailable. No partial page is shown as the total.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check counts again" })).toBeInTheDocument();
   });
 
   it("runs NHI decommission from a served governance signal", async () => {

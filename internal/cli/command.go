@@ -192,7 +192,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"approval-requests", "deny"}, Method: "POST", Path: "/api/v1/approval-requests/{id}/denials", Body: bodyIntentDigestReason, Summary: "Deny an exact immutable request with its digest and a review reason"},
 
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
-	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},
+	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor", "q", "kind", "include_summary"}, Summary: "List identities with optional search and complete status summary"},
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
 	{Name: []string{"identities", "issuance-result"}, Method: "GET", Path: "/api/v1/identities/{id}/issuance-result", Query: []string{"request_key"}, Summary: "Read the public certificate result using the original issuance Idempotency-Key"},
 	{Name: []string{"identities", "issuance-retry"}, Method: "POST", Path: "/api/v1/identities/{id}/issuance-retry", Body: bodyFile, Summary: "Grant one audited retry of the original failed issuance using its request_key and a reason"},

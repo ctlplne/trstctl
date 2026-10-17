@@ -10,6 +10,8 @@ import { AppQueryProvider } from "@/lib/query";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     identities: vi.fn(),
+    identityPage: vi.fn(),
+    identityStatusSummary: vi.fn(),
     getIdentity: vi.fn(),
     transitionIdentity: vi.fn(),
     graphBlastRadius: vi.fn(),
@@ -47,6 +49,8 @@ describe("WIRE-11 identity delivery and rotation evidence", () => {
         status: "deployed",
       },
     ]);
+    apiMock.identityPage.mockImplementation(async () => ({ items: await apiMock.identities(), next_cursor: "" }));
+    apiMock.identityStatusSummary.mockResolvedValue({ total: 1, by_status: { deployed: 1 } });
     apiMock.getIdentity.mockResolvedValue({
       id: "id-deployed-1",
       name: "payments-tls",

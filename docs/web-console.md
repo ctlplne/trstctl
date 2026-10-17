@@ -147,6 +147,11 @@ an exact kind match. **Previous** and **Next** move through 50-row pages; select
 is cleared whenever the search, type or page changes. API callers can use
 `GET /api/v1/identities?q=...&kind=x509_certificate&limit=50` and must retain
 the same `q` and `kind` when following `next_cursor`.
+The health tiles use `GET /api/v1/identities?limit=1&include_summary=true`.
+Its `summary.total` and `summary.by_status` count the complete authenticated
+tenant, independent of the returned page and any search filter. If the summary
+read fails, the console shows an unavailable state and a retry control rather
+than presenting the first page as the complete estate.
 See [Workload identity](features/workload-identity.md) and
 [Observability & risk](features/observability-and-risk.md). Backed by
 `/api/v1/identities`, `/api/v1/nhi/inventory`, `/api/v1/risk/credentials`, and

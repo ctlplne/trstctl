@@ -405,6 +405,7 @@ public final class OpenApiSchemas {
       "IdentityIssuanceResult",
       "IdentityList",
       "IdentityRequest",
+      "IdentityStatusSummary",
       "IdentityTransitionPreview",
       "IncidentExecution",
       "IncidentExecutionList",

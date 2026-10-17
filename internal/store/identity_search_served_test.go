@@ -96,3 +96,74 @@ func TestIdentitySearchFiltersBeforeCursorAndBindsTenant(t *testing.T) {
 		t.Fatalf("invalid kind http=%d, want 400", code)
 	}
 }
+
+// The console's health tiles must use the complete event-derived tenant read
+// model, not a default 20-row cursor page presented as estate-wide counts.
+func TestIdentitySummaryCoversAllTenantRowsBeyondPage(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "summary owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignOwner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantB, Kind: store.OwnerTeam, Name: "foreign owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := 1; n <= 30; n++ {
+		status := "issued"
+		if n > 20 {
+			status = "deployed"
+		}
+		if err := s.UpsertIdentity(ctx, store.Identity{
+			ID: fmt.Sprintf("00000000-0000-4000-8000-%012x", n), TenantID: tenantA,
+			OwnerID: owner.ID, Kind: store.KindX509Certificate, Name: fmt.Sprintf("summary-%02d", n), Status: status,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.UpsertIdentity(ctx, store.Identity{
+		ID: "00000000-0000-4000-8000-00000000001f", TenantID: tenantB,
+		OwnerID: foreignOwner.ID, Kind: store.KindSecret, Name: "foreign-summary", Status: "revoked",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := api.New(s, nil, nil, api.WithInsecureHeaderResolver())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/identities?limit=1&include_summary=true", nil)
+	req.Header.Set("X-Tenant-ID", tenantA)
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("identity summary http=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items   []json.RawMessage `json:"items"`
+		Summary struct {
+			Total    int64            `json:"total"`
+			ByStatus map[string]int64 `json:"by_status"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Summary.Total != 30 || page.Summary.ByStatus["issued"] != 20 || page.Summary.ByStatus["deployed"] != 10 || page.Summary.ByStatus["revoked"] != 0 {
+		t.Fatalf("first page must keep one row while full tenant summary covers 30: page=%s", rec.Body.String())
+	}
+	filtered := httptest.NewRequest(http.MethodGet, "/api/v1/identities?limit=1&q=no-such-name&kind=secret&include_summary=true", nil)
+	filtered.Header.Set("X-Tenant-ID", tenantA)
+	filtered.Header.Set("X-Roles", "admin")
+	filteredResult := httptest.NewRecorder()
+	handler.ServeHTTP(filteredResult, filtered)
+	if filteredResult.Code != http.StatusOK || json.Unmarshal(filteredResult.Body.Bytes(), &page) != nil || len(page.Items) != 0 || page.Summary.Total != 30 {
+		t.Fatalf("search filter must not shrink full tenant summary: http=%d body=%s", filteredResult.Code, filteredResult.Body.String())
+	}
+	invalid := httptest.NewRequest(http.MethodGet, "/api/v1/identities?include_summary=maybe", nil)
+	invalid.Header.Set("X-Tenant-ID", tenantA)
+	invalid.Header.Set("X-Roles", "admin")
+	invalidResult := httptest.NewRecorder()
+	handler.ServeHTTP(invalidResult, invalid)
+	if invalidResult.Code != http.StatusBadRequest {
+		t.Fatalf("invalid summary option http=%d, want 400", invalidResult.Code)
+	}
+}

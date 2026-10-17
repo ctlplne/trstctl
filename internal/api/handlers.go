@@ -192,6 +192,17 @@ type listResponse struct {
 	NextCursor string `json:"next_cursor"`
 }
 
+type identityStatusSummaryResponse struct {
+	Total    int64            `json:"total"`
+	ByStatus map[string]int64 `json:"by_status"`
+}
+
+type identityListResponse struct {
+	Items      any                            `json:"items"`
+	NextCursor string                         `json:"next_cursor"`
+	Summary    *identityStatusSummaryResponse `json:"summary,omitempty"`
+}
+
 // ---- owners ---------------------------------------------------------------
 
 //trstctl:mutation
@@ -465,6 +476,11 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	includeSummary := r.URL.Query().Get("include_summary")
+	if includeSummary != "" && includeSummary != "true" && includeSummary != "false" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "include_summary must be true or false"))
+		return
+	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
@@ -512,7 +528,20 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 	if hasMore {
 		next = encodeCursor(idents[len(idents)-1].ID)
 	}
-	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+	response := identityListResponse{Items: items, NextCursor: next}
+	if includeSummary == "true" {
+		counts, err := a.store.IdentityStatusCounts(r.Context(), tenantID)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		summary := &identityStatusSummaryResponse{ByStatus: counts}
+		for _, count := range counts {
+			summary.Total += count
+		}
+		response.Summary = summary
+	}
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 //trstctl:mutation

@@ -171,6 +171,30 @@ func (s *Store) SearchIdentitiesPage(ctx context.Context, tenantID, afterID stri
 	return out, err
 }
 
+// IdentityStatusCounts aggregates the complete tenant read model for the
+// operator's lifecycle tiles. A cursor page is never an estate-wide count.
+func (s *Store) IdentityStatusCounts(ctx context.Context, tenantID string) (map[string]int64, error) {
+	counts := make(map[string]int64)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT status, count(*) FROM identities WHERE tenant_id = $1 GROUP BY status`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var status string
+			var count int64
+			if err := rows.Scan(&status, &count); err != nil {
+				return err
+			}
+			counts[status] = count
+		}
+		return rows.Err()
+	})
+	return counts, err
+}
+
 // SetIdentityStatusTx updates an identity's lifecycle status on the caller's
 // transaction, so a state change and its outbox side effect (AN-6) commit
 // atomically. It is tenant-scoped; the caller supplies a WithTenant transaction.

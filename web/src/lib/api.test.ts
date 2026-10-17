@@ -63,6 +63,27 @@ describe("api error handling (SURFACE-007)", () => {
     expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/identities?limit=20&q=qa-bulk-console&kind=x509_certificate");
   });
 
+  it("reads complete tenant identity counts separately from the first page", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        items: [{ id: "first" }],
+        next_cursor: "later",
+        summary: { total: 41, by_status: { issued: 10, deployed: 8, requested: 9, revoked: 11, renewing: 1, retired: 2 } },
+      }),
+    );
+    expect(await api.identityStatusSummary()).toEqual({
+      total: 41,
+      by_status: { issued: 10, deployed: 8, requested: 9, revoked: 11, renewing: 1, retired: 2 },
+    });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/identities?limit=1&include_summary=true");
+  });
+
+  it("refuses an inconsistent tenant summary instead of showing partial tiles", async () => {
+    mockFetch(200, JSON.stringify({ items: [], summary: { total: 41, by_status: { issued: 20 } } }));
+    await expect(api.identityStatusSummary()).rejects.toThrow("Identity status summary is missing or invalid");
+  });
+
   it("refuses a browser machine credential before fetch when /auth/me has not supplied a tenant", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
@@ -532,8 +553,8 @@ describe("exported API surface census", () => {
     // so pin the browser handoff without letting its temporary anchor navigate.
     const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     const transport = vi.fn(async (target: RequestInfo | URL, init?: RequestInit) => {
-      void target;
       void init;
+      const identitySummary = String(target).includes("/api/v1/identities?limit=1&include_summary=true") ? { summary: { total: 0, by_status: {} } } : {};
       return new Response(
         JSON.stringify({
           id: "result-id",
@@ -542,6 +563,7 @@ describe("exported API surface census", () => {
           events: [],
           protocols: [],
           status: "ok",
+          ...identitySummary,
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );

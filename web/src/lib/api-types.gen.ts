@@ -4111,6 +4111,7 @@ export interface IdentityIssuanceResult {
 export interface IdentityList {
   items: Identity[];
   next_cursor?: string;
+  summary?: IdentityStatusSummary;
 }
 
 export interface IdentityRequest {
@@ -4119,6 +4120,11 @@ export interface IdentityRequest {
   kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
   name: string;
   owner_id: string;
+}
+
+export interface IdentityStatusSummary {
+  by_status: Record<string, unknown>;
+  total: number;
 }
 
 export interface IdentityTransitionPreview {

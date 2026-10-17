@@ -344,6 +344,14 @@ export function Identities() {
   // Acceptance and outbox completion are different moments. Keep the inventory,
   // open drawer and projected receipts live, using the shared visible-tab gate.
   const inventory = useApiQuery(["identities"], api.identities, { live: { intervalMs: 10_000 } });
+  const statusSummary = useApiQuery(
+    ["identity-status-summary", user?.tenant_id, user?.subject, (user?.permissions ?? []).join("|")],
+    api.identityStatusSummary,
+    {
+      retry: false,
+      live: { intervalMs: 30_000 },
+    },
+  );
   const ownerQuery = useApiQuery(["owners"], api.owners);
   const deliveries = useApiQuery(["connector-deliveries", { limit: 50 }], () => api.connectorDeliveries({ limit: 50 }), {
     live: { intervalMs: 10_000 },
@@ -429,6 +437,7 @@ export function Identities() {
   const load = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["identities"] }),
+      queryClient.invalidateQueries({ queryKey: ["identity-status-summary"] }),
       queryClient.invalidateQueries({ queryKey: ["identity-search"] }),
       queryClient.invalidateQueries({ queryKey: ["owners"] }),
       queryClient.invalidateQueries({ queryKey: ["identity"] }),
@@ -764,7 +773,18 @@ export function Identities() {
         }
       />
 
-      <IssuancePipeline identities={items ?? []} />
+      {statusSummary.error ? (
+        <ErrorState title={t("identities.health.title")}>
+          {t("identities.health.unavailable")}{" "}
+          <Button type="button" variant="outline" size="sm" onClick={() => statusSummary.refetch()}>
+            {t("identities.health.retry")}
+          </Button>
+        </ErrorState>
+      ) : statusSummary.data ? (
+        <IssuancePipeline counts={statusSummary.data.by_status} />
+      ) : (
+        <LoadingState>{t("identities.health.loading")}</LoadingState>
+      )}
 
       <LifecycleAutomationPanel identities={items ?? []} onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)} />
 

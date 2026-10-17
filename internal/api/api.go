@@ -1017,6 +1017,7 @@ func (a *API) routes() []route {
 	identityQuery := append([]param{
 		{name: "q", typ: "string", desc: "Case-insensitive literal substring of identity name, kind, status, owner name or environment; also matches an exact identity UUID. At most 256 characters, valid UTF-8 without NUL. Applied within the authenticated tenant before pagination; retain the same search and kind on subsequent pages."},
 		{name: "kind", typ: "string", desc: "Optional exact identity kind: x509_certificate, ssh_certificate, ssh_key, secret, api_key or workload_identity."},
+		{name: "include_summary", typ: "boolean", desc: "When true, include complete authenticated-tenant lifecycle status counts and total, independent of q, kind, cursor and page limit. Omitted by default."},
 	}, page...)
 	notificationQuery := []param{
 		{name: "order", typ: "string", desc: "asc (default) or desc by notification ID; retain the same order with each cursor"},
