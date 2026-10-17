@@ -146,6 +146,10 @@ vi.mock("@/lib/api", async (orig) => {
     evidence_refs: [],
   } satisfies NHIShadowPosture;
   base.nhiShadowPosture = vi.fn().mockResolvedValue(emptyShadowPosture);
+  // The identities page renders status counts after the chrome has loaded.
+  // Give this call its real response shape so the route test cannot leave an
+  // asynchronous render exception behind after its naming assertions pass.
+  base.identityStatusSummary = vi.fn().mockResolvedValue({ total: 0, by_status: {} });
   base.me = bootstrapFixture.me;
   return { ...actual, api: base };
 });
