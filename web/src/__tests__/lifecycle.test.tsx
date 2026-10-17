@@ -1289,6 +1289,27 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText("2 selected")).toBeInTheDocument();
   });
 
+  it("keeps the reviewed name of a later-page target in a failed bulk result", async () => {
+    const later = { id: "late-fail", name: "qa-bulk-console-late.example.test", kind: "x509_certificate", status: "issued" };
+    const first = { id: "first-page", name: "first-page.example.test", kind: "x509_certificate", status: "issued" };
+    apiMock.identities.mockResolvedValue([first]);
+    apiMock.identityPage.mockImplementation(async (options: { query?: string }) => ({ items: options.query ? [later] : [first], next_cursor: "" }));
+    apiMock.bulkRevokeIdentities.mockResolvedValue({
+      total_matched: 1,
+      total_revoked: 0,
+      total_skipped: 0,
+      total_failed: 1,
+      items: [{ id: later.id, status: "failed", error: "CA refused the request" }],
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+    await user.type(await screen.findByRole("searchbox", { name: "Find identities" }), "qa-bulk-console");
+    await user.click(await screen.findByLabelText(`Select ${later.name}`));
+    await user.click(screen.getByRole("button", { name: "Bulk revoke selected" }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Confirm bulk revoke" }));
+    expect(await screen.findByText(/qa-bulk-console-late.example.test failed: CA refused the request/)).toBeInTheDocument();
+  });
+
   it("pages identity search without carrying a bulk selection to another result set", async () => {
     const first = { id: "first", name: "first.example.test", kind: "x509_certificate", status: "issued" };
     const second = { id: "second", name: "second.example.test", kind: "x509_certificate", status: "issued" };

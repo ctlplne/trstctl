@@ -398,6 +398,7 @@ export function Identities() {
   const [bulkReason, setBulkReason] = useState<BulkRevokeRequest["reason"]>("keyCompromise");
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkResult, setBulkResult] = useState<BulkRevokeResult | null>(null);
+  const [bulkResultNames, setBulkResultNames] = useState<Record<string, string>>({});
   const [decommissionType, setDecommissionType] = useState<DecommissionSignalType>("departure");
   const [decommissionTarget, setDecommissionTarget] = useState("");
   const [decommissionReason, setDecommissionReason] = useState("");
@@ -640,11 +641,16 @@ export function Identities() {
   async function runBulkRevoke() {
     const ids = selectedRows.map((identity) => identity.id);
     if (ids.length === 0) return;
+    const namesByID = Object.fromEntries(selectedRows.map((identity) => [identity.id, identity.name]));
     setBulkBusy(true);
     setBulkError(null);
     setBulkResult(null);
+    setBulkResultNames({});
     try {
       const result = await api.bulkRevokeIdentities({ identity_ids: ids, reason: bulkReason });
+      // Preserve the exact reviewed ID/name pair. A refresh after the mutation
+      // can return a different cursor page, so it cannot label this result.
+      setBulkResultNames(namesByID);
       setBulkResult(result);
       setSelectedIds(new Set());
       setBulkConfirmOpen(false);
@@ -889,7 +895,7 @@ export function Identities() {
                 .filter((item) => item.status !== "revoked")
                 .map((item) => (
                   <li key={item.id}>
-                    {(items ?? []).find((identity) => identity.id === item.id)?.name ?? item.id} {item.status}
+                    {bulkResultNames[item.id] ?? item.id} {item.status}
                     {item.error ? translateNow("source.value1.92dd63d2f3", { value1: item.error }) : ""}
                   </li>
                 ))}

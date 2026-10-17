@@ -156,6 +156,9 @@ The lifecycle automation panel may list a due identity outside the inventory's
 current cursor page. Its review button reads that exact identity by ID before
 opening the effect-free transition preview; a failed or mismatched read is
 shown as an error instead of silently disabling a valid action.
+When a bulk revocation returns per-item failures, the result keeps the names
+from the exact identities the operator reviewed, even after the inventory
+refreshes to a different cursor page.
 See [Workload identity](features/workload-identity.md) and
 [Observability & risk](features/observability-and-risk.md). Backed by
 `/api/v1/identities`, `/api/v1/nhi/inventory`, `/api/v1/risk/credentials`, and
