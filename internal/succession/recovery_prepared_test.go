@@ -15,6 +15,7 @@ func TestRecoveryEventIDsAreStableTenantScopedAndDistinct(t *testing.T) {
 		"successor": succession.RecoverySuccessorEventID,
 		"record":    succession.RecoveryRecordEventID,
 		"proof":     succession.RecoveryProofEventID,
+		"kem":       succession.KEMRewrapRecordEventID,
 	} {
 		t.Run(name, func(t *testing.T) {
 			id := fn("tenant-a", "identity", 1)
@@ -29,7 +30,8 @@ func TestRecoveryEventIDsAreStableTenantScopedAndDistinct(t *testing.T) {
 		})
 	}
 	if succession.RecoverySuccessorEventID("t", "i", 1) == succession.RecoveryRecordEventID("t", "i", 1) ||
-		succession.RecoveryRecordEventID("t", "i", 1) == succession.RecoveryProofEventID("t", "i", 1) {
+		succession.RecoveryRecordEventID("t", "i", 1) == succession.RecoveryProofEventID("t", "i", 1) ||
+		succession.KEMRewrapRecordEventID("t", "i", 1) == succession.RecoveryRecordEventID("t", "i", 1) {
 		t.Fatal("recovery event classes do not have independent domains")
 	}
 }

@@ -13,6 +13,18 @@ import (
 const recoverySuccessorDomain = "trstctl/pcas/recovery-successor/v1\x00"
 const recoveryRecordDomain = "trstctl/pcas/recovery-record/v1\x00"
 const recoveryProofDomain = "trstctl/pcas/recovery-proof/v1\x00"
+const kemRewrapRecordDomain = "trstctl/pcas/kem-rewrap-record/v1\x00"
+
+// KEMRewrapRecordEventID is the first-writer fence for one tenant identity's
+// paired-signing/KEM successor at an epoch.
+func KEMRewrapRecordEventID(tenantID, identityID string, epoch uint64) string {
+	bound, _ := json.Marshal(struct {
+		TenantID   string `json:"tenant_id"`
+		IdentityID string `json:"identity_id"`
+		Epoch      uint64 `json:"epoch"`
+	}{tenantID, identityID, epoch})
+	return recoveryEventID(kemRewrapRecordDomain, bound)
+}
 
 // RecoveryProofEventID is the unique proof decision for one recovery record.
 func RecoveryProofEventID(tenantID, identityID string, epoch uint64) string {

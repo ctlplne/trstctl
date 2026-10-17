@@ -22,7 +22,7 @@ import (
 )
 
 // RecoveryRecordProjection rebuilds the SQL chain and epoch serving copy from
-// the immutable, tenant-bound recovery event. Historical direct-write records
+// immutable, tenant-bound recovery and KEM rewrap events. Historical direct-write records
 // have source_sequence=0 and are never silently promoted to source authority.
 type RecoveryRecordProjection struct{ store *corestore.Store }
 
@@ -56,7 +56,7 @@ func (p *RecoveryRecordProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("pcas recovery record: projection store unavailable")
 	}
-	//trstctl:system-query — cross-tenant full replay uses one system transaction to delete only derived recovery rows with a source sequence; legacy and ordinary succession rows remain.
+	//trstctl:system-query — cross-tenant full replay removes only event-sourced recovery and KEM rows; legacy and ordinary succession rows remain.
 	if _, err := tx.Exec(ctx, `DELETE FROM succession_records WHERE source_sequence > 0`); err != nil {
 		return err
 	}
@@ -75,6 +75,7 @@ func (p *RecoveryRecordProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 
 func (p *RecoveryRecordProjection) Apply(ctx context.Context, ev eventspec.Event) error {
 	if ev.Type != succession.TypeRecoveryRecorded && ev.Type != succession.TypeRecoveryProofIssued &&
+		ev.Type != succession.TypeKEMRewrapRecorded &&
 		ev.Type != projections.EventTenantOffboarded {
 		return nil
 	}
@@ -99,6 +100,9 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 	if ev.Type != succession.TypeRecoveryRecorded {
 		if ev.Type == succession.TypeRecoveryProofIssued {
 			return ApplyRecoveryProofEventTx(ctx, tx, ev)
+		}
+		if ev.Type == succession.TypeKEMRewrapRecorded {
+			return ApplyKEMRewrapRecordEventTx(ctx, tx, ev)
 		}
 		return nil
 	}

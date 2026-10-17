@@ -52,6 +52,9 @@ const (
 	// TypeRecoveryProofIssued binds a record's commitment to a signer-signed
 	// append-only per-identity recovery log before the worker reports delivery.
 	TypeRecoveryProofIssued = "nhi.recovery.proof.issued"
+	// TypeKEMRewrapRecorded is the immutable source for the signed paired KEM
+	// record; SQL chain and high-water rows are rebuildable projections.
+	TypeKEMRewrapRecorded = "nhi.kem.rewrap.recorded"
 	// TypeIssuerAuthorityRegistered binds a tenant's managed CA to one PCAS epoch.
 	TypeIssuerAuthorityRegistered = "nhi.issuer.authority.registered"
 	// TypeFederationBridgeImported records a verified, locally signed foreign trust bridge.
@@ -77,6 +80,7 @@ const (
 	RecoverySuccessorPreparedSchemaV1 = 1
 	RecoveryRecordedSchemaV1          = 1
 	RecoveryProofIssuedSchemaV1       = 1
+	KEMRewrapRecordedSchemaV1         = 1
 	IssuerAuthorityRegisteredSchemaV1 = 1
 	FederationBridgeImportedSchemaV1  = 1
 )
@@ -144,6 +148,19 @@ type RecoverySuccessorPreparedV1 struct {
 }
 
 func (RecoverySuccessorPreparedV1) isSuccessionPayload() {}
+
+// KEMRewrapRecordedV1 binds one signer-verified paired record to its exact
+// tenant identity epoch and outbox request before any serving-row update.
+type KEMRewrapRecordedV1 struct {
+	TenantID      string `json:"tenant_id"`
+	IdentityID    string `json:"identity_id"`
+	Epoch         uint64 `json:"epoch"`
+	RequestID     string `json:"request_id"`
+	RequestDigest []byte `json:"request_digest"`
+	RecordJSON    []byte `json:"record_json"`
+}
+
+func (KEMRewrapRecordedV1) isSuccessionPayload() {}
 
 // RecoveryRecordedV1 keeps the exact signed record and the public verification
 // root in the source log. RequestID and epoch are first-writer bound; neither a
@@ -350,6 +367,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeRecoveryRecorded, RecoveryRecordedSchemaV1, v.TenantID, v)
 	case RecoveryProofIssuedV1:
 		return marshalEvent(TypeRecoveryProofIssued, RecoveryProofIssuedSchemaV1, v.TenantID, v)
+	case KEMRewrapRecordedV1:
+		return marshalEvent(TypeKEMRewrapRecorded, KEMRewrapRecordedSchemaV1, v.TenantID, v)
 	case IssuerAuthorityRegisteredV1:
 		return marshalEvent(TypeIssuerAuthorityRegistered, IssuerAuthorityRegisteredSchemaV1, v.TenantID, v)
 	case FederationBridgeImportedV1:
@@ -443,6 +462,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RecoveryProofIssuedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeKEMRewrapRecorded:
+		if ver > KEMRewrapRecordedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p KEMRewrapRecordedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

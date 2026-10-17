@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1531 annotated sites across 26 rules. Each row is
+1532 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -407,7 +407,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (253 sites)
+### G115 — CWE-190 Integer overflow or wraparound (254 sites)
 
 | Location | Reason |
 |---|---|
@@ -631,6 +631,7 @@ not this file.
 | `internal/store/upsert_arbiter_race_test.go:105` | small fixture counter (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:220` | small fixture counter (CWE-190) |
 | `internal/succession/background/workers_retirement_legacy_test.go:80` | TCP port was checked against [0, 65535] above. |
+| `internal/succession/conformance/int20_fullstack_test.go:438` | source sequence was checked against MaxInt64 above (CWE-190). |
 | `internal/tenantseal/idempotency.go:96` | length framing of short bounded fields (CWE-190) |
 | `internal/tsa/fuzz_test.go:133` | crafted DER length byte for fuzz corpus; truncation is the crafted input (CWE-190) |
 | `internal/tsa/fuzz_test.go:135` | crafted DER length byte for fuzz corpus (CWE-190) |
@@ -920,7 +921,7 @@ not this file.
 | `internal/signing/supervisor.go:235` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
 | `internal/succession/conformance/edition_test.go:44` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/succession/conformance/edition_test.go:128` | fixed argv, no user input (CWE-78) |
-| `internal/succession/conformance/int20_fullstack_test.go:1171` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
+| `internal/succession/conformance/int20_fullstack_test.go:1223` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
 | `internal/testutil/openssltest/openssltest.go:97` | test-support helper running the system openssl found above; not linked into served binaries (CWE-78) |
 | `internal/tsa/http_test.go:48` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/tsa/http_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |

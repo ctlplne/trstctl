@@ -169,6 +169,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"tenant_id":"","identity_id":"","epoch":1,"request_id":"","request_digest":"","trust_root_der":"","record_json":""}`), true
 	case "nhi.recovery.proof.issued":
 		return shape(`{"tenant_id":"","identity_id":"","epoch":1,"request_id":"","record_event_id":"","log_public_key_der":"","proof_bytes":""}`), true
+	case "nhi.kem.rewrap.recorded":
+		return shape(`{"tenant_id":"","identity_id":"","epoch":1,"request_id":"","request_digest":"","record_json":""}`), true
 	case "nhi.issuer.authority.registered":
 		return shape(`{"tenant_id":"","issuer_id":"","identity_id":"","current_epoch":0,"ca_key_handle":"","ca_cert_der":""}`), true
 	case "nhi.federation.bridge.imported":

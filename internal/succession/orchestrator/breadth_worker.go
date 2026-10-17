@@ -261,6 +261,24 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 	if p.IdentityID == "" || p.PredecessorHandle == "" || p.SuccessorSignHandle == "" || p.SuccessorKEMHandle == "" {
 		return errors.New("pcas KEM rewrap: missing identity or signer handles")
 	}
+	if env.RequestID == "" || w.log == nil || w.repo == nil {
+		return errors.New("pcas KEM rewrap: request ID, event log and projection store are required")
+	}
+	requestBytes, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	requestDigest := crypto.SHA256Sum(requestBytes)
+	recordEventID := succession.KEMRewrapRecordEventID(tenantID, p.IdentityID, p.PredecessorEpoch+1)
+	if prior, found, err := w.log.EventByID(ctx, recordEventID); err != nil {
+		return err
+	} else if found {
+		if err := w.applyExistingKEMRewrap(ctx, prior, tenantID, p.IdentityID,
+			p.PredecessorEpoch+1, env.RequestID, requestDigest); err != nil {
+			return err
+		}
+		return w.completeKEMRewrapJob(ctx, tenantID, env.RequestID)
+	}
 	predRemote, err := w.kem.SignerForHandle(ctx, p.PredecessorHandle)
 	if err != nil {
 		return fmt.Errorf("pcas KEM rewrap: bind predecessor handle: %w", err)
@@ -295,16 +313,20 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 	if err != nil {
 		return err
 	}
-	if err := w.recordOpaque(ctx, tenantID, rec.Base.Fields, encoded, env.RequestID); err != nil {
+	if err := w.recordKEMRewrap(ctx, tenantID, rec.Base.Fields, encoded, env.RequestID, requestDigest); err != nil {
 		return err
 	}
+	return w.completeKEMRewrapJob(ctx, tenantID, env.RequestID)
+}
+
+func (w *BreadthWorker) completeKEMRewrapJob(ctx context.Context, tenantID, requestID string) error {
 	if w.core != nil {
 		return w.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx,
 				`UPDATE pcas_rewrap_job
 				    SET completed_stages = total_stages, status = 'complete', updated_at = now()
 				  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND job_id = $1`,
-				env.RequestID)
+				requestID)
 			return err
 		})
 	}
@@ -720,31 +742,40 @@ func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID str
 	return err
 }
 
-func (w *BreadthWorker) recordOpaque(ctx context.Context, tenantID string, fields succession.CommitmentFields, encoded []byte, idempotencyKey string) error {
-	if w.core == nil {
-		return nil
-	}
-	return w.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO succession_records
-			   (tenant_id, identity_id, epoch, predecessor_epoch, predecessor_alg, successor_alg, successor_pub, record, idempotency_key)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8)
-			 ON CONFLICT DO NOTHING`,
-			fields.IdentityID, fields.Epoch, fields.PredecessorEpoch, string(fields.PredecessorAlg),
-			string(fields.SuccessorAlg), fields.SuccessorPub, encoded, idempotencyKey); err != nil {
-			return fmt.Errorf("pcas breadth: append record: %w", err)
-		}
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO identity_algorithm_epoch (tenant_id, identity_id, epoch)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2)
-			 ON CONFLICT (tenant_id, identity_id)
-			 DO UPDATE SET epoch = EXCLUDED.epoch, updated_at = now()
-			 WHERE identity_algorithm_epoch.epoch < EXCLUDED.epoch`,
-			fields.IdentityID, fields.Epoch); err != nil {
-			return fmt.Errorf("pcas breadth: advance high-water: %w", err)
-		}
-		return nil
+func (w *BreadthWorker) recordKEMRewrap(ctx context.Context, tenantID string,
+	fields succession.CommitmentFields, encoded []byte, requestID string, requestDigest []byte) error {
+	source, err := succession.Encode(succession.KEMRewrapRecordedV1{
+		TenantID: tenantID, IdentityID: fields.IdentityID, Epoch: fields.Epoch,
+		RequestID: requestID, RequestDigest: requestDigest, RecordJSON: encoded,
 	})
+	if err != nil {
+		return err
+	}
+	source.ID = succession.KEMRewrapRecordEventID(tenantID, fields.IdentityID, fields.Epoch)
+	recorded, err := w.log.Append(ctx, source)
+	if err != nil {
+		return fmt.Errorf("pcas KEM rewrap: append immutable paired record: %w", err)
+	}
+	return w.applyExistingKEMRewrap(ctx, recorded, tenantID, fields.IdentityID, fields.Epoch, requestID, requestDigest)
+}
+
+func (w *BreadthWorker) applyExistingKEMRewrap(ctx context.Context, ev events.Event,
+	tenantID, identityID string, epoch uint64, requestID string, requestDigest []byte) error {
+	if ev.TenantID != tenantID || ev.Type != succession.TypeKEMRewrapRecorded ||
+		ev.ID != succession.KEMRewrapRecordEventID(tenantID, identityID, epoch) {
+		return errors.New("pcas KEM rewrap: first-writer event differs from tenant identity epoch")
+	}
+	decoded, err := succession.Decode(ev)
+	if err != nil {
+		return err
+	}
+	prior, ok := decoded.(succession.KEMRewrapRecordedV1)
+	if !ok || prior.TenantID != tenantID || prior.IdentityID != identityID ||
+		prior.Epoch != epoch || prior.RequestID != requestID ||
+		!bytes.Equal(prior.RequestDigest, requestDigest) {
+		return errors.New("pcas KEM rewrap: immutable paired record belongs to another request")
+	}
+	return w.repo.ApplyKEMRewrapRecordEvent(ctx, ev)
 }
 
 func (w *BreadthWorker) highWater(ctx context.Context, tenantID, identityID string) (uint64, error) {

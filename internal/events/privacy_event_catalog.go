@@ -73,6 +73,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		rejectingEntry("nhi.recovery.successor.prepared"),
 		rejectingEntry("nhi.recovery.recorded"),
 		rejectingEntry("nhi.recovery.proof.issued"),
+		rejectingEntry("nhi.kem.rewrap.recorded"),
 		rejectingEntry("nhi.issuer.authority.registered"),
 		rejectingEntry("nhi.federation.bridge.imported"),
 		entry("acme.account.upserted",

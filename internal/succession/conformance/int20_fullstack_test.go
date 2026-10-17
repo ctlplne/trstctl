@@ -423,6 +423,58 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	if err := pcaskem.VerifyPaired(paired); err != nil {
 		t.Fatalf("paired KEM record verify: %v", err)
 	}
+	// A database read model can be rebuilt from JetStream alone. Remove the
+	// projected KEM row, replay the immutable log and require the same paired
+	// record to return before relying-party cutover or predecessor retirement.
+	wantRecord := append([]byte(nil), rows[0].Encoded...)
+	eventID := succession.KEMRewrapRecordEventID(st.tenantID, id, 1)
+	source, found, err := st.log.EventByID(st.ctx, eventID)
+	if err != nil || !found || source.Type != succession.TypeKEMRewrapRecorded {
+		t.Fatalf("KEM record has no immutable tenant-epoch source: found=%v type=%s err=%v", found, source.Type, err)
+	}
+	if source.Sequence > math.MaxInt64 {
+		t.Fatalf("KEM source sequence exceeds PostgreSQL bigint: %d", source.Sequence)
+	}
+	// #nosec G115 -- source sequence was checked against MaxInt64 above (CWE-190).
+	checkedSequence := int64(source.Sequence)
+	var sourceSequence int64
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(st.ctx, `SELECT source_sequence FROM succession_records
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1 AND epoch = 1`, id).Scan(&sourceSequence)
+	}); err != nil || sourceSequence != checkedSequence {
+		t.Fatalf("KEM serving row has no exact source sequence: row=%d event=%d err=%v", sourceSequence, source.Sequence, err)
+	}
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(st.ctx, `DELETE FROM succession_records
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, id)
+		return err
+	}); err != nil {
+		t.Fatalf("remove KEM serving row before event-only restore: %v", err)
+	}
+	projection := pcasstore.NewRecoveryRecordProjection(st.store)
+	if err := st.log.Replay(st.ctx, 0, func(ev events.Event) error { return projection.Apply(st.ctx, ev) }); err != nil {
+		t.Fatalf("replay KEM record source: %v", err)
+	}
+	rows, err = st.repo.FetchChain(st.ctx, st.tenantID, id)
+	if err != nil || len(rows) != 1 || !bytes.Equal(rows[0].Encoded, wantRecord) {
+		t.Fatalf("event-only KEM record restore rows=%d err=%v", len(rows), err)
+	}
+	if err := projection.Apply(st.ctx, source); err != nil {
+		t.Fatalf("identical KEM source replay: %v", err)
+	}
+	var forged succession.KEMRewrapRecordedV1
+	if err := json.Unmarshal(source.Data, &forged); err != nil {
+		t.Fatal(err)
+	}
+	forged.RequestID = "different-request"
+	tampered := source
+	tampered.Data, err = json.Marshal(forged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Apply(st.ctx, tampered); err == nil {
+		t.Fatal("same tenant identity epoch accepted a different source request")
+	}
 
 	rp, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	if err != nil {
