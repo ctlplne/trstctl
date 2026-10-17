@@ -212,7 +212,7 @@ statusless.
 
 | Page | Served state | Why it has no `F*` row |
 |---|---|---|
-| docs/features/agent-delegation.md | Conditional | Part of the core since 2026-09-20. `attachAgentDelegation` in `cmd/trstctl/attach_families.go` attaches the `/api/v1/agent-delegation/*` routes and the `agentid.issue-chain-bound` outbox worker in every build. The root-anchor API writes and independently reads the signer's own public floor over the authenticated signer transport; reachability-verdict and attestor trust floors still need operator provisioning at the signer. The signer refuses a chain-bound mint until the required floors are present. |
+| docs/features/agent-delegation.md | Conditional | Part of the core since 2026-09-20. `attachAgentDelegation` in `cmd/trstctl/attach_families.go` attaches the `/api/v1/agent-delegation/*` routes, root-event projection and `agentid.issue-chain-bound` outbox worker in every build. Root registration writes an immutable first-writer event, rebuilds the tenant registry from it, then writes and independently reads the signer's public floor over the authenticated signer transport. Legacy SQL-only roots require exact signer readback before event backfill; a one-shot rebuild refuses them. Reachability-verdict and attestor trust floors still need operator provisioning at the signer. The signer refuses a chain-bound mint until the required floors are present. |
 | docs/features/client-sdks.md | Served | The generated clients under `clients/sdk/` track the served OpenAPI 3.1 contract; they package the REST API rather than adding a capability of their own. |
 
 ## Census proof modes

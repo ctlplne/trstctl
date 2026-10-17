@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 
+	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
@@ -29,11 +30,14 @@ func attachEE(_ context.Context, cfg *config.Config, _ *slog.Logger, _ *license.
 }
 
 func attachEEProjectionOptions(
-	context.Context,
-	*config.Config,
-	*license.Manager,
-	*store.Store,
-	*events.Log,
+	ctx context.Context,
+	_ *config.Config,
+	_ *license.Manager,
+	st *store.Store,
+	log *events.Log,
 ) ([]projections.Option, error) {
-	return nil, nil
+	if err := agidstore.BackfillLegacyRootAnchorEvents(ctx, st, log, nil); err != nil {
+		return nil, err
+	}
+	return agentRootRecoveryProjectionOptions(st), nil
 }

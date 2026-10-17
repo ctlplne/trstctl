@@ -28,6 +28,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/agent/transport"
+	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -1032,6 +1033,12 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	if err := recoverPreparedPrivacySubjectErasures(ctx, d); err != nil {
 		return nil, err
+	}
+	// Historical root rows predate event sourcing. Promote one only after the
+	// isolated signer returns the exact tenant/key/public/auth tuple; otherwise
+	// a rebuild could erase trust authority or recreate it from SQL alone.
+	if err := agidstore.BackfillLegacyRootAnchorEvents(ctx, d.Store, d.Log, s.agidRootAnchors()); err != nil {
+		return nil, fmt.Errorf("server: reconcile agent root source authority: %w", err)
 	}
 	proj, err := catchUpReadModel(ctx, d)
 	if err != nil {

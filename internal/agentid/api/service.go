@@ -49,6 +49,7 @@ type RootAnchorProvisioner interface {
 var ErrRootAnchorSignerUnavailable = errors.New("agentid api: signer root-anchor floor is unavailable")
 var ErrRootAnchorSignerReadback = errors.New("agentid api: signer root-anchor readback differs from registered authority")
 var ErrInvalidRootAnchorRequest = errors.New("agentid api: invalid root-anchor request")
+var ErrRootAnchorLogUnavailable = errors.New("agentid api: root-anchor event log is unavailable")
 
 // service is the store/log/outbox-backed AGID API Service. IssueChainBound and Revoke
 // enqueue an idempotent outbox job through the core outbox (the AGID mechanisms run
@@ -89,11 +90,10 @@ func NewServiceWithRootAnchorProvisioner(store *corestore.Store, log *events.Log
 
 var _ Service = (*service)(nil)
 
-// RegisterRootAnchor binds the tenant root in the RLS store, then sends its public
-// binding to the signer and reads the exact result back. The RLS and signer floors
-// each enforce first writer; a lost response can be retried without replacing a
-// different authority. Success means the signer has independently returned the
-// same tenant/key/public-key/authentication-reference tuple.
+// RegisterRootAnchor appends the immutable tenant/key trust tuple, projects its
+// RLS serving copy, then provisions and independently reads the signer floor.
+// The deterministic event ID, projection and signer each enforce first writer.
+// A lost response can be retried without replacing a different authority.
 func (s *service) RegisterRootAnchor(ctx context.Context, tenantID string, req RootAnchorRequest) (RootAnchorResponse, error) {
 	if s.anchorProvisioner == nil {
 		return RootAnchorResponse{}, ErrRootAnchorSignerUnavailable
@@ -124,13 +124,37 @@ func (s *service) RegisterRootAnchor(ctx context.Context, tenantID string, req R
 	if err := crypto.ValidatePublicKeyDER(publicDER); err != nil {
 		return RootAnchorResponse{}, fmt.Errorf("root-anchor public key is invalid (%v): %w", err, ErrInvalidRootAnchorRequest)
 	}
-	row := agidstore.RootAnchor{
-		KeyID:     req.KeyID,
-		PublicDER: publicDER,
-		AuthRef:   req.AuthRef,
-	}
 	if s.repo != nil {
-		if err := s.repo.RegisterRootAnchor(ctx, tenantID, row); err != nil {
+		if err := s.repo.CheckRootAnchorFirstWriter(ctx, tenantID, agidstore.RootAnchor{
+			KeyID: req.KeyID, PublicDER: publicDER, AuthRef: req.AuthRef,
+		}); err != nil {
+			return RootAnchorResponse{}, err
+		}
+		if s.log == nil {
+			return RootAnchorResponse{}, ErrRootAnchorLogUnavailable
+		}
+		encoded, err := delegation.Encode(delegation.RootAnchorRegisteredV1{
+			TenantID: tenantID, KeyID: req.KeyID, PublicDER: publicDER, AuthRef: req.AuthRef,
+		})
+		if err != nil {
+			return RootAnchorResponse{}, err
+		}
+		encoded.ID = delegation.RootAnchorEventID(tenantID, req.KeyID)
+		recorded, found, err := s.log.EventByID(ctx, encoded.ID)
+		if err != nil {
+			return RootAnchorResponse{}, err
+		}
+		if !found {
+			recorded, err = s.log.Append(ctx, encoded)
+			if err != nil {
+				return RootAnchorResponse{}, err
+			}
+		}
+		if recorded.TenantID != tenantID || recorded.Type != encoded.Type ||
+			recorded.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(recorded.Data, encoded.Data) {
+			return RootAnchorResponse{}, fmt.Errorf("agentid api: root key ID already binds different trust material: %w", corestore.ErrIdempotencyConflict)
+		}
+		if err := s.repo.ApplyRootAnchorEvent(ctx, recorded); err != nil {
 			return RootAnchorResponse{}, err
 		}
 	}

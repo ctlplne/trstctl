@@ -33,6 +33,7 @@ import (
 	reconcileplanremediation "trstctl.com/trstctl/internal/reconcile/plan/remediation"
 	"trstctl.com/trstctl/internal/reconcile/rounds"
 	"trstctl.com/trstctl/internal/server"
+	corestore "trstctl.com/trstctl/internal/store"
 	successionapi "trstctl.com/trstctl/internal/succession/api"
 	successionbackground "trstctl.com/trstctl/internal/succession/background"
 	successionorch "trstctl.com/trstctl/internal/succession/orchestrator"
@@ -109,6 +110,8 @@ func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 // attachAgentDelegation is the AGID stage of the core attach seam, a named
 // stage so the seam stays readable (the startup-hotspot ratchet).
 func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
+	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions,
+		projections.WithEventProjection(agentstore.NewRootAnchorProjection(deps.Store)))
 	{
 		// Core activation point for Agent Identity Lifecycle Enforcement (AGID).
 		// Every build attaches the feature-neutral chain-bound
@@ -159,6 +162,15 @@ func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.De
 			log.Info("agent delegation attached")
 		}
 	}
+}
+
+// The one-shot rebuild/restore entry points do not call attachFamilies, so the
+// core AGID projection must be included in their explicit projection options.
+func agentRootRecoveryProjectionOptions(st *corestore.Store) []projections.Option {
+	if st == nil {
+		return nil
+	}
+	return []projections.Option{projections.WithEventProjection(agentstore.NewRootAnchorProjection(st))}
 }
 
 func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) error {

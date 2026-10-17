@@ -25,6 +25,7 @@ import (
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
+	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	cryptosamlsp "trstctl.com/trstctl/internal/crypto/samlsp"
@@ -76,8 +77,12 @@ func attachEEProjectionOptions(
 	st *corestore.Store,
 	log *events.Log,
 ) ([]projections.Option, error) {
+	if err := agidstore.BackfillLegacyRootAnchorEvents(ctx, st, log, nil); err != nil {
+		return nil, err
+	}
+	coreOptions := agentRootRecoveryProjectionOptions(st)
 	if lic == nil || !lic.Has(license.FeatureProviderPlane) {
-		return nil, nil
+		return coreOptions, nil
 	}
 	if st == nil || log == nil {
 		return nil, errors.New("provider recovery projection requires PostgreSQL and the event log")
@@ -86,7 +91,7 @@ func attachEEProjectionOptions(
 	if err := runtime.Bootstrap(ctx); err != nil {
 		return nil, fmt.Errorf("bootstrap provider authority before recovery rebuild: %w", err)
 	}
-	return runtime.ProjectionOptions, nil
+	return append(coreOptions, runtime.ProjectionOptions...), nil
 }
 
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {

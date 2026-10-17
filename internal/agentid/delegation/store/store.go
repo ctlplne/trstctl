@@ -195,6 +195,30 @@ func (r *Repo) RegisterRootAnchor(ctx context.Context, tenantID string, anchor R
 	})
 }
 
+// CheckRootAnchorFirstWriter protects pre-event legacy rows before a new
+// immutable event is appended. A changed request must be refused before it can
+// poison the source log with a tuple the existing tenant registry rejects.
+// New registrations are fenced by the deterministic event ID itself.
+func (r *Repo) CheckRootAnchorFirstWriter(ctx context.Context, tenantID string, anchor RootAnchor) error {
+	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var existingDER []byte
+		var existingAuthRef string
+		err := tx.QueryRow(ctx, `SELECT public_der, auth_ref FROM agent_root_anchors
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND key_id = $1`, anchor.KeyID).
+			Scan(&existingDER, &existingAuthRef)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("agid store: check root first writer: %w", err)
+		}
+		if !bytes.Equal(existingDER, anchor.PublicDER) || existingAuthRef != anchor.AuthRef {
+			return fmt.Errorf("agid store: root anchor key id already binds different trust material: %w", corestore.ErrIdempotencyConflict)
+		}
+		return nil
+	})
+}
+
 // ListRootAnchors returns the caller tenant's registered anchors ordered by key
 // id for deterministic API responses and signer provisioning.
 func (r *Repo) ListRootAnchors(ctx context.Context, tenantID string) ([]RootAnchor, error) {

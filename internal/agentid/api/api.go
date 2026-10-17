@@ -41,6 +41,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -337,6 +338,9 @@ func registerRootAnchorHandler(a *api.API, svc Service) http.HandlerFunc {
 				}
 				if status.Code(err) == codes.InvalidArgument {
 					return 0, nil, api.ErrStatus(http.StatusBadRequest, "root-anchor key_id or public key is invalid")
+				}
+				if errors.Is(err, ErrRootAnchorLogUnavailable) || errors.Is(err, events.ErrEventIDIndexBehind) {
+					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "root-anchor event authority is unavailable; retry the same request after recovery")
 				}
 				if errors.Is(err, ErrRootAnchorSignerUnavailable) || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.Unavailable {
 					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "signer root-anchor floor is unavailable; retry the same request after signer recovery")

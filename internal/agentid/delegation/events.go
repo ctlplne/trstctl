@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
@@ -14,6 +16,9 @@ import (
 // the event TYPES and their versioned encode/decode only; the issuance / attestation
 // / refusal / revocation projections and their DDL land in AGID-02.
 const (
+	// TypeRootAnchorRegistered is the immutable first-writer trust tuple that
+	// rebuilds the tenant registry after PostgreSQL read-model loss.
+	TypeRootAnchorRegistered = "agent.root_anchor.registered"
 	// TypeDelegationRecorded records that a signed delegation record was appended to
 	// a chain (the delegator conferred a no-broader authority set on a delegate).
 	TypeDelegationRecorded = "agent.delegation.recorded"
@@ -36,14 +41,32 @@ const (
 // (Unknown, carrying the raw bytes forward), so replay is forward-compatible and
 // never mis-projects on untrusted or newer input.
 const (
-	DelegationRecordedSchemaV1  = 1
-	IssuanceRecordedSchemaV1    = 1
-	RefusalRecordedSchemaV1     = 1
-	RevocationDirectiveSchemaV1 = 1
+	RootAnchorRegisteredSchemaV1 = 1
+	DelegationRecordedSchemaV1   = 1
+	IssuanceRecordedSchemaV1     = 1
+	RefusalRecordedSchemaV1      = 1
+	RevocationDirectiveSchemaV1  = 1
 )
 
 // Payload is a decoded, typed delegation-lifecycle event payload.
 type Payload interface{ isDelegationPayload() }
+
+// RootAnchorRegisteredV1 carries public trust material only. The signer keeps
+// private keys outside the control plane and independently verifies this tuple.
+type RootAnchorRegisteredV1 struct {
+	TenantID  string `json:"tenant_id"`
+	KeyID     string `json:"key_id"`
+	PublicDER []byte `json:"public_der"`
+	AuthRef   string `json:"auth_ref"`
+}
+
+func (RootAnchorRegisteredV1) isDelegationPayload() {}
+
+// RootAnchorEventID fixes one event identity per tenant/key slot. A retry with
+// changed trust bytes must encounter the existing event and be refused.
+func RootAnchorEventID(tenantID, keyID string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("agent.root_anchor.registered.v1\x00"+tenantID+"\x00"+keyID)).String()
+}
 
 // DelegationRecordedV1 is the ledger announcement of an appended delegation record.
 // RecordDigest is an opaque reference to the record (Record.Digest); the record's
@@ -110,6 +133,8 @@ func (Unknown) isDelegationPayload() {}
 // are assigned by events.Log.Append.
 func Encode(p Payload) (eventspec.Event, error) {
 	switch v := p.(type) {
+	case RootAnchorRegisteredV1:
+		return marshalEvent(TypeRootAnchorRegistered, RootAnchorRegisteredSchemaV1, v.TenantID, v)
 	case DelegationRecordedV1:
 		return marshalEvent(TypeDelegationRecorded, DelegationRecordedSchemaV1, v.TenantID, v)
 	case IssuanceRecordedV1:
@@ -141,6 +166,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 		ver = eventspec.DefaultSchemaVersion
 	}
 	switch e.Type {
+	case TypeRootAnchorRegistered:
+		if ver > RootAnchorRegisteredSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RootAnchorRegisteredV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("delegation: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
 	case TypeDelegationRecorded:
 		if ver > DelegationRecordedSchemaV1 {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil

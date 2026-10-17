@@ -77,6 +77,9 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		rejectingEntry("nhi.kem.rewrap.requested"),
 		rejectingEntry("nhi.issuer.authority.registered"),
 		rejectingEntry("nhi.federation.bridge.imported"),
+		// Rewriting a root key or authentication reference would change signer
+		// trust authority without the matching independent signer floor.
+		rejectingEntry("agent.root_anchor.registered"),
 		entry("acme.account.upserted",
 			catalogPrivacyRule("/seq", opaque), catalogPrivacyRule("/id", opaque),
 			catalogPrivacyRule("/url", opaque), catalogPrivacyRule("/jwk", opaque),

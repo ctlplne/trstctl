@@ -325,6 +325,15 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// tenant's derived checklist in a full retained-event rebuild. Ordinary
 		// issuance, disposition and offboard events run through WithTenant/RLS.
 		"internal/decommission/store/projection.go": 1,
+		// AGID root projection uses one system transaction only to clear the
+		// derived registry during full replay. Event writes and reads use the
+		// event tenant's RLS context, and the payload must bind that tenant.
+		"internal/agentid/delegation/store/root_anchor_projection.go": 1,
+		// Upgrade/recovery preflight inventories public legacy root tuples
+		// across tenants at startup. It appends a canonical event only after
+		// exact isolated-signer readback; one-shot rebuild refuses unchecked
+		// rows. No tenant record is served from this system query.
+		"internal/agentid/delegation/store/legacy_root_backfill.go": 2,
 		// PCAS delegation's standalone projection opens one system transaction
 		// for full-replay reset or one event. Reset removes only derived scope
 		// rows; ApplyTx checks payload tenant against the event and scopes every

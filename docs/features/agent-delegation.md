@@ -74,8 +74,9 @@ root principal's real **public** key before sending. Replaying the same
 `Idempotency-Key` returns the original
 result. A successful response reports `provisioned: true` only after an
 independent read of the exact public key and authentication reference from the
-signer. If the signer is unavailable, retry the same request after it returns;
-the tenant registry may already hold the first binding. A list response marks
+signer. An immutable tenant/key event rebuilds the SQL registry after a crash.
+If the signer is unavailable, retry the same request after it returns;
+the event and tenant registry may already hold the first binding. A list response marks
 an anchor unprovisioned when the signer readback is absent or differs:
 
 ```http
@@ -147,8 +148,15 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
   is refused until the signer trust floors above are provisioned.
 - The TTL ceiling is sub-hour by design; a request above it is refused, not
   clamped.
-- Root-anchor and attestor floors are operator-provisioned files — an absent
-  anchor is a refusal, not a fallback.
+- Register root anchors through the API, CLI, or console. The signer stores its
+  public root floor under its own durable key store; an absent anchor is a
+  refusal, not a fallback. Reachability and attestor public floors still need
+  operator provisioning at the signer.
+- At upgrade, a pre-event root row gains an immutable event only after the
+  isolated signer returns the exact tenant, key, public key, and authentication
+  reference. A missing or different signer floor blocks startup. A one-shot
+  rebuild refuses a SQL-only legacy row; start the paired signer/control plane
+  to reconcile it before invoking rebuild or restore.
 - The chain is verified by the signer, not the API: a compromised control
   plane cannot mint a widened credential.
 
