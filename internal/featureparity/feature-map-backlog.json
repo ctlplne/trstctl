@@ -11563,6 +11563,8 @@
                 "configurePCASDelegationScope",
                 "raisePCASDelegationFloor",
                 "configurePCASRecoveryPolicy",
+                "preparePCASRecoverySuccessor",
+                "getPCASRecoverySuccessor",
                 "requestPCASRecovery",
                 "listPCASFederationBridges",
                 "requestPCASFederationImport",
@@ -11598,6 +11600,8 @@
                 "pcas retirement show",
                 "pcas retirement policy set",
                 "pcas recovery policy set",
+                "pcas recovery successor prepare",
+                "pcas recovery successor get",
                 "pcas recovery request",
                 "pcas federation bridges list",
                 "pcas federation imports request",
@@ -11649,7 +11653,7 @@
                         "CLI command: profiles get-version",
                         "CLI command: cbom scan",
                         "CLI command: cbom assets",
-                        "CLI commands: pcas genesis register, pcas requests status, pcas delegation scopes list/set, pcas delegation floors raise, pcas succession request, pcas chain get, pcas checkpoints get, pcas retirement show, pcas retirement policy set, pcas recovery policy set/request, pcas federation bridges list/imports request, pcas kem rewrap request, pcas rewrap status, pcas issuers register/leaf issue, pcas staple leaf issue"
+                        "CLI commands: pcas genesis register, pcas requests status, pcas delegation scopes list/set, pcas delegation floors raise, pcas succession request, pcas chain get, pcas checkpoints get, pcas retirement show, pcas retirement policy set, pcas recovery policy set/successor prepare/successor get/request, pcas federation bridges list/imports request, pcas kem rewrap request, pcas rewrap status, pcas issuers register/leaf issue, pcas staple leaf issue"
                     ],
                     "refs": [
                         "internal/cli/command.go",

@@ -80,6 +80,8 @@ func TestPCASBreadthCommandsReachTheirServedRoutes(t *testing.T) {
 		{"KEM rewrap", []string{"pcas", "kem", "rewrap", "request", "-f", "-"}, "POST", "/api/v1/pcas/kem/rewraps", ""},
 		{"KEM status", []string{"pcas", "rewrap", "status", "--identity_id", "spiffe://qa/id"}, "GET", "/api/v1/pcas/rewrap", "spiffe://qa/id"},
 		{"recovery policy", []string{"pcas", "recovery", "policy", "set", "-f", "-", "--force"}, "POST", "/api/v1/pcas/recovery/policies", ""},
+		{"recovery successor prepare", []string{"pcas", "recovery", "successor", "prepare", "-f", "-", "--force"}, "POST", "/api/v1/pcas/recovery/successors/prepare", ""},
+		{"recovery successor get", []string{"pcas", "recovery", "successor", "get", "--identity_id", "spiffe://qa/id", "--epoch", "1"}, "GET", "/api/v1/pcas/recovery/successors", "spiffe://qa/id"},
 		{"recovery request", []string{"pcas", "recovery", "request", "-f", "-", "--force"}, "POST", "/api/v1/pcas/recovery/requests", ""},
 		{"issuer register", []string{"pcas", "issuers", "register", "-f", "-"}, "POST", "/api/v1/pcas/issuers", ""},
 		{"issuer leaf", []string{"pcas", "issuers", "leaf", "issue", "-f", "-"}, "POST", "/api/v1/pcas/issuers/leaf", ""},
@@ -95,6 +97,9 @@ func TestPCASBreadthCommandsReachTheirServedRoutes(t *testing.T) {
 				}
 				if tc.query != "" && r.URL.Query().Get("identity_id") != tc.query {
 					t.Errorf("identity_id query = %q", r.URL.Query().Get("identity_id"))
+				}
+				if tc.name == "recovery successor get" && r.URL.Query().Get("epoch") != "1" {
+					t.Errorf("recovery successor epoch query = %q", r.URL.Query().Get("epoch"))
 				}
 				if tc.method == "POST" {
 					body, _ := io.ReadAll(r.Body)

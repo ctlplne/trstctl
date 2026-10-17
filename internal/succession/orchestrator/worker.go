@@ -24,9 +24,10 @@ import (
 const RequestDestination = "pcas.succession-request"
 
 const (
-	RecoveryRequestDestination  = "pcas.recovery-request"
-	FederationImportDestination = "pcas.federation-import"
-	KEMRewrapDestination        = "pcas.kem-rewrap"
+	RecoveryRequestDestination          = "pcas.recovery-request"
+	RecoverySuccessorPrepareDestination = "pcas.recovery-successor-prepare"
+	FederationImportDestination         = "pcas.federation-import"
+	KEMRewrapDestination                = "pcas.kem-rewrap"
 )
 
 // SuccessionRequestWorker is the outbox handler for pcas.succession-request messages

@@ -39,13 +39,14 @@ import (
 // request. The signer-side orchestrator (PCAS-08) consumes it and mints the
 // successor; the IdempotencyKey renders redeliveries exactly-once (AN-5 ↔ AN-6).
 const (
-	GenesisRequestDestination    = "pcas.genesis-request"
-	SuccessionRequestDestination = "pcas.succession-request"
-	RecoveryRequestDestination   = "pcas.recovery-request"
-	FederationImportDestination  = "pcas.federation-import"
-	KEMRewrapDestination         = "pcas.kem-rewrap"
-	DelegationScopeDestination   = "pcas.delegation-scope"
-	DelegationFloorDestination   = "pcas.delegation-floor"
+	GenesisRequestDestination           = "pcas.genesis-request"
+	SuccessionRequestDestination        = "pcas.succession-request"
+	RecoveryRequestDestination          = "pcas.recovery-request"
+	RecoverySuccessorPrepareDestination = "pcas.recovery-successor-prepare"
+	FederationImportDestination         = "pcas.federation-import"
+	KEMRewrapDestination                = "pcas.kem-rewrap"
+	DelegationScopeDestination          = "pcas.delegation-scope"
+	DelegationFloorDestination          = "pcas.delegation-floor"
 )
 
 // service is the store/log/outbox-backed PCAS API Service. Request-succession
@@ -185,10 +186,11 @@ func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID stri
 		var destination string
 		err := tx.QueryRow(ctx, `SELECT destination, status, attempts, created_at, delivered_at FROM outbox
 			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND idempotency_key = $1
-			AND destination IN ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			AND destination IN ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			requestID, GenesisRequestDestination, SuccessionRequestDestination,
 			DelegationScopeDestination, DelegationFloorDestination,
-			RecoveryRequestDestination, FederationImportDestination, KEMRewrapDestination,
+			RecoveryRequestDestination, RecoverySuccessorPrepareDestination,
+			FederationImportDestination, KEMRewrapDestination,
 			recoveryTopic, federationTopic, kemTopic).
 			Scan(&destination, &result.Status, &result.Attempts, &result.CreatedAt, &result.DeliveredAt)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -210,6 +212,8 @@ func (s *service) GetRequestStatus(ctx context.Context, tenantID, requestID stri
 			result.Kind = "delegation_floor"
 		case recoveryTopic, RecoveryRequestDestination:
 			result.Kind = "recovery"
+		case RecoverySuccessorPrepareDestination:
+			result.Kind = "recovery_successor_prepare"
 		case federationTopic, FederationImportDestination:
 			result.Kind = "federation_import"
 		case kemTopic, KEMRewrapDestination:
@@ -413,9 +417,159 @@ func validateRecoveryPolicyRequest(req RecoveryPolicyRequest) error {
 	return nil
 }
 
+// PrepareRecoverySuccessor sends signer key creation through the outbox. Its
+// delivered result is a signed public event read by GetRecoverySuccessor;
+// custodians must sign that exact key, never a caller-generated substitute.
+func (s *service) PrepareRecoverySuccessor(ctx context.Context, tenantID string,
+	req RecoverySuccessorPrepareRequest) (AsyncRequestResponse, error) {
+	if s.repo == nil || s.log == nil || s.kem == nil || s.outbox == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable,
+			"PCAS recovery policy, event log, outbox or isolated signer is unavailable")
+	}
+	if req.IdentityID == "" || req.DeploymentScope == "" || req.Epoch == 0 || req.Algorithm == "" {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest,
+			"identity_id, deployment_scope, positive epoch and algorithm are required")
+	}
+	classification, err := crypto.Classify(crypto.Algorithm(req.Algorithm))
+	if err != nil {
+		return AsyncRequestResponse{}, api.ErrWithStatus(http.StatusBadRequest, err)
+	}
+	// The isolated signer does not implement Ed25519 key generation, and a KEM
+	// cannot sign the custody receipt. Refuse those before creating an outbox
+	// command which would otherwise retry forever.
+	if classification.Kind != "signature" || req.Algorithm == string(crypto.Ed25519) {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest,
+			"recovery successor algorithm cannot sign in isolated custody")
+	}
+	anchor, found, err := s.repo.GetGenesis(ctx, tenantID, req.IdentityID)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if !found || anchor.Genesis.DeploymentScope != req.DeploymentScope {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery successor requires this tenant's registered genesis and exact deployment scope")
+	}
+	if _, found, err := s.repo.GetRecoveryPolicy(ctx, tenantID, req.IdentityID); err != nil {
+		return AsyncRequestResponse{}, err
+	} else if !found {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"configure this tenant identity's threshold recovery policy before preparing a successor")
+	}
+	current, err := s.recoveryCurrentEpoch(ctx, tenantID, req.IdentityID)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if req.Epoch != current+1 {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery successor epoch must immediately follow the current recorded epoch")
+	}
+	if prior, found, err := s.log.EventByID(ctx, succession.RecoverySuccessorEventID(tenantID, req.IdentityID, req.Epoch)); err != nil {
+		return AsyncRequestResponse{}, err
+	} else if found {
+		decoded, err := succession.Decode(prior)
+		if err != nil {
+			return AsyncRequestResponse{}, err
+		}
+		prepared, ok := decoded.(succession.RecoverySuccessorPreparedV1)
+		if !ok || prior.TenantID != tenantID || prepared.TenantID != tenantID ||
+			prepared.IdentityID != req.IdentityID || prepared.Epoch != req.Epoch ||
+			prepared.Algorithm != req.Algorithm || prepared.DeploymentScope != req.DeploymentScope {
+			return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+				"this tenant identity epoch is already prepared with a different successor")
+		}
+		if _, err := s.GetRecoverySuccessor(ctx, tenantID, req.IdentityID, req.Epoch); err != nil {
+			return AsyncRequestResponse{}, err
+		}
+	}
+	return s.enqueue(ctx, tenantID, RecoverySuccessorPrepareDestination, req.IdentityID, req)
+}
+
+func (s *service) recoveryCurrentEpoch(ctx context.Context, tenantID, identityID string) (uint64, error) {
+	var epoch uint64
+	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT epoch FROM identity_algorithm_epoch
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`,
+			identityID).Scan(&epoch)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	})
+	return epoch, err
+}
+
+// GetRecoverySuccessor reads one indexed immutable event and confirms that the
+// separate signer still holds the same key after restart or storage loss.
+func (s *service) GetRecoverySuccessor(ctx context.Context, tenantID, identityID string,
+	epoch uint64) (RecoverySuccessorResponse, error) {
+	if s.log == nil || s.kem == nil {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusServiceUnavailable,
+			"PCAS recovery event log or isolated signer is unavailable")
+	}
+	if identityID == "" || epoch == 0 {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusBadRequest,
+			"identity_id and positive epoch are required")
+	}
+	eventID := succession.RecoverySuccessorEventID(tenantID, identityID, epoch)
+	ev, found, err := s.log.EventByID(ctx, eventID)
+	if err != nil {
+		return RecoverySuccessorResponse{}, err
+	}
+	if !found {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusNotFound,
+			"recovery successor preparation has not completed")
+	}
+	if ev.TenantID != tenantID || ev.Type != succession.TypeRecoverySuccessorPrepared || ev.ID != eventID {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery successor event binding is inconsistent")
+	}
+	decoded, err := succession.Decode(ev)
+	if err != nil {
+		return RecoverySuccessorResponse{}, err
+	}
+	prepared, ok := decoded.(succession.RecoverySuccessorPreparedV1)
+	if !ok || prepared.TenantID != tenantID || prepared.IdentityID != identityID || prepared.Epoch != epoch {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery successor event does not bind this tenant identity epoch")
+	}
+	if err := succession.VerifyRecoverySuccessorPrepared(prepared); err != nil {
+		return RecoverySuccessorResponse{}, api.ErrWithStatus(http.StatusConflict, err)
+	}
+	remote, err := s.kem.SignerForHandle(ctx, prepared.Handle)
+	if status.Code(err) == codes.NotFound {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusConflict,
+			"prepared recovery successor is absent from isolated signer custody")
+	}
+	if status.Code(err) == codes.Unavailable {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusServiceUnavailable,
+			"isolated recovery signer is unavailable")
+	}
+	if err != nil {
+		return RecoverySuccessorResponse{}, err
+	}
+	if string(remote.Algorithm()) != prepared.Algorithm ||
+		!bytes.Equal(remote.Public().DER, prepared.PublicKeyDER) {
+		return RecoverySuccessorResponse{}, api.ErrStatus(http.StatusConflict,
+			"isolated signer key differs from prepared recovery receipt")
+	}
+	return RecoverySuccessorResponse{
+		IdentityID: prepared.IdentityID, DeploymentScope: prepared.DeploymentScope,
+		Epoch: prepared.Epoch, Algorithm: prepared.Algorithm, Handle: prepared.Handle,
+		PublicKeyDER: prepared.PublicKeyDER, RequestID: prepared.RequestID,
+		SignerSignature: prepared.SignerSignature, EventID: eventID,
+	}, nil
+}
+
 func (s *service) RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error) {
 	if s.repo == nil {
 		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS recovery policy store unavailable")
+	}
+	// The signed approval names one successor key. A caller-selected signer
+	// handle would let a tenant ask the isolated signer to use another identity's
+	// key, so derive the only accepted handle from authenticated tenancy here.
+	if req.SuccessorHandle != succession.TenantKeyHandle(tenantID, req.IdentityID, req.Epoch) {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery successor handle must name this tenant, identity and epoch")
 	}
 	policy, found, err := s.repo.GetRecoveryPolicy(ctx, tenantID, req.IdentityID)
 	if err != nil {
@@ -427,7 +581,77 @@ func (s *service) RequestRecovery(ctx context.Context, tenantID string, req Reco
 	if err := validateRecoveryRequestPolicy(tenantID, req, policy); err != nil {
 		return AsyncRequestResponse{}, err
 	}
+	prepared, err := s.GetRecoverySuccessor(ctx, tenantID, req.IdentityID, req.Epoch)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if prepared.Handle != req.SuccessorHandle || prepared.Algorithm != req.TargetAlgorithm ||
+		prepared.DeploymentScope != req.DeploymentScope {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery request differs from prepared signer key or deployment scope")
+	}
+	if err := s.validateRecoveryPredecessor(ctx, tenantID, req); err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if s.kem == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable,
+			"isolated recovery signer is unavailable")
+	}
+	successor, err := s.kem.SignerForHandle(ctx, req.SuccessorHandle)
+	if status.Code(err) == codes.NotFound {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery successor key is not prepared in isolated signer custody")
+	}
+	if status.Code(err) == codes.Unavailable {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable,
+			"isolated recovery signer is unavailable")
+	}
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	var auth pcasrecovery.RecoveryAuthorization
+	if err := json.Unmarshal(req.Authorization, &auth); err != nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest, "recovery authorization must be valid JSON")
+	}
+	if string(successor.Algorithm()) != req.TargetAlgorithm ||
+		!bytes.Equal(successor.Public().DER, auth.Statement.SuccessorPub) {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"recovery approvals do not name the prepared successor key")
+	}
 	return s.enqueue(ctx, tenantID, topicOr(s.recoveryTopic, RecoveryRequestDestination), req.IdentityID, req)
+}
+
+func (s *service) validateRecoveryPredecessor(ctx context.Context, tenantID string, req RecoveryRequest) error {
+	anchor, found, err := s.repo.GetGenesis(ctx, tenantID, req.IdentityID)
+	if err != nil {
+		return err
+	}
+	if !found || anchor.Genesis.DeploymentScope != req.DeploymentScope {
+		return api.ErrStatus(http.StatusConflict, "recovery request differs from tenant genesis or deployment scope")
+	}
+	current, err := s.recoveryCurrentEpoch(ctx, tenantID, req.IdentityID)
+	if err != nil {
+		return err
+	}
+	if req.PredecessorEpoch != current || req.Epoch != current+1 {
+		return api.ErrStatus(http.StatusConflict,
+			"recovery predecessor and successor epochs must follow the current tenant chain")
+	}
+	predecessorAlg, predecessorPub := string(anchor.Genesis.Algorithm), anchor.Genesis.PublicKey
+	if current > 0 {
+		rows, err := s.repo.FetchChain(ctx, tenantID, req.IdentityID)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 || rows[len(rows)-1].Epoch != current {
+			return api.ErrStatus(http.StatusConflict, "current recovery predecessor record is unavailable")
+		}
+		predecessorAlg, predecessorPub = rows[len(rows)-1].SuccessorAlg, rows[len(rows)-1].SuccessorPub
+	}
+	if req.PredecessorAlgorithm != predecessorAlg || !bytes.Equal(req.PredecessorPublicDER, predecessorPub) {
+		return api.ErrStatus(http.StatusConflict, "claimed recovery predecessor differs from current tenant chain")
+	}
+	return nil
 }
 
 func validateRecoveryRequestPolicy(tenantID string, req RecoveryRequest, policy pcasstore.RecoveryPolicy) error {

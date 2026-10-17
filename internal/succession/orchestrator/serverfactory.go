@@ -157,6 +157,8 @@ func (h *licensedOutboxHandler) breadthKind(destination string) breadthKind {
 		return breadthKEM
 	case topics.Recovery, RecoveryRequestDestination:
 		return breadthRecovery
+	case RecoverySuccessorPrepareDestination:
+		return breadthRecoveryPrepare
 	case topics.Federation, FederationImportDestination:
 		return breadthFederation
 	default:
@@ -191,6 +193,8 @@ func (h *licensedOutboxHandler) featureAction(destination string) (feature, acti
 		return "pcas_kem", "rewrap", true
 	case breadthRecovery:
 		return "pcas_recovery", "mint", true
+	case breadthRecoveryPrepare:
+		return "pcas_recovery", "prepare", true
 	case breadthFederation:
 		return "pcas_federation", "import", true
 	default:

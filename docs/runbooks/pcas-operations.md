@@ -182,12 +182,29 @@ event are not accepted as recovery authority after this upgrade; reconfigure
 them through the API, CLI, or console before requesting recovery. Reuse the
 same `Idempotency-Key` when retrying an uncertain configuration response.
 
-`POST /api/v1/pcas/recovery/requests` refuses a request unless its tenant and
-identity have a configured policy and its trust root, quorum, roster, statement
-and signatures match that policy. An accepted response means the request was
-queued. The worker checks the same policy again at delivery; changing the root
-or roster after queueing makes the old request fail instead of minting under
-stale authority. Inspect its request status and independently verify the resulting
+Before asking custodians to sign, run
+`trstctl pcas recovery successor prepare -f successor.json --force` (or POST
+`/api/v1/pcas/recovery/successors/prepare`). The document names the registered
+`identity_id`, its exact `deployment_scope`, the next `epoch`, and a signature
+`algorithm` the isolated signer can generate. Preparation creates a tenant,
+identity and epoch-bound key inside signer custody and appends its signed public
+receipt to the event log. Poll the returned request status to `delivered`, then
+read `trstctl pcas recovery successor get --identity-id ID --epoch N` (or GET
+`/api/v1/pcas/recovery/successors?identity_id=ID&epoch=N`). Compare the public
+key and signer receipt independently. Give the custodians the **public key from
+that readback**, never a separately generated key. A second preparation with a
+different algorithm or scope for that epoch is refused; a lost response can be
+retried without replacing the key. The isolated signer does not support Ed25519
+for this key-creation path.
+
+`POST /api/v1/pcas/recovery/requests` then refuses a request unless its tenant
+and identity have a configured policy, its signer handle is the derived tenant
+handle for that prepared epoch, its predecessor matches the current recorded
+chain, and its trust root, quorum, roster, signed statement and signatures
+match the policy and prepared public key. An accepted response means the
+request was queued. The worker checks the same policy, chain and signer receipt
+again at delivery; changing authority after queueing makes the old request fail
+closed. Inspect its request status and independently verify the resulting
 recovery record before trusting a successor. A queued response alone is not
 proof of minting, signer custody or relying-party acceptance.
 
@@ -259,7 +276,9 @@ The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
 `trstctl pcas federation imports request -f import.json`,
 `trstctl pcas kem rewrap request -f rewrap.json`, and
 `trstctl pcas rewrap status --identity_id <identity>`.
-Recovery uses `trstctl pcas recovery policy set -f policy.json --force` and
+Recovery uses `trstctl pcas recovery policy set -f policy.json --force`,
+`trstctl pcas recovery successor prepare -f successor.json --force`, the
+successor readback command above, and
 `trstctl pcas recovery request -f request.json --force`; the force flag makes
 the operator acknowledge the authority change or mint. Issuer registration and
 leaf issuance use `trstctl pcas issuers register`,

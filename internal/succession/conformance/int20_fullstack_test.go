@@ -710,17 +710,51 @@ func (st *int20Stack) issuerAndStapledLeaves(t *testing.T, checkpointIdentity st
 func (st *int20Stack) recoveryMint(t *testing.T) {
 	t.Helper()
 	const id = "spiffe://int20.example/workload/recovery"
-	trustRoot, auth, successor := recoveryAuthForSigner(t, st.ctx, st.signer, id, st.tenantID, "int20-recovery-successor", 2)
+	if _, err := st.svc.RegisterGenesis(st.ctx, st.tenantID, succapi.GenesisRegistrationRequest{
+		IdentityID: id, DeploymentScope: "spiffe://int20.example", Algorithm: string(crypto.ECDSAP256),
+	}); err != nil {
+		t.Fatalf("register recovery predecessor genesis: %v", err)
+	}
+	st.dispatchAll(t)
+	chain, err := st.svc.FetchChain(st.ctx, st.tenantID, id)
+	if err != nil || chain.Genesis == nil {
+		t.Fatalf("read recovery predecessor genesis: %+v err=%v", chain, err)
+	}
+	successorHandle := succession.TenantKeyHandle(st.tenantID, id, 1)
+	trustRoot, auth, successor := recoveryAuthForSigner(t, st.ctx, st.signer, id, st.tenantID, successorHandle, 1)
 	if _, err := st.svc.ConfigureRecoveryPolicy(st.ctx, st.tenantID, succapi.RecoveryPolicyRequest{
 		IdentityID: id, Threshold: 2, Roster: mustJSON(t, auth.Roster), TrustRootDER: trustRoot.Public().DER,
 	}); err != nil {
 		t.Fatalf("configure recovery policy: %v", err)
 	}
+	if _, err := st.svc.PrepareRecoverySuccessor(st.ctx, st.tenantID, succapi.RecoverySuccessorPrepareRequest{
+		IdentityID: id, DeploymentScope: "spiffe://int20.example", Epoch: 1,
+		Algorithm: string(successor.Algorithm()),
+	}); err != nil {
+		t.Fatalf("prepare recovery successor: %v", err)
+	}
+	st.dispatchAll(t)
+	prepared, err := st.svc.GetRecoverySuccessor(st.ctx, st.tenantID, id, 1)
+	if err != nil || !bytes.Equal(prepared.PublicKeyDER, successor.Public().DER) {
+		t.Fatalf("prepared successor readback = %+v err=%v", prepared, err)
+	}
+	if _, err := st.svc.PrepareRecoverySuccessor(st.ctx, st.tenantID, succapi.RecoverySuccessorPrepareRequest{
+		IdentityID: id, DeploymentScope: "spiffe://int20.example", Epoch: 1,
+		Algorithm: string(crypto.ECDSAP521),
+	}); err == nil || !strings.Contains(err.Error(), "different successor") {
+		t.Fatalf("changed preparation after immutable receipt = %v, want pre-append refusal", err)
+	}
+	if _, err := st.svc.PrepareRecoverySuccessor(st.ctx, st.tenantID, succapi.RecoverySuccessorPrepareRequest{
+		IdentityID: id, DeploymentScope: "spiffe://int20.example", Epoch: 1,
+		Algorithm: string(crypto.Ed25519),
+	}); err == nil || !strings.Contains(err.Error(), "cannot sign") {
+		t.Fatalf("unsupported isolated-signer Ed25519 preparation = %v, want admission refusal", err)
+	}
 	rawAuth := mustJSON(t, auth)
 	if _, err := st.svc.RequestRecovery(st.ctx, st.tenantID, succapi.RecoveryRequest{
 		IdentityID: id, DeploymentScope: "spiffe://int20.example", TargetAlgorithm: string(successor.Algorithm()),
-		SuccessorHandle: "int20-recovery-successor", PredecessorEpoch: 1, Epoch: 2,
-		PredecessorAlgorithm: string(crypto.ECDSAP256), PredecessorPublicDER: []byte("lost-predecessor-public-key"),
+		SuccessorHandle: successorHandle, PredecessorEpoch: 0, Epoch: 1,
+		PredecessorAlgorithm: string(chain.Genesis.Algorithm), PredecessorPublicDER: chain.Genesis.PublicKey,
 		TrustRootDER: trustRoot.Public().DER, Authorization: rawAuth,
 	}); err != nil {
 		t.Fatalf("request recovery: %v", err)

@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -47,6 +49,8 @@ func (w *BreadthWorker) Deliver(ctx context.Context, m coreorch.Message) error {
 	switch m.Destination {
 	case KEMRewrapDestination:
 		return w.handleKEMRewrap(ctx, m.TenantID, m.Payload)
+	case RecoverySuccessorPrepareDestination:
+		return w.handleRecoverySuccessorPrepare(ctx, m.TenantID, m.Payload)
 	case RecoveryRequestDestination:
 		return w.handleRecovery(ctx, m.TenantID, m.Payload)
 	case FederationImportDestination:
@@ -62,9 +66,10 @@ func (w *BreadthWorker) Deliver(ctx context.Context, m coreorch.Message) error {
 type breadthKind string
 
 const (
-	breadthKEM        breadthKind = "kem"
-	breadthRecovery   breadthKind = "recovery"
-	breadthFederation breadthKind = "federation"
+	breadthKEM             breadthKind = "kem"
+	breadthRecovery        breadthKind = "recovery"
+	breadthRecoveryPrepare breadthKind = "recovery_prepare"
+	breadthFederation      breadthKind = "federation"
 )
 
 // DeliverKind routes by resolved family rather than by destination literal; the
@@ -75,6 +80,8 @@ func (w *BreadthWorker) DeliverKind(ctx context.Context, kind breadthKind, m cor
 		return w.handleKEMRewrap(ctx, m.TenantID, m.Payload)
 	case breadthRecovery:
 		return w.handleRecovery(ctx, m.TenantID, m.Payload)
+	case breadthRecoveryPrepare:
+		return w.handleRecoverySuccessorPrepare(ctx, m.TenantID, m.Payload)
 	case breadthFederation:
 		return w.handleFederationImport(ctx, m.TenantID, m.Payload)
 	default:
@@ -109,6 +116,125 @@ type recoveryPayload struct {
 	PredecessorPublicDER []byte          `json:"predecessor_public_der"`
 	TrustRootDER         []byte          `json:"trust_root_der"`
 	Authorization        json.RawMessage `json:"authorization"`
+}
+
+type recoveryPreparePayload struct {
+	IdentityID      string `json:"identity_id"`
+	Epoch           uint64 `json:"epoch"`
+	Algorithm       string `json:"algorithm"`
+	DeploymentScope string `json:"deployment_scope"`
+}
+
+// handleRecoverySuccessorPrepare creates one signer-held key under a deterministic
+// tenant identity epoch handle, then appends a signed public receipt. The event
+// ID is a first-writer fence; a lost reply reuses the same key and event.
+func (w *BreadthWorker) handleRecoverySuccessorPrepare(ctx context.Context, tenantID string, payload []byte) error {
+	var env requestEnvelope[recoveryPreparePayload]
+	if err := json.Unmarshal(payload, &env); err != nil {
+		return fmt.Errorf("pcas recovery prepare: decode payload: %w", err)
+	}
+	p := env.Request
+	if env.RequestID == "" || p.IdentityID == "" || p.Epoch == 0 || p.Algorithm == "" || p.DeploymentScope == "" {
+		return errors.New("pcas recovery prepare: incomplete request")
+	}
+	if w.log == nil || w.repo == nil || w.kem == nil {
+		return errors.New("pcas recovery prepare: event log, policy store and signer are required")
+	}
+	anchor, found, err := w.repo.GetGenesis(ctx, tenantID, p.IdentityID)
+	if err != nil {
+		return err
+	}
+	if !found || anchor.Genesis.DeploymentScope != p.DeploymentScope {
+		return errors.New("pcas recovery prepare: tenant identity genesis or scope mismatch")
+	}
+	highWater, err := w.highWater(ctx, tenantID, p.IdentityID)
+	if err != nil {
+		return err
+	}
+	if p.Epoch != highWater+1 {
+		return errors.New("pcas recovery prepare: epoch is not next after current high-water")
+	}
+	handle := succession.TenantKeyHandle(tenantID, p.IdentityID, p.Epoch)
+	eventID := succession.RecoverySuccessorEventID(tenantID, p.IdentityID, p.Epoch)
+	if prior, exists, err := w.log.EventByID(ctx, eventID); err != nil {
+		return err
+	} else if exists {
+		return w.verifyPreparedSuccessorReadback(ctx, prior, tenantID, p.IdentityID,
+			p.Epoch, p.Algorithm, p.DeploymentScope, handle)
+	}
+	remote, err := w.kem.SignerForHandle(ctx, handle)
+	if status.Code(err) == codes.NotFound {
+		remote, err = w.kem.GenerateKeyHandle(ctx, crypto.Algorithm(p.Algorithm), handle)
+		if status.Code(err) == codes.AlreadyExists {
+			remote, err = w.kem.SignerForHandle(ctx, handle)
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("pcas recovery prepare: signer key: %w", err)
+	}
+	if string(remote.Algorithm()) != p.Algorithm {
+		return errors.New("pcas recovery prepare: existing signer key uses a different algorithm")
+	}
+	receipt := succession.RecoverySuccessorPreparedV1{
+		TenantID: tenantID, IdentityID: p.IdentityID, Epoch: p.Epoch,
+		Algorithm: p.Algorithm, Handle: handle, PublicKeyDER: remote.Public().DER,
+		DeploymentScope: p.DeploymentScope, RequestID: env.RequestID,
+	}
+	message, err := succession.RecoverySuccessorSigningMessage(receipt)
+	if err != nil {
+		return err
+	}
+	digest, err := crypto.Digest(crypto.SHA256, message)
+	if err != nil {
+		return err
+	}
+	receipt.SignerSignature, err = remote.SignDigestForOperation(
+		"pcas-recovery-prepare:"+eventID, digest, crypto.SignOptions{Hash: crypto.SHA256})
+	if err != nil {
+		return fmt.Errorf("pcas recovery prepare: signer receipt: %w", err)
+	}
+	if err := succession.VerifyRecoverySuccessorPrepared(receipt); err != nil {
+		return err
+	}
+	ev, err := succession.Encode(receipt)
+	if err != nil {
+		return err
+	}
+	ev.ID = eventID
+	recorded, err := w.log.Append(ctx, ev)
+	if err != nil {
+		return fmt.Errorf("pcas recovery prepare: append public receipt: %w", err)
+	}
+	return w.verifyPreparedSuccessorReadback(ctx, recorded, tenantID, p.IdentityID,
+		p.Epoch, p.Algorithm, p.DeploymentScope, handle)
+}
+
+func (w *BreadthWorker) verifyPreparedSuccessorReadback(ctx context.Context, ev events.Event,
+	tenantID, identityID string, epoch uint64, algorithm, deploymentScope, handle string) error {
+	if ev.TenantID != tenantID || ev.Type != succession.TypeRecoverySuccessorPrepared {
+		return errors.New("pcas recovery prepare: event ID belongs to another tenant or command")
+	}
+	decoded, err := succession.Decode(ev)
+	if err != nil {
+		return err
+	}
+	receipt, ok := decoded.(succession.RecoverySuccessorPreparedV1)
+	if !ok || receipt.TenantID != tenantID || receipt.IdentityID != identityID ||
+		receipt.Epoch != epoch || receipt.Algorithm != algorithm ||
+		receipt.DeploymentScope != deploymentScope || receipt.Handle != handle {
+		return errors.New("pcas recovery prepare: existing receipt binds different key or scope")
+	}
+	if err := succession.VerifyRecoverySuccessorPrepared(receipt); err != nil {
+		return err
+	}
+	remote, err := w.kem.SignerForHandle(ctx, handle)
+	if err != nil {
+		return fmt.Errorf("pcas recovery prepare: signer readback: %w", err)
+	}
+	if string(remote.Algorithm()) != algorithm || !bytes.Equal(remote.Public().DER, receipt.PublicKeyDER) {
+		return errors.New("pcas recovery prepare: signer key differs from immutable receipt")
+	}
+	return nil
 }
 
 type federationImportPayload struct {
@@ -233,6 +359,9 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 		return fmt.Errorf("pcas recovery: decode payload: %w", err)
 	}
 	p := env.Request
+	if p.SuccessorHandle != succession.TenantKeyHandle(tenantID, p.IdentityID, p.Epoch) {
+		return errors.New("pcas recovery: successor handle is not bound to tenant, identity and epoch")
+	}
 	if w.repo == nil {
 		return errors.New("pcas recovery: recovery policy store unavailable")
 	}
@@ -258,21 +387,61 @@ func (w *BreadthWorker) handleRecovery(ctx context.Context, tenantID string, pay
 	}, p.TrustRootDER, auth, expected, p.DeploymentScope); err != nil {
 		return fmt.Errorf("pcas recovery: configured policy refusal: %w", err)
 	}
+	if w.log == nil {
+		return errors.New("pcas recovery: event log unavailable")
+	}
+	preparedID := succession.RecoverySuccessorEventID(tenantID, p.IdentityID, p.Epoch)
+	preparedEvent, preparedFound, err := w.log.EventByID(ctx, preparedID)
+	if err != nil {
+		return err
+	}
+	if !preparedFound {
+		return errors.New("pcas recovery: successor has no immutable preparation receipt")
+	}
+	if err := w.verifyPreparedSuccessorReadback(ctx, preparedEvent, tenantID, p.IdentityID,
+		p.Epoch, p.TargetAlgorithm, p.DeploymentScope, p.SuccessorHandle); err != nil {
+		return err
+	}
+	anchor, found, err := w.repo.GetGenesis(ctx, tenantID, p.IdentityID)
+	if err != nil {
+		return err
+	}
+	if !found || anchor.Genesis.DeploymentScope != p.DeploymentScope {
+		return errors.New("pcas recovery: genesis or deployment scope mismatch")
+	}
+	highWater, err := w.highWater(ctx, tenantID, p.IdentityID)
+	if err != nil {
+		return err
+	}
+	if p.PredecessorEpoch != highWater || p.Epoch != highWater+1 {
+		return errors.New("pcas recovery: predecessor and successor epochs do not follow the current chain")
+	}
+	predecessorAlg, predecessorPub := string(anchor.Genesis.Algorithm), anchor.Genesis.PublicKey
+	if highWater > 0 {
+		rows, err := w.repo.FetchChain(ctx, tenantID, p.IdentityID)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 || rows[len(rows)-1].Epoch != highWater {
+			return errors.New("pcas recovery: current predecessor record is missing")
+		}
+		predecessorAlg, predecessorPub = rows[len(rows)-1].SuccessorAlg, rows[len(rows)-1].SuccessorPub
+	}
+	if p.PredecessorAlgorithm != predecessorAlg || !bytes.Equal(p.PredecessorPublicDER, predecessorPub) {
+		return errors.New("pcas recovery: claimed predecessor differs from current tenant chain")
+	}
 	if w.kem == nil {
 		return errors.New("pcas recovery: no signer custody configured")
 	}
 	successorRemote, err := w.kem.SignerForHandle(ctx, p.SuccessorHandle)
 	if err != nil {
-		successorRemote, err = w.kem.GenerateKeyHandle(ctx, crypto.Algorithm(p.TargetAlgorithm), p.SuccessorHandle)
-		if err != nil {
-			return fmt.Errorf("pcas recovery: bind successor in signer: %w", err)
-		}
+		return fmt.Errorf("pcas recovery: prepared successor absent from signer: %w", err)
+	}
+	if string(successorRemote.Algorithm()) != p.TargetAlgorithm ||
+		!bytes.Equal(successorRemote.Public().DER, auth.Statement.SuccessorPub) {
+		return errors.New("pcas recovery: prepared signer key differs from signed approval")
 	}
 	successor := crypto.SignerFromDigestSigner(successorRemote)
-	highWater, err := w.highWater(ctx, tenantID, p.IdentityID)
-	if err != nil {
-		return err
-	}
 	now := time.Now().UTC()
 	fields := succession.CommitmentFields{
 		DeploymentScope:   p.DeploymentScope,

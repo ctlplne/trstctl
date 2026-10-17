@@ -18,6 +18,7 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/succession"
 	succapi "trstctl.com/trstctl/internal/succession/api"
+	"trstctl.com/trstctl/internal/succession/recovery"
 	"trstctl.com/trstctl/internal/succession/retirement"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
 )
@@ -329,7 +330,7 @@ func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *
 	}
 	const id = "spiffe://d/recovery-policy-bound"
 	request := succapi.RecoveryRequest{IdentityID: id, TargetAlgorithm: "ECDSA-P256",
-		SuccessorHandle: "qa-recovery-successor", Epoch: 2,
+		SuccessorHandle: succession.TenantKeyHandle(tenantA, id, 2), Epoch: 2,
 		TrustRootDER: root.Public().DER, Authorization: json.RawMessage(`{}`)}
 	if _, err := svc.RequestRecovery(ctx, tenantA, request); err == nil || !strings.Contains(err.Error(), "recovery policy") {
 		t.Fatalf("missing recovery policy request = %v, want refusal before outbox", err)
@@ -348,7 +349,10 @@ func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *
 		t.Fatalf("mismatched recovery trust root request = %v, want refusal before outbox", err)
 	}
 	request.TrustRootDER = root.Public().DER
-	if _, err := svc.RequestRecovery(ctx, "22222222-2222-4222-8222-222222222222", request); err == nil || !strings.Contains(err.Error(), "recovery policy") {
+	const otherTenant = "22222222-2222-4222-8222-222222222222"
+	otherRequest := request
+	otherRequest.SuccessorHandle = succession.TenantKeyHandle(otherTenant, id, request.Epoch)
+	if _, err := svc.RequestRecovery(ctx, otherTenant, otherRequest); err == nil || !strings.Contains(err.Error(), "recovery policy") {
 		t.Fatalf("another tenant's recovery policy request = %v, want refusal before outbox", err)
 	}
 	request.Authorization, err = json.Marshal(map[string]any{
@@ -379,6 +383,89 @@ func TestService_RequestRecoveryRefusesMissingOrMismatchedPolicyBeforeOutbox(t *
 	}
 	if n != 0 {
 		t.Fatalf("recovery outbox rows after refused requests = %d, want 0", n)
+	}
+}
+
+// A signed recovery approval is authority over one exact successor public key,
+// not authority to ask the isolated signer to use an arbitrary named key. The
+// control plane must reject a foreign or unprepared handle before enqueuing.
+func TestService_RequestRecoveryRequiresPreparedTenantSuccessor(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	outbox := orchestrator.NewOutbox(cs)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	svc := succapi.NewService(cs, log, outbox)
+	backend := crypto.NewSoftwareBackend()
+	root, err := backend.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approver, err := backend.GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	successor, err := backend.GenerateKey(crypto.ECDSAP384)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const identity = "spiffe://qa.local/recovery-handle-bound"
+	roster := []recovery.Approver{{ID: "qa-custodian", PubDER: approver.Public().DER}}
+	rosterJSON, err := json.Marshal(roster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, succapi.RecoveryPolicyRequest{
+		IdentityID: identity, Threshold: 1, Roster: rosterJSON, TrustRootDER: root.Public().DER,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	statement := recovery.RecoveryStatement{
+		DeploymentScope: "spiffe://qa.local", IdentityID: identity, TenantID: tenantA,
+		Epoch: 1, SuccessorAlg: string(successor.Algorithm()), SuccessorPub: successor.Public().DER,
+		Nonce: "qa-exact-successor",
+	}
+	rosterSig, err := recovery.SignRoster(root, 1, roster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalSig, err := recovery.SignApproval(approver, statement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authJSON, err := json.Marshal(recovery.RecoveryAuthorization{
+		Statement: statement, Threshold: 1, Roster: roster, RosterSig: rosterSig,
+		Approvals: []recovery.Approval{{ApproverID: "qa-custodian", Signature: approvalSig}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, handle := range []string{
+		succession.TenantKeyHandle("22222222-2222-4222-8222-222222222222", identity, 1),
+		succession.TenantKeyHandle(tenantA, identity, 1),
+	} {
+		_, err := svc.RequestRecovery(ctx, tenantA, succapi.RecoveryRequest{
+			IdentityID: identity, DeploymentScope: statement.DeploymentScope,
+			TargetAlgorithm: statement.SuccessorAlg, SuccessorHandle: handle,
+			PredecessorEpoch: 0, Epoch: 1, PredecessorAlgorithm: string(crypto.ECDSAP256),
+			PredecessorPublicDER: []byte("qa-lost-predecessor"), TrustRootDER: root.Public().DER,
+			Authorization: authJSON,
+		})
+		if err == nil {
+			t.Fatalf("recovery accepted unprepared or foreign signer handle %q", handle)
+		}
+	}
+	var queued int
+	if err := cs.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE destination = $1`,
+		succapi.RecoveryRequestDestination).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("unprepared recovery queued %d outbox calls, want zero", queued)
 	}
 }
 

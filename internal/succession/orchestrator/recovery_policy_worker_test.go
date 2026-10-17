@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/succession"
 	succapi "trstctl.com/trstctl/internal/succession/api"
 	"trstctl.com/trstctl/internal/succession/orchestrator"
 	pcasstore "trstctl.com/trstctl/internal/succession/store"
@@ -47,6 +48,7 @@ func TestRecoveryWorkerRefusesMissingOrChangedPolicyBeforeSigner(t *testing.T) {
 	}
 	request := map[string]any{
 		"identity_id": id, "trust_root_der": root.Public().DER,
+		"epoch": 1, "successor_handle": succession.TenantKeyHandle(tenantA, id, 1),
 		"authorization": map[string]any{},
 	}
 	message := func() coreorch.Message {

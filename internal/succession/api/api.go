@@ -154,6 +154,27 @@ type RecoveryRequest struct {
 	Authorization        json.RawMessage `json:"authorization"`
 }
 
+// RecoverySuccessorPrepareRequest requests an isolated-signer key for the next
+// epoch before custodians sign its exact public key.
+type RecoverySuccessorPrepareRequest struct {
+	IdentityID      string `json:"identity_id"`
+	DeploymentScope string `json:"deployment_scope"`
+	Epoch           uint64 `json:"epoch"`
+	Algorithm       string `json:"algorithm"`
+}
+
+type RecoverySuccessorResponse struct {
+	IdentityID      string `json:"identity_id"`
+	DeploymentScope string `json:"deployment_scope"`
+	Epoch           uint64 `json:"epoch"`
+	Algorithm       string `json:"algorithm"`
+	Handle          string `json:"handle"`
+	PublicKeyDER    []byte `json:"public_key_der"`
+	RequestID       string `json:"request_id"`
+	SignerSignature []byte `json:"signer_signature"`
+	EventID         string `json:"event_id"`
+}
+
 type AsyncRequestResponse struct {
 	RequestID  string    `json:"request_id"`
 	Status     string    `json:"status"`
@@ -347,6 +368,8 @@ type Service interface {
 	RaiseDelegationFloor(ctx context.Context, tenantID string, req DelegationFloorRequest) (DelegationScopeResponse, error)
 	ListDelegationScopes(ctx context.Context, tenantID string) (DelegationListResponse, error)
 	ConfigureRecoveryPolicy(ctx context.Context, tenantID string, req RecoveryPolicyRequest) (RecoveryPolicyResponse, error)
+	PrepareRecoverySuccessor(ctx context.Context, tenantID string, req RecoverySuccessorPrepareRequest) (AsyncRequestResponse, error)
+	GetRecoverySuccessor(ctx context.Context, tenantID, identityID string, epoch uint64) (RecoverySuccessorResponse, error)
 	RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error)
 	RequestFederationImport(ctx context.Context, tenantID string, req FederationImportRequest) (AsyncRequestResponse, error)
 	RequestKEMRewrap(ctx context.Context, tenantID string, req KEMRewrapRequest) (AsyncRequestResponse, error)
@@ -445,6 +468,20 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:       func(a *api.API) http.HandlerFunc { return recoveryPolicyHandler(a, svc) },
 			RequestSchema: "PCASRecoveryPolicyRequest", ResponseSchema: "PCASRecoveryPolicy",
 			SuccessCode: "200", Mutation: true, Permission: authz.CertsWrite,
+		},
+		{
+			Method: "POST", Path: "/api/v1/pcas/recovery/successors/prepare", OperationID: "preparePCASRecoverySuccessor",
+			Summary:       "Prepare a tenant-bound signer-held successor key before custodian approval",
+			Handler:       func(a *api.API) http.HandlerFunc { return recoverySuccessorPrepareHandler(a, svc) },
+			RequestSchema: "PCASRecoverySuccessorPrepareRequest", ResponseSchema: "PCASAsyncRequest",
+			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/pcas/recovery/successors", OperationID: "getPCASRecoverySuccessor",
+			Summary:        "Read the exact signer-signed public successor key prepared for threshold recovery",
+			Handler:        func(a *api.API) http.HandlerFunc { return recoverySuccessorGetHandler(a, svc) },
+			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Required: true}, {Name: "epoch", Type: "integer", Required: true}},
+			ResponseSchema: "PCASRecoverySuccessor", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/recovery/requests", OperationID: "requestPCASRecovery",
@@ -727,6 +764,46 @@ func recoveryPolicyHandler(a *api.API, svc Service) http.HandlerFunc {
 		resp, err := svc.ConfigureRecoveryPolicy(ctx, tenantID, req)
 		return http.StatusOK, resp, err
 	})
+}
+
+func recoverySuccessorPrepareHandler(a *api.API, svc Service) http.HandlerFunc {
+	return mutationHandler(a, "pcas_recovery", "prepare", func(ctx context.Context, tenantID string, r *http.Request) (int, any, error) {
+		var req RecoverySuccessorPrepareRequest
+		if err := api.DecodeJSON(r, &req); err != nil {
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
+		if req.IdentityID == "" || req.DeploymentScope == "" || req.Epoch == 0 || req.Algorithm == "" {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest,
+				"identity_id, deployment_scope, positive epoch and algorithm are required")
+		}
+		resp, err := svc.PrepareRecoverySuccessor(ctx, tenantID, req)
+		return http.StatusAccepted, resp, err
+	})
+}
+
+func recoverySuccessorGetHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		identityID := r.URL.Query().Get("identity_id")
+		epoch, err := strconv.ParseUint(r.URL.Query().Get("epoch"), 10, 64)
+		if identityID == "" || err != nil || epoch == 0 {
+			writeProblem(w, http.StatusBadRequest, "identity_id and positive epoch are required")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.GetRecoverySuccessor(r.Context(), tenantID, identityID, epoch)
+		a.ObserveFeature("pcas_recovery", "read_successor", start, err)
+		if err != nil {
+			statusCode, _, mapped := mapPCASServiceError(http.StatusOK, nil, err)
+			writeProblem(w, statusCode, mapped.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
 }
 
 func recoveryRequestHandler(a *api.API, svc Service) http.HandlerFunc {
@@ -1151,6 +1228,24 @@ func schemas() map[string]*api.Schema {
 			"status":      api.StringSchema(),
 			"updated_at":  api.TimestampSchema(),
 		}, "identity_id", "status"),
+		"PCASRecoverySuccessorPrepareRequest": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id":      api.StringSchema(),
+			"deployment_scope": api.StringSchema(),
+			"epoch":            api.IntegerSchema(),
+			"algorithm":        api.StringSchema(),
+		}, "identity_id", "deployment_scope", "epoch", "algorithm"),
+		"PCASRecoverySuccessor": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id":      api.StringSchema(),
+			"deployment_scope": api.StringSchema(),
+			"epoch":            api.IntegerSchema(),
+			"algorithm":        api.StringSchema(),
+			"handle":           api.StringSchema(),
+			"public_key_der":   api.StringSchema(),
+			"request_id":       api.StringSchema(),
+			"signer_signature": api.StringSchema(),
+			"event_id":         api.StringSchema(),
+		}, "identity_id", "deployment_scope", "epoch", "algorithm", "handle",
+			"public_key_der", "request_id", "signer_signature", "event_id"),
 		"PCASRecoveryRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":            api.StringSchema(),
 			"deployment_scope":       api.StringSchema(),

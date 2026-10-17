@@ -149,6 +149,16 @@ func (f *fakeService) ConfigureRecoveryPolicy(_ context.Context, _ string, req s
 	return succapi.RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: time.Now()}, nil
 }
 
+func (f *fakeService) PrepareRecoverySuccessor(_ context.Context, _ string, req succapi.RecoverySuccessorPrepareRequest) (succapi.AsyncRequestResponse, error) {
+	return succapi.AsyncRequestResponse{RequestID: "recovery-prepare-1", Status: "queued", QueuedAt: time.Now(), IdentityID: req.IdentityID}, nil
+}
+
+func (f *fakeService) GetRecoverySuccessor(_ context.Context, _, identityID string, epoch uint64) (succapi.RecoverySuccessorResponse, error) {
+	return succapi.RecoverySuccessorResponse{IdentityID: identityID, Epoch: epoch,
+		Algorithm: "ECDSA-P384", Handle: "qa-signer-handle", PublicKeyDER: []byte("qa-public"),
+		SignerSignature: []byte("qa-signature"), EventID: "qa-event", RequestID: "recovery-prepare-1"}, nil
+}
+
 func (f *fakeService) RequestRecovery(_ context.Context, _ string, req succapi.RecoveryRequest) (succapi.AsyncRequestResponse, error) {
 	return succapi.AsyncRequestResponse{RequestID: "recovery-1", Status: "queued", QueuedAt: time.Now(), IdentityID: req.IdentityID}, nil
 }

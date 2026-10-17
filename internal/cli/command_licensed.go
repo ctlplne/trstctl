@@ -30,6 +30,8 @@ var licensedRouteCommands = []Command{
 	{Name: []string{"pcas", "genesis", "register"}, Method: "POST", Path: "/api/v1/pcas/genesis", Body: bodyFile, Summary: "Register a tenant-scoped signer-held PCAS genesis key"},
 	{Name: []string{"pcas", "requests", "status"}, Method: "GET", Path: "/api/v1/pcas/requests/{request_id}", Summary: "Show durable PCAS request and breadth-worker progress"},
 	{Name: []string{"pcas", "recovery", "policy", "set"}, Method: "POST", Path: "/api/v1/pcas/recovery/policies", Body: bodyFile, Summary: "Set a tenant identity's public threshold-recovery policy"},
+	{Name: []string{"pcas", "recovery", "successor", "prepare"}, Method: "POST", Path: "/api/v1/pcas/recovery/successors/prepare", Body: bodyFile, Summary: "Prepare the exact signer-held public key before custodian approval"},
+	{Name: []string{"pcas", "recovery", "successor", "get"}, Method: "GET", Path: "/api/v1/pcas/recovery/successors", Query: []string{"identity_id", "epoch"}, RequiredQuery: []string{"identity_id", "epoch"}, Summary: "Read the signed public successor receipt from isolated signer custody"},
 	{Name: []string{"pcas", "recovery", "request"}, Method: "POST", Path: "/api/v1/pcas/recovery/requests", Body: bodyFile, Summary: "Queue signed threshold recovery under the configured policy"},
 	{Name: []string{"pcas", "federation", "bridges", "list"}, Method: "GET", Path: "/api/v1/pcas/federation/bridges", Summary: "List only verified, signed foreign trust bridges"},
 	{Name: []string{"pcas", "federation", "imports", "request"}, Method: "POST", Path: "/api/v1/pcas/federation/imports", Body: bodyFile, Summary: "Queue verification and signing of a foreign PCAS bridge"},

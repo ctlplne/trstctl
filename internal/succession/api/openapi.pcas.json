@@ -729,6 +729,72 @@
           "authorization"
         ]
       },
+      "PCASRecoverySuccessor": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "deployment_scope": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "public_key_der": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "signer_signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "deployment_scope",
+          "epoch",
+          "algorithm",
+          "handle",
+          "public_key_der",
+          "request_id",
+          "signer_signature",
+          "event_id"
+        ]
+      },
+      "PCASRecoverySuccessorPrepareRequest": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "deployment_scope": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "deployment_scope",
+          "epoch",
+          "algorithm"
+        ]
+      },
       "PCASRequestStatus": {
         "type": "object",
         "properties": {
@@ -1620,6 +1686,83 @@
           }
         },
         "summary": "Queue a threshold-authenticated PCAS recovery mint"
+      }
+    },
+    "/api/v1/pcas/recovery/successors": {
+      "get": {
+        "operationId": "getPCASRecoverySuccessor",
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "epoch",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRecoverySuccessor"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "Read the exact signer-signed public successor key prepared for threshold recovery"
+      }
+    },
+    "/api/v1/pcas/recovery/successors/prepare": {
+      "post": {
+        "operationId": "preparePCASRecoverySuccessor",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASRecoverySuccessorPrepareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASAsyncRequest"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "Prepare a tenant-bound signer-held successor key before custodian approval"
       }
     },
     "/api/v1/pcas/requests/{request_id}": {

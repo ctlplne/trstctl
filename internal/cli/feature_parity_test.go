@@ -305,8 +305,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// PCAS delegation adds signer-confirmed scope readback and two reviewed
 	// commands for scope creation and monotonic floor raises.
 	// PCAS breadth adds recovery, federation, KEM, issuer and staple operator paths.
-	if len(out) != 532 {
-		t.Fatalf("CLI commands = %d, want 532", len(out))
+	// Recovery preparation and signed public readback add two commands so a
+	// custodian can approve the exact isolated-signer key.
+	if len(out) != 534 {
+		t.Fatalf("CLI commands = %d, want 534", len(out))
 	}
 	return out
 }

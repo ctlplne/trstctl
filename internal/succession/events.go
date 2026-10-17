@@ -43,6 +43,9 @@ const (
 	TypeDelegationApplied = "nhi.delegation.applied"
 	// TypeRecoveryPolicyConfigured records public, tenant-bound recovery authority.
 	TypeRecoveryPolicyConfigured = "nhi.recovery.policy.configured"
+	// TypeRecoverySuccessorPrepared records a signer-held key before custodians
+	// sign a recovery statement naming that exact public key.
+	TypeRecoverySuccessorPrepared = "nhi.recovery.successor.prepared"
 	// TypeIssuerAuthorityRegistered binds a tenant's managed CA to one PCAS epoch.
 	TypeIssuerAuthorityRegistered = "nhi.issuer.authority.registered"
 	// TypeFederationBridgeImported records a verified, locally signed foreign trust bridge.
@@ -65,6 +68,7 @@ const (
 	MisissuanceSchemaV1               = 1
 	DelegationAppliedSchemaV1         = 1
 	RecoveryPolicyConfiguredSchemaV1  = 1
+	RecoverySuccessorPreparedSchemaV1 = 1
 	IssuerAuthorityRegisteredSchemaV1 = 1
 	FederationBridgeImportedSchemaV1  = 1
 )
@@ -116,6 +120,22 @@ type RecoveryPolicyConfiguredV1 struct {
 }
 
 func (RecoveryPolicyConfiguredV1) isSuccessionPayload() {}
+
+// RecoverySuccessorPreparedV1 is public, signer-signed custody evidence. The
+// private successor key stays inside the isolated signer process.
+type RecoverySuccessorPreparedV1 struct {
+	TenantID        string `json:"tenant_id"`
+	IdentityID      string `json:"identity_id"`
+	Epoch           uint64 `json:"epoch"`
+	Algorithm       string `json:"algorithm"`
+	Handle          string `json:"handle"`
+	PublicKeyDER    []byte `json:"public_key_der"`
+	DeploymentScope string `json:"deployment_scope"`
+	RequestID       string `json:"request_id"`
+	SignerSignature []byte `json:"signer_signature"`
+}
+
+func (RecoverySuccessorPreparedV1) isSuccessionPayload() {}
 
 // IssuerAuthorityRegisteredV1 is public CA and signer-handle metadata. The
 // isolated signer retains the private key; replay rebuilds only this serving
@@ -286,6 +306,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeDelegationApplied, DelegationAppliedSchemaV1, v.TenantID, v)
 	case RecoveryPolicyConfiguredV1:
 		return marshalEvent(TypeRecoveryPolicyConfigured, RecoveryPolicyConfiguredSchemaV1, v.TenantID, v)
+	case RecoverySuccessorPreparedV1:
+		return marshalEvent(TypeRecoverySuccessorPrepared, RecoverySuccessorPreparedSchemaV1, v.TenantID, v)
 	case IssuerAuthorityRegisteredV1:
 		return marshalEvent(TypeIssuerAuthorityRegistered, IssuerAuthorityRegisteredSchemaV1, v.TenantID, v)
 	case FederationBridgeImportedV1:
@@ -352,6 +374,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RecoveryPolicyConfiguredV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRecoverySuccessorPrepared:
+		if ver > RecoverySuccessorPreparedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RecoverySuccessorPreparedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}
