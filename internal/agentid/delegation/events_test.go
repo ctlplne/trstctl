@@ -10,6 +10,17 @@ import (
 	"trstctl.com/trstctl/internal/events"
 )
 
+func TestRootAnchorEventIDsRemainStableAcrossSignerDependencyRepair(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111111"
+	const key = "qa-root-1"
+	if got, want := delegation.RootAnchorEventID(tenant, key), "62b27e2a-2c09-5645-a58e-265484c72b79"; got != want {
+		t.Fatalf("registered root event ID = %s, want %s", got, want)
+	}
+	if got, want := delegation.RootAnchorUnprovisionedEventID(tenant, key), "08074d45-1154-575f-a84d-92ba85f495ad"; got != want {
+		t.Fatalf("unprovisioned root event ID = %s, want %s", got, want)
+	}
+}
+
 // TestEvents_RoundTrip verifies every delegation-lifecycle event type has a
 // versioned schema with round-trip encode/decode (acceptance criterion 1).
 func TestEvents_RoundTrip(t *testing.T) {

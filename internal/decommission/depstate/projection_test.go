@@ -4,13 +4,31 @@ package depstate
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 	"trstctl.com/trstctl/internal/proptest"
 
+	"trstctl.com/trstctl/internal/caevent"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/projections"
 )
+
+func TestSignerCADependencyFoldRejectsFutureMintSchema(t *testing.T) {
+	event := eventspec.Event{
+		Type: caevent.EventCAEndEntityIssued, SchemaVersion: 99,
+		TenantID: "11111111-1111-4111-8111-111111111111", ID: "future-leaf",
+		Data: []byte(`{"ca_id":"22222222-2222-4222-8222-222222222222","serial":"17"}`),
+	}
+	if _, err := Fold([]eventspec.Event{event}); !errors.Is(err, caevent.ErrUnknownSchemaVersion) {
+		t.Fatalf("future CA mint must stop signer retirement fold, got %v", err)
+	}
+	for _, eventType := range CARegistrationEventTypes() {
+		if !caevent.IsDependencyEvent(eventType) {
+			t.Errorf("signer cut includes unvalidated CA event %s", eventType)
+		}
+	}
+}
 
 func TestManagedCALeafIssuanceRegistersExactRetirementDependent(t *testing.T) {
 	const tenantID = "11111111-1111-4111-8111-111111111111"

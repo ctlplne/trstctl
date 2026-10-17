@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1536 annotated sites across 26 rules. Each row is
+1538 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -503,10 +503,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:604` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5315` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5332` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5345` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5373` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5322` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5339` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5352` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5380` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1575,7 +1575,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:228` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (5 sites)
+### G401 — CWE-328 Use of weak hash (6 sites)
 
 | Location | Reason |
 |---|---|
@@ -1584,6 +1584,7 @@ not this file.
 | `internal/crypto/opaque_x509.go:266` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:115` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
+| `internal/crypto/uuidv5.go:21` | RFC 4122 UUIDv5 public identifier, not a security digest. |
 
 ### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (8 sites)
 
@@ -1638,7 +1639,7 @@ not this file.
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (5 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (6 sites)
 
 | Location | Reason |
 |---|---|
@@ -1647,6 +1648,7 @@ not this file.
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/tsa.go:20` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:7` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
+| `internal/crypto/uuidv5.go:6` | RFC 4122 UUIDv5 uses SHA-1 only for a public identity label, never integrity (CWE-328). |
 
 ### G602 — CWE-118 Incorrect access of indexable resource (5 sites)
 

@@ -6,8 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
-
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
@@ -84,13 +83,13 @@ func (RootAnchorUnprovisionedV1) isDelegationPayload() {}
 // RootAnchorEventID fixes one event identity per tenant/key slot. A retry with
 // changed trust bytes must encounter the existing event and be refused.
 func RootAnchorEventID(tenantID, keyID string) string {
-	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("agent.root_anchor.registered.v1\x00"+tenantID+"\x00"+keyID)).String()
+	return crypto.UUIDv5OID([]byte("agent.root_anchor.registered.v1\x00" + tenantID + "\x00" + keyID))
 }
 
 // RootAnchorUnprovisionedEventID fences one historical observation per
 // tenant/key. A retry with different bytes must not rewrite the record.
 func RootAnchorUnprovisionedEventID(tenantID, keyID string) string {
-	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("agent.root_anchor.unprovisioned.v1\x00"+tenantID+"\x00"+keyID)).String()
+	return crypto.UUIDv5OID([]byte("agent.root_anchor.unprovisioned.v1\x00" + tenantID + "\x00" + keyID))
 }
 
 // DelegationRecordedV1 is the ledger announcement of an appended delegation record.

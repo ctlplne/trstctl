@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/caevent"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -136,15 +137,13 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 // derived row identity must be stable across replay and upgrade. The event ID
 // belongs to the original mint; rebuilding inventory never mints another leaf.
 func LegacyManagedCAInventoryID(e events.Event) string {
-	return uuid.NewSHA1(uuid.NameSpaceOID,
-		[]byte("managed-ca-legacy-inventory\x00"+e.TenantID+"\x00"+e.ID)).String()
+	return caevent.LegacyManagedCAInventoryID(e)
 }
 
 // SecretPKIInventoryID is stable across replay of the exact issuance event.
 // It never derives identity from a tenant-supplied name or a collidable serial.
 func SecretPKIInventoryID(e events.Event) string {
-	return uuid.NewSHA1(uuid.NameSpaceOID,
-		[]byte("secret-pki-inventory\x00"+e.TenantID+"\x00"+e.ID)).String()
+	return caevent.SecretPKIInventoryID(e)
 }
 
 // ApplyTx takes the fingerprint fence before any approval row/fence lock. Both

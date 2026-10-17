@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/caevent"
 	"trstctl.com/trstctl/internal/connector"
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -163,21 +164,21 @@ const (
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventKeyCompromiseCAEffectCompleted           = "identity.key_compromise_ca_effect_completed"
 	EventCertificateSuperseded                    = "certificate.superseded"
-	EventCAIssuedCertificate                      = "ca.certificate.issued"
+	EventCAIssuedCertificate                      = caevent.EventCAIssuedCertificate
 	EventCACertificateRevoked                     = "ca.certificate.revoked"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
 	EventCACeremonyApproved                       = "ca.ceremony.approved"
 	EventCACeremonyCancelled                      = "ca.ceremony.cancelled"
 	EventCARootCreated                            = "ca.root.created"
-	EventCAAuthorityImported                      = "ca.authority.imported"
+	EventCAAuthorityImported                      = caevent.EventCAAuthorityImported
 	EventCAAuthorityRotated                       = "ca.authority.rotated"
-	EventCAAuthorityRekeyed                       = "ca.authority.rekeyed"
+	EventCAAuthorityRekeyed                       = caevent.EventCAAuthorityRekeyed
 	EventCAAuthorityHorizonAlerted                = "ca.authority.horizon_alerted"
-	EventCAIntermediateCreated                    = "ca.intermediate.created"
+	EventCAIntermediateCreated                    = caevent.EventCAIntermediateCreated
 	EventCAIntermediateCSRSignRequested           = "ca.intermediate_csr.sign_requested"
-	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
-	EventCAEndEntityIssued                        = "ca.endentity.issued"
-	EventCACrossSigned                            = "ca.cross_signed"
+	EventCAIntermediateCSRIssued                  = caevent.EventCAIntermediateCSRIssued
+	EventCAEndEntityIssued                        = caevent.EventCAEndEntityIssued
+	EventCACrossSigned                            = caevent.EventCACrossSigned
 	EventBreakglassIssued                         = "breakglass.issued"
 	EventBreakglassCARotated                      = "breakglass.ca.rotated"
 	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
@@ -375,7 +376,7 @@ const OwnerDepthEventSchemaVersion = 2
 // CAAuthorityCreatedEventSchemaVersion is the first CA create/import event shape
 // that carries the full ca_authorities row. Version 1 events were audit-only
 // breadcrumbs and cannot rebuild the authority read model.
-const CAAuthorityCreatedEventSchemaVersion = 2
+const CAAuthorityCreatedEventSchemaVersion = caevent.CAAuthorityCreatedEventSchemaVersion
 
 // PrivacySubjectErasedOperationEventSchemaVersion is the first
 // privacy.subject.erased shape that binds the durable operation and canonical
@@ -1569,17 +1570,17 @@ type AccessChangeRequestDecided struct {
 }
 
 // CAIssuedCertificateEvidenceSchemaVersion declares retained public leaf proof.
-const CAIssuedCertificateEvidenceSchemaVersion = 2
+const CAIssuedCertificateEvidenceSchemaVersion = caevent.CAIssuedCertificateEvidenceSchemaVersion
 
 // CASecretInventorySchemaVersion binds a PKI-secret mint to one public
 // inventory row, its subject-key custody, and the same responder serial.
 // Historical v1/v2 events keep their responder-only replay contract.
-const CASecretInventorySchemaVersion = 3
+const CASecretInventorySchemaVersion = caevent.CASecretInventorySchemaVersion
 
 // CAEndEntityInventorySchemaVersion makes one managed leaf event the authority
 // for both inventory and the CA responder serial. Older responder-only events
 // retain their original projection contract during replay.
-const CAEndEntityInventorySchemaVersion = 3
+const CAEndEntityInventorySchemaVersion = caevent.CAEndEntityInventorySchemaVersion
 
 type CAEndEntityInventoried struct {
 	ID                      string     `json:"id"`
@@ -4031,6 +4032,12 @@ func schemaVersionOf(e events.Event) int {
 // knows how to decode. Unknown event types stay forward-compatible and are ignored
 // by old projectors; known types at unknown versions fail closed (SCHEMA-001/002).
 func ValidateSchemaVersion(e events.Event) error {
+	// The signer derives CA retirement dependencies without linking this
+	// projector. Validate its shared CA contract here as well, including the
+	// intermediate-CSR event that is not a relational projection itself.
+	if err := caevent.ValidateSchemaVersion(e); err != nil {
+		return fmt.Errorf("%w: %v", ErrUnknownSchemaVersion, err)
+	}
 	if versions, gated := knownSchemaVersions[e.Type]; gated {
 		if v := schemaVersionOf(e); !versions[v] {
 			return fmt.Errorf("%w: type %q v%d (seq %d)", ErrUnknownSchemaVersion, e.Type, v, e.Sequence)

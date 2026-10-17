@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"trstctl.com/trstctl/internal/caevent"
 	"trstctl.com/trstctl/internal/eventspec"
-	"trstctl.com/trstctl/internal/projections"
 )
 
 // CARegistrations derives dependencies from the original, immutable CA action.
@@ -18,8 +18,8 @@ import (
 func CARegistrations(e eventspec.Event) ([]DependencyRegisteredV1, error) {
 	var keyID, dependentID string
 	switch e.Type {
-	case projections.EventCAEndEntityIssued, projections.EventCAIssuedCertificate, projections.EventCAIntermediateCSRIssued:
-		if err := projections.ValidateSchemaVersion(e); err != nil {
+	case caevent.EventCAEndEntityIssued, caevent.EventCAIssuedCertificate, caevent.EventCAIntermediateCSRIssued:
+		if err := caevent.ValidateSchemaVersion(e); err != nil {
 			return nil, err
 		}
 		var leaf struct {
@@ -31,33 +31,33 @@ func CARegistrations(e eventspec.Event) ([]DependencyRegisteredV1, error) {
 			return nil, fmt.Errorf("depstate: decode %s: %w", e.Type, err)
 		}
 		if leaf.CAID == "" || leaf.Serial == "" {
-			if e.Type == projections.EventCAIntermediateCSRIssued && leaf.Serial == "" {
+			if e.Type == caevent.EventCAIntermediateCSRIssued && leaf.Serial == "" {
 				return nil, nil // Preparing an offline-parent CSR has not issued a certificate.
 			}
 			return nil, fmt.Errorf("depstate: %s requires ca_id and serial", e.Type)
 		}
 		keyID = leaf.CAID
 		switch {
-		case e.Type == projections.EventCAEndEntityIssued && e.SchemaVersion == projections.CAEndEntityInventorySchemaVersion:
+		case e.Type == caevent.EventCAEndEntityIssued && e.SchemaVersion == caevent.CAEndEntityInventorySchemaVersion:
 			if leaf.ID == "" {
 				return nil, fmt.Errorf("depstate: managed CA leaf requires inventory id")
 			}
 			dependentID = leaf.ID
-		case e.Type == projections.EventCAEndEntityIssued && e.SchemaVersion == projections.CAIssuedCertificateEvidenceSchemaVersion:
+		case e.Type == caevent.EventCAEndEntityIssued && e.SchemaVersion == caevent.CAIssuedCertificateEvidenceSchemaVersion:
 			if e.ID == "" {
 				return nil, fmt.Errorf("depstate: historical managed CA leaf requires event id")
 			}
-			dependentID = projections.LegacyManagedCAInventoryID(e)
-		case e.Type == projections.EventCAIssuedCertificate && e.SchemaVersion == projections.CASecretInventorySchemaVersion:
+			dependentID = caevent.LegacyManagedCAInventoryID(e)
+		case e.Type == caevent.EventCAIssuedCertificate && e.SchemaVersion == caevent.CASecretInventorySchemaVersion:
 			if e.ID == "" {
 				return nil, fmt.Errorf("depstate: PKI secret leaf requires event id")
 			}
-			dependentID = projections.SecretPKIInventoryID(e)
+			dependentID = caevent.SecretPKIInventoryID(e)
 		default:
 			dependentID = "serial:" + leaf.Serial
 		}
-	case projections.EventCAIntermediateCreated, projections.EventCAAuthorityImported:
-		if err := projections.ValidateSchemaVersion(e); err != nil {
+	case caevent.EventCAIntermediateCreated, caevent.EventCAAuthorityImported:
+		if err := caevent.ValidateSchemaVersion(e); err != nil {
 			return nil, err
 		}
 		if e.SchemaVersion == 1 {
@@ -77,8 +77,8 @@ func CARegistrations(e eventspec.Event) ([]DependencyRegisteredV1, error) {
 			return nil, fmt.Errorf("depstate: child CA requires ca_id")
 		}
 		keyID, dependentID = *authority.ParentID, authority.CAID
-	case projections.EventCAAuthorityRekeyed:
-		if err := projections.ValidateSchemaVersion(e); err != nil {
+	case caevent.EventCAAuthorityRekeyed:
+		if err := caevent.ValidateSchemaVersion(e); err != nil {
 			return nil, err
 		}
 		var authority struct {
@@ -109,8 +109,8 @@ func CARegistrations(e eventspec.Event) ([]DependencyRegisteredV1, error) {
 			})
 		}
 		return registrations, nil
-	case projections.EventCACrossSigned:
-		if err := projections.ValidateSchemaVersion(e); err != nil {
+	case caevent.EventCACrossSigned:
+		if err := caevent.ValidateSchemaVersion(e); err != nil {
 			return nil, err
 		}
 		var signed struct {
@@ -143,12 +143,12 @@ func CARegistrations(e eventspec.Event) ([]DependencyRegisteredV1, error) {
 // with CARegistrations so a late mint cannot be omitted from the signer gate.
 func CARegistrationEventTypes() []string {
 	return []string{
-		projections.EventCAEndEntityIssued,
-		projections.EventCAIssuedCertificate,
-		projections.EventCAIntermediateCSRIssued,
-		projections.EventCAIntermediateCreated,
-		projections.EventCAAuthorityImported,
-		projections.EventCAAuthorityRekeyed,
-		projections.EventCACrossSigned,
+		caevent.EventCAEndEntityIssued,
+		caevent.EventCAIssuedCertificate,
+		caevent.EventCAIntermediateCSRIssued,
+		caevent.EventCAIntermediateCreated,
+		caevent.EventCAAuthorityImported,
+		caevent.EventCAAuthorityRekeyed,
+		caevent.EventCACrossSigned,
 	}
 }
