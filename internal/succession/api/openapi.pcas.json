@@ -879,9 +879,13 @@
           },
           "signer_signature": {
             "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
           }
         },
         "required": [
+          "tenant_id",
           "identity_id",
           "deployment_scope",
           "epoch",

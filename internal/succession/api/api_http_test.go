@@ -162,10 +162,27 @@ func (f *fakeService) PrepareRecoverySuccessor(_ context.Context, _ string, req 
 	return succapi.AsyncRequestResponse{RequestID: "recovery-prepare-1", Status: "queued", QueuedAt: time.Now(), IdentityID: req.IdentityID}, nil
 }
 
-func (f *fakeService) GetRecoverySuccessor(_ context.Context, _, identityID string, epoch uint64) (succapi.RecoverySuccessorResponse, error) {
-	return succapi.RecoverySuccessorResponse{IdentityID: identityID, Epoch: epoch,
+func (f *fakeService) GetRecoverySuccessor(_ context.Context, tenantID, identityID string, epoch uint64) (succapi.RecoverySuccessorResponse, error) {
+	return succapi.RecoverySuccessorResponse{IdentityID: identityID, TenantID: tenantID, Epoch: epoch,
 		Algorithm: "ECDSA-P384", Handle: "qa-signer-handle", PublicKeyDER: []byte("qa-public"),
 		SignerSignature: []byte("qa-signature"), EventID: "qa-event", RequestID: "recovery-prepare-1"}, nil
+}
+
+func TestPreparedRecoverySuccessorReadbackNamesAuthenticatedTenant(t *testing.T) {
+	a := newAPI(t, &fakeService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/pcas/recovery/successors?identity_id="+url.QueryEscape(identity)+"&epoch=1", nil)
+	rr := httptest.NewRecorder()
+	a.ServeHTTP(rr, r)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("successor readback = %d: %s", rr.Code, rr.Body.String())
+	}
+	var readback map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &readback); err != nil {
+		t.Fatal(err)
+	}
+	if readback["tenant_id"] != tenantA {
+		t.Fatalf("signed successor readback has no authenticated tenant binding: %#v", readback)
+	}
 }
 
 func (f *fakeService) RequestRecovery(_ context.Context, _ string, req succapi.RecoveryRequest) (succapi.AsyncRequestResponse, error) {

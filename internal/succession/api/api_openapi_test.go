@@ -79,6 +79,10 @@ func TestOpenAPI_Golden(t *testing.T) {
 	if got := authorization["Statement"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASRecoveryStatement" {
 		t.Fatalf("recovery statement schema = %v, want bound statement", got)
 	}
+	successor := schemas["PCASRecoverySuccessor"].(map[string]any)
+	if _, ok := successor["properties"].(map[string]any)["tenant_id"]; !ok {
+		t.Fatal("prepared successor readback does not publish its signed tenant binding")
+	}
 	for _, rt := range succapi.Routes(nil) {
 		if !rt.Mutation {
 			continue

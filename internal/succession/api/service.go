@@ -568,7 +568,7 @@ func (s *service) GetRecoverySuccessor(ctx context.Context, tenantID, identityID
 			"isolated signer key differs from prepared recovery receipt")
 	}
 	return RecoverySuccessorResponse{
-		IdentityID: prepared.IdentityID, DeploymentScope: prepared.DeploymentScope,
+		TenantID: prepared.TenantID, IdentityID: prepared.IdentityID, DeploymentScope: prepared.DeploymentScope,
 		Epoch: prepared.Epoch, Algorithm: prepared.Algorithm, Handle: prepared.Handle,
 		PublicKeyDER: prepared.PublicKeyDER, RequestID: prepared.RequestID,
 		SignerSignature: prepared.SignerSignature, EventID: eventID,

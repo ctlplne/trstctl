@@ -2502,6 +2502,7 @@ export const messages = {
   "pcas.recovery.prepareStatus": { defaultMessage: "Key preparation", description: "PCAS recovery preparation status." },
   "pcas.recovery.pending": { defaultMessage: "pending", description: "PCAS pending operation state." },
   "pcas.recovery.prepared": { defaultMessage: "Prepared signer key", description: "PCAS recovery prepared key heading." },
+  "pcas.recovery.tenant": { defaultMessage: "Signed tenant", description: "PCAS recovery prepared-key tenant binding." },
   "pcas.recovery.preparedKey": { defaultMessage: "Prepared public key (base64 DER)", description: "PCAS recovery prepared public key." },
   "pcas.recovery.signedReceipt": { defaultMessage: "Signed preparation event and signature", description: "PCAS recovery signer receipt." },
   "pcas.recovery.prepareError": { defaultMessage: "Could not prepare the successor key.", description: "PCAS recovery preparation error fallback." },

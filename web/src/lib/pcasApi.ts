@@ -119,6 +119,7 @@ export interface PCASRecoveryPolicy {
 }
 
 export interface PCASRecoverySuccessor {
+  tenant_id: string;
   identity_id: string;
   deployment_scope: string;
   epoch: number;

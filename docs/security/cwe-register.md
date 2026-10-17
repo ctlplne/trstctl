@@ -1086,7 +1086,7 @@ not this file.
 | `cmd/trstctl-signer/offline.go:185` | operator-selected create-new offline output file (CWE-22) |
 | `cmd/trstctl-signer/offline.go:214` | operator-selected public CSR input file (CWE-22) |
 | `cmd/trstctl-signer/offline_pcas_test.go:45` | path is under t.TempDir from this test's keygen (CWE-22) |
-| `cmd/trstctl-signer/offline_pcas_test.go:153` | test helper reads only t.TempDir fixture paths (CWE-22) |
+| `cmd/trstctl-signer/offline_pcas_test.go:177` | test helper reads only t.TempDir fixture paths (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |

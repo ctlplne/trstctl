@@ -110,6 +110,7 @@ describe("PCAS threshold recovery console", () => {
     pcasMock.prepareRecoverySuccessor.mockResolvedValue({ request_id: "prep-1", status: "queued" });
     pcasMock.requestStatus.mockResolvedValue({ request_id: "prep-1", kind: "recovery_successor_prepare", status: "delivered", attempts: 1 });
     pcasMock.recoverySuccessor.mockResolvedValue({
+      tenant_id: genesis.tenant_id,
       identity_id: genesis.identity_id,
       deployment_scope: genesis.deployment_scope,
       epoch: 1,

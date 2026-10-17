@@ -235,7 +235,10 @@ trstctl-signer --pcas-recovery-mode statement \
 ```
 
 This refuses a chain whose genesis signature does not verify under the pinned
-root, a changed identity or scope, and a successor that is not the next epoch.
+root, a changed tenant, identity or scope, a successor that is not the next
+epoch, an altered first-writer event ID, or an invalid signature made with the
+prepared successor key. The public GET readback includes the tenant ID because
+it is part of the bytes the isolated signer signed.
 The statement contains a fresh nonce. The recovery root signs the exact ordered
 roster and threshold; each custodian then signs the same statement with their
 own key and ID:
@@ -253,8 +256,9 @@ trstctl-signer --pcas-recovery-mode approve \
   --pcas-recovery-output custodian-a-approval.json
 ```
 
-Each custodian independently checks the pinned genesis and derives the same
-statement from the chain and prepared successor before their own key signs.
+Each custodian independently checks the pinned genesis and the prepared
+successor's signature, then derives the same statement before their own key
+signs.
 Repeat approval on another custodian's machine. Combine only the **public**
 approval documents into a JSON array, for example with `jq -s` over their
 paths, then assemble and verify the quorum before submitting:

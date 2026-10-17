@@ -174,6 +174,7 @@ type RecoverySuccessorPrepareRequest struct {
 }
 
 type RecoverySuccessorResponse struct {
+	TenantID        string `json:"tenant_id"`
 	IdentityID      string `json:"identity_id"`
 	DeploymentScope string `json:"deployment_scope"`
 	Epoch           uint64 `json:"epoch"`
@@ -1304,6 +1305,7 @@ func schemas() map[string]*api.Schema {
 			"algorithm":        api.StringSchema(),
 		}, "identity_id", "deployment_scope", "epoch", "algorithm"),
 		"PCASRecoverySuccessor": api.ObjectSchema(map[string]*api.Schema{
+			"tenant_id":        api.StringSchema(),
 			"identity_id":      api.StringSchema(),
 			"deployment_scope": api.StringSchema(),
 			"epoch":            api.IntegerSchema(),
@@ -1313,7 +1315,7 @@ func schemas() map[string]*api.Schema {
 			"request_id":       api.StringSchema(),
 			"signer_signature": api.StringSchema(),
 			"event_id":         api.StringSchema(),
-		}, "identity_id", "deployment_scope", "epoch", "algorithm", "handle",
+		}, "tenant_id", "identity_id", "deployment_scope", "epoch", "algorithm", "handle",
 			"public_key_der", "request_id", "signer_signature", "event_id"),
 		"PCASRecoveryRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":            api.StringSchema(),

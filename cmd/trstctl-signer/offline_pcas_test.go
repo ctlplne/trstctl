@@ -70,10 +70,23 @@ func TestOfflinePCASRecoveryDistinctCustodiansAndExactSuccessor(t *testing.T) {
 	writeTestJSON(t, chainPath, map[string]any{"identity_id": "identity-1", "genesis": genesis,
 		"trust_root_public_der": root.PubDER, "records": [][]byte{}, "count": 0})
 	successorPath := filepath.Join(dir, "successor.json")
+	prepared := succession.RecoverySuccessorPreparedV1{TenantID: "tenant-1", IdentityID: "identity-1",
+		DeploymentScope: "qa-scope", Epoch: 1, Algorithm: "ECDSA-P384", PublicKeyDER: root.PubDER,
+		Handle: succession.TenantKeyHandle("tenant-1", "identity-1", 1), RequestID: "prepare-1"}
+	message, err := succession.RecoverySuccessorSigningMessage(prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared.SignerSignature, err = crypto.SignMessage(rootSigner, message)
+	if err != nil {
+		t.Fatal(err)
+	}
 	writeTestJSON(t, successorPath, map[string]any{
-		"identity_id": "identity-1", "deployment_scope": "qa-scope", "epoch": 1,
-		"algorithm": "ECDSA-P384", "public_key_der": root.PubDER, "handle": "prepared-handle",
-		"signer_signature": []byte("signed-receipt"), "event_id": "prepared-event",
+		"tenant_id": prepared.TenantID, "identity_id": prepared.IdentityID,
+		"deployment_scope": prepared.DeploymentScope, "epoch": prepared.Epoch,
+		"algorithm": prepared.Algorithm, "public_key_der": prepared.PublicKeyDER, "handle": prepared.Handle,
+		"request_id": prepared.RequestID, "signer_signature": prepared.SignerSignature,
+		"event_id": succession.RecoverySuccessorEventID("tenant-1", "identity-1", 1),
 	})
 	statementPath := filepath.Join(dir, "statement.json")
 	if err := runOfflinePCASRecovery(pcasOfflineOptions{Mode: "statement", ChainFile: chainPath, SuccessorFile: successorPath,
@@ -134,6 +147,17 @@ func TestOfflinePCASRecoveryDistinctCustodiansAndExactSuccessor(t *testing.T) {
 	if err := runOfflinePCASRecovery(pcasOfflineOptions{Mode: "statement", ChainFile: chainPath, SuccessorFile: successorPath + ".wrong",
 		PinnedRootFile: filepath.Join(dir, "root.json"), Nonce: "x", Output: filepath.Join(dir, "wrong-statement.json")}); err == nil {
 		t.Fatal("statement must reject another deployment scope")
+	}
+	writeTestJSON(t, successorPath+".forged", map[string]any{
+		"tenant_id": prepared.TenantID, "identity_id": prepared.IdentityID,
+		"deployment_scope": prepared.DeploymentScope, "epoch": prepared.Epoch,
+		"algorithm": prepared.Algorithm, "public_key_der": prepared.PublicKeyDER, "handle": prepared.Handle,
+		"request_id": prepared.RequestID, "signer_signature": []byte("forged-signature"),
+		"event_id": succession.RecoverySuccessorEventID("tenant-1", "identity-1", 1),
+	})
+	if err := runOfflinePCASRecovery(pcasOfflineOptions{Mode: "statement", ChainFile: chainPath, SuccessorFile: successorPath + ".forged",
+		PinnedRootFile: filepath.Join(dir, "root.json"), Nonce: "incident-unique-1", Output: filepath.Join(dir, "forged-statement.json")}); err == nil {
+		t.Fatal("statement must verify the prepared successor's signer signature")
 	}
 }
 

@@ -158,6 +158,7 @@ func buildPCASOfflineStatement(o pcasOfflineOptions) (recovery.RecoveryStatement
 	// #nosec G115 -- Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190).
 	nextEpoch := uint64(chain.Count) + 1
 	var prepared struct {
+		TenantID        string `json:"tenant_id"`
 		IdentityID      string `json:"identity_id"`
 		DeploymentScope string `json:"deployment_scope"`
 		Epoch           uint64 `json:"epoch"`
@@ -171,10 +172,21 @@ func buildPCASOfflineStatement(o pcasOfflineOptions) (recovery.RecoveryStatement
 	if err := readOfflineJSON(o.SuccessorFile, &prepared); err != nil {
 		return recovery.RecoveryStatement{}, err
 	}
-	if prepared.IdentityID != chain.IdentityID || prepared.DeploymentScope != chain.Genesis.DeploymentScope ||
+	if prepared.TenantID != chain.Genesis.TenantID || prepared.IdentityID != chain.IdentityID || prepared.DeploymentScope != chain.Genesis.DeploymentScope ||
 		prepared.Epoch != nextEpoch || prepared.Algorithm == "" || len(prepared.PublicKeyDER) == 0 ||
 		prepared.Handle == "" || len(prepared.SignerSignature) == 0 || prepared.EventID == "" {
 		return recovery.RecoveryStatement{}, errors.New("PCAS prepared successor does not bind the next epoch of this chain")
+	}
+	if prepared.EventID != succession.RecoverySuccessorEventID(prepared.TenantID, prepared.IdentityID, prepared.Epoch) {
+		return recovery.RecoveryStatement{}, errors.New("PCAS prepared successor event ID differs from the tenant identity epoch fence")
+	}
+	if err := succession.VerifyRecoverySuccessorPrepared(succession.RecoverySuccessorPreparedV1{
+		TenantID: prepared.TenantID, IdentityID: prepared.IdentityID, Epoch: prepared.Epoch,
+		Algorithm: prepared.Algorithm, Handle: prepared.Handle, PublicKeyDER: prepared.PublicKeyDER,
+		DeploymentScope: prepared.DeploymentScope, RequestID: prepared.RequestID,
+		SignerSignature: prepared.SignerSignature,
+	}); err != nil {
+		return recovery.RecoveryStatement{}, fmt.Errorf("PCAS prepared successor signature: %w", err)
 	}
 	if chain.Count > 0 {
 		var last struct{ Fields succession.CommitmentFields }

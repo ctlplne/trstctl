@@ -123,10 +123,11 @@ function matchingAuthorization(
     threshold: number;
     roster: PCASRecoveryApprover[];
   },
-  successor: { epoch: number; algorithm: string; public_key_der: string; deployment_scope: string },
+  successor: { tenant_id: string; epoch: number; algorithm: string; public_key_der: string; deployment_scope: string },
 ): boolean {
   const statement = auth.Statement;
   return (
+    successor.tenant_id === chain.genesis?.tenant_id &&
     statement.IdentityID === chain.identity_id &&
     statement.TenantID === chain.genesis?.tenant_id &&
     statement.DeploymentScope === successor.deployment_scope &&
@@ -495,6 +496,9 @@ export function PCASRecoveryPanel({ identityID }: { identityID: string }) {
           {successor.data ? (
             <div className="grid gap-1 rounded-panel border border-border bg-background p-3 text-sm">
               <strong>{t("pcas.recovery.prepared")}</strong>
+              <p>
+                {t("pcas.recovery.tenant")}: <code>{successor.data.tenant_id}</code>
+              </p>
               <p>
                 {successor.data.algorithm} · {t("pcas.epoch")} {successor.data.epoch} · <code>{successor.data.handle}</code>
               </p>
