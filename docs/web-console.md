@@ -139,6 +139,14 @@ SURFACE-007 confirm and dual-control guards), and above it an issuance pipeline 
 identities by stage. The dashboard's NHI inventory summary and the risk posture and
 orphan-governance panels on Risk and Owners complete the governance lens: counts by
 kind, custodian-less credentials, and a shared risk score.
+The grid searches the authenticated tenant on the server before pagination, so an
+identity beyond the first page can still be found and selected for an exact bulk
+action. Search matches a literal, case-insensitive substring of name, kind,
+status, owner name or environment, or an exact identity UUID. The type filter is
+an exact kind match. **Previous** and **Next** move through 50-row pages; selection
+is cleared whenever the search, type or page changes. API callers can use
+`GET /api/v1/identities?q=...&kind=x509_certificate&limit=50` and must retain
+the same `q` and `kind` when following `next_cursor`.
 See [Workload identity](features/workload-identity.md) and
 [Observability & risk](features/observability-and-risk.md). Backed by
 `/api/v1/identities`, `/api/v1/nhi/inventory`, `/api/v1/risk/credentials`, and

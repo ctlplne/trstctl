@@ -1014,6 +1014,10 @@ func (a *API) routes() []route {
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 	}
+	identityQuery := append([]param{
+		{name: "q", typ: "string", desc: "Case-insensitive literal substring of identity name, kind, status, owner name or environment; also matches an exact identity UUID. At most 256 characters, valid UTF-8 without NUL. Applied within the authenticated tenant before pagination; retain the same search and kind on subsequent pages."},
+		{name: "kind", typ: "string", desc: "Optional exact identity kind: x509_certificate, ssh_certificate, ssh_key, secret, api_key or workload_identity."},
+	}, page...)
 	notificationQuery := []param{
 		{name: "order", typ: "string", desc: "asc (default) or desc by notification ID; retain the same order with each cursor"},
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
@@ -1204,7 +1208,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/approval-requests/{id}/approvals", opID: "approveApprovalRequest", summary: "Approve one exact immutable operation request", handler: a.approveApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDecisionInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, approval: true, perm: authz.ApprovalsReview},
 		{method: "POST", path: "/api/v1/approval-requests/{id}/denials", opID: "denyApprovalRequest", summary: "Deny one exact immutable operation request without mutating its target", handler: a.denyApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDenialInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, approval: true, perm: authz.ApprovalsReview},
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
-		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
+		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: identityQuery, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/bulk-revoke", opID: "bulkRevokeIdentities", summary: "Bulk revoke identities by id or criteria", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: idPath, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/{id}/transitions/preview", opID: "previewIdentityTransition", summary: "Explain and validate an exact lifecycle transition without writing state or contacting an external system", handler: a.previewIdentityTransition, pathParams: idPath, reqSchema: "TransitionRequest", resSchema: "IdentityTransitionPreview", successCode: "200", perm: authz.IdentitiesWrite},

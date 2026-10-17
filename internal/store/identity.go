@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -99,6 +100,54 @@ func (s *Store) ListIdentitiesPage(ctx context.Context, tenantID, afterID string
 			        status, not_before, not_after, attributes, created_at
 			   FROM identities WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
 			tenantID, afterID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				it    Identity
+				kind  string
+				attrs []byte
+			)
+			if err := rows.Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
+				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt); err != nil {
+				return err
+			}
+			it.Kind = IdentityKind(kind)
+			it.Attributes = attrs
+			out = append(out, it)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// SearchIdentitiesPage applies the operator's literal search within one RLS
+// tenant before keyset pagination. The empty case retains the indexed list
+// query; filtering never loads an unbounded estate into the control plane.
+func (s *Store) SearchIdentitiesPage(ctx context.Context, tenantID, afterID string, limit int, query string, filterKind IdentityKind) ([]Identity, error) {
+	query = strings.TrimSpace(query)
+	if query == "" && filterKind == "" {
+		return s.ListIdentitiesPage(ctx, tenantID, afterID, limit)
+	}
+	var out []Identity
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT i.id::text, i.tenant_id::text, i.kind, i.name, i.owner_id::text, i.issuer_id::text,
+			        i.status, i.not_before, i.not_after, i.attributes, i.created_at
+			   FROM identities i
+			   LEFT JOIN owners o ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
+			  WHERE i.tenant_id = $1 AND i.id > $2
+			    AND ($4::text = '' OR i.kind = $4)
+			    AND ($5::text = '' OR
+			         strpos(lower(i.name), lower($5)) > 0 OR
+			         i.id::text = lower($5) OR
+			         strpos(lower(i.kind), lower($5)) > 0 OR
+			         strpos(lower(i.status), lower($5)) > 0 OR
+			         strpos(lower(coalesce(o.name, '')), lower($5)) > 0 OR
+			         strpos(lower(coalesce(o.environment, '')), lower($5)) > 0)
+			  ORDER BY i.id LIMIT $3`, tenantID, afterID, limit, string(filterKind), query)
 		if err != nil {
 			return err
 		}

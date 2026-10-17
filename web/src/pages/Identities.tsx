@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -381,7 +381,9 @@ export function Identities() {
   const [approvalNotice, setApprovalNotice] = useState<LifecycleApproval | null>(null);
   const [approvalRestart, setApprovalRestart] = useState<{ fingerprint: string; requestId: string } | null>(null);
   const [query, setQuery] = useState("");
+  const [settledQuery, setSettledQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [pageCursors, setPageCursors] = useState<string[]>([""]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -398,18 +400,28 @@ export function Identities() {
   const pendingReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const bulkConfirmRef = useRef<HTMLButtonElement>(null);
   const impactRequestRef = useRef(0);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledQuery(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const searchWaiting = query.trim() !== settledQuery;
+  const searchCursor = pageCursors[pageCursors.length - 1] ?? "";
+  const searchPage = useApiQuery(
+    ["identity-search", user?.tenant_id, user?.subject, (user?.permissions ?? []).join("|"), settledQuery, kindFilter, searchCursor],
+    ({ signal }) =>
+      api.identityPage({
+        limit: 50,
+        cursor: searchCursor || undefined,
+        query: settledQuery || undefined,
+        kind: kindFilter === "all" ? undefined : kindFilter,
+        signal,
+      }),
+    { enabled: !searchWaiting, live: { intervalMs: 10_000 } },
+  );
   const ownerByID = useMemo(() => new Map((owners ?? []).map((owner) => [owner.id, owner])), [owners]);
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    return (items ?? []).filter((identity) => {
-      if (kindFilter !== "all" && identity.kind !== kindFilter) return false;
-      if (!normalizedQuery) return true;
-      const owner = ownerByID.get(identity.owner_id);
-      return [identity.name, identity.id, identity.kind, identityKindLabel(identity.kind), identityState(identity), owner?.name, owner?.environment].some(
-        (value) => value?.toLocaleLowerCase().includes(normalizedQuery),
-      );
-    });
-  }, [items, kindFilter, ownerByID, query]);
+  // During the debounce, the old query is still cached. Never leave its rows
+  // selectable under the new search text.
+  const filteredItems = useMemo(() => (searchWaiting ? [] : (searchPage.data?.items ?? [])), [searchPage.data, searchWaiting]);
   const selectedRows = useMemo(() => filteredItems.filter((identity) => selectedIds.has(identity.id)), [filteredItems, selectedIds]);
   const latestDelivery = useMemo(() => latestDeliveryByIdentity(deliveryReceipts), [deliveryReceipts]);
   const latestRotation = useMemo(() => latestRotationByIdentity(rotationRuns), [rotationRuns]);
@@ -417,6 +429,7 @@ export function Identities() {
   const load = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["identities"] }),
+      queryClient.invalidateQueries({ queryKey: ["identity-search"] }),
       queryClient.invalidateQueries({ queryKey: ["owners"] }),
       queryClient.invalidateQueries({ queryKey: ["identity"] }),
     ]);
@@ -897,7 +910,12 @@ export function Identities() {
                     id="identity-search-input"
                     type="search"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    maxLength={256}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setPageCursors([""]);
+                      setSelectedIds(new Set());
+                    }}
                     className="ui-input"
                     placeholder={t("identities.search.placeholder")}
                   />
@@ -907,7 +925,11 @@ export function Identities() {
                   <select
                     id="identity-kind-filter"
                     value={kindFilter}
-                    onChange={(event) => setKindFilter(event.target.value as KindFilter)}
+                    onChange={(event) => {
+                      setKindFilter(event.target.value as KindFilter);
+                      setPageCursors([""]);
+                      setSelectedIds(new Set());
+                    }}
                     className="ui-input"
                   >
                     <option value="all">{t("identities.filter.allTypes")}</option>
@@ -925,9 +947,37 @@ export function Identities() {
               onSelectedIdsChange: setSelectedIds,
               getRowLabel: (identity) => identity.name,
             }}
-            state={filteredItems.length === 0 ? "empty" : "ready"}
+            pagination={
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pageCursors.length === 1 || searchWaiting || searchPage.loading}
+                  onClick={() => {
+                    setPageCursors((current) => current.slice(0, -1));
+                    setSelectedIds(new Set());
+                  }}
+                >
+                  {t("owners.cockpit.queue.previous")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!searchPage.data?.next_cursor || searchWaiting || searchPage.loading}
+                  onClick={() => {
+                    setPageCursors((current) => [...current, searchPage.data!.next_cursor!]);
+                    setSelectedIds(new Set());
+                  }}
+                >
+                  {t("owners.cockpit.queue.next")}
+                </Button>
+              </div>
+            }
+            state={searchWaiting || searchPage.loading ? "loading" : searchPage.error ? "error" : filteredItems.length === 0 ? "empty" : "ready"}
             stateTitle={t("identities.search.emptyTitle")}
-            stateMessage={t("identities.search.emptyBody")}
+            stateMessage={searchPage.error ?? t("identities.search.emptyBody")}
           />
         </div>
       )}

@@ -25112,6 +25112,10 @@ export interface operations {
     listIdentities: {
         parameters: {
             query?: {
+                /** @description Case-insensitive literal substring of identity name, kind, status, owner name or environment; also matches an exact identity UUID. At most 256 characters, valid UTF-8 without NUL. Applied within the authenticated tenant before pagination; retain the same search and kind on subsequent pages. */
+                q?: string;
+                /** @description Optional exact identity kind: x509_certificate, ssh_certificate, ssh_key, secret, api_key or workload_identity. */
+                kind?: string;
                 /** @description maximum items per page (1-100, default 20) */
                 limit?: number;
                 /** @description opaque pagination cursor from a prior page */

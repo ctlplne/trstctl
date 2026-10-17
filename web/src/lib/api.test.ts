@@ -57,6 +57,12 @@ describe("api error handling (SURFACE-007)", () => {
     expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/identities?limit=20&cursor=previous%2Fidentity%3D");
   });
 
+  it("sends identity search and kind to the server before pagination", async () => {
+    mockFetch(200, JSON.stringify({ items: [], next_cursor: "" }));
+    await api.identityPage({ limit: 20, query: "qa-bulk-console", kind: "x509_certificate" });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/identities?limit=20&q=qa-bulk-console&kind=x509_certificate");
+  });
+
   it("refuses a browser machine credential before fetch when /auth/me has not supplied a tenant", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

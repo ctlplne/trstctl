@@ -12,6 +12,7 @@ import { IntlProvider } from "@/i18n/I18nProvider";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     identities: vi.fn(),
+    identityPage: vi.fn(),
     issuers: vi.fn(),
     owners: vi.fn(),
     getIdentity: vi.fn(),
@@ -577,6 +578,13 @@ describe("lifecycle actions from the UI", () => {
       verification_steps: ["Confirm the rotation run and connector delivery receipts."],
     });
     apiMock.identities.mockReset();
+    apiMock.identityPage.mockReset().mockImplementation(async (options?: { query?: string; kind?: string }) => ({
+      items: (await apiMock.identities()).filter(
+        (identity: { name: string; kind: string }) =>
+          (!options?.kind || identity.kind === options.kind) && (!options?.query || identity.name.toLowerCase().includes(options.query.toLowerCase())),
+      ),
+      next_cursor: "",
+    }));
   });
 
   it("keeps each identity row to one review action and moves lifecycle choices into detail", async () => {
@@ -712,9 +720,11 @@ describe("lifecycle actions from the UI", () => {
     for (const identity of fixtures) {
       await user.selectOptions(screen.getByLabelText("Credential type"), identity.kind);
       expect(await screen.findByText(identity.name)).toBeInTheDocument();
-      for (const other of fixtures.filter((fixture) => fixture.id !== identity.id)) {
-        expect(screen.queryByText(other.name)).not.toBeInTheDocument();
-      }
+      await waitFor(() => {
+        for (const other of fixtures.filter((fixture) => fixture.id !== identity.id)) {
+          expect(screen.queryByText(other.name)).not.toBeInTheDocument();
+        }
+      });
     }
 
     await user.selectOptions(screen.getByLabelText("Credential type"), "all");
@@ -773,8 +783,8 @@ describe("lifecycle actions from the UI", () => {
     expect(paymentsRow).not.toHaveTextContent("plugin_surface_unconfigured");
 
     await user.type(screen.getByRole("searchbox", { name: "Find identities" }), "release");
-    expect(screen.queryByText("payments-api")).not.toBeInTheDocument();
-    const releaseRow = screen.getByText("release-deploy").closest("tr")!;
+    await waitFor(() => expect(screen.queryByText("payments-api")).not.toBeInTheDocument());
+    const releaseRow = (await screen.findByText("release-deploy")).closest("tr")!;
     expect(within(releaseRow).getByText("SSH key")).toBeInTheDocument();
     expect(within(releaseRow).getByText("Owner record unavailable")).toBeInTheDocument();
   });
@@ -1243,6 +1253,53 @@ describe("lifecycle actions from the UI", () => {
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(await screen.findByText(/Revoked 1 of 2 \(skipped 0, failed 1\)/i)).toBeInTheDocument();
     expect(screen.getByText(/bulk-fail failed: connector queue unavailable/)).toBeInTheDocument();
+  });
+
+  it("finds and selects exact bulk-revoke targets beyond the default identity page", async () => {
+    const unrelated = Array.from({ length: 20 }, (_, index) => ({
+      id: `unrelated-${index}`,
+      name: `unrelated-${index}.example.test`,
+      kind: "x509_certificate",
+      status: "issued",
+    }));
+    const targets = [
+      { id: "late-21", name: "qa-bulk-console-21.example.test", kind: "x509_certificate", status: "issued" },
+      { id: "late-29", name: "qa-bulk-console-29.example.test", kind: "x509_certificate", status: "issued" },
+    ];
+    apiMock.identities.mockResolvedValue(unrelated);
+    apiMock.identityPage.mockImplementation(async (options: { query?: string }) => ({
+      items: options.query === "qa-bulk-console" ? targets : unrelated,
+      next_cursor: "",
+    }));
+    const user = userEvent.setup();
+    renderIdentities();
+    await user.type(await screen.findByRole("searchbox", { name: "Find identities" }), "qa-bulk-console");
+    expect(await screen.findByLabelText("Select qa-bulk-console-21.example.test")).toBeInTheDocument();
+    expect(screen.getByLabelText("Select qa-bulk-console-29.example.test")).toBeInTheDocument();
+    expect(apiMock.identityPage).toHaveBeenCalledWith(expect.objectContaining({ query: "qa-bulk-console", limit: 50 }));
+    await user.click(screen.getByLabelText("Select qa-bulk-console-21.example.test"));
+    await user.click(screen.getByLabelText("Select qa-bulk-console-29.example.test"));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+  });
+
+  it("pages identity search without carrying a bulk selection to another result set", async () => {
+    const first = { id: "first", name: "first.example.test", kind: "x509_certificate", status: "issued" };
+    const second = { id: "second", name: "second.example.test", kind: "x509_certificate", status: "issued" };
+    apiMock.identities.mockResolvedValue([first]);
+    apiMock.identityPage.mockImplementation(async (options?: { cursor?: string; query?: string }) => ({
+      items: options?.query ? [second] : options?.cursor === "next-page" ? [second] : [first],
+      next_cursor: options?.query || options?.cursor ? "" : "next-page",
+    }));
+    const user = userEvent.setup();
+    renderIdentities();
+    await user.click(await screen.findByLabelText("Select first.example.test"));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByLabelText("Select second.example.test")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Select first.example.test")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
+    await user.type(screen.getByRole("searchbox", { name: "Find identities" }), "second");
+    await waitFor(() => expect(apiMock.identityPage).toHaveBeenCalledWith(expect.objectContaining({ query: "second", cursor: undefined })));
   });
 
   it("runs NHI decommission from a served governance signal", async () => {

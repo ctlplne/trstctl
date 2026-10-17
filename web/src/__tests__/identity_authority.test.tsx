@@ -18,6 +18,7 @@ vi.mock("@/lib/api", async (original) => {
     api: {
       ...actual.api,
       identities: fixture.identities,
+      identityPage: vi.fn(async () => ({ items: await fixture.identities(), next_cursor: "" })),
       owners: vi.fn(async () => []),
       connectorDeliveries: vi.fn(async () => ({ items: [] })),
       rotationRuns: vi.fn(async () => ({ items: [] })),

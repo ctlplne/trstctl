@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -469,10 +470,27 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
 		return
 	}
-	idents, err := a.store.ListIdentitiesPage(r.Context(), tenantID, after, limit)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 256 || strings.ContainsRune(query, 0) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "q must be valid UTF-8, at most 256 characters, without NUL"))
+		return
+	}
+	kind := store.IdentityKind(r.URL.Query().Get("kind"))
+	switch kind {
+	case "", store.KindX509Certificate, store.KindSSHCertificate, store.KindSSHKey,
+		store.KindSecret, store.KindAPIKey, store.KindWorkloadIdentity:
+	default:
+		a.writeError(w, errStatus(http.StatusBadRequest, "kind must name a supported identity kind"))
+		return
+	}
+	idents, err := a.store.SearchIdentitiesPage(r.Context(), tenantID, after, limit+1, query, kind)
 	if err != nil {
 		a.writeError(w, err)
 		return
+	}
+	hasMore := len(idents) > limit
+	if hasMore {
+		idents = idents[:limit]
 	}
 	items := make([]identityResponse, 0, len(idents))
 	ids := make([]string, 0, len(idents))
@@ -491,7 +509,7 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 		items = append(items, response)
 	}
 	next := ""
-	if len(idents) == limit {
+	if hasMore {
 		next = encodeCursor(idents[len(idents)-1].ID)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})

@@ -1711,7 +1711,7 @@ export interface Api {
   issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
-  identityPage(options?: { limit?: number; cursor?: string }): Promise<IdentityList>;
+  identityPage(options?: { limit?: number; cursor?: string; query?: string; kind?: string; signal?: AbortSignal }): Promise<IdentityList>;
   /** AUD-77: real pending intents only; lifecycle inventory is not an approval queue. */
   approvalRequests(): Promise<PendingApprovalRequest[]>;
   /** AUD-77: bind the vote to both the immutable request id and its intent digest. */
@@ -2329,7 +2329,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
-  identityPage: (options) => req<IdentityList>(`/api/v1/identities${pageQueryString(options)}`),
+  identityPage: (options) =>
+    req<IdentityList>(`/api/v1/identities${pageQueryString(options)}`, {
+      signal: options?.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
+    }),
   approvalRequests: allPendingApprovalRequests,
   approveApprovalRequest: (id, intentDigest) =>
     mutate<ApprovalRequestDecision>("POST", `/api/v1/approval-requests/${encodeURIComponent(id)}/approvals`, { intent_digest: intentDigest }),
@@ -2914,11 +2917,17 @@ function brokerHistoryQueryString(options?: BrokerHistoryQuery): string {
   return query.size ? `?${query}` : "";
 }
 
-function pageQueryString(options?: { limit?: number; cursor?: string; order?: "id" | "recent" }, scopedId?: string, scopedKey = "identity_id"): string {
+function pageQueryString(
+  options?: { limit?: number; cursor?: string; order?: "id" | "recent"; query?: string; kind?: string },
+  scopedId?: string,
+  scopedKey = "identity_id",
+): string {
   const qs = new URLSearchParams();
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
   if (options?.order) qs.set("order", options.order);
+  if (options?.query) qs.set("q", options.query);
+  if (options?.kind) qs.set("kind", options.kind);
   if (scopedId) qs.set(scopedKey, scopedId);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
