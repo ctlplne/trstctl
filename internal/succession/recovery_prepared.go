@@ -14,6 +14,15 @@ const recoverySuccessorDomain = "trstctl/pcas/recovery-successor/v1\x00"
 const recoveryRecordDomain = "trstctl/pcas/recovery-record/v1\x00"
 const recoveryProofDomain = "trstctl/pcas/recovery-proof/v1\x00"
 const kemRewrapRecordDomain = "trstctl/pcas/kem-rewrap-record/v1\x00"
+const kemRewrapRequestDomain = "trstctl/pcas/kem-rewrap-request/v1\x00"
+
+func KEMRewrapRequestEventID(tenantID, requestID string) string {
+	bound, _ := json.Marshal(struct {
+		TenantID  string `json:"tenant_id"`
+		RequestID string `json:"request_id"`
+	}{tenantID, requestID})
+	return recoveryEventID(kemRewrapRequestDomain, bound)
+}
 
 // KEMRewrapRecordEventID is the first-writer fence for one tenant identity's
 // paired-signing/KEM successor at an epoch.

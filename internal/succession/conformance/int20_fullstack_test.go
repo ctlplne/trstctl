@@ -394,6 +394,27 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	if _, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP256, predHandle); err != nil {
 		t.Fatalf("KEM predecessor: %v", err)
 	}
+	// A pre-migration direct-write row is not immutable completion evidence and
+	// must never authorize predecessor retirement after an event-only restore.
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(st.ctx, `INSERT INTO pcas_rewrap_job
+			(tenant_id, job_id, identity_id, predecessor_epoch, stage, total_stages, completed_stages, status)
+			VALUES (current_setting('trstctl.tenant_id')::uuid, 'legacy-stage', $1, 0, 'legacy', 1, 1, 'complete')`, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	legacyComplete, err := st.repo.RewrapComplete(st.ctx, st.tenantID, id, 0)
+	if err != nil || legacyComplete {
+		t.Fatalf("unsourced legacy KEM stage authorized retirement: complete=%t err=%v", legacyComplete, err)
+	}
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(st.ctx, `DELETE FROM pcas_rewrap_job
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND job_id = 'legacy-stage'`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	resp, err := st.svc.RequestKEMRewrap(st.ctx, st.tenantID, succapi.KEMRewrapRequest{
 		IdentityID: id, PredecessorHandle: predHandle, PredecessorEpoch: 0,
 		SuccessorSignHandle: succession.TenantKeyHandle(st.tenantID, id, 1), SuccessorKEMHandle: "kem:" + id + ":1",
@@ -402,6 +423,14 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	})
 	if err != nil {
 		t.Fatalf("request KEM rewrap: %v", err)
+	}
+	requestSource, found, err := st.log.EventByID(st.ctx, succession.KEMRewrapRequestEventID(st.tenantID, resp.RequestID))
+	if err != nil || !found || requestSource.Type != succession.TypeKEMRewrapRequested {
+		t.Fatalf("KEM request has no immutable source: found=%v type=%s err=%v", found, requestSource.Type, err)
+	}
+	queued, err := st.svc.RewrapStatus(st.ctx, st.tenantID, id, 0)
+	if err != nil || queued.Complete || len(queued.Jobs) != 2 {
+		t.Fatalf("KEM accepted stage readback = %+v err=%v, want two queued stages", queued, err)
 	}
 	st.dispatchAll(t)
 
@@ -445,6 +474,10 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 		t.Fatalf("KEM serving row has no exact source sequence: row=%d event=%d err=%v", sourceSequence, source.Sequence, err)
 	}
 	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(st.ctx, `DELETE FROM pcas_rewrap_job
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, id); err != nil {
+			return err
+		}
 		_, err := tx.Exec(st.ctx, `DELETE FROM succession_records
 			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, id)
 		return err
@@ -459,8 +492,44 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	if err != nil || len(rows) != 1 || !bytes.Equal(rows[0].Encoded, wantRecord) {
 		t.Fatalf("event-only KEM record restore rows=%d err=%v", len(rows), err)
 	}
+	status, err = st.svc.RewrapStatus(st.ctx, st.tenantID, id, 0)
+	if err != nil || !status.Complete || len(status.Jobs) != 2 {
+		t.Fatalf("event-only KEM stage restore status=%+v err=%v", status, err)
+	}
+	if err := projection.Apply(st.ctx, requestSource); err != nil {
+		t.Fatalf("identical accepted KEM request replay: %v", err)
+	}
+	var forgedRequest succession.KEMRewrapRequestedV1
+	if err := json.Unmarshal(requestSource.Data, &forgedRequest); err != nil {
+		t.Fatal(err)
+	}
+	forgedRequest.RequestDigest = bytes.Repeat([]byte{0xff}, 32)
+	requestCollision := requestSource
+	requestCollision.Data, err = json.Marshal(forgedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Apply(st.ctx, requestCollision); err == nil {
+		t.Fatal("same request event ID accepted a different immutable digest")
+	}
 	if err := projection.Apply(st.ctx, source); err != nil {
 		t.Fatalf("identical KEM source replay: %v", err)
+	}
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(st.ctx, `DELETE FROM pcas_rewrap_job
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Apply(st.ctx, source); err == nil {
+		t.Fatal("KEM completion accepted without its immutable queued-stage source")
+	}
+	if err := projection.Apply(st.ctx, requestSource); err != nil {
+		t.Fatalf("restore accepted KEM request source: %v", err)
+	}
+	if err := projection.Apply(st.ctx, source); err != nil {
+		t.Fatalf("restore KEM completion after request source: %v", err)
 	}
 	var forged succession.KEMRewrapRecordedV1
 	if err := json.Unmarshal(source.Data, &forged); err != nil {

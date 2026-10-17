@@ -42,7 +42,12 @@ func openStorePCAS(t *testing.T) *corestore.Store {
 func TestKEMRequestStatusResolvesConfiguredOutboxTopic(t *testing.T) {
 	ctx := context.Background()
 	cs := openStorePCAS(t)
-	svc := succapi.NewService(cs, nil, orchestrator.NewOutbox(cs),
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	svc := succapi.NewService(cs, log, orchestrator.NewOutbox(cs),
 		succapi.WithOutboxTopics("", "", "qa.pcas.kem-rewrap"))
 	queued, err := svc.RequestKEMRewrap(ctx, tenantA, succapi.KEMRewrapRequest{
 		IdentityID: "spiffe://qa.local/kem-status", PredecessorHandle: "test-predecessor",

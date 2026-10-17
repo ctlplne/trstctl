@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -258,8 +259,17 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 		return fmt.Errorf("pcas KEM rewrap: decode payload: %w", err)
 	}
 	p := env.Request
+	if len(p.Stages) == 0 {
+		p.Stages = []string{"default"}
+	}
+	if err := succession.ValidateKEMRewrapStages(p.Stages); err != nil {
+		return err
+	}
 	if p.IdentityID == "" || p.PredecessorHandle == "" || p.SuccessorSignHandle == "" || p.SuccessorKEMHandle == "" {
 		return errors.New("pcas KEM rewrap: missing identity or signer handles")
+	}
+	if p.PredecessorEpoch >= math.MaxInt64 {
+		return errors.New("pcas KEM rewrap: predecessor epoch exceeds signed storage range")
 	}
 	if env.RequestID == "" || w.log == nil || w.repo == nil {
 		return errors.New("pcas KEM rewrap: request ID, event log and projection store are required")
@@ -269,15 +279,19 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 		return err
 	}
 	requestDigest := crypto.SHA256Sum(requestBytes)
+	if err := w.recordKEMRewrapRequest(ctx, tenantID, p.IdentityID, p.PredecessorEpoch,
+		env.RequestID, requestDigest, p.Stages); err != nil {
+		return err
+	}
 	recordEventID := succession.KEMRewrapRecordEventID(tenantID, p.IdentityID, p.PredecessorEpoch+1)
 	if prior, found, err := w.log.EventByID(ctx, recordEventID); err != nil {
 		return err
 	} else if found {
 		if err := w.applyExistingKEMRewrap(ctx, prior, tenantID, p.IdentityID,
-			p.PredecessorEpoch+1, env.RequestID, requestDigest); err != nil {
+			p.PredecessorEpoch+1, env.RequestID, requestDigest, p.Stages); err != nil {
 			return err
 		}
-		return w.completeKEMRewrapJob(ctx, tenantID, env.RequestID)
+		return nil
 	}
 	predRemote, err := w.kem.SignerForHandle(ctx, p.PredecessorHandle)
 	if err != nil {
@@ -313,22 +327,8 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 	if err != nil {
 		return err
 	}
-	if err := w.recordKEMRewrap(ctx, tenantID, rec.Base.Fields, encoded, env.RequestID, requestDigest); err != nil {
+	if err := w.recordKEMRewrap(ctx, tenantID, rec.Base.Fields, encoded, env.RequestID, requestDigest, p.Stages); err != nil {
 		return err
-	}
-	return w.completeKEMRewrapJob(ctx, tenantID, env.RequestID)
-}
-
-func (w *BreadthWorker) completeKEMRewrapJob(ctx context.Context, tenantID, requestID string) error {
-	if w.core != nil {
-		return w.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx,
-				`UPDATE pcas_rewrap_job
-				    SET completed_stages = total_stages, status = 'complete', updated_at = now()
-				  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND job_id = $1`,
-				requestID)
-			return err
-		})
 	}
 	return nil
 }
@@ -742,11 +742,41 @@ func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID str
 	return err
 }
 
+func (w *BreadthWorker) recordKEMRewrapRequest(ctx context.Context, tenantID, identityID string,
+	predecessorEpoch uint64, requestID string, requestDigest []byte, stages []string) error {
+	source, err := succession.Encode(succession.KEMRewrapRequestedV1{
+		TenantID: tenantID, IdentityID: identityID, PredecessorEpoch: predecessorEpoch,
+		RequestID: requestID, RequestDigest: requestDigest, Stages: stages,
+	})
+	if err != nil {
+		return err
+	}
+	source.ID = succession.KEMRewrapRequestEventID(tenantID, requestID)
+	if prior, found, err := w.log.EventByID(ctx, source.ID); err != nil {
+		return err
+	} else if found {
+		if prior.TenantID != tenantID || prior.Type != source.Type ||
+			prior.SchemaVersion != source.SchemaVersion || !bytes.Equal(prior.Data, source.Data) {
+			return errors.New("pcas KEM rewrap: request ID belongs to another immutable request")
+		}
+		return w.repo.ApplyKEMRewrapRequestedEvent(ctx, prior)
+	}
+	recorded, err := w.log.Append(ctx, source)
+	if err != nil {
+		return err
+	}
+	if recorded.TenantID != tenantID || recorded.Type != source.Type ||
+		recorded.SchemaVersion != source.SchemaVersion || !bytes.Equal(recorded.Data, source.Data) {
+		return errors.New("pcas KEM rewrap: request ID append collided with another immutable request")
+	}
+	return w.repo.ApplyKEMRewrapRequestedEvent(ctx, recorded)
+}
+
 func (w *BreadthWorker) recordKEMRewrap(ctx context.Context, tenantID string,
-	fields succession.CommitmentFields, encoded []byte, requestID string, requestDigest []byte) error {
+	fields succession.CommitmentFields, encoded []byte, requestID string, requestDigest []byte, stages []string) error {
 	source, err := succession.Encode(succession.KEMRewrapRecordedV1{
 		TenantID: tenantID, IdentityID: fields.IdentityID, Epoch: fields.Epoch,
-		RequestID: requestID, RequestDigest: requestDigest, RecordJSON: encoded,
+		RequestID: requestID, RequestDigest: requestDigest, RecordJSON: encoded, Stages: stages,
 	})
 	if err != nil {
 		return err
@@ -756,11 +786,11 @@ func (w *BreadthWorker) recordKEMRewrap(ctx context.Context, tenantID string,
 	if err != nil {
 		return fmt.Errorf("pcas KEM rewrap: append immutable paired record: %w", err)
 	}
-	return w.applyExistingKEMRewrap(ctx, recorded, tenantID, fields.IdentityID, fields.Epoch, requestID, requestDigest)
+	return w.applyExistingKEMRewrap(ctx, recorded, tenantID, fields.IdentityID, fields.Epoch, requestID, requestDigest, stages)
 }
 
 func (w *BreadthWorker) applyExistingKEMRewrap(ctx context.Context, ev events.Event,
-	tenantID, identityID string, epoch uint64, requestID string, requestDigest []byte) error {
+	tenantID, identityID string, epoch uint64, requestID string, requestDigest []byte, stages []string) error {
 	if ev.TenantID != tenantID || ev.Type != succession.TypeKEMRewrapRecorded ||
 		ev.ID != succession.KEMRewrapRecordEventID(tenantID, identityID, epoch) {
 		return errors.New("pcas KEM rewrap: first-writer event differs from tenant identity epoch")
@@ -772,8 +802,13 @@ func (w *BreadthWorker) applyExistingKEMRewrap(ctx context.Context, ev events.Ev
 	prior, ok := decoded.(succession.KEMRewrapRecordedV1)
 	if !ok || prior.TenantID != tenantID || prior.IdentityID != identityID ||
 		prior.Epoch != epoch || prior.RequestID != requestID ||
-		!bytes.Equal(prior.RequestDigest, requestDigest) {
+		!bytes.Equal(prior.RequestDigest, requestDigest) || len(prior.Stages) != len(stages) {
 		return errors.New("pcas KEM rewrap: immutable paired record belongs to another request")
+	}
+	for i := range stages {
+		if prior.Stages[i] != stages[i] {
+			return errors.New("pcas KEM rewrap: immutable paired record has a different stage set")
+		}
 	}
 	return w.repo.ApplyKEMRewrapRecordEvent(ctx, ev)
 }

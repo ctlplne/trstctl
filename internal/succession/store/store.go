@@ -550,29 +550,11 @@ func (r *Repo) ListFederationQuarantine(ctx context.Context, tenantID string) ([
 	return out, nil
 }
 
-func (r *Repo) UpsertRewrapJob(ctx context.Context, tenantID string, job RewrapJob) error {
-	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO pcas_rewrap_job
-			    (tenant_id, job_id, identity_id, predecessor_epoch, stage, total_stages, completed_stages, status)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7)
-			 ON CONFLICT (tenant_id, job_id, stage)
-			 DO UPDATE SET completed_stages = EXCLUDED.completed_stages,
-			               status = EXCLUDED.status,
-			               updated_at = now()`,
-			job.JobID, job.IdentityID, job.PredecessorEpoch, job.Stage, job.TotalStages, job.CompletedStages, job.Status)
-		if err != nil {
-			return fmt.Errorf("succession store: upsert rewrap job: %w", err)
-		}
-		return nil
-	})
-}
-
 func (r *Repo) RewrapComplete(ctx context.Context, tenantID, identityID string, predecessorEpoch uint64) (bool, error) {
 	var complete bool
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		e := tx.QueryRow(ctx,
-			`SELECT COALESCE(bool_and(status = 'complete'), false)
+			`SELECT COALESCE(bool_and(status = 'complete' AND source_sequence > 0 AND request_digest IS NOT NULL), false)
 			   FROM pcas_rewrap_job
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 			    AND identity_id = $1

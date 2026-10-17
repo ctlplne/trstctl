@@ -55,6 +55,9 @@ const (
 	// TypeKEMRewrapRecorded is the immutable source for the signed paired KEM
 	// record; SQL chain and high-water rows are rebuildable projections.
 	TypeKEMRewrapRecorded = "nhi.kem.rewrap.recorded"
+	// TypeKEMRewrapRequested records the accepted outbox intent and stage names.
+	// Its projection gives queued jobs a replayable source before completion.
+	TypeKEMRewrapRequested = "nhi.kem.rewrap.requested"
 	// TypeIssuerAuthorityRegistered binds a tenant's managed CA to one PCAS epoch.
 	TypeIssuerAuthorityRegistered = "nhi.issuer.authority.registered"
 	// TypeFederationBridgeImported records a verified, locally signed foreign trust bridge.
@@ -81,6 +84,7 @@ const (
 	RecoveryRecordedSchemaV1          = 1
 	RecoveryProofIssuedSchemaV1       = 1
 	KEMRewrapRecordedSchemaV1         = 1
+	KEMRewrapRequestedSchemaV1        = 1
 	IssuerAuthorityRegisteredSchemaV1 = 1
 	FederationBridgeImportedSchemaV1  = 1
 )
@@ -152,15 +156,27 @@ func (RecoverySuccessorPreparedV1) isSuccessionPayload() {}
 // KEMRewrapRecordedV1 binds one signer-verified paired record to its exact
 // tenant identity epoch and outbox request before any serving-row update.
 type KEMRewrapRecordedV1 struct {
-	TenantID      string `json:"tenant_id"`
-	IdentityID    string `json:"identity_id"`
-	Epoch         uint64 `json:"epoch"`
-	RequestID     string `json:"request_id"`
-	RequestDigest []byte `json:"request_digest"`
-	RecordJSON    []byte `json:"record_json"`
+	TenantID      string   `json:"tenant_id"`
+	IdentityID    string   `json:"identity_id"`
+	Epoch         uint64   `json:"epoch"`
+	RequestID     string   `json:"request_id"`
+	RequestDigest []byte   `json:"request_digest"`
+	RecordJSON    []byte   `json:"record_json"`
+	Stages        []string `json:"stages"`
 }
 
 func (KEMRewrapRecordedV1) isSuccessionPayload() {}
+
+type KEMRewrapRequestedV1 struct {
+	TenantID         string   `json:"tenant_id"`
+	IdentityID       string   `json:"identity_id"`
+	PredecessorEpoch uint64   `json:"predecessor_epoch"`
+	RequestID        string   `json:"request_id"`
+	RequestDigest    []byte   `json:"request_digest"`
+	Stages           []string `json:"stages"`
+}
+
+func (KEMRewrapRequestedV1) isSuccessionPayload() {}
 
 // RecoveryRecordedV1 keeps the exact signed record and the public verification
 // root in the source log. RequestID and epoch are first-writer bound; neither a
@@ -369,6 +385,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeRecoveryProofIssued, RecoveryProofIssuedSchemaV1, v.TenantID, v)
 	case KEMRewrapRecordedV1:
 		return marshalEvent(TypeKEMRewrapRecorded, KEMRewrapRecordedSchemaV1, v.TenantID, v)
+	case KEMRewrapRequestedV1:
+		return marshalEvent(TypeKEMRewrapRequested, KEMRewrapRequestedSchemaV1, v.TenantID, v)
 	case IssuerAuthorityRegisteredV1:
 		return marshalEvent(TypeIssuerAuthorityRegistered, IssuerAuthorityRegisteredSchemaV1, v.TenantID, v)
 	case FederationBridgeImportedV1:
@@ -471,6 +489,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p KEMRewrapRecordedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeKEMRewrapRequested:
+		if ver > KEMRewrapRequestedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p KEMRewrapRequestedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("succession: decode %s v%d: %w", e.Type, ver, err)
 		}

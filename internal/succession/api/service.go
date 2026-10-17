@@ -758,23 +758,45 @@ func validateForeignTrustRoot(der []byte) error {
 }
 
 func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEMRewrapRequest) (AsyncRequestResponse, error) {
+	if strings.TrimSpace(req.IdentityID) != req.IdentityID || req.IdentityID == "" ||
+		req.PredecessorEpoch >= math.MaxInt64 {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest, "PCAS KEM identity or predecessor epoch is invalid")
+	}
 	if len(req.Stages) == 0 {
 		req.Stages = []string{"default"}
+	}
+	if err := succession.ValidateKEMRewrapStages(req.Stages); err != nil {
+		return AsyncRequestResponse{}, api.ErrWithStatus(http.StatusBadRequest, err)
+	}
+	if s.repo == nil || s.log == nil {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS KEM event log or projection store is unavailable")
 	}
 	resp, err := s.enqueue(ctx, tenantID, topicOr(s.kemTopic, KEMRewrapDestination), req.IdentityID, req)
 	if err != nil {
 		return AsyncRequestResponse{}, err
 	}
-	if s.repo != nil {
-		total := len(req.Stages)
-		for _, stage := range req.Stages {
-			if err := s.repo.UpsertRewrapJob(ctx, tenantID, pcasstore.RewrapJob{
-				JobID: resp.RequestID, IdentityID: req.IdentityID, PredecessorEpoch: req.PredecessorEpoch,
-				Stage: stage, TotalStages: total, Status: "queued",
-			}); err != nil {
-				return AsyncRequestResponse{}, err
-			}
-		}
+	requestJSON, err := json.Marshal(req)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	encoded, err := succession.Encode(succession.KEMRewrapRequestedV1{
+		TenantID: tenantID, IdentityID: req.IdentityID, PredecessorEpoch: req.PredecessorEpoch,
+		RequestID: resp.RequestID, RequestDigest: crypto.SHA256Sum(requestJSON), Stages: req.Stages,
+	})
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	encoded.ID = succession.KEMRewrapRequestEventID(tenantID, resp.RequestID)
+	recorded, err := s.log.Append(ctx, encoded)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	if recorded.TenantID != tenantID || recorded.Type != encoded.Type ||
+		recorded.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(recorded.Data, encoded.Data) {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict, "PCAS KEM request ID belongs to another immutable event")
+	}
+	if err := s.repo.ApplyKEMRewrapRequestedEvent(ctx, recorded); err != nil {
+		return AsyncRequestResponse{}, err
 	}
 	return resp, nil
 }

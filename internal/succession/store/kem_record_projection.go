@@ -20,7 +20,10 @@ import (
 
 func (r *Repo) ApplyKEMRewrapRecordEvent(ctx context.Context, ev eventspec.Event) error {
 	return r.core.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
-		return ApplyKEMRewrapRecordEventTx(ctx, tx, ev)
+		if err := ApplyKEMRewrapRecordEventTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		return ApplyKEMRewrapCompletedStagesTx(ctx, tx, ev)
 	})
 }
 

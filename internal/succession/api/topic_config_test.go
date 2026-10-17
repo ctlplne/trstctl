@@ -14,7 +14,9 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
 	succapi "trstctl.com/trstctl/internal/succession/api"
@@ -57,8 +59,13 @@ func TestKEMRewrap_ConfiguredOutboxTopicBinds(t *testing.T) {
 	}
 
 	outbox := orchestrator.NewOutbox(cs)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatalf("event log: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
 	factory := succapi.NewAPIOptionsFactory(succapi.WithOutboxTopics("", "", namespacedTopic))
-	licensed, err := factory(editionseam.LicensedAPIOptionsDeps{Store: cs, Outbox: outbox})
+	licensed, err := factory(editionseam.LicensedAPIOptionsDeps{Store: cs, Log: log, Outbox: outbox})
 	if err != nil {
 		t.Fatalf("api options factory: %v", err)
 	}

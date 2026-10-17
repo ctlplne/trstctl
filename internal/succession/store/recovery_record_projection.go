@@ -60,6 +60,10 @@ func (p *RecoveryRecordProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 	if _, err := tx.Exec(ctx, `DELETE FROM succession_records WHERE source_sequence > 0`); err != nil {
 		return err
 	}
+	//trstctl:system-query — a full event replay resets only event-sourced KEM job rows across tenants.
+	if _, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job WHERE source_sequence > 0`); err != nil {
+		return err
+	}
 	//trstctl:system-query — cross-tenant system replay recomputes only the derived high-water from retained tenant_id-bound chain rows before restoring recovery events.
 	if _, err := tx.Exec(ctx, `UPDATE identity_algorithm_epoch AS h SET epoch = r.epoch, updated_at = now()
 		FROM (SELECT tenant_id, identity_id, max(epoch) AS epoch FROM succession_records GROUP BY tenant_id, identity_id) AS r
@@ -75,7 +79,7 @@ func (p *RecoveryRecordProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 
 func (p *RecoveryRecordProjection) Apply(ctx context.Context, ev eventspec.Event) error {
 	if ev.Type != succession.TypeRecoveryRecorded && ev.Type != succession.TypeRecoveryProofIssued &&
-		ev.Type != succession.TypeKEMRewrapRecorded &&
+		ev.Type != succession.TypeKEMRewrapRecorded && ev.Type != succession.TypeKEMRewrapRequested &&
 		ev.Type != projections.EventTenantOffboarded {
 		return nil
 	}
@@ -94,7 +98,11 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 	}
 	if ev.Type == projections.EventTenantOffboarded {
 		//trstctl:system-query — the system transaction can see cross-tenant rows, but this offboard DELETE is limited to the event's exact tenant_id and projected recovery records.
-		_, err := tx.Exec(ctx, `DELETE FROM succession_records WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID)
+		if _, err := tx.Exec(ctx, `DELETE FROM succession_records WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID); err != nil {
+			return err
+		}
+		//trstctl:system-query — tenant offboard removes only that tenant's event-sourced KEM job projection.
+		_, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID)
 		return err
 	}
 	if ev.Type != succession.TypeRecoveryRecorded {
@@ -102,7 +110,13 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 			return ApplyRecoveryProofEventTx(ctx, tx, ev)
 		}
 		if ev.Type == succession.TypeKEMRewrapRecorded {
-			return ApplyKEMRewrapRecordEventTx(ctx, tx, ev)
+			if err := ApplyKEMRewrapRecordEventTx(ctx, tx, ev); err != nil {
+				return err
+			}
+			return ApplyKEMRewrapCompletedStagesTx(ctx, tx, ev)
+		}
+		if ev.Type == succession.TypeKEMRewrapRequested {
+			return ApplyKEMRewrapRequestedEventTx(ctx, tx, ev)
 		}
 		return nil
 	}

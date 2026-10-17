@@ -364,14 +364,20 @@ outbox state even when the operator has configured custom PCAS breadth topics;
 it also recognizes canonical topics left queued before a configuration change.
 `delivered` means the worker finished its call. For KEM, use the separate
 `GET /api/v1/pcas/rewrap` stage readback and verify the paired public record
-before treating a rewrap as complete. The paired signing/KEM record is appended
-to the tenant event log before its SQL chain and epoch rows are projected. Its
+before treating a rewrap as complete. Queued stage rows come from an immutable,
+tenant-bound accepted-request event. The signed paired signing/KEM record is
+appended to the tenant event log before its SQL chain, epoch, and completed-stage
+rows are projected in one transaction. An outbox retry repairs a lost response
+between enqueue, event append, and SQL projection. Event-only replay restores
+the accepted stage set and its completion status. Its
 tenant, identity, epoch and exact request have a first-writer event ID; a
 projection rebuild restores the same signed record from that event. A second
 request or altered event at the same epoch cannot silently replace it. The
-historical direct-write rows from builds before this change have no source
-event; keep their retained signed artifacts and do not claim event-only disaster
-recovery can reconstruct them or invent predecessor keys.
+historical direct-write record and stage rows from builds before this change
+have no source event; keep their retained signed artifacts and do not claim
+event-only disaster recovery can reconstruct them or invent predecessor keys.
+Unsourced historical stage rows cannot satisfy the current predecessor-retirement
+gate, even if their old status says complete.
 
 The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
 `trstctl pcas federation imports request -f import.json`,
