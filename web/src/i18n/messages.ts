@@ -25525,7 +25525,7 @@ export const messages = {
   },
   "cmdb.setup.bindingHelp": {
     defaultMessage:
-      "Use the ServiceNow URL and secret:// reference already approved by the deployment operator. The control plane does not contact ServiceNow; an enrolled network relay reads it.",
+      "Use the HTTPS ServiceNow URL and secret:// reference already approved in a relay_only deployment binding. The control plane does not contact ServiceNow; an enrolled network relay reads it.",
     description: "I2: explain the operator binding and relay boundary at setup.",
   },
   "cmdb.setup.instanceURL": {
@@ -25573,7 +25573,7 @@ export const messages = {
     description: "I2: distinguish accepted configuration from completed reconciliation.",
   },
   "cmdb.setup.invalidURL": {
-    defaultMessage: "Enter an HTTP(S) URL without credentials, query, or fragment.",
+    defaultMessage: "Enter an HTTPS URL without credentials, query, or fragment.",
     description: "I2: validate the operator-approved CMDB destination before review.",
   },
   "cmdb.setup.invalidTokenRef": {

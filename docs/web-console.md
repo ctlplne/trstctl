@@ -218,7 +218,7 @@ a problem:
   owner IDs win; approved source data may inherit a match; imports never overwrite
   a human attestation; unresolved disagreements wait for review. It also shows
   **CMDB ownership sync** before setup, with a reviewed form for the deployment
-  operator's approved ServiceNow URL, `secret://` reference, CI query, interval,
+  operator's approved HTTPS ServiceNow URL and `relay_only` binding, `secret://` reference, CI query, interval,
   and enabled state. Saving a schedule does not claim a CMDB read completed;
   the panel separately reports relay progress, retained cursor, failure and
   terminal coverage.

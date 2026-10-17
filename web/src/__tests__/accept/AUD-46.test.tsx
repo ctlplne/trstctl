@@ -35,7 +35,7 @@ describe("AUD-46 bounded CMDB coverage", () => {
     renderPanel();
 
     await user.click(await screen.findByRole("button", { name: "Configure CMDB sync" }));
-    await user.type(screen.getByRole("textbox", { name: "Approved ServiceNow URL" }), "http://servicenow.qa.local:18080");
+    await user.type(screen.getByRole("textbox", { name: "Approved ServiceNow URL" }), "https://servicenow.qa.local:18080");
     await user.type(screen.getByRole("textbox", { name: "Secret reference" }), "secret://qa/servicenow-token");
     await user.type(screen.getByRole("textbox", { name: "CI query" }), "install_status=1");
     await user.clear(screen.getByRole("spinbutton", { name: "Interval in seconds" }));
@@ -49,7 +49,7 @@ describe("AUD-46 bounded CMDB coverage", () => {
     await waitFor(() =>
       expect(putCMDBSchedule).toHaveBeenCalledWith(
         {
-          instance_url: "http://servicenow.qa.local:18080",
+          instance_url: "https://servicenow.qa.local:18080",
           token_ref: "secret://qa/servicenow-token",
           ci_query: "install_status=1",
           interval_seconds: 3600,
@@ -60,6 +60,21 @@ describe("AUD-46 bounded CMDB coverage", () => {
         expect.any(String),
       ),
     );
+  });
+
+  it("refuses an HTTP relay URL before review because operator bindings require HTTPS", async () => {
+    cmdbSchedule.mockResolvedValue({ configured: false, enabled: false, coverage_status: "not_configured", guidance: "" });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Configure CMDB sync" }));
+    await user.type(screen.getByRole("textbox", { name: "Approved ServiceNow URL" }), "http://127.0.0.1:18080");
+    await user.type(screen.getByRole("textbox", { name: "Secret reference" }), "secret://qa/servicenow-token");
+    await user.click(screen.getByRole("button", { name: "Review CMDB schedule" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("HTTPS");
+    expect(screen.queryByRole("region", { name: "Reviewed CMDB schedule" })).not.toBeInTheDocument();
+    expect(putCMDBSchedule).not.toHaveBeenCalled();
   });
 
   it("keeps the reviewed idempotency key after an uncertain save response", async () => {

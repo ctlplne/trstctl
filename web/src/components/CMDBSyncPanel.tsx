@@ -37,7 +37,7 @@ const scheduleSchema = z.object({
     .url({ error: translateNow("cmdb.setup.invalidURL") })
     .refine((value) => {
       const url = new URL(value);
-      return ["http:", "https:"].includes(url.protocol) && !!url.hostname && !url.username && !url.password && !url.search && !url.hash;
+      return url.protocol === "https:" && !!url.hostname && !url.username && !url.password && !url.search && !url.hash;
     }, translateNow("cmdb.setup.invalidURL")),
   token_ref: z
     .string()

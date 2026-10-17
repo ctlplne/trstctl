@@ -201,7 +201,7 @@ func TestServedCMDBScheduleRefusesAnUnapprovedInstance(t *testing.T) {
 		"interval_seconds": 3600,
 		"enabled":          true,
 	})
-	if status != http.StatusBadRequest || !strings.Contains(string(body), "must match an operator-approved ServiceNow binding") {
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "must match an operator-approved relay_only ServiceNow binding") {
 		t.Fatalf("unapproved CMDB instance did not reach the destination guard: status %d body %s", status, body)
 	}
 	if _, found, err := h.store.GetCMDBReconcileSchedule(t.Context(), h.tenant); err != nil || found {
