@@ -3,6 +3,7 @@
 package delegation
 
 import (
+	"bytes"
 	"context"
 	"encoding/pem"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 const durableAnchorDir = "agid-root-anchors"
@@ -19,6 +21,7 @@ const durableAnchorDir = "agid-root-anchors"
 // isolated signer links no SQL, NATS, or HTTP while trust roots survive restart.
 type DurableAnchorStore struct {
 	floorDir string
+	mu       sync.Mutex
 }
 
 // NewDurableAnchorStore builds a durable root-anchor store rooted at floorDir.
@@ -30,6 +33,11 @@ func NewDurableAnchorStore(floorDir string) *DurableAnchorStore {
 // directory. The material is public key DER plus a non-secret auth reference; file
 // mode 0600 still keeps the signer floor operator-controlled.
 func (s *DurableAnchorStore) PutRootAnchor(_ context.Context, tenantID, keyID string, anchor RootAnchor) error {
+	if s == nil {
+		return errors.New("delegation: root-anchor store is not configured")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	pemPath, authRefPath, err := s.paths(tenantID, keyID)
 	if err != nil {
 		return err
@@ -63,11 +71,36 @@ func (s *DurableAnchorStore) PutRootAnchor(_ context.Context, tenantID, keyID st
 	if err != nil || !filepath.IsLocal(relAuthRef) {
 		return errors.New("delegation: root-anchor auth-ref path escaped signer floor")
 	}
-	if err := root.WriteFile(relPEM, EncodeRootAnchorPEM(anchor.PublicDER), 0o600); err != nil {
-		return fmt.Errorf("delegation: write root-anchor public key: %w", err)
+	publicPEM := EncodeRootAnchorPEM(anchor.PublicDER)
+	existingPEM, pemErr := root.ReadFile(relPEM)
+	if pemErr != nil && !errors.Is(pemErr, os.ErrNotExist) {
+		return fmt.Errorf("delegation: read first-writer public key: %w", pemErr)
 	}
-	if err := root.WriteFile(relAuthRef, []byte(anchor.AuthRef+"\n"), 0o600); err != nil {
-		return fmt.Errorf("delegation: write root-anchor auth ref: %w", err)
+	if pemErr == nil {
+		storedDER, err := DecodeRootAnchorPEM(existingPEM)
+		if err != nil || !bytes.Equal(storedDER, anchor.PublicDER) {
+			return errors.New("delegation: root-anchor public key is already bound to another authority")
+		}
+	}
+	existingAuth, authErr := root.ReadFile(relAuthRef)
+	if authErr != nil && !errors.Is(authErr, os.ErrNotExist) {
+		return fmt.Errorf("delegation: read first-writer auth ref: %w", authErr)
+	}
+	if authErr == nil && strings.TrimSpace(string(existingAuth)) != anchor.AuthRef {
+		return errors.New("delegation: root-anchor auth ref is already bound to another authority")
+	}
+	// A crash after the first of the two public files leaves a partial anchor
+	// that the gate cannot read. An exact retry completes that same binding;
+	// a different binding cannot overwrite either retained file.
+	if errors.Is(pemErr, os.ErrNotExist) {
+		if err := root.WriteFile(relPEM, publicPEM, 0o600); err != nil {
+			return fmt.Errorf("delegation: write root-anchor public key: %w", err)
+		}
+	}
+	if errors.Is(authErr, os.ErrNotExist) {
+		if err := root.WriteFile(relAuthRef, []byte(anchor.AuthRef+"\n"), 0o600); err != nil {
+			return fmt.Errorf("delegation: write root-anchor auth ref: %w", err)
+		}
 	}
 	return nil
 }

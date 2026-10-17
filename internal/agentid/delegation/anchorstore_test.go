@@ -44,6 +44,46 @@ func TestDurableAnchorStore_PutLoadAndLookup(t *testing.T) {
 	}
 }
 
+func TestDurableAnchorStore_FirstWriterBindingSurvivesRestart(t *testing.T) {
+	floor := t.TempDir()
+	first := NewDurableAnchorStore(floor)
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	const keyID = "root-key"
+	want := RootAnchor{PublicDER: []byte{0x30, 0x02, 0x01, 0x02}, AuthRef: "webauthn:first"}
+	if err := first.PutRootAnchor(context.Background(), tenantID, keyID, want); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewDurableAnchorStore(floor).PutRootAnchor(context.Background(), tenantID, keyID, want); err != nil {
+		t.Fatalf("exact retry after restart: %v", err)
+	}
+	for _, changed := range []RootAnchor{
+		{PublicDER: []byte{0x30, 0x02, 0x01, 0x03}, AuthRef: want.AuthRef},
+		{PublicDER: want.PublicDER, AuthRef: "webauthn:other"},
+	} {
+		if err := first.PutRootAnchor(context.Background(), tenantID, keyID, changed); err == nil {
+			t.Fatal("same signer-floor anchor ID accepted a different authority")
+		}
+	}
+	_, authPath, err := first.paths(tenantID, keyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(authPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.PutRootAnchor(context.Background(), tenantID, keyID,
+		RootAnchor{PublicDER: []byte{0x30, 0x02, 0x01, 0x03}, AuthRef: want.AuthRef}); err == nil {
+		t.Fatal("partial signer-floor anchor accepted a different public key")
+	}
+	if err := first.PutRootAnchor(context.Background(), tenantID, keyID, want); err != nil {
+		t.Fatalf("exact retry did not repair partial public anchor: %v", err)
+	}
+	got, err := NewDurableAnchorStore(floor).GetRootAnchor(tenantID, keyID)
+	if err != nil || string(got.PublicDER) != string(want.PublicDER) || got.AuthRef != want.AuthRef {
+		t.Fatalf("first-writer signer anchor changed: got=%+v err=%v", got, err)
+	}
+}
+
 func TestDurableAnchorStore_RefusesSymlinkEscapeOnWrite(t *testing.T) {
 	floor := t.TempDir()
 	outside := t.TempDir()
