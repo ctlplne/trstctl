@@ -71,6 +71,14 @@ func TestOpenAPI_Golden(t *testing.T) {
 	if got := checkpoint["checkpoint"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASSignedEpochCheckpoint" {
 		t.Fatalf("nested signed checkpoint schema = %v", got)
 	}
+	recoveryRequest := schemas["PCASRecoveryRequest"].(map[string]any)["properties"].(map[string]any)
+	if got := recoveryRequest["authorization"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASRecoveryAuthorization" {
+		t.Fatalf("recovery authorization schema = %v, want structured signed artifact", got)
+	}
+	authorization := schemas["PCASRecoveryAuthorization"].(map[string]any)["properties"].(map[string]any)
+	if got := authorization["Statement"].(map[string]any)["$ref"]; got != "#/components/schemas/PCASRecoveryStatement" {
+		t.Fatalf("recovery statement schema = %v, want bound statement", got)
+	}
 	for _, rt := range succapi.Routes(nil) {
 		if !rt.Mutation {
 			continue

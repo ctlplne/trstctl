@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IntlProvider } from "@/i18n/I18nProvider";
+import { AppQueryProvider } from "@/lib/query";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 
 const { pcasMock } = vi.hoisted(() => ({
@@ -13,6 +14,7 @@ const { pcasMock } = vi.hoisted(() => ({
     checkpoint: vi.fn(),
     retirementStatus: vi.fn(),
     configureRetirement: vi.fn(),
+    recoveryPolicy: vi.fn(),
   },
 }));
 
@@ -21,6 +23,16 @@ vi.mock("@/lib/pcasApi", () => ({ pcasApi: pcasMock }));
 describe("PCAS first-use console", () => {
   beforeEach(() => {
     for (const mock of Object.values(pcasMock)) mock.mockReset();
+    pcasMock.recoveryPolicy.mockResolvedValue({
+      identity_id: "spiffe://example.test/workload/api",
+      threshold: 2,
+      roster: [
+        { ID: "custodian-a", PubDER: "AQID" },
+        { ID: "custodian-b", PubDER: "BAUG" },
+      ],
+      trust_root_der: "BwgJ",
+      updated_at: "2026-10-17T00:00:00Z",
+    });
   });
 
   it("requires review of exact values and displays durable signer readback", async () => {
@@ -29,15 +41,24 @@ describe("PCAS first-use console", () => {
     pcasMock.requestStatus.mockResolvedValue({ request_id: "genesis-1", kind: "genesis", status: "delivered", attempts: 1 });
     pcasMock.chain.mockResolvedValue({
       identity_id: "spiffe://example.test/workload/api",
-      genesis: { algorithm: "ECDSA-P256", epoch: 0 },
+      genesis: {
+        identity_id: "spiffe://example.test/workload/api",
+        tenant_id: "11111111-1111-1111-1111-111111111111",
+        deployment_scope: "spiffe://example.test",
+        algorithm: "ECDSA-P256",
+        public_key: "AQID",
+        epoch: 0,
+      },
       trust_root_public_der: "AQID",
       records: [],
       count: 0,
     });
     render(
-      <IntlProvider>
-        <PCASSuccessionWorkflow />
-      </IntlProvider>,
+      <AppQueryProvider>
+        <IntlProvider>
+          <PCASSuccessionWorkflow />
+        </IntlProvider>
+      </AppQueryProvider>,
     );
     await user.type(screen.getByLabelText("Stable identity ID"), "spiffe://example.test/workload/api");
     await user.type(screen.getByLabelText("Deployment scope"), "spiffe://example.test");
@@ -79,9 +100,11 @@ describe("PCAS first-use console", () => {
       signature: "AQID",
     });
     render(
-      <IntlProvider>
-        <PCASSuccessionWorkflow />
-      </IntlProvider>,
+      <AppQueryProvider>
+        <IntlProvider>
+          <PCASSuccessionWorkflow />
+        </IntlProvider>
+      </AppQueryProvider>,
     );
     await user.type(screen.getByLabelText("Stable identity ID"), "spiffe://example.test/workload/api");
     await user.click(screen.getByRole("button", { name: "Read signed checkpoint" }));
@@ -116,9 +139,11 @@ describe("PCAS first-use console", () => {
       updated_at: "2026-10-15T00:01:00Z",
     });
     render(
-      <IntlProvider>
-        <PCASSuccessionWorkflow />
-      </IntlProvider>,
+      <AppQueryProvider>
+        <IntlProvider>
+          <PCASSuccessionWorkflow />
+        </IntlProvider>
+      </AppQueryProvider>,
     );
     await user.type(screen.getByLabelText("Stable identity ID"), "spiffe://example.test/workload/api");
     await user.click(screen.getByRole("button", { name: "Read retirement policy" }));

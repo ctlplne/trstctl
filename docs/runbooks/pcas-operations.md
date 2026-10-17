@@ -197,6 +197,23 @@ different algorithm or scope for that epoch is refused; a lost response can be
 retried without replacing the key. The isolated signer does not support Ed25519
 for this key-creation path.
 
+In the console, open **Algorithms and future readiness → Compatibility, PQC
+policy, and upgrade planning → Proof-carrying key succession**, enter the stable
+identity and read its chain. The **Threshold recovery** section reads the
+currently enforced public policy. Its policy form accepts only public DER keys;
+review the exact threshold, ordered roster and recovery root before saving.
+Read the saved policy back before preparation. The next panel derives the
+deployment scope and next epoch from the tenant chain, prepares the key inside
+signer custody, and reads its signed public receipt. Hand that exact public key
+and the signed statement to separate custodians through a trusted channel.
+The final panel accepts a JSON authorization containing `Statement`,
+`Threshold`, ordered `Roster`, `RosterSig`, and distinct `Approvals`. It
+checks the visible identity, tenant, scope, epoch, public key and policy binding
+before the reviewed submission; the server verifies the signatures at admission
+and again at delivery. The browser never asks for custodian private keys.
+After delivery, refresh the served chain and verify its inclusion proof with
+an independent relying party.
+
 `POST /api/v1/pcas/recovery/requests` then refuses a request unless its tenant
 and identity have a configured policy, its signer handle is the derived tenant
 handle for that prepared epoch, its predecessor matches the current recorded

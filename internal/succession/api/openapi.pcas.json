@@ -629,6 +629,69 @@
           "signature"
         ]
       },
+      "PCASRecoveryApproval": {
+        "type": "object",
+        "properties": {
+          "ApproverID": {
+            "type": "string"
+          },
+          "Signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ApproverID",
+          "Signature"
+        ]
+      },
+      "PCASRecoveryApprover": {
+        "type": "object",
+        "properties": {
+          "ID": {
+            "type": "string"
+          },
+          "PubDER": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ID",
+          "PubDER"
+        ]
+      },
+      "PCASRecoveryAuthorization": {
+        "type": "object",
+        "properties": {
+          "Approvals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PCASRecoveryApproval"
+            }
+          },
+          "Roster": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PCASRecoveryApprover"
+            }
+          },
+          "RosterSig": {
+            "type": "string"
+          },
+          "Statement": {
+            "$ref": "#/components/schemas/PCASRecoveryStatement"
+          },
+          "Threshold": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "Statement",
+          "Threshold",
+          "Roster",
+          "RosterSig",
+          "Approvals"
+        ]
+      },
       "PCASRecoveryPolicy": {
         "type": "object",
         "properties": {
@@ -657,19 +720,7 @@
           "roster": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "ID": {
-                  "type": "string"
-                },
-                "PubDER": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "ID",
-                "PubDER"
-              ]
+              "$ref": "#/components/schemas/PCASRecoveryApprover"
             }
           },
           "threshold": {
@@ -695,19 +746,7 @@
           "roster": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "ID": {
-                  "type": "string"
-                },
-                "PubDER": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "ID",
-                "PubDER"
-              ]
+              "$ref": "#/components/schemas/PCASRecoveryApprover"
             }
           },
           "threshold": {
@@ -733,7 +772,7 @@
         "type": "object",
         "properties": {
           "authorization": {
-            "type": "string"
+            "$ref": "#/components/schemas/PCASRecoveryAuthorization"
           },
           "deployment_scope": {
             "type": "string"
@@ -765,11 +804,50 @@
         },
         "required": [
           "identity_id",
+          "deployment_scope",
           "target_algorithm",
           "successor_handle",
+          "predecessor_epoch",
           "epoch",
+          "predecessor_algorithm",
+          "predecessor_public_der",
           "trust_root_der",
           "authorization"
+        ]
+      },
+      "PCASRecoveryStatement": {
+        "type": "object",
+        "properties": {
+          "DeploymentScope": {
+            "type": "string"
+          },
+          "Epoch": {
+            "type": "integer"
+          },
+          "IdentityID": {
+            "type": "string"
+          },
+          "Nonce": {
+            "type": "string"
+          },
+          "SuccessorAlg": {
+            "type": "string"
+          },
+          "SuccessorPub": {
+            "type": "string"
+          },
+          "TenantID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "DeploymentScope",
+          "IdentityID",
+          "TenantID",
+          "Epoch",
+          "SuccessorAlg",
+          "SuccessorPub",
+          "Nonce"
         ]
       },
       "PCASRecoverySuccessor": {

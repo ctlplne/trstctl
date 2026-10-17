@@ -1261,11 +1261,9 @@ func schemas() map[string]*api.Schema {
 			"count": api.IntegerSchema(),
 		}, "scopes", "count"),
 		"PCASRecoveryPolicyRequest": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id": api.StringSchema(),
-			"threshold":   api.IntegerSchema(),
-			"roster": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
-				"ID": api.StringSchema(), "PubDER": api.StringSchema(),
-			}, "ID", "PubDER")),
+			"identity_id":    api.StringSchema(),
+			"threshold":      api.IntegerSchema(),
+			"roster":         api.ArraySchema(api.SchemaRef("PCASRecoveryApprover")),
 			"trust_root_der": api.StringSchema(),
 		}, "identity_id", "threshold", "roster", "trust_root_der"),
 		"PCASRecoveryPolicy": api.ObjectSchema(map[string]*api.Schema{
@@ -1274,14 +1272,31 @@ func schemas() map[string]*api.Schema {
 			"updated_at":  api.TimestampSchema(),
 		}, "identity_id", "status"),
 		"PCASRecoveryPolicyState": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id": api.StringSchema(),
-			"threshold":   api.IntegerSchema(),
-			"roster": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
-				"ID": api.StringSchema(), "PubDER": api.StringSchema(),
-			}, "ID", "PubDER")),
+			"identity_id":    api.StringSchema(),
+			"threshold":      api.IntegerSchema(),
+			"roster":         api.ArraySchema(api.SchemaRef("PCASRecoveryApprover")),
 			"trust_root_der": api.StringSchema(),
 			"updated_at":     api.TimestampSchema(),
 		}, "identity_id", "threshold", "roster", "trust_root_der", "updated_at"),
+		"PCASRecoveryApprover": api.ObjectSchema(map[string]*api.Schema{
+			"ID": api.StringSchema(), "PubDER": api.StringSchema(),
+		}, "ID", "PubDER"),
+		"PCASRecoveryStatement": api.ObjectSchema(map[string]*api.Schema{
+			"DeploymentScope": api.StringSchema(), "IdentityID": api.StringSchema(),
+			"TenantID": api.StringSchema(), "Epoch": api.IntegerSchema(),
+			"SuccessorAlg": api.StringSchema(), "SuccessorPub": api.StringSchema(),
+			"Nonce": api.StringSchema(),
+		}, "DeploymentScope", "IdentityID", "TenantID", "Epoch", "SuccessorAlg", "SuccessorPub", "Nonce"),
+		"PCASRecoveryApproval": api.ObjectSchema(map[string]*api.Schema{
+			"ApproverID": api.StringSchema(), "Signature": api.StringSchema(),
+		}, "ApproverID", "Signature"),
+		"PCASRecoveryAuthorization": api.ObjectSchema(map[string]*api.Schema{
+			"Statement": api.SchemaRef("PCASRecoveryStatement"),
+			"Threshold": api.IntegerSchema(),
+			"Roster":    api.ArraySchema(api.SchemaRef("PCASRecoveryApprover")),
+			"RosterSig": api.StringSchema(),
+			"Approvals": api.ArraySchema(api.SchemaRef("PCASRecoveryApproval")),
+		}, "Statement", "Threshold", "Roster", "RosterSig", "Approvals"),
 		"PCASRecoverySuccessorPrepareRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":      api.StringSchema(),
 			"deployment_scope": api.StringSchema(),
@@ -1310,8 +1325,10 @@ func schemas() map[string]*api.Schema {
 			"predecessor_algorithm":  api.StringSchema(),
 			"predecessor_public_der": api.StringSchema(),
 			"trust_root_der":         api.StringSchema(),
-			"authorization":          api.StringSchema(),
-		}, "identity_id", "target_algorithm", "successor_handle", "epoch", "trust_root_der", "authorization"),
+			"authorization":          api.SchemaRef("PCASRecoveryAuthorization"),
+		}, "identity_id", "deployment_scope", "target_algorithm", "successor_handle",
+			"predecessor_epoch", "epoch", "predecessor_algorithm", "predecessor_public_der",
+			"trust_root_der", "authorization"),
 		"PCASAsyncRequest": api.ObjectSchema(map[string]*api.Schema{
 			"request_id":  api.StringSchema(),
 			"status":      api.StringSchema(),

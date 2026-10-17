@@ -4,6 +4,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { pcasApi, type PCASAcceptedRequest, type PCASChain, type PCASCheckpoint, type PCASRequestStatus } from "@/lib/pcasApi";
 import { PCASRetirementPanel } from "@/pages/posture/PCASRetirementPanel";
 import { PCASDelegationPanel } from "@/pages/posture/PCASDelegationPanel";
+import { PCASRecoveryPanel } from "@/pages/posture/PCASRecoveryPanel";
 
 const genesisAlgorithms = ["ECDSA-P256", "ECDSA-P384", "Ed25519"];
 const successorAlgorithms = ["ECDSA-P384", "ECDSA-P521", "ML-DSA-65"];
@@ -346,6 +347,7 @@ export function PCASSuccessionWorkflow() {
         </div>
       ) : null}
       <PCASDelegationPanel />
+      {chain?.genesis ? <PCASRecoveryPanel key={chain.genesis.identity_id} identityID={chain.genesis.identity_id} /> : null}
       <PCASRetirementPanel key={identityID.trim()} identityID={identityID.trim()} />
       {error ? (
         <p role="alert" className="text-sm text-destructive">

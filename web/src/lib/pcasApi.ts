@@ -105,6 +105,44 @@ export interface PCASDelegationAccepted {
   status_url: string;
 }
 
+export interface PCASRecoveryApprover {
+  ID: string;
+  PubDER: string;
+}
+
+export interface PCASRecoveryPolicy {
+  identity_id: string;
+  threshold: number;
+  roster: PCASRecoveryApprover[];
+  trust_root_der: string;
+  updated_at: string;
+}
+
+export interface PCASRecoverySuccessor {
+  identity_id: string;
+  deployment_scope: string;
+  epoch: number;
+  algorithm: string;
+  handle: string;
+  public_key_der: string;
+  request_id: string;
+  signer_signature: string;
+  event_id: string;
+}
+
+export interface PCASRecoveryRequest {
+  identity_id: string;
+  deployment_scope: string;
+  target_algorithm: string;
+  successor_handle: string;
+  predecessor_epoch: number;
+  epoch: number;
+  predecessor_algorithm: string;
+  predecessor_public_der: string;
+  trust_root_der: string;
+  authorization: Record<string, unknown>;
+}
+
 export const pcasApi = {
   registerGenesis: (body: PCASGenesisRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/genesis", body),
   requestSuccession: (body: PCASSuccessionRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/successions", body),
@@ -118,4 +156,12 @@ export const pcasApi = {
   configureDelegationScope: (body: { scope_id: string; parent_scope_id?: string; epoch_floor: number }) =>
     mutate<PCASDelegationAccepted>("POST", "/api/v1/pcas/delegation/scopes", body),
   raiseDelegationFloor: (body: { scope_id: string; epoch_floor: number }) => mutate<PCASDelegationAccepted>("POST", "/api/v1/pcas/delegation/floors", body),
+  recoveryPolicy: (identityId: string) => req<PCASRecoveryPolicy>("/api/v1/pcas/recovery/policies?identity_id=" + encodeURIComponent(identityId)),
+  configureRecoveryPolicy: (body: Pick<PCASRecoveryPolicy, "identity_id" | "threshold" | "roster" | "trust_root_der">) =>
+    mutate<{ identity_id: string; status: string; updated_at: string }>("POST", "/api/v1/pcas/recovery/policies", body),
+  prepareRecoverySuccessor: (body: { identity_id: string; deployment_scope: string; epoch: number; algorithm: string }) =>
+    mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/recovery/successors/prepare", body),
+  recoverySuccessor: (identityId: string, epoch: number) =>
+    req<PCASRecoverySuccessor>("/api/v1/pcas/recovery/successors?identity_id=" + encodeURIComponent(identityId) + "&epoch=" + epoch),
+  requestRecovery: (body: PCASRecoveryRequest) => mutate<PCASAcceptedRequest>("POST", "/api/v1/pcas/recovery/requests", body),
 };
