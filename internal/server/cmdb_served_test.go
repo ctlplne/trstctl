@@ -44,6 +44,7 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL: instanceURL,
 			TokenRef:    servedCMDBSecretRef,
+			RelayOnly:   true,
 		}}
 	})
 
@@ -191,7 +192,7 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 // likes by calling it a CMDB.
 func TestServedCMDBScheduleRefusesAnUnapprovedInstance(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-unapproved", map[string]any{
@@ -218,7 +219,7 @@ func TestServedCMDBScheduleRefusesAnUnapprovedInstance(t *testing.T) {
 // A poll tighter than the floor buys rate limiting, not freshness.
 func TestServedCMDBScheduleRefusesAHotPoll(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-hot", map[string]any{
@@ -296,6 +297,7 @@ func TestRelayModeCMDBScheduleDispatchesAndIngestsTheReport(t *testing.T) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{
 			InstanceURL: "https://cmdb.internal.example",
 			TokenRef:    servedCMDBSecretRef,
+			RelayOnly:   true,
 		}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "owners:read")
@@ -433,7 +435,7 @@ func TestRelayModeCMDBScheduleDispatchesAndIngestsTheReport(t *testing.T) {
 func TestCMDBSweepContinuesPastFiveHundredAndOnlyTerminalPageSucceedsAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 
 	var target store.Owner
@@ -586,7 +588,7 @@ func TestCMDBSweepContinuesPastFiveHundredAndOnlyTerminalPageSucceedsAUD46(t *te
 func TestCMDBSweepReconcilesChangesAndDeletionsIdempotentlyAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
 		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "payments",
@@ -685,7 +687,7 @@ func TestCMDBSweepDeletionPreservesAttestationAndTenantFenceAUD46(t *testing.T) 
 		otherTenant = "22222222-2222-4222-8222-222222222246"
 	)
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
 		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "attested-payments",
@@ -781,7 +783,7 @@ func TestCMDBSweepDeletionPreservesAttestationAndTenantFenceAUD46(t *testing.T) 
 func TestConcurrentDuplicateCMDBTerminalReportsConvergeAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
 		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "concurrent-payments",
@@ -872,7 +874,7 @@ func TestCMDBReportCannotClaimAnExpectedTotalBehindItsReadCountAUD46(t *testing.
 func TestFailedCMDBPageRetainsAndResumesTheExactCursorAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
-		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef, RelayOnly: true}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok,

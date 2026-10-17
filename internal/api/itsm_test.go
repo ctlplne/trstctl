@@ -18,7 +18,7 @@ func TestServiceNowBindingApprovalRequiresConfiguredURLTokenAndPrivateFlag(t *te
 		InstanceURL:      "https://example.service-now.com",
 		TokenRef:         "env:TRSTCTL_SERVICENOW_TOKEN",
 		ShortDescription: "ok",
-	}); err != nil {
+	}, false); err != nil {
 		t.Fatalf("approved binding rejected: %v", err)
 	}
 
@@ -27,9 +27,25 @@ func TestServiceNowBindingApprovalRequiresConfiguredURLTokenAndPrivateFlag(t *te
 		{InstanceURL: "https://example.service-now.com", TokenRef: "env:AWS_SECRET_ACCESS_KEY"},                                // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	} {
-		if _, err := a.approvedServiceNowBinding(tc); err == nil {
+		if _, err := a.approvedServiceNowBinding(tc, false); err == nil {
 			t.Fatalf("unapproved binding accepted: %+v", tc)
 		}
+	}
+}
+
+func TestServiceNowRelayBindingCannotAuthorizeControlPlaneTicket(t *testing.T) {
+	ref := "secret://itsm/cmdb-qa-token"
+	a := New(nil, nil, nil, WithServiceNowBindings(ServiceNowBinding{
+		InstanceURL: "https://cmdb.qa.invalid",
+		TokenRef:    ref,
+		RelayOnly:   true,
+	}))
+	req := serviceNowTicketRequest{InstanceURL: "https://cmdb.qa.invalid", TokenRef: ref}
+	if _, err := a.approvedServiceNowBinding(req, false); err == nil {
+		t.Fatal("relay-only CMDB binding authorized control-plane ticket dispatch")
+	}
+	if _, err := a.approvedServiceNowBinding(req, true); err != nil {
+		t.Fatalf("relay-only CMDB binding rejected by CMDB setup: %v", err)
 	}
 }
 

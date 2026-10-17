@@ -1300,11 +1300,12 @@ type ServiceNowITSM struct {
 }
 
 // ServiceNowBinding names one approved ServiceNow destination and credential
-// reference. TokenRef is a reference such as env:TRSTCTL_SERVICENOW_TOKEN; it is
-// not the token value.
+// reference. Ticket bindings use env:NAME; relay-only CMDB bindings use
+// secret://NAME, which only the enrolled relay can redeem per attempt.
 type ServiceNowBinding struct {
 	InstanceURL          string   `json:"instance_url,omitempty"`
 	TokenRef             string   `json:"token_ref,omitempty"`
+	RelayOnly            bool     `json:"relay_only,omitempty"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
@@ -3688,8 +3689,15 @@ func validateITSM(c *Config) []error {
 		tokenRef := strings.TrimSpace(b.TokenRef)
 		if tokenRef == "" {
 			errs = append(errs, fmt.Errorf("%s.token_ref is required", prefix))
+		} else if b.RelayOnly {
+			if name, ok := strings.CutPrefix(tokenRef, "secret://"); !ok || strings.TrimSpace(name) == "" {
+				errs = append(errs, fmt.Errorf("%s.token_ref must be a secret:// reference for relay_only bindings", prefix))
+			}
 		} else if name, ok := strings.CutPrefix(tokenRef, "env:"); !ok || strings.TrimSpace(name) == "" {
 			errs = append(errs, fmt.Errorf("%s.token_ref must be an env:NAME credential reference", prefix))
+		}
+		if b.RelayOnly && b.AllowPrivateEndpoint {
+			errs = append(errs, fmt.Errorf("%s.relay_only bindings cannot grant control-plane private egress", prefix))
 		}
 		if len(b.PrivateEgressCIDRs) > 0 && !b.AllowPrivateEndpoint {
 			errs = append(errs, fmt.Errorf("%s.private_egress_cidrs requires allow_private_endpoint", prefix))

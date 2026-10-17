@@ -33,6 +33,7 @@ type serviceNowTicketRequest struct {
 type ServiceNowBinding struct {
 	InstanceURL          string   `json:"instance_url"`
 	TokenRef             string   `json:"token_ref"`
+	RelayOnly            bool     `json:"relay_only,omitempty"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
@@ -84,7 +85,7 @@ func (a *API) createServiceNowTicket(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(req.ShortDescription) == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "short_description is required")
 		}
-		binding, err := a.approvedServiceNowBinding(req)
+		binding, err := a.approvedServiceNowBinding(req, false)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -116,7 +117,7 @@ func (a *API) createServiceNowTicket(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest) (ServiceNowBinding, error) {
+func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest, relayOnly bool) (ServiceNowBinding, error) {
 	if len(a.serviceNowBindings) == 0 {
 		return ServiceNowBinding{}, errStatus(http.StatusServiceUnavailable, "ServiceNow ITSM integration is not configured")
 	}
@@ -132,6 +133,7 @@ func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest) (ServiceNow
 		}
 		if instanceURL == allowedURL &&
 			tokenRef == strings.TrimSpace(raw.TokenRef) &&
+			relayOnly == raw.RelayOnly &&
 			req.AllowPrivateEndpoint == raw.AllowPrivateEndpoint {
 			privateCIDRs := cleanAPIStringList(raw.PrivateEgressCIDRs)
 			if raw.AllowPrivateEndpoint {
@@ -145,10 +147,14 @@ func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest) (ServiceNow
 			return ServiceNowBinding{
 				InstanceURL:          allowedURL,
 				TokenRef:             tokenRef,
+				RelayOnly:            raw.RelayOnly,
 				AllowPrivateEndpoint: raw.AllowPrivateEndpoint,
 				PrivateEgressCIDRs:   privateCIDRs,
 			}, nil
 		}
+	}
+	if relayOnly {
+		return ServiceNowBinding{}, errStatus(http.StatusBadRequest, "instance_url and token_ref must match an operator-approved relay_only ServiceNow binding")
 	}
 	return ServiceNowBinding{}, errStatus(http.StatusBadRequest, "instance_url, token_ref, and allow_private_endpoint must match an operator-approved ServiceNow binding")
 }

@@ -112,7 +112,7 @@ func (a *API) putCMDBSchedule(w http.ResponseWriter, r *http.Request) {
 			InstanceURL:          body.InstanceURL,
 			TokenRef:             body.TokenRef,
 			AllowPrivateEndpoint: false,
-		}); err != nil {
+		}, true); err != nil {
 			return 0, nil, err
 		}
 		saved := store.CMDBReconcileSchedule{

@@ -1027,6 +1027,7 @@ func serviceNowBindingsFromConfig(sn config.ServiceNowITSM) []api.ServiceNowBind
 		out = append(out, api.ServiceNowBinding{
 			InstanceURL:          b.InstanceURL,
 			TokenRef:             b.TokenRef,
+			RelayOnly:            b.RelayOnly,
 			AllowPrivateEndpoint: b.AllowPrivateEndpoint,
 			PrivateEgressCIDRs:   append([]string(nil), b.PrivateEgressCIDRs...),
 		})

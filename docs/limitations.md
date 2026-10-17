@@ -2560,8 +2560,9 @@ than sending an operator looking for a credential that was never there.
   `cmdb.sync` outbox job, and a NETWORK relay inside the segment claims it over
   its outbound channel. There is no control-plane HTTP fallback and therefore
   no private-egress hole into the estate. The relay redeems the ServiceNow token
-  per attempt through the job-credential path (`secret://` is required; an
-  `env:` reference belongs to the brain process and is refused), reads the one
+  per attempt through the job-credential path (the approved ServiceNow binding
+  sets `relay_only: true` with a `secret://` reference; an `env:` reference
+  belongs to the brain process and is refused), reads the one
   permitted table through the shared endpoint builder, parses in place, and
   reports records — never the raw response, bounded at 8MB. The RECONCILE
   stays in the control plane on the reported records, so the

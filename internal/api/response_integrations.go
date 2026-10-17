@@ -191,7 +191,7 @@ func (a *API) responseIntegrationDestinationCommand(ctx context.Context, tenantI
 			InstanceURL:          dst.InstanceURL,
 			TokenRef:             dst.TokenRef,
 			AllowPrivateEndpoint: dst.AllowPrivateEndpoint,
-		})
+		}, false)
 		if err != nil {
 			return orchestrator.ResponseIntegrationDestination{}, err
 		}

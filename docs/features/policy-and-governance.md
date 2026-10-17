@@ -161,6 +161,8 @@ The served OpenAPI declares this import as a required `text/csv` body (up to
 URL, a `secret://` token reference, an interval of at least 300 seconds, and
 relay execution. `GET /api/v1/owners/cmdb-schedule` distinguishes never
 configured, paused, incomplete, failed, and completed coverage.
+The deployment binding for this URL and reference must set `relay_only: true`;
+ticket and response-dispatch bindings remain separate `env:` references.
 The Ownership console exposes **Configure CMDB sync** in its Sources disclosure
 even before the first schedule exists. Review the exact URL, reference, query,
 interval, and enabled state before saving. An ambiguous response can be retried

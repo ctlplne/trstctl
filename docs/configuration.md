@@ -692,18 +692,21 @@ match that binding exactly; callers cannot send the ServiceNow token to an arbit
 | `TRSTCTL_SERVICENOW_PRIVATE_EGRESS_CIDRS` | — | Comma-separated CIDR grants for a private ServiceNow binding. Required when `TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT=true`. |
 
 JSON config supports the same policy as `itsm.servicenow.bindings[]` with
-`instance_url`, `token_ref`, `allow_private_endpoint`, and
-`private_egress_cidrs`. Private endpoint requests also require the caller to hold
+`instance_url`, `token_ref`, `relay_only`, `allow_private_endpoint`, and
+`private_egress_cidrs`. Ticket and response-dispatch bindings use `env:NAME` and
+`relay_only: false`; private endpoint requests also require the caller to hold
 the dedicated `egress:private` permission.
 
 Ownership CMDB reconciliation uses the same approved binding but a different
 credential path: its `token_ref` must be a `secret://` reference redeemable by the
 enrolled network relay, and its schedule sets `execution: "relay"` and
 `allow_private_endpoint: false`. For this path, register the exact URL and
-`secret://` reference in `itsm.servicenow.bindings[]` before configuring the
-tenant schedule through the Ownership console, API or CLI. The control plane
-never polls the CMDB directly. The legacy `env:` default above is for ticket
-dispatch and cannot activate CMDB reconciliation.
+`secret://` reference with `relay_only: true` and
+`allow_private_endpoint: false` in `itsm.servicenow.bindings[]` before
+configuring the tenant schedule through the Ownership console, API or CLI.
+That binding cannot authorize a control-plane ticket or response dispatch.
+The control plane never polls the CMDB directly. The legacy `env:` default
+above is for ticket dispatch and cannot activate CMDB reconciliation.
 
 ## OpenTelemetry export
 
