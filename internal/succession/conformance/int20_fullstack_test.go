@@ -415,6 +415,20 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// Simulate a signer reply lost after both successor keys were durably minted,
+	// but before the worker could append the paired public record. Redelivery
+	// must recover these exact keys, not generate a different successor or stall.
+	lostSign, err := st.signer.GenerateKeyHandle(st.ctx, crypto.ECDSAP384,
+		succession.TenantKeyHandle(st.tenantID, id, 1))
+	if err != nil {
+		t.Fatalf("pre-mint paired signing key: %v", err)
+	}
+	lostKEM, err := st.signer.GenerateSuccessorKEM(st.ctx,
+		succession.TenantKEMKeyHandle(st.tenantID, id, 1),
+		eepqc.KEMAlgorithmToProto(eepqc.MLKEM768))
+	if err != nil {
+		t.Fatalf("pre-mint KEM key: %v", err)
+	}
 	resp, err := st.svc.RequestKEMRewrap(st.ctx, st.tenantID, succapi.KEMRewrapRequest{
 		IdentityID: id, PredecessorHandle: predHandle, PredecessorEpoch: 0,
 		SuccessorSignHandle: succession.TenantKeyHandle(st.tenantID, id, 1), SuccessorKEMHandle: succession.TenantKEMKeyHandle(st.tenantID, id, 1),
@@ -451,6 +465,10 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	}
 	if err := pcaskem.VerifyPaired(paired); err != nil {
 		t.Fatalf("paired KEM record verify: %v", err)
+	}
+	if !bytes.Equal(paired.Base.Fields.SuccessorPub, lostSign.Public().DER) ||
+		!bytes.Equal(paired.KEMPub, lostKEM.PublicDER) {
+		t.Fatal("lost signer reply caused a different paired signing or KEM public key")
 	}
 	// A database read model can be rebuilt from JetStream alone. Remove the
 	// projected KEM row, replay the immutable log and require the same paired

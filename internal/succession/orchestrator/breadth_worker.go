@@ -345,9 +345,18 @@ type signerKEMAdapter struct {
 }
 
 func (a signerKEMAdapter) GeneratePairedSigningKey(handle string) (crypto.Signer, error) {
-	rs, err := a.custody.GenerateKeyHandle(a.ctx, a.signingAlg, handle)
+	rs, err := a.custody.SignerForHandle(a.ctx, handle)
+	if status.Code(err) == codes.NotFound {
+		rs, err = a.custody.GenerateKeyHandle(a.ctx, a.signingAlg, handle)
+		if status.Code(err) == codes.AlreadyExists {
+			rs, err = a.custody.SignerForHandle(a.ctx, handle)
+		}
+	}
 	if err != nil {
 		return nil, err
+	}
+	if rs.Algorithm() != a.signingAlg {
+		return nil, fmt.Errorf("pcas KEM rewrap: paired signer handle uses %s, want %s", rs.Algorithm(), a.signingAlg)
 	}
 	return crypto.SignerFromDigestSigner(rs), nil
 }

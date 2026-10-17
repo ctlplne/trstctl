@@ -401,7 +401,10 @@ handle is rejected before the outbox command or authority event is created.
 If the signer persists the successor KEM key but its reply is lost, the same
 handle and algorithm return that existing public key on retry, including after a
 signer restart. A different algorithm at the same handle is refused. This
-recovers custody without minting a second, incompatible successor.
+recovers custody without minting a second, incompatible successor. The paired
+signing key follows the same retry rule: the worker first binds the existing
+epoch handle, mints only when absent, and refuses an algorithm mismatch before
+it appends the signed paired record.
 
 The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
 `trstctl pcas federation imports request -f import.json`,
