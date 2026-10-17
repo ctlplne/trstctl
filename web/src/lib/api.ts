@@ -32,6 +32,7 @@ import type {
   CryptoReadiness,
   CryptoReadinessExport,
   CMDBReconcileSchedule,
+  CMDBReconcileScheduleInput,
   IssuanceRequest,
   IdentityIssuanceResult,
   IssuanceRequestInput,
@@ -632,7 +633,7 @@ export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
-export type { CMDBReconcileSchedule } from "./api-types.gen";
+export type { CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
 export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollSchedule, MDMPollScheduleInput, MDMPollScheduleList } from "./api-types.gen";
@@ -1650,6 +1651,7 @@ export interface Api {
   resolveOwnershipConflict(id: string, resolution: string): Promise<unknown>;
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
+  putCMDBSchedule(input: CMDBReconcileScheduleInput, idempotencyKey?: string): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
   issuanceRequest(id: string): Promise<IssuanceRequest>;
@@ -2248,6 +2250,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       resolution,
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
+  putCMDBSchedule: (input, idempotencyKey) => mutate<CMDBReconcileSchedule>("PUT", "/api/v1/owners/cmdb-schedule", input, idempotencyKey),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
   issuanceRequest: (id) => req<IssuanceRequest>(`/api/v1/issuance-requests/${encodeURIComponent(id)}`),
   identityIssuanceResult: (id, requestKey) =>

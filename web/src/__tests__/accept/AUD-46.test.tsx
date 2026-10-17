@@ -1,25 +1,91 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CMDBSyncPanel } from "@/components/CMDBSyncPanel";
+import { RbacProvider } from "@/components/rbac";
 import { AppQueryProvider } from "@/lib/query";
 
-const { cmdbSchedule } = vi.hoisted(() => ({ cmdbSchedule: vi.fn() }));
+const { cmdbSchedule, putCMDBSchedule } = vi.hoisted(() => ({ cmdbSchedule: vi.fn(), putCMDBSchedule: vi.fn() }));
 
 vi.mock("@/lib/api", async (original) => {
   const actual = await original<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, cmdbSchedule } };
+  return { ...actual, api: { ...actual.api, cmdbSchedule, putCMDBSchedule } };
 });
 
-function renderPanel() {
+function renderPanel(permissions: string[] | null = null) {
   return render(
     <AppQueryProvider>
-      <CMDBSyncPanel />
+      <RbacProvider permissions={permissions}>
+        <CMDBSyncPanel />
+      </RbacProvider>
     </AppQueryProvider>,
   );
 }
 
 describe("AUD-46 bounded CMDB coverage", () => {
-  beforeEach(() => cmdbSchedule.mockReset());
+  beforeEach(() => {
+    cmdbSchedule.mockReset();
+    putCMDBSchedule.mockReset();
+  });
+
+  it("configures an unconfigured relay schedule only after reviewing the exact approved binding", async () => {
+    cmdbSchedule.mockResolvedValue({ configured: false, enabled: false, coverage_status: "not_configured", guidance: "" });
+    putCMDBSchedule.mockResolvedValue({ configured: true, enabled: true, execution: "relay" });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Configure CMDB sync" }));
+    await user.type(screen.getByRole("textbox", { name: "Approved ServiceNow URL" }), "http://servicenow.qa.local:18080");
+    await user.type(screen.getByRole("textbox", { name: "Secret reference" }), "secret://qa/servicenow-token");
+    await user.type(screen.getByRole("textbox", { name: "CI query" }), "install_status=1");
+    await user.clear(screen.getByRole("spinbutton", { name: "Interval in seconds" }));
+    await user.type(screen.getByRole("spinbutton", { name: "Interval in seconds" }), "3600");
+    await user.click(screen.getByRole("checkbox", { name: "Enable scheduled reads" }));
+    await user.click(screen.getByRole("button", { name: "Review CMDB schedule" }));
+
+    expect(putCMDBSchedule).not.toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Reviewed CMDB schedule" })).toHaveTextContent("secret://qa/servicenow-token");
+    await user.click(screen.getByRole("button", { name: "Save reviewed CMDB schedule" }));
+    await waitFor(() =>
+      expect(putCMDBSchedule).toHaveBeenCalledWith(
+        {
+          instance_url: "http://servicenow.qa.local:18080",
+          token_ref: "secret://qa/servicenow-token",
+          ci_query: "install_status=1",
+          interval_seconds: 3600,
+          enabled: true,
+          execution: "relay",
+          allow_private_endpoint: false,
+        },
+        expect.any(String),
+      ),
+    );
+  });
+
+  it("keeps the reviewed idempotency key after an uncertain save response", async () => {
+    cmdbSchedule.mockResolvedValue({ configured: false, enabled: false, coverage_status: "not_configured", guidance: "" });
+    putCMDBSchedule.mockRejectedValueOnce(new Error("response lost")).mockResolvedValueOnce({ configured: true, enabled: false });
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Configure CMDB sync" }));
+    await user.type(screen.getByRole("textbox", { name: "Approved ServiceNow URL" }), "https://servicenow.qa.local");
+    await user.type(screen.getByRole("textbox", { name: "Secret reference" }), "secret://qa/servicenow-token");
+    await user.click(screen.getByRole("button", { name: "Review CMDB schedule" }));
+    await user.click(screen.getByRole("button", { name: "Save reviewed CMDB schedule" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("response lost");
+    await user.click(screen.getByRole("button", { name: "Save reviewed CMDB schedule" }));
+    await waitFor(() => expect(putCMDBSchedule).toHaveBeenCalledTimes(2));
+    expect(putCMDBSchedule.mock.calls[1][1]).toBe(putCMDBSchedule.mock.calls[0][1]);
+  });
+
+  it("does not offer schedule writes to a read-only owner", async () => {
+    cmdbSchedule.mockResolvedValue({ configured: false, enabled: false, coverage_status: "not_configured", guidance: "" });
+    renderPanel(["owners:read"]);
+
+    expect(await screen.findByText("No ServiceNow CMDB schedule is configured.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Configure CMDB sync" })).not.toBeInTheDocument();
+  });
 
   it("keeps a full first page visibly incomplete with its durable denominator", async () => {
     cmdbSchedule.mockResolvedValue({

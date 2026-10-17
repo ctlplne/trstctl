@@ -696,6 +696,15 @@ JSON config supports the same policy as `itsm.servicenow.bindings[]` with
 `private_egress_cidrs`. Private endpoint requests also require the caller to hold
 the dedicated `egress:private` permission.
 
+Ownership CMDB reconciliation uses the same approved binding but a different
+credential path: its `token_ref` must be a `secret://` reference redeemable by the
+enrolled network relay, and its schedule sets `execution: "relay"` and
+`allow_private_endpoint: false`. For this path, register the exact URL and
+`secret://` reference in `itsm.servicenow.bindings[]` before configuring the
+tenant schedule through the Ownership console, API or CLI. The control plane
+never polls the CMDB directly. The legacy `env:` default above is for ticket
+dispatch and cannot activate CMDB reconciliation.
+
 ## OpenTelemetry export
 
 OTLP export is **off by default** and sends data only to the collector endpoint you

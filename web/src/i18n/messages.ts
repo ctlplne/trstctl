@@ -25511,6 +25511,91 @@ export const messages = {
     defaultMessage: "Executed by a network relay inside the segment; the token is redeemed per attempt and the reconcile still runs in the control plane.",
     description: "I2: relay-mode syncs read from a different vantage, and an operator debugging one needs to know which machine performed the read.",
   },
+  "cmdb.setup.notConfigured": {
+    defaultMessage: "No ServiceNow CMDB schedule is configured.",
+    description: "I2: distinguish an absent ownership schedule from a paused or failed one.",
+  },
+  "cmdb.setup.configure": {
+    defaultMessage: "Configure CMDB sync",
+    description: "I2: open the first ownership CMDB schedule form.",
+  },
+  "cmdb.setup.edit": {
+    defaultMessage: "Edit CMDB sync",
+    description: "I2: edit a previously configured ownership CMDB schedule.",
+  },
+  "cmdb.setup.bindingHelp": {
+    defaultMessage:
+      "Use the ServiceNow URL and secret:// reference already approved by the deployment operator. The control plane does not contact ServiceNow; an enrolled network relay reads it.",
+    description: "I2: explain the operator binding and relay boundary at setup.",
+  },
+  "cmdb.setup.instanceURL": {
+    defaultMessage: "Approved ServiceNow URL",
+    description: "I2: exact operator-approved CMDB destination.",
+  },
+  "cmdb.setup.tokenRef": {
+    defaultMessage: "Secret reference",
+    description: "I2: secret:// reference to the relay-redeemed ServiceNow credential, never its value.",
+  },
+  "cmdb.setup.ciQuery": {
+    defaultMessage: "CI query",
+    description: "I2: optional read filter for ServiceNow cmdb_ci.",
+  },
+  "cmdb.setup.interval": {
+    defaultMessage: "Interval in seconds",
+    description: "I2: bounded scheduled CMDB poll interval.",
+  },
+  "cmdb.setup.enabled": {
+    defaultMessage: "Enable scheduled reads",
+    description: "I2: whether a configured relay CMDB schedule starts polling.",
+  },
+  "cmdb.setup.review": {
+    defaultMessage: "Review CMDB schedule",
+    description: "I2: show the exact binding before writing the schedule.",
+  },
+  "cmdb.setup.reviewed": {
+    defaultMessage: "Reviewed CMDB schedule",
+    description: "I2: accessible title for the exact CMDB configuration review.",
+  },
+  "cmdb.setup.save": {
+    defaultMessage: "Save reviewed CMDB schedule",
+    description: "I2: write the exact reviewed ownership CMDB schedule.",
+  },
+  "cmdb.setup.editReview": {
+    defaultMessage: "Edit reviewed values",
+    description: "I2: return to the ownership CMDB form without writing.",
+  },
+  "cmdb.setup.cancel": {
+    defaultMessage: "Cancel",
+    description: "I2: close the CMDB schedule form without writing.",
+  },
+  "cmdb.setup.saved": {
+    defaultMessage: "CMDB schedule saved. Check the read coverage and relay result below.",
+    description: "I2: distinguish accepted configuration from completed reconciliation.",
+  },
+  "cmdb.setup.invalidURL": {
+    defaultMessage: "Enter an HTTP(S) URL without credentials, query, or fragment.",
+    description: "I2: validate the operator-approved CMDB destination before review.",
+  },
+  "cmdb.setup.invalidTokenRef": {
+    defaultMessage: "Enter a secret:// reference, not a token value.",
+    description: "I2: require relay-side secret custody in CMDB setup.",
+  },
+  "cmdb.setup.invalidInterval": {
+    defaultMessage: "Use at least 300 seconds between reads.",
+    description: "I2: bound ServiceNow CMDB polling frequency.",
+  },
+  "cmdb.setup.allCIs": {
+    defaultMessage: "All matching CIs",
+    description: "I2: empty optional CMDB query in reviewed configuration.",
+  },
+  "cmdb.setup.enabledState": {
+    defaultMessage: "Enabled; the next relay tick can start a read.",
+    description: "I2: reviewed enabled state without claiming the read completed.",
+  },
+  "cmdb.setup.pausedState": {
+    defaultMessage: "Paused; no scheduled read will start.",
+    description: "I2: reviewed paused CMDB schedule state.",
+  },
   "cmdb.sync.coverage.unknown.aud460001": {
     defaultMessage: "{read} CIs read across {pages} pages; the CMDB did not provide a total.",
     description: "AUD-46: bounded CMDB sweep progress when ServiceNow omits its pagination denominator.",

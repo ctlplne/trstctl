@@ -161,6 +161,12 @@ The served OpenAPI declares this import as a required `text/csv` body (up to
 URL, a `secret://` token reference, an interval of at least 300 seconds, and
 relay execution. `GET /api/v1/owners/cmdb-schedule` distinguishes never
 configured, paused, incomplete, failed, and completed coverage.
+The Ownership console exposes **Configure CMDB sync** in its Sources disclosure
+even before the first schedule exists. Review the exact URL, reference, query,
+interval, and enabled state before saving. An ambiguous response can be retried
+with the same reviewed idempotency key. The console requires `owners:write` to
+offer setup and shows the server's binding refusal if the URL and reference were
+not approved in deployment configuration.
 In the console, open **Ownership → Sources, disagreements, and review history**
 to select a CSV, review its name and size, and apply it. The result separates
 applied values, unchanged values, and disagreements; resolve the latter from
