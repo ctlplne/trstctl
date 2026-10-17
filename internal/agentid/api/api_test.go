@@ -117,6 +117,30 @@ func TestOpenAPI_Surface(t *testing.T) {
 	}
 }
 
+func TestOpenAPIRootAnchorRequiresOnePublicKeySource(t *testing.T) {
+	raw, err := json.Marshal(agidapi.OpenAPISpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				OneOf []struct {
+					Required []string `json:"required"`
+				} `json:"oneOf"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := doc.Components.Schemas["AGIDRootAnchorRequest"].OneOf
+	if len(got) != 2 || len(got[0].Required) != 1 || got[0].Required[0] != "public_pem" ||
+		len(got[1].Required) != 1 || got[1].Required[0] != "public_der" {
+		t.Fatalf("root-anchor public key oneOf = %+v; want PEM or DER exactly once", got)
+	}
+}
+
 func TestOpenAPIRequiredReadIdentifiers(t *testing.T) {
 	raw, err := json.Marshal(agidapi.OpenAPISpec())
 	if err != nil {

@@ -67,8 +67,11 @@ signer restart.
 
 Register a tenant root anchor. A `key_id` is bound to its first public key and
 authentication reference: an identical request can be retried, while a changed
-binding returns 409 and needs a new key ID. `public_der` as base64 JSON bytes
-is also accepted; replaying the same `Idempotency-Key` returns the original
+binding returns 409 and needs a new key ID. Supply exactly one public-key
+source: `public_pem` as shown below, or `public_der` as base64 JSON bytes.
+The console API playground includes a PEM placeholder; replace it with the
+root principal's real **public** key before sending. Replaying the same
+`Idempotency-Key` returns the original
 result. A successful response reports `provisioned: true` only after an
 independent read of the exact public key and authentication reference from the
 signer. If the signer is unavailable, retry the same request after it returns;

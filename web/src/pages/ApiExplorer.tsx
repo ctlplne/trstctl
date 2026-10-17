@@ -186,6 +186,7 @@ function sampleForSchema(schema: JSONSchema | undefined, spec: OpenAPIDocument, 
   if (resolved.type === "array") return [sampleForSchema(resolved.items, spec, propertyName, depth + 1)];
   if (resolved.type === "object" || resolved.properties) {
     const required = new Set(resolved.required ?? Object.keys(resolved.properties ?? {}).slice(0, 3));
+    for (const name of resolved.oneOf?.[0]?.required ?? []) required.add(name);
     const body: Record<string, unknown> = {};
     for (const [name, child] of Object.entries(resolved.properties ?? {})) {
       if (!required.has(name)) continue;
@@ -209,6 +210,7 @@ function sampleForName(name: string): string {
   if (normalized.includes("profile")) return "server-tls";
   if (normalized.includes("name")) return "docs-sample";
   if (normalized.includes("id")) return sampleUUID;
+  if (normalized.includes("public_pem")) return "-----BEGIN PUBLIC KEY-----\n<paste base64 public key>\n-----END PUBLIC KEY-----";
   if (normalized.includes("pem")) return "-----BEGIN CERTIFICATE-----";
   if (normalized.includes("ttl")) return "24h";
   if (normalized.includes("scope")) return "certs:read";
@@ -290,13 +292,15 @@ function validateJSONValue(value: unknown, schema: JSONSchema | undefined, spec:
   const resolved = dereference(schema, spec);
   if (!resolved || depth > 12) return [];
   if (resolved.oneOf?.length) {
-    if (resolved.oneOf.some((candidate) => validateJSONValue(value, candidate, spec, t, path, depth + 1).length === 0)) return [];
+    const baseIssues = validateJSONValue(value, { ...resolved, oneOf: undefined }, spec, t, path, depth + 1);
+    if (baseIssues.length > 0) return baseIssues;
+    if (resolved.oneOf.filter((candidate) => validateJSONValue(value, candidate, spec, t, path, depth + 1).length === 0).length === 1) return [];
     return [t("apiExplorer.validation.oneOf", { name: path })];
   }
   if (resolved.enum && !resolved.enum.some((candidate) => JSON.stringify(candidate) === JSON.stringify(value))) {
     return [t("apiExplorer.validation.enum", { name: path, values: resolved.enum.map(String).join(", ") })];
   }
-  if (resolved.type === "object" || resolved.properties) {
+  if (resolved.type === "object" || resolved.properties || resolved.required) {
     if (!isObject(value)) return [t("apiExplorer.validation.object", { name: path })];
     const issues: string[] = [];
     for (const name of resolved.required ?? []) {

@@ -549,13 +549,15 @@ func writeProblem(w http.ResponseWriter, status int, detail string) {
 }
 
 func schemas() map[string]*api.Schema {
+	rootRequest := api.ObjectSchema(map[string]*api.Schema{
+		"key_id":     api.StringSchema(),
+		"public_der": {Type: "string", MinLength: 56, Description: "Base64-encoded PKIX SubjectPublicKeyInfo DER for the public delegation root; supply exactly one public key source."},
+		"public_pem": {Type: "string", MinLength: 100, Description: "PEM-encoded PUBLIC KEY for the delegation root. Paste the real public key; never submit a private key. Supply exactly one public key source."},
+		"auth_ref":   api.StringSchema(),
+	}, "key_id", "auth_ref")
+	rootRequest.OneOf = []*api.Schema{{Required: []string{"public_pem"}}, {Required: []string{"public_der"}}}
 	return map[string]*api.Schema{
-		"AGIDRootAnchorRequest": api.ObjectSchema(map[string]*api.Schema{
-			"key_id":     api.StringSchema(),
-			"public_der": api.StringSchema(), // base64-encoded PKIX SubjectPublicKeyInfo DER
-			"public_pem": api.StringSchema(),
-			"auth_ref":   api.StringSchema(),
-		}, "key_id", "auth_ref"),
+		"AGIDRootAnchorRequest": rootRequest,
 		"AGIDRootAnchor": api.ObjectSchema(map[string]*api.Schema{
 			"key_id":      api.StringSchema(),
 			"public_der":  api.StringSchema(), // base64-encoded PKIX SubjectPublicKeyInfo DER

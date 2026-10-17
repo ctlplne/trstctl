@@ -20676,8 +20676,8 @@ export const messages = {
     description: "Fail-closed validation message for an invalid OpenAPI regular expression.",
   },
   "apiExplorer.validation.oneOf": {
-    defaultMessage: "{name} does not match any allowed schema.",
-    description: "Validation message when JSON matches no OpenAPI oneOf branch.",
+    defaultMessage: "{name} must match exactly one allowed schema.",
+    description: "Validation message when JSON matches zero or multiple OpenAPI oneOf branches.",
   },
   "apiExplorer.validation.object": {
     defaultMessage: "{name} must be an object.",

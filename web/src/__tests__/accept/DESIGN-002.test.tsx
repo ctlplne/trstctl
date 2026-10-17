@@ -102,6 +102,17 @@ const explorerSpec = {
         "x-trstctl-permission": "identities:write",
       },
     },
+    "/api/v1/agent-delegation/root-anchors": {
+      post: {
+        operationId: "registerAgentDelegationRootAnchor",
+        summary: "Register an AGID root anchor",
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true, schema: { type: "string" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/AGIDRootAnchorRequest" } } } },
+        responses: { "200": { description: "Exact signer readback" } },
+        security: [{ BearerAuth: [] }, { SessionCookie: [] }],
+        "x-trstctl-permission": "agents:write",
+      },
+    },
     "/api/v1/identities/{id}": {
       get: {
         operationId: "getIdentity",
@@ -137,6 +148,17 @@ const explorerSpec = {
           kind: { type: "string", enum: ["x509_certificate"] },
           name: { type: "string" },
           owner_id: { type: "string", format: "uuid" },
+        },
+      },
+      AGIDRootAnchorRequest: {
+        type: "object",
+        required: ["key_id", "auth_ref"],
+        oneOf: [{ required: ["public_pem"] }, { required: ["public_der"] }],
+        properties: {
+          key_id: { type: "string" },
+          public_pem: { type: "string", minLength: 100 },
+          public_der: { type: "string", minLength: 56 },
+          auth_ref: { type: "string" },
         },
       },
     },
@@ -236,6 +258,22 @@ describe("DESIGN-002 answer-first API playground", () => {
 
     await user.click(screen.getByText("Headers, body, and exact request", { exact: true }));
     expect(screen.getAllByRole("region", { name: "Request preview" })).toHaveLength(1);
+  });
+
+  it("shows one public-key source for AGID roots and rejects missing or ambiguous keys", async () => {
+    renderRoute("/integrate/api?operation=registerAgentDelegationRootAnchor");
+    const body = (await screen.findByRole("textbox", { name: "Request body JSON" })) as HTMLTextAreaElement;
+    const sample = JSON.parse(body.value) as Record<string, unknown>;
+    expect(sample).toHaveProperty("public_pem");
+    expect(sample).not.toHaveProperty("public_der");
+    expect(screen.getAllByText(/public_pem must contain at least 100 characters/i).length).toBeGreaterThan(0);
+    fireEvent.change(body, { target: { value: JSON.stringify({ key_id: "root", auth_ref: "webauthn:qa" }) } });
+    expect(screen.getAllByText(/request body must match exactly one allowed schema/i).length).toBeGreaterThan(0);
+    fireEvent.change(body, {
+      target: { value: JSON.stringify({ key_id: "root", auth_ref: "webauthn:qa", public_pem: "P".repeat(100), public_der: "A".repeat(56) }) },
+    });
+    expect(screen.getAllByText(/request body must match exactly one allowed schema/i).length).toBeGreaterThan(0);
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
   });
 
   it("names empty and failed contract states and can retry without inventing operations", async () => {
