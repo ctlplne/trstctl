@@ -1037,7 +1037,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	// Historical root rows predate event sourcing. Promote one only after the
 	// isolated signer returns the exact tenant/key/public/auth tuple; otherwise
 	// a rebuild could erase trust authority or recreate it from SQL alone.
-	if err := agidstore.BackfillLegacyRootAnchorEvents(ctx, d.Store, d.Log, s.agidRootAnchors()); err != nil {
+	if err := agidstore.RecoverLegacyRootAnchorEvents(ctx, d.Store, d.Log, s.agidRootAnchors()); err != nil {
 		return nil, fmt.Errorf("server: reconcile agent root source authority: %w", err)
 	}
 	proj, err := catchUpReadModel(ctx, d)

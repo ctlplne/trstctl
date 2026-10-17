@@ -107,3 +107,118 @@ func TestAGIDLegacyRootRequiresExactSignerBeforeEventBackfill(t *testing.T) {
 		t.Fatalf("backfilled event: found=%t type=%s err=%v", found, ev.Type, err)
 	}
 }
+
+// A historical SQL row from the old control-plane-only registration path must
+// not keep the entire product offline when the isolated signer has no floor.
+// Preserve the observed tuple as an explicitly unprovisioned source fact, so a
+// rebuild cannot silently discard its first-writer fence or claim authority.
+func TestAGIDLegacySignerAbsentRecoversAsUnprovisionedSourceEvent(t *testing.T) {
+	h := newHarness(t, tenantHard)
+	legacy := generateSigner(t)
+	row := agidstore.RootAnchor{KeyID: "legacy-unprovisioned", PublicDER: legacy.Public().DER, AuthRef: "fido2:legacy"}
+	if err := agidstore.New(h.store).RegisterRootAnchor(h.ctx, h.tenant, row); err != nil {
+		t.Fatal(err)
+	}
+	if err := agidstore.RecoverLegacyRootAnchorEvents(h.ctx, h.store, h.log, h.client); err != nil {
+		t.Fatalf("startup recovery: %v", err)
+	}
+	orphan, found, err := h.log.EventByID(h.ctx, delegation.RootAnchorUnprovisionedEventID(h.tenant, row.KeyID))
+	if err != nil || !found || orphan.Type != delegation.TypeRootAnchorUnprovisioned {
+		t.Fatalf("unprovisioned source event: found=%t type=%s err=%v", found, orphan.Type, err)
+	}
+	if _, found, err := h.log.EventByID(h.ctx, delegation.RootAnchorEventID(h.tenant, row.KeyID)); err != nil || found {
+		t.Fatalf("absent signer must not create registered authority: found=%t err=%v", found, err)
+	}
+	if err := agidstore.BackfillLegacyRootAnchorEvents(h.ctx, h.store, h.log, nil); err != nil {
+		t.Fatalf("one-shot preflight after unprovisioned source event: %v", err)
+	}
+	projector := projections.New(h.store, projections.WithEventProjection(agidstore.NewRootAnchorProjection(h.store)))
+	if err := projector.Rebuild(h.ctx, h.log); err != nil {
+		t.Fatalf("rebuild unprovisioned legacy root: %v", err)
+	}
+	listed, err := h.api.ListRootAnchors(h.ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("list replayed legacy roots: %v", err)
+	}
+	var observed *agidapi.RootAnchorResponse
+	for i := range listed.Anchors {
+		if listed.Anchors[i].KeyID == row.KeyID {
+			observed = &listed.Anchors[i]
+		}
+	}
+	if observed == nil || observed.Provisioned {
+		t.Fatalf("replayed legacy root must remain visible but unprovisioned: found=%t", observed != nil)
+	}
+	if _, err := h.api.RegisterRootAnchor(h.ctx, h.tenant, agidapi.RootAnchorRequest{
+		KeyID: row.KeyID, PublicDER: row.PublicDER, AuthRef: row.AuthRef,
+	}); err != nil {
+		t.Fatalf("explicit exact operator registration: %v", err)
+	}
+	listed, err = h.api.ListRootAnchors(h.ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("list provisioned legacy roots: %v", err)
+	}
+	observed = nil
+	for i := range listed.Anchors {
+		if listed.Anchors[i].KeyID == row.KeyID {
+			observed = &listed.Anchors[i]
+		}
+	}
+	if observed == nil || !observed.Provisioned {
+		t.Fatalf("explicit exact registration should provision signer: found=%t", observed != nil)
+	}
+}
+
+type rootAnchorReadFunc func(context.Context, string, string) ([]byte, string, error)
+
+func (f rootAnchorReadFunc) ReadAgentRootAnchor(ctx context.Context, tenantID, keyID string) ([]byte, string, error) {
+	return f(ctx, tenantID, keyID)
+}
+
+func TestAGIDLegacyRecoveryNeverMasksSignerFailureOrDifferentTuple(t *testing.T) {
+	h := newHarness(t, tenantHard)
+	legacy := generateSigner(t)
+	row := agidstore.RootAnchor{KeyID: "legacy-unverified", PublicDER: legacy.Public().DER, AuthRef: "fido2:legacy"}
+	if err := agidstore.New(h.store).RegisterRootAnchor(h.ctx, h.tenant, row); err != nil {
+		t.Fatal(err)
+	}
+	for name, reader := range map[string]rootAnchorReadFunc{
+		"signer unavailable": func(context.Context, string, string) ([]byte, string, error) {
+			return nil, "", errors.New("signer transport unavailable")
+		},
+		"different signer tuple": func(context.Context, string, string) ([]byte, string, error) {
+			return generateSigner(t).Public().DER, row.AuthRef, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := agidstore.RecoverLegacyRootAnchorEvents(h.ctx, h.store, h.log, reader); err == nil {
+				t.Fatal("legacy recovery accepted unverified signer authority")
+			}
+			if _, found, err := h.log.EventByID(h.ctx, delegation.RootAnchorUnprovisionedEventID(h.tenant, row.KeyID)); err != nil || found {
+				t.Fatalf("unverified tuple emitted an unprovisioned event: found=%t err=%v", found, err)
+			}
+		})
+	}
+}
+
+func TestAGIDLegacyUnprovisionedSignerLaterAppearsGetsVerifiedSourceEvent(t *testing.T) {
+	h := newHarness(t, tenantHard)
+	legacy := generateSigner(t)
+	row := agidstore.RootAnchor{KeyID: "legacy-later-signer", PublicDER: legacy.Public().DER, AuthRef: "fido2:legacy"}
+	if err := agidstore.New(h.store).RegisterRootAnchor(h.ctx, h.tenant, row); err != nil {
+		t.Fatal(err)
+	}
+	if err := agidstore.RecoverLegacyRootAnchorEvents(h.ctx, h.store, h.log, h.client); err != nil {
+		t.Fatalf("record signer-absent legacy tuple: %v", err)
+	}
+	if err := h.client.ProvisionAgentRootAnchor(h.ctx, h.tenant, row.KeyID, row.PublicDER, row.AuthRef); err != nil {
+		t.Fatalf("exact signer provision: %v", err)
+	}
+	if err := agidstore.RecoverLegacyRootAnchorEvents(h.ctx, h.store, h.log, h.client); err != nil {
+		t.Fatalf("reconcile signer-verified legacy tuple: %v", err)
+	}
+	registered, found, err := h.log.EventByID(h.ctx, delegation.RootAnchorEventID(h.tenant, row.KeyID))
+	if err != nil || !found || registered.Type != delegation.TypeRootAnchorRegistered {
+		t.Fatalf("verified source event: found=%t type=%s err=%v", found, registered.Type, err)
+	}
+}

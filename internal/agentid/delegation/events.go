@@ -19,6 +19,11 @@ const (
 	// TypeRootAnchorRegistered is the immutable first-writer trust tuple that
 	// rebuilds the tenant registry after PostgreSQL read-model loss.
 	TypeRootAnchorRegistered = "agent.root_anchor.registered"
+	// TypeRootAnchorUnprovisioned retains a pre-event SQL trust tuple whose
+	// isolated signer explicitly reported absent. It is historical evidence and
+	// a first-writer fence, never a grant of signer authority.
+	TypeRootAnchorUnprovisioned               = "agent.root_anchor.unprovisioned"
+	RootAnchorUnprovisionedReasonSignerAbsent = "signer_absent"
 	// TypeDelegationRecorded records that a signed delegation record was appended to
 	// a chain (the delegator conferred a no-broader authority set on a delegate).
 	TypeDelegationRecorded = "agent.delegation.recorded"
@@ -41,11 +46,12 @@ const (
 // (Unknown, carrying the raw bytes forward), so replay is forward-compatible and
 // never mis-projects on untrusted or newer input.
 const (
-	RootAnchorRegisteredSchemaV1 = 1
-	DelegationRecordedSchemaV1   = 1
-	IssuanceRecordedSchemaV1     = 1
-	RefusalRecordedSchemaV1      = 1
-	RevocationDirectiveSchemaV1  = 1
+	RootAnchorRegisteredSchemaV1    = 1
+	RootAnchorUnprovisionedSchemaV1 = 1
+	DelegationRecordedSchemaV1      = 1
+	IssuanceRecordedSchemaV1        = 1
+	RefusalRecordedSchemaV1         = 1
+	RevocationDirectiveSchemaV1     = 1
 )
 
 // Payload is a decoded, typed delegation-lifecycle event payload.
@@ -62,10 +68,29 @@ type RootAnchorRegisteredV1 struct {
 
 func (RootAnchorRegisteredV1) isDelegationPayload() {}
 
+// RootAnchorUnprovisionedV1 preserves an old public tuple after an exact
+// signer NotFound. It cannot authorize issuance until a new explicit operator
+// registration provisions the matching tuple in the isolated signer.
+type RootAnchorUnprovisionedV1 struct {
+	TenantID  string `json:"tenant_id"`
+	KeyID     string `json:"key_id"`
+	PublicDER []byte `json:"public_der"`
+	AuthRef   string `json:"auth_ref"`
+	Reason    string `json:"reason"`
+}
+
+func (RootAnchorUnprovisionedV1) isDelegationPayload() {}
+
 // RootAnchorEventID fixes one event identity per tenant/key slot. A retry with
 // changed trust bytes must encounter the existing event and be refused.
 func RootAnchorEventID(tenantID, keyID string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("agent.root_anchor.registered.v1\x00"+tenantID+"\x00"+keyID)).String()
+}
+
+// RootAnchorUnprovisionedEventID fences one historical observation per
+// tenant/key. A retry with different bytes must not rewrite the record.
+func RootAnchorUnprovisionedEventID(tenantID, keyID string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("agent.root_anchor.unprovisioned.v1\x00"+tenantID+"\x00"+keyID)).String()
 }
 
 // DelegationRecordedV1 is the ledger announcement of an appended delegation record.
@@ -135,6 +160,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 	switch v := p.(type) {
 	case RootAnchorRegisteredV1:
 		return marshalEvent(TypeRootAnchorRegistered, RootAnchorRegisteredSchemaV1, v.TenantID, v)
+	case RootAnchorUnprovisionedV1:
+		return marshalEvent(TypeRootAnchorUnprovisioned, RootAnchorUnprovisionedSchemaV1, v.TenantID, v)
 	case DelegationRecordedV1:
 		return marshalEvent(TypeDelegationRecorded, DelegationRecordedSchemaV1, v.TenantID, v)
 	case IssuanceRecordedV1:
@@ -171,6 +198,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RootAnchorRegisteredV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("delegation: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeRootAnchorUnprovisioned:
+		if ver > RootAnchorUnprovisionedSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p RootAnchorUnprovisionedV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("delegation: decode %s v%d: %w", e.Type, ver, err)
 		}

@@ -56,7 +56,7 @@ func (p *RootAnchorProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 }
 
 func (p *RootAnchorProjection) Apply(ctx context.Context, ev eventspec.Event) error {
-	if ev.Type != delegation.TypeRootAnchorRegistered && ev.Type != tenantOffboardedEvent {
+	if ev.Type != delegation.TypeRootAnchorRegistered && ev.Type != delegation.TypeRootAnchorUnprovisioned && ev.Type != tenantOffboardedEvent {
 		return nil
 	}
 	if p == nil || p.store == nil {
@@ -71,7 +71,7 @@ func (p *RootAnchorProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("agentid root: projection transaction unavailable")
 	}
-	if ev.Type != delegation.TypeRootAnchorRegistered && ev.Type != tenantOffboardedEvent {
+	if ev.Type != delegation.TypeRootAnchorRegistered && ev.Type != delegation.TypeRootAnchorUnprovisioned && ev.Type != tenantOffboardedEvent {
 		return nil
 	}
 	if err := p.store.SetTenantGUCTx(ctx, tx, ev.TenantID); err != nil {
@@ -85,17 +85,28 @@ func (p *RootAnchorProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 	if err != nil {
 		return err
 	}
-	payload, ok := decoded.(delegation.RootAnchorRegisteredV1)
-	if !ok {
-		return nil // a newer schema cannot project current trust authority
+	var tenantID, keyID, authRef, eventID string
+	var publicDER []byte
+	switch payload := decoded.(type) {
+	case delegation.RootAnchorRegisteredV1:
+		tenantID, keyID, authRef, publicDER = payload.TenantID, payload.KeyID, payload.AuthRef, payload.PublicDER
+		eventID = delegation.RootAnchorEventID(ev.TenantID, keyID)
+	case delegation.RootAnchorUnprovisionedV1:
+		if payload.Reason != delegation.RootAnchorUnprovisionedReasonSignerAbsent {
+			return errors.New("agentid root: invalid legacy signer-absent reason")
+		}
+		tenantID, keyID, authRef, publicDER = payload.TenantID, payload.KeyID, payload.AuthRef, payload.PublicDER
+		eventID = delegation.RootAnchorUnprovisionedEventID(ev.TenantID, keyID)
+	default:
+		return nil // a newer schema cannot project current trust history
 	}
-	if payload.TenantID != ev.TenantID || !delegation.ValidRootAnchorID(payload.KeyID) ||
-		ev.ID != delegation.RootAnchorEventID(ev.TenantID, payload.KeyID) ||
-		payload.AuthRef == "" || strings.TrimSpace(payload.AuthRef) != payload.AuthRef ||
+	if tenantID != ev.TenantID || !delegation.ValidRootAnchorID(keyID) ||
+		ev.ID != eventID ||
+		authRef == "" || strings.TrimSpace(authRef) != authRef ||
 		ev.Time.IsZero() {
 		return errors.New("agentid root: invalid event authority binding")
 	}
-	if err := crypto.ValidatePublicKeyDER(payload.PublicDER); err != nil {
+	if err := crypto.ValidatePublicKeyDER(publicDER); err != nil {
 		return fmt.Errorf("agentid root: invalid event public key: %w", err)
 	}
 	var inserted int
@@ -103,7 +114,7 @@ func (p *RootAnchorProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 		(tenant_id, key_id, public_der, auth_ref, created_at)
 		VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4)
 		ON CONFLICT (tenant_id, key_id) DO NOTHING RETURNING 1`,
-		payload.KeyID, payload.PublicDER, payload.AuthRef, ev.Time).Scan(&inserted)
+		keyID, publicDER, authRef, ev.Time).Scan(&inserted)
 	if err == nil {
 		return nil
 	}
@@ -113,11 +124,11 @@ func (p *RootAnchorProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 	var existingDER []byte
 	var existingAuthRef string
 	if err := tx.QueryRow(ctx, `SELECT public_der, auth_ref FROM agent_root_anchors
-		WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND key_id = $1`, payload.KeyID).
+		WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND key_id = $1`, keyID).
 		Scan(&existingDER, &existingAuthRef); err != nil {
 		return fmt.Errorf("agentid root: read first writer: %w", err)
 	}
-	if !bytes.Equal(existingDER, payload.PublicDER) || existingAuthRef != payload.AuthRef {
+	if !bytes.Equal(existingDER, publicDER) || existingAuthRef != authRef {
 		return fmt.Errorf("agentid root: key ID belongs to another trust tuple: %w", corestore.ErrIdempotencyConflict)
 	}
 	return nil

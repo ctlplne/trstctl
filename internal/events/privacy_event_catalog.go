@@ -80,6 +80,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		// Rewriting a root key or authentication reference would change signer
 		// trust authority without the matching independent signer floor.
 		rejectingEntry("agent.root_anchor.registered"),
+		rejectingEntry("agent.root_anchor.unprovisioned"),
 		entry("acme.account.upserted",
 			catalogPrivacyRule("/seq", opaque), catalogPrivacyRule("/id", opaque),
 			catalogPrivacyRule("/url", opaque), catalogPrivacyRule("/jwk", opaque),

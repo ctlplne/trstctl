@@ -152,11 +152,18 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
   public root floor under its own durable key store; an absent anchor is a
   refusal, not a fallback. Reachability and attestor public floors still need
   operator provisioning at the signer.
-- At upgrade, a pre-event root row gains an immutable event only after the
-  isolated signer returns the exact tenant, key, public key, and authentication
-  reference. A missing or different signer floor blocks startup. A one-shot
-  rebuild refuses a SQL-only legacy row; start the paired signer/control plane
-  to reconcile it before invoking rebuild or restore.
+- At upgrade, a pre-event root row gains a registered authority event only
+  after the isolated signer returns the exact tenant, key, public key, and
+  authentication reference. An explicit signer `NotFound` records the old
+  public tuple as **unprovisioned** history; the root remains visible with
+  `provisioned: false` after restart and read-model rebuild, and cannot
+  authorize issuance. A different signer tuple or signer transport failure
+  still blocks startup. A one-shot rebuild refuses a SQL-only row until a
+  paired signer/control-plane start records one of those two source facts.
+  An operator can provision an unprovisioned root by registering the exact
+  public tuple through the normal API, CLI, or console path. If the signer
+  floor is restored separately, paired startup independently checks the exact
+  tuple and records a registered event before treating it as authority.
 - The chain is verified by the signer, not the API: a compromised control
   plane cannot mint a widened credential.
 
