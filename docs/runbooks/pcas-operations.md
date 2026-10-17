@@ -189,7 +189,7 @@ Before asking custodians to sign, run
 `algorithm` the isolated signer can generate. Preparation creates a tenant,
 identity and epoch-bound key inside signer custody and appends its signed public
 receipt to the event log. Poll the returned request status to `delivered`, then
-read `trstctl pcas recovery successor get --identity-id ID --epoch N` (or GET
+read `trstctl pcas recovery successor get --identity_id ID --epoch N` (or GET
 `/api/v1/pcas/recovery/successors?identity_id=ID&epoch=N`). Compare the public
 key and signer receipt independently. Give the custodians the **public key from
 that readback**, never a separately generated key. A second preparation with a
