@@ -60,6 +60,20 @@ func main() {
 	offlinePrepareReason := flag.String("offline-prepare-reason", "", "incident reason bound to the offline request")
 	offlinePrepareTTL := flag.Duration("offline-prepare-ttl", 10*time.Minute, "requested offline emergency certificate lifetime")
 	offlineOutput := flag.String("offline-output", "", "0600 output path for an offline bundle or approval")
+	pcasRecoveryMode := flag.String("pcas-recovery-mode", "", "one-shot PCAS recovery ceremony: keygen|statement|roster|approve|assemble")
+	pcasRecoveryID := flag.String("pcas-recovery-id", "", "custodian ID for keygen or approve")
+	pcasRecoveryKey := flag.String("pcas-recovery-key", "", "owner-only PKCS#8 private key for roster or approve")
+	pcasRecoveryPrivateOut := flag.String("pcas-recovery-private-out", "", "new owner-only PKCS#8 private-key output for keygen")
+	pcasRecoveryPublicOut := flag.String("pcas-recovery-public-out", "", "new public roster-entry output for keygen")
+	pcasRecoveryPolicy := flag.String("pcas-recovery-policy", "", "public exact recovery policy JSON from the tenant readback")
+	pcasRecoveryChain := flag.String("pcas-recovery-chain", "", "public current PCAS chain JSON")
+	pcasRecoverySuccessor := flag.String("pcas-recovery-successor", "", "public signer-prepared successor JSON")
+	pcasRecoveryPinnedRoot := flag.String("pcas-recovery-pinned-root", "", "independently pinned genesis trust-root public entry")
+	pcasRecoveryStatement := flag.String("pcas-recovery-statement", "", "public statement JSON for approve or assemble")
+	pcasRecoveryRosterSignature := flag.String("pcas-recovery-roster-signature", "", "root-signed roster JSON for assemble")
+	pcasRecoveryApprovals := flag.String("pcas-recovery-approvals", "", "JSON array of separately produced custodian approvals")
+	pcasRecoveryNonce := flag.String("pcas-recovery-nonce", "", "incident-unique nonce for statement; generated when omitted")
+	pcasRecoveryOutput := flag.String("pcas-recovery-output", "", "new owner-only public output for statement, roster, approve or assemble")
 	allowInsecureDevNonLinux := flag.Bool("allow-insecure-dev-nonlinux", false, "development-only: allow signer startup on non-Linux where process hardening, UDS peer UID checks, and locked memory are unavailable")
 
 	// Cross-node mTLS transport (AN-4 multi-node mode, SIGNER-005 / design §3,§5.2).
@@ -89,7 +103,7 @@ func main() {
 		return
 	}
 
-	offlineMode := *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" || *offlinePrepareKit != ""
+	offlineMode := *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" || *offlinePrepareKit != "" || *pcasRecoveryMode != ""
 	useMTLS := *mtlsListen != ""
 	if !offlineMode && !useMTLS && *socket == "" {
 		fmt.Fprintln(os.Stderr, "trstctl-signer: one of --socket (UDS) or --mtls-listen (cross-node mTLS) is required")
@@ -122,6 +136,22 @@ func main() {
 		os.Exit(1)
 	}
 	if offlineMode {
+		if *pcasRecoveryMode != "" {
+			if *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" || *offlinePrepareKit != "" {
+				fmt.Fprintln(os.Stderr, "trstctl-signer: PCAS and break-glass one-shot modes are mutually exclusive")
+				os.Exit(2)
+			}
+			if err := runOfflinePCASRecovery(pcasOfflineOptions{Mode: *pcasRecoveryMode, ID: *pcasRecoveryID,
+				PrivateKey: *pcasRecoveryKey, PrivateOut: *pcasRecoveryPrivateOut, PublicOut: *pcasRecoveryPublicOut,
+				PolicyFile: *pcasRecoveryPolicy, ChainFile: *pcasRecoveryChain, SuccessorFile: *pcasRecoverySuccessor,
+				PinnedRootFile: *pcasRecoveryPinnedRoot, StatementFile: *pcasRecoveryStatement,
+				RosterSignatureFile: *pcasRecoveryRosterSignature, ApprovalsFile: *pcasRecoveryApprovals,
+				Nonce: *pcasRecoveryNonce, Output: *pcasRecoveryOutput}); err != nil {
+				fmt.Fprintf(os.Stderr, "trstctl-signer: PCAS recovery ceremony: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if *offlinePrepareKit != "" {
 			if *offlineInitPolicy != "" || *offlineIssueRequest != "" || *offlineApproveRequest != "" || *offlineGenerateCustodian != "" {
 				fmt.Fprintln(os.Stderr, "trstctl-signer: choose one offline mode")

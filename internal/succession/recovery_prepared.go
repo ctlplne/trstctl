@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
-
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -23,7 +21,7 @@ func RecoveryProofEventID(tenantID, identityID string, epoch uint64) string {
 		IdentityID string `json:"identity_id"`
 		Epoch      uint64 `json:"epoch"`
 	}{tenantID, identityID, epoch})
-	return uuid.NewSHA1(uuid.NameSpaceOID, append([]byte(recoveryProofDomain), bound...)).String()
+	return recoveryEventID(recoveryProofDomain, bound)
 }
 
 // RecoveryRecordEventID fences a recovery record by its authenticated tenant,
@@ -35,7 +33,7 @@ func RecoveryRecordEventID(tenantID, identityID string, epoch uint64) string {
 		IdentityID string `json:"identity_id"`
 		Epoch      uint64 `json:"epoch"`
 	}{tenantID, identityID, epoch})
-	return uuid.NewSHA1(uuid.NameSpaceOID, append([]byte(recoveryRecordDomain), bound...)).String()
+	return recoveryEventID(recoveryRecordDomain, bound)
 }
 
 // RecoverySuccessorEventID is a first-writer fence for one tenant identity's
@@ -47,7 +45,20 @@ func RecoverySuccessorEventID(tenantID, identityID string, epoch uint64) string 
 		IdentityID string `json:"identity_id"`
 		Epoch      uint64 `json:"epoch"`
 	}{tenantID, identityID, epoch})
-	return uuid.NewSHA1(uuid.NameSpaceOID, append([]byte(recoverySuccessorDomain), bound...)).String()
+	return recoveryEventID(recoverySuccessorDomain, bound)
+}
+
+// The first-writer event IDs use a domain-separated SHA-256 UUIDv8. Keeping
+// this derivation here avoids pulling a general UUID package (and its SQL
+// driver dependency) into the isolated signing process through succession.
+func recoveryEventID(domain string, bound []byte) string {
+	message := make([]byte, 0, len(domain)+len(bound))
+	message = append(message, domain...)
+	message = append(message, bound...)
+	digest := crypto.SHA256Sum(message)
+	digest[6] = (digest[6] & 0x0f) | 0x80 // UUID version 8
+	digest[8] = (digest[8] & 0x3f) | 0x80 // RFC 4122 variant
+	return fmt.Sprintf("%x-%x-%x-%x-%x", digest[:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16])
 }
 
 // RecoverySuccessorSigningMessage includes every public field except the

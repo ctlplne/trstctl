@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1528 annotated sites across 26 rules. Each row is
+1531 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -407,11 +407,12 @@ not this file.
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (252 sites)
+### G115 — CWE-190 Integer overflow or wraparound (253 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/main.go:449` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:269` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
@@ -1047,7 +1048,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (421 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (423 sites)
 
 | Location | Reason |
 |---|---|
@@ -1084,6 +1085,8 @@ not this file.
 | `cmd/trstctl-signer/offline.go:181` | operator-selected owner-only custodian key file (CWE-22) |
 | `cmd/trstctl-signer/offline.go:185` | operator-selected create-new offline output file (CWE-22) |
 | `cmd/trstctl-signer/offline.go:214` | operator-selected public CSR input file (CWE-22) |
+| `cmd/trstctl-signer/offline_pcas_test.go:45` | path is under t.TempDir from this test's keygen (CWE-22) |
+| `cmd/trstctl-signer/offline_pcas_test.go:153` | test helper reads only t.TempDir fixture paths (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |

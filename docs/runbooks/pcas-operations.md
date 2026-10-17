@@ -211,6 +211,71 @@ The final panel accepts a JSON authorization containing `Statement`,
 checks the visible identity, tenant, scope, epoch, public key and policy binding
 before the reviewed submission; the server verifies the signatures at admission
 and again at delivery. The browser never asks for custodian private keys.
+
+The one-shot `trstctl-signer --pcas-recovery-mode` ceremony produces that JSON
+without bringing root or custodian private keys into the control plane. Run each
+key operation as its own signer process on the machine holding that person's
+owner-only key file. `keygen` creates an ECDSA-P384 PKCS#8 private key and a
+public `{ "ID", "PubDER" }` roster entry; use it separately for the recovery
+root and for every custodian. Save the recovery root public DER and ordered
+custodian entries in the tenant policy. Save the genesis trust-root public key
+from the original verified chain as a separate, independently pinned public
+entry; it may differ from the recovery root. Keep these roots distinct in the
+operator record.
+
+After reading the current policy, chain and prepared successor through the API
+or CLI into public JSON files, produce the exact statement:
+
+```sh
+trstctl-signer --pcas-recovery-mode statement \
+  --pcas-recovery-chain chain.json \
+  --pcas-recovery-successor successor.json \
+  --pcas-recovery-pinned-root pinned-genesis-root.json \
+  --pcas-recovery-output statement.json
+```
+
+This refuses a chain whose genesis signature does not verify under the pinned
+root, a changed identity or scope, and a successor that is not the next epoch.
+The statement contains a fresh nonce. The recovery root signs the exact ordered
+roster and threshold; each custodian then signs the same statement with their
+own key and ID:
+
+```sh
+trstctl-signer --pcas-recovery-mode roster \
+  --pcas-recovery-policy policy.json --pcas-recovery-key root.key \
+  --pcas-recovery-output roster-signature.json
+trstctl-signer --pcas-recovery-mode approve \
+  --pcas-recovery-policy policy.json --pcas-recovery-statement statement.json \
+  --pcas-recovery-chain chain.json \
+  --pcas-recovery-successor successor.json \
+  --pcas-recovery-pinned-root pinned-genesis-root.json \
+  --pcas-recovery-id custodian-a --pcas-recovery-key custodian-a.key \
+  --pcas-recovery-output custodian-a-approval.json
+```
+
+Each custodian independently checks the pinned genesis and derives the same
+statement from the chain and prepared successor before their own key signs.
+Repeat approval on another custodian's machine. Combine only the **public**
+approval documents into a JSON array, for example with `jq -s` over their
+paths, then assemble and verify the quorum before submitting:
+
+```sh
+jq -s '.' custodian-a-approval.json custodian-b-approval.json > approvals.json
+trstctl-signer --pcas-recovery-mode assemble \
+  --pcas-recovery-policy policy.json --pcas-recovery-statement statement.json \
+  --pcas-recovery-roster-signature roster-signature.json \
+  --pcas-recovery-approvals approvals.json \
+  --pcas-recovery-output authorization.json
+```
+
+The signer refuses a signature from the wrong key, a reordered or changed
+roster, and fewer than the configured number of distinct valid approvals.
+The output is create-new and owner-only. Independently verify the full chain
+and the prepared successor receipt before asking custodians to sign; the
+statement command verifies the pinned genesis and immediate binding, while
+the server checks the current event-sourced chain and signed successor receipt
+again at request admission and delivery. Do not treat copied JSON alone as
+proof that the successor is served or that recovery completed.
 After delivery, refresh the served chain and verify its inclusion proof with
 an independent relying party.
 
