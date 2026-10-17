@@ -321,9 +321,18 @@ ceremony rules, then activate it behind the predecessor's stable issue URL.
    independently against the issuer before distributing the new chain.
    Older in-process hierarchy events that recorded only the issuer and ceremony
    have no public certificate to recover; their receipt lookup remains 404.
-6. Retire the old key per your policy (and per the
-   [incident-response runbook](incident-response.md) if the rotation is
-   compromise-driven).
+6. Open **CA hierarchy → Lifecycle → Retirement** or read
+   `GET /api/v1/ca/keys/{predecessor-id}/retirement` before requesting key
+   destruction. The checklist is rebuilt from immutable CA issuance and
+   dependency-completion events. It names each leaf, child CA, or cross-sign
+   still tied to the old key; a missing checklist returns 404 rather than an
+   empty safe list. A historical serial-only event stays a `serial:` dependent:
+   it does not prove a recoverable leaf or subject key. Verify replacement or
+   revocation using the original certificate and relying party before accounting
+   for it. Retire the old key per your policy (and per the
+   [incident-response runbook](incident-response.md) if compromise drove the
+   rotation). The isolated signer still refuses destruction until its frozen
+   event-set proof is complete.
 
 ## Procedure: renewing or re-keying a signer-backed CA
 

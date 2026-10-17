@@ -11,11 +11,66 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/api"
+	eedecommission "trstctl.com/trstctl/internal/decommission"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 )
+
+func TestRetirementChecklistServesImmutableManagedCALeafAfterColdProjectionReplay(t *testing.T) {
+	cs := openStoreOn(t, "vdec_api_issued_leaf")
+	runtime, err := eedecommission.NewRuntime(eedecommission.RuntimeConfig{Store: cs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const caID = "44444444-4444-4444-8444-444444444444"
+	const leafID = "55555555-5555-4555-8555-555555555555"
+	raw, err := json.Marshal(projections.CAEndEntityInventoried{ID: leafID, CAID: caID, Serial: "72"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := eventspec.Event{
+		ID: "issued-leaf-72", Type: projections.EventCAEndEntityIssued,
+		TenantID: tenantA, SchemaVersion: projections.CAEndEntityInventorySchemaVersion,
+		Sequence: 17, Data: raw,
+	}
+	served := newServedAPI(t, cs, orchestrator.NewOutbox(cs))
+	read := func(wantStatus int) api.RetirementChecklist {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		served.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/ca/keys/"+caID+"/retirement", nil))
+		if rr.Code != wantStatus {
+			t.Fatalf("checklist status %d: %s; want %d", rr.Code, rr.Body.String(), wantStatus)
+		}
+		if wantStatus != http.StatusOK {
+			return api.RetirementChecklist{}
+		}
+		var got api.RetirementChecklist
+		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if !got.Blocked || got.Total != 1 || got.Accounted != 0 || len(got.Outstanding) != 1 ||
+			got.Outstanding[0].Ref != leafID {
+			t.Fatalf("issued certificate not bound to CA retirement: %+v", got)
+		}
+		return got
+	}
+	read(http.StatusNotFound)
+	if err := runtime.DependencyProjection.Apply(t.Context(), issued); err != nil {
+		t.Fatal(err)
+	}
+	read(http.StatusOK)
+	if err := runtime.DependencyProjection.Reset(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	read(http.StatusNotFound)
+	if err := runtime.DependencyProjection.Apply(t.Context(), issued); err != nil {
+		t.Fatal(err)
+	}
+	read(http.StatusOK)
+}
 
 // Missing tenant evidence must not become permission-looking retirement advice.
 // Exercise the production factory and real PostgreSQL projection, including a

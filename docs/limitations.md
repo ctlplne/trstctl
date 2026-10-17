@@ -3108,6 +3108,13 @@ than sending an operator looking for a credential that was never there.
   projection after restart. The console displays signed refusals and downloads the
   complete destruction record for offline verification.
   VDEC attaches in every build and remains fail-closed on missing evidence.
+  The checklist now derives its CA-key dependents from the original immutable
+  managed-leaf, PKI-secret, child-CA, re-key and public cross-sign events. It does
+  not depend on a later best-effort registration append after signing. The
+  indexed tenant read model is rebuilt from those same events on restart; the
+  signer's frozen event-set check uses the same derivation, including issuance
+  after the frozen cut. A serial-only historical issuance remains a conservative
+  `serial:` dependent rather than an invented certificate inventory row.
   If the tenant has no recorded dependency state for the requested key, the
   checklist returns HTTP 404 with an explanation to verify the key ID and collect
   dependency evidence. This does not establish whether the key itself exists;

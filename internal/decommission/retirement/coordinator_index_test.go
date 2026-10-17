@@ -3,11 +3,13 @@
 package retirement
 
 import (
+	"encoding/json"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 func TestDependencyChangeIndexColdRestartPreservesExactCutAndRefusal(t *testing.T) {
@@ -66,5 +68,20 @@ func TestDependencyChangeIndexColdRestartPreservesExactCutAndRefusal(t *testing.
 	}
 	if _, err := coordinator.dependencyChangedBetween(t.Context(), tenant, "key-a", matching.Sequence+1, head); err == nil {
 		t.Fatal("malformed retained dependency event was ignored")
+	}
+	leaf, err := json.Marshal(projections.CAEndEntityInventoried{ID: "issued-leaf-2", CAID: "key-a", Serial: "99"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := log.Append(t.Context(), events.Event{
+		Type: projections.EventCAEndEntityIssued, TenantID: tenant,
+		SchemaVersion: projections.CAEndEntityInventorySchemaVersion, Data: leaf,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err = coordinator.dependencyChangedBetween(t.Context(), tenant, "key-a", issued.Sequence, issued.Sequence)
+	if err != nil || !changed {
+		t.Fatalf("late CA issuance escaped frozen retirement cut: changed=%t err=%v", changed, err)
 	}
 }

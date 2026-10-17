@@ -3,12 +3,91 @@
 package depstate
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"trstctl.com/trstctl/internal/proptest"
 
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/projections"
 )
+
+func TestManagedCALeafIssuanceRegistersExactRetirementDependent(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	const caID = "22222222-2222-4222-8222-222222222222"
+	const leafID = "33333333-3333-4333-8333-333333333333"
+	payload, err := json.Marshal(projections.CAEndEntityInventoried{
+		ID: leafID, CAID: caID, Serial: "7a",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := eventspec.Event{
+		Type: projections.EventCAEndEntityIssued, TenantID: tenantID,
+		SchemaVersion: projections.CAEndEntityInventorySchemaVersion,
+		ID:            "issued-leaf-1", Sequence: 17, Data: payload,
+	}
+	state, err := Fold([]eventspec.Event{event})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := state.Lookup(tenantID, caID)
+	if !ok || !reflect.DeepEqual(got.Registered, []Dependent{{Class: DependentCredential, ID: leafID}}) ||
+		got.LedgerPosition != 17 {
+		t.Fatalf("CA key retirement lost exact issued leaf: found=%t state=%+v", ok, got)
+	}
+}
+
+func TestCADependencyDerivationKeepsLegacySerialsAndPublicCASignatures(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	const caID = "22222222-2222-4222-8222-222222222222"
+	encode := func(eventType string, version int, id string, data any) eventspec.Event {
+		t.Helper()
+		raw, err := json.Marshal(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return eventspec.Event{Type: eventType, TenantID: tenantID, ID: id, SchemaVersion: version, Data: raw}
+	}
+	legacy := encode(projections.EventCAEndEntityIssued, 1, "legacy-serial", map[string]string{
+		"ca_id": caID, "serial": "99",
+	})
+	modern := encode(projections.EventCAIssuedCertificate, projections.CASecretInventorySchemaVersion,
+		"pki-secret", map[string]string{"ca_id": caID, "serial": "a1"})
+	child := encode(projections.EventCAIntermediateCreated, projections.CAAuthorityCreatedEventSchemaVersion,
+		"child-created", map[string]string{"ca_id": "child-ca", "parent_id": caID})
+	cross := encode(projections.EventCACrossSigned, 1, "cross-signed", map[string]any{
+		"ca_id": caID, "target_sha256": "abcd", "cross_certificate_der": []byte("public-cross-cert"),
+	})
+	preparedCSR := encode(projections.EventCAIntermediateCSRIssued, 1, "offline-csr", map[string]string{
+		"ca_id": caID, "csr_sha256": "efgh", "offline_root": "true",
+	})
+	signedCSR := encode(projections.EventCAIntermediateCSRIssued, 1, "signed-csr", map[string]string{
+		"ca_id": caID, "serial": "a2", "csr_sha256": "efgh",
+	})
+	sequence := []eventspec.Event{legacy, modern, child, cross, preparedCSR, signedCSR}
+	for i := range sequence {
+		sequence[i].Sequence = uint64(i + 1)
+	}
+	projection, err := Fold(sequence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, ok := projection.Lookup(tenantID, caID)
+	if !ok {
+		t.Fatal("CA dependency state missing")
+	}
+	want := []Dependent{
+		{Class: DependentCredential, ID: "serial:99"},
+		{Class: DependentCredential, ID: projections.SecretPKIInventoryID(modern)},
+		{Class: DependentCredential, ID: "child-ca"},
+		{Class: DependentCredential, ID: "cross-sign:abcd"},
+		{Class: DependentCredential, ID: "serial:a2"},
+	}
+	if !reflect.DeepEqual(state.Registered, want) {
+		t.Fatalf("CA dependency inventory = %+v, want %+v", state.Registered, want)
+	}
+}
 
 func mustEncode(t *testing.T, p Payload) eventspec.Event {
 	t.Helper()

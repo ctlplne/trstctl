@@ -321,6 +321,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// which enters the tenant's RLS context; nothing tenant-owned is returned
 		// to a caller from the system pool.
 		"internal/decommission/retirement/projection.go": 2,
+		// VDEC dependency projection needs the system pool only to reset every
+		// tenant's derived checklist in a full retained-event rebuild. Ordinary
+		// issuance, disposition and offboard events run through WithTenant/RLS.
+		"internal/decommission/store/projection.go": 1,
 		// PCAS delegation's standalone projection opens one system transaction
 		// for full-replay reset or one event. Reset removes only derived scope
 		// rows; ApplyTx checks payload tenant against the event and scopes every

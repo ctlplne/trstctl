@@ -106,7 +106,7 @@ func (c *Coordinator) Request(ctx context.Context, tenantID, keyID string, reque
 		return Receipt{}, fmt.Errorf("vdec retirement: fold dependency evidence: %w", err)
 	}
 	state, found := projection.Lookup(tenantID, keyID)
-	if !found {
+	if !found || len(state.Registered) == 0 {
 		return Receipt{}, fmt.Errorf("%w: no dependency evidence exists for this key", ErrInvalidCommand)
 	}
 	requiredSet, err := gate.RequiredSetBytes(state)
@@ -193,14 +193,24 @@ func (c *Coordinator) snapshot(ctx context.Context, tenantID string) (uint64, []
 
 func (c *Coordinator) dependencyChangedBetween(ctx context.Context, tenantID, keyID string, from, through uint64) (bool, error) {
 	changed := false
+	eventTypes := append([]string{
+		depstate.TypeDependencyRegistered, depstate.TypeDependencyReleased,
+		depstate.TypeDependencyErasureDesignated, depstate.TypeReprotectionCompleted,
+		depstate.TypeRevocationCompleted,
+	}, depstate.CARegistrationEventTypes()...)
 	err := c.log.ReplayTenantTypesThrough(ctx, tenantID, from, through,
-		[]string{
-			depstate.TypeDependencyRegistered, depstate.TypeDependencyReleased,
-			depstate.TypeDependencyErasureDesignated, depstate.TypeReprotectionCompleted,
-			depstate.TypeRevocationCompleted,
-		}, func(ev events.Event) error {
+		eventTypes, func(ev events.Event) error {
 			if ev.TenantID != tenantID {
 				return nil
+			}
+			registrations, err := depstate.CARegistrations(ev)
+			if err != nil {
+				return err
+			}
+			for _, registration := range registrations {
+				if registration.KeyID == keyID {
+					changed = true
+				}
 			}
 			switch ev.Type {
 			case depstate.TypeDependencyRegistered, depstate.TypeDependencyReleased,

@@ -159,9 +159,22 @@ func (h *Handler) replayEvidence(ctx context.Context, requested RequestedV1) ([]
 		if err != nil {
 			return err
 		}
+		registrationTypes := append([]string{depstate.TypeDependencyRegistered}, depstate.CARegistrationEventTypes()...)
 		return h.log.ReplayTenantTypesThrough(readCtx, requested.TenantID,
-			requested.LedgerPosition+1, head, []string{depstate.TypeDependencyRegistered},
+			requested.LedgerPosition+1, head, registrationTypes,
 			func(ev events.Event) error {
+				caRegistrations, err := depstate.CARegistrations(ev)
+				if err != nil {
+					return err
+				}
+				for _, registration := range caRegistrations {
+					if registration.KeyID == requested.KeyID {
+						laterRegistration = true
+					}
+				}
+				if ev.Type != depstate.TypeDependencyRegistered {
+					return nil
+				}
 				payload, err := depstate.Decode(ev)
 				if err != nil {
 					return err
@@ -182,7 +195,7 @@ func verifyFrozenCommand(requested RequestedV1, tenantEvents []eventspec.Event) 
 		return err
 	}
 	state, found := projection.Lookup(requested.TenantID, requested.KeyID)
-	if !found {
+	if !found || len(state.Registered) == 0 {
 		return fmt.Errorf("%w: frozen dependency state is absent", ErrInvalidCommand)
 	}
 	required, err := gate.RequiredSetBytes(state)

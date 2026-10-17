@@ -120,6 +120,7 @@ func (r *Repo) FetchKeyState(ctx context.Context, tenantID, keyID string) (depst
 		if err != nil {
 			return err
 		}
+		found = len(registered) > 0
 		out.Registered = registered
 		out.Accounted = accounted
 		out.Released = released
@@ -140,6 +141,7 @@ func (r *Repo) UnaccountedDependents(ctx context.Context, tenantID, keyID string
 			   FROM decommission_dependents
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 			    AND key_id = $1
+		    AND registered_ordinal > 0
 			    AND accounted_ordinal IS NULL
 			  ORDER BY registered_ordinal ASC`, keyID)
 		if err != nil {
@@ -353,6 +355,7 @@ func fetchRegistered(ctx context.Context, tx pgx.Tx, keyID string) ([]depstate.D
 		`SELECT dependent_class, dependent_id
 		   FROM decommission_dependents
 		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND key_id = $1
+		    AND registered_ordinal > 0
 		  ORDER BY registered_ordinal ASC`, keyID)
 	if err != nil {
 		return nil, fmt.Errorf("decommission store: fetch registered dependents: %w", err)
@@ -366,6 +369,7 @@ func fetchAccounted(ctx context.Context, tx pgx.Tx, keyID string) ([]depstate.De
 		   FROM decommission_dependents
 		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 		    AND key_id = $1
+		    AND registered_ordinal > 0
 		    AND accounted_ordinal IS NOT NULL
 		  ORDER BY accounted_ordinal ASC`, keyID)
 	if err != nil {
@@ -380,6 +384,7 @@ func fetchReleased(ctx context.Context, tx pgx.Tx, keyID string) ([]depstate.Dep
 		   FROM decommission_dependents
 		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 		    AND key_id = $1
+		    AND registered_ordinal > 0
 		    AND released_ordinal IS NOT NULL
 		  ORDER BY released_ordinal ASC`, keyID)
 	if err != nil {
@@ -394,6 +399,7 @@ func fetchErasureDesignated(ctx context.Context, tx pgx.Tx, keyID string) ([]dep
 		   FROM decommission_dependents
 		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 		    AND key_id = $1
+		    AND registered_ordinal > 0
 		    AND erasure_ordinal IS NOT NULL
 		  ORDER BY erasure_ordinal ASC`, keyID)
 	if err != nil {
@@ -446,7 +452,7 @@ func dependentRows(state depstate.KeyState) []dependentRow {
 	rows := make(map[string]*dependentRow, len(state.Registered))
 	for i, dep := range state.Registered {
 		cp := dep
-		rows[dependentKey(dep)] = &dependentRow{dep: cp, registeredOrdinal: int64(i)}
+		rows[dependentKey(dep)] = &dependentRow{dep: cp, registeredOrdinal: int64(i + 1)}
 	}
 	setOrdinal := func(deps []depstate.Dependent, set func(*dependentRow, int64)) {
 		for i, dep := range deps {

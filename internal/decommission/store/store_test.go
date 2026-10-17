@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -20,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/projections"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -72,6 +74,10 @@ func freePort() uint32 {
 }
 
 func newRepoOn(t *testing.T, dbName string) *decstore.Repo {
+	return decstore.New(newCoreStoreOn(t, dbName))
+}
+
+func newCoreStoreOn(t *testing.T, dbName string) *corestore.Store {
 	t.Helper()
 	ctx := context.Background()
 
@@ -94,7 +100,85 @@ func newRepoOn(t *testing.T, dbName string) *decstore.Repo {
 	if err := cs.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	return decstore.New(cs)
+	return cs
+}
+
+func TestDependencyProjectionRecoversManagedCAIssuanceAndDisposition(t *testing.T) {
+	core := newCoreStoreOn(t, "vdec_ca_issuance")
+	projection := decstore.NewDependencyProjection(core)
+	repo := decstore.New(core)
+	ctx := context.Background()
+	const caID = "44444444-4444-4444-8444-444444444444"
+	const leafID = "55555555-5555-4555-8555-555555555555"
+	leaf, err := json.Marshal(projections.CAEndEntityInventoried{ID: leafID, CAID: caID, Serial: "72"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := eventspec.Event{
+		ID: "issued-leaf-72", Type: projections.EventCAEndEntityIssued,
+		TenantID: tenantA, SchemaVersion: projections.CAEndEntityInventorySchemaVersion,
+		Sequence: 17, Data: leaf,
+	}
+	if err := projection.Apply(ctx, issued); err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Apply(ctx, issued); err != nil {
+		t.Fatalf("duplicate issuance changed projection: %v", err)
+	}
+	state, found, err := repo.FetchKeyState(ctx, tenantA, caID)
+	if err != nil || !found || !reflect.DeepEqual(state.Registered, []depstate.Dependent{dep(depstate.DependentCredential, leafID)}) {
+		t.Fatalf("issued leaf missing from indexed checklist: found=%t state=%+v error=%v", found, state, err)
+	}
+	if _, found, err := repo.FetchKeyState(ctx, tenantB, caID); err != nil || found {
+		t.Fatalf("neighbor tenant saw CA dependency: found=%t error=%v", found, err)
+	}
+	released := mustEncode(t, depstate.DependencyReleasedV1{
+		TenantID: tenantA, KeyID: caID, Dependent: dep(depstate.DependentCredential, leafID), Reason: "replacement verified",
+	}, 18)
+	if err := projection.Apply(ctx, released); err != nil {
+		t.Fatal(err)
+	}
+	state, found, err = repo.FetchKeyState(ctx, tenantA, caID)
+	if err != nil || !found || len(state.Unaccounted()) != 0 || len(state.Accounted) != 1 {
+		t.Fatalf("release not reflected in checklist: found=%t state=%+v error=%v", found, state, err)
+	}
+	if err := projection.Reset(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := repo.FetchKeyState(ctx, tenantA, caID); err != nil || found {
+		t.Fatalf("reset retained derived evidence: found=%t error=%v", found, err)
+	}
+	for _, event := range []eventspec.Event{issued, released} {
+		if err := projection.Apply(ctx, event); err != nil {
+			t.Fatalf("cold replay %s: %v", event.Type, err)
+		}
+	}
+	state, found, err = repo.FetchKeyState(ctx, tenantA, caID)
+	if err != nil || !found || len(state.Registered) != 1 || len(state.Accounted) != 1 {
+		t.Fatalf("cold replay lost dependency evidence: found=%t state=%+v error=%v", found, state, err)
+	}
+	if err := projection.Apply(ctx, eventspec.Event{Type: projections.EventTenantOffboarded, TenantID: tenantA, Sequence: 19}); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := repo.FetchKeyState(ctx, tenantA, caID); err != nil || found {
+		t.Fatalf("offboard retained CA dependency: found=%t error=%v", found, err)
+	}
+	// A completion that arrives before its registration must not create a
+	// reassuring zero-dependent checklist. Once the original issuance is
+	// replayed, the prior completion must still account for that exact leaf.
+	if err := projection.Apply(ctx, released); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := repo.FetchKeyState(ctx, tenantA, caID); err != nil || found {
+		t.Fatalf("unmatched release became a safe checklist: found=%t error=%v", found, err)
+	}
+	if err := projection.Apply(ctx, issued); err != nil {
+		t.Fatal(err)
+	}
+	state, found, err = repo.FetchKeyState(ctx, tenantA, caID)
+	if err != nil || !found || len(state.Registered) != 1 || len(state.Accounted) != 1 {
+		t.Fatalf("out-of-order replay lost exact completion: found=%t state=%+v error=%v", found, state, err)
+	}
 }
 
 func mustEncode(t *testing.T, p depstate.Payload, seq uint64) eventspec.Event {

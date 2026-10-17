@@ -127,6 +127,15 @@ func Fold(seq []eventspec.Event) (Projection, error) {
 	var position uint64
 	for i, e := range seq {
 		position++
+		registrations, err := CARegistrations(e)
+		if err != nil {
+			return nil, fmt.Errorf("depstate: fold CA event %d (%s): %w", i, e.Type, err)
+		}
+		for _, registered := range registrations {
+			b := builderFor(builders, registered.TenantID, registered.KeyID)
+			b.register(registered.Dependent)
+			b.advance(ledgerPosition(e, position))
+		}
 		payload, err := Decode(e)
 		if err != nil {
 			return nil, fmt.Errorf("depstate: fold event %d (%s): %w", i, e.Type, err)

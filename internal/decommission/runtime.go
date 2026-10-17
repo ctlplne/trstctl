@@ -32,6 +32,7 @@ type Runtime struct {
 	ReprotectionOutboxFactory editionseam.LicensedOutboxFactory
 	RetirementOutboxFactory   editionseam.LicensedOutboxFactory
 	RetirementProjection      *retirement.Projection
+	DependencyProjection      *decstore.DependencyProjection
 	ProjectionOptions         []projections.Option
 	// APIOptionsFactory serves the H4 surface: the retirement checklist source
 	// behind core's GET route, re-protection production, and the irreversible
@@ -44,12 +45,17 @@ type Runtime struct {
 func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	repo := decstore.New(cfg.Store)
 	retirementProjection := retirement.NewProjection(cfg.Store, orchestrator.NewOutbox(cfg.Store))
+	dependencyProjection := decstore.NewDependencyProjection(cfg.Store)
 	return &Runtime{
 		Store:                     repo,
 		ReprotectionOutboxFactory: reprotect.NewLicensedOutboxFactory(reprotect.WithStore(repo)),
 		RetirementOutboxFactory:   retirement.NewOutboxFactory(retirementProjection),
 		RetirementProjection:      retirementProjection,
-		ProjectionOptions:         []projections.Option{projections.WithEventProjection(retirementProjection)},
-		APIOptionsFactory:         decapi.NewAPIOptionsFactory(retirementProjection),
+		DependencyProjection:      dependencyProjection,
+		ProjectionOptions: []projections.Option{
+			projections.WithEventProjection(dependencyProjection),
+			projections.WithEventProjection(retirementProjection),
+		},
+		APIOptionsFactory: decapi.NewAPIOptionsFactory(retirementProjection),
 	}, nil
 }
