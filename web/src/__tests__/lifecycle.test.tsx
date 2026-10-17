@@ -1624,6 +1624,67 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
   });
 
+  it("can review a due renewal outside the inventory's first cursor page", async () => {
+    const later = { id: "later-due", name: "later-due.example.test", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([{ id: "first-page", name: "first-page.example.test", kind: "x509_certificate", status: "deployed" }]);
+    apiMock.getIdentity.mockResolvedValue(later);
+    const plan = await apiMock.lifecycleAutomationPlan();
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      ...plan,
+      summary: { ...plan.summary, monitored: 2, due_now: 1 },
+      items: [
+        {
+          identity_id: later.id,
+          identity_name: later.name,
+          identity_status: "deployed",
+          owner_id: "own-1",
+          owner_name: "team",
+          certificate_id: "later-cert",
+          due: true,
+          renewal_source: "ari",
+          reason: "The CA renewal window is open.",
+          blockers: [],
+        },
+      ],
+    });
+    renderIdentities();
+    const user = userEvent.setup();
+    const button = await screen.findByRole("button", { name: "Review renewal now" });
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(apiMock.getIdentity).toHaveBeenCalledWith(later.id);
+    expect(await screen.findByRole("dialog", { name: /^Review /i })).toHaveTextContent(later.name);
+  });
+
+  it.each(["missing", "mismatched"])("fails visibly when the exact renewal identity is %s", async (state) => {
+    const plan = await apiMock.lifecycleAutomationPlan();
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      ...plan,
+      summary: { ...plan.summary, monitored: 1, due_now: 1 },
+      items: [
+        {
+          identity_id: "exact-due",
+          identity_name: "exact-due.example.test",
+          identity_status: "deployed",
+          owner_id: "own-1",
+          owner_name: "team",
+          due: true,
+          renewal_source: "ari",
+          reason: "The CA renewal window is open.",
+          blockers: [],
+        },
+      ],
+    });
+    if (state === "missing") apiMock.getIdentity.mockRejectedValue(new Error("identity unavailable"));
+    else apiMock.getIdentity.mockResolvedValue({ id: "wrong-due", name: "wrong.example.test", kind: "x509_certificate", status: "deployed" });
+    renderIdentities();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Review renewal now" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(state === "missing" ? /Could not load the exact identity/ : /did not match/);
+    expect(screen.queryByRole("dialog", { name: /^Review /i })).not.toBeInTheDocument();
+    expect(apiMock.previewIdentityTransition).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["5m0s", 300],
     ["36h0m0s", 129_600],

@@ -28697,6 +28697,14 @@ export const messages = {
   "identities.automation.expires": { defaultMessage: " · expires {time}", description: "Certificate expiry in lifecycle plan." },
   "identities.automation.startAction": { defaultMessage: "Review renewal now", description: "Open effect-free review for a due renewal." },
   "identities.automation.retryAction": { defaultMessage: "Review retry", description: "Open effect-free review for a failed renewal." },
+  "identities.automation.identityUnavailable": {
+    defaultMessage: "Could not load the exact identity for renewal review",
+    description: "Identity lookup failure before renewal preview.",
+  },
+  "identities.automation.identityMismatch": {
+    defaultMessage: "Identity readback did not match the requested identity",
+    description: "Identity mismatch before renewal preview.",
+  },
   "identities.automation.noneDue": {
     defaultMessage: "Nothing needs a manual nudge right now. trstctl will keep checking.",
     description: "Empty due-renewal state.",

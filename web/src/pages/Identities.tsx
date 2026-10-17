@@ -786,7 +786,7 @@ export function Identities() {
         <LoadingState>{t("identities.health.loading")}</LoadingState>
       )}
 
-      <LifecycleAutomationPanel identities={items ?? []} onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)} />
+      <LifecycleAutomationPanel onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)} />
 
       {showForm && canIssue && (
         <NewIdentityForm

@@ -1,14 +1,14 @@
-import { useMemo } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type Identity, type LifecycleAutomationPlan } from "@/lib/api";
+import { apiProblemContext } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 
 type Props = {
-  identities: Identity[];
   onReviewRenewal: (identity: Identity, label: string, reason: string) => void;
 };
 
@@ -36,8 +36,10 @@ function isLifecycleAutomationPlan(value: unknown): value is LifecycleAutomation
   );
 }
 
-export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props) {
+export function LifecycleAutomationPanel({ onReviewRenewal }: Props) {
   const { t, formatDateTime } = useTranslation();
+  const [loadingID, setLoadingID] = useState<string | null>(null);
+  const [identityError, setIdentityError] = useState<{ id: string; message: string } | null>(null);
   const {
     data: plan,
     error,
@@ -52,7 +54,23 @@ export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props)
     },
     { retry: false, live: { intervalMs: 10_000 } },
   );
-  const identityByID = useMemo(() => new Map(identities.map((identity) => [identity.id, identity])), [identities]);
+
+  async function reviewRenewal(item: LifecycleAutomationPlan["items"][number], retry: boolean) {
+    if (loadingID || item.blockers.length > 0) return;
+    setLoadingID(item.identity_id);
+    setIdentityError(null);
+    try {
+      // The automation plan can include identities beyond the grid's current
+      // cursor page. Read the exact identity before opening its preview.
+      const identity = await api.getIdentity(item.identity_id);
+      if (identity.id !== item.identity_id) throw new Error(t("identities.automation.identityMismatch"));
+      onReviewRenewal(identity, retry ? t("identities.automation.retryAction") : t("identities.automation.startAction"), item.reason);
+    } catch (err) {
+      setIdentityError({ id: item.identity_id, message: apiProblemContext(err, t("identities.automation.identityUnavailable")) });
+    } finally {
+      setLoadingID(null);
+    }
+  }
 
   const renewDays = plan ? durationDays(plan.scheduler.renew_before, plan.scheduler.renew_before_seconds) : null;
   const alertDays = plan ? durationDays(plan.scheduler.alert_before, plan.scheduler.alert_before_seconds) : null;
@@ -122,7 +140,6 @@ export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props)
               {plan.items
                 .filter((item) => item.due || item.identity_status === "renewal_failed" || item.blockers.length > 0)
                 .map((item) => {
-                  const identity = identityByID.get(item.identity_id);
                   const retry = item.identity_status === "renewal_failed";
                   return (
                     <div
@@ -144,14 +161,17 @@ export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props)
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={!identity || item.blockers.length > 0}
-                        onClick={() =>
-                          identity &&
-                          onReviewRenewal(identity, retry ? t("identities.automation.retryAction") : t("identities.automation.startAction"), item.reason)
-                        }
+                        disabled={loadingID !== null || item.blockers.length > 0}
+                        loading={loadingID === item.identity_id}
+                        onClick={() => void reviewRenewal(item, retry)}
                       >
                         {retry ? t("identities.automation.retryAction") : t("identities.automation.startAction")}
                       </Button>
+                      {identityError?.id === item.identity_id && (
+                        <p role="alert" className="w-full text-sm text-risk-critical">
+                          {identityError.message}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

@@ -152,6 +152,10 @@ Its `summary.total` and `summary.by_status` count the complete authenticated
 tenant, independent of the returned page and any search filter. If the summary
 read fails, the console shows an unavailable state and a retry control rather
 than presenting the first page as the complete estate.
+The lifecycle automation panel may list a due identity outside the inventory's
+current cursor page. Its review button reads that exact identity by ID before
+opening the effect-free transition preview; a failed or mismatched read is
+shown as an error instead of silently disabling a valid action.
 See [Workload identity](features/workload-identity.md) and
 [Observability & risk](features/observability-and-risk.md). Backed by
 `/api/v1/identities`, `/api/v1/nhi/inventory`, `/api/v1/risk/credentials`, and
