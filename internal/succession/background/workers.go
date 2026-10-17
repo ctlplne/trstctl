@@ -478,6 +478,18 @@ func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.C
 				return err
 			}
 			if len(jobs) == 0 {
+				var paired kem.PairedRecord
+				if err := json.Unmarshal(successorRec.Encoded, &paired); err != nil {
+					return fmt.Errorf("pcas retirement worker: decode successor record: %w", err)
+				}
+				if len(paired.KEMPub) > 0 || paired.KEMAlg != "" || len(paired.Binding) > 0 {
+					if err := kem.VerifyPaired(paired); err != nil {
+						return fmt.Errorf("pcas retirement worker: paired KEM proof: %w", err)
+					}
+					// No job is not proof of an empty ciphertext inventory. A KEM
+					// predecessor needs an explicit, bound empty-inventory receipt.
+					return kem.ErrRewrapIncomplete
+				}
 				return nil
 			}
 			complete, err := w.repo.RewrapComplete(ctx, tenantID, policy.IdentityID, policy.PredecessorEpoch)

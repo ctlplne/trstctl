@@ -554,7 +554,8 @@ func (r *Repo) RewrapComplete(ctx context.Context, tenantID, identityID string, 
 	var complete bool
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		e := tx.QueryRow(ctx,
-			`SELECT COALESCE(bool_and(status = 'complete' AND source_sequence > 0 AND request_digest IS NOT NULL), false)
+			`SELECT COALESCE(bool_and(status = 'complete' AND source_sequence > 0 AND
+			    data_receipt_sequence > 0 AND request_digest IS NOT NULL), false)
 			   FROM pcas_rewrap_job
 			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 			    AND identity_id = $1

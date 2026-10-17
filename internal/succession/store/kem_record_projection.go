@@ -23,7 +23,7 @@ func (r *Repo) ApplyKEMRewrapRecordEvent(ctx context.Context, ev eventspec.Event
 		if err := ApplyKEMRewrapRecordEventTx(ctx, tx, ev); err != nil {
 			return err
 		}
-		return ApplyKEMRewrapCompletedStagesTx(ctx, tx, ev)
+		return ApplyKEMPairedKeyReadyTx(ctx, tx, ev)
 	})
 }
 

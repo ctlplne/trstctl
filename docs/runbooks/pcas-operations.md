@@ -156,8 +156,9 @@ duplicate relying parties, invalid public keys, or a threshold above the
 roster size. A successful policy read means the quorum is configured. After
 the signed acknowledgment, verify `retired` with the API and CLI, then confirm
 the exact predecessor signer key refuses signing; the status alone is not proof
-of zeroization. `rewrap_complete` is false when there are no rewrap jobs; in
-that case there is no ciphertext to rewrap. Do not infer that a relying party
+of zeroization. `rewrap_complete` is false when there are no rewrap jobs;
+this does not establish that the ciphertext inventory is empty. Do not infer
+that a relying party
 changed trust stores just because it appears in the roster.
 
 On restart, the retirement worker checks previously retired policies against
@@ -368,17 +369,21 @@ The recovery, federation and KEM mutation responses include a `status_url` to
 outbox state even when the operator has configured custom PCAS breadth topics;
 it also recognizes canonical topics left queued before a configuration change.
 `delivered` means the worker finished its call. For KEM, use the separate
-`GET /api/v1/pcas/rewrap` stage readback and verify the paired public record
-before treating a rewrap as complete. Queued stage rows come from an immutable,
+`GET /api/v1/pcas/rewrap` stage readback and verify the paired public record.
+Keep the data stage pending until a bound readback receipt exists. The
+paired record proves signer custody, not data migration: its projected stage
+state is `key_ready`, and `rewrap_complete` remains false. A stage label alone
+never proves a ciphertext changed, and a KEM predecessor cannot retire on a
+paired record or an absent job list. Queued stage rows come from an immutable,
 tenant-bound accepted-request event. The signed paired signing/KEM record is
-appended to the tenant event log before its SQL chain, epoch, and completed-stage
-rows are projected in one transaction. An outbox retry repairs a lost response
+appended to the tenant event log before its SQL chain, epoch, and key-ready rows
+are projected in one transaction. An outbox retry repairs a lost response
 between enqueue, event append, and SQL projection. The KEM request ID is derived
 from the authenticated tenant and `Idempotency-Key`; a retry with the same key
 and body returns the original outbox creation time and restores a missing queued
 projection. Reusing that key with a changed body is rejected by the outbox's
 exact command comparison. Event-only replay restores
-the accepted stage set and its completion status. Its
+the accepted stage set and its key-ready status. Its
 tenant, identity, epoch and exact request have a first-writer event ID; a
 projection rebuild restores the same signed record from that event. A second
 request or altered event at the same epoch cannot silently replace it. The

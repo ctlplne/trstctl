@@ -113,7 +113,7 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 			if err := ApplyKEMRewrapRecordEventTx(ctx, tx, ev); err != nil {
 				return err
 			}
-			return ApplyKEMRewrapCompletedStagesTx(ctx, tx, ev)
+			return ApplyKEMPairedKeyReadyTx(ctx, tx, ev)
 		}
 		if ev.Type == succession.TypeKEMRewrapRequested {
 			return ApplyKEMRewrapRequestedEventTx(ctx, tx, ev)

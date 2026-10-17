@@ -438,8 +438,8 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("rewrap status: %v", err)
 	}
-	if !status.Complete || len(status.Jobs) != 2 {
-		t.Fatalf("rewrap status = %+v, want complete two-stage job", status)
+	if status.Complete || len(status.Jobs) != 2 {
+		t.Fatalf("paired-key custody alone completed data rewrap: %+v", status)
 	}
 	rows, err := st.repo.FetchChain(st.ctx, st.tenantID, id)
 	if err != nil || len(rows) != 1 {
@@ -493,7 +493,7 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 		t.Fatalf("event-only KEM record restore rows=%d err=%v", len(rows), err)
 	}
 	status, err = st.svc.RewrapStatus(st.ctx, st.tenantID, id, 0)
-	if err != nil || !status.Complete || len(status.Jobs) != 2 {
+	if err != nil || status.Complete || len(status.Jobs) != 2 {
 		t.Fatalf("event-only KEM stage restore status=%+v err=%v", status, err)
 	}
 	if err := projection.Apply(st.ctx, requestSource); err != nil {
@@ -563,16 +563,37 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	if _, err := st.svc.RecordAck(st.ctx, st.tenantID, succapi.AckRequest{IdentityID: id, Epoch: 0, RelyingParty: "rp1", Signature: ackSig}); err != nil {
 		t.Fatalf("record RP ack: %v", err)
 	}
-	st.runWorkersUntil(t, config.PCAS{Retirement: config.PCASRetirement{Enabled: true, Interval: "1h", ValidityWindow: "1h"}}, func() (bool, error) {
-		retired, found, err := st.svc.RetirementStatus(st.ctx, st.tenantID, id, 0)
-		return found && retired.Status == "retired", err
+	workers := background.NewWorkers(background.Options{
+		Store: st.store, Log: st.log, Signer: staticSignerProvider{c: st.signer},
+		PCAS: config.PCAS{Retirement: config.PCASRetirement{Enabled: true, Interval: "1h", ValidityWindow: "1h"}},
 	})
-	retired, found, err := st.svc.RetirementStatus(st.ctx, st.tenantID, id, 0)
-	if err != nil || !found || retired.Status != "retired" {
-		t.Fatalf("retirement status = %+v found=%v err=%v, want retired", retired, found, err)
+	if len(workers) != 1 {
+		t.Fatalf("one retirement worker expected, got %d", len(workers))
 	}
-	if _, err := st.signer.SignerForHandle(st.ctx, predHandle); err == nil {
-		t.Fatal("predecessor signer handle still resolves after retirement zeroize")
+	if err := workers[0].Run(st.ctx); !errors.Is(err, pcaskem.ErrRewrapIncomplete) {
+		t.Fatalf("retirement worker accepted missing data receipts: %v", err)
+	}
+	retired, found, err := st.svc.RetirementStatus(st.ctx, st.tenantID, id, 0)
+	if err != nil || !found || retired.Status == "retired" {
+		t.Fatalf("retirement status = %+v found=%v err=%v, want predecessor retained", retired, found, err)
+	}
+	if _, err := st.signer.SignerForHandle(st.ctx, predHandle); err != nil {
+		t.Fatalf("retirement removed predecessor without rewrap receipts: %v", err)
+	}
+	// A missing projected job is not an attestation that no predecessor
+	// ciphertext exists. Keep the key even if the stage projection is lost.
+	if err := st.store.WithTenant(st.ctx, st.tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(st.ctx, `DELETE FROM pcas_rewrap_job
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND identity_id = $1`, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := workers[0].Run(st.ctx); !errors.Is(err, pcaskem.ErrRewrapIncomplete) {
+		t.Fatalf("retirement treated a lost KEM job as empty inventory: %v", err)
+	}
+	if _, err := st.signer.SignerForHandle(st.ctx, predHandle); err != nil {
+		t.Fatalf("retirement removed predecessor after stage projection loss: %v", err)
 	}
 	_ = resp
 	return id

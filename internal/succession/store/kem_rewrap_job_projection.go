@@ -22,9 +22,9 @@ func (r *Repo) ApplyKEMRewrapRequestedEvent(ctx context.Context, ev eventspec.Ev
 	})
 }
 
-func (r *Repo) ApplyKEMRewrapCompletedStages(ctx context.Context, ev eventspec.Event) error {
+func (r *Repo) ApplyKEMPairedKeyReady(ctx context.Context, ev eventspec.Event) error {
 	return r.core.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
-		return ApplyKEMRewrapCompletedStagesTx(ctx, tx, ev)
+		return ApplyKEMPairedKeyReadyTx(ctx, tx, ev)
 	})
 }
 
@@ -64,7 +64,9 @@ func ApplyKEMRewrapRequestedEventTx(ctx context.Context, tx pgx.Tx, ev eventspec
 	return checkKEMStageCount(ctx, tx, p.RequestID, len(p.Stages))
 }
 
-func ApplyKEMRewrapCompletedStagesTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event) error {
+// ApplyKEMPairedKeyReadyTx records only custody proof. A paired public key and a
+// signer decapsulation self-test do not prove that a served ciphertext changed.
+func ApplyKEMPairedKeyReadyTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event) error {
 	if ev.Type != succession.TypeKEMRewrapRecorded || ev.Sequence == 0 || ev.Sequence > math.MaxInt64 {
 		return errors.New("pcas KEM job: invalid completed source event")
 	}
@@ -84,8 +86,8 @@ func ApplyKEMRewrapCompletedStagesTx(ctx context.Context, tx pgx.Tx, ev eventspe
 	}
 	predecessorEpoch := p.Epoch - 1
 	for _, stage := range p.Stages {
-		_, err := tx.Exec(ctx, `UPDATE pcas_rewrap_job SET completed_stages = total_stages,
-			status = 'complete', source_sequence = $6, updated_at = now()
+		_, err := tx.Exec(ctx, `UPDATE pcas_rewrap_job SET completed_stages = 0,
+			status = 'key_ready', source_sequence = $6, updated_at = now()
 			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
 			  AND job_id = $1 AND identity_id = $2 AND predecessor_epoch = $3
 			  AND stage = $4 AND total_stages = $5 AND request_digest = $7
@@ -121,7 +123,7 @@ func checkKEMStage(ctx context.Context, tx pgx.Tx, requestID, identityID string,
 	if queuedOK && gotStatus == "queued" && gotCompleted == 0 && uint64(gotSource) == sourceSequence {
 		return nil
 	}
-	if gotStatus == "complete" && gotCompleted == total &&
+	if gotStatus == "key_ready" && gotCompleted == 0 &&
 		((queuedOK && uint64(gotSource) > sourceSequence) || (!queuedOK && uint64(gotSource) == sourceSequence)) {
 		return nil
 	}
