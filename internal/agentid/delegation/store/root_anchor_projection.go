@@ -50,7 +50,7 @@ func (p *RootAnchorProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 	if p == nil || p.store == nil || tx == nil {
 		return errors.New("agentid root: projection transaction unavailable")
 	}
-	//trstctl:system-query — full rebuild clears only the derived root registry; tenant-bound immutable events restore it under RLS.
+	//trstctl:system-query — cross-tenant full rebuild uses a system transaction to clear only the derived root registry; tenant-bound immutable events restore it under RLS.
 	_, err := tx.Exec(ctx, `DELETE FROM agent_root_anchors`)
 	return err
 }

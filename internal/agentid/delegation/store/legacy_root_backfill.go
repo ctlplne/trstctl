@@ -28,14 +28,14 @@ func BackfillLegacyRootAnchorEvents(ctx context.Context, st *corestore.Store, lo
 		return nil
 	}
 	var present bool
-	//trstctl:system-query — startup/recovery schema probe; the core server also runs before extension migrations exist in harnesses.
+	//trstctl:system-query — before any tenant is known, the system pool checks only schema metadata; this reads no tenant rows and tolerates absent extension migrations.
 	if err := st.SystemPool().QueryRow(ctx, `SELECT to_regclass('agent_root_anchors') IS NOT NULL`).Scan(&present); err != nil {
 		return fmt.Errorf("agentid root: check legacy registry: %w", err)
 	}
 	if !present {
 		return nil
 	}
-	//trstctl:system-query — bounded startup migration inventories public legacy trust tuples across tenants; each is reconciled against the isolated signer and canonical event before projection reset.
+	//trstctl:system-query — cross-tenant startup inventory uses the system pool only for public legacy trust columns; each tenant_id/key tuple needs isolated-signer and canonical-event agreement before it becomes authority.
 	rows, err := st.SystemPool().Query(ctx, `SELECT tenant_id::text, key_id, public_der, auth_ref FROM agent_root_anchors ORDER BY tenant_id, key_id`)
 	if err != nil {
 		return fmt.Errorf("agentid root: read legacy registry: %w", err)
