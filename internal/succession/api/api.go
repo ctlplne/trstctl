@@ -846,8 +846,8 @@ func recoverySuccessorGetHandler(a *api.API, svc Service) http.HandlerFunc {
 		resp, err := svc.GetRecoverySuccessor(r.Context(), tenantID, identityID, epoch)
 		a.ObserveFeature("pcas_recovery", "read_successor", start, err)
 		if err != nil {
-			statusCode, _, mapped := mapPCASServiceError(http.StatusOK, nil, err)
-			writeProblem(w, statusCode, mapped.Error())
+			_, _, mapped := mapPCASServiceError(http.StatusOK, nil, err)
+			a.WriteError(w, mapped)
 			return
 		}
 		writeJSON(w, http.StatusOK, resp)

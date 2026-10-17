@@ -98,6 +98,7 @@ type fakeService struct {
 	lastReq      succapi.RequestSuccessionRequest
 	lastAck      succapi.AckRequest
 	chainRecords [][]byte
+	successorErr error
 }
 
 func (f *fakeService) RegisterGenesis(_ context.Context, _ string, req succapi.GenesisRegistrationRequest) (succapi.AsyncRequestResponse, error) {
@@ -163,9 +164,37 @@ func (f *fakeService) PrepareRecoverySuccessor(_ context.Context, _ string, req 
 }
 
 func (f *fakeService) GetRecoverySuccessor(_ context.Context, tenantID, identityID string, epoch uint64) (succapi.RecoverySuccessorResponse, error) {
+	if f.successorErr != nil {
+		return succapi.RecoverySuccessorResponse{}, f.successorErr
+	}
 	return succapi.RecoverySuccessorResponse{IdentityID: identityID, TenantID: tenantID, Epoch: epoch,
 		Algorithm: "ECDSA-P384", Handle: "qa-signer-handle", PublicKeyDER: []byte("qa-public"),
 		SignerSignature: []byte("qa-signature"), EventID: "qa-event", RequestID: "recovery-prepare-1"}, nil
+}
+
+func TestMissingRecoverySuccessorReturnsStructured404(t *testing.T) {
+	a := newAPI(t, &fakeService{successorErr: api.ErrStatus(http.StatusNotFound,
+		"recovery successor preparation has not completed")})
+	r := httptest.NewRequest(http.MethodGet,
+		"/api/v1/pcas/recovery/successors?identity_id="+url.QueryEscape(identity)+"&epoch=2", nil)
+	rr := httptest.NewRecorder()
+	a.ServeHTTP(rr, r)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("missing prepared successor = HTTP %d, want 404: %s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/problem+json" {
+		t.Fatalf("content type = %q, want application/problem+json", got)
+	}
+	var problem struct {
+		Status int    `json:"status"`
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("missing successor returned invalid problem JSON: %v", err)
+	}
+	if problem.Status != http.StatusNotFound || problem.Detail == "" {
+		t.Fatalf("missing successor problem = %#v", problem)
+	}
 }
 
 func TestPreparedRecoverySuccessorReadbackNamesAuthenticatedTenant(t *testing.T) {

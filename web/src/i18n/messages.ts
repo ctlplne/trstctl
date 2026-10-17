@@ -2499,6 +2499,10 @@ export const messages = {
   "pcas.recovery.prepareReview": { defaultMessage: "Review identity, scope, epoch and algorithm", description: "PCAS recovery preparation review heading." },
   "pcas.recovery.prepare": { defaultMessage: "Prepare signer-held key", description: "PCAS recovery key preparation action." },
   "pcas.recovery.readPrepared": { defaultMessage: "Read prepared key and signer receipt", description: "PCAS recovery successor readback action." },
+  "pcas.recovery.noPreparedSuccessor": {
+    defaultMessage: "No signer-held successor is prepared for epoch {epoch}. Review key preparation, then read the signed receipt.",
+    description: "PCAS next-epoch readback has no prepared signer key yet.",
+  },
   "pcas.recovery.prepareStatus": { defaultMessage: "Key preparation", description: "PCAS recovery preparation status." },
   "pcas.recovery.pending": { defaultMessage: "pending", description: "PCAS pending operation state." },
   "pcas.recovery.prepared": { defaultMessage: "Prepared signer key", description: "PCAS recovery prepared key heading." },

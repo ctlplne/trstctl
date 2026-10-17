@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { AppQueryProvider } from "@/lib/query";
+import { ApiError } from "@/lib/apiTransport";
 import { PCASRecoveryPanel } from "@/pages/posture/PCASRecoveryPanel";
 
 const { pcasMock } = vi.hoisted(() => ({
@@ -63,6 +64,29 @@ describe("PCAS threshold recovery console", () => {
     expect(await screen.findByText(/2 of 2 distinct custodians/)).toBeInTheDocument();
     expect(screen.getByText(/custodian-a/)).toBeInTheDocument();
     expect(pcasMock.requestRecovery).not.toHaveBeenCalled();
+  });
+
+  it("explains that the next epoch needs preparation when no signer receipt exists", async () => {
+    const user = userEvent.setup();
+    pcasMock.recoverySuccessor.mockRejectedValue(
+      new ApiError(
+        404,
+        JSON.stringify({
+          detail: "recovery successor preparation has not completed",
+        }),
+      ),
+    );
+    render(
+      <AppQueryProvider>
+        <IntlProvider>
+          <PCASRecoveryPanel identityID={genesis.identity_id} />
+        </IntlProvider>
+      </AppQueryProvider>,
+    );
+    await screen.findByText(/2 of 2 distinct custodians/);
+    await user.click(screen.getByRole("button", { name: "Read prepared key and signer receipt" }));
+    expect(await screen.findByText(/No signer-held successor is prepared for epoch 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Review key preparation, then read the signed receipt/)).toBeInTheDocument();
   });
 
   it("reviews and saves a distinct public custodian quorum without private keys", async () => {

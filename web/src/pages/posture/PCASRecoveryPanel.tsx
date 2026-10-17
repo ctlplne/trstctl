@@ -511,6 +511,11 @@ export function PCASRecoveryPanel({ identityID }: { identityID: string }) {
               </p>
             </div>
           ) : null}
+          {readPrepared && successor.errorValue instanceof ApiError && successor.errorValue.status === 404 ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {t("pcas.recovery.noPreparedSuccessor", { epoch: successorEpoch })}
+            </p>
+          ) : null}
           {successor.error && !(successor.errorValue instanceof ApiError && successor.errorValue.status === 404) ? <p role="alert">{successor.error}</p> : null}
         </div>
       ) : null}

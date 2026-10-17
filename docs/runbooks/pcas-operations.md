@@ -196,6 +196,11 @@ that readback**, never a separately generated key. A second preparation with a
 different algorithm or scope for that epoch is refused; a lost response can be
 retried without replacing the key. The isolated signer does not support Ed25519
 for this key-creation path.
+Reading an epoch that has not been prepared returns a structured HTTP 404. In
+the console, **Read prepared key and signer receipt** explains that no key is
+ready for the next epoch and directs the operator to review preparation. A
+completed recovery advances the chain, so the panel then asks for a new key at
+the following epoch rather than presenting the already consumed predecessor.
 
 In the console, open **Algorithms and future readiness → Compatibility, PQC
 policy, and upgrade planning → Proof-carrying key succession**, enter the stable
