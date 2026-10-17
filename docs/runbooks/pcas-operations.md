@@ -393,6 +393,12 @@ event-only disaster recovery can reconstruct them or invent predecessor keys.
 Unsourced historical stage rows cannot satisfy the current predecessor-retirement
 gate, even if their old status says complete.
 
+The KEM request takes `identity_id`, `predecessor_epoch`, `signing_algorithm`,
+`kem_algorithm` and the target stages. The service derives all three signer
+handles from the authenticated tenant, identity and epoch. An optional supplied
+handle must match that exact derived value; a cross-tenant or different-epoch
+handle is rejected before the outbox command or authority event is created.
+
 The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
 `trstctl pcas federation imports request -f import.json`,
 `trstctl pcas kem rewrap request -f rewrap.json`, and

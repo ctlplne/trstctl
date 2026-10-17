@@ -901,8 +901,8 @@ func kemRewrapHandler(a *api.API, svc Service) http.HandlerFunc {
 		if err := api.DecodeJSON(r, &req); err != nil {
 			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
 		}
-		if req.IdentityID == "" || req.PredecessorHandle == "" || req.SuccessorSignHandle == "" || req.SuccessorKEMHandle == "" || req.SigningAlgorithm == "" || req.KEMAlgorithm == "" {
-			return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id, predecessor_handle, successor handles, signing_algorithm, and kem_algorithm are required")
+		if req.IdentityID == "" || req.SigningAlgorithm == "" || req.KEMAlgorithm == "" {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id, signing_algorithm, and kem_algorithm are required")
 		}
 		req.OperationID = r.Header.Get("Idempotency-Key")
 		resp, err := svc.RequestKEMRewrap(ctx, tenantID, req)
@@ -1361,7 +1361,7 @@ func schemas() map[string]*api.Schema {
 			"signing_algorithm":     api.StringSchema(),
 			"kem_algorithm":         api.StringSchema(),
 			"stages":                api.ArraySchema(api.StringSchema()),
-		}, "identity_id", "predecessor_handle", "successor_sign_handle", "successor_kem_handle", "signing_algorithm", "kem_algorithm"),
+		}, "identity_id", "signing_algorithm", "kem_algorithm"),
 		"PCASIssuerAuthorityRequest": api.ObjectSchema(map[string]*api.Schema{
 			"issuer_id":     api.StringSchema(),
 			"identity_id":   api.StringSchema(),

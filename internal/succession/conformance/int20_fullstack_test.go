@@ -417,7 +417,7 @@ func (st *int20Stack) kemRewrapAndRetirement(t *testing.T) string {
 	}
 	resp, err := st.svc.RequestKEMRewrap(st.ctx, st.tenantID, succapi.KEMRewrapRequest{
 		IdentityID: id, PredecessorHandle: predHandle, PredecessorEpoch: 0,
-		SuccessorSignHandle: succession.TenantKeyHandle(st.tenantID, id, 1), SuccessorKEMHandle: "kem:" + id + ":1",
+		SuccessorSignHandle: succession.TenantKeyHandle(st.tenantID, id, 1), SuccessorKEMHandle: succession.TenantKEMKeyHandle(st.tenantID, id, 1),
 		SigningAlgorithm: string(crypto.ECDSAP384), KEMAlgorithm: string(eepqc.MLKEM768),
 		Stages: []string{"stage-a", "stage-b"},
 	})

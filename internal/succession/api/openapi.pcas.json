@@ -534,9 +534,6 @@
         },
         "required": [
           "identity_id",
-          "predecessor_handle",
-          "successor_sign_handle",
-          "successor_kem_handle",
           "signing_algorithm",
           "kem_algorithm"
         ]

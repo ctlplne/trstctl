@@ -271,6 +271,11 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 	if p.PredecessorEpoch >= math.MaxInt64 {
 		return errors.New("pcas KEM rewrap: predecessor epoch exceeds signed storage range")
 	}
+	if p.PredecessorHandle != succession.TenantKeyHandle(tenantID, p.IdentityID, p.PredecessorEpoch) ||
+		p.SuccessorSignHandle != succession.TenantKeyHandle(tenantID, p.IdentityID, p.PredecessorEpoch+1) ||
+		p.SuccessorKEMHandle != succession.TenantKEMKeyHandle(tenantID, p.IdentityID, p.PredecessorEpoch+1) {
+		return errors.New("pcas KEM rewrap: signer handles are not bound to tenant identity and epoch")
+	}
 	if env.RequestID == "" || w.log == nil || w.repo == nil {
 		return errors.New("pcas KEM rewrap: request ID, event log and projection store are required")
 	}

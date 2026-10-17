@@ -75,7 +75,7 @@ func TestKEMRewrap_ConfiguredOutboxTopicBinds(t *testing.T) {
 		api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
 	}, licensed...)...)
 
-	body := `{"identity_id":"spiffe://d/id","predecessor_handle":"pred","successor_sign_handle":"sig","successor_kem_handle":"kem","signing_algorithm":"ML-DSA-65","kem_algorithm":"ML-KEM-768"}`
+	body := `{"identity_id":"spiffe://d/id","signing_algorithm":"ML-DSA-65","kem_algorithm":"ML-KEM-768"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/pcas/kem/rewraps", bytes.NewBufferString(body))
 	req.Header.Set("Idempotency-Key", "kem-topic-1")
 	rr := httptest.NewRecorder()

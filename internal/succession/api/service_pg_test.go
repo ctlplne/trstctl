@@ -50,8 +50,7 @@ func TestKEMRequestStatusResolvesConfiguredOutboxTopic(t *testing.T) {
 	svc := succapi.NewService(cs, log, orchestrator.NewOutbox(cs),
 		succapi.WithOutboxTopics("", "", "qa.pcas.kem-rewrap"))
 	queued, err := svc.RequestKEMRewrap(ctx, tenantA, succapi.KEMRewrapRequest{
-		IdentityID: "spiffe://qa.local/kem-status", PredecessorHandle: "test-predecessor",
-		SuccessorSignHandle: "test-successor", SuccessorKEMHandle: "test-kem",
+		IdentityID:       "spiffe://qa.local/kem-status",
 		SigningAlgorithm: string(crypto.ECDSAP384), KEMAlgorithm: "ML-KEM-768",
 	})
 	if err != nil {
@@ -76,8 +75,7 @@ func TestKEMRequestRecoversLostResponseAndProjection(t *testing.T) {
 	t.Cleanup(func() { _ = log.Close() })
 	svc := succapi.NewService(cs, log, orchestrator.NewOutbox(cs))
 	req := succapi.KEMRewrapRequest{
-		IdentityID: "spiffe://qa.local/kem-retry", PredecessorHandle: "pred",
-		SuccessorSignHandle: "sig", SuccessorKEMHandle: "kem",
+		IdentityID:       "spiffe://qa.local/kem-retry",
 		SigningAlgorithm: string(crypto.ECDSAP384), KEMAlgorithm: "ML-KEM-768",
 		Stages: []string{"first", "second"}, OperationID: "kem-lost-response-1",
 	}
@@ -113,6 +111,32 @@ func TestKEMRequestRecoversLostResponseAndProjection(t *testing.T) {
 	req.Stages = []string{"changed"}
 	if _, err := svc.RequestKEMRewrap(ctx, tenantA, req); err == nil {
 		t.Fatal("same operation ID accepted a different KEM stage set")
+	}
+}
+
+func TestKEMRequestRejectsCrossTenantSignerHandleBeforeOutbox(t *testing.T) {
+	ctx := context.Background()
+	cs := openStorePCAS(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	svc := succapi.NewService(cs, log, orchestrator.NewOutbox(cs))
+	const identityID = "spiffe://qa.local/kem-tenant-fence"
+	otherTenant := "22222222-2222-4222-8222-222222222222"
+	_, err = svc.RequestKEMRewrap(ctx, tenantA, succapi.KEMRewrapRequest{
+		IdentityID: identityID, PredecessorEpoch: 0,
+		PredecessorHandle: succession.TenantKeyHandle(otherTenant, identityID, 0),
+		SigningAlgorithm:  string(crypto.ECDSAP384), KEMAlgorithm: "ML-KEM-768",
+		OperationID: "kem-cross-tenant-handle-refusal",
+	})
+	if err == nil || !strings.Contains(err.Error(), "tenant") {
+		t.Fatalf("cross-tenant KEM predecessor handle admitted: %v", err)
+	}
+	if _, found, err := log.EventByID(ctx, succession.KEMRewrapRequestEventID(tenantA,
+		succession.KEMRewrapOperationRequestID(tenantA, "kem-cross-tenant-handle-refusal"))); err != nil || found {
+		t.Fatalf("cross-tenant KEM handle created an authority event: found=%t err=%v", found, err)
 	}
 }
 

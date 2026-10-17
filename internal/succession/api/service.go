@@ -768,6 +768,16 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 	if err := succession.ValidateKEMRewrapStages(req.Stages); err != nil {
 		return AsyncRequestResponse{}, api.ErrWithStatus(http.StatusBadRequest, err)
 	}
+	pred := succession.TenantKeyHandle(tenantID, req.IdentityID, req.PredecessorEpoch)
+	sign := succession.TenantKeyHandle(tenantID, req.IdentityID, req.PredecessorEpoch+1)
+	kem := succession.TenantKEMKeyHandle(tenantID, req.IdentityID, req.PredecessorEpoch+1)
+	if (req.PredecessorHandle != "" && req.PredecessorHandle != pred) ||
+		(req.SuccessorSignHandle != "" && req.SuccessorSignHandle != sign) ||
+		(req.SuccessorKEMHandle != "" && req.SuccessorKEMHandle != kem) {
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusConflict,
+			"PCAS KEM signer handles must match this tenant, identity and epoch")
+	}
+	req.PredecessorHandle, req.SuccessorSignHandle, req.SuccessorKEMHandle = pred, sign, kem
 	if s.repo == nil || s.log == nil {
 		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS KEM event log or projection store is unavailable")
 	}

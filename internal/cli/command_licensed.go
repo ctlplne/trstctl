@@ -36,7 +36,7 @@ var licensedRouteCommands = []Command{
 	{Name: []string{"pcas", "recovery", "request"}, Method: "POST", Path: "/api/v1/pcas/recovery/requests", Body: bodyFile, Summary: "Queue signed threshold recovery under the configured policy"},
 	{Name: []string{"pcas", "federation", "bridges", "list"}, Method: "GET", Path: "/api/v1/pcas/federation/bridges", Summary: "List only verified, signed foreign trust bridges"},
 	{Name: []string{"pcas", "federation", "imports", "request"}, Method: "POST", Path: "/api/v1/pcas/federation/imports", Body: bodyFile, Summary: "Queue verification and signing of a foreign PCAS bridge"},
-	{Name: []string{"pcas", "kem", "rewrap", "request"}, Method: "POST", Path: "/api/v1/pcas/kem/rewraps", Body: bodyFile, Summary: "Queue a signer-held KEM rewrap with named stages"},
+	{Name: []string{"pcas", "kem", "rewrap", "request"}, Method: "POST", Path: "/api/v1/pcas/kem/rewraps", Body: bodyFile, Summary: "Queue a tenant-bound signer-held KEM successor with named stages"},
 	{Name: []string{"pcas", "rewrap", "status"}, Method: "GET", Path: "/api/v1/pcas/rewrap", Query: []string{"identity_id", "predecessor_epoch"}, RequiredQuery: []string{"identity_id"}, Summary: "Read KEM rewrap stage completion for an identity"},
 	{Name: []string{"pcas", "issuers", "register"}, Method: "POST", Path: "/api/v1/pcas/issuers", Body: bodyFile, Summary: "Bind an active tenant-managed CA to its current PCAS epoch"},
 	{Name: []string{"pcas", "issuers", "leaf", "issue"}, Method: "POST", Path: "/api/v1/pcas/issuers/leaf", Body: bodyFile, Summary: "Issue an issuer-epoch-bound X.509 leaf"},

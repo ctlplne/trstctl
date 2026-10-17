@@ -32,6 +32,12 @@ func TenantKeyHandle(tenantID, identityID string, epoch uint64) string {
 	return fmt.Sprintf("%s:%d", TenantIdentityKey(tenantID, identityID), epoch)
 }
 
+// TenantKEMKeyHandle names the separate, signer-held KEM key for one epoch.
+// The purpose tag prevents a signing handle from being mistaken for KEM custody.
+func TenantKEMKeyHandle(tenantID, identityID string, epoch uint64) string {
+	return fmt.Sprintf("%s:kem:%d", TenantIdentityKey(tenantID, identityID), epoch)
+}
+
 // TenantRootHandle names the signer-held trust root shared by this tenant's
 // first-use anchors and recovery transparency heads. The root never leaves
 // isolated custody; relying parties pin its public key from the genesis.
