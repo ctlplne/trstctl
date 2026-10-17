@@ -191,6 +191,7 @@ var Inventory = []Constructor{
 
 	// ---- delegation/store (AGID-02 projection-backed repo) -----------------------
 	{Pkg: "internal/agentid/delegation/store", Name: "New", File: "internal/agentid/delegation/store/store.go", Tier: TierRequired, SeededVia: "api.NewService + orchestrator handler (AGID-02 repo)"},
+	{Pkg: "internal/agentid/delegation/store", Name: "NewRootAnchorProjection", File: "internal/agentid/delegation/store/root_anchor_projection.go", Tier: TierRequired, SeededVia: "cmd/trstctl attach_families (AGID root-anchor rebuild and tail projection)"},
 
 	// ---- delegation/brokerstore (AGID-07b chain-bound issuance precondition) ------
 	{Pkg: "internal/agentid/delegation/brokerstore", Name: "NewMemoryIdempotencer", File: "internal/agentid/delegation/brokerstore/precondition.go", Tier: TierRequired, SeededVia: "brokerstore.NewBrokerPrecondition (default Idem)"},
