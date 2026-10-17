@@ -141,6 +141,16 @@ type RecoveryPolicyResponse struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// RecoveryPolicyState is the exact public quorum currently enforced for an
+// identity. Roster keys and the root are public verification material only.
+type RecoveryPolicyState struct {
+	IdentityID   string          `json:"identity_id"`
+	Threshold    int             `json:"threshold"`
+	Roster       json.RawMessage `json:"roster"`
+	TrustRootDER []byte          `json:"trust_root_der"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+}
+
 type RecoveryRequest struct {
 	IdentityID           string          `json:"identity_id"`
 	DeploymentScope      string          `json:"deployment_scope,omitempty"`
@@ -368,6 +378,7 @@ type Service interface {
 	RaiseDelegationFloor(ctx context.Context, tenantID string, req DelegationFloorRequest) (DelegationScopeResponse, error)
 	ListDelegationScopes(ctx context.Context, tenantID string) (DelegationListResponse, error)
 	ConfigureRecoveryPolicy(ctx context.Context, tenantID string, req RecoveryPolicyRequest) (RecoveryPolicyResponse, error)
+	RecoveryPolicy(ctx context.Context, tenantID, identityID string) (RecoveryPolicyState, bool, error)
 	PrepareRecoverySuccessor(ctx context.Context, tenantID string, req RecoverySuccessorPrepareRequest) (AsyncRequestResponse, error)
 	GetRecoverySuccessor(ctx context.Context, tenantID, identityID string, epoch uint64) (RecoverySuccessorResponse, error)
 	RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error)
@@ -468,6 +479,13 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:       func(a *api.API) http.HandlerFunc { return recoveryPolicyHandler(a, svc) },
 			RequestSchema: "PCASRecoveryPolicyRequest", ResponseSchema: "PCASRecoveryPolicy",
 			SuccessCode: "200", Mutation: true, Permission: authz.CertsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/pcas/recovery/policies", OperationID: "getPCASRecoveryPolicy",
+			Summary:        "Read the currently enforced public threshold recovery policy for an identity",
+			Handler:        func(a *api.API) http.HandlerFunc { return recoveryPolicyGetHandler(a, svc) },
+			Query:          []api.RouteParam{{Name: "identity_id", Type: "string", Required: true}},
+			ResponseSchema: "PCASRecoveryPolicyState", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/recovery/successors/prepare", OperationID: "preparePCASRecoverySuccessor",
@@ -764,6 +782,33 @@ func recoveryPolicyHandler(a *api.API, svc Service) http.HandlerFunc {
 		resp, err := svc.ConfigureRecoveryPolicy(ctx, tenantID, req)
 		return http.StatusOK, resp, err
 	})
+}
+
+func recoveryPolicyGetHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		identityID := r.URL.Query().Get("identity_id")
+		if identityID == "" {
+			writeProblem(w, http.StatusBadRequest, "identity_id query parameter is required")
+			return
+		}
+		start := time.Now()
+		resp, found, err := svc.RecoveryPolicy(r.Context(), tenantID, identityID)
+		a.ObserveFeature("pcas_recovery", "read_policy", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to read PCAS recovery policy")
+			return
+		}
+		if !found {
+			writeProblem(w, http.StatusNotFound, "PCAS recovery policy not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
 }
 
 func recoverySuccessorPrepareHandler(a *api.API, svc Service) http.HandlerFunc {
@@ -1228,6 +1273,15 @@ func schemas() map[string]*api.Schema {
 			"status":      api.StringSchema(),
 			"updated_at":  api.TimestampSchema(),
 		}, "identity_id", "status"),
+		"PCASRecoveryPolicyState": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id": api.StringSchema(),
+			"threshold":   api.IntegerSchema(),
+			"roster": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
+				"ID": api.StringSchema(), "PubDER": api.StringSchema(),
+			}, "ID", "PubDER")),
+			"trust_root_der": api.StringSchema(),
+			"updated_at":     api.TimestampSchema(),
+		}, "identity_id", "threshold", "roster", "trust_root_der", "updated_at"),
 		"PCASRecoverySuccessorPrepareRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":      api.StringSchema(),
 			"deployment_scope": api.StringSchema(),

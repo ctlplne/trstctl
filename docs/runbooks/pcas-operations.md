@@ -284,7 +284,9 @@ The native CLI mirrors these routes: `trstctl pcas federation bridges list`,
 `trstctl pcas federation imports request -f import.json`,
 `trstctl pcas kem rewrap request -f rewrap.json`, and
 `trstctl pcas rewrap status --identity_id <identity>`.
-Recovery uses `trstctl pcas recovery policy set -f policy.json --force`,
+Recovery uses `trstctl pcas recovery policy set -f policy.json --force` and
+`trstctl pcas recovery policy get --identity_id ID` to read back the exact
+public quorum and trust root currently enforced for that tenant identity,
 `trstctl pcas recovery successor prepare -f successor.json --force`, the
 successor readback command above, and
 `trstctl pcas recovery request -f request.json --force`; the force flag makes

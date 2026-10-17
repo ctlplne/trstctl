@@ -149,6 +149,15 @@ func (f *fakeService) ConfigureRecoveryPolicy(_ context.Context, _ string, req s
 	return succapi.RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: time.Now()}, nil
 }
 
+func (f *fakeService) RecoveryPolicy(_ context.Context, _, identityID string) (succapi.RecoveryPolicyState, bool, error) {
+	if identityID != identity {
+		return succapi.RecoveryPolicyState{}, false, nil
+	}
+	return succapi.RecoveryPolicyState{IdentityID: identityID, Threshold: 2,
+		Roster:       json.RawMessage(`[{"ID":"custodian-1","PubDER":"AQID"},{"ID":"custodian-2","PubDER":"BAUG"}]`),
+		TrustRootDER: []byte("root"), UpdatedAt: time.Now()}, true, nil
+}
+
 func (f *fakeService) PrepareRecoverySuccessor(_ context.Context, _ string, req succapi.RecoverySuccessorPrepareRequest) (succapi.AsyncRequestResponse, error) {
 	return succapi.AsyncRequestResponse{RequestID: "recovery-prepare-1", Status: "queued", QueuedAt: time.Now(), IdentityID: req.IdentityID}, nil
 }
@@ -271,6 +280,34 @@ func TestRecoveryPolicyRejectsMissingRootAndUnreachableRoster(t *testing.T) {
 				t.Fatalf("invalid recovery policy HTTP %d, want 400: %s", rr.Code, rr.Body.String())
 			}
 		})
+	}
+}
+
+func TestRecoveryPolicyReadbackIsScopedAndComplete(t *testing.T) {
+	a := newAPI(t, &fakeService{})
+	for _, tc := range []struct {
+		path string
+		code int
+	}{
+		{"/api/v1/pcas/recovery/policies?identity_id=" + url.QueryEscape(identity), http.StatusOK},
+		{"/api/v1/pcas/recovery/policies?identity_id=missing", http.StatusNotFound},
+		{"/api/v1/pcas/recovery/policies", http.StatusBadRequest},
+	} {
+		r := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		rr := httptest.NewRecorder()
+		a.ServeHTTP(rr, r)
+		if rr.Code != tc.code {
+			t.Fatalf("GET %s = %d, want %d: %s", tc.path, rr.Code, tc.code, rr.Body.String())
+		}
+		if tc.code == http.StatusOK {
+			var got succapi.RecoveryPolicyState
+			if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.IdentityID != identity || got.Threshold != 2 || len(got.Roster) == 0 || string(got.TrustRootDER) != "root" {
+				t.Fatalf("incomplete policy readback: %+v", got)
+			}
+		}
 	}
 }
 

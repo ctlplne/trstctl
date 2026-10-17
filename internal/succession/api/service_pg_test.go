@@ -3,6 +3,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -498,6 +499,18 @@ func TestService_RecoveryPolicyAppendsPublicEventBeforeServing(t *testing.T) {
 	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, command); err != nil {
 		t.Fatal(err)
 	}
+	served, visible, err := svc.RecoveryPolicy(ctx, tenantA, id)
+	var servedRoster []map[string]any
+	if parseErr := json.Unmarshal(served.Roster, &servedRoster); parseErr != nil {
+		t.Fatalf("decode served recovery roster: %v", parseErr)
+	}
+	if err != nil || !visible || served.Threshold != 1 || len(servedRoster) != 1 || servedRoster[0]["ID"] != "custodian-1" ||
+		!bytes.Equal(served.TrustRootDER, root.Public().DER) {
+		t.Fatalf("enforced policy readback: visible=%t threshold=%d members=%d err=%v", visible, served.Threshold, len(servedRoster), err)
+	}
+	if _, visible, err := svc.RecoveryPolicy(ctx, "22222222-2222-2222-2222-222222222222", id); err != nil || visible {
+		t.Fatalf("another tenant can read recovery authority: visible=%t err=%v", visible, err)
+	}
 	if _, err := svc.ConfigureRecoveryPolicy(ctx, tenantA, command); err != nil {
 		t.Fatalf("retry of same operation after event append: %v", err)
 	}
@@ -543,11 +556,18 @@ func TestService_RecoveryPolicyAppendsPublicEventBeforeServing(t *testing.T) {
 	if err := proj.Reset(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if _, visible, err := svc.RecoveryPolicy(ctx, tenantA, id); err != nil || visible {
+		t.Fatalf("policy remained served after reset: visible=%t err=%v", visible, err)
+	}
 	if _, found, err := pcasstore.New(cs).GetRecoveryPolicy(ctx, tenantA, id); err != nil || found {
 		t.Fatalf("policy after projection reset: found=%t err=%v", found, err)
 	}
 	if err := log.Replay(ctx, 0, func(ev events.Event) error { return proj.Apply(ctx, ev) }); err != nil {
 		t.Fatal(err)
+	}
+	served, visible, err = svc.RecoveryPolicy(ctx, tenantA, id)
+	if err != nil || !visible || served.Threshold != 1 || !bytes.Equal(served.TrustRootDER, root.Public().DER) {
+		t.Fatalf("policy not served after event replay: visible=%t policy=%+v err=%v", visible, served, err)
 	}
 	got, found, err := pcasstore.New(cs).GetRecoveryPolicy(ctx, tenantA, id)
 	if err != nil || !found || got.Threshold != 1 || string(got.TrustRootDER) != string(root.Public().DER) {

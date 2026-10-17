@@ -686,6 +686,49 @@
           "trust_root_der"
         ]
       },
+      "PCASRecoveryPolicyState": {
+        "type": "object",
+        "properties": {
+          "identity_id": {
+            "type": "string"
+          },
+          "roster": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ID": {
+                  "type": "string"
+                },
+                "PubDER": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ID",
+                "PubDER"
+              ]
+            }
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "trust_root_der": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "identity_id",
+          "threshold",
+          "roster",
+          "trust_root_der",
+          "updated_at"
+        ]
+      },
       "PCASRecoveryRequest": {
         "type": "object",
         "properties": {
@@ -1611,6 +1654,33 @@
       }
     },
     "/api/v1/pcas/recovery/policies": {
+      "get": {
+        "operationId": "getPCASRecoveryPolicy",
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASRecoveryPolicyState"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "Read the currently enforced public threshold recovery policy for an identity"
+      },
       "post": {
         "operationId": "configurePCASRecoveryPolicy",
         "parameters": [

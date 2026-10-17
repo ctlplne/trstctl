@@ -401,6 +401,21 @@ func (s *service) ConfigureRecoveryPolicy(ctx context.Context, tenantID string, 
 	return RecoveryPolicyResponse{IdentityID: req.IdentityID, Status: "configured", UpdatedAt: recorded.Time}, nil
 }
 
+func (s *service) RecoveryPolicy(ctx context.Context, tenantID, identityID string) (RecoveryPolicyState, bool, error) {
+	if s.repo == nil {
+		return RecoveryPolicyState{}, false, api.ErrStatus(http.StatusServiceUnavailable, "PCAS recovery policy store unavailable")
+	}
+	policy, found, err := s.repo.GetRecoveryPolicy(ctx, tenantID, identityID)
+	if err != nil || !found {
+		return RecoveryPolicyState{}, found, err
+	}
+	return RecoveryPolicyState{
+		IdentityID: policy.IdentityID, Threshold: policy.Threshold,
+		Roster:       append(json.RawMessage(nil), policy.RosterJSON...),
+		TrustRootDER: append([]byte(nil), policy.TrustRootDER...), UpdatedAt: policy.UpdatedAt,
+	}, true, nil
+}
+
 func validateRecoveryPolicyRequest(req RecoveryPolicyRequest) error {
 	if strings.TrimSpace(req.IdentityID) == "" || req.Threshold < 1 {
 		return api.ErrStatus(http.StatusBadRequest, "identity_id and positive threshold are required")
