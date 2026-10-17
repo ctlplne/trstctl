@@ -2114,6 +2114,18 @@ remains empty and fail-closed until an operator chooses each kind.
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.
 
+**Private HTTPS targets reached by a network relay.** The agent's
+`--ca-bundle` authenticates the control plane only. If an appliance, CMDB, or
+other relay target uses an internal CA that the relay host does not already
+trust, start the network agent with `--relay-claim --relay-ca-bundle
+/path/to/appliance-ca.pem`. The relay adds the PEM certificates to the host's
+normal HTTPS trust roots; it still checks the URL hostname, requires TLS 1.2 or
+newer, and refuses credential-bearing redirects. An unreadable or invalid PEM
+stops the agent at startup. Restart the agent after changing the file. Keep the
+control-plane CA and appliance CA in separate files so adding appliance trust
+does not silently expand bootstrap trust. Windows service installation retains
+the relay CA path across service restarts.
+
 ### Relay-local CRL and OCSP cache
 
 A certificate enrolled with the `network` role may serve revocation data to an

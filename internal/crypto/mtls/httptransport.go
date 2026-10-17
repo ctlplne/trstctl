@@ -36,6 +36,23 @@ func HTTPTransportForServerName(caPEM []byte, serverName string) (*http.Transpor
 	}, nil
 }
 
+// HTTPTransportWithSystemRootsAndCA keeps the host's normal HTTPS trust and
+// adds an operator-supplied private CA for appliance APIs. A relay must never
+// disable certificate or hostname verification to reach an internal endpoint.
+// The transport carries no agent client certificate.
+func HTTPTransportWithSystemRootsAndCA(caPEM []byte) (*http.Transport, error) {
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	if !pool.AppendCertsFromPEM(caPEM) {
+		return nil, errors.New("mtls: no CA certificates found in relay PEM")
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	return transport, nil
+}
+
 // AgentHTTPTransport returns an HTTP transport for the agent-facing HTTPS renewal
 // listener. It verifies the server against serverCAPEM/serverName, pins TLS 1.3, and
 // presents the current agent client certificate from src when one is supplied.

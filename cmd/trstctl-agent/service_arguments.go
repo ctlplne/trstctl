@@ -65,6 +65,9 @@ func serviceArguments(o agentOptions) []string {
 	}
 	if o.relayClaim {
 		args = append(args, "--relay-claim")
+		if o.relayCABundle != "" {
+			args = append(args, "--relay-ca-bundle", o.relayCABundle)
+		}
 		if o.relayPollEvery > 0 {
 			args = append(args, "--relay-poll-every", o.relayPollEvery.String())
 		}

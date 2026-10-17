@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1538 annotated sites across 26 rules. Each row is
+1539 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -415,7 +415,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:449` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:450` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:269` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1013,7 +1013,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:549` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:550` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1053,7 +1053,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (423 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (424 sites)
 
 | Location | Reason |
 |---|---|
@@ -1069,11 +1069,12 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:122` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:242` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:253` | t.TempDir path (CWE-22) |
-| `cmd/trstctl-agent/main.go:982` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:992` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:403` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/relayloop.go:156` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
 | `cmd/trstctl-agent/sshkrl.go:51` | operator-selected public KRL input |
 | `cmd/trstctl-agent/sshkrl_test.go:24` | test fixture path created under t.TempDir |
 | `cmd/trstctl-agent/sshkrl_test.go:67` | test fixture target under t.TempDir |
@@ -1619,7 +1620,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:667` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:677` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

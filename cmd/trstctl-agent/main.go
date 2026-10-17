@@ -59,6 +59,7 @@ func main() {
 	allowInlineToken := flag.Bool("allow-insecure-dev-bootstrap-token-arg", false, "allow inline bootstrap tokens in process arguments for local development only")
 	allowLoopbackEnrollment := flag.Bool("allow-insecure-loopback-enrollment", false, "allow bootstrap over plain HTTP only when --enroll-url is a loopback address; the resolved address is rechecked before every dial")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
+	relayCABundle := flag.String("relay-ca-bundle", "", "optional PEM CA bundle for private HTTPS appliance APIs reached by this network relay; adds to OS roots, does not change control-plane trust")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
 	serverName := flag.String("server-name", "", "expected control-plane server name (defaults to --name)")
 	commonName := flag.String("name", "", "this agent's identity (client-cert common name)")
@@ -356,7 +357,7 @@ func main() {
 	}
 
 	o := agentOptions{
-		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle,
+		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle, relayCABundle: *relayCABundle,
 		tokenFile: *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
 		allowInsecureDevBootstrapTokenArg: *allowInlineToken,
@@ -450,19 +451,19 @@ func checkedTPMPersistentHandleBase(value uint) (uint32, error) {
 }
 
 type agentOptions struct {
-	enrollURL, inlineToken, tokenFile, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
-	rotateEvery                                                                                        time.Duration
-	allowInsecureDevBootstrapTokenArg                                                                  bool
-	allowInsecureLoopbackEnrollment                                                                    bool
-	inventoryCertRoots                                                                                 []string
-	inventoryOSTrustRoots                                                                              []string
-	inventoryJavaTrustStores                                                                           []string
-	inventoryJavaTrustStorePassword                                                                    string
-	inventoryNSSTrustRoots                                                                             []string
-	inventoryBrowserTrustRoots                                                                         []string
-	inventoryPrivateKeyRoots                                                                           []string
-	inventorySSH                                                                                       sshdiscovery.Config
-	inventoryK8sSecrets                                                                                bool
+	enrollURL, inlineToken, tokenFile, caBundle, relayCABundle, serverAddr, serverName, commonName, keyPath, certPath string
+	rotateEvery                                                                                                       time.Duration
+	allowInsecureDevBootstrapTokenArg                                                                                 bool
+	allowInsecureLoopbackEnrollment                                                                                   bool
+	inventoryCertRoots                                                                                                []string
+	inventoryOSTrustRoots                                                                                             []string
+	inventoryJavaTrustStores                                                                                          []string
+	inventoryJavaTrustStorePassword                                                                                   string
+	inventoryNSSTrustRoots                                                                                            []string
+	inventoryBrowserTrustRoots                                                                                        []string
+	inventoryPrivateKeyRoots                                                                                          []string
+	inventorySSH                                                                                                      sshdiscovery.Config
+	inventoryK8sSecrets                                                                                               bool
 	// inventoryWindowsStores names the Windows certificate stores to inventory
 	// (epic C1). Empty means the source is off — a Windows estate is only
 	// inventoried when an operator says which stores, because "all of them" on a
@@ -587,6 +588,16 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if err != nil {
 		return fmt.Errorf("build enrollment TLS trust: %w", err)
 	}
+	if o.relayCABundle != "" && !o.relayClaim {
+		return errors.New("--relay-ca-bundle requires --relay-claim")
+	}
+	var relayClient *http.Client
+	if o.relayClaim {
+		relayClient, err = relayHTTPClient(o.relayCABundle)
+		if err != nil {
+			return err
+		}
+	}
 	enroller := enrollmentEnroller(o, enrollClient)
 	serverName := o.serverName
 	if serverName == "" {
@@ -639,10 +650,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	// Start the relay before the first heartbeat. Otherwise the most important
 	// boot-time observation says "not serving" and the truthful topology does
 	// not arrive until the next server-selected interval.
-	// The relay trusts the same operator-supplied control-plane CA bundle as
-	// bootstrap. Its protocol client attaches NO agent certificate; sharing the
-	// trust-only HTTP client cannot accidentally lend the relay's identity to a
-	// device request.
+	// Relay appliance trust is independent of bootstrap/control-plane trust.
+	// The relay client adds only --relay-ca-bundle to OS roots and attaches no
+	// agent certificate to appliance requests.
 	reportEnrollmentProxy, stopEnrollProxy := startEnrollProxy(ctx, o, enrollClient)
 	defer stopEnrollProxy()
 	reportRevocationCaches, stopRevocationCaches := startRevocationCache(ctx, o)
@@ -846,7 +856,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 				if !claimsEnabled {
 					result.err = relayCh.(relayChannel).recoverPendingReport(workCtx)
 				} else if o.relayClaim {
-					result.executed, result.err = relay.RunOnceWithSelfUpgradeAndHostRollback(workCtx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
+					result.executed, result.err = relay.RunOnceWithSelfUpgradeAndHostRollback(workCtx, relayCh, relayClient, hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
 				} else {
 					result.executed, result.err = relay.RunOnceSelfUpgradeOnly(workCtx, relayCh, selfUp, relayClaimBatch, lease)
 				}

@@ -2578,7 +2578,15 @@ than sending an operator looking for a credential that was never there.
   `read_count`, optional `expected_count`, `pages_completed`, `next_cursor`,
   `coverage_complete`, and the retained failure. Restart recovery derives the
   same idempotent next job from the event/checkpoint, so it resumes rather than
-  rereading page one. The source inventory stores only CI key, matched local
+  rereading page one.
+
+  The relay verifies the CMDB's HTTPS certificate against host roots plus an
+  optional operator-supplied `--relay-ca-bundle` PEM. That file is separate
+  from the control-plane `--ca-bundle`; adding appliance trust must not widen
+  bootstrap trust. An invalid bundle fails agent startup, and a CA change
+  takes effect after the relay restarts. No skip-verification switch exists.
+
+  The source inventory stores only CI key, matched local
   owner ID, and the four contributed ownership values. At terminal completion
   it withdraws a vanished/reassigned CI's still-identical, unattested values,
   never a human attestation or later edit, and serves changed/removed counts.

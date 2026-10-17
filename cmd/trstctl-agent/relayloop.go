@@ -143,8 +143,8 @@ func relayLeaseFor(poll time.Duration) time.Duration {
 // a real reduction in what the control plane can promise about where a relay
 // connects; docs/limitations.md says so plainly rather than leaving it to be
 // discovered.
-func relayHTTPClient() *http.Client {
-	return &http.Client{
+func relayHTTPClient(caBundlePath string) (*http.Client, error) {
+	client := &http.Client{
 		Timeout: 60 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			// An appliance that redirects a credential upload elsewhere is not a
@@ -152,4 +152,16 @@ func relayHTTPClient() *http.Client {
 			return http.ErrUseLastResponse
 		},
 	}
+	if caBundlePath != "" {
+		caPEM, err := os.ReadFile(caBundlePath) // #nosec G304 -- explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22).
+		if err != nil {
+			return nil, fmt.Errorf("read relay CA bundle: %w", err)
+		}
+		transport, err := mtls.HTTPTransportWithSystemRootsAndCA(caPEM)
+		if err != nil {
+			return nil, fmt.Errorf("build relay HTTPS trust: %w", err)
+		}
+		client.Transport = transport
+	}
+	return client, nil
 }

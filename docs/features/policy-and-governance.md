@@ -163,6 +163,13 @@ relay execution. `GET /api/v1/owners/cmdb-schedule` distinguishes never
 configured, paused, incomplete, failed, and completed coverage.
 The deployment binding for this URL and reference must set `relay_only: true`;
 ticket and response-dispatch bindings remain separate `env:` references.
+For a private HTTPS CMDB whose issuing CA is absent from the network relay's
+system trust store, configure that agent with `--relay-ca-bundle
+/path/to/cmdb-ca.pem` as described in [Configuration](../configuration.md).
+The control-plane `--ca-bundle` authenticates trstctl only; it does not grant
+trust to CMDB servers. A failed TLS verification remains a failed schedule
+attempt until the relay is restarted with the correct CA and the next due job
+completes.
 The Ownership console exposes **Configure CMDB sync** in its Sources disclosure
 even before the first schedule exists. Review the exact URL, reference, query,
 interval, and enabled state before saving. An ambiguous response can be retried
