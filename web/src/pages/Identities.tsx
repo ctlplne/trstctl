@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -55,6 +58,13 @@ const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "rev
 const identityKinds = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"] as const satisfies Identity["kind"][];
 type KindFilter = "all" | Identity["kind"];
 type DecommissionSignalType = NHIDecommissionRequest["signals"][number]["type"];
+const decommissionFormSchema = z.object({
+  signal: z.enum(["departure", "vendor_term", "inactivity"]),
+  selector: z.enum(["owner", "identity"]),
+  target: z.string().trim().min(1, "Enter the selected owner, identity, vendor, or cutoff."),
+  reason: z.string().trim(),
+});
+type DecommissionFormValues = z.infer<typeof decommissionFormSchema>;
 type BlastRadiusState = {
   error: string | null;
   impact: GraphImpact | null;
@@ -281,10 +291,15 @@ function transitionPreviewKey(id: string, to: TransitionTo, reason: string): str
 
 function decommissionInputLabelKey(
   type: DecommissionSignalType,
-): "identities.decommission.vendor" | "identities.decommission.inactiveBefore" | "identities.decommission.subject" {
+  selector: DecommissionFormValues["selector"],
+):
+  | "identities.decommission.vendor"
+  | "identities.decommission.inactiveBefore"
+  | "identities.decommission.ownerSubject"
+  | "identities.decommission.exactIdentity" {
   if (type === "vendor_term") return "identities.decommission.vendor";
   if (type === "inactivity") return "identities.decommission.inactiveBefore";
-  return "identities.decommission.subject";
+  return selector === "identity" ? "identities.decommission.exactIdentity" : "identities.decommission.ownerSubject";
 }
 
 function localDateTimeToISO(value: string): string {
@@ -399,9 +414,18 @@ export function Identities() {
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkResult, setBulkResult] = useState<BulkRevokeResult | null>(null);
   const [bulkResultNames, setBulkResultNames] = useState<Record<string, string>>({});
-  const [decommissionType, setDecommissionType] = useState<DecommissionSignalType>("departure");
-  const [decommissionTarget, setDecommissionTarget] = useState("");
-  const [decommissionReason, setDecommissionReason] = useState("");
+  const {
+    control: decommissionControl,
+    register: registerDecommission,
+    handleSubmit: handleDecommissionSubmit,
+    setValue: setDecommissionValue,
+    formState: { errors: decommissionErrors },
+  } = useForm<DecommissionFormValues>({
+    resolver: zodResolver(decommissionFormSchema),
+    defaultValues: { signal: "departure", selector: "owner", target: "", reason: "" },
+  });
+  const decommissionType = useWatch({ control: decommissionControl, name: "signal" });
+  const decommissionSelector = useWatch({ control: decommissionControl, name: "selector" });
   const [decommissionBusy, setDecommissionBusy] = useState(false);
   const [decommissionResult, setDecommissionResult] = useState<NHIDecommissionResponse | null>(null);
   const [pendingImpact, setPendingImpact] = useState<BlastRadiusState>(emptyBlastRadiusState);
@@ -663,31 +687,30 @@ export function Identities() {
     }
   }
 
-  async function runDecommission(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const value = decommissionTarget.trim();
-    if (!value) {
-      setError(`${t(decommissionInputLabelKey(decommissionType))} is required`);
-      return;
-    }
+  async function runDecommission(values: DecommissionFormValues) {
+    const { signal: type, selector, target: value, reason } = values;
     const signal: NHIDecommissionRequest["signals"][number] =
-      decommissionType === "vendor_term"
+      type === "vendor_term"
         ? { type: "vendor_term", vendor_name: value, evidence_refs: ["ui:identities/decommission"] }
-        : decommissionType === "inactivity"
+        : type === "inactivity"
           ? { type: "inactivity", inactive_before: localDateTimeToISO(value), evidence_refs: ["ui:identities/decommission"] }
-          : { type: "departure", subject: value, evidence_refs: ["ui:identities/decommission"] };
+          : selector === "identity"
+            ? { type: "departure", identity_id: value, evidence_refs: ["ui:identities/decommission"] }
+            : { type: "departure", subject: value, evidence_refs: ["ui:identities/decommission"] };
     setDecommissionBusy(true);
     setError(null);
     setNotice(null);
     try {
       const result = await api.decommissionNHI({
-        reason: decommissionReason.trim() || `${decommissionType} decommission via UI`,
+        reason: reason || `${type} decommission via UI`,
         signals: [signal],
       });
       setDecommissionResult(result);
-      await load();
-      await loadEvidence();
-      setNotice(`NHI decommission accepted: ${result.summary.revoked} revoked, ${result.summary.retired} retired, ${result.summary.skipped} skipped.`);
+      if (result.summary.total_matched > 0) {
+        await load();
+        await loadEvidence();
+        setNotice(`NHI decommission accepted: ${result.summary.revoked} revoked, ${result.summary.retired} retired, ${result.summary.skipped} skipped.`);
+      }
     } catch (err) {
       setError(apiProblemContext(err, "NHI decommission failed"));
     } finally {
@@ -1043,51 +1066,72 @@ export function Identities() {
           </summary>
           <form
             aria-label={t("identities.decommission.ariaLabel")}
-            className="mt-3 grid gap-3 md:grid-cols-[minmax(10rem,12rem)_1fr_1fr_auto]"
-            onSubmit={(event) => void runDecommission(event)}
+            className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(9rem,11rem)_minmax(9rem,11rem)_1fr_1fr_auto]"
+            onSubmit={handleDecommissionSubmit((values) => void runDecommission(values))}
           >
             <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-type">
               {t("identities.decommission.signal")}
               <select
                 id="nhi-decommission-type"
                 className="ui-input"
-                value={decommissionType}
-                onChange={(event) => {
-                  setDecommissionType(event.target.value as DecommissionSignalType);
-                  setDecommissionTarget("");
-                  setDecommissionResult(null);
-                }}
+                {...registerDecommission("signal", {
+                  onChange: () => {
+                    setDecommissionValue("target", "");
+                    setDecommissionValue("selector", "owner");
+                    setDecommissionResult(null);
+                  },
+                })}
               >
                 <option value="departure">{t("identities.decommission.departure")}</option>
                 <option value="vendor_term">{t("identities.decommission.vendorTerm")}</option>
                 <option value="inactivity">{t("identities.decommission.inactivity")}</option>
               </select>
             </label>
+            {decommissionType === "departure" && (
+              <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-selector">
+                {t("identities.decommission.findBy")}
+                <select
+                  id="nhi-decommission-selector"
+                  className="ui-input"
+                  {...registerDecommission("selector", {
+                    onChange: () => {
+                      setDecommissionValue("target", "");
+                      setDecommissionResult(null);
+                    },
+                  })}
+                >
+                  <option value="owner">{t("identities.decommission.ownerSubject")}</option>
+                  <option value="identity">{t("identities.decommission.exactIdentity")}</option>
+                </select>
+              </label>
+            )}
             <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-target">
-              {t(decommissionInputLabelKey(decommissionType))}
+              {t(decommissionInputLabelKey(decommissionType, decommissionSelector))}
               <input
                 id="nhi-decommission-target"
                 className="ui-input"
                 type={decommissionType === "inactivity" ? "datetime-local" : "text"}
-                value={decommissionTarget}
-                onChange={(event) => setDecommissionTarget(event.target.value)}
+                {...registerDecommission("target")}
                 placeholder={
                   decommissionType === "vendor_term"
                     ? translateNow("source.acme.saas.5d97e28912")
-                    : decommissionType === "departure"
+                    : decommissionType === "departure" && decommissionSelector === "owner"
                       ? translateNow("source.alice.example.com.ff8d9819fc")
                       : undefined
                 }
-                required
               />
+              {decommissionErrors.target && (
+                <span role="alert" className="text-status-danger">
+                  {decommissionErrors.target.message}
+                </span>
+              )}
             </label>
             <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
               {translateNow("source.reason.f81ab834de")}
               <input
                 id="nhi-decommission-reason"
                 className="ui-input"
-                value={decommissionReason}
-                onChange={(event) => setDecommissionReason(event.target.value)}
+                {...registerDecommission("reason")}
                 placeholder={t("identities.decommission.reasonPlaceholder")}
               />
             </label>
@@ -1098,7 +1142,16 @@ export function Identities() {
             </div>
           </form>
 
-          {decommissionResult && (
+          {decommissionResult?.summary.total_matched === 0 && (
+            <div
+              role="alert"
+              aria-label={t("identities.decommission.noMatchesTitle")}
+              className="mt-3 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
+            >
+              <strong>{t("identities.decommission.noMatchesTitle")}</strong> {t("identities.decommission.noMatchesDetail")}
+            </div>
+          )}
+          {decommissionResult && decommissionResult.summary.total_matched > 0 && (
             <div role="status" className="mt-3 border-s-2 border-status-success ps-3 text-sm">
               <p className="font-medium">
                 {translateNow("source.cap.gov.04.matched.d376577cb5")} {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked};

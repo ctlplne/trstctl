@@ -1388,6 +1388,57 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText("payments-api revoked via vendor_term")).toBeInTheDocument();
   });
 
+  it("explains an unmatched departure and lets an operator select one exact identity", async () => {
+    const identityID = "41b3d53a-7de0-4311-bcf4-9201ddf509af";
+    apiMock.identities.mockResolvedValue([{ id: identityID, name: "qa-nhi-console", kind: "x509_certificate", status: "issued" }]);
+    apiMock.decommissionNHI
+      .mockResolvedValueOnce({
+        capability: "CAP-GOV-04",
+        coverage: ["departure", "revoke"],
+        reason: "QA departure",
+        summary: { total_matched: 0, revoked: 0, retired: 0, skipped: 0, failed: 0 },
+        items: [],
+      })
+      .mockResolvedValueOnce({
+        capability: "CAP-GOV-04",
+        coverage: ["departure", "revoke"],
+        reason: "QA departure",
+        summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+        items: [
+          {
+            identity_id: identityID,
+            name: "qa-nhi-console",
+            kind: "x509_certificate",
+            owner_id: "owner-1",
+            signal_type: "departure",
+            action: "revoked",
+            from: "issued",
+            to: "revoked",
+          },
+        ],
+      });
+    const user = userEvent.setup();
+    renderIdentities();
+    expect(await screen.findByText("qa-nhi-console")).toBeInTheDocument();
+    await user.click(screen.getByText("Open decommission controls"));
+    const form = screen.getByRole("form", { name: "NHI decommission" });
+    expect(within(form).getByLabelText("Owner name or email")).toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Owner name or email"), identityID);
+    await user.click(within(form).getByRole("button", { name: "Decommission" }));
+    expect(await screen.findByRole("alert", { name: "No identities matched" })).toHaveTextContent("No credential changed");
+    expect(screen.queryByText(/NHI decommission accepted/)).not.toBeInTheDocument();
+
+    await user.selectOptions(within(form).getByLabelText("Find by"), "identity");
+    await user.type(within(form).getByLabelText("Exact identity ID"), identityID);
+    await user.click(within(form).getByRole("button", { name: "Decommission" }));
+    await waitFor(() => expect(apiMock.decommissionNHI).toHaveBeenCalledTimes(2));
+    expect(apiMock.decommissionNHI).toHaveBeenLastCalledWith({
+      reason: "departure decommission via UI",
+      signals: [{ type: "departure", identity_id: identityID, evidence_refs: ["ui:identities/decommission"] }],
+    });
+    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 1; retired 0; failed 0/)).toBeInTheDocument();
+  });
+
   it("removes static revocation endpoint prose from the identities page", async () => {
     apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "revocation-docs", status: "deployed" }]);
 
@@ -1761,7 +1812,7 @@ describe("lifecycle actions from the UI", () => {
     renderIdentities();
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
-    await user.type(screen.getByLabelText(/name/i), "svc");
+    await user.type(screen.getByLabelText("Service name"), "svc");
     await user.selectOptions(screen.getByLabelText("Ready owner"), "own-1");
     await user.click(screen.getByRole("button", { name: /create|issue/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc", ownerId: "own-1" })));
@@ -1786,7 +1837,7 @@ describe("lifecycle actions from the UI", () => {
     renderIdentities();
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
-    await user.type(screen.getByLabelText(/name/i), "svc");
+    await user.type(screen.getByLabelText("Service name"), "svc");
 
     expect(screen.getByRole("combobox", { name: "Ready owner" })).toHaveValue("");
     expect(screen.getByRole("button", { name: /create|issue/i })).toBeDisabled();
@@ -1811,7 +1862,7 @@ describe("lifecycle actions from the UI", () => {
     renderIdentities();
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
-    await user.type(screen.getByLabelText(/name/i), "*.payments.example");
+    await user.type(screen.getByLabelText("Service name"), "*.payments.example");
     await user.selectOptions(screen.getByLabelText("Ready owner"), "own-1");
     expect(screen.getByRole("heading", { name: "Wildcard safety check" })).toBeInTheDocument();
     expect(screen.getByText("Automatic ACME requests can prove wildcard control only with DNS-01.")).toBeInTheDocument();
@@ -1845,7 +1896,7 @@ describe("lifecycle actions from the UI", () => {
     renderIdentities();
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
-    await user.type(screen.getByLabelText(/name/i), "*.blocked.example");
+    await user.type(screen.getByLabelText("Service name"), "*.blocked.example");
     await user.selectOptions(screen.getByLabelText("Ready owner"), "own-1");
     await user.click(screen.getByLabelText(/Acknowledge wildcard blast radius/i));
     await user.click(screen.getByRole("button", { name: /create|issue/i }));

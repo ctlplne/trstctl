@@ -208,6 +208,15 @@ nhi-decommission.json --force` and in the Identities console. It deliberately
 does not treat full tenant deletion or member/API-token offboarding as NHI
 decommissioning; those remain separate admin flows.
 
+In **Machine identities → Decommission by signal**, Departure offers two explicit
+selectors. **Owner name or email** matches the recorded owner and can affect all
+of that owner's managed identities. **Exact identity ID** selects one tenant-local
+identity; use it when the change ticket names a specific machine identity. A
+zero-match response leaves credentials unchanged and asks the operator to check
+the selector; it is not presented as a successful decommission. Review the
+returned per-identity actions, then verify certificate revocation using the
+signed CRL or OCSP with a relying-party client where applicable.
+
 **Status:** served for managed NHI identities selected by departure, vendor-term,
 and inactivity signals, using event-sourced revoke/retire transitions.
 

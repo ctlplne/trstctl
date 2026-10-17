@@ -13876,9 +13876,25 @@ export const messages = {
     defaultMessage: "Signal",
     description: "Label for the decommission signal selector.",
   },
-  "identities.decommission.subject": {
-    defaultMessage: "Subject",
-    description: "Label for the owner subject field in the NHI decommission form.",
+  "identities.decommission.findBy": {
+    defaultMessage: "Find by",
+    description: "Selector for owner-subject versus exact-identity NHI decommissioning.",
+  },
+  "identities.decommission.ownerSubject": {
+    defaultMessage: "Owner name or email",
+    description: "The person or owner whose departure is being reviewed; an identity ID is a separate option.",
+  },
+  "identities.decommission.exactIdentity": {
+    defaultMessage: "Exact identity ID",
+    description: "Target one tenant-scoped machine identity by its exact ID.",
+  },
+  "identities.decommission.noMatchesTitle": {
+    defaultMessage: "No identities matched",
+    description: "Warning when a governance signal did not select any machine identity.",
+  },
+  "identities.decommission.noMatchesDetail": {
+    defaultMessage: "No credential changed. Check the owner name or email, or choose Exact identity ID for one machine.",
+    description: "Actionable next step after an NHI decommission request matched zero identities.",
   },
   "identities.decommission.vendor": {
     defaultMessage: "Vendor",
