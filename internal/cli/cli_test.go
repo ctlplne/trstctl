@@ -392,6 +392,26 @@ func TestCARetirementCommandRequiresForceAndCarriesExactCommandAUD42(t *testing.
 	}
 }
 
+func TestCAReprotectionCommandQueuesTheExactKeyWithoutInventingCompletion(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusAccepted,
+		`{"key_id":"ca-old","planned":1,"enqueued":1,"jobs":[{"id":"job-1","kind":"re-issue","dependent_class":"credential","dependent_ref":"leaf-1","enqueued":true}]}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: "reprotect-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+	code, stdout, stderr := run(t, []string{"ca", "keys", "reprotect", "ca-old"}, env, "")
+	if code != 0 || stderr != "" {
+		t.Fatalf("reprotect command = exit %d stderr=%q", code, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/ca/keys/ca-old/reprotect" ||
+		captured.Header.Get("Idempotency-Key") == "" || len(captured.Body) != 0 {
+		t.Fatalf("reprotect request = %s %s key=%q body=%q", captured.Method, captured.Path,
+			captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+	if !strings.Contains(stdout, `"enqueued": 1`) || !strings.Contains(stdout, `"dependent_ref": "leaf-1"`) {
+		t.Fatalf("queued job receipt missing from CLI output: %s", stdout)
+	}
+}
+
 func TestPCASRetirementCommandsBindIdentityAndPolicy(t *testing.T) {
 	var captured capture
 	srv := mockServer(t, http.StatusOK,

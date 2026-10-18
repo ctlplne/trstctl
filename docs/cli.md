@@ -281,6 +281,7 @@ exhaustive subcommand list:
 | `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                                                                                                                                                                                |
 | `ca ceremonies`                   | Effect-free review, start, inspect, approve, and reasoned cancellation of m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve` · `cancel`)                                                                                                                                                                                                  |
 | `ca authorities`                  | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`)                |
+| `ca keys`                         | Read retirement dependencies, queue their re-protection jobs, and request irreversible signer-gated retirement (`retirement` · `reprotect` · `retire`). A re-protection enqueue receipt is not evidence that a credential was reissued or deployed. |
 | `ca discovery`                    | List public and private CA discovery inventory (`list`)                                                                                                                                                                                                                                                             |
 | `cbom`                            | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                                                                                                                                                                                   |
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
@@ -789,6 +790,13 @@ trstctl-cli ca cross-signs get <cross-sign-ceremony-id>
 trstctl-cli ca authorities rekey-offline-root <offline-root-authority-id> -f offline-root-rekey.json
 trstctl-cli ca offline-rekeys get <succession-ceremony-id> # recover both public trust paths after a lost response
 trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f offline-target-cross.json
+
+# Inspect the predecessor CA key's registered dependents before retirement.
+# The re-protection response lists queued job IDs; it does not assert that a
+# replacement was issued or deployed. Credential jobs require an immutable
+# successor/host plan before this command will queue them.
+trstctl-cli ca keys retirement <predecessor-ca-authority-id>
+trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 
 # Review the exact request and deployment-owned quorum/custody readiness first.
 trstctl-cli breakglass issue-preview -f breakglass-issue-intent.json
