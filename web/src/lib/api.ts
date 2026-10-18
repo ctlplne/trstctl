@@ -550,6 +550,8 @@ import type {
   WorkloadAttesterTrustSourceRotated,
   WorkloadAttesterTrustSourceRotateRequest,
   EdgeSegmentPolicyList,
+  EdgeSegmentPolicy,
+  EdgeSegmentPolicyInput,
   EdgeDelegationList,
   EdgeDelegationDetail,
 } from "./api-types.gen";
@@ -1772,7 +1774,7 @@ export interface Api {
   discoveryCapabilities(): Promise<DiscoveryCapabilityCatalog>;
   previewDiscoveryPlan(input: DiscoverySourceRequest): Promise<DiscoveryPlanPreview>;
   preflightDiscoverySource(id: string): Promise<DiscoveryPlanPreview>;
-  createDiscoverySegment(input: DiscoverySegmentRequest): Promise<DiscoverySegment>;
+  createDiscoverySegment(input: DiscoverySegmentRequest, idempotencyKey?: string): Promise<DiscoverySegment>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
   discoverySchedules(options?: { limit?: number; cursor?: string }): Promise<DiscoveryScheduleList>;
@@ -1976,6 +1978,7 @@ export interface Api {
   caCeremony(id: string): Promise<CAKeyCeremony>;
   caAuthorities(): Promise<CAAuthorityList>;
   edgeSegmentPolicies(): Promise<EdgeSegmentPolicyList>;
+  setEdgeSegmentPolicy(id: string, input: EdgeSegmentPolicyInput, idempotencyKey?: string): Promise<EdgeSegmentPolicy>;
   edgeDelegations(): Promise<EdgeDelegationList>;
   edgeDelegation(id: string): Promise<EdgeDelegationDetail>;
   createRootCA(input: CACreateRootRequest): Promise<CAAuthority>;
@@ -2461,7 +2464,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   discoveryCapabilities: () => req<DiscoveryCapabilityCatalog>("/api/v1/discovery/capabilities"),
   previewDiscoveryPlan: (input) => mutate<DiscoveryPlanPreview>("POST", "/api/v1/discovery/plans/preview", input),
   preflightDiscoverySource: (id) => req<DiscoveryPlanPreview>(`/api/v1/discovery/sources/${encodeURIComponent(id)}/preflight`),
-  createDiscoverySegment: (input) => mutate<DiscoverySegment>("POST", "/api/v1/discovery/segments", input),
+  createDiscoverySegment: (input, idempotencyKey) => mutate<DiscoverySegment>("POST", "/api/v1/discovery/segments", input, idempotencyKey),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
   discoverySchedules: (options) => req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),
@@ -2696,6 +2699,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   caCeremony: (id) => req<CAKeyCeremony>(`/api/v1/ca/ceremonies/${encodeURIComponent(id)}`),
   caAuthorities: () => req<CAAuthorityList>("/api/v1/ca/authorities"),
   edgeSegmentPolicies: () => req<EdgeSegmentPolicyList>("/api/v1/edge/segments"),
+  setEdgeSegmentPolicy: (id, input, idempotencyKey) =>
+    mutate<EdgeSegmentPolicy>("PUT", `/api/v1/edge/segments/${encodeURIComponent(id)}`, input, idempotencyKey),
   edgeDelegations: () => req<EdgeDelegationList>("/api/v1/edge/delegations"),
   edgeDelegation: (id) => req<EdgeDelegationDetail>(`/api/v1/edge/delegations/${encodeURIComponent(id)}`),
   createRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/roots", input),

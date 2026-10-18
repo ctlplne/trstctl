@@ -92,6 +92,25 @@ An enabled policy is still default-off unless it exists, pins at least one TPM
 attestation root, and carries DNS name constraints. Custody is an additional
 closed allowlist:
 
+In the console, open Certificates → Certificate authorities → Authorities →
+Delegated edge CAs → **Configure edge segment**. An operator with
+`issuers:write` can select an existing declared segment ID; an operator who
+also has `discovery:write` can declare a segment by name and exact address or
+CIDR. Paste public PEM attestation roots, enter comma-separated permitted and
+excluded DNS subtrees, then review the entire public root bundle and provider
+allowlist before saving. A lost response leaves the reviewed request available
+for retry with the same idempotency keys. The resulting row shows the active
+policy; it does not prove that a host has attested or that a delegated CA was
+minted. Disable an existing segment through the same form to stop new mints.
+
+For automation, declare the segment with `POST /api/v1/discovery/segments` or
+`trstctl-cli discovery segments create -f segment.json`, retain the returned
+UUID, then use `PUT /api/v1/edge/segments/{segmentID}` or
+`trstctl-cli edge segments set <segmentID> -f policy.json`. Read back with
+`GET /api/v1/edge/segments` or `trstctl-cli edge segments list`. Keep the
+attestation private key on the host or in its test fixture; the policy accepts
+only its public root certificate.
+
 ```json
 {
   "enabled": true,
