@@ -6961,6 +6961,10 @@
           "certificate_pem": {
             "type": "string"
           },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "signer_handle": {
             "type": "string"
           },

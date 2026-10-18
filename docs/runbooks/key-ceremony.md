@@ -264,18 +264,22 @@ paste private-key PEM into the API or UI.
 
 1. **Pre-provision the signer handle.** The signer holds the CA private
    key under a handle constrained to CA signing; the control plane uses only that
-   handle and its public key.
+   handle and its public key. If the key is not already held by the signer, use
+   the offline-root and signer-held intermediate CSR procedure above. The
+   existing-chain import form itself does not create or import a private key.
 2. **Export the public CA chain.** Put the imported authority certificate first,
    followed by its issuer chain up to a self-signed root (for a root import, just
    the self-signed root certificate). The PEM bundle must contain only
    `CERTIFICATE` blocks.
 3. **Open the import ceremony** with the chain, signer handle, and reviewed
-   `CASpec`:
+   `CASpec`. When the direct issuer is registered in this tenant, include its
+   `parent_id` in this body and the final import body:
 
    ```json
    {
      "operation": "import_existing_ca",
      "threshold": 2,
+     "parent_id": "<registered-direct-issuer-id>",
      "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
      "signer_handle": "customer-existing-ca",
      "spec": {
@@ -290,11 +294,12 @@ paste private-key PEM into the API or UI.
 
 4. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals`.
 5. **Import the CA** with `POST /api/v1/ca/authorities/imported` (same
-   `ceremony_id`, `certificate_pem`, `signer_handle`, `spec`). The server
+   `ceremony_id`, `parent_id`, `certificate_pem`, `signer_handle`, `spec`). The server
    verifies the first certificate is a usable CA, the chain reaches a self-signed
    root, the reviewed profile matches, and the certificate's public key exactly
-   matches the signer-held key. The stored authority holds only public chain
-   metadata plus the signer handle.
+   matches the signer-held key. A selected parent must be active and its public
+   certificate must exactly match the next certificate in the chain. The stored
+   authority holds only public chain metadata plus the signer handle.
 
 Leaf issuance then uses `POST /api/v1/ca/authorities/{imported-ca-id}/issue`.
 

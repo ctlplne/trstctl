@@ -10409,6 +10409,19 @@ export const messages = {
     defaultMessage: "Existing CA chain PEM",
     description: "Field label for the imported public existing CA chain.",
   },
+  "caHierarchy.existing.parentAuthority": {
+    defaultMessage: "Registered parent authority",
+    description: "Selector for the exact registered issuer of an imported intermediate CA.",
+  },
+  "caHierarchy.existing.noRegisteredParent": {
+    defaultMessage: "No registered parent (self-signed root or external chain)",
+    description: "Option when the imported CA has no parent authority registered in this tenant.",
+  },
+  "caHierarchy.existing.parentHelp": {
+    defaultMessage:
+      "If the direct issuer is registered here, select it. Its certificate must exactly match the next certificate in the chain. For a new signer-held key under an offline root, use the Offline root and intermediate CSR workflow above.",
+    description: "Explains exact parent binding and the supported signer-held CSR preparation path.",
+  },
   "caHierarchy.existing.ceremonyID": {
     defaultMessage: "Existing CA ceremony ID",
     description: "Field label for the existing CA import ceremony id.",

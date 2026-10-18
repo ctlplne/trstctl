@@ -7266,6 +7266,7 @@ export const canonicalCapabilities = [
             "CLI command: graph trust-stores",
             "CLI command: migrations assess",
             "CLI command: ca keys retirement",
+            "CLI command: ca keys reprotect",
             "CLI command: ca keys retire",
             "CLI command: owners unowned",
             "CLI command: graph nodes",

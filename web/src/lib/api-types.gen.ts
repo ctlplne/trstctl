@@ -1699,6 +1699,7 @@ export interface CADiscoverySummary {
 export interface CAImportExistingRequest {
   ceremony_id: string;
   certificate_pem: string;
+  parent_id?: string;
   signer_handle: string;
   spec: CASpec;
 }

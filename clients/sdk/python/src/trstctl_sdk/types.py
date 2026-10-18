@@ -2359,6 +2359,7 @@ CAImportExistingRequest = TypedDict(
     {
         'ceremony_id': str,
         'certificate_pem': str,
+        'parent_id': str,
         'signer_handle': str,
         'spec': dict[str, Any],
     },

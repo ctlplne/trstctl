@@ -568,7 +568,7 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	if err != nil {
 		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
-	purpose, err := existingCAPurpose(chainDER, req.SignerHandle, req.Spec)
+	purpose, err := existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
 	if err != nil {
 		return api.CAAuthority{}, err
 	}
@@ -576,12 +576,23 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	var created store.CAAuthority
 	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var parentID *string
+		if req.ParentID != "" {
+			parent, err := h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, req.ParentID)
+			if err != nil {
+				return err
+			}
+			if err := validateImportedCAParent(parent, chainDER); err != nil {
+				return err
+			}
+			parentID = &parent.ID
+		}
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
 		notAfter := issued.NotAfter
 		created = store.CAAuthority{
-			ID: authorityID, TenantID: tenantID, CommonName: issued.CommonName, Kind: kind, Status: "active",
+			ID: authorityID, TenantID: tenantID, ParentID: parentID, CommonName: issued.CommonName, Kind: kind, Status: "active",
 			CertificatePEM: chainPEM, SignerHandle: req.SignerHandle, Serial: issued.Serial,
 			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
@@ -1513,7 +1524,7 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 		if err != nil {
 			return "", err
 		}
-		return existingCAPurpose(chainDER, req.SignerHandle, req.Spec)
+		return existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
 	case "create_offline_intermediate":
 		return offlineIntermediatePurpose(req.ParentID, req.Spec)
 	case "issue_intermediate_csr":
@@ -1574,17 +1585,6 @@ func offlineRootPurpose(certDER []byte, spec api.CASpec) (string, error) {
 		return "", err
 	}
 	return "offline-root:" + crypto.SHA256Hex(certDER) + ":" + rootPurpose, nil
-}
-
-func existingCAPurpose(chainDER [][]byte, signerHandle string, spec api.CASpec) (string, error) {
-	if signerHandle == "" {
-		return "", fmt.Errorf("%w: signer_handle is required for import_existing_ca", api.ErrCAHierarchyInvalid)
-	}
-	rootPurpose, err := hierarchyPurpose("create_root", "", spec)
-	if err != nil {
-		return "", err
-	}
-	return "import-existing-ca:" + signerHandle + ":" + crypto.SHA256Hex(flattenDERChain(chainDER)) + ":" + rootPurpose, nil
 }
 
 func offlineIntermediatePurpose(parentID string, spec api.CASpec) (string, error) {

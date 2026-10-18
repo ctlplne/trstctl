@@ -9176,6 +9176,8 @@ export interface components {
             /** Format: uuid */
             ceremony_id: string;
             certificate_pem: string;
+            /** Format: uuid */
+            parent_id?: string;
             signer_handle: string;
             spec: components["schemas"]["CASpec"];
         };

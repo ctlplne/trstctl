@@ -622,6 +622,7 @@ describe("CA hierarchy and custody surface", () => {
     apiMock.importExistingCA.mockResolvedValue({
       id: "ca-existing-imported",
       tenant_id: "tenant-1",
+      parent_id: "ca-registered-root",
       kind: "intermediate",
       common_name: "Imported Existing CA",
       signer_handle: "customer-existing-ca",
@@ -1553,12 +1554,16 @@ describe("CA hierarchy and custody surface", () => {
 
   it("imports an existing signer-backed CA chain without collecting private key bytes", async () => {
     const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [{ id: "ca-registered-root", kind: "root", status: "active", common_name: "Registered root", signer_handle: "" }],
+    });
     renderCAHierarchy();
 
     const chainPEM = "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----";
     await user.clear(await screen.findByLabelText("Signer handle"));
     await user.type(screen.getByLabelText("Signer handle"), "customer-existing-ca");
     await user.type(screen.getByLabelText("Existing CA chain PEM"), chainPEM);
+    await user.selectOptions(screen.getByLabelText("Registered parent authority"), "ca-registered-root");
     await user.click(screen.getByRole("button", { name: "Start existing-CA ceremony" }));
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
@@ -1568,6 +1573,7 @@ describe("CA hierarchy and custody surface", () => {
         threshold: 2,
         certificate_pem: chainPEM,
         signer_handle: "customer-existing-ca",
+        parent_id: "ca-registered-root",
         spec: expect.objectContaining({ common_name: "Imported Existing CA", max_path_len: 0, signature_algorithm: "ECDSA-P256" }),
       }),
     );
@@ -1580,6 +1586,7 @@ describe("CA hierarchy and custody surface", () => {
           ceremony_id: "ceremony-existing-ca",
           certificate_pem: chainPEM,
           signer_handle: "customer-existing-ca",
+          parent_id: "ca-registered-root",
         }),
       ),
     );

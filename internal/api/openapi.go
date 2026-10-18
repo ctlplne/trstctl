@@ -502,7 +502,7 @@ func componentSchemas() map[string]*Schema {
 		"ceremony_id": uuid(), "certificate_pem": str(), "spec": ref("CASpec"),
 	}, "ceremony_id", "certificate_pem", "spec")
 	caImportExistingReq := object(map[string]*Schema{
-		"ceremony_id": uuid(), "certificate_pem": str(), "signer_handle": str(), "spec": ref("CASpec"),
+		"ceremony_id": uuid(), "certificate_pem": str(), "signer_handle": str(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "certificate_pem", "signer_handle", "spec")
 	caCreateIntermediateReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "spec": ref("CASpec"),

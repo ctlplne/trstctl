@@ -126,6 +126,7 @@ type CAImportExistingRequest struct {
 	CeremonyID     string `json:"ceremony_id"`
 	CertificatePEM string `json:"certificate_pem"`
 	SignerHandle   string `json:"signer_handle"`
+	ParentID       string `json:"parent_id,omitempty"`
 	Spec           CASpec `json:"spec"`
 }
 

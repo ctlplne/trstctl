@@ -50,6 +50,42 @@ func TestCASpecRejectsUnrepresentableTTL(t *testing.T) {
 	}
 }
 
+func TestImportedCAParentRequiresExactNextCertificate(t *testing.T) {
+	firstKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(firstKey.Destroy)
+	secondKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(secondKey.Destroy)
+	profile := crypto.HierarchyCAProfile{CommonName: "registered root", MaxPathLen: 1, TTL: 24 * time.Hour}
+	first, err := crypto.SelfSignedHierarchyCA(firstKey, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := crypto.SelfSignedHierarchyCA(secondKey, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := store.CAAuthority{Status: "active", CertificatePEM: string(first.CertificatePEM)}
+	if err := validateImportedCAParent(parent, [][]byte{second.CertificateDER, first.CertificateDER}); err != nil {
+		t.Fatalf("exact registered parent rejected: %v", err)
+	}
+	if err := validateImportedCAParent(parent, [][]byte{second.CertificateDER, second.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyInvalid) {
+		t.Fatalf("different parent certificate = %v, want invalid", err)
+	}
+	if err := validateImportedCAParent(parent, [][]byte{first.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyInvalid) {
+		t.Fatalf("parent on imported root = %v, want invalid", err)
+	}
+	parent.Status = "superseded"
+	if err := validateImportedCAParent(parent, [][]byte{second.CertificateDER, first.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyConflict) {
+		t.Fatalf("superseded parent = %v, want conflict", err)
+	}
+}
+
 func TestOfflineRootCeremonyPreviewBindsCertificateAlgorithmAndValidity(t *testing.T) {
 	const tenantID = "11111111-1111-4111-8111-111111111111"
 	service := &caHierarchyService{}
@@ -1479,6 +1515,19 @@ func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create external root fixture: %v", err)
 	}
+	rootSpec := map[string]any{
+		"common_name": rootProfile.CommonName, "max_path_len": rootProfile.MaxPathLen,
+		"ttl_seconds":           int64(rootProfile.TTL.Seconds()),
+		"permitted_dns_domains": rootProfile.PermittedDNSDomains,
+		"extended_key_usages":   rootProfile.EKUs,
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	rootCeremony := createCACeremonyWithCertificate(t, h, operator, "import_offline_root",
+		string(externalRoot.CertificatePEM), rootSpec, 2, "byo-ca-root-ceremony")
+	approveCACeremony(t, h, approverOne, rootCeremony.ID, 1, "byo-ca-root-approval-one")
+	approveCACeremony(t, h, approverTwo, rootCeremony.ID, 2, "byo-ca-root-approval-two")
+	registeredRoot := importOfflineRootCA(t, h, operator, rootCeremony.ID,
+		string(externalRoot.CertificatePEM), rootSpec, "byo-ca-root-import")
 
 	client := h.signer.Client()
 	importedHandle := "imported-existing-intermediate"
@@ -1526,11 +1575,12 @@ func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
 		t.Fatalf("import existing CA with wrong signer = %d body=%s; want 422 public-key mismatch", code, body)
 	}
 
-	ceremony := createImportExistingCACeremony(t, h, operator, chainPEM, importedHandle, interSpec, 2, "byo-ca-ceremony")
+	ceremony := createImportExistingCACeremony(t, h, operator, chainPEM, importedHandle, interSpec, 2, "byo-ca-ceremony", registeredRoot.ID)
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", operator, "byo-ca-before-quorum", map[string]any{
 		"ceremony_id":     ceremony.ID,
 		"certificate_pem": chainPEM,
 		"signer_handle":   importedHandle,
+		"parent_id":       registeredRoot.ID,
 		"spec":            interSpec,
 	})
 	if code != http.StatusConflict || !strings.Contains(string(body), "quorum") {
@@ -1538,9 +1588,12 @@ func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
 	}
 	approveCACeremony(t, h, approverOne, ceremony.ID, 1, "byo-ca-approval-one")
 	approveCACeremony(t, h, approverTwo, ceremony.ID, 2, "byo-ca-approval-two")
-	imported := importExistingCA(t, h, operator, ceremony.ID, chainPEM, importedHandle, interSpec, "byo-ca-import")
+	imported := importExistingCA(t, h, operator, ceremony.ID, chainPEM, importedHandle, interSpec, "byo-ca-import", registeredRoot.ID)
 	if imported.Kind != "intermediate" || imported.SignerHandle != importedHandle || imported.CommonName != interProfile.CommonName {
 		t.Fatalf("imported CA = %+v; want signer-backed existing intermediate", imported)
+	}
+	if imported.ParentID == nil || *imported.ParentID != registeredRoot.ID {
+		t.Fatalf("imported CA parent = %+v, want exact registered root %s", imported.ParentID, registeredRoot.ID)
 	}
 	if strings.Contains(imported.CertificatePEM, "PRIVATE KEY") || strings.Count(imported.CertificatePEM, "BEGIN CERTIFICATE") != 2 {
 		t.Fatalf("imported CA certificate response leaked key material or lost chain: %q", imported.CertificatePEM)
@@ -1636,15 +1689,19 @@ func createCACeremonyWithCertificate(t *testing.T, h *servedHarness, token, oper
 	return got
 }
 
-func createImportExistingCACeremony(t *testing.T, h *servedHarness, token, certificatePEM, signerHandle string, spec map[string]any, threshold int, idem string) servedCACeremony {
+func createImportExistingCACeremony(t *testing.T, h *servedHarness, token, certificatePEM, signerHandle string, spec map[string]any, threshold int, idem string, parentID ...string) servedCACeremony {
 	t.Helper()
-	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, map[string]any{
+	body := map[string]any{
 		"operation":       "import_existing_ca",
 		"certificate_pem": certificatePEM,
 		"signer_handle":   signerHandle,
 		"threshold":       threshold,
 		"spec":            spec,
-	})
+	}
+	if len(parentID) != 0 {
+		body["parent_id"] = parentID[0]
+	}
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, body)
 	if code != http.StatusCreated {
 		t.Fatalf("create import_existing_ca ceremony = %d body=%s; want 201", code, raw)
 	}
@@ -1693,14 +1750,18 @@ func createCARekeyCeremony(t *testing.T, h *servedHarness, token, authorityID st
 	return got
 }
 
-func importExistingCA(t *testing.T, h *servedHarness, token, ceremonyID, certificatePEM, signerHandle string, spec map[string]any, idem string) servedCAAuthority {
+func importExistingCA(t *testing.T, h *servedHarness, token, ceremonyID, certificatePEM, signerHandle string, spec map[string]any, idem string, parentID ...string) servedCAAuthority {
 	t.Helper()
-	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", token, idem, map[string]any{
+	body := map[string]any{
 		"ceremony_id":     ceremonyID,
 		"certificate_pem": certificatePEM,
 		"signer_handle":   signerHandle,
 		"spec":            spec,
-	})
+	}
+	if len(parentID) != 0 {
+		body["parent_id"] = parentID[0]
+	}
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", token, idem, body)
 	if code != http.StatusCreated {
 		t.Fatalf("import existing CA = %d body=%s; want 201", code, raw)
 	}
