@@ -110,10 +110,17 @@ func (DelegationRecordedV1) isDelegationPayload() {}
 // IssuanceRecordedV1 records issuance of an agent credential bound to a chain digest.
 type IssuanceRecordedV1 struct {
 	TenantID         string `json:"tenant_id"`
+	IssuanceID       string `json:"issuance_id,omitempty"`
 	CredentialID     string `json:"credential_id,omitempty"`
 	CredentialDigest []byte `json:"credential_digest,omitempty"`
 	SubjectID        string `json:"subject_id"`
 	ChainDigest      []byte `json:"chain_digest,omitempty"`
+}
+
+// IssuanceReceiptEventID binds a queued receipt to exactly one issued credential.
+// Length prefixes keep tenant and receipt boundaries unambiguous in the event index.
+func IssuanceReceiptEventID(tenantID, issuanceID string) string {
+	return fmt.Sprintf("agentid:issuance:%d:%s:%d:%s", len(tenantID), tenantID, len(issuanceID), issuanceID)
 }
 
 func (IssuanceRecordedV1) isDelegationPayload() {}

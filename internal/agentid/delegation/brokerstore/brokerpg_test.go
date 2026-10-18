@@ -18,10 +18,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
+	agidapi "trstctl.com/trstctl/internal/agentid/api"
 	"trstctl.com/trstctl/internal/agentid/delegation"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/broker"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -37,7 +41,82 @@ const (
 	pgTenantReplay  = "11111111-1111-1111-1111-111111111111"
 	pgTenantIdem    = "22222222-2222-2222-2222-222222222222"
 	pgTenantRefusal = "33333333-3333-3333-3333-333333333333"
+	pgTenantReceipt = "44444444-4444-4444-8444-444444444444"
 )
+
+// TestIssuanceReceiptSurvivesLostResponseAndProjection proves the operator can
+// follow the 202 receipt to one exact public credential. Real PostgreSQL keeps
+// the tenant and receipt fences; embedded file-backed JetStream is the source
+// of the result, including after the serving row is removed and rebuilt.
+func TestIssuanceReceiptSurvivesLostResponseAndProjection(t *testing.T) {
+	ctx := context.Background()
+	cs := sharedStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	svc := agidapi.NewService(cs, log, orchestrator.NewOutbox(cs))
+	ack, err := svc.IssueChainBound(ctx, pgTenantReceipt, agidapi.IssueChainBoundRequest{AgentID: "agent-receipt"})
+	if err != nil || ack.IssuanceID == "" || !strings.Contains(ack.StatusURL, ack.IssuanceID) {
+		t.Fatalf("followable issuance ack = %+v err=%v", ack, err)
+	}
+	before, err := svc.GetIssuance(ctx, pgTenantReceipt, ack.IssuanceID)
+	if err != nil || !before.Found || before.Status != "pending" || before.CredentialID != "" {
+		t.Fatalf("pending receipt = %+v err=%v", before, err)
+	}
+	binding := delegation.IssuanceBinding{
+		TenantID: pgTenantReceipt, IdempotencyKey: ack.IssuanceID,
+		CredentialID: fmt.Sprintf("cred:%s", ack.IssuanceID), SubjectID: "agent-receipt", CredentialDER: []byte{0x30, 0x00},
+		ChainHeadDigest: []byte("head"), ChainDigest: []byte("whole-chain"), AgentStackDigest: []byte("stack"),
+		NotBefore: 1_760_000_000, NotAfter: 1_760_000_600,
+	}
+	rec := New(cs).WithEventLog(log)
+	if err := rec.RecordIssuanceBinding(ctx, binding); err != nil {
+		t.Fatalf("record signer result: %v", err)
+	}
+	// Reconstruct the API service, as happens after a cold process restart.
+	svc = agidapi.NewService(cs, log, orchestrator.NewOutbox(cs))
+	after, err := svc.GetIssuance(ctx, pgTenantReceipt, ack.IssuanceID)
+	if err != nil || !after.Found || after.Status != "issued" || after.CredentialID != binding.CredentialID {
+		t.Fatalf("receipt did not find exact issued credential: %+v err=%v", after, err)
+	}
+	other, err := svc.GetIssuance(ctx, pgTenantReplay, ack.IssuanceID)
+	if err != nil || other.Found {
+		t.Fatalf("other tenant found issuance: %+v err=%v", other, err)
+	}
+	// A lost response must re-read the first result, not create a second one.
+	if err := rec.RecordIssuanceBinding(ctx, binding); err != nil {
+		t.Fatalf("identical retry: %v", err)
+	}
+	changed := binding
+	changed.CredentialID = binding.CredentialID + ":different-result"
+	if err := rec.RecordIssuanceBinding(ctx, changed); err == nil {
+		t.Fatal("same receipt accepted a different signer result")
+	}
+	if got := countRows(t, cs, pgTenantReceipt, `SELECT count(*) FROM agent_issuances
+		WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND issuance_id = $1`, ack.IssuanceID); got != 1 {
+		t.Fatalf("receipt has %d credential rows, want one", got)
+	}
+	if err := cs.WithTenant(ctx, pgTenantReceipt, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM agent_issuances WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			AND issuance_id = $1`, ack.IssuanceID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := svc.GetIssuance(ctx, pgTenantReceipt, ack.IssuanceID)
+	if err != nil || missing.Status != "result_unavailable" || missing.CredentialID != binding.CredentialID {
+		t.Fatalf("lost serving row claimed issue complete: %+v err=%v", missing, err)
+	}
+	if err := rec.RecordIssuanceBinding(ctx, binding); err != nil {
+		t.Fatalf("rebuild result from exact first writer: %v", err)
+	}
+	restored, err := svc.GetIssuance(ctx, pgTenantReceipt, ack.IssuanceID)
+	if err != nil || restored.Status != "issued" || restored.CredentialID != binding.CredentialID {
+		t.Fatalf("restored receipt = %+v err=%v", restored, err)
+	}
+}
 
 var (
 	pgOnce sync.Once
@@ -331,6 +410,17 @@ func (c *capturingAppender) Append(_ context.Context, e eventspec.Event) (events
 	e.Sequence = uint64(len(c.events) + 1)
 	c.events = append(c.events, e)
 	return e, nil
+}
+
+func (c *capturingAppender) EventByID(_ context.Context, id string) (eventspec.Event, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, event := range c.events {
+		if event.ID == id {
+			return event, true, nil
+		}
+	}
+	return eventspec.Event{}, false, nil
 }
 
 func (c *capturingAppender) byType(typ string) []eventspec.Event {

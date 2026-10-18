@@ -15,7 +15,7 @@ import (
 )
 
 // TestRoutes_Surface asserts the AGID REST surface: the root-anchor provisioning routes,
-// the two mutating journey routes, and the three read routes exist with the expected
+// the two mutating journey routes, and receipt/credential/evidence reads exist with the expected
 // methods, success codes, mutation flags, and permissions. This locks the contract the
 // cmd/trstctl attach exposes (the
 // reachability entry points for the two AGID user journeys) without a datastore.
@@ -48,6 +48,7 @@ func TestRoutes_Surface(t *testing.T) {
 		{"POST /api/v1/agent-delegation/root-anchors", true, "200", authz.AgentsWrite},
 		{"GET /api/v1/agent-delegation/root-anchors", false, "200", authz.AgentsRead},
 		{"POST /api/v1/agent-delegation/issuances", true, "202", authz.AgentsWrite},
+		{"GET /api/v1/agent-delegation/issuance", false, "200", authz.AgentsRead},
 		{"POST /api/v1/agent-delegation/revocations", true, "202", authz.AgentsWrite},
 		{"GET /api/v1/agent-delegation/credential", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/chain", false, "200", authz.AgentsRead},
@@ -94,6 +95,7 @@ func TestOpenAPI_Surface(t *testing.T) {
 	for _, p := range []string{
 		"/api/v1/agent-delegation/root-anchors",
 		"/api/v1/agent-delegation/issuances",
+		"/api/v1/agent-delegation/issuance",
 		"/api/v1/agent-delegation/revocations",
 		"/api/v1/agent-delegation/credential",
 		"/api/v1/agent-delegation/chain",
@@ -188,8 +190,8 @@ func TestOpenAPIRequiredReadIdentifiers(t *testing.T) {
 			}
 		}
 	}
-	if checked != 4 {
-		t.Errorf("keyed AGID read routes = %d, want 4", checked)
+	if checked != 5 {
+		t.Errorf("keyed AGID read routes = %d, want 5", checked)
 	}
 }
 
@@ -256,8 +258,12 @@ func TestService_NilBackedReadsAreSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueChainBound: %v", err)
 	}
-	if iss.IssuanceID == "" || iss.Status != "queued" {
+	if iss.IssuanceID == "" || iss.Status != "queued" || iss.StatusURL == "" {
 		t.Errorf("IssueChainBound ack = %+v, want a queued issuance id", iss)
+	}
+	issuance, err := svc.GetIssuance(ctx, "t", iss.IssuanceID)
+	if err != nil || issuance.Found || issuance.Status != "not_found" {
+		t.Errorf("nil-backed issuance status = %+v err=%v", issuance, err)
 	}
 
 	rev, err := svc.Revoke(ctx, "t", agidapi.RevokeRequest{Subject: "s", Reason: "compromise"})

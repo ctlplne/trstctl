@@ -124,6 +124,7 @@ revocation when a subject is compromised:
 
 ```http
 GET  /api/v1/agent-delegation/root-anchors
+GET  /api/v1/agent-delegation/issuance?issuance_id=...  # follow the POST receipt to status and credential_id
 GET  /api/v1/agent-delegation/credential?credential_id=...
 GET  /api/v1/agent-delegation/chain?credential_id=...
 POST /api/v1/agent-delegation/revocations        # {"subject":"agent:...","reason":"compromise","publish_downstream":true}
@@ -131,7 +132,7 @@ GET  /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...
 GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
 ```
 
-The downloadable `trstctl-cli` exposes the same eight routes. Set
+The downloadable `trstctl-cli` exposes the same nine routes. Set
 `TRSTCTL_SERVER`, `TRSTCTL_TOKEN`, `TRSTCTL_TENANT`, and `TRSTCTL_CA_FILE` for
 the deployment, then use a stable idempotency key for each mutation. Request
 JSON can be supplied from a private file or standard input; the CLI does not
@@ -142,8 +143,9 @@ is sent, including IDs containing a slash:
 trstctl-cli agent-delegation roots list
 trstctl-cli --idempotency-key root-qa-1 agent-delegation roots register -f root-anchor.json
 trstctl-cli --idempotency-key issue-qa-1 agent-delegation issue -f issuance.json
-trstctl-cli agent-delegation credential get --credential_id 'agent:qa/credential'
-trstctl-cli agent-delegation chain get --credential_id 'agent:qa/credential'
+trstctl-cli agent-delegation issuance get --issuance_id '<issuance_id from the 202 receipt>'
+trstctl-cli agent-delegation credential get --credential_id '<credential_id from the issued result>'
+trstctl-cli agent-delegation chain get --credential_id '<credential_id from the issued result>'
 trstctl-cli --idempotency-key revoke-qa-1 agent-delegation revoke -f revocation.json --force
 trstctl-cli agent-delegation revocations incomplete-jobs --directive_id directive-1
 trstctl-cli agent-delegation revocations evidence --directive_id directive-1
@@ -157,8 +159,9 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
   clamped.
 - Register root anchors through the API, CLI, or console. The signer stores its
   public root floor under its own durable key store; an absent anchor is a
-  refusal, not a fallback. Reachability and attestor public floors still need
-  operator provisioning at the signer.
+  refusal, not a fallback. The control plane provisions and reads back the
+  reachability public floor over the authenticated signer RPC. Attestor public
+  floors still need operator provisioning at the signer.
 - At upgrade, a pre-event root row gains a registered authority event only
   after the isolated signer returns the exact tenant, key, public key, and
   authentication reference. An explicit signer `NotFound` records the old
@@ -173,13 +176,20 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
   tuple and records a registered event before treating it as authority.
 - The chain is verified by the signer, not the API: a compromised control
   plane cannot mint a widened credential.
+- An issuance POST is only a queue acknowledgement. Follow its `status_url`
+  until status is `issued`, then use the returned `credential_id` for the public
+  credential and chain. `pending` can be retried, `failed` needs operator
+  recovery, and `result_unavailable` means delivery or the immutable result
+  exists but the exact public credential is not readable. The status read never
+  guesses a result from another request naming the same agent. Historical
+  credentials issued before receipt binding have no invented receipt mapping.
 
 ## Reference
 
 - **Mutations** (all require `Idempotency-Key`):
   `POST /api/v1/agent-delegation/root-anchors`, `.../issuances`,
   `.../revocations`.
-- **Reads:** `.../root-anchors`, `.../credential?credential_id=`,
+- **Reads:** `.../root-anchors`, `.../issuance?issuance_id=`, `.../credential?credential_id=`,
   `.../chain?credential_id=`, `.../revocations/incomplete-jobs?directive_id=`,
   `.../revocations/evidence?directive_id=`.
 - **Outbox job:** `agentid.issue-chain-bound`; signer call: `GatedIssue`.

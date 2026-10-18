@@ -39,6 +39,7 @@ import (
 
 type eventAppender interface {
 	Append(context.Context, eventspec.Event) (eventspec.Event, error)
+	EventByID(context.Context, string) (eventspec.Event, bool, error)
 }
 
 // Recorder persists chain-bound issuance bindings and refuses replays over the core
@@ -126,16 +127,31 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 		// Issuance registry row (INV-A3): binds the verified chain + agent-stack + the
 		// attestation reference. The tenant_id column is bound from the RLS session
 		// setting so the row is always the caller's tenant.
-		if _, err := tx.Exec(ctx,
+		inserted, err := tx.Exec(ctx,
 			`INSERT INTO agent_issuances
-			   (tenant_id, credential_id, subject_id, chain_head_digest, chain_digest, agent_stack_digest,
+			   (tenant_id, issuance_id, credential_id, subject_id, chain_head_digest, chain_digest, agent_stack_digest,
 			    task_envelope_digest, not_before, not_after, attestation_ref, credential_der, seq)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)
+			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)
 			 ON CONFLICT (tenant_id, credential_id) DO NOTHING`,
-			b.CredentialID, b.SubjectID, notNilBytes(b.ChainHeadDigest), notNilBytes(b.ChainDigest),
+			b.IdempotencyKey, b.CredentialID, b.SubjectID, notNilBytes(b.ChainHeadDigest), notNilBytes(b.ChainDigest),
 			notNilBytes(b.AgentStackDigest), nilIfEmptyBytes(b.TaskEnvelopeDigest),
-			b.NotBefore, b.NotAfter, nilIfEmptyBytes(b.EvidenceDigest), nilIfEmptyBytes(b.CredentialDER)); err != nil {
+			b.NotBefore, b.NotAfter, nilIfEmptyBytes(b.EvidenceDigest), nilIfEmptyBytes(b.CredentialDER))
+		if err != nil {
 			return fmt.Errorf("record issuance: %w", err)
+		}
+		if inserted.RowsAffected() == 0 {
+			var priorReceipt, priorSubject string
+			var priorChain, priorDER []byte
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(issuance_id, ''), subject_id, chain_digest, credential_der
+				FROM agent_issuances WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+				AND credential_id = $1`, b.CredentialID).Scan(&priorReceipt, &priorSubject, &priorChain, &priorDER); err != nil {
+				return fmt.Errorf("read existing issuance binding: %w", err)
+			}
+			if priorReceipt != b.IdempotencyKey || priorSubject != b.SubjectID ||
+				!bytes.Equal(priorChain, notNilBytes(b.ChainDigest)) ||
+				!bytes.Equal(priorDER, b.CredentialDER) {
+				return fmt.Errorf("brokerstore: credential id already belongs to a different issuance binding")
+			}
 		}
 
 		// Attestation binding (AGID-claim-9 / INV-A6): bound to the issuance it justified. The
@@ -329,6 +345,7 @@ func (r *Recorder) appendLedgerFacts(ctx context.Context, b delegation.IssuanceB
 	}
 	issuance, err := delegation.Encode(delegation.IssuanceRecordedV1{
 		TenantID:         b.TenantID,
+		IssuanceID:       b.IdempotencyKey,
 		CredentialID:     b.CredentialID,
 		CredentialDigest: crypto.SHA256Sum([]byte(b.CredentialID)),
 		SubjectID:        b.SubjectID,
@@ -337,8 +354,30 @@ func (r *Recorder) appendLedgerFacts(ctx context.Context, b delegation.IssuanceB
 	if err != nil {
 		return err
 	}
-	_, err = r.log.Append(ctx, issuance)
-	return err
+	issuance.ID = delegation.IssuanceReceiptEventID(b.TenantID, b.IdempotencyKey)
+	checkSource := func(source eventspec.Event) error {
+		if source.TenantID != issuance.TenantID || source.Type != issuance.Type ||
+			!bytes.Equal(source.Data, issuance.Data) {
+			return fmt.Errorf("brokerstore: issuance receipt already belongs to a different credential")
+		}
+		return nil
+	}
+	if prior, found, err := r.log.EventByID(ctx, issuance.ID); err != nil {
+		return err
+	} else if found {
+		return checkSource(prior)
+	}
+	if _, err := r.log.Append(ctx, issuance); err != nil {
+		return err
+	}
+	readback, found, err := r.log.EventByID(ctx, issuance.ID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("brokerstore: issuance receipt source is not durably readable")
+	}
+	return checkSource(readback)
 }
 
 // isUniqueViolation reports whether err is a PostgreSQL unique-constraint violation

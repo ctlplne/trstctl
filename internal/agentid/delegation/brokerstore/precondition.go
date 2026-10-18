@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/agentid/delegation"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/broker"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/signing"
 )
@@ -539,17 +540,18 @@ func (p *BrokerPrecondition) recordBinding(ctx context.Context, view broker.Issu
 	return binding, nil
 }
 
-// credentialIDFor derives a stable credential id for the binding row from the tenant,
-// agent, and chain digest, so the binding keys to a deterministic id the broker's mint
-// can be reconciled against. A renewal derives a DISTINCT id (it is a fresh credential),
-// but the same attestation evidence still cannot justify it (the evidence-digest unique
-// index rejects a reused attestation, AGID-claim-9).
+// credentialIDFor derives a stable id from tenant, agent, verified binding and
+// issuance receipt. Retrying the same receipt keeps one credential; a separate
+// authorized request for the same chain gets a distinct credential instead of
+// silently reusing a prior key. Attestation evidence still cannot justify two
+// issuances (the evidence-digest unique index rejects reuse, AGID-claim-9).
 func credentialIDFor(view broker.IssuanceView, chainDigest []byte, renewal bool) string {
 	kind := "cred"
 	if renewal {
 		kind = "renew"
 	}
-	return kind + ":" + view.TenantID + ":" + view.AgentID + ":" + shortHex(chainDigest)
+	receiptDigest := crypto.SHA256Sum([]byte(view.IdempotencyKey))
+	return kind + ":" + view.TenantID + ":" + view.AgentID + ":" + shortHex(chainDigest) + ":" + shortHex(receiptDigest)
 }
 
 // shortHex renders up to the first 16 bytes of a digest as hex, enough to make the

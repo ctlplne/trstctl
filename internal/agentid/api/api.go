@@ -88,7 +88,18 @@ type IssueChainBoundResponse struct {
 	AgentID        string    `json:"agent_id"`
 	TrustAnchorRef string    `json:"trust_anchor_ref"`
 	Status         string    `json:"status"`
+	StatusURL      string    `json:"status_url"`
 	QueuedAt       time.Time `json:"queued_at"`
+}
+
+// IssuanceStatusResponse follows a queued receipt to its signer-minted public
+// credential. It never includes the credential bytes or the submitted chain.
+type IssuanceStatusResponse struct {
+	IssuanceID   string `json:"issuance_id"`
+	Status       string `json:"status"`
+	CredentialID string `json:"credential_id,omitempty"`
+	Attempts     int    `json:"attempts"`
+	Found        bool   `json:"found"`
 }
 
 // RevokeRequest asks to revoke a subject (a delegation record, agent identity, or
@@ -204,6 +215,9 @@ type Service interface {
 	// IssueChainBound stages a chain-bound issuance as an idempotent outbox job
 	// (agentid.issue-chain-bound) for the orchestrator to drive.
 	IssueChainBound(ctx context.Context, tenantID string, req IssueChainBoundRequest) (IssueChainBoundResponse, error)
+	// GetIssuance follows the receipt through the durable outbox and the exact
+	// immutable issuance result event; it never guesses a credential from a subject.
+	GetIssuance(ctx context.Context, tenantID, issuanceID string) (IssuanceStatusResponse, error)
 	// Revoke stages a revocation directive as an idempotent outbox job
 	// (agentid.revoke-directive) for the orchestrator's cascade to drive.
 	Revoke(ctx context.Context, tenantID string, req RevokeRequest) (RevokeResponse, error)
@@ -257,6 +271,13 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:       func(a *api.API) http.HandlerFunc { return issueHandler(a, svc) },
 			RequestSchema: "AGIDIssuanceRequest", ResponseSchema: "AGIDIssuanceAck",
 			SuccessCode: "202", Mutation: true, Permission: authz.AgentsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/agent-delegation/issuance", OperationID: "getAgentDelegationIssuance",
+			Summary:        "Follow an agent issuance receipt to its terminal result and public credential ID",
+			Handler:        func(a *api.API) http.HandlerFunc { return issuanceStatusHandler(a, svc) },
+			Query:          []api.RouteParam{{Name: "issuance_id", Type: "string", Description: "queued issuance receipt ID", Required: true}},
+			ResponseSchema: "AGIDIssuanceStatus", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/agent-delegation/revocations", OperationID: "revokeAgentDelegation",
@@ -404,6 +425,29 @@ func issueHandler(a *api.API, svc Service) http.HandlerFunc {
 			}
 			return http.StatusAccepted, resp, nil
 		})
+	}
+}
+
+func issuanceStatusHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		issuanceID := r.URL.Query().Get("issuance_id")
+		if issuanceID == "" {
+			writeProblem(w, http.StatusBadRequest, "issuance_id query parameter is required")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.GetIssuance(r.Context(), tenantID, issuanceID)
+		a.ObserveFeature("agentid", "issuance-status", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusServiceUnavailable, "issuance status is unavailable; retry the same receipt after recovery")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -597,8 +641,16 @@ func schemas() map[string]*api.Schema {
 			"agent_id":         api.StringSchema(),
 			"trust_anchor_ref": api.StringSchema(),
 			"status":           api.StringSchema(),
+			"status_url":       api.StringSchema(),
 			"queued_at":        api.TimestampSchema(),
 		}, "issuance_id", "agent_id", "status"),
+		"AGIDIssuanceStatus": api.ObjectSchema(map[string]*api.Schema{
+			"issuance_id":   api.StringSchema(),
+			"status":        api.StringSchema(),
+			"credential_id": api.StringSchema(),
+			"attempts":      api.IntegerSchema(),
+			"found":         api.BooleanSchema(),
+		}, "issuance_id", "status", "found"),
 		"AGIDRevocationRequest": api.ObjectSchema(map[string]*api.Schema{
 			"subject":            api.StringSchema(),
 			"reason":             api.StringSchema(),

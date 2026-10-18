@@ -298,7 +298,7 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// PCAS first use adds registration, request status, succession, and chain readback.
 	// F2 adds one exact discovery schedule read and three event-sourced lifecycle controls.
 	// F34 adds matching headless recovery list and exact get commands for issues and CA results.
-	// The eight attached Core agent-delegation routes now have matching
+	// The nine attached Core agent-delegation routes now have matching
 	// headless commands; the static API-table parity test cannot see them.
 	// PCAS predecessor retirement adds one exact status read and one reviewed
 	// quorum-policy write, keeping the attached Core API usable headlessly.
@@ -307,9 +307,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// PCAS breadth adds recovery, federation, KEM, issuer and staple operator paths.
 	// Recovery preparation and signed public readback add two commands so a
 	// custodian can approve the exact isolated-signer key.
-	if len(out) != 535 {
+	if len(out) != 536 {
 		// PCAS recovery policy readback is a tenant-scoped stock-client action.
-		t.Fatalf("CLI commands = %d, want 535", len(out))
+		t.Fatalf("CLI commands = %d, want 536", len(out))
 	}
 	return out
 }

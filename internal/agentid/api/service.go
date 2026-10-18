@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -239,8 +240,78 @@ func (s *service) IssueChainBound(ctx context.Context, tenantID string, req Issu
 		AgentID:        req.AgentID,
 		TrustAnchorRef: req.TrustAnchorRef,
 		Status:         "queued",
+		StatusURL:      "/api/v1/agent-delegation/issuance?" + url.Values{"issuance_id": {issuanceID}}.Encode(),
 		QueuedAt:       time.Now().UTC(),
 	}, nil
+}
+
+// GetIssuance follows a receipt through its immutable first-writer result
+// event. The outbox answers pending/failed requests; an issued result is
+// reported only when its exact public credential is independently readable.
+// Looking up a subject is deliberately insufficient: two requests can name
+// the same agent, and a lost HTTP response must not return the wrong one.
+func (s *service) GetIssuance(ctx context.Context, tenantID, issuanceID string) (IssuanceStatusResponse, error) {
+	resp := IssuanceStatusResponse{IssuanceID: issuanceID, Status: "not_found"}
+	if s.store == nil {
+		return resp, nil
+	}
+	if s.log != nil {
+		eventID := delegation.IssuanceReceiptEventID(tenantID, issuanceID)
+		event, found, err := s.log.EventByID(ctx, eventID)
+		if err != nil {
+			return resp, fmt.Errorf("agentid api: read issuance source: %w", err)
+		}
+		if found {
+			decoded, err := delegation.Decode(event)
+			if err != nil {
+				return resp, fmt.Errorf("agentid api: decode issuance source: %w", err)
+			}
+			issued, ok := decoded.(delegation.IssuanceRecordedV1)
+			if !ok || event.TenantID != tenantID || issued.TenantID != tenantID ||
+				issued.IssuanceID != issuanceID || issued.CredentialID == "" {
+				return resp, fmt.Errorf("agentid api: issuance receipt source has a different binding")
+			}
+			credential, err := s.FetchCredential(ctx, tenantID, issued.CredentialID)
+			if err != nil {
+				return resp, err
+			}
+			resp.Found = true
+			resp.CredentialID = issued.CredentialID
+			if credential.Found {
+				resp.Status = "issued"
+			} else {
+				resp.Status = "result_unavailable"
+			}
+			return resp, nil
+		}
+	}
+	var delivery string
+	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status, attempts FROM outbox
+			WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			  AND destination = $1 AND idempotency_key = $2`,
+			IssuanceRequestDestination, issuanceID).Scan(&delivery, &resp.Attempts)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return resp, nil
+	}
+	if err != nil {
+		return resp, fmt.Errorf("agentid api: read issuance delivery: %w", err)
+	}
+	resp.Found = true
+	switch delivery {
+	case "pending", "processing":
+		resp.Status = "pending"
+	case "failed":
+		resp.Status = "failed"
+	case "delivered":
+		// Historical rows may predate receipt-bound result events. Do not infer
+		// a credential ID from a shared subject or call delivery an issuance.
+		resp.Status = "result_unavailable"
+	default:
+		return resp, fmt.Errorf("agentid api: unknown issuance delivery status %q", delivery)
+	}
+	return resp, nil
 }
 
 // revocationJob is the durable outbox payload the orchestrator's cascade drains. It carries

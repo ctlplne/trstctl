@@ -14,6 +14,23 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+func TestCredentialIDBindsDistinctIssuanceReceipts(t *testing.T) {
+	view := broker.IssuanceView{TenantID: "tenant-a", AgentID: "agent-a", IdempotencyKey: "receipt-a"}
+	chain := []byte("verified-binding-digest")
+	first := credentialIDFor(view, chain, false)
+	if first != credentialIDFor(view, chain, false) {
+		t.Fatal("same receipt did not keep a stable credential ID")
+	}
+	view.IdempotencyKey = "receipt-b"
+	if first == credentialIDFor(view, chain, false) {
+		t.Fatal("a second authorized receipt reused the predecessor credential ID")
+	}
+	view.IdempotencyKey = "receipt-a"
+	if first == credentialIDFor(view, chain, true) {
+		t.Fatal("renewal reused the issuance credential ID")
+	}
+}
+
 // precondition_test.go covers the AGID-07b chain-bound precondition paths that need NO
 // datastore: short-TTL/no-status-query (AGID-claim-7 / INV-A7), sub-hour-on-verified-
 // attestation (AGID-claim-26 / INV-A6), renewal-repeats-verification-in-signer (AGID-claim-8), and
