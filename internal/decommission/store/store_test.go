@@ -344,6 +344,37 @@ func TestCompletionEventsDoNotCollapseSharedJobID(t *testing.T) {
 	}
 }
 
+func TestCompletionProjectionRejectsConflictingSuccessor(t *testing.T) {
+	repo := newRepoOn(t, "vdec_completion_conflict")
+	ctx := context.Background()
+	dependent := dep(depstate.DependentCredential, "leaf-a")
+	events := []eventspec.Event{
+		mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: "key-a", Dependent: dependent}, 1),
+		mustEncode(t, depstate.ReprotectionCompletedV1{TenantID: tenantA, KeyID: "key-a", JobID: "job-a", Dependent: dependent, SuccessorKeyID: "key-b"}, 2),
+		mustEncode(t, depstate.ReprotectionCompletedV1{TenantID: tenantA, KeyID: "key-a", JobID: "job-a", Dependent: dependent, SuccessorKeyID: "key-b"}, 3),
+	}
+	if err := repo.RebuildTenant(ctx, tenantA, events); err != nil {
+		t.Fatalf("exact duplicate replay: %v", err)
+	}
+	completions, err := repo.ListCompletionEvents(ctx, tenantA, "key-a")
+	if err != nil || len(completions) != 1 || completions[0].SuccessorKeyID != "key-b" {
+		t.Fatalf("exact duplicate replay completions = %+v, err = %v", completions, err)
+	}
+	events = append(events, mustEncode(t, depstate.ReprotectionCompletedV1{
+		TenantID: tenantA, KeyID: "key-a", JobID: "job-a", Dependent: dependent, SuccessorKeyID: "key-c",
+	}, 4))
+	if err := repo.RebuildTenant(ctx, tenantA, events); err == nil {
+		t.Fatal("conflicting successor for one completion identity was silently accepted")
+	}
+	completions, err = repo.ListCompletionEvents(ctx, tenantA, "key-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(completions) != 1 || completions[0].SuccessorKeyID != "key-b" {
+		t.Fatalf("failed projection changed prior completion rows: %+v", completions)
+	}
+}
+
 func TestCoreOnly_AppliesZeroVDECMigrations(t *testing.T) {
 	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, testDSN)

@@ -315,7 +315,7 @@ func insertCompletionFromEvent(ctx context.Context, tx pgx.Tx, tenantID string, 
 }
 
 func insertCompletion(ctx context.Context, tx pgx.Tx, ev CompletionEvent) error {
-	_, err := tx.Exec(ctx,
+	result, err := tx.Exec(ctx,
 		`INSERT INTO decommission_completion_events
 		   (tenant_id, key_id, dependent_class, dependent_id, completion_kind,
 		    job_id, successor_key_id, destination, ledger_position)
@@ -324,6 +324,27 @@ func insertCompletion(ctx context.Context, tx pgx.Tx, ev CompletionEvent) error 
 		ev.KeyID, string(ev.Dependent.Class), ev.Dependent.ID, ev.Kind, ev.JobID, ev.SuccessorKeyID, ev.Destination, ev.LedgerPosition)
 	if err != nil {
 		return fmt.Errorf("decommission store: insert completion event: %w", err)
+	}
+	if result.RowsAffected() == 1 {
+		return nil
+	}
+	// A second copy of the same canonical event is harmless during restore. A
+	// changed successor for the same completion identity is evidence of a
+	// conflicting event and must stop the projection, not disappear behind the
+	// unique index's DO NOTHING branch.
+	var successorKeyID, destination string
+	if err := tx.QueryRow(ctx,
+		`SELECT successor_key_id, destination FROM decommission_completion_events
+		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+		    AND key_id = $1 AND dependent_class = $2 AND dependent_id = $3
+		    AND completion_kind = $4 AND destination = $5 AND job_id = $6`,
+		ev.KeyID, string(ev.Dependent.Class), ev.Dependent.ID, ev.Kind, ev.Destination, ev.JobID).
+		Scan(&successorKeyID, &destination); err != nil {
+		return fmt.Errorf("decommission store: read prior completion event: %w", err)
+	}
+	if successorKeyID != ev.SuccessorKeyID || destination != ev.Destination {
+		return fmt.Errorf("decommission store: conflicting completion evidence for key %s job %s dependent %s/%s",
+			ev.KeyID, ev.JobID, ev.Dependent.Class, ev.Dependent.ID)
 	}
 	return nil
 }
