@@ -589,7 +589,10 @@ never live in the API process. What you can do end to end against the running bi
   while reconciled leaves enter the certificate inventory so there is no
   shadow estate. Key custody, stated exactly: `trstctl-agent --edge-csr`
   defaults to a persistent TPM2 signing object and writes only an opaque public
-  handle; `--edge-issue` reopens that handle and asks the TPM to sign. PKCS#11
+  handle; `--edge-attest` has a separately certified TPM AIK run TPM2_Certify
+  over that exact object and CSR, verifies the resulting WebAuthn TPM envelope
+  locally, and can write a complete reviewed CLI mint body; `--edge-issue`
+  reopens the delegated key handle and asks the TPM to sign. PKCS#11
   is a configured alternative whose shipping module creates a token object
   with `CKA_SENSITIVE=true` and `CKA_EXTRACTABLE=false`. It must be explicitly
   allowed in the segment policy because the host's WebAuthn TPM attestation

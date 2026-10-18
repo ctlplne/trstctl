@@ -28,11 +28,77 @@ bytes and wiped after the device opens. Repeating the same tenant, segment, and
 generation reconciles the same persistent object after a lost response. Use a
 new generation label when intentionally rotating the edge CA.
 
-The command prints the CSR as base64 and the exact attestation challenge. TPM
-attestation tooling must produce a WebAuthn TPM credential over that challenge
-for the CSR key. The mint request uses `key_provider: "tpm2"`. The control plane
-checks that the attested public-key digest equals the CSR public-key digest, so
-an unrelated software key cannot borrow the host TPM's proof.
+The command prints the CSR as base64 and the exact attestation challenge. A
+separate TPM attestation identity key (AIK) must already have a certificate
+chain issued by the operator's vetted TPM attestation authority. Its private
+key stays in the TPM; the public chain is what the segment policy pins. The
+AIK handle file has the same public-only JSON shape as `edge-ca.keyref.json`.
+Provision the AIK under a *different* durable operation label from the edge CA,
+then obtain its AIK-profile certificate from that authority. Do not sign an
+arbitrary host-generated AIK public key without the authority's device
+enrollment and endorsement checks. A local QA authority may issue a disposable
+AIK certificate for a local swtpm; that qualifies only the emulator contract.
+To create the separate TPM-resident AIK key and a proof-of-possession CSR with
+the shipped agent, use the same tenant and segment but a distinct generation:
+
+```sh
+trstctl-agent \
+  --edge-csr \
+  --edge-tenant 77777777-7777-7777-7777-777777777777 \
+  --edge-segment 88888888-8888-8888-8888-888888888888 \
+  --edge-key-generation aik-1 \
+  --edge-cn bunker-01-aik \
+  --edge-key-provider tpm2 \
+  --edge-key-handle-out /var/lib/trstctl/edge-aik.keyref.json \
+  --edge-csr-out /var/lib/trstctl/edge-aik.csr
+```
+
+The attestation authority issues an AIK certificate for that public key with
+an empty subject, TPM manufacturer/model/version directory-name SAN, digital
+signature use, and the TPM AIK extended key usage `2.23.133.8.3`. Put the AIK
+leaf first and its chain through the pinned root in `edge-aik-chain.pem`.
+
+With the edge CSR, both public handle files, and the AIK certificate chain on
+the host, have the **same TPM** certify the edge CA's persistent signing object:
+
+```sh
+trstctl-agent \
+  --edge-attest \
+  --edge-tenant 77777777-7777-7777-7777-777777777777 \
+  --edge-segment 88888888-8888-8888-8888-888888888888 \
+  --edge-key-provider tpm2 \
+  --edge-csr-in /var/lib/trstctl/edge-ca.csr \
+  --edge-ca-key-handle /var/lib/trstctl/edge-ca.keyref.json \
+  --edge-aik-key-handle /var/lib/trstctl/edge-aik.keyref.json \
+  --edge-aik-cert-chain /var/lib/trstctl/edge-aik-chain.pem \
+  --edge-attestation-out /var/lib/trstctl/edge-attestation.json \
+  --edge-parent-ca-id 99999999-9999-9999-9999-999999999999 \
+  --edge-host bunker-01 \
+  --edge-mint-ttl 24h \
+  --edge-mint-request-out /var/lib/trstctl/edge-mint.json
+```
+
+Use `--edge-tpm-path` for a swtpm socket or a nondefault TPM device, and
+`--edge-tpm-key-auth-file` / `--edge-aik-auth-file` for distinct 0600
+authorization files. The agent verifies the CSR against the edge TPM handle,
+the AIK certificate against its own TPM handle, and the resulting TPM2_Certify
+statement through the same parser used by the server. It writes the WebAuthn
+TPM credential as a 0600 file. It refuses a mismatch; there is no software
+attestation fallback. The mint request carries the CSR as base64 DER,
+`attestation_credential_json` as base64 of that JSON file, and
+`key_provider: "tpm2"`. The control plane separately checks the installed
+root and binds the attested key digest to the CSR public-key digest. The
+certificate authority selected for minting must permit a subordinate CA. Review
+`edge-mint.json` and send it through the native CLI with a fresh idempotency key:
+
+```sh
+trstctl-cli --idempotency-key edge-bunker-01-generation-1 \
+  edge delegations mint -f /var/lib/trstctl/edge-mint.json
+```
+
+The same JSON body can be sent to `POST /api/v1/edge/delegations`. An absent
+`--edge-mint-request-out` leaves only the attestation file; the agent never
+contacts the control plane from this offline host mode.
 
 After the control plane returns the delegated certificate chain:
 

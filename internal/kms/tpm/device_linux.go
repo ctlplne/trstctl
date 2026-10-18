@@ -10,6 +10,7 @@ package tpm
 // device.
 
 import (
+	"bytes"
 	"encoding/asn1"
 	"encoding/binary"
 	"fmt"
@@ -49,6 +50,7 @@ type goTPMDevice struct {
 var _ Device = (*goTPMDevice)(nil)
 var _ LifecycleDevice = (*goTPMDevice)(nil)
 var _ OperationDevice = (*goTPMDevice)(nil)
+var _ EdgeCertificationDevice = (*goTPMDevice)(nil)
 
 // OpenDevice opens a real TPM 2.0 transport. An empty path uses go-tpm's Linux
 // defaults; a Unix socket path reaches swtpm through the same command protocol.
@@ -454,6 +456,79 @@ func (d *goTPMDevice) Sign(handle string, digest []byte, opts crypto.SignOptions
 		return asn1.Marshal(struct{ R, S any }{R: sig.ECC.R, S: sig.ECC.S})
 	}
 	return nil, fmt.Errorf("tpm: device returned an empty signature")
+}
+
+// CertifyEdgeKey uses the TPM's Certify command. The returned certInfo comes
+// from the device itself, and its signature comes from the resident AIK. This
+// is stronger than signing a caller-constructed statement with the AIK.
+func (d *goTPMDevice) CertifyEdgeKey(objectHandle, signerHandle string, qualifyingData, signerAuth []byte) (crypto.EdgeTPMCertification, error) {
+	if len(qualifyingData) != 32 {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: edge certification requires a SHA-256 qualifying digest")
+	}
+	lockedSignerAuth, err := lockTPMAuth(signerAuth)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: protect attestation key authorization: %w", err)
+	}
+	if lockedSignerAuth != nil {
+		defer lockedSignerAuth.Destroy()
+	}
+	object, err := parseTPMHandle(objectHandle)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, err
+	}
+	signer, err := parseTPMHandle(signerHandle)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, err
+	}
+	if object == signer {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: attestation identity must differ from the edge CA key")
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: device is closed")
+	}
+	objectPublic, _, _, err := gotpm.ReadPublic(d.rw, object)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: read edge key: %w", err)
+	}
+	signerPublic, _, _, err := gotpm.ReadPublic(d.rw, signer)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: read attestation key: %w", err)
+	}
+	if objectPublic.Type != gotpm.AlgECC || signerPublic.Type != gotpm.AlgECC || objectPublic.ECCParameters == nil || signerPublic.ECCParameters == nil || objectPublic.ECCParameters.CurveID != gotpm.CurveNISTP256 || signerPublic.ECCParameters.CurveID != gotpm.CurveNISTP256 {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: edge and attestation objects must be P-256 signing keys")
+	}
+	pubArea, err := objectPublic.Encode()
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: encode edge public area: %w", err)
+	}
+	objectDER, err := tpmPublicDER(objectPublic, crypto.ECDSAP256)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, err
+	}
+	signerDER, err := tpmPublicDER(signerPublic, crypto.ECDSAP256)
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, err
+	}
+	attest, signatureWire, err := gotpm.CertifyEx(d.rw,
+		secrettext.String(tpmAuthBytes(d.keyAuth)), secrettext.String(tpmAuthBytes(lockedSignerAuth)), object, signer,
+		qualifyingData, gotpm.SigScheme{Alg: gotpm.AlgECDSA, Hash: gotpm.AlgSHA256})
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: TPM2_Certify: %w", err)
+	}
+	signature, err := gotpm.DecodeSignature(bytes.NewBuffer(signatureWire))
+	if err != nil || signature.ECC == nil || signature.Alg != gotpm.AlgECDSA || signature.ECC.HashAlg != gotpm.AlgSHA256 {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: TPM2_Certify returned an invalid ECDSA-SHA256 signature")
+	}
+	signatureDER, err := asn1.Marshal(struct{ R, S any }{R: signature.ECC.R, S: signature.ECC.S})
+	if err != nil {
+		return crypto.EdgeTPMCertification{}, err
+	}
+	return crypto.EdgeTPMCertification{
+		PublicArea: pubArea, ObjectPublicKeyDER: objectDER, SignerPublicKeyDER: signerDER,
+		CertInfo: attest, SignatureDER: signatureDER,
+	}, nil
 }
 
 func tpmHash(hash crypto.Hash) (gotpm.Algorithm, error) {

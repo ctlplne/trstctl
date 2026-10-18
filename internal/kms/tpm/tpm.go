@@ -55,6 +55,12 @@ type OperationDevice interface {
 	ZeroizeKeyForOperation(operationID, handle string) error
 }
 
+// EdgeCertificationDevice asks a TPM attestation identity to certify the
+// persistent edge signing object. Only public evidence crosses this seam.
+type EdgeCertificationDevice interface {
+	CertifyEdgeKey(objectHandle, signerHandle string, qualifyingData, signerAuth []byte) (crypto.EdgeTPMCertification, error)
+}
+
 // Backend is a TPM 2.0 crypto.Backend. It owns a Device and turns the generic backend
 // contract into TPM operations; it never holds private key material itself.
 type Backend struct {
@@ -83,6 +89,16 @@ func New(dev Device, opts ...Option) *Backend {
 
 // Name identifies the backend.
 func (b *Backend) Name() string { return "tpm2" }
+
+// CertifyEdgeKey performs TPM2_Certify; it never accepts a caller-made
+// certInfo or a signature computed outside the TPM.
+func (b *Backend) CertifyEdgeKey(objectHandle, signerHandle string, qualifyingData, signerAuth []byte) (crypto.EdgeTPMCertification, error) {
+	device, ok := b.dev.(EdgeCertificationDevice)
+	if !ok {
+		return crypto.EdgeTPMCertification{}, fmt.Errorf("tpm: device does not support TPM2_Certify")
+	}
+	return device.CertifyEdgeKey(objectHandle, signerHandle, qualifyingData, signerAuth)
+}
 
 // GenerateKey provisions a signing key in the TPM and returns a Signer for it. TPM 2.0
 // devices commonly support ECDSA P-256 and RSA-2048; the device decides which algorithms

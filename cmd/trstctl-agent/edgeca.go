@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -43,6 +45,17 @@ type edgeCAOptions struct {
 	keyOut                  string
 	keyHandleOut            string
 	csrOut                  string
+	attestMode              bool
+	csrIn                   string
+	caKeyHandle             string
+	aikKeyHandle            string
+	aikCertChain            string
+	aikAuthFile             string
+	attestationOut          string
+	mintRequestOut          string
+	mintParentCAID          string
+	mintHost                string
+	mintTTL                 time.Duration
 	tpmPath                 string
 	tpmOwnerAuthFile        string
 	tpmKeyAuthFile          string
@@ -52,16 +65,15 @@ type edgeCAOptions struct {
 	pkcs11PINFile           string
 	pkcs11KeyLabelPrefix    string
 
-	issueMode   bool
-	caCert      string
-	caKey       string
-	caKeyHandle string
-	leafCN      string
-	leafDNS     string
-	leafTTL     time.Duration
-	certOut     string
-	leafKeyOut  string
-	journal     string
+	issueMode  bool
+	caCert     string
+	caKey      string
+	leafCN     string
+	leafDNS    string
+	leafTTL    time.Duration
+	certOut    string
+	leafKeyOut string
+	journal    string
 }
 
 // edgeJournal is the reconcile request body, maintained on disk in exactly the
@@ -73,13 +85,107 @@ type edgeJournal struct {
 
 // runEdgeCAOps handles the one-shot edge modes; reports whether one ran.
 func runEdgeCAOps(opts edgeCAOptions, host string) (bool, error) {
+	if modes := boolCount(opts.csrMode, opts.attestMode, opts.issueMode); modes > 1 {
+		return true, fmt.Errorf("use exactly one of --edge-csr, --edge-attest or --edge-issue")
+	}
 	switch {
 	case opts.csrMode:
 		return true, runEdgeCSR(opts)
+	case opts.attestMode:
+		return true, runEdgeAttest(opts)
 	case opts.issueMode:
 		return true, runEdgeIssue(opts, host)
 	}
 	return false, nil
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
+}
+
+func runEdgeAttest(opts edgeCAOptions) error {
+	if normalizedEdgeKeyProvider(opts.keyProvider) != "tpm2" {
+		return fmt.Errorf("edge-attest requires a TPM2 edge CA key")
+	}
+	if strings.TrimSpace(opts.tenantID) == "" || strings.TrimSpace(opts.segmentID) == "" || opts.csrIn == "" || opts.caKeyHandle == "" || opts.aikKeyHandle == "" || opts.aikCertChain == "" || opts.attestationOut == "" {
+		return fmt.Errorf("edge-attest requires tenant, segment, CSR, edge key handle, AIK handle, AIK certificate chain and output path")
+	}
+	csrDER, err := os.ReadFile(opts.csrIn) // #nosec G304 -- explicit operator file path
+	if err != nil {
+		return fmt.Errorf("read edge CA CSR: %w", err)
+	}
+	readHandle := func(path string) (crypto.EdgeCAKeyHandle, error) {
+		raw, err := os.ReadFile(path) // #nosec G304 -- explicit operator file path
+		if err != nil {
+			return crypto.EdgeCAKeyHandle{}, err
+		}
+		var handle crypto.EdgeCAKeyHandle
+		if err := json.Unmarshal(raw, &handle); err != nil {
+			return crypto.EdgeCAKeyHandle{}, err
+		}
+		return handle, nil
+	}
+	edgeHandle, err := readHandle(opts.caKeyHandle)
+	if err != nil {
+		return fmt.Errorf("read edge TPM handle: %w", err)
+	}
+	aikHandle, err := readHandle(opts.aikKeyHandle)
+	if err != nil {
+		return fmt.Errorf("read AIK TPM handle: %w", err)
+	}
+	chain, err := os.ReadFile(opts.aikCertChain) // #nosec G304 -- explicit operator file path
+	if err != nil {
+		return fmt.Errorf("read AIK certificate chain: %w", err)
+	}
+	aikAuth, err := readEdgeSecretFile(opts.aikAuthFile, false)
+	if err != nil {
+		return fmt.Errorf("read AIK authorization: %w", err)
+	}
+	defer secret.Wipe(aikAuth)
+	provider, closeProvider, err := openEdgeCAKeyProvider(opts)
+	if err != nil {
+		return fmt.Errorf("open TPM2 edge CA provider: %w", err)
+	}
+	defer func() { _ = closeProvider() }()
+	certifier, ok := provider.(crypto.EdgeTPMCertifier)
+	if !ok {
+		return fmt.Errorf("TPM2 provider cannot certify a persistent edge key")
+	}
+	credential, err := deviceattest.CreateEdgeTPMCredential(opts.tenantID, opts.segmentID, csrDER, edgeHandle, aikHandle, chain, aikAuth, certifier)
+	if err != nil {
+		return err
+	}
+	if err := writeEdgePrivateFile(opts.attestationOut, credential); err != nil {
+		return fmt.Errorf("write edge TPM attestation: %w", err)
+	}
+	fmt.Printf("TPM2_Certify evidence for tenant %s segment %s written to %s (0600)\n", opts.tenantID, opts.segmentID, opts.attestationOut)
+	if opts.mintRequestOut != "" {
+		if strings.TrimSpace(opts.mintParentCAID) == "" || strings.TrimSpace(opts.mintHost) == "" || opts.mintTTL < 0 || opts.mintTTL > 30*24*time.Hour || (opts.mintTTL > 0 && opts.mintTTL < time.Second) {
+			return fmt.Errorf("edge mint request needs parent CA id, host and a TTL within the 30-day ceiling")
+		}
+		request := map[string]any{
+			"segment_id": opts.segmentID, "ca_id": opts.mintParentCAID, "host": opts.mintHost,
+			"csr_der": csrDER, "attestation_credential_json": credential, "key_provider": "tpm2",
+		}
+		if opts.mintTTL > 0 {
+			request["ttl_seconds"] = int(opts.mintTTL.Seconds())
+		}
+		requestJSON, err := json.MarshalIndent(request, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encode edge mint request: %w", err)
+		}
+		if err := writeEdgePrivateFile(opts.mintRequestOut, append(requestJSON, '\n')); err != nil {
+			return fmt.Errorf("write edge mint request: %w", err)
+		}
+		fmt.Printf("reviewed CLI mint body written to %s (0600); send with trstctl-cli edge delegations mint -f\n", opts.mintRequestOut)
+	}
+	return nil
 }
 
 func runEdgeCSR(opts edgeCAOptions) error {
@@ -102,7 +208,7 @@ func runEdgeCSR(opts edgeCAOptions) error {
 			return err
 		}
 		defer secret.Wipe(keyPEM)
-		if err := os.WriteFile(opts.keyOut, keyPEM, 0o600); err != nil {
+		if err := writeEdgePrivateFile(opts.keyOut, keyPEM); err != nil {
 			return fmt.Errorf("write edge CA key: %w", err)
 		}
 		csrDER = generatedCSR
@@ -128,7 +234,7 @@ func runEdgeCSR(opts edgeCAOptions) error {
 		if err != nil {
 			return fmt.Errorf("encode edge CA public key handle: %w", err)
 		}
-		if err := os.WriteFile(opts.keyHandleOut, handleJSON, 0o600); err != nil {
+		if err := writeEdgePrivateFile(opts.keyHandleOut, handleJSON); err != nil {
 			return fmt.Errorf("write edge CA public key handle: %w", err)
 		}
 		csrDER = generatedCSR
@@ -136,7 +242,7 @@ func runEdgeCSR(opts edgeCAOptions) error {
 	default:
 		return fmt.Errorf("unknown --edge-key-provider %q (want tpm2, pkcs11, or software)", opts.keyProvider)
 	}
-	if err := os.WriteFile(opts.csrOut, csrDER, 0o600); err != nil {
+	if err := writeEdgePrivateFile(opts.csrOut, csrDER); err != nil {
 		return fmt.Errorf("write edge CA CSR: %w", err)
 	}
 	challenge := crypto.EdgeAttestationChallenge(
@@ -145,8 +251,8 @@ func runEdgeCSR(opts edgeCAOptions) error {
 	fmt.Printf("mint custody: provider=%s storage=%s exportable=%t\n", providerName, edgeKeyStorage(providerName), providerName == "software")
 	fmt.Printf("csr_der (base64, for the mint request): %s\n", base64.StdEncoding.EncodeToString(csrDER))
 	fmt.Printf("attestation challenge (hex): %s\n", hex.EncodeToString(challenge))
-	fmt.Println("have this host's TPM tooling produce a WebAuthn TPM attestation over that challenge;")
-	fmt.Println("the brain refuses the mint without it")
+	fmt.Println("run trstctl-agent --edge-attest with this CSR, its TPM handle, and a certified TPM AIK;")
+	fmt.Println("the brain refuses the mint without that TPM2_Certify evidence")
 	return nil
 }
 
@@ -223,10 +329,10 @@ func runEdgeIssue(opts edgeCAOptions, host string) error {
 	if keyOut == "" {
 		keyOut = "edge-leaf.key"
 	}
-	if err := os.WriteFile(certOut, leaf.CertificatePEM, 0o600); err != nil {
+	if err := writeEdgePrivateFile(certOut, leaf.CertificatePEM); err != nil {
 		return fmt.Errorf("write leaf certificate: %w", err)
 	}
-	if err := os.WriteFile(keyOut, leaf.LeafKeyPEM, 0o600); err != nil {
+	if err := writeEdgePrivateFile(keyOut, leaf.LeafKeyPEM); err != nil {
 		return fmt.Errorf("write leaf key: %w", err)
 	}
 	if err := appendEdgeJournal(opts.journal, host, string(leaf.CertificatePEM)); err != nil {
@@ -289,5 +395,39 @@ func appendEdgeJournal(path, host, certPEM string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o600)
+	return writeEdgePrivateFile(path, out)
+}
+
+// writeEdgePrivateFile replaces a local edge artifact atomically with mode
+// 0600. os.WriteFile would preserve an existing loose mode and follow an
+// existing symlink; neither is acceptable for a private key or mint evidence.
+func writeEdgePrivateFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	directory, err := os.Open(dir) // #nosec G304 -- directory of the operator-selected output, synced after an atomic rename
+	if err == nil {
+		defer func() { _ = directory.Close() }()
+		if err := directory.Sync(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

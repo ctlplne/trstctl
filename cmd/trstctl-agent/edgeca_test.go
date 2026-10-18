@@ -293,3 +293,49 @@ func TestEdgeHardwareCLIUsesOnlyOpaqueHandleAndFailsClosed(t *testing.T) {
 		t.Fatalf("unavailable device error = %v; hardware mode must not fall back to software", err)
 	}
 }
+
+func TestEdgeAttestRefusesIncompleteOrMixedModes(t *testing.T) {
+	if handled, err := runEdgeCAOps(edgeCAOptions{csrMode: true, attestMode: true}, "host"); !handled || err == nil || !strings.Contains(err.Error(), "exactly one") {
+		t.Fatalf("mixed one-shot modes handled=%t err=%v", handled, err)
+	}
+	if err := runEdgeAttest(edgeCAOptions{keyProvider: "software"}); err == nil || !strings.Contains(err.Error(), "TPM2") {
+		t.Fatalf("software attestation unexpectedly allowed: %v", err)
+	}
+	if err := runEdgeAttest(edgeCAOptions{keyProvider: "tpm2"}); err == nil || !strings.Contains(err.Error(), "requires") {
+		t.Fatalf("incomplete TPM attestation unexpectedly allowed: %v", err)
+	}
+}
+
+func TestEdgePrivateArtifactReplacesLooseFileAndSymlink(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "edge-attestation.json")
+	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil { // #nosec G306 -- deliberately loose fixture proves atomic replacement tightens the mode
+		t.Fatal(err)
+	}
+	if err := writeEdgePrivateFile(path, []byte("attested")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("replaced artifact mode=%v err=%v; want 0600", info, err)
+	}
+	sentinel := filepath.Join(dir, "sentinel")
+	if err := os.WriteFile(sentinel, []byte("untouched"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sentinel, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeEdgePrivateFile(path, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	if raw, err := os.ReadFile(sentinel); err != nil || string(raw) != "untouched" { // #nosec G304 -- exact test tempdir sentinel
+		t.Fatalf("symlink target changed: %q %v", raw, err)
+	}
+	if raw, err := os.ReadFile(path); err != nil || string(raw) != "new" { // #nosec G304 -- exact test tempdir output
+		t.Fatalf("atomic replacement failed: %q %v", raw, err)
+	}
+}

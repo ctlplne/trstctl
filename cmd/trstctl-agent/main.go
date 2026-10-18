@@ -173,6 +173,7 @@ func main() {
 	// leaf under the delegated certificate, whose OWN name constraints bound
 	// the request — out-of-constraint fails closed here, not at reconcile.
 	edgeCSRMode := flag.Bool("edge-csr", false, "one-shot: generate the delegated edge CA's non-extractable key and CSR on this host, print the TPM attestation challenge, and exit")
+	edgeAttestMode := flag.Bool("edge-attest", false, "one-shot: have the TPM attest the exact persistent edge CA key and CSR under a separately certified TPM attestation key")
 	edgeTenant := flag.String("edge-tenant", "", "tenant id the delegation is for (bound into the attestation challenge)")
 	edgeSegment := flag.String("edge-segment", "", "declared segment id the delegation is for (bound into the attestation challenge)")
 	edgeCN := flag.String("edge-cn", "", "common name for the delegated edge CA (edge-csr)")
@@ -182,6 +183,15 @@ func main() {
 	edgeKeyOut := flag.String("edge-key-out", "edge-ca.key", "software-exception only: where edge-csr writes the exportable delegated CA private key (0600)")
 	edgeKeyHandleOut := flag.String("edge-key-handle-out", "edge-ca.keyref.json", "hardware path: where edge-csr writes the opaque TPM/PKCS#11 public key handle (contains no private key)")
 	edgeCSROut := flag.String("edge-csr-out", "edge-ca.csr", "where edge-csr writes the CSR (DER) the operator carries to the brain")
+	edgeCSRIn := flag.String("edge-csr-in", "", "edge-attest: DER CSR written by edge-csr")
+	edgeAIKKeyHandle := flag.String("edge-aik-key-handle", "", "edge-attest: opaque TPM handle of the separately certified attestation signing key")
+	edgeAIKCertChain := flag.String("edge-aik-cert-chain", "", "edge-attest: PEM certificate chain for the TPM attestation key, leaf first")
+	edgeAIKAuthFile := flag.String("edge-aik-auth-file", "", "edge-attest: optional 0600 authorization file for the attestation key")
+	edgeAttestationOut := flag.String("edge-attestation-out", "edge-attestation.json", "edge-attest: WebAuthn TPM credential over the exact CSR")
+	edgeMintRequestOut := flag.String("edge-mint-request-out", "", "edge-attest: optional complete JSON body for trstctl-cli edge delegations mint -f")
+	edgeMintParentCAID := flag.String("edge-parent-ca-id", "", "edge-attest: intended parent CA id for the optional mint request body")
+	edgeMintHost := flag.String("edge-host", "", "edge-attest: edge host name for the optional mint request body")
+	edgeMintTTL := flag.Duration("edge-mint-ttl", 0, "edge-attest: optional delegated CA lifetime (default is 7 days, maximum is 30 days)")
 	edgeTPMPath := flag.String("edge-tpm-path", "", "TPM device or swtpm Unix socket; empty uses the Linux TPM default")
 	edgeTPMOwnerAuthFile := flag.String("edge-tpm-owner-auth-file", "", "optional file holding TPM owner hierarchy authorization")
 	edgeTPMKeyAuthFile := flag.String("edge-tpm-key-auth-file", "", "optional file holding TPM edge-key authorization")
@@ -212,9 +222,11 @@ func main() {
 	}
 
 	if handled, err := runEdgeCAOps(edgeCAOptions{
-		csrMode: *edgeCSRMode, tenantID: *edgeTenant, segmentID: *edgeSegment,
+		csrMode: *edgeCSRMode, attestMode: *edgeAttestMode, tenantID: *edgeTenant, segmentID: *edgeSegment,
 		commonName: *edgeCN, keyProvider: *edgeKeyProvider, keyGeneration: *edgeKeyGeneration,
 		allowSoftwareKey: *edgeAllowSoftwareKey, keyOut: *edgeKeyOut, keyHandleOut: *edgeKeyHandleOut, csrOut: *edgeCSROut,
+		csrIn: *edgeCSRIn, aikKeyHandle: *edgeAIKKeyHandle, aikCertChain: *edgeAIKCertChain, aikAuthFile: *edgeAIKAuthFile, attestationOut: *edgeAttestationOut,
+		mintRequestOut: *edgeMintRequestOut, mintParentCAID: *edgeMintParentCAID, mintHost: *edgeMintHost, mintTTL: *edgeMintTTL,
 		tpmPath: *edgeTPMPath, tpmOwnerAuthFile: *edgeTPMOwnerAuthFile, tpmKeyAuthFile: *edgeTPMKeyAuthFile,
 		tpmPersistentHandleBase: tpmPersistentHandleBase, pkcs11Module: *edgePKCS11Module,
 		pkcs11Token: *edgePKCS11Token, pkcs11PINFile: *edgePKCS11PINFile, pkcs11KeyLabelPrefix: *edgePKCS11KeyLabelPrefix,
