@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +14,7 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 
 const certificatePEM = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 const keyProviders = ["tpm2", "pkcs11", "software"] as const;
+const EdgeDelegationActions = lazy(() => import("./EdgeDelegationActions").then((module) => ({ default: module.EdgeDelegationActions })));
 const setupSchema = z
   .object({
     mode: z.enum(["existing", "declare"]),
@@ -83,6 +84,7 @@ export function EdgeDelegationsPanel() {
   const canConfigure = hasPermission(user, "issuers:write");
   const canDeclare = hasPermission(user, "discovery:write");
   const [open, setOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [reviewed, setReviewed] = useState<ReviewedSetup | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -164,16 +166,34 @@ export function EdgeDelegationsPanel() {
         {translateNow("source.edge.delegations.b6edge00001")}
       </h2>
       {canConfigure ? (
-        <button
-          type="button"
-          className="mt-3 rounded-md border border-border px-3 py-2 text-caption"
-          onClick={() => {
-            setOpen(true);
-            setNotice(null);
-          }}
-        >
-          {translateNow("edge.setup.configure")}
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-2 text-caption"
+            onClick={() => {
+              setOpen(true);
+              setNotice(null);
+            }}
+          >
+            {translateNow("edge.setup.configure")}
+          </button>
+          <button type="button" className="rounded-md border border-border px-3 py-2 text-caption" onClick={() => setActionsOpen(true)}>
+            {translateNow("edge.actions.mint")}
+          </button>
+        </div>
+      ) : null}
+      {actionsOpen && canConfigure && policies && delegations ? (
+        <Suspense fallback={<p className="mt-3 text-caption">{translateNow("source.loading.4f9d1e0e3a")}</p>}>
+          <EdgeDelegationActions
+            policies={policies.items ?? []}
+            delegations={delegations.items ?? []}
+            onClose={() => setActionsOpen(false)}
+            onChanged={() => {
+              void queryClient.invalidateQueries({ queryKey: ["edge-delegations"] });
+              void queryClient.invalidateQueries({ queryKey: ["edge-segment-policies"] });
+            }}
+          />
+        </Suspense>
       ) : null}
       {notice ? (
         <p role="status" className="mt-2 text-caption">

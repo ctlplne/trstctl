@@ -100,6 +100,20 @@ The same JSON body can be sent to `POST /api/v1/edge/delegations`. An absent
 `--edge-mint-request-out` leaves only the attestation file; the agent never
 contacts the control plane from this offline host mode.
 
+In the console, open Certificates → Certificate authorities → Authorities →
+Delegated edge CAs → **Mint delegated edge CA**. Upload or paste the complete
+host-generated `edge-mint.json`. The console checks that its segment is enabled
+for the chosen provider and shows the exact public CSR and TPM credential before
+submission. A lost response keeps the same reviewed request and idempotency
+key for retry. Success requires an independent read of the same delegation,
+key digest, status, and public certificate chain. Copy that chain from the
+read-only result into `edge-ca.crt` on the exact host; the TPM key never crosses
+the browser or control plane. The console also offers **Reconcile host journal**
+for the host's `edge-journal.json`, showing the exact certificates and counts
+for reconciled, already recorded, violated, and rejected leaves. **Revoke
+delegated edge CA** reviews the exact host, delegation ID, certificate serial,
+and reason before sending the request and reading the revoked state back.
+
 After the control plane returns the delegated certificate chain:
 
 ```sh

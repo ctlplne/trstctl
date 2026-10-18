@@ -553,7 +553,12 @@ import type {
   EdgeSegmentPolicy,
   EdgeSegmentPolicyInput,
   EdgeDelegationList,
+  EdgeDelegation,
   EdgeDelegationDetail,
+  EdgeDelegationMintInput,
+  EdgeDelegationRevokeInput,
+  EdgeReconcileInput,
+  EdgeReconcileResult,
 } from "./api-types.gen";
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
@@ -1981,6 +1986,9 @@ export interface Api {
   setEdgeSegmentPolicy(id: string, input: EdgeSegmentPolicyInput, idempotencyKey?: string): Promise<EdgeSegmentPolicy>;
   edgeDelegations(): Promise<EdgeDelegationList>;
   edgeDelegation(id: string): Promise<EdgeDelegationDetail>;
+  mintEdgeDelegation(input: EdgeDelegationMintInput, idempotencyKey?: string): Promise<EdgeDelegation>;
+  revokeEdgeDelegation(id: string, input: EdgeDelegationRevokeInput, idempotencyKey?: string): Promise<EdgeDelegation>;
+  reconcileEdgeDelegation(id: string, input: EdgeReconcileInput, idempotencyKey?: string): Promise<EdgeReconcileResult>;
   createRootCA(input: CACreateRootRequest): Promise<CAAuthority>;
   createIntermediateCA(input: CACreateIntermediateRequest): Promise<CAAuthority>;
   signIntermediateCSR(id: string, input: CAIssueIntermediateRequest): Promise<CAIssuedIntermediate>;
@@ -2703,6 +2711,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<EdgeSegmentPolicy>("PUT", `/api/v1/edge/segments/${encodeURIComponent(id)}`, input, idempotencyKey),
   edgeDelegations: () => req<EdgeDelegationList>("/api/v1/edge/delegations"),
   edgeDelegation: (id) => req<EdgeDelegationDetail>(`/api/v1/edge/delegations/${encodeURIComponent(id)}`),
+  mintEdgeDelegation: (input, idempotencyKey) => mutate<EdgeDelegation>("POST", "/api/v1/edge/delegations", input, idempotencyKey),
+  revokeEdgeDelegation: (id, input, idempotencyKey) =>
+    mutate<EdgeDelegation>("POST", `/api/v1/edge/delegations/${encodeURIComponent(id)}/revoke`, input, idempotencyKey),
+  reconcileEdgeDelegation: (id, input, idempotencyKey) =>
+    mutate<EdgeReconcileResult>("POST", `/api/v1/edge/delegations/${encodeURIComponent(id)}/reconcile`, input, idempotencyKey),
   createRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/roots", input),
   createIntermediateCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/intermediates", input),
   signIntermediateCSR: (id, input) => mutate<CAIssuedIntermediate>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/intermediates/csr`, input),
