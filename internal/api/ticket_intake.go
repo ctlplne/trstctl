@@ -163,7 +163,14 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 		} else if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusOK, ticketIntakeFrom(saved, true), nil
+		persisted, found, err := a.store.GetTicketIntakeSchedule(ctx, tenantID, system)
+		if err != nil {
+			return 0, nil, err
+		}
+		if !found {
+			return 0, nil, errors.New("ticket intake schedule missing after configuration")
+		}
+		return http.StatusOK, ticketIntakeFrom(persisted, true), nil
 	})
 }
 

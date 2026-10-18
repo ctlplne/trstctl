@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -498,10 +499,27 @@ func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID strin
 	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
 		if current, found, loadErr := o.store.GetTicketIntakeSchedule(lockCtx, tenantID, in.System); loadErr != nil {
 			return loadErr
-		} else if found && current.CurrentSweepID != "" && !current.CoverageComplete {
-			return ErrTicketIntakeSweepInProgress
+		} else if found {
+			// A lost Save response can be retried with a new HTTP key. Reusing the
+			// exact instruction leaves the durable sweep and cursor untouched.
+			if sameTicketIntakeConfig(current, in) {
+				return nil
+			}
+			if current.CurrentSweepID != "" && !current.CoverageComplete {
+				return ErrTicketIntakeSweepInProgress
+			}
 		}
 		_, err := o.emit(lockCtx, projections.EventTicketIntakeConfigured, tenantID, payload)
 		return err
 	})
+}
+
+func sameTicketIntakeConfig(current store.TicketIntakeSchedule, in projections.TicketIntakeConfigured) bool {
+	return current.System == in.System &&
+		current.InstanceURL == in.InstanceURL && current.TokenRef == in.TokenRef &&
+		current.SNTable == in.SNTable && current.JiraProject == in.JiraProject && current.Query == in.Query &&
+		current.SubjectField == in.SubjectField && current.ProfileField == in.ProfileField &&
+		current.RequesterField == in.RequesterField && current.JustificationField == in.JustificationField &&
+		current.IntervalSeconds == in.IntervalSeconds && current.Enabled == in.Enabled &&
+		current.AllowPrivateEndpoint == in.AllowPrivate && slices.Equal(current.PrivateEgressCIDRs, in.PrivateCIDRs)
 }

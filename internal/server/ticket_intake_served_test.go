@@ -29,14 +29,15 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 
+	config := map[string]any{
+		"system": "servicenow", "instance_url": "https://servicenow.internal.example", "token_ref": servedIntakeTokenRef,
+		"sn_table": "sc_req_item", "query": "state=1",
+		"subject_field": "u_subject", "profile_field": "u_profile",
+		"requester_field": "opened_by", "justification_field": "short_description",
+		"interval_seconds": 3600, "enabled": true,
+	}
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok,
-		"intake-1", map[string]any{
-			"system": "servicenow", "instance_url": "https://servicenow.internal.example", "token_ref": servedIntakeTokenRef,
-			"sn_table": "sc_req_item", "query": "state=1",
-			"subject_field": "u_subject", "profile_field": "u_profile",
-			"requester_field": "opened_by", "justification_field": "short_description",
-			"interval_seconds": 3600, "enabled": true,
-		})
+		"intake-1", config)
 	if status != http.StatusOK {
 		t.Fatalf("configure intake: %d %s", status, out)
 	}
@@ -60,6 +61,24 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 	sched, found, err = h.store.GetTicketIntakeSchedule(t.Context(), h.tenant, "servicenow")
 	if err != nil || !found || sched.CurrentSweepID == "" {
 		t.Fatalf("named sweep not projected: %+v found=%v err=%v", sched, found, err)
+	}
+	// An operator may retry an uncertain Save with a fresh browser key while a
+	// sweep is active. The exact same schedule must read back the retained
+	// cursor without replacing the job; a changed connection still fails shut.
+	status, out = secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok,
+		"intake-identical-retry", config)
+	if status != http.StatusOK || !strings.Contains(string(out), sched.CurrentSweepID) {
+		t.Fatalf("identical schedule during sweep = %d %s, want 200 with retained sweep %s", status, out, sched.CurrentSweepID)
+	}
+	changed := map[string]any{}
+	for key, value := range config {
+		changed[key] = value
+	}
+	changed["query"] = "state=2"
+	status, out = secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok,
+		"intake-changed-during-sweep", changed)
+	if status != http.StatusConflict {
+		t.Fatalf("changed schedule during sweep = %d %s, want 409", status, out)
 	}
 	intent := ticketSyncIntent(sched)
 	var jobs int

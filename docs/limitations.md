@@ -2651,6 +2651,9 @@ than sending an operator looking for a credential that was never there.
   The Approvals console can configure either provider, shows its exact HTTPS
   destination, secret reference, ticket source, field mapping and enabled state
   for review, and retains the idempotency key when a save response is uncertain.
+  Retrying the exact same schedule, even with a fresh HTTP idempotency key, returns
+  its retained sweep cursor without replacing the running job. Changing a schedule
+  during an incomplete sweep returns 409 until that sweep reaches a terminal page.
   The console reports schedule acceptance separately from relay read coverage.
   Each provider has its own schedule row, so a slow ServiceNow sweep cannot
   hide or replace Jira progress. ServiceNow is bounded to one of the four
