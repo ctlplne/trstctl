@@ -20,6 +20,10 @@ import (
 // to durably record the intent.
 var ErrEnqueuerUnavailable = errors.New("reprotect: enqueue substrate unavailable")
 
+// ErrCredentialPlanRequired refuses to queue a signing job before an exact,
+// immutable successor and host route have been reviewed and recorded.
+var ErrCredentialPlanRequired = errors.New("reprotect: reviewed credential plan is required before queueing")
+
 // Enqueuer is the production PRODUCER for DestinationJob. The handler in this
 // package is a consumer with no other producer: until an operator-driven surface
 // enqueues rows at "vdec.reprotect.job", the entire re-protection pipeline is
@@ -34,12 +38,17 @@ type Enqueuer struct {
 	store  *corestore.Store
 	repo   *decstore.Repo
 	outbox *orchestrator.Outbox
+	plans  *CredentialPlanLedger
 }
 
 // NewEnqueuer builds the producer over the core store, the VDEC read-model
 // repository, and the outbox that the server's dispatcher drains.
-func NewEnqueuer(store *corestore.Store, repo *decstore.Repo, outbox *orchestrator.Outbox) *Enqueuer {
-	return &Enqueuer{store: store, repo: repo, outbox: outbox}
+func NewEnqueuer(store *corestore.Store, repo *decstore.Repo, outbox *orchestrator.Outbox, plans ...*CredentialPlanLedger) *Enqueuer {
+	e := &Enqueuer{store: store, repo: repo, outbox: outbox}
+	if len(plans) != 0 {
+		e.plans = plans[0]
+	}
+	return e
 }
 
 // EnqueuedJob is the receipt row for one planned re-protection job. Enqueued is
@@ -79,6 +88,28 @@ func (e *Enqueuer) EnqueueOutstanding(ctx context.Context, tenantID, keyID strin
 	receipts := make([]EnqueuedJob, 0, len(planned))
 	if len(planned) == 0 {
 		return receipts, true, nil
+	}
+	// Check every signing plan before the transaction inserts even the first
+	// outbox row. This prevents a mixed batch from starting partially when one
+	// dependent has no successor or verified host route.
+	for _, job := range planned {
+		if job.Kind != JobKindReIssue {
+			continue
+		}
+		if e.plans == nil || e.plans.log == nil {
+			return nil, true, ErrCredentialPlanRequired
+		}
+		plan, exists, err := e.plans.Load(ctx, tenantID, job.ID)
+		if err != nil {
+			return nil, true, err
+		}
+		if !exists {
+			return nil, true, ErrCredentialPlanRequired
+		}
+		if plan.Job.TenantID != job.TenantID || plan.Job.KeyID != job.KeyID ||
+			plan.Job.Dependent != job.Dependent || plan.Job.IdempotencyKey != job.IdempotencyKey {
+			return nil, true, ErrCompletionConflict
+		}
 	}
 	err = e.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, job := range planned {

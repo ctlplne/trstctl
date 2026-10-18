@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -31,12 +32,14 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/config"
 	eedecommission "trstctl.com/trstctl/internal/decommission"
 	decapi "trstctl.com/trstctl/internal/decommission/api"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
@@ -115,10 +118,14 @@ var vdecRole = authz.Role{Name: "vdec-operator", Permissions: []authz.Permission
 // newServedAPI assembles the core API exactly the way the server does for a
 // VDEC-licensed deployment: the licensed options come from the SAME factory the
 // attach seam mounts, over the same store and outbox.
-func newServedAPI(t *testing.T, cs *corestore.Store, outbox *orchestrator.Outbox) *api.API {
+func newServedAPI(t *testing.T, cs *corestore.Store, outbox *orchestrator.Outbox, logs ...*events.Log) *api.API {
 	t.Helper()
 	factory := decapi.NewAPIOptionsFactory()
-	licensed, err := factory(editionseam.LicensedAPIOptionsDeps{Store: cs, Outbox: outbox})
+	deps := editionseam.LicensedAPIOptionsDeps{Store: cs, Outbox: outbox}
+	if len(logs) != 0 {
+		deps.Log = logs[0]
+	}
+	licensed, err := factory(deps)
 	if err != nil {
 		t.Fatalf("api options factory: %v", err)
 	}
@@ -327,5 +334,66 @@ func TestReprotection_UnknownKeyRefuses(t *testing.T) {
 	served.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("POST reprotect unknown key = %d body=%s, want 404", rr.Code, rr.Body.String())
+	}
+}
+
+func TestReprotection_CredentialStartRequiresReviewedPlanBeforeOutbox(t *testing.T) {
+	cs := openStoreOn(t, "vdec_api_credential_plan")
+	dependent := dep(depstate.DependentCredential, "qa-leaf-a")
+	if err := decstore.New(cs).RebuildTenant(context.Background(), tenantA, []eventspec.Event{
+		mustEncode(t, depstate.DependencyRegisteredV1{
+			TenantID: tenantA, KeyID: "qa-old-ca", Dependent: dependent,
+		}, 1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	outbox := orchestrator.NewOutbox(cs)
+	log, err := events.Open(context.Background(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	served := newServedAPI(t, cs, outbox, log)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/qa-old-ca/reprotect", nil)
+	req.Header.Set("Idempotency-Key", "qa-planless-start")
+	res := httptest.NewRecorder()
+	served.ServeHTTP(res, req)
+	if res.Code != http.StatusConflict {
+		t.Fatalf("planless credential start = %d %s, want 409 before queue", res.Code, res.Body.String())
+	}
+	pending, err := outbox.Pending(context.Background(), tenantA)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("planless credential start queued %+v: %v", pending, err)
+	}
+	state, found, err := decstore.New(cs).FetchKeyState(context.Background(), tenantA, "qa-old-ca")
+	if err != nil || !found {
+		t.Fatalf("read dependency state: found=%t err=%v", found, err)
+	}
+	jobs, err := reprotect.PlanFromState(state)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("plan credential job: %+v err=%v", jobs, err)
+	}
+	plan := reprotect.CredentialPlan{
+		Job: jobs[0], SuccessorAuthorityID: "qa-successor",
+		PredecessorFingerprint: "qa-old-fingerprint", PredecessorSPKISHA256: "qa-old-spki",
+		TargetID: "qa-target", TargetRevisionID: "qa-target-revision", RequiredAgentID: "qa-agent",
+		Connector: "nginx", VerifyAddress: "127.0.0.1:443", VerifyServerName: "qa.local",
+		TTLSeconds: 600,
+	}
+	if recorded, err := reprotect.NewCredentialPlanLedger(log, cs).Record(context.Background(), plan); err != nil || !recorded {
+		t.Fatalf("record reviewed command: recorded=%t err=%v", recorded, err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/qa-old-ca/reprotect", nil)
+	req.Header.Set("Idempotency-Key", "qa-planned-start")
+	res = httptest.NewRecorder()
+	served.ServeHTTP(res, req)
+	if res.Code != http.StatusAccepted {
+		t.Fatalf("planned credential start = %d %s, want 202", res.Code, res.Body.String())
+	}
+	pending, err = outbox.Pending(context.Background(), tenantA)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("planned credential start queued %+v: %v", pending, err)
 	}
 }

@@ -144,6 +144,9 @@ func reprotectHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
 			}
 			jobs, found, err := enq.EnqueueOutstanding(ctx, tenantID, keyID)
 			if err != nil {
+				if errors.Is(err, reprotect.ErrCredentialPlanRequired) {
+					err = api.ErrStatus(http.StatusConflict, err.Error())
+				}
 				opErr = err
 				return 0, nil, err
 			}
@@ -286,7 +289,7 @@ func NewAPIOptionsFactory(retirementProjections ...*retirement.Projection) editi
 		if outbox == nil {
 			outbox = orchestrator.NewOutbox(d.Store)
 		}
-		enq := reprotect.NewEnqueuer(d.Store, repo, outbox)
+		enq := reprotect.NewEnqueuer(d.Store, repo, outbox, reprotect.NewCredentialPlanLedger(d.Log, d.Store))
 		coordinator := retirement.NewCoordinator(d.Store, d.Log, retirementProjection)
 		return []api.Option{
 			api.WithRetirementChecklist(NewChecklistSource(repo, retirementProjection)),
