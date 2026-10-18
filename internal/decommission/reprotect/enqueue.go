@@ -92,6 +92,7 @@ func (e *Enqueuer) EnqueueOutstanding(ctx context.Context, tenantID, keyID strin
 	// Check every signing plan before the transaction inserts even the first
 	// outbox row. This prevents a mixed batch from starting partially when one
 	// dependent has no successor or verified host route.
+	successorByJob := make(map[string]string, len(planned))
 	for _, job := range planned {
 		if job.Kind != JobKindReIssue {
 			continue
@@ -110,10 +111,11 @@ func (e *Enqueuer) EnqueueOutstanding(ctx context.Context, tenantID, keyID strin
 			plan.Job.Dependent != job.Dependent || plan.Job.IdempotencyKey != job.IdempotencyKey {
 			return nil, true, ErrCompletionConflict
 		}
+		successorByJob[job.ID] = plan.SuccessorAuthorityID
 	}
 	err = e.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, job := range planned {
-			payload, err := json.Marshal(Payload{Job: job})
+			payload, err := json.Marshal(Payload{Job: job, SuccessorKeyID: successorByJob[job.ID]})
 			if err != nil {
 				return fmt.Errorf("reprotect: encode job payload: %w", err)
 			}

@@ -396,4 +396,11 @@ func TestReprotection_CredentialStartRequiresReviewedPlanBeforeOutbox(t *testing
 	if err != nil || len(pending) != 1 {
 		t.Fatalf("planned credential start queued %+v: %v", pending, err)
 	}
+	var command reprotect.Payload
+	if err := json.Unmarshal(pending[0].Payload, &command); err != nil {
+		t.Fatalf("decode queued credential command: %v", err)
+	}
+	if command.Job != plan.Job || command.SuccessorKeyID != plan.SuccessorAuthorityID {
+		t.Fatalf("queued command lost reviewed job or successor binding: %+v", command)
+	}
 }
