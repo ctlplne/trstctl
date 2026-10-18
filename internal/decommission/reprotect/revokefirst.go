@@ -184,7 +184,7 @@ func (c *RevokeFirstCoordinator) RevokeFirst(ctx context.Context, req RevokeFirs
 }
 
 type RevocationCompletionEventSink interface {
-	AppendRevocationCompleted(context.Context, depstate.RevocationCompletedV1) error
+	AppendRevocationCompleted(context.Context, depstate.RevocationCompletedV1) (bool, error)
 }
 
 type RevocationCompletionResult struct {
@@ -230,11 +230,12 @@ func (r *RevocationCompletionRecorder) RecordDestinationCompletion(ctx context.C
 	if _, ok := r.seen[key]; ok {
 		return RevocationCompletionResult{Recorded: false, Event: event}, nil
 	}
-	if err := r.sink.AppendRevocationCompleted(ctx, event); err != nil {
+	recorded, err := r.sink.AppendRevocationCompleted(ctx, event)
+	if err != nil {
 		return RevocationCompletionResult{}, err
 	}
 	r.seen[key] = struct{}{}
-	return RevocationCompletionResult{Recorded: true, Event: event}, nil
+	return RevocationCompletionResult{Recorded: recorded, Event: event}, nil
 }
 
 type RevocationCompletionStatus struct {

@@ -228,7 +228,7 @@ type recordingRevocationCompletionSink struct {
 	events []depstate.RevocationCompletedV1
 }
 
-func (s *recordingRevocationCompletionSink) AppendRevocationCompleted(_ context.Context, event depstate.RevocationCompletedV1) error {
+func (s *recordingRevocationCompletionSink) AppendRevocationCompleted(_ context.Context, event depstate.RevocationCompletedV1) (bool, error) {
 	s.events = append(s.events, event)
-	return nil
+	return true, nil
 }

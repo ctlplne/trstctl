@@ -95,6 +95,16 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if created != 1 {
 		t.Fatalf("concurrent completion appends = %d, want 1", created)
 	}
+	revocation := depstate.RevocationCompletedV1{
+		TenantID: ev.TenantID, KeyID: ev.KeyID, JobID: ev.JobID, Dependent: ev.Dependent,
+		Destination: "qa-local-relying-party",
+	}
+	if recorded, err := first.AppendRevocationCompleted(ctx, revocation); err != nil || !recorded {
+		t.Fatalf("first revocation completion recorded = %t: %v", recorded, err)
+	}
+	if recorded, err := first.AppendRevocationCompleted(ctx, revocation); err != nil || recorded {
+		t.Fatalf("repeated revocation completion recorded = %t: %v", recorded, err)
+	}
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -106,16 +116,24 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if newEvent, err := second.AppendReprotectionCompleted(ctx, ev); err != nil || newEvent {
 		t.Fatalf("cold replay of exact completion: %v", err)
 	}
+	if recorded, err := second.AppendRevocationCompleted(ctx, revocation); err != nil || recorded {
+		t.Fatalf("cold replay of exact revocation completion recorded = %t: %v", recorded, err)
+	}
 	conflict := ev
 	conflict.SuccessorKeyID = "ca-other"
 	if _, err := second.AppendReprotectionCompleted(ctx, conflict); !errors.Is(err, ErrCompletionConflict) {
 		t.Fatalf("changed successor after restart = %v, want ErrCompletionConflict", err)
 	}
 	count := 0
+	revocationCount := 0
 	if err := log.Replay(ctx, 0, func(item events.Event) error {
 		if item.TenantID == ev.TenantID && item.Type == depstate.TypeReprotectionCompleted &&
 			strings.Contains(string(item.Data), `"job_id":"job-a"`) {
 			count++
+		}
+		if item.TenantID == revocation.TenantID && item.Type == depstate.TypeRevocationCompleted &&
+			strings.Contains(string(item.Data), `"destination":"qa-local-relying-party"`) {
+			revocationCount++
 		}
 		return nil
 	}); err != nil {
@@ -123,5 +141,8 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("durable completion events = %d, want 1", count)
+	}
+	if revocationCount != 1 {
+		t.Fatalf("durable revocation completion events = %d, want 1", revocationCount)
 	}
 }
