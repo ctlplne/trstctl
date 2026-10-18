@@ -292,6 +292,20 @@ public PEM; an import is an observation and does not by itself prove trstctl
 issued or can revoke that leaf. A failed replay leaves startup closed with an
 error rather than guessing a certificate or CA.
 
+### Recovering a failed CA-key retirement delivery
+
+The CA Hierarchy lifecycle tab shows the exact frozen retirement command and its
+signer-delivery state. If delivery is `failed` after its attempt budget, review
+the failure and enter an audited reason to grant one more attempt. The retry
+uses the **same** tenant-bound command and outbox row, so it cannot silently
+alter the dependency evidence or sign a new destruction request. If the signer
+already handled the command before its response was lost, its durable journal
+returns the same signed refusal or destruction record. Read the checklist again
+to see the result; `pending` means the signer has not yet returned an accepted
+result. The CLI command is `trstctl-cli ca keys retirement retry <id> -f
+retirement-retry.json`; its body uses `command_event_id`, `expected_attempts`,
+`reason`, and `confirm_irreversible`, with an `Idempotency-Key` header.
+
 ### Executing a CA migration in waves (H2)
 
 CA rollover is served as a durable trust-before-leaf workflow, not as a batch loop.

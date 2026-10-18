@@ -50,9 +50,13 @@ type RetirementChecklist struct {
 	// RetirementStatus is pending, refused, or destroyed once an explicitly
 	// authorized command exists. RefusalRecord is the signer's public signed
 	// proof that the frozen dependency set was not empty.
-	RetirementStatus string `json:"retirement_status,omitempty"`
-	RefusalRecord    string `json:"refusal_record,omitempty"`
-	Guidance         string `json:"guidance"`
+	RetirementStatus     string `json:"retirement_status,omitempty"`
+	RefusalRecord        string `json:"refusal_record,omitempty"`
+	CommandEventID       string `json:"command_event_id,omitempty"`
+	DeliveryStatus       string `json:"delivery_status,omitempty"`
+	DeliveryAttempts     int    `json:"delivery_attempts,omitempty"`
+	DeliveryAttemptLimit int    `json:"delivery_attempt_limit,omitempty"`
+	Guidance             string `json:"guidance"`
 }
 
 // RetirementChecklistSource is the licensed seam that answers the checklist.

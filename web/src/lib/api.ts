@@ -1572,6 +1572,23 @@ export interface CARetirementReceipt {
   final_epoch: number;
 }
 
+export interface CARetirementRetryRequest {
+  command_event_id: string;
+  expected_attempts: number;
+  reason: string;
+  confirm_irreversible: true;
+}
+
+export interface CARetirementRetryReceipt {
+  key_id: string;
+  command_event_id: string;
+  grant_event_id: string;
+  outbox_id: number;
+  attempts_before: number;
+  attempt_limit: number;
+  status: string;
+}
+
 function enrollmentTokenRequest(input?: EnrollmentTokenRequest): EnrollmentTokenRequest | undefined {
   const allowedIdentity = input?.allowed_identity?.trim();
   const roles = input?.roles ?? [];
@@ -1959,6 +1976,7 @@ export interface Api {
   // H4: what blocks a CA key's destruction.
   caRetirementChecklist(keyId: string): Promise<RetirementChecklist>;
   retireCAKey(keyId: string, input: CARetirementRequest): Promise<CARetirementReceipt>;
+  retryCAKeyRetirement(keyId: string, input: CARetirementRetryRequest): Promise<CARetirementRetryReceipt>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -2677,6 +2695,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   unownedIdentities: estate.unownedIdentities,
   caRetirementChecklist: estate.caRetirementChecklist,
   retireCAKey: estate.retireCAKey,
+  retryCAKeyRetirement: estate.retryCAKeyRetirement,
   assessMigration: estate.assessMigration,
   startMigrationRun: estate.startMigrationRun,
   migrationRuns: estate.migrationRuns,

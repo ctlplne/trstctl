@@ -6,11 +6,13 @@ package retirement
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/decommission/gate"
@@ -22,9 +24,10 @@ import (
 const (
 	SchemaV1 = 1
 
-	TypeRetirementRequested = "decommission.retirement.requested"
-	TypeRetirementRefused   = "decommission.retirement.refused"
-	TypeDestructionRecorded = "decommission.destruction_record.recorded"
+	TypeRetirementRequested      = "decommission.retirement.requested"
+	TypeRetirementRetryRequested = "decommission.retirement.retry_requested"
+	TypeRetirementRefused        = "decommission.retirement.refused"
+	TypeDestructionRecorded      = "decommission.destruction_record.recorded"
 
 	DestinationRetirement = "vdec.retirement.destroy"
 
@@ -43,6 +46,7 @@ var (
 	ErrProjectionMissing   = errors.New("vdec retirement: command projection is missing")
 	ErrDestructionRefused  = errors.New("vdec retirement: destruction refused")
 	ErrRecordNotVerifiable = errors.New("vdec retirement: signed record is not verifiable")
+	ErrRetryUnavailable    = errors.New("vdec retirement: exact failed command is not eligible for a bounded retry")
 )
 
 // RequestedV1 is the immutable public command. It binds the exact retained
@@ -60,6 +64,23 @@ type RequestedV1 struct {
 	RevocationCompletionDigest []byte   `json:"revocation_completion_digest,omitempty"`
 	KeyClass                   string   `json:"key_class"`
 	Approvals                  []string `json:"approvals,omitempty"`
+}
+
+// RetryRequestedV1 grants one extra receiver attempt to the original immutable
+// destruction command. Its attempt count and payload digest are a first-writer
+// fence: replaying this event cannot create a second command or refund a used
+// attempt after a crash.
+type RetryRequestedV1 struct {
+	TenantID       string    `json:"tenant_id"`
+	KeyID          string    `json:"key_id"`
+	CommandEventID string    `json:"command_event_id"`
+	OutboxID       int64     `json:"outbox_id"`
+	PayloadSHA256  string    `json:"payload_sha256"`
+	Attempts       int       `json:"attempts"`
+	RequestKey     string    `json:"request_key"`
+	Reason         string    `json:"reason"`
+	Actor          string    `json:"actor"`
+	RequestedAt    time.Time `json:"requested_at"`
 }
 
 // RefusedV1 carries the signer's public signed refusal and local append receipt.
@@ -85,8 +106,8 @@ type RecordedV1 struct {
 
 type FinalizationContextV1 = retirementwire.FinalizationContextV1
 
-// State is the tenant-filtered serving view rebuilt from the three immutable
-// event types above.
+// State is the tenant-filtered serving view rebuilt from immutable retirement
+// commands and signer outcomes. Retry grants alter only the original delivery.
 type State struct {
 	TenantID          string
 	KeyID             string
@@ -111,6 +132,21 @@ func (r RequestedV1) Validate() error {
 	}
 	if !bytes.Equal(crypto.SHA256Sum(r.RequiredSet), r.RequiredSetDigest) {
 		return fmt.Errorf("%w: required-set digest mismatch", ErrInvalidCommand)
+	}
+	return nil
+}
+
+func (r RetryRequestedV1) Validate() error {
+	if strings.TrimSpace(r.TenantID) == "" || strings.TrimSpace(r.KeyID) == "" ||
+		strings.TrimSpace(r.CommandEventID) == "" || r.OutboxID <= 0 ||
+		r.Attempts < 1 || r.Attempts >= 2147483647 || len(r.PayloadSHA256) != 64 ||
+		strings.TrimSpace(r.RequestKey) == "" || len(r.RequestKey) > 256 ||
+		strings.TrimSpace(r.Reason) == "" || len(r.Reason) > 1024 ||
+		strings.TrimSpace(r.Actor) == "" || r.RequestedAt.IsZero() {
+		return ErrInvalidCommand
+	}
+	if digest, err := hex.DecodeString(r.PayloadSHA256); err != nil || len(digest) != sha256DigestLen {
+		return ErrInvalidCommand
 	}
 	return nil
 }
@@ -148,6 +184,17 @@ func EncodeRequested(v RequestedV1) (eventspec.Event, error) {
 	return eventspec.Event{Type: TypeRetirementRequested, TenantID: v.TenantID, SchemaVersion: SchemaV1, Data: raw}, nil
 }
 
+func EncodeRetryRequested(v RetryRequestedV1) (eventspec.Event, error) {
+	if err := v.Validate(); err != nil {
+		return eventspec.Event{}, err
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return eventspec.Event{}, err
+	}
+	return eventspec.Event{Type: TypeRetirementRetryRequested, TenantID: v.TenantID, SchemaVersion: SchemaV1, Data: raw}, nil
+}
+
 func EncodeRefused(v RefusedV1) (eventspec.Event, error) {
 	if err := v.Validate(); err != nil {
 		return eventspec.Event{}, err
@@ -176,6 +223,19 @@ func DecodeRequested(ev eventspec.Event) (RequestedV1, error) {
 		return RequestedV1{}, err
 	}
 	return value, value.Validate()
+}
+
+func DecodeRetryRequested(ev eventspec.Event) (RetryRequestedV1, error) {
+	var value RetryRequestedV1
+	if err := decodeExact(ev, TypeRetirementRetryRequested, &value); err != nil {
+		return RetryRequestedV1{}, err
+	}
+	return value, value.Validate()
+}
+
+func RetryEventID(tenantID, keyID, commandEventID string, attempts int, requestKey, actor string) string {
+	raw, _ := json.Marshal([]any{"trstctl/vdec/retirement-retry/v1", tenantID, keyID, commandEventID, attempts, requestKey, actor})
+	return "vdec-retirement-retry-" + crypto.SHA256Hex(raw)
 }
 
 func DecodeRefused(ev eventspec.Event) (RefusedV1, error) {

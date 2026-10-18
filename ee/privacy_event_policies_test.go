@@ -140,6 +140,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: reprotect.TypeCredentialSupersession, SchemaVersion: depstate.SchemaV1},
 		{EventType: reprotect.TypeCredentialPlan, SchemaVersion: depstate.SchemaV1},
 		{EventType: retirement.TypeRetirementRequested, SchemaVersion: retirement.SchemaV1},
+		{EventType: retirement.TypeRetirementRetryRequested, SchemaVersion: retirement.SchemaV1},
 		{EventType: retirement.TypeRetirementRefused, SchemaVersion: retirement.SchemaV1},
 		{EventType: retirement.TypeDestructionRecorded, SchemaVersion: retirement.SchemaV1},
 		{EventType: "kmip.state.object.created", SchemaVersion: 1},
@@ -202,6 +203,7 @@ func TestFullBinaryProducerVocabularyAndPrivacyCatalogHaveSetEquality(t *testing
 func TestRetirementPrivacyPoliciesCoverEveryImmutableEventShape(t *testing.T) {
 	for _, schema := range []events.ProductionPrivacyEventSchema{
 		{EventType: retirement.TypeRetirementRequested, SchemaVersion: retirement.SchemaV1},
+		{EventType: retirement.TypeRetirementRetryRequested, SchemaVersion: retirement.SchemaV1},
 		{EventType: retirement.TypeRetirementRefused, SchemaVersion: retirement.SchemaV1},
 		{EventType: retirement.TypeDestructionRecorded, SchemaVersion: retirement.SchemaV1},
 	} {

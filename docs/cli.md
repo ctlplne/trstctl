@@ -823,6 +823,15 @@ trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f
 trstctl-cli ca keys retirement <predecessor-ca-authority-id>
 trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 
+# If the exact retirement outbox command has failed after its delivery budget,
+# read its command_event_id and delivery_attempts from the checklist. Review the
+# failure, then grant ONE attempt to that same frozen command and signer journal.
+# The body must name the exact observed command and attempt count; use a fresh
+# Idempotency-Key for each reviewed grant and retain it for lost-response retry.
+trstctl-cli ca keys retirement retry <predecessor-ca-authority-id> -f retirement-retry.json
+# {"command_event_id":"<from checklist>","expected_attempts":10,
+#  "reason":"Local signer response was lost","confirm_irreversible":true}
+
 # Review the exact request and deployment-owned quorum/custody readiness first.
 trstctl-cli breakglass issue-preview -f breakglass-issue-intent.json
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -97,6 +98,8 @@ func (p *Projection) ApplyTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event)
 	switch ev.Type {
 	case TypeRetirementRequested:
 		err = p.applyRequestedTx(ctx, tx, ev)
+	case TypeRetirementRetryRequested:
+		err = p.applyRetryRequestedTx(ctx, tx, ev)
 	case TypeRetirementRefused:
 		err = p.applyRefusedTx(ctx, tx, ev)
 	case TypeDestructionRecorded:
@@ -111,6 +114,65 @@ func (p *Projection) ApplyTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event)
 		return err
 	}
 	p.advance(ev.Sequence)
+	return nil
+}
+
+func (p *Projection) applyRetryRequestedTx(ctx context.Context, tx pgx.Tx, ev eventspec.Event) error {
+	retry, err := DecodeRetryRequested(ev)
+	if err != nil {
+		return err
+	}
+	if retry.TenantID != ev.TenantID || ev.Actor == nil || ev.Actor.Subject != retry.Actor ||
+		RetryEventID(retry.TenantID, retry.KeyID,
+			retry.CommandEventID, retry.Attempts, retry.RequestKey, retry.Actor) != ev.ID {
+		return fmt.Errorf("%w: retry event binding differs", ErrInvalidCommand)
+	}
+	var activeCommand, retirementStatus string
+	if err := tx.QueryRow(ctx, `SELECT command_event_id,status FROM decommission_retirements
+	    WHERE tenant_id=$1 AND key_id=$2 FOR UPDATE`, retry.TenantID, retry.KeyID).
+		Scan(&activeCommand, &retirementStatus); err != nil {
+		return fmt.Errorf("vdec retirement: load retry target: %w", err)
+	}
+	if activeCommand != retry.CommandEventID {
+		return ErrCommandConflict
+	}
+	var destination, outboxKey, outboxStatus string
+	var payload []byte
+	var attempts, retryLimit int
+	if err := tx.QueryRow(ctx, `SELECT destination,idempotency_key,payload,status,attempts,retry_attempt_limit
+	    FROM outbox WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, retry.TenantID, retry.OutboxID).
+		Scan(&destination, &outboxKey, &payload, &outboxStatus, &attempts, &retryLimit); err != nil {
+		return fmt.Errorf("vdec retirement: load retry outbox row: %w", err)
+	}
+	if destination != DestinationRetirement || outboxKey != retry.CommandEventID ||
+		crypto.SHA256Hex(payload) != retry.PayloadSHA256 {
+		return ErrCommandConflict
+	}
+	if retirementStatus == StatusDestroyed || retirementStatus == StatusRefused ||
+		outboxStatus == "delivered" || attempts > retry.Attempts {
+		// A replay after the signer answered or consumed the granted attempt must
+		// never reactivate the original row.
+		return nil
+	}
+	if retirementStatus != StatusPending {
+		return ErrRetryUnavailable
+	}
+	if attempts == retry.Attempts && outboxStatus == "pending" && retryLimit == attempts+1 {
+		return nil // append succeeded and the same grant already projected
+	}
+	if attempts != retry.Attempts || outboxStatus != "failed" || retryLimit > attempts {
+		return ErrRetryUnavailable
+	}
+	tag, err := tx.Exec(ctx, `UPDATE outbox SET status='pending',next_attempt_at=$4,
+	    worker_id=NULL,lease_until=NULL,retry_attempt_limit=$3+1
+	    WHERE tenant_id=$1 AND id=$2 AND attempts=$3 AND status='failed'`,
+		retry.TenantID, retry.OutboxID, retry.Attempts, retry.RequestedAt)
+	if err != nil {
+		return fmt.Errorf("vdec retirement: project bounded retry: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrRetryUnavailable
+	}
 	return nil
 }
 
@@ -258,6 +320,35 @@ func (p *Projection) Fetch(ctx context.Context, tenantID, keyID string) (State, 
 			 WHERE tenant_id = $1 AND key_id = $2`, tenantID, keyID).
 			Scan(&out.TenantID, &out.KeyID, &out.CommandEventID, &out.Status,
 				&out.FinalEpoch, &out.LedgerPosition, &out.RefusalRecord, &out.DestructionRecord)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err == nil {
+			found = true
+		}
+		return err
+	})
+	return out, found, err
+}
+
+type DeliveryState struct {
+	OutboxID     int64
+	Status       string
+	Attempts     int
+	AttemptLimit int
+}
+
+func (p *Projection) FetchDelivery(ctx context.Context, tenantID, commandEventID string) (DeliveryState, bool, error) {
+	if p == nil || p.store == nil || tenantID == "" || commandEventID == "" {
+		return DeliveryState{}, false, ErrProjectionMissing
+	}
+	var out DeliveryState
+	found := false
+	err := p.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT id,status,attempts,retry_attempt_limit
+		  FROM outbox WHERE tenant_id=$1 AND idempotency_key=$2 AND destination=$3`,
+			tenantID, commandEventID, DestinationRetirement).
+			Scan(&out.OutboxID, &out.Status, &out.Attempts, &out.AttemptLimit)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

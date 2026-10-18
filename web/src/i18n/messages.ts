@@ -23730,6 +23730,47 @@ export const messages = {
     defaultMessage: "Preview signed destruction record",
     description: "H4: disclose the public offline record inline.",
   },
+  "source.retirement.retry.heading.h4ret00017": {
+    defaultMessage: "Delivery stopped after repeated failures",
+    description: "H4: the exact CA retirement outbox command needs an operator recovery decision.",
+  },
+  "source.retirement.retry.explanation.h4ret00018": {
+    defaultMessage:
+      "Grant one more attempt to the same frozen command. The signer may return its retained signed result; this does not create a new destruction command.",
+    description: "H4: explain the bounded retry and signer journal semantics.",
+  },
+  "source.retirement.retry.reason.h4ret00019": {
+    defaultMessage: "Reason for one more attempt",
+    description: "H4: audited operator justification.",
+  },
+  "source.retirement.retry.reason.required.h4ret00020": {
+    defaultMessage: "Enter at least eight characters explaining the recovery decision.",
+    description: "H4: reject an empty retry justification in the form.",
+  },
+  "source.retirement.retry.confirm.required.h4ret00021": {
+    defaultMessage: "Confirm that this attempt can permanently destroy the key.",
+    description: "H4: require explicit acknowledgment before the retry request.",
+  },
+  "source.retirement.retry.failed.h4ret00022": {
+    defaultMessage: "The retirement retry was refused",
+    description: "H4: fallback for a rejected bounded retry.",
+  },
+  "source.retirement.retry.confirm.h4ret00023": {
+    defaultMessage: "I understand this attempt may permanently destroy the signer-held key",
+    description: "H4: explicit bounded-retry acknowledgment.",
+  },
+  "source.retirement.retry.action.h4ret00024": {
+    defaultMessage: "Grant one delivery attempt",
+    description: "H4: submit one bound and audited retry grant.",
+  },
+  "source.retirement.command.h4ret00025": {
+    defaultMessage: "Frozen command",
+    description: "H4: exact immutable retirement event identifier.",
+  },
+  "source.retirement.delivery.h4ret00026": {
+    defaultMessage: "Signer delivery (attempts)",
+    description: "H4: outbox status and exact completed attempt count.",
+  },
   "source.ca.key.ceremony.244faa4ab3": {
     defaultMessage: "CA key ceremony",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",

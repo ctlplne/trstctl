@@ -28709,6 +28709,18 @@
           "blocked": {
             "type": "boolean"
           },
+          "command_event_id": {
+            "type": "string"
+          },
+          "delivery_attempt_limit": {
+            "type": "integer"
+          },
+          "delivery_attempts": {
+            "type": "integer"
+          },
+          "delivery_status": {
+            "type": "string"
+          },
           "destruction_record": {
             "type": "string"
           },

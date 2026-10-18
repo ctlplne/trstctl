@@ -9663,6 +9663,10 @@ RetirementChecklist = TypedDict(
     {
         'accounted': int,
         'blocked': bool,
+        'command_event_id': str,
+        'delivery_attempt_limit': int,
+        'delivery_attempts': int,
+        'delivery_status': str,
         'destruction_record': str,
         'guidance': str,
         'key_id': str,

@@ -223,6 +223,13 @@ func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *t
 		coreapi.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
 	}, licensed...)
 	served := coreapi.New(h.store, orchestrator.NewIdempotency(h.store), nil, opts...)
+	retryOperation := served.Spec().Paths["/api/v1/ca/keys/{id}/retirement/retry"]["post"]
+	if retryOperation == nil || retryOperation.OperationID != "retryCAKeyRetirement" ||
+		retryOperation.XPermission != string(authz.KeysWrite) ||
+		served.Spec().Components.Schemas["VDECRetirementRetryRequest"] == nil ||
+		served.Spec().Components.Schemas["VDECRetirementRetryReceipt"] == nil {
+		t.Fatal("bounded retirement recovery is missing from the served licensed OpenAPI contract")
+	}
 	licensedHandler, err := runtime.RetirementOutboxFactory(editionseam.LicensedOutboxDeps{
 		Store: h.store, Log: h.log, GatedDestruction: h.signer,
 	})
@@ -292,10 +299,107 @@ func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *t
 	if _, foreignFound, err := runtime.RetirementProjection.Fetch(h.ctx, "88888888-8888-8888-8888-888888888888", h.keyID); err != nil || foreignFound {
 		t.Fatalf("foreign tenant saw retirement command: found=%v err=%v", foreignFound, err)
 	}
+	// Reproduce a command whose bounded receiver attempts were exhausted before
+	// the isolated signer could return its signed decision. A retry must grant
+	// one more attempt to this SAME frozen command and outbox row.
+	tag, err := h.store.SystemPool().Exec(h.ctx, `UPDATE outbox
+	    SET status='failed', attempts=10, last_error='external_delivery_failed'
+	  WHERE tenant_id=$1 AND idempotency_key=$2 AND destination=$3 AND status='pending'`,
+		h.tenant, firstReceipt.CommandEventID, retirement.DestinationRetirement)
+	if err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("seed exhausted exact retirement command: affected=%d err=%v", tag.RowsAffected(), err)
+	}
+	failedChecklist := get()
+	if failedChecklist.RetirementStatus != retirement.StatusPending || failedChecklist.DeliveryStatus != "failed" ||
+		failedChecklist.DeliveryAttempts != 10 || failedChecklist.CommandEventID != firstReceipt.CommandEventID {
+		t.Fatalf("failed receiver looked ready or lost its command binding: %+v", failedChecklist)
+	}
+	retryBody, err := json.Marshal(map[string]any{
+		"command_event_id":     firstReceipt.CommandEventID,
+		"expected_attempts":    10,
+		"reason":               "recover the task-owned signer command after receiver outage",
+		"confirm_irreversible": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryRequest := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+h.keyID+"/retirement/retry", bytes.NewReader(retryBody))
+	retryRequest.Header.Set("Idempotency-Key", "served-retirement-one-attempt-retry")
+	retryResponse := httptest.NewRecorder()
+	served.ServeHTTP(retryResponse, retryRequest)
+	if retryResponse.Code != http.StatusAccepted {
+		t.Fatalf("retry exact failed retirement command = %d body=%s, want 202", retryResponse.Code, retryResponse.Body.String())
+	}
+	var firstGrant retirement.RetryReceipt
+	if err := json.Unmarshal(retryResponse.Body.Bytes(), &firstGrant); err != nil || firstGrant.GrantEventID == "" {
+		t.Fatalf("decode bounded retry receipt: %+v err=%v", firstGrant, err)
+	}
+	// Simulate append success followed by a lost PostgreSQL commit. The same
+	// authenticated caller recovers from the retained grant without appending
+	// another event or adding a second receiver attempt.
+	if _, err := h.store.SystemPool().Exec(h.ctx, `UPDATE outbox SET status='failed',retry_attempt_limit=0
+	    WHERE tenant_id=$1 AND idempotency_key=$2 AND destination=$3 AND attempts=10`,
+		h.tenant, firstReceipt.CommandEventID, retirement.DestinationRetirement); err != nil {
+		t.Fatal(err)
+	}
+	beforeRecovery, err := h.log.LastSequence(h.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator := retirement.NewCoordinator(h.store, h.log, runtime.RetirementProjection)
+	actorCtx := events.ContextWithActor(h.ctx, events.Actor{Subject: principal.Subject, Roles: []string{role.Name}})
+	recoveredGrant, err := coordinator.Retry(actorCtx, h.tenant, h.keyID, retirement.RetryRequest{
+		CommandEventID: firstReceipt.CommandEventID, ExpectedAttempts: 10,
+		Reason:     "recover the task-owned signer command after receiver outage",
+		RequestKey: "served-retirement-one-attempt-retry", ConfirmIrreversible: true,
+	})
+	afterRecovery, headErr := h.log.LastSequence(h.ctx)
+	if err != nil || headErr != nil || recoveredGrant.GrantEventID != firstGrant.GrantEventID ||
+		beforeRecovery != afterRecovery {
+		t.Fatalf("lost-commit recovery changed grant: receipt=%+v err=%v head=%d to %d headErr=%v",
+			recoveredGrant, err, beforeRecovery, afterRecovery, headErr)
+	}
+	if _, err := coordinator.Retry(actorCtx, h.tenant, h.keyID, retirement.RetryRequest{
+		CommandEventID: firstReceipt.CommandEventID, ExpectedAttempts: 10,
+		Reason: "changed operator reason", RequestKey: "served-retirement-one-attempt-retry",
+		ConfirmIrreversible: true,
+	}); !errors.Is(err, retirement.ErrCommandConflict) {
+		t.Fatalf("changed retry reason reused retained grant: %v", err)
+	}
+	retryExact := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+h.keyID+"/retirement/retry", bytes.NewReader(retryBody))
+	retryExact.Header.Set("Idempotency-Key", "served-retirement-one-attempt-retry")
+	retryReplay := httptest.NewRecorder()
+	served.ServeHTTP(retryReplay, retryExact)
+	if retryReplay.Code != http.StatusAccepted || !bytes.Equal(retryReplay.Body.Bytes(), retryResponse.Body.Bytes()) {
+		t.Fatalf("retry lost-response replay changed result: status=%d body=%s", retryReplay.Code, retryReplay.Body.String())
+	}
+	retryAnother := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+h.keyID+"/retirement/retry", bytes.NewReader(retryBody))
+	retryAnother.Header.Set("Idempotency-Key", "served-retirement-second-grant")
+	secondGrant := httptest.NewRecorder()
+	served.ServeHTTP(secondGrant, retryAnother)
+	if secondGrant.Code != http.StatusConflict {
+		t.Fatalf("second grant before first attempt was consumed = %d, want 409", secondGrant.Code)
+	}
+	var recoveryStatus string
+	var recoveryAttempts, recoveryLimit int
+	if err := h.store.SystemPool().QueryRow(h.ctx, `SELECT status,attempts,retry_attempt_limit FROM outbox
+	    WHERE tenant_id=$1 AND idempotency_key=$2 AND destination=$3`,
+		h.tenant, firstReceipt.CommandEventID, retirement.DestinationRetirement).
+		Scan(&recoveryStatus, &recoveryAttempts, &recoveryLimit); err != nil ||
+		recoveryStatus != "pending" || recoveryAttempts != 10 || recoveryLimit != 11 {
+		t.Fatalf("retry changed original command: status=%q attempts=%d limit=%d err=%v", recoveryStatus, recoveryAttempts, recoveryLimit, err)
+	}
+	queuedChecklist := get()
+	if queuedChecklist.DeliveryStatus != "pending" || queuedChecklist.DeliveryAttemptLimit != 11 {
+		t.Fatalf("bounded retry not visible to operator: %+v", queuedChecklist)
+	}
 	dispatch()
 	refused := get()
 	if refused.RetirementStatus != retirement.StatusRefused || refused.RefusalRecord == "" || refused.DestructionRecord != "" {
 		t.Fatalf("refused checklist = %+v", refused)
+	}
+	if refused.DeliveryStatus != "delivered" || refused.DeliveryAttempts != 11 {
+		t.Fatalf("signer result did not close bounded retry: %+v", refused)
 	}
 	if _, err := h.signer.SignerForHandle(h.ctx, handle); err != nil {
 		t.Fatalf("signed refusal destroyed key: %v", err)
@@ -344,6 +448,15 @@ func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *t
 	}
 	if err := h.log.Replay(h.ctx, 1, func(ev events.Event) error { return restarted.Apply(h.ctx, ev) }); err != nil {
 		t.Fatalf("restart projection replay: %v", err)
+	}
+	var afterReplayStatus string
+	var afterReplayAttempts int
+	if err := h.store.SystemPool().QueryRow(h.ctx, `SELECT status,attempts FROM outbox
+	    WHERE tenant_id=$1 AND idempotency_key=$2 AND destination=$3`,
+		h.tenant, firstReceipt.CommandEventID, retirement.DestinationRetirement).
+		Scan(&afterReplayStatus, &afterReplayAttempts); err != nil ||
+		afterReplayStatus != "delivered" || afterReplayAttempts != 11 {
+		t.Fatalf("cold replay refunded consumed retirement retry: status=%q attempts=%d err=%v", afterReplayStatus, afterReplayAttempts, err)
 	}
 	state, found, err := restarted.Fetch(h.ctx, h.tenant, h.keyID)
 	if err != nil || !found || state.Status != retirement.StatusDestroyed || len(state.DestructionRecord) == 0 {

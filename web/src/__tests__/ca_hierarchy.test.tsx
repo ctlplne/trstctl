@@ -54,6 +54,7 @@ const { apiMock } = vi.hoisted(() => ({
     edgeDelegations: vi.fn(),
     caRetirementChecklist: vi.fn(),
     retireCAKey: vi.fn(),
+    retryCAKeyRetirement: vi.fn(),
   },
 }));
 
@@ -1870,5 +1871,83 @@ describe("CA hierarchy and custody surface", () => {
     expect(download).toHaveAttribute("download", "trstctl-ca-key-ca-retired-destruction-record.json");
     expect(download.getAttribute("href")).toContain(encodeURIComponent("offline-signature"));
     expect(within(panel).getByText("destroyed")).toBeInTheDocument();
+  });
+
+  it("recovers only the exact failed retirement delivery after a reviewed one-attempt grant", async () => {
+    const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "ca-retry",
+          tenant_id: "tenant-1",
+          common_name: "Superseded Root CA",
+          kind: "root",
+          status: "superseded",
+          certificate_pem: "public certificate",
+          signer_handle: "signer-handle-retry",
+          serial: "43",
+          max_path_len: 1,
+          created_at: "2026-08-12T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.caRetirementChecklist
+      .mockResolvedValueOnce({
+        key_id: "ca-retry",
+        blocked: false,
+        accounted: 1,
+        total: 1,
+        outstanding: [],
+        command_event_id: "vdec-command-43",
+        retirement_status: "pending",
+        delivery_status: "failed",
+        delivery_attempts: 10,
+        guidance: "Delivery exhausted; review and grant one attempt.",
+      })
+      .mockResolvedValueOnce({
+        key_id: "ca-retry",
+        blocked: false,
+        accounted: 1,
+        total: 1,
+        outstanding: [],
+        command_event_id: "vdec-command-43",
+        retirement_status: "pending",
+        delivery_status: "pending",
+        delivery_attempts: 10,
+        delivery_attempt_limit: 11,
+        guidance: "Signer delivery pending.",
+      });
+    apiMock.retryCAKeyRetirement.mockResolvedValue({
+      key_id: "ca-retry",
+      command_event_id: "vdec-command-43",
+      grant_event_id: "grant-1",
+      outbox_id: 2334,
+      attempts_before: 10,
+      attempt_limit: 11,
+      status: "pending",
+    });
+
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+    const panel = await screen.findByRole("region", { name: "Key retirement" });
+    const grant = await within(panel).findByRole("button", { name: "Grant one delivery attempt" });
+    expect(within(panel).getByText("vdec-command-43")).toBeInTheDocument();
+    expect(within(panel).getByText("failed (10)")).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Irreversibly retire key" })).not.toBeInTheDocument();
+    await user.click(grant);
+    expect(await within(panel).findByText("Enter at least eight characters explaining the recovery decision.")).toBeInTheDocument();
+    expect(apiMock.retryCAKeyRetirement).not.toHaveBeenCalled();
+    await user.type(within(panel).getByRole("textbox", { name: /Reason for one more attempt/ }), "Local signer response was lost");
+    await user.click(within(panel).getByLabelText("I understand this attempt may permanently destroy the signer-held key"));
+    await user.click(grant);
+    await waitFor(() =>
+      expect(apiMock.retryCAKeyRetirement).toHaveBeenCalledWith("ca-retry", {
+        command_event_id: "vdec-command-43",
+        expected_attempts: 10,
+        reason: "Local signer response was lost",
+        confirm_irreversible: true,
+      }),
+    );
+    expect(await within(panel).findByText("pending (10)")).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Grant one delivery attempt" })).not.toBeInTheDocument();
   });
 });

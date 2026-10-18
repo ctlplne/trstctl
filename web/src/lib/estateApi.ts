@@ -10,6 +10,8 @@ import type {
   MigrationRunStartRequest,
   CARetirementReceipt,
   CARetirementRequest,
+  CARetirementRetryReceipt,
+  CARetirementRetryRequest,
   RetirementChecklist,
   UnownedQueue,
 } from "./api";
@@ -61,3 +63,7 @@ export const caRetirementChecklist = (keyId: string) => req<RetirementChecklist>
 /** H4: record one exact irreversible command; the outbox owns signer I/O. */
 export const retireCAKey = (keyId: string, request: CARetirementRequest) =>
   mutate<CARetirementReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/retirement`, request);
+
+/** H4: one audited attempt on the same failed outbox row and frozen signer command. */
+export const retryCAKeyRetirement = (keyId: string, request: CARetirementRetryRequest) =>
+  mutate<CARetirementRetryReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/retirement/retry`, request);

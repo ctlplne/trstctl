@@ -20407,6 +20407,7 @@
                 "graph trust-stores",
                 "migrations assess",
                 "ca keys retirement",
+                "ca keys retirement retry",
                 "ca keys reprotect",
                 "ca keys retire",
                 "owners unowned",

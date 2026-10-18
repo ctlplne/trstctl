@@ -7015,6 +7015,10 @@ export interface ResponseIntegrationQueuedDestination {
 export interface RetirementChecklist {
   accounted: number;
   blocked: boolean;
+  command_event_id?: string;
+  delivery_attempt_limit?: number;
+  delivery_attempts?: number;
+  delivery_status?: string;
   destruction_record?: string;
   guidance: string;
   key_id: string;

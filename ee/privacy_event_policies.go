@@ -459,6 +459,16 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 				licensedPrivacyRule("/key_class", events.PrivacyFieldOpaqueExact),
 				licensedPrivacyRule("/approvals/*", events.PrivacyFieldIdentityExact),
 			)),
+		entry(retirement.TypeRetirementRetryRequested, retirement.SchemaV1,
+			typedLicensedPrivacyPolicy[retirement.RetryRequestedV1](
+				licensedPrivacyRule("/tenant_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/key_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/command_event_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/payload_sha256", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/request_key", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/reason", events.PrivacyFieldFreeTextClear),
+				licensedPrivacyRule("/actor", events.PrivacyFieldIdentityExact),
+			)),
 		entry(retirement.TypeRetirementRefused, retirement.SchemaV1,
 			typedLicensedPrivacyPolicy[retirement.RefusedV1](
 				licensedPrivacyRule("/tenant_id", events.PrivacyFieldOpaqueExact),

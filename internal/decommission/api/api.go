@@ -83,6 +83,16 @@ func (s *ChecklistSource) RetirementChecklist(r *http.Request, tenantID, keyID s
 			checklist.RetirementStatus = retired.Status
 			checklist.RefusalRecord = string(retired.RefusalRecord)
 			checklist.DestructionRecord = string(retired.DestructionRecord)
+			checklist.CommandEventID = retired.CommandEventID
+			delivery, delivered, err := s.retirement.FetchDelivery(r.Context(), tenantID, retired.CommandEventID)
+			if err != nil {
+				return api.RetirementChecklist{}, err
+			}
+			if delivered {
+				checklist.DeliveryStatus = delivery.Status
+				checklist.DeliveryAttempts = delivery.Attempts
+				checklist.DeliveryAttemptLimit = delivery.AttemptLimit
+			}
 		}
 	}
 	return checklist, nil
@@ -178,6 +188,52 @@ type RetirementRequest struct {
 	ConfirmIrreversible bool   `json:"confirm_irreversible"`
 }
 
+type RetirementRetryRequest struct {
+	CommandEventID      string `json:"command_event_id"`
+	ExpectedAttempts    int    `json:"expected_attempts"`
+	Reason              string `json:"reason"`
+	ConfirmIrreversible bool   `json:"confirm_irreversible"`
+}
+
+func retirementRetryHandler(a *api.API, coordinator *retirement.Coordinator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idempotencyKey := r.Header.Get("Idempotency-Key")
+		a.Mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+			start := time.Now()
+			var opErr error
+			defer func() { a.ObserveFeature("vdec_retirement", "retry", start, opErr) }()
+			keyID := r.PathValue("id")
+			var input RetirementRetryRequest
+			if keyID == "" {
+				opErr = api.ErrStatus(http.StatusBadRequest, "key id is required")
+				return 0, nil, opErr
+			}
+			if err := api.DecodeJSONStrict(r, &input); err != nil {
+				opErr = api.ErrWithStatus(http.StatusBadRequest, err)
+				return 0, nil, opErr
+			}
+			receipt, err := coordinator.Retry(ctx, tenantID, keyID, retirement.RetryRequest{
+				CommandEventID: input.CommandEventID, ExpectedAttempts: input.ExpectedAttempts,
+				Reason: input.Reason, RequestKey: idempotencyKey,
+				ConfirmIrreversible: input.ConfirmIrreversible,
+			})
+			if err != nil {
+				switch {
+				case errors.Is(err, pgx.ErrNoRows):
+					err = api.ErrStatus(http.StatusNotFound, "CA authority or exact retirement command not found")
+				case errors.Is(err, retirement.ErrRetryUnavailable), errors.Is(err, retirement.ErrCommandConflict):
+					err = api.ErrStatus(http.StatusConflict, err.Error())
+				case errors.Is(err, retirement.ErrInvalidCommand):
+					err = api.ErrStatus(http.StatusBadRequest, err.Error())
+				}
+				opErr = err
+				return 0, nil, err
+			}
+			return http.StatusAccepted, receipt, nil
+		})
+	}
+}
+
 func retirementHandler(a *api.API, coordinator *retirement.Coordinator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
@@ -241,6 +297,14 @@ func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator) []api.
 			RequestSchema: "VDECRetirementRequest", ResponseSchema: "VDECRetirementReceipt", SuccessCode: "202",
 			Mutation: true, Permission: authz.KeysWrite,
 		},
+		{
+			Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement/retry", OperationID: "retryCAKeyRetirement",
+			Summary:       "Grant one bounded retry to an exact failed CA-key destruction command",
+			Handler:       func(a *api.API) http.HandlerFunc { return retirementRetryHandler(a, coordinator) },
+			PathParams:    []api.RouteParam{api.PathStringParam("id", "stable CA authority identifier")},
+			RequestSchema: "VDECRetirementRetryRequest", ResponseSchema: "VDECRetirementRetryReceipt", SuccessCode: "202",
+			Mutation: true, Permission: authz.KeysWrite,
+		},
 	}
 }
 
@@ -270,6 +334,21 @@ func schemas() map[string]*api.Schema {
 			"ledger_position":  api.IntegerSchema(),
 			"final_epoch":      api.IntegerSchema(),
 		}, "key_id", "command_event_id", "status", "ledger_position", "final_epoch"),
+		"VDECRetirementRetryRequest": api.ObjectSchema(map[string]*api.Schema{
+			"command_event_id":     api.StringSchema(),
+			"expected_attempts":    api.IntegerSchema(),
+			"reason":               api.StringSchema(),
+			"confirm_irreversible": api.BooleanSchema(),
+		}, "command_event_id", "expected_attempts", "reason", "confirm_irreversible"),
+		"VDECRetirementRetryReceipt": api.ObjectSchema(map[string]*api.Schema{
+			"key_id":           api.StringSchema(),
+			"command_event_id": api.StringSchema(),
+			"grant_event_id":   api.StringSchema(),
+			"outbox_id":        api.IntegerSchema(),
+			"attempts_before":  api.IntegerSchema(),
+			"attempt_limit":    api.IntegerSchema(),
+			"status":           api.StringSchema(),
+		}, "key_id", "command_event_id", "grant_event_id", "outbox_id", "attempts_before", "attempt_limit", "status"),
 	}
 }
 

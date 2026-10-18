@@ -52,6 +52,7 @@ var licensedRouteCommands = []Command{
 	{Name: []string{"pcas", "retirement", "policy", "set"}, Method: "POST", Path: "/api/v1/pcas/retirement/policies", Body: bodyFile, Summary: "Set the relying-party acknowledgment quorum for predecessor-key retirement"},
 	{Name: []string{"ca", "keys", "reprotect"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect", Summary: "Queue exact CA-key dependent re-protection jobs and show the durable enqueue receipt"},
 	{Name: []string{"ca", "keys", "retire"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", Body: bodyFile, Summary: "Irreversibly retire a superseded CA key through the isolated signer and retain its signed destruction record"},
+	{Name: []string{"ca", "keys", "retirement", "retry"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement/retry", Body: bodyFile, Summary: "Grant one audited attempt to the same failed CA-key retirement command"},
 	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
 	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a Core PQC migration run over selected CBOM assets"},
 	{Name: []string{"migration", "status"}, Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", Summary: "Show migration run progress"},

@@ -3159,6 +3159,18 @@ than sending an operator looking for a credential that was never there.
   `revoked`; it sends that authority's exact ID, while the API repeats the same
   precondition check. A failed checklist read renders an explicit unavailable
   state and no destruction control, never a reassuring zero.
+  A failed `vdec.retirement.destroy` outbox row can be recovered through
+  `POST /api/v1/ca/keys/{id}/retirement/retry`,
+  `trstctl-cli ca keys retirement retry`, or the lifecycle console. The
+  checklist includes the frozen command ID, delivery state and attempt count.
+  The operator must bind a reason and explicit irreversible-action confirmation
+  to the observed command ID and attempt count. The event grants exactly one
+  more outbox attempt on the original row; it cannot mint a replacement command
+  or change the frozen dependency evidence. A repeated idempotency key recovers
+  the same grant after a lost response. The isolated signer returns its durable
+  signed result for the same command if it completed before the response was
+  lost. A changed dependent, command, payload, actor, tenant, or attempt count
+  refuses the grant; a cold replay cannot refund an already consumed attempt.
 - Incident fleet-reissue batch gates (H3): each batch's health gate is recomputed
   on read from THAT BATCH's own replacement identities, through the same
   verification summary D6's canary uses. It previously round-robined the run's
