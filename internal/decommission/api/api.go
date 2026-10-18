@@ -270,8 +270,8 @@ func schemas() map[string]*api.Schema {
 	}
 }
 
-// NewAPIOptionsFactory returns the licensed-route factory that attaches the VDEC
-// H4 surface under the FeatureVerifiableDecommission block (ee_attach). The
+// NewAPIOptionsFactory returns the composition factory that attaches the Core
+// VDEC H4 surface. The
 // checklist source and the re-protection producer are built from the
 // server-provided store and outbox, so the route serves the same read model and
 // the same outbox the dispatcher drains.
@@ -290,7 +290,7 @@ func NewAPIOptionsFactory(retirementProjections ...*retirement.Projection) editi
 		coordinator := retirement.NewCoordinator(d.Store, d.Log, retirementProjection)
 		return []api.Option{
 			api.WithRetirementChecklist(NewChecklistSource(repo, retirementProjection)),
-			api.WithLicensedRoutes(Routes(enq, coordinator)...),
+			api.WithCoreRoutes(Routes(enq, coordinator)...),
 			api.WithLicensedSchemas(schemas()),
 		}, nil
 	}

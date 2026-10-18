@@ -22,8 +22,8 @@ type RuntimeConfig struct {
 }
 
 // Runtime is the production VDEC control-plane assembly. The outbox factory and
-// the API options factory are BOTH mounted by cmd/trstctl/ee_attach.go under the
-// single VDEC license block. Mounting only the outbox factory was AUD-2/AUD-3:
+// the API options factory are mounted by the Core family attach seam. Mounting
+// only the outbox factory was AUD-2/AUD-3:
 // the handler had no producer and the retirement checklist had no source, so a
 // licensed deployment logged "attached" and could neither start re-protection
 // nor answer the checklist.
