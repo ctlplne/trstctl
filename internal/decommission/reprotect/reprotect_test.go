@@ -150,6 +150,28 @@ func TestReprotect_IdempotentAtMostOneCompletion(t *testing.T) {
 	}
 }
 
+func TestReprotect_CompletionRejectsConflictingRetry(t *testing.T) {
+	state := depstate.KeyState{
+		TenantID: "tenant-a", KeyID: "ca-a", LedgerPosition: 7,
+		Registered: []depstate.Dependent{{Class: depstate.DependentCredential, ID: "leaf-a"}},
+	}
+	jobs, err := PlanFromState(state)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("plan = %v, %v", jobs, err)
+	}
+	sink := &recordingCompletionSink{}
+	recorder := NewCompletionRecorder(sink)
+	if _, err := recorder.RecordCompletion(context.Background(), jobs[0], "successor-a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recorder.RecordCompletion(context.Background(), jobs[0], "successor-b"); err == nil {
+		t.Fatal("same-process retry changed the successor without a conflict")
+	}
+	if got := len(sink.events); got != 1 {
+		t.Fatalf("completion events = %d, want 1", got)
+	}
+}
+
 func mustDepEvent(t *testing.T, p depstate.Payload) eventspec.Event {
 	t.Helper()
 	e, err := depstate.Encode(p)
@@ -175,7 +197,7 @@ type recordingCompletionSink struct {
 	events []depstate.ReprotectionCompletedV1
 }
 
-func (s *recordingCompletionSink) AppendReprotectionCompleted(_ context.Context, event depstate.ReprotectionCompletedV1) error {
+func (s *recordingCompletionSink) AppendReprotectionCompleted(_ context.Context, event depstate.ReprotectionCompletedV1) (bool, error) {
 	s.events = append(s.events, event)
-	return nil
+	return true, nil
 }

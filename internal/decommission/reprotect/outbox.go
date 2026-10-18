@@ -3,6 +3,7 @@
 package reprotect
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -75,7 +77,7 @@ func NewLicensedOutboxFactory(opts ...Option) editionseam.LicensedOutboxFactory 
 }
 
 func newHandler(d editionseam.LicensedOutboxDeps, cfg factoryConfig) (Handler, error) {
-	completions := NewCompletionRecorder(eventSink{log: d.Log})
+	completions := NewCompletionRecorder(eventSink{log: d.Log, store: d.Store})
 	revocations := NewRevocationCompletionRecorder(eventSink{log: d.Log})
 	rewrap := RewrapBoundary(unavailableRewrapBoundary{})
 	if boundary, err := NewTransitBoundary(d.Transit); err == nil {
@@ -195,19 +197,52 @@ func decodePayload(raw []byte) (Payload, error) {
 }
 
 type eventSink struct {
-	log *events.Log
+	log   *events.Log
+	store *corestore.Store
 }
 
-func (s eventSink) AppendReprotectionCompleted(ctx context.Context, ev depstate.ReprotectionCompletedV1) error {
-	if s.log == nil {
-		return fmt.Errorf("%w: event log is required", ErrExecutorUnavailable)
+func (s eventSink) AppendReprotectionCompleted(ctx context.Context, ev depstate.ReprotectionCompletedV1) (bool, error) {
+	if s.log == nil || s.store == nil {
+		return false, fmt.Errorf("%w: event log and tenant store are required", ErrExecutorUnavailable)
 	}
 	encoded, err := depstate.Encode(ev)
 	if err != nil {
-		return err
+		return false, err
 	}
-	_, err = s.log.Append(ctx, encoded)
-	return err
+	identity := ev.TenantID + "\x1f" + ev.KeyID + "\x1f" + ev.JobID + "\x1f" +
+		string(ev.Dependent.Class) + "\x1f" + ev.Dependent.ID
+	encoded.ID = "vdec-completion:" + crypto.SHA256Hex([]byte(identity))
+	var recorded bool
+	err = s.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+		// A row lock cannot protect a completion that has not yet been appended.
+		// This transaction-scoped lock fences competing workers before the event
+		// append. The canonical event ID is the durable answer after a crash.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+			"vdec-completion/v1/"+identity); err != nil {
+			return err
+		}
+		prior, found, err := s.log.EventByID(ctx, encoded.ID)
+		if err != nil {
+			return err
+		}
+		if found {
+			if prior.TenantID != encoded.TenantID || prior.Type != encoded.Type ||
+				prior.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(prior.Data, encoded.Data) {
+				return ErrCompletionConflict
+			}
+			return nil
+		}
+		appended, err := s.log.Append(ctx, encoded)
+		if err != nil {
+			return err
+		}
+		if appended.ID != encoded.ID || !bytes.Equal(appended.Data, encoded.Data) {
+			return ErrCompletionConflict
+		}
+		recorded = true
+		return nil
+	})
+	return recorded, err
 }
 
 func (s eventSink) AppendRevocationCompleted(ctx context.Context, ev depstate.RevocationCompletedV1) error {

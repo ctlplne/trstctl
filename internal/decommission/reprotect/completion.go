@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -13,11 +14,12 @@ import (
 )
 
 var ErrNilCompletionSink = errors.New("vdec reprotect: nil completion sink")
+var ErrCompletionConflict = errors.New("vdec reprotect: completion identity already binds different evidence")
 
 // CompletionEventSink appends completion evidence to the caller-owned event
 // substrate. The recorder supplies idempotency; the sink supplies durability.
 type CompletionEventSink interface {
-	AppendReprotectionCompleted(context.Context, depstate.ReprotectionCompletedV1) error
+	AppendReprotectionCompleted(context.Context, depstate.ReprotectionCompletedV1) (bool, error)
 }
 
 // CompletionResult reports whether this delivery appended a new completion event.
@@ -40,11 +42,11 @@ type CompletionEvidence struct {
 type CompletionRecorder struct {
 	mu   sync.Mutex
 	sink CompletionEventSink
-	seen map[string]struct{}
+	seen map[string]depstate.ReprotectionCompletedV1
 }
 
 func NewCompletionRecorder(sink CompletionEventSink) *CompletionRecorder {
-	return &CompletionRecorder{sink: sink, seen: make(map[string]struct{})}
+	return &CompletionRecorder{sink: sink, seen: make(map[string]depstate.ReprotectionCompletedV1)}
 }
 
 func (r *CompletionRecorder) RecordCompletion(ctx context.Context, job Job, successorKeyID string) (CompletionResult, error) {
@@ -78,14 +80,18 @@ func (r *CompletionRecorder) RecordCompletionEvidence(ctx context.Context, job J
 	key := completionKey(job)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.seen[key]; ok {
+	if prior, ok := r.seen[key]; ok {
+		if !reflect.DeepEqual(prior, event) {
+			return CompletionResult{}, ErrCompletionConflict
+		}
 		return CompletionResult{Recorded: false, Event: event}, nil
 	}
-	if err := r.sink.AppendReprotectionCompleted(ctx, event); err != nil {
+	recorded, err := r.sink.AppendReprotectionCompleted(ctx, event)
+	if err != nil {
 		return CompletionResult{}, err
 	}
-	r.seen[key] = struct{}{}
-	return CompletionResult{Recorded: true, Event: event}, nil
+	r.seen[key] = event
+	return CompletionResult{Recorded: recorded, Event: event}, nil
 }
 
 func validateCompletionEvidence(job Job, evidence CompletionEvidence) error {
