@@ -228,6 +228,8 @@ describe("CA hierarchy and custody surface", () => {
     fireEvent.change(screen.getByLabelText("Succession ceremony ID"), { target: { value: ceremonyID } });
     await user.click(screen.getByRole("button", { name: "Refresh offline-root ceremony" }));
     await waitFor(() => expect(apiMock.getOfflineRootRekeyReceipt).toHaveBeenCalledWith(ceremonyID));
+    expect(screen.getByText(/No public package reviewed in this browser/)).toBeInTheDocument();
+    expect(screen.queryByText(/reviewed package does not match this ceremony/)).not.toBeInTheDocument();
     expect(screen.getByText(/old-root → new-root/)).toBeInTheDocument();
     expect(screen.getByLabelText("Recovered successor signed by predecessor PEM")).toHaveValue("public forward chain");
     expect(screen.getByLabelText("Recovered predecessor signed by successor PEM")).toHaveValue("public reverse chain");

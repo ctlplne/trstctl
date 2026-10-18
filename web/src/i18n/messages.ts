@@ -10191,6 +10191,10 @@ export const messages = {
   "caHierarchy.offlineRekey.refresh": { defaultMessage: "Refresh offline-root ceremony", description: "Offline-root ceremony and receipt readback action." },
   "caHierarchy.offlineRekey.activate": { defaultMessage: "Activate approved offline successor", description: "Offline-root succession activation action." },
   "caHierarchy.offlineRekey.bound": { defaultMessage: "exact package matches reviewed ceremony", description: "Offline-root positive ceremony binding." },
+  "caHierarchy.offlineRekey.notCompared": {
+    defaultMessage: "No public package reviewed in this browser",
+    description: "Offline-root ceremony retrieved without a local package comparison.",
+  },
   "caHierarchy.offlineRekey.unbound": {
     defaultMessage: "reviewed package does not match this ceremony",
     description: "Offline-root negative ceremony binding.",
@@ -10240,6 +10244,10 @@ export const messages = {
   "caHierarchy.offlineCross.activate": { defaultMessage: "Import approved cross-certificate", description: "Execute exact public offline cross-sign import." },
   "caHierarchy.offlineCross.approvals": { defaultMessage: "distinct approvals", description: "Offline cross-sign approval count." },
   "caHierarchy.offlineCross.bound": { defaultMessage: "exact certificates match reviewed ceremony", description: "Positive ceremony binding." },
+  "caHierarchy.offlineCross.notCompared": {
+    defaultMessage: "No public certificates reviewed in this browser",
+    description: "Offline cross-sign ceremony retrieved without a local certificate comparison.",
+  },
   "caHierarchy.offlineCross.unbound": { defaultMessage: "reviewed certificates do not match this ceremony", description: "Negative ceremony binding." },
   "caHierarchy.offlineCross.imported": { defaultMessage: "Offline cross-sign imported", description: "Completed import status." },
   "caHierarchy.offlineCross.receipt": { defaultMessage: "Recovered public cross-certificate PEM", description: "Durable public certificate readback." },

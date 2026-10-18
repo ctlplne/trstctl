@@ -51,7 +51,7 @@ export function CAOfflineCrossSignPanel({ authorities }: { authorities: CAAuthor
   );
   const [ceremonyID, setCeremonyID] = useState("");
   const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
-  const [matching, setMatching] = useState(false);
+  const [matching, setMatching] = useState<boolean | null>(null);
   const [receipt, setReceipt] = useState<CACrossSign | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -113,7 +113,7 @@ export function CAOfflineCrossSignPanel({ authorities }: { authorities: CAAuthor
     try {
       const next = await api.caCeremony(ceremonyID.trim());
       setCeremony(next);
-      setMatching(Boolean(reviewed && (await ceremonyFingerprint(next)) === reviewed.preview.request_fingerprint));
+      setMatching(reviewed ? (await ceremonyFingerprint(next)) === reviewed.preview.request_fingerprint : null);
       if (next.status === "completed") {
         const recovered = await api.getCACrossSignReceipt(next.id);
         if (!recovered.imported) throw new Error(t("caHierarchy.offlineCross.wrongReceipt"));
@@ -121,7 +121,7 @@ export function CAOfflineCrossSignPanel({ authorities }: { authorities: CAAuthor
       } else setReceipt(null);
     } catch (cause) {
       setCeremony(null);
-      setMatching(false);
+      setMatching(null);
       setReceipt(null);
       fail(cause);
     } finally {
@@ -240,7 +240,7 @@ export function CAOfflineCrossSignPanel({ authorities }: { authorities: CAAuthor
           onChange={(value) => {
             setCeremonyID(value.trim());
             setCeremony(null);
-            setMatching(false);
+            setMatching(null);
             setReceipt(null);
           }}
         />
@@ -260,7 +260,11 @@ export function CAOfflineCrossSignPanel({ authorities }: { authorities: CAAuthor
         {ceremony && (
           <p role="status">
             {ceremony.status}; {ceremony.approvals}/{ceremony.threshold} {t("caHierarchy.offlineCross.approvals")};{" "}
-            {matching ? t("caHierarchy.offlineCross.bound") : t("caHierarchy.offlineCross.unbound")}
+            {matching === null
+              ? t("caHierarchy.offlineCross.notCompared")
+              : matching
+                ? t("caHierarchy.offlineCross.bound")
+                : t("caHierarchy.offlineCross.unbound")}
           </p>
         )}
         {receipt && (

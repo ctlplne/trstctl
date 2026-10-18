@@ -111,7 +111,7 @@ export function CAOfflineRootRekeyPanel({ authorities, onActivated }: { authorit
   } | null>(null);
   const [ceremonyID, setCeremonyID] = useState("");
   const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
-  const [matching, setMatching] = useState(false);
+  const [matching, setMatching] = useState<boolean | null>(null);
   const [receipt, setReceipt] = useState<CAOfflineRootRekey | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -176,12 +176,12 @@ export function CAOfflineRootRekeyPanel({ authorities, onActivated }: { authorit
     try {
       const next = await api.caCeremony(ceremonyID.trim());
       setCeremony(next);
-      setMatching(Boolean(reviewed && (await ceremonyFingerprint(next)) === reviewed.preview.request_fingerprint));
+      setMatching(reviewed ? (await ceremonyFingerprint(next)) === reviewed.preview.request_fingerprint : null);
       if (next.status === "completed") setReceipt(await api.getOfflineRootRekeyReceipt(next.id));
       else setReceipt(null);
     } catch (cause) {
       setCeremony(null);
-      setMatching(false);
+      setMatching(null);
       setReceipt(null);
       fail(cause);
     } finally {
@@ -336,7 +336,7 @@ export function CAOfflineRootRekeyPanel({ authorities, onActivated }: { authorit
           onChange={(v) => {
             setCeremonyID(v.trim());
             setCeremony(null);
-            setMatching(false);
+            setMatching(null);
             setReceipt(null);
           }}
         />
@@ -356,7 +356,11 @@ export function CAOfflineRootRekeyPanel({ authorities, onActivated }: { authorit
         {ceremony && (
           <p role="status">
             {ceremony.status}; {ceremony.approvals}/{ceremony.threshold} {t("caHierarchy.offlineRekey.approvals")};{" "}
-            {matching ? t("caHierarchy.offlineRekey.bound") : t("caHierarchy.offlineRekey.unbound")}
+            {matching === null
+              ? t("caHierarchy.offlineRekey.notCompared")
+              : matching
+                ? t("caHierarchy.offlineRekey.bound")
+                : t("caHierarchy.offlineRekey.unbound")}
           </p>
         )}
         {receipt && (
