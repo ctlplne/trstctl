@@ -76,6 +76,19 @@ describe("Edge segment setup", () => {
     );
   });
 
+  it("shows excluded DNS subtrees in the exact review before saving", async () => {
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByRole("button", { name: "Configure edge segment" }));
+    await user.type(screen.getByLabelText("Declared segment ID"), segmentID);
+    await user.type(screen.getByLabelText("TPM attestation root certificate"), publicRoot);
+    await user.type(screen.getByLabelText("Permitted DNS domains"), "edge.qa.invalid");
+    await user.type(screen.getByLabelText("Excluded DNS domains"), "blocked.edge.qa.invalid");
+    await user.click(screen.getByRole("button", { name: "Review segment policy" }));
+    expect(screen.getByText("Excluded DNS domains")).toBeInTheDocument();
+    expect(screen.getByText("blocked.edge.qa.invalid")).toBeInTheDocument();
+  });
+
   it("does not show a policy mutation to a reader", async () => {
     principal.permissions = ["issuers:read"];
     mount();

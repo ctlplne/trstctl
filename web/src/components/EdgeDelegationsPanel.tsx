@@ -229,6 +229,10 @@ export function EdgeDelegationsPanel() {
                   <dd>{(reviewed.input.permitted_dns_domains ?? []).join(", ")}</dd>
                 </div>
                 <div>
+                  <dt>{translateNow("edge.setup.excluded")}</dt>
+                  <dd>{(reviewed.input.excluded_dns_domains ?? []).join(", ") || "—"}</dd>
+                </div>
+                <div>
                   <dt>{translateNow("edge.setup.providers")}</dt>
                   <dd>{(reviewed.input.allowed_key_providers ?? []).join(", ")}</dd>
                 </div>
