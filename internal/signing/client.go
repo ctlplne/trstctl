@@ -211,6 +211,9 @@ func (c *Client) VerifyOperation(ctx context.Context, req OperationRequest) (Ope
 // evidence inside the signer and destroy the signer-held handle only after the
 // attached gate approves. No private key material crosses the transport.
 func (c *Client) GatedDestroy(ctx context.Context, req GatedDestroyRequest) (GatedDestroyDecision, error) {
+	if len(req.SatisfactionEvidence) > maxMessageBytes/2 {
+		return c.gatedDestroyStream(ctx, req)
+	}
 	resp, err := c.svc.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
 	if err != nil {
 		return GatedDestroyDecision{}, err

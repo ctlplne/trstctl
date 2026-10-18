@@ -15,8 +15,8 @@ import (
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// maxMessageBytes bounds gRPC request/response size; the signer signs digests,
-// not bulk data.
+// maxMessageBytes bounds each gRPC message. Large public destruction evidence
+// uses bounded streaming frames while signing requests remain digest-sized.
 const maxMessageBytes = 1 << 20 // 1 MiB
 
 // maxConcurrentStreams caps concurrent HTTP/2 streams at the gRPC transport as a

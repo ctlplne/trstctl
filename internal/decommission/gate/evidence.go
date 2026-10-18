@@ -122,31 +122,41 @@ func BoundEvents(events []eventspec.Event, bound uint64) []eventspec.Event {
 }
 
 func AuditChainHead(events []eventspec.Event) []byte {
-	head := crypto.SHA256Sum([]byte("trstctl/vdec/gated-destruction/audit-head/v1"))
+	head := NewAuditChainHead()
 	for _, ev := range events {
-		entry := struct {
-			Previous      []byte           `json:"previous"`
-			ID            string           `json:"id,omitempty"`
-			Type          string           `json:"type"`
-			TenantID      string           `json:"tenant_id"`
-			Sequence      uint64           `json:"sequence"`
-			SchemaVersion int              `json:"schema_version"`
-			DataDigest    []byte           `json:"data_digest"`
-			Actor         *eventspec.Actor `json:"actor,omitempty"`
-		}{
-			Previous:      head,
-			ID:            ev.ID,
-			Type:          ev.Type,
-			TenantID:      ev.TenantID,
-			Sequence:      ev.Sequence,
-			SchemaVersion: ev.SchemaVersion,
-			DataDigest:    crypto.SHA256Sum(ev.Data),
-			Actor:         ev.Actor,
-		}
-		raw, _ := json.Marshal(entry)
-		head = crypto.SHA256Sum(raw)
+		head = ExtendAuditChainHead(head, ev)
 	}
 	return head
+}
+
+func NewAuditChainHead() []byte {
+	return crypto.SHA256Sum([]byte("trstctl/vdec/gated-destruction/audit-head/v1"))
+}
+
+// ExtendAuditChainHead uses the same event-by-event commitment as the unary
+// gate, allowing large histories to be verified without retaining them.
+func ExtendAuditChainHead(head []byte, ev eventspec.Event) []byte {
+	entry := struct {
+		Previous      []byte           `json:"previous"`
+		ID            string           `json:"id,omitempty"`
+		Type          string           `json:"type"`
+		TenantID      string           `json:"tenant_id"`
+		Sequence      uint64           `json:"sequence"`
+		SchemaVersion int              `json:"schema_version"`
+		DataDigest    []byte           `json:"data_digest"`
+		Actor         *eventspec.Actor `json:"actor,omitempty"`
+	}{
+		Previous:      head,
+		ID:            ev.ID,
+		Type:          ev.Type,
+		TenantID:      ev.TenantID,
+		Sequence:      ev.Sequence,
+		SchemaVersion: ev.SchemaVersion,
+		DataDigest:    crypto.SHA256Sum(ev.Data),
+		Actor:         ev.Actor,
+	}
+	raw, _ := json.Marshal(entry)
+	return crypto.SHA256Sum(raw)
 }
 
 func cloneEvents(events []eventspec.Event) []eventspec.Event {

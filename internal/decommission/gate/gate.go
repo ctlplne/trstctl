@@ -120,6 +120,10 @@ func (g *Gate) VerifyGatedDestroy(ctx context.Context, req signing.GatedDestroyR
 	if !ok {
 		state = depstate.KeyState{TenantID: req.TenantID, KeyID: req.SubjectRef, LedgerPosition: req.LedgerPosition}
 	}
+	return g.verifyGatedDestroyState(ctx, req, state)
+}
+
+func (g *Gate) verifyGatedDestroyState(ctx context.Context, req signing.GatedDestroyRequest, state depstate.KeyState) (signing.GatedDestroyDecision, error) {
 	requiredDigest, err := RequiredSetDigest(state)
 	if err != nil {
 		return signing.GatedDestroyDecision{}, err

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -113,6 +114,13 @@ func (r *Runtime) VerifyGatedDestroy(ctx context.Context, req signing.GatedDestr
 		return signing.GatedDestroyDecision{}, ErrSignerRuntimeUnavailable
 	}
 	return r.Gate.VerifyGatedDestroy(ctx, req)
+}
+
+func (r *Runtime) VerifyGatedDestroyStream(ctx context.Context, req signing.GatedDestroyRequest, evidence io.Reader) (signing.GatedDestroyDecision, error) {
+	if r == nil || r.Gate == nil {
+		return signing.GatedDestroyDecision{}, ErrSignerRuntimeUnavailable
+	}
+	return r.Gate.VerifyGatedDestroyStream(ctx, req, evidence)
 }
 
 // FinalizeGatedDestroy runs only after internal/signing has successfully

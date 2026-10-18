@@ -63,6 +63,24 @@ func TestGate_RefusesDestroyUntilAllDependentsReprotected(t *testing.T) {
 	}
 }
 
+func TestGate_StreamKeepsUnaryDecisionAndRejectsTruncatedHistory(t *testing.T) {
+	dep := depstate.Dependent{Class: depstate.DependentCredential, ID: "credential:stream"}
+	events := []eventspec.Event{
+		mustDepEvent(t, 1, depstate.DependencyRegisteredV1{TenantID: testTenant, KeyID: testKey, Dependent: dep}),
+		{ID: "unrelated", Type: "qa.unrelated", TenantID: testTenant, Sequence: 2, SchemaVersion: 1, Data: []byte(`{"note":"unrelated"}`)},
+	}
+	req := requestFromEvents(t, events, 2)
+	req.SatisfactionEvidenceDigest = crypto.SHA256Sum(req.SatisfactionEvidence)
+	g := newTestGate(t, NewMemorySink())
+	streamed, err := g.VerifyGatedDestroyStream(context.Background(), req, bytes.NewReader(req.SatisfactionEvidence))
+	if err != nil || streamed.Approved || len(streamed.RefusalRecord) == 0 {
+		t.Fatalf("stream decision = approved %v refusal %d err %v", streamed.Approved, len(streamed.RefusalRecord), err)
+	}
+	if _, err := g.VerifyGatedDestroyStream(context.Background(), req, bytes.NewReader(req.SatisfactionEvidence[:len(req.SatisfactionEvidence)-1])); err == nil {
+		t.Fatal("truncated streamed evidence passed the gate")
+	}
+}
+
 func TestGate_SetDifferenceEmptyRequired(t *testing.T) {
 	ctx := context.Background()
 	g := newTestGate(t, NewMemorySink())

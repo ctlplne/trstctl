@@ -208,6 +208,11 @@ to the single crypto boundary.
 
 - Maximum request/response size (default 1 MiB; the signer signs digests/short
   messages, not bulk data).
+- `GatedDestroyStream` keeps that per-frame limit. Its evidence transfer uses
+  128 KiB frames, at most two concurrent streams, and a 512 MiB total cap.
+  The signer unlinks its 0600 spool before writing, hashes the exact transferred
+  bytes into the durable command identity, and reads the evidence incrementally
+  into one key's dependency state before any destroy operation.
 - Maximum concurrent in-flight requests and a bounded queue (a per-subsystem
   bulkhead).
 - A per-RPC deadline; work past the deadline is abandoned.

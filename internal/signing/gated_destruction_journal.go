@@ -28,19 +28,20 @@ type gatedDestroyJournalRecord struct {
 // Every field is public evidence. The fixed struct makes the request hash
 // independent of Go field layout and binds newly added fields deliberately.
 type gatedDestroyJournalIntent struct {
-	TenantID             string `json:"tenant_id"`
-	Handle               string `json:"handle"`
-	SubjectRef           string `json:"subject_ref"`
-	AssertedFinalEpoch   uint64 `json:"asserted_final_epoch"`
-	LedgerPosition       uint64 `json:"ledger_position"`
-	RequiredSet          []byte `json:"required_set"`
-	RequiredSetDigest    []byte `json:"required_set_digest"`
-	SatisfiedSet         []byte `json:"satisfied_set,omitempty"`
-	SatisfactionEvidence []byte `json:"satisfaction_evidence"`
-	Authorization        []byte `json:"authorization,omitempty"`
-	Approvals            []byte `json:"approvals,omitempty"`
-	AuditChainHead       []byte `json:"audit_chain_head"`
-	Context              []byte `json:"context"`
+	TenantID                   string `json:"tenant_id"`
+	Handle                     string `json:"handle"`
+	SubjectRef                 string `json:"subject_ref"`
+	AssertedFinalEpoch         uint64 `json:"asserted_final_epoch"`
+	LedgerPosition             uint64 `json:"ledger_position"`
+	RequiredSet                []byte `json:"required_set"`
+	RequiredSetDigest          []byte `json:"required_set_digest"`
+	SatisfiedSet               []byte `json:"satisfied_set,omitempty"`
+	SatisfactionEvidence       []byte `json:"satisfaction_evidence"`
+	SatisfactionEvidenceDigest []byte `json:"satisfaction_evidence_digest,omitempty"`
+	Authorization              []byte `json:"authorization,omitempty"`
+	Approvals                  []byte `json:"approvals,omitempty"`
+	AuditChainHead             []byte `json:"audit_chain_head"`
+	Context                    []byte `json:"context"`
 }
 
 func gatedDestroyRequestHash(req GatedDestroyRequest) (string, error) {

@@ -320,5 +320,19 @@ func TestDepState_FoldEqualsReplayOverGeneratedSequences(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("seed %d: fold(seq) != replay(persist(seq)):\n got %#v\nwant %#v", seed, got, want)
 		}
+		for _, suffix := range keySuffixes {
+			keyID := "key-" + suffix
+			folder := NewKeyFolder("tenant-a", keyID)
+			for _, event := range seq {
+				if err := folder.Apply(event); err != nil {
+					t.Fatalf("seed %d key %s: streamed fold: %v", seed, keyID, err)
+				}
+			}
+			streamed, found := folder.Snapshot()
+			folded, wanted := want.Lookup("tenant-a", keyID)
+			if found != wanted || (found && !reflect.DeepEqual(streamed, folded)) {
+				t.Fatalf("seed %d key %s: streamed state %+v/%v, full fold %+v/%v", seed, keyID, streamed, found, folded, wanted)
+			}
+		}
 	}
 }

@@ -36,6 +36,7 @@ const (
 	SignerService_SignArtifact_FullMethodName                  = "/trstctl.signing.v1.SignerService/SignArtifact"
 	SignerService_VerifyOperation_FullMethodName               = "/trstctl.signing.v1.SignerService/VerifyOperation"
 	SignerService_GatedDestroy_FullMethodName                  = "/trstctl.signing.v1.SignerService/GatedDestroy"
+	SignerService_GatedDestroyStream_FullMethodName            = "/trstctl.signing.v1.SignerService/GatedDestroyStream"
 	SignerService_DestroyKey_FullMethodName                    = "/trstctl.signing.v1.SignerService/DestroyKey"
 	SignerService_ManageKey_FullMethodName                     = "/trstctl.signing.v1.SignerService/ManageKey"
 	SignerService_SignManagedKey_FullMethodName                = "/trstctl.signing.v1.SignerService/SignManagedKey"
@@ -92,6 +93,10 @@ type SignerServiceClient interface {
 	// attached edition implementation owns the semantics and may return an opaque
 	// signed refusal record. The free DestroyKey RPC below remains ungated.
 	GatedDestroy(ctx context.Context, in *GatedDestroyRequest, opts ...grpc.CallOption) (*GatedDestroyResponse, error)
+	// A large public evidence segment is streamed in bounded frames. The first
+	// frame carries the exact command metadata; the signer hashes and verifies
+	// the complete segment before any signer-held key can be destroyed.
+	GatedDestroyStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[GatedDestroyStreamRequest, GatedDestroyStreamResponse], error)
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error)
 	// ManageKey performs a remote-custody lifecycle command in this isolated
@@ -228,6 +233,19 @@ func (c *signerServiceClient) GatedDestroy(ctx context.Context, in *GatedDestroy
 	}
 	return out, nil
 }
+
+func (c *signerServiceClient) GatedDestroyStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[GatedDestroyStreamRequest, GatedDestroyStreamResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SignerService_ServiceDesc.Streams[0], SignerService_GatedDestroyStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GatedDestroyStreamRequest, GatedDestroyStreamResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SignerService_GatedDestroyStreamClient = grpc.ClientStreamingClient[GatedDestroyStreamRequest, GatedDestroyStreamResponse]
 
 func (c *signerServiceClient) DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -409,6 +427,10 @@ type SignerServiceServer interface {
 	// attached edition implementation owns the semantics and may return an opaque
 	// signed refusal record. The free DestroyKey RPC below remains ungated.
 	GatedDestroy(context.Context, *GatedDestroyRequest) (*GatedDestroyResponse, error)
+	// A large public evidence segment is streamed in bounded frames. The first
+	// frame carries the exact command metadata; the signer hashes and verifies
+	// the complete segment before any signer-held key can be destroyed.
+	GatedDestroyStream(grpc.ClientStreamingServer[GatedDestroyStreamRequest, GatedDestroyStreamResponse]) error
 	// DestroyKey zeroizes and forgets a key handle. It is idempotent.
 	DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error)
 	// ManageKey performs a remote-custody lifecycle command in this isolated
@@ -503,6 +525,9 @@ func (UnimplementedSignerServiceServer) VerifyOperation(context.Context, *Operat
 }
 func (UnimplementedSignerServiceServer) GatedDestroy(context.Context, *GatedDestroyRequest) (*GatedDestroyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GatedDestroy not implemented")
+}
+func (UnimplementedSignerServiceServer) GatedDestroyStream(grpc.ClientStreamingServer[GatedDestroyStreamRequest, GatedDestroyStreamResponse]) error {
+	return status.Error(codes.Unimplemented, "method GatedDestroyStream not implemented")
 }
 func (UnimplementedSignerServiceServer) DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DestroyKey not implemented")
@@ -674,6 +699,13 @@ func _SignerService_GatedDestroy_Handler(srv interface{}, ctx context.Context, d
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _SignerService_GatedDestroyStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(SignerServiceServer).GatedDestroyStream(&grpc.GenericServerStream[GatedDestroyStreamRequest, GatedDestroyStreamResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SignerService_GatedDestroyStreamServer = grpc.ClientStreamingServer[GatedDestroyStreamRequest, GatedDestroyStreamResponse]
 
 func _SignerService_DestroyKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DestroyKeyRequest)
@@ -1015,6 +1047,12 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SignerService_GetAgentReachabilityKey_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GatedDestroyStream",
+			Handler:       _SignerService_GatedDestroyStream_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "internal/signing/proto/signer.proto",
 }

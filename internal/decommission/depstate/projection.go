@@ -155,6 +155,51 @@ func Fold(seq []eventspec.Event) (Projection, error) {
 	return out, nil
 }
 
+// KeyFolder keeps only one key's dependency sets while consuming a tenant's
+// event history. It is the streaming counterpart of Fold for a signer gate:
+// unrelated tenant history cannot grow signer memory with tenant age.
+type KeyFolder struct {
+	tenantID string
+	keyID    string
+	builder  *keyBuilder
+	position uint64
+	touched  bool
+}
+
+func NewKeyFolder(tenantID, keyID string) *KeyFolder {
+	return &KeyFolder{tenantID: tenantID, keyID: keyID, builder: newKeyBuilder(tenantID, keyID)}
+}
+
+func (f *KeyFolder) Apply(e eventspec.Event) error {
+	f.position++
+	registrations, err := CARegistrations(e)
+	if err != nil {
+		return err
+	}
+	for _, registration := range registrations {
+		if registration.TenantID == f.tenantID && registration.KeyID == f.keyID {
+			f.builder.register(registration.Dependent)
+			f.builder.advance(ledgerPosition(e, f.position))
+			f.touched = true
+		}
+	}
+	payload, err := Decode(e)
+	if err != nil {
+		return err
+	}
+	change, ok := payloadChange(payload)
+	if ok && change.tenantID == f.tenantID && change.keyID == f.keyID {
+		f.builder.apply(change.op, change.dependent)
+		f.builder.advance(ledgerPosition(e, f.position))
+		f.touched = true
+	}
+	return nil
+}
+
+func (f *KeyFolder) Snapshot() (KeyState, bool) {
+	return f.builder.snapshot(), f.touched
+}
+
 type change struct {
 	tenantID, keyID string
 	dependent       Dependent

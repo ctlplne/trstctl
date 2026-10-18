@@ -56,6 +56,11 @@ service SignerService {
   // signed refusal record. The free DestroyKey RPC below remains ungated.
   rpc GatedDestroy(GatedDestroyRequest) returns (GatedDestroyResponse);
 
+  // A large public evidence segment is streamed in bounded frames. The first
+  // frame carries the exact command metadata; the signer hashes and verifies
+  // the complete segment before any signer-held key can be destroyed.
+  rpc GatedDestroyStream(stream GatedDestroyStreamRequest) returns (GatedDestroyStreamResponse);
+
   // DestroyKey zeroizes and forgets a key handle. It is idempotent.
   rpc DestroyKey(DestroyKeyRequest) returns (DestroyKeyResponse);
 
@@ -327,6 +332,15 @@ message GatedDestroyResponse {
   bytes refusal_record = 2;
   bytes authorization = 3;
   bytes evidence = 4;
+}
+
+message GatedDestroyStreamRequest {
+  GatedDestroyRequest request = 1;
+  bytes evidence_chunk = 2;
+}
+
+message GatedDestroyStreamResponse {
+  GatedDestroyResponse decision = 1;
 }
 
 message DestroyKeyRequest {

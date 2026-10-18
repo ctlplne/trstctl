@@ -92,8 +92,9 @@ type Server struct {
 	gatedDestroyer GatedDestroyer
 	// Serializes signer-owned destruction intent/result journaling with handle
 	// removal. Two commands must never both observe one handle as live.
-	gatedDestroyMu  sync.Mutex
-	gatedDestroyOps map[string]gatedDestroyJournalRecord
+	gatedDestroyMu      sync.Mutex
+	gatedDestroyOps     map[string]gatedDestroyJournalRecord
+	gatedDestroyStreams *limiter
 
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
@@ -138,7 +139,7 @@ func WithKeyFactory(factory KeyFactory) ServerOption {
 // NewServer returns a ready in-memory signing server (keys do not survive a
 // restart).
 func NewServer(opts ...ServerOption) *Server {
-	s := &Server{keys: make(map[string]*heldKey), serving: true, keyspec: defaultKeyFactory{}}
+	s := &Server{keys: make(map[string]*heldKey), serving: true, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
 	for _, o := range opts {
 		o(s)
 	}
@@ -153,7 +154,7 @@ func NewServer(opts ...ServerOption) *Server {
 // generated. Usage constraints are sealed with the key and restored too, so a
 // CA-class key stays purpose-bound across a restart.
 func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error) {
-	s := &Server{serving: true, store: store, keyspec: defaultKeyFactory{}}
+	s := &Server{serving: true, store: store, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
 	for _, o := range opts {
 		o(s)
 	}

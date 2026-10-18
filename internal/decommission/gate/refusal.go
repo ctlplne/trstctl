@@ -145,33 +145,35 @@ func (g *Gate) signRefusal(req signing.GatedDestroyRequest, state depstate.KeySt
 
 func requestDigest(req signing.GatedDestroyRequest) []byte {
 	body := struct {
-		TenantID             string `json:"tenant_id"`
-		Handle               string `json:"handle"`
-		SubjectRef           string `json:"subject_ref"`
-		AssertedFinalEpoch   uint64 `json:"asserted_final_epoch"`
-		LedgerPosition       uint64 `json:"ledger_position"`
-		RequiredSet          []byte `json:"required_set,omitempty"`
-		RequiredSetDigest    []byte `json:"required_set_digest,omitempty"`
-		SatisfiedSet         []byte `json:"satisfied_set,omitempty"`
-		SatisfactionEvidence []byte `json:"satisfaction_evidence,omitempty"`
-		Authorization        []byte `json:"authorization,omitempty"`
-		Approvals            []byte `json:"approvals,omitempty"`
-		AuditChainHead       []byte `json:"audit_chain_head,omitempty"`
-		Context              []byte `json:"context,omitempty"`
+		TenantID                   string `json:"tenant_id"`
+		Handle                     string `json:"handle"`
+		SubjectRef                 string `json:"subject_ref"`
+		AssertedFinalEpoch         uint64 `json:"asserted_final_epoch"`
+		LedgerPosition             uint64 `json:"ledger_position"`
+		RequiredSet                []byte `json:"required_set,omitempty"`
+		RequiredSetDigest          []byte `json:"required_set_digest,omitempty"`
+		SatisfiedSet               []byte `json:"satisfied_set,omitempty"`
+		SatisfactionEvidence       []byte `json:"satisfaction_evidence,omitempty"`
+		SatisfactionEvidenceDigest []byte `json:"satisfaction_evidence_digest,omitempty"`
+		Authorization              []byte `json:"authorization,omitempty"`
+		Approvals                  []byte `json:"approvals,omitempty"`
+		AuditChainHead             []byte `json:"audit_chain_head,omitempty"`
+		Context                    []byte `json:"context,omitempty"`
 	}{
-		TenantID:             req.TenantID,
-		Handle:               req.Handle,
-		SubjectRef:           req.SubjectRef,
-		AssertedFinalEpoch:   req.AssertedFinalEpoch,
-		LedgerPosition:       req.LedgerPosition,
-		RequiredSet:          req.RequiredSet,
-		RequiredSetDigest:    req.RequiredSetDigest,
-		SatisfiedSet:         req.SatisfiedSet,
-		SatisfactionEvidence: req.SatisfactionEvidence,
-		Authorization:        req.Authorization,
-		Approvals:            req.Approvals,
-		AuditChainHead:       req.AuditChainHead,
-		Context:              req.Context,
+		TenantID:                   req.TenantID,
+		Handle:                     req.Handle,
+		SubjectRef:                 req.SubjectRef,
+		AssertedFinalEpoch:         req.AssertedFinalEpoch,
+		LedgerPosition:             req.LedgerPosition,
+		RequiredSet:                req.RequiredSet,
+		RequiredSetDigest:          req.RequiredSetDigest,
+		SatisfiedSet:               req.SatisfiedSet,
+		SatisfactionEvidence:       req.SatisfactionEvidence,
+		SatisfactionEvidenceDigest: req.SatisfactionEvidenceDigest,
+		Authorization:              req.Authorization,
+		Approvals:                  req.Approvals,
+		AuditChainHead:             req.AuditChainHead,
+		Context:                    req.Context,
 	}
 	raw, _ := json.Marshal(body)
 	return crypto.SHA256Sum(raw)

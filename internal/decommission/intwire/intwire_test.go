@@ -100,6 +100,52 @@ func TestVDEC_Wire_SystemGateRefusesUntilComplete_RealInfra(t *testing.T) {
 	}
 }
 
+// A mature tenant can have much more unrelated history than the signer RPC's
+// 1 MiB receive limit. That history must not strand a blocked retirement in
+// pending: the signer still owes the operator a durable signed refusal.
+func TestVDEC_Wire_LargeTenantHistoryStillSignsRetirementRefusal(t *testing.T) {
+	h := newHarness(t)
+	h.seedRegistered(t)
+	for i := 0; i < 65; i++ {
+		_, err := h.log.Append(h.ctx, eventspec.Event{
+			ID:            fmt.Sprintf("unrelated-tenant-history-%03d", i),
+			Type:          "qa.unrelated.history",
+			TenantID:      h.tenant,
+			SchemaVersion: 1,
+			Data:          []byte(fmt.Sprintf(`{"index":%d,"padding":"%s"}`, i, strings.Repeat("x", 16384))),
+		})
+		if err != nil {
+			t.Fatalf("append unrelated tenant history %d: %v", i, err)
+		}
+	}
+	events := h.rebuildTenant(t)
+	handle := h.generateSubjectHandle(t)
+	request := h.gateRequest(t, handle, events)
+	if len(request.SatisfactionEvidence) <= 1<<20 {
+		t.Fatalf("test evidence length = %d, want over signer transport limit", len(request.SatisfactionEvidence))
+	}
+	decision, err := h.signer.GatedDestroy(h.ctx, request)
+	if err != nil {
+		t.Fatalf("GatedDestroy with unrelated history bytes=%d: %v", len(request.SatisfactionEvidence), err)
+	}
+	if decision.Approved || len(decision.RefusalRecord) == 0 {
+		t.Fatalf("GatedDestroy = approved %v, refusal bytes %d; want signed refusal", decision.Approved, len(decision.RefusalRecord))
+	}
+	if _, err := h.signer.SignerForHandle(h.ctx, handle); err != nil {
+		t.Fatalf("large-history refusal removed signer key: %v", err)
+	}
+	h.completeDependents(t)
+	events = h.rebuildTenant(t)
+	request = h.gateRequest(t, handle, events)
+	decision, err = h.signer.GatedDestroy(h.ctx, request)
+	if err != nil || !decision.Approved {
+		t.Fatalf("GatedDestroy after completion = approved %v err %v", decision.Approved, err)
+	}
+	if _, err := h.signer.SignerForHandle(h.ctx, handle); status.Code(err) != codes.NotFound {
+		t.Fatalf("large-history approval left signer key available: %v", err)
+	}
+}
+
 func TestVDEC_Wire_VerifierAcceptsRecordOffline(t *testing.T) {
 	assertOfflineVerdict(t, runRetireFlow(t))
 }
@@ -139,6 +185,15 @@ func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *t
 	h.keyID = authority.ID
 	h.successorKeyID = authority.ID + ":successor"
 	h.seedRegistered(t)
+	for i := 0; i < 65; i++ {
+		if _, err := h.log.Append(h.ctx, eventspec.Event{
+			ID: fmt.Sprintf("served-unrelated-history-%03d", i), Type: "qa.unrelated.history",
+			TenantID: h.tenant, SchemaVersion: 1,
+			Data: []byte(fmt.Sprintf(`{"index":%d,"padding":"%s"}`, i, strings.Repeat("x", 16384))),
+		}); err != nil {
+			t.Fatalf("append served unrelated history %d: %v", i, err)
+		}
+	}
 	h.rebuildTenant(t)
 
 	outbox := orchestrator.NewOutbox(h.store)

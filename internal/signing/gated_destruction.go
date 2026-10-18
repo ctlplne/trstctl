@@ -5,6 +5,7 @@ package signing
 import (
 	"context"
 	"errors"
+	"io"
 )
 
 // GatedDestroyer is a generic destruction-precondition extension attached to the
@@ -25,6 +26,13 @@ type GatedDestructionFinalizer interface {
 	FinalizeGatedDestroy(context.Context, GatedDestroyRequest, GatedDestroyDecision) (GatedDestroyDecision, error)
 }
 
+// StreamingGatedDestroyer verifies large public evidence from a bounded reader.
+// The signer hashes the exact bytes before calling this method, so an edition
+// gate receives the same immutable evidence that the durable intent names.
+type StreamingGatedDestroyer interface {
+	VerifyGatedDestroyStream(context.Context, GatedDestroyRequest, io.Reader) (GatedDestroyDecision, error)
+}
+
 // GatedDestroyRequest carries public, generic destruction preconditions into the
 // isolated signer. It carries no private key material and names no edition-specific
 // feature. Handle is the signer-local custody handle to destroy only after the
@@ -39,10 +47,13 @@ type GatedDestroyRequest struct {
 	RequiredSetDigest    []byte
 	SatisfiedSet         []byte
 	SatisfactionEvidence []byte
-	Authorization        []byte
-	Approvals            []byte
-	AuditChainHead       []byte
-	Context              []byte
+	// SatisfactionEvidenceDigest binds the exact streamed bytes to the signer
+	// journal and refusal record. It is empty on the legacy unary RPC.
+	SatisfactionEvidenceDigest []byte
+	Authorization              []byte
+	Approvals                  []byte
+	AuditChainHead             []byte
+	Context                    []byte
 }
 
 // GatedDestroyDecision is the generic verifier result. Core reads only Approved
@@ -78,10 +89,25 @@ func (s *Server) verifyGatedDestroy(ctx context.Context, req GatedDestroyRequest
 	return g.VerifyGatedDestroy(ctx, req)
 }
 
+func (s *Server) verifyGatedDestroyStream(ctx context.Context, req GatedDestroyRequest, evidence io.Reader) (GatedDestroyDecision, error) {
+	s.mu.Lock()
+	g := s.gatedDestroyer
+	s.mu.Unlock()
+	streaming, ok := g.(StreamingGatedDestroyer)
+	if !ok {
+		return GatedDestroyDecision{}, ErrNoGatedDestroyer
+	}
+	return streaming.VerifyGatedDestroyStream(ctx, req, evidence)
+}
+
 // gatedDestroy enforces the generic ordering: verify first, destroy only after an
 // approving decision, and never call the supplied destroy hook on a refusal or
 // verifier error. The destroy hook is signer-local in production.
 func (s *Server) gatedDestroy(ctx context.Context, req GatedDestroyRequest, destroy func(context.Context, string) error, durable bool) (GatedDestroyDecision, error) {
+	return s.gatedDestroyWithEvidence(ctx, req, nil, destroy, durable)
+}
+
+func (s *Server) gatedDestroyWithEvidence(ctx context.Context, req GatedDestroyRequest, evidence io.Reader, destroy func(context.Context, string) error, durable bool) (GatedDestroyDecision, error) {
 	var operationID string
 	var decision GatedDestroyDecision
 	var err error
@@ -105,7 +131,11 @@ func (s *Server) gatedDestroy(ctx context.Context, req GatedDestroyRequest, dest
 			// mutable policy here could strand a key that was already zeroized.
 			decision = prior
 		} else {
-			decision, err = s.verifyGatedDestroy(ctx, req)
+			if evidence != nil {
+				decision, err = s.verifyGatedDestroyStream(ctx, req, evidence)
+			} else {
+				decision, err = s.verifyGatedDestroy(ctx, req)
+			}
 			if err != nil {
 				return GatedDestroyDecision{}, err
 			}
@@ -117,7 +147,11 @@ func (s *Server) gatedDestroy(ctx context.Context, req GatedDestroyRequest, dest
 			}
 		}
 	} else {
-		decision, err = s.verifyGatedDestroy(ctx, req)
+		if evidence != nil {
+			decision, err = s.verifyGatedDestroyStream(ctx, req, evidence)
+		} else {
+			decision, err = s.verifyGatedDestroy(ctx, req)
+		}
 		if err != nil {
 			return GatedDestroyDecision{}, err
 		}
