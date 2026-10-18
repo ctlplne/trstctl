@@ -69,7 +69,9 @@ function parseMint(text: string, policies: Props["policies"]): EdgeDelegationMin
 function parseJournal(text: string, delegation: Props["delegations"][number]): EdgeReconcileInput {
   const raw = objectFromJSON(text);
   if (Object.keys(raw).some((key) => key !== "host" && key !== "certificates_pem")) throw new Error(translateNow("edge.actions.unknownField"));
-  if (raw.host !== undefined && raw.host !== delegation.host) throw new Error(translateNow("edge.actions.journalHost"));
+  if (raw.host !== undefined && (typeof raw.host !== "string" || (raw.host.trim() !== "" && raw.host.trim() !== delegation.host))) {
+    throw new Error(translateNow("edge.actions.journalHost"));
+  }
   if (
     !Array.isArray(raw.certificates_pem) ||
     raw.certificates_pem.length < 1 ||

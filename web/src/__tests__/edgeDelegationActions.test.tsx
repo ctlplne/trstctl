@@ -147,7 +147,7 @@ describe("delegated Edge CA console lifecycle", () => {
     await user.click(screen.getByRole("button", { name: "Review journal" }));
     expect(screen.getByRole("alert")).toHaveTextContent("must match the selected delegation");
     expect(apiMock.reconcileEdgeDelegation).not.toHaveBeenCalled();
-    fireEvent.change(journal, { target: { value: JSON.stringify({ host: delegation.host, certificates_pem: [delegation.certificate_pem] }) } });
+    fireEvent.change(journal, { target: { value: JSON.stringify({ host: "", certificates_pem: [delegation.certificate_pem] }) } });
     await user.click(screen.getByRole("button", { name: "Review journal" }));
     await user.click(screen.getByRole("button", { name: "Reconcile reviewed journal" }));
     await waitFor(() =>

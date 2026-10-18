@@ -113,6 +113,8 @@ for the host's `edge-journal.json`, showing the exact certificates and counts
 for reconciled, already recorded, violated, and rejected leaves. **Revoke
 delegated edge CA** reviews the exact host, delegation ID, certificate serial,
 and reason before sending the request and reading the revoked state back.
+The host agent may write an empty `host` field in its journal; the console
+binds that journal to the operator-selected delegation host before sending it.
 
 The issued event retains the complete public delegated and parent chain, so
 `GET /api/v1/edge/delegations/{id}` recovers exactly what the mint returned
