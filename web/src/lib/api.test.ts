@@ -463,6 +463,15 @@ describe("approval request contract (AUD-77)", () => {
     });
   });
 
+  it("reads a bounded all-status approval history page with its exact cursor", async () => {
+    mockFetch(200, JSON.stringify({ items: [{ id: "completed-1", status: "consumed" }], next_cursor: "older/page=" }));
+    expect(await api.approvalRequestHistory({ cursor: "newer/page=", limit: 100 })).toEqual({
+      items: [{ id: "completed-1", status: "consumed" }],
+      next_cursor: "older/page=",
+    });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/approval-requests?limit=100&cursor=newer%2Fpage%3D");
+  });
+
   it("keeps legacy secret and ephemeral decisions bound to an exact served request", async () => {
     document.cookie = "trstctl_csrf=csrf-approval; path=/";
     mockFetchSequence([

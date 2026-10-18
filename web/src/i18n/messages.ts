@@ -12200,8 +12200,16 @@ export const messages = {
   },
   "approvals.design.historyHelp": {
     defaultMessage:
-      "Issuance approval and certificate issuance are separate steps. A certificate rule approval applies that rule immediately. A denied request is different from one that expired without a decision.",
+      "General decisions remain available after they leave the pending queue. Issuance approval and certificate issuance are separate steps. A certificate rule approval applies that rule immediately. A denied request is different from one that expired without a decision.",
     description: "Technical ELI5 decision lifecycle boundary.",
+  },
+  "approvals.design.generalHistoryTitle": {
+    defaultMessage: "Operation decision history",
+    description: "Completed immutable approval requests across the tenant's authorized review domains.",
+  },
+  "approvals.design.loadOlder": {
+    defaultMessage: "Load older decisions",
+    description: "Read the next bounded page of operation approval history.",
   },
   "approvals.design.specializedHelp": {
     defaultMessage:

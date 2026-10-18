@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Info } from "lucide-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useAuth } from "@/auth/AuthProvider";
 import { IssuanceRequestsPanel, issuanceRequestsQueryKey, readIssuanceRequests } from "@/components/IssuanceRequestsPanel";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -24,7 +25,14 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { hasPermission } from "@/lib/access";
-import { approvalAuditHref, approvalRequestsQueryKey, approvalRows, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import {
+  approvalAuditHref,
+  approvalRequestHistoryQueryKey,
+  approvalRequestsQueryKey,
+  approvalRows,
+  requesterMatchesPrincipal,
+  type ApprovalQueueRow,
+} from "@/lib/approvalQueue";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 type Notice = { kind: "permission" | "error"; message: string };
@@ -56,6 +64,13 @@ export function Approvals() {
   const [selectedProfile, setSelectedProfile] = useState<ProfileEditApprovalRecord | null>(null);
   const profileReviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const [open, setOpen] = useState<OpenSections>({ queue: false, history: false, specialized: false });
+  const generalHistory = useInfiniteQuery({
+    queryKey: approvalRequestHistoryQueryKey,
+    queryFn: ({ pageParam }) => api.approvalRequestHistory({ cursor: pageParam, limit: 100 }),
+    initialPageParam: "",
+    getNextPageParam: (page, _pages, _lastPageParam, pageParams) => (page.next_cursor && !pageParams.includes(page.next_cursor) ? page.next_cursor : undefined),
+    enabled: canReadGeneral && open.history,
+  });
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const issuanceReviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const [ephemeralRequestID, setEphemeralRequestID] = useState("");
@@ -67,6 +82,7 @@ export function Approvals() {
   const issuanceItems = issuanceRequests.data?.items ?? [];
   const waitingIssuance = issuanceItems.filter((request) => request.status === "requested");
   const profileItems = profileApprovals.data?.items ?? [];
+  const completedGeneral = generalHistory.data?.pages.flatMap((page) => page.items.filter((item) => item.status !== "pending")) ?? [];
   const waitingProfiles = profileItems.filter((request) => request.state === "awaiting_approval");
   const waitingCount = rows.length + waitingIssuance.length + waitingProfiles.length;
   const reviewableRequest = rows.find((row) => !requesterMatchesPrincipal(row, user)) ?? null;
@@ -168,6 +184,7 @@ export function Approvals() {
         setNotice(t("approvals.design.approvalRecorded", { action: row.action, resource: row.resource_name || row.resource_id }));
         closeReview();
         void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
+        void queryClient.invalidateQueries({ queryKey: approvalRequestHistoryQueryKey });
       } catch (err) {
         setError({ kind: "error", message: approvalErrorMessage(err) });
       } finally {
@@ -190,6 +207,7 @@ export function Approvals() {
       setNotice(t("approvals.design.denialRecorded", { action: row.action, resource: row.resource_name || row.resource_id }));
       closeReview();
       void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: approvalRequestHistoryQueryKey });
     } catch (err) {
       setError({ kind: "error", message: approvalErrorMessage(err) });
     } finally {
@@ -460,12 +478,47 @@ export function Approvals() {
       >
         <div className="grid gap-4">
           <p className="max-w-3xl text-sm text-muted-foreground">{t("approvals.design.historyHelp")}</p>
+          {open.history && canReadGeneral ? (
+            <section className="grid gap-3" aria-label={t("approvals.design.generalHistoryTitle")}>
+              <h3 className="font-semibold">{t("approvals.design.generalHistoryTitle")}</h3>
+              {generalHistory.isPending && !generalHistory.error ? <LoadingState>{t("source.loading.approvals.192880172b")}</LoadingState> : null}
+              {generalHistory.error ? (
+                <ErrorState title={t("source.approvals.unavailable.8071a7e2c8")}>{approvalErrorMessage(generalHistory.error)}</ErrorState>
+              ) : null}
+              {completedGeneral.map((request) => (
+                <article key={request.id} className="grid gap-2 rounded-control border border-border p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{request.resource_name || request.resource_id}</span>
+                    <StatusBadge value={request.status} />
+                    <span>
+                      {request.approval_count}/{request.required_approvals}
+                    </span>
+                  </div>
+                  <p>
+                    {request.action} · {request.resource_kind} · {request.requester} · {formatDate(request.created_at)}
+                  </p>
+                  <p className="break-all font-mono text-xs">
+                    {request.id} · {request.intent_digest}
+                  </p>
+                  <Link className="w-fit text-brand-accent underline" to={approvalAuditHref(request)}>
+                    {t("source.audit.trail.c1ada08ce1")}
+                  </Link>
+                </article>
+              ))}
+              {generalHistory.hasNextPage ? (
+                <Button type="button" variant="outline" disabled={generalHistory.isFetchingNextPage} onClick={() => void generalHistory.fetchNextPage()}>
+                  {t("approvals.design.loadOlder")}
+                </Button>
+              ) : null}
+            </section>
+          ) : null}
           {open.history && canReadIssuance ? <IssuanceRequestsPanel currentPrincipal={user} /> : null}
           {open.history &&
           canReadIssuance &&
           !issuanceRequests.loading &&
           !issuanceRequests.errorValue &&
           issuanceItems.length === 0 &&
+          (!canReadGeneral || (!generalHistory.isPending && !generalHistory.error && completedGeneral.length === 0 && !generalHistory.hasNextPage)) &&
           profileItems.every((request) => request.state === "awaiting_approval") ? (
             <EmptyState title={t("approvals.design.emptyHistory")} />
           ) : null}

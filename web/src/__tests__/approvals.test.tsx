@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     identities: vi.fn(),
     approvalRequests: vi.fn(),
+    approvalRequestHistory: vi.fn(),
     profileEditApprovals: vi.fn(),
     approveProfileEditApproval: vi.fn(),
     issuanceRequests: vi.fn(),
@@ -78,6 +79,7 @@ describe("dedicated approvals inbox", () => {
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
     apiMock.approvalRequests.mockResolvedValue([]);
+    apiMock.approvalRequestHistory.mockResolvedValue({ items: [], next_cursor: "" });
     apiMock.profileEditApprovals.mockResolvedValue({ items: [] });
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
     apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
@@ -315,7 +317,7 @@ describe("dedicated approvals inbox", () => {
       expect(screen.getByText(title, { exact: true }).closest("details")).not.toHaveAttribute("open");
     }
 
-    await user.click(screen.getByText("Decision lifecycle and history", { exact: true }));
+    await user.click(await screen.findByText("Decision lifecycle and history", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Issuance requests" })).toBeInTheDocument();
     expect(screen.getByText("qa-design-partner-mtls", { exact: true })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.ticketIntakeSchedule).toHaveBeenCalledTimes(2));
@@ -449,6 +451,57 @@ describe("dedicated approvals inbox", () => {
 
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
     expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
+  });
+
+  it("keeps a completed general identity approval in paged decision history after the pending queue drains", async () => {
+    apiMock.approvalRequests.mockResolvedValue([]);
+    apiMock.approvalRequestHistory.mockResolvedValue({
+      items: [
+        approvalRequest({
+          id: "9ad5d227-ce22-56e3-9296-baf4d0f591e6",
+          resource_id: "daf71dc5-de6f-4188-a4eb-5ffcc2c16d18",
+          resource_name: "qa-identity-approval",
+          approval_count: 2,
+          required_approvals: 2,
+          status: "consumed",
+        }),
+      ],
+      next_cursor: "older-page",
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+    expect(await screen.findByRole("heading", { name: "Nothing needs approval right now" })).toBeInTheDocument();
+    await user.click(screen.getByText("Decision lifecycle and history", { exact: true }));
+    const history = await screen.findByRole("region", { name: "Operation decision history" });
+    expect(await within(history).findByText("qa-identity-approval")).toBeInTheDocument();
+    expect(within(history).getByText(/9ad5d227-ce22-56e3-9296-baf4d0f591e6/)).toBeInTheDocument();
+    expect(within(history).getByText("2/2")).toBeInTheDocument();
+    expect(within(history).getByText("Consumed")).toBeInTheDocument();
+    expect(within(history).getByRole("link", { name: "Audit trail" })).toHaveAttribute(
+      "href",
+      "/audit?q=9ad5d227-ce22-56e3-9296-baf4d0f591e6+sha256%3A8ec59a9c",
+    );
+    expect(apiMock.approvalRequestHistory).toHaveBeenCalledWith({ cursor: "", limit: 100 });
+    expect(within(history).getByRole("button", { name: "Load older decisions" })).toBeEnabled();
+  });
+
+  it("loads older completed decisions when newer pending requests fill the first history page", async () => {
+    apiMock.approvalRequestHistory.mockImplementation(async ({ cursor }: { cursor: string }) =>
+      cursor
+        ? { items: [approvalRequest({ id: "older-denied-request", status: "denied", approval_count: 0, resource_name: "older-target" })], next_cursor: "" }
+        : { items: [approvalRequest({ id: "newer-pending-request", resource_name: "newer-target" })], next_cursor: "older-page" },
+    );
+    const user = userEvent.setup();
+    renderAt("/approvals");
+    await user.click(await screen.findByText("Decision lifecycle and history", { exact: true }));
+    const history = await screen.findByRole("region", { name: "Operation decision history" });
+    expect(within(history).queryByText("newer-target")).not.toBeInTheDocument();
+    await user.click(within(history).getByRole("button", { name: "Load older decisions" }));
+    expect(await within(history).findByText("older-target")).toBeInTheDocument();
+    expect(within(history).getByText("Denied")).toBeInTheDocument();
+    expect(within(history).queryByRole("button", { name: "Load older decisions" })).not.toBeInTheDocument();
+    expect(apiMock.approvalRequestHistory).toHaveBeenNthCalledWith(1, { cursor: "", limit: 100 });
+    expect(apiMock.approvalRequestHistory).toHaveBeenNthCalledWith(2, { cursor: "older-page", limit: 100 });
   });
 
   it("reviews consequence and records a reasoned rejection against the immutable intent", async () => {

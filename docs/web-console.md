@@ -872,6 +872,12 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   even if the browser closes. A later recovery can reconcile the exact signed result
   after revocation or retirement; it does not restore that credential's validity or
   mint another certificate. Credential values and private keys never enter the review.
+  **Decision lifecycle and history** reads completed general approvals from the
+  tenant-scoped, authorization-filtered approval projection, one newest-first page
+  at a time. Each row shows the outcome, quorum, exact request ID and intent digest,
+  and an audit link. **Load older decisions** continues from the server cursor;
+  a decision remains findable after it leaves the pending queue. The console
+  displays the recorded decision and does not infer that the requested action ran.
 - Rules and approvals (`/policy`) includes access-change approvals for NHI entitlement changes: a
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential

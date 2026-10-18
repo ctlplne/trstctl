@@ -3,6 +3,7 @@ import type { Me, PendingApprovalRequest } from "@/lib/api";
 export type ApprovalActionKind = PendingApprovalRequest["action"];
 export type ApprovalQueueRow = PendingApprovalRequest;
 export const approvalRequestsQueryKey = ["approval-requests", { status: "pending" }] as const;
+export const approvalRequestHistoryQueryKey = ["approval-requests", { status: "all" }] as const;
 
 /** S-C18: the queue rendered whatever the served `approvals` attribute held —
  * "1 of 2", "1/2", a bare count, or a placeholder — so "how many more do I

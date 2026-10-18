@@ -1737,6 +1737,8 @@ export interface Api {
   identityPage(options?: { limit?: number; cursor?: string; query?: string; kind?: string; signal?: AbortSignal }): Promise<IdentityList>;
   /** AUD-77: real pending intents only; lifecycle inventory is not an approval queue. */
   approvalRequests(): Promise<PendingApprovalRequest[]>;
+  /** One newest-first page across all statuses; a completed decision stays visible after it leaves the pending queue. */
+  approvalRequestHistory(options: { cursor: string; limit: number }): Promise<PendingApprovalRequestList>;
   /** AUD-77: bind the vote to both the immutable request id and its intent digest. */
   approveApprovalRequest(id: string, intentDigest: string): Promise<ApprovalRequestDecision>;
   /** AUD-77: deny the immutable request itself; never mutate its target resource. */
@@ -2402,6 +2404,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       signal: options?.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
     }),
   approvalRequests: allPendingApprovalRequests,
+  approvalRequestHistory: ({ cursor, limit }) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (cursor) query.set("cursor", cursor);
+    return req<PendingApprovalRequestList>(`/api/v1/approval-requests?${query.toString()}`);
+  },
   approveApprovalRequest: (id, intentDigest) =>
     mutate<ApprovalRequestDecision>("POST", `/api/v1/approval-requests/${encodeURIComponent(id)}/approvals`, { intent_digest: intentDigest }),
   denyApprovalRequest: (id, intentDigest, reason) =>
