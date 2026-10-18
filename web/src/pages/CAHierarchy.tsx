@@ -2517,7 +2517,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
             {review && (
               <p>
                 {t("ca.externalCSR.reviewFingerprint")}: <code className="break-all">{review.preview.request_fingerprint}</code>
-                {!reviewCurrent && ` — ${t("ca.externalCSR.reviewStale")}`}
+                {!reviewCurrent && <span className="ml-2">{t("ca.externalCSR.reviewStale")}</span>}
               </p>
             )}
             <p className="text-muted-foreground">{t("ca.externalCSR.reviewHelp")}</p>
