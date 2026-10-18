@@ -40,7 +40,10 @@ func InspectPrivateKey(data []byte) (PrivateKeyInfo, error) {
 	if block, _ := pem.Decode(trimmed); block != nil {
 		return inspectPEMPrivateKey(trimmed, block)
 	}
-	return inspectDERPrivateKey(trimmed)
+	// DER is binary: its final octet may have the value of an ASCII whitespace
+	// character. Only PEM framing is whitespace-tolerant; parsing a trimmed DER
+	// slice would turn a valid PKCS#8 key into a truncated ASN.1 object.
+	return inspectDERPrivateKey(data)
 }
 
 func inspectPEMPrivateKey(pemBytes []byte, block *pem.Block) (PrivateKeyInfo, error) {

@@ -3,7 +3,12 @@
 package crypto
 
 import (
+	"crypto/ecdh"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/x509"
 	"encoding/pem"
+	"math/big"
 	"runtime"
 	"strings"
 	"testing"
@@ -43,6 +48,47 @@ func TestInspectPrivateKeyClassifiesEncryptedPEMWithoutPassphrase(t *testing.T) 
 	if !info.Encrypted || info.Format != "PKCS8-ENCRYPTED" || info.FingerprintSHA256 != "" {
 		t.Fatalf("encrypted private-key info = %+v, want encrypted metadata without fingerprint", info)
 	}
+}
+
+func TestInspectPrivateKeyPreservesWhitespaceValuedDERTail(t *testing.T) {
+	// DER is binary. A valid PKCS#8 key may end in an octet that is ASCII
+	// whitespace; stripping it corrupts the ASN.1 before the parser sees it.
+	// Deterministic scalars avoid depending on a random key landing on that tail.
+	curve := elliptic.P384()
+	for scalar := int64(1); scalar <= 1024; scalar++ {
+		d := big.NewInt(scalar)
+		var scalarBytes [48]byte
+		d.FillBytes(scalarBytes[:])
+		ecdhKey, err := ecdh.P384().NewPrivateKey(scalarBytes[:])
+		if err != nil {
+			t.Fatalf("derive deterministic P-384 test key: %v", err)
+		}
+		point := ecdhKey.PublicKey().Bytes()
+		x := new(big.Int).SetBytes(point[1:49])
+		y := new(big.Int).SetBytes(point[49:97])
+		key := &ecdsa.PrivateKey{PublicKey: ecdsa.PublicKey{Curve: curve, X: x, Y: y}, D: d}
+		der, err := x509.MarshalPKCS8PrivateKey(key)
+		if err != nil {
+			t.Fatalf("marshal deterministic P-384 PKCS#8 key: %v", err)
+		}
+		tail := der[len(der)-1]
+		if tail != ' ' && tail != '\n' && tail != '\r' && tail != '\t' {
+			wipeTestBytes(der)
+			d.SetInt64(0)
+			continue
+		}
+		info, err := InspectPrivateKey(der)
+		wipeTestBytes(der)
+		d.SetInt64(0)
+		if err != nil {
+			t.Fatalf("valid PKCS#8 DER with whitespace-valued final byte was rejected: %v", err)
+		}
+		if info.Format != "PKCS8-DER" || info.Algorithm != ECDSAP384 || info.Encrypted {
+			t.Fatalf("key classification = %+v, want unencrypted P-384 PKCS8-DER", info)
+		}
+		return
+	}
+	t.Fatal("could not construct a deterministic valid PKCS#8 DER with whitespace-valued final byte")
 }
 
 func wipeTestBytes(b []byte) {
