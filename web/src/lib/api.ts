@@ -46,6 +46,7 @@ import type {
   MDMPollScheduleInput,
   MDMPollScheduleList,
   TicketIntakeSchedule,
+  TicketIntakeInput,
   AgentUpgradeCampaign,
   OwnershipConflictList,
   OwnershipImportResult,
@@ -638,7 +639,7 @@ export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, Cry
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
-export type { TicketIntakeSchedule } from "./api-types.gen";
+export type { TicketIntakeInput, TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollSchedule, MDMPollScheduleInput, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
 export type { ACMEDNS01CAAPolicyEvidence, ACMEDNS01CAAPolicyRecord } from "./api-types.gen";
@@ -1679,6 +1680,8 @@ export interface Api {
   completeIssuanceRequest(id: string): Promise<IssuanceRequest>;
   /** I3/AUD-47: one provider's durable relay cursor, coverage, terminal run, and failure. */
   ticketIntakeSchedule(system?: "servicenow" | "jira"): Promise<TicketIntakeSchedule>;
+  /** I3: save one reviewed relay binding; retry the same key after an uncertain response. */
+  putTicketIntakeSchedule(input: TicketIntakeInput, idempotencyKey: string): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
   mdmDevices(): Promise<MDMDeviceList>;
   /** I5/AUD-45: relay-only Intune/Jamf schedules, including waiting/failure state. */
@@ -2275,6 +2278,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   completeIssuanceRequest: (id) =>
     mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/complete`, undefined, `issuance-request-complete:${id}`),
   ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
+  putTicketIntakeSchedule: (input, idempotencyKey) => mutate<TicketIntakeSchedule>("PUT", "/api/v1/issuance-requests/intake-schedule", input, idempotencyKey),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),
   putMDMPollSchedule: (input) => mutate<MDMPollSchedule>("PUT", "/api/v1/mdm/poll-schedule", input),

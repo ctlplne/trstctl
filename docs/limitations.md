@@ -2645,6 +2645,10 @@ than sending an operator looking for a credential that was never there.
   backfilled with a guessed account. TICKET-DRIVEN INTAKE is now real: `PUT/GET
   /api/v1/issuance-requests/intake-schedule` (`trstctl issuance-requests
   intake-schedule set|show`) configures a per-tenant ServiceNow or Jira read.
+  The Approvals console can configure either provider, shows its exact HTTPS
+  destination, secret reference, ticket source, field mapping and enabled state
+  for review, and retains the idempotency key when a save response is uncertain.
+  The console reports schedule acceptance separately from relay read coverage.
   Each provider has its own schedule row, so a slow ServiceNow sweep cannot
   hide or replace Jira progress. ServiceNow is bounded to one of the four
   request-shaped tables (`incident`, `sc_req_item`, `sc_request`,

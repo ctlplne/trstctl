@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     transitionIdentity: vi.fn(),
     completeIssuanceRequest: vi.fn(),
     ticketIntakeSchedule: vi.fn(),
+    putTicketIntakeSchedule: vi.fn(),
   },
 }));
 
@@ -45,6 +46,100 @@ describe("ticket-intake relay visibility", () => {
           }
         : { configured: false, enabled: false, system, guidance: "" },
     );
+    apiMock.putTicketIntakeSchedule.mockReset();
+  });
+
+  it("reviews a Jira relay binding and retries an uncertain save with one idempotency key", async () => {
+    apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
+      configured: false,
+      enabled: false,
+      system,
+      guidance: "",
+    }));
+    apiMock.putTicketIntakeSchedule
+      .mockRejectedValueOnce(new Error("response lost after submit"))
+      .mockResolvedValueOnce({ configured: true, system: "jira", enabled: false, jira_project: "QA", guidance: "" });
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write"] }} />
+      </AppQueryProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Configure ticket intake" }));
+    await user.selectOptions(screen.getByLabelText("Provider"), "jira");
+    await user.type(screen.getByLabelText("Provider HTTPS URL"), "https://127.0.0.1:19995");
+    await user.type(screen.getByLabelText("Secret reference"), "secret://qa-ticket-intake");
+    await user.type(screen.getByLabelText("Jira project key"), "QA");
+    await user.type(screen.getByLabelText("Subject field"), "summary");
+    await user.type(screen.getByLabelText("Profile field"), "customfield_profile");
+    await user.click(screen.getByRole("button", { name: "Review ticket intake schedule" }));
+    expect(screen.getByText(/Jira project key: QA/)).toBeInTheDocument();
+    expect(screen.getByText(/Paused; no scheduled read will start/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save reviewed ticket intake schedule" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("response lost after submit");
+    await user.click(screen.getByRole("button", { name: "Save reviewed ticket intake schedule" }));
+    await waitFor(() => expect(apiMock.putTicketIntakeSchedule).toHaveBeenCalledTimes(2));
+    const [firstBody, firstKey] = apiMock.putTicketIntakeSchedule.mock.calls[0];
+    const [retryBody, retryKey] = apiMock.putTicketIntakeSchedule.mock.calls[1];
+    expect(firstBody).toEqual({
+      system: "jira",
+      instance_url: "https://127.0.0.1:19995",
+      token_ref: "secret://qa-ticket-intake",
+      jira_project: "QA",
+      subject_field: "summary",
+      profile_field: "customfield_profile",
+      interval_seconds: 3600,
+      enabled: false,
+    });
+    expect(retryBody).toEqual(firstBody);
+    expect(retryKey).toBe(firstKey);
+    expect(await screen.findByRole("status")).toHaveTextContent("Ticket intake schedule saved");
+  });
+
+  it("does not offer schedule setup to a certificate reader", async () => {
+    apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
+      configured: system === "servicenow",
+      enabled: false,
+      system,
+      guidance: "",
+    }));
+    render(
+      <AppQueryProvider>
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read"] }} />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText((_, node) => node?.tagName === "P" && node.textContent?.includes("servicenow · Disabled") === true)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Configure ticket intake" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit ticket intake schedule" })).not.toBeInTheDocument();
+  });
+
+  it("reviews the closed ServiceNow table and field mapping before any write", async () => {
+    apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
+      configured: false,
+      enabled: false,
+      system,
+      guidance: "",
+    }));
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <IssuanceRequestsPanel currentPrincipal={{ permissions: ["certs:read", "certs:write"] }} />
+      </AppQueryProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Configure ticket intake" }));
+    expect(screen.getByRole("option", { name: "sc_req_item" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "change_request" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Jira project key")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Provider HTTPS URL"), "https://127.0.0.1:19995");
+    await user.type(screen.getByLabelText("Secret reference"), "secret://qa-ticket-snow");
+    await user.type(screen.getByLabelText("Subject field"), "short_description");
+    await user.type(screen.getByLabelText("Profile field"), "u_certificate_profile");
+    await user.click(screen.getByRole("button", { name: "Review ticket intake schedule" }));
+    expect(screen.getByText("ServiceNow ticket table: sc_req_item")).toBeInTheDocument();
+    expect(screen.getByText("Subject field: short_description")).toBeInTheDocument();
+    expect(apiMock.putTicketIntakeSchedule).not.toHaveBeenCalled();
   });
 
   it("shows the durable relay outcome even before a ticket opens a request", async () => {

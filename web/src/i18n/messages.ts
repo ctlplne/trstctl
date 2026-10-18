@@ -25724,6 +25724,96 @@ export const messages = {
     defaultMessage: "Paused; no scheduled read will start.",
     description: "I2: reviewed paused CMDB schedule state.",
   },
+  "ticket.intake.setup.configure": {
+    defaultMessage: "Configure ticket intake",
+    description: "I3: open the ServiceNow or Jira certificate-request intake setup form.",
+  },
+  "ticket.intake.setup.edit": {
+    defaultMessage: "Edit ticket intake schedule",
+    description: "I3: edit one provider's current ticket-intake binding.",
+  },
+  "ticket.intake.setup.help": {
+    defaultMessage:
+      "Choose one provider and its bounded ticket source. An enrolled network relay redeems the secret reference for each read; the control plane never contacts this URL. Review the exact mapping before enabling reads.",
+    description: "I3: explain the relay and custody boundary without claiming a configured schedule has completed a read.",
+  },
+  "ticket.intake.setup.provider": {
+    defaultMessage: "Provider",
+    description: "I3: ServiceNow or Jira ticket source.",
+  },
+  "ticket.intake.setup.providerJira": {
+    defaultMessage: "Jira",
+    description: "I3: Jira provider option.",
+  },
+  "ticket.intake.setup.providerServiceNow": {
+    defaultMessage: "ServiceNow",
+    description: "I3: ServiceNow provider option.",
+  },
+  "ticket.intake.setup.labelValue": {
+    defaultMessage: "{label}: {value}",
+    description: "I3: exact reviewed source table or project key.",
+  },
+  "ticket.intake.setup.url": {
+    defaultMessage: "Provider HTTPS URL",
+    description: "I3: operator-approved relay destination for one ticket provider.",
+  },
+  "ticket.intake.setup.project": {
+    defaultMessage: "Jira project key",
+    description: "I3: closed Jira project boundary for certificate requests.",
+  },
+  "ticket.intake.setup.table": {
+    defaultMessage: "ServiceNow ticket table",
+    description: "I3: one of four request-shaped ServiceNow tables.",
+  },
+  "ticket.intake.setup.query": {
+    defaultMessage: "Additional ticket query",
+    description: "I3: optional bounded filter inside the selected table or project.",
+  },
+  "ticket.intake.setup.none": {
+    defaultMessage: "None",
+    description: "I3: an optional ticket filter or field mapping was intentionally left empty.",
+  },
+  "ticket.intake.setup.subject_field": {
+    defaultMessage: "Subject field",
+    description: "I3: source field that contains the certificate subject, never inferred from prose.",
+  },
+  "ticket.intake.setup.profile_field": {
+    defaultMessage: "Profile field",
+    description: "I3: source field that names the certificate profile.",
+  },
+  "ticket.intake.setup.requester_field": {
+    defaultMessage: "Requester field (optional)",
+    description: "I3: optional provider field identifying the original ticket requester.",
+  },
+  "ticket.intake.setup.justification_field": {
+    defaultMessage: "Justification field (optional)",
+    description: "I3: optional provider field containing the request reason.",
+  },
+  "ticket.intake.setup.invalid": {
+    defaultMessage:
+      "Use an HTTPS URL without credentials or query, a secret:// reference, a valid ticket source and field names, and an interval of at least 300 seconds.",
+    description: "I3: local ticket-intake form validation before the operator reviews a mutation.",
+  },
+  "ticket.intake.setup.review": {
+    defaultMessage: "Review ticket intake schedule",
+    description: "I3: show the exact provider, field mapping and enabled state before writing.",
+  },
+  "ticket.intake.setup.reviewed": {
+    defaultMessage: "Reviewed ticket intake schedule",
+    description: "I3: accessible title for the exact ticket-intake configuration review.",
+  },
+  "ticket.intake.setup.relayBoundary": {
+    defaultMessage: "A network relay makes the read. Saving this schedule does not prove a ticket was fetched or opened as a request.",
+    description: "I3: distinguish configuration from external ticket-intake outcome.",
+  },
+  "ticket.intake.setup.save": {
+    defaultMessage: "Save reviewed ticket intake schedule",
+    description: "I3: write the exact reviewed provider mapping with a retained idempotency key.",
+  },
+  "ticket.intake.setup.saved": {
+    defaultMessage: "Ticket intake schedule saved. Check the relay result and coverage below.",
+    description: "I3: confirm configuration without claiming provider read success.",
+  },
   "cmdb.sync.coverage.unknown.aud460001": {
     defaultMessage: "{read} CIs read across {pages} pages; the CMDB did not provide a total.",
     description: "AUD-46: bounded CMDB sweep progress when ServiceNow omits its pagination denominator.",
