@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -625,7 +626,21 @@ func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
 	httpSink := newMultiChannelHTTPSink(t)
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {})
 	resolver := notify.NewStoreChannelResolver(h.store)
-	resolver.SetHTTPClient(httpSink.Client())
+	// The public URI is the product-facing contract. Only this injected test
+	// client maps it to the owned local sink; no external DNS or network call occurs.
+	resolver.SetHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Hostname() != "notifications.example.test" {
+			return nil, errors.New("unexpected tenant notification test host")
+		}
+		localURL, err := url.Parse(httpSink.URL(req.URL.Path))
+		if err != nil {
+			return nil, err
+		}
+		local := req.Clone(req.Context())
+		local.URL = localURL
+		local.Host = localURL.Host
+		return httpSink.Client().Do(local)
+	})})
 	h.srv.notifications.SetChannelResolver(resolver)
 	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
 
@@ -634,7 +649,7 @@ func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
 		"id":             "webhook",
 		"channel_type":   "webhook",
 		"label":          "Tenant webhook",
-		"endpoint_url":   httpSink.URL("/tenant-webhook"),
+		"endpoint_url":   "https://notifications.example.test/tenant-webhook",
 		"credential_ref": rawCredentialRef,
 		"enabled":        true,
 	})
@@ -684,6 +699,54 @@ func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
 	}
 	if !h.hasEvent(t, "notification.channel.upserted") {
 		t.Fatal("missing notification.channel.upserted event")
+	}
+}
+
+func TestServedTenantNotificationChannelRejectsUndeliverableEndpointBeforeEvent(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
+	lastEvent := func() uint64 {
+		t.Helper()
+		seq, err := h.log.LastSequence(t.Context())
+		if err != nil {
+			t.Fatalf("event head: %v", err)
+		}
+		return seq
+	}
+	initial := lastEvent()
+	for _, tc := range []struct {
+		name, channel, endpoint string
+	}{
+		{"private webhook", "webhook", "https://127.0.0.1:19995/qa-alert"},
+		{"plain HTTP Slack", "slack", "http://example.com/alerts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels", tok, "qa-endpoint-refuse-"+tc.channel, map[string]any{
+				"id": tc.channel, "channel_type": tc.channel, "endpoint_url": tc.endpoint, "enabled": true,
+			})
+			if status != http.StatusBadRequest || !strings.Contains(string(body), "public HTTPS") {
+				t.Fatalf("unsafe channel = %d %s, want 400 public HTTPS", status, body)
+			}
+		})
+	}
+	if got := lastEvent(); got != initial {
+		t.Fatalf("unsafe create appended event: %d -> %d", initial, got)
+	}
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels", tok, "qa-endpoint-public-create", map[string]any{
+		"id": "webhook", "channel_type": "webhook", "endpoint_url": "https://notify.example.com/qa-alert", "enabled": true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("public HTTPS create = %d %s", status, body)
+	}
+	configuredHead := lastEvent()
+	status, body = secretsReqKey(t, h, http.MethodPut, "/api/v1/notification-channels/webhook", tok, "qa-endpoint-private-replace", map[string]any{
+		"channel_type": "webhook", "endpoint_url": "https://127.0.0.1:19995/qa-alert", "enabled": true,
+	})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "public HTTPS") {
+		t.Fatalf("unsafe replacement = %d %s, want 400 public HTTPS", status, body)
+	}
+	if got := lastEvent(); got != configuredHead {
+		t.Fatalf("unsafe replace appended event: %d -> %d", configuredHead, got)
 	}
 }
 

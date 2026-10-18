@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -360,6 +361,12 @@ func (a *API) decodeNotificationChannelRequest(r *http.Request, tenantID, pathID
 		}
 		if parsed.User != nil {
 			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must not contain userinfo credentials")
+		}
+		// Tenant-authored channels cannot use operator private-CIDR exceptions.
+		// Reject unusable endpoints before appending a configured channel event;
+		// the delivery transport checks DNS again at dial time.
+		if err := netsec.ValidatePublicHTTPSURL(endpointURL); err != nil {
+			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must be public HTTPS")
 		}
 	}
 	label := strings.TrimSpace(req.Label)

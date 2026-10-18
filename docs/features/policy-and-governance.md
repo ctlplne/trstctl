@@ -352,6 +352,11 @@ held in wipeable memory where the provider allows it and never logged.
 HTTP-based channels default to the shared SSRF-safe client and accept only public HTTPS
 endpoints, so an operator callback can't turn the control plane into a request to
 loopback, RFC1918, or cloud-metadata addresses.
+Tenant channel create and replace reject plain HTTP and literal private addresses
+before recording a configured channel. The delivery transport rechecks DNS at
+dial time, including redirects, so a later DNS change cannot turn a public name
+into a private-address request. Operator-configured private alert channels use
+their separate explicit allowlist; tenant-authored channels never inherit it.
 
 The `/notifications` console names this journey **Alerts and delivery**. Its opening
 summary says whether any ready channel and routing rule actually connect an event to a
