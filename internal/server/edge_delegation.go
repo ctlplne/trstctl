@@ -228,7 +228,10 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 	if err := s.orch.RecordEdgeDelegationIssued(ctx, tenantID, projections.EdgeDelegationIssued{
 		ID: id, SegmentID: segmentID, CAID: caID, Host: host,
 		CommonName: issued.CommonName, Serial: issued.Serial,
-		CertificatePEM:        string(issued.CertificatePEM),
+		// Persist the exact chain returned to the host. The event is the
+		// recovery source after a lost mint response or a projection rebuild;
+		// storing only the delegated certificate made the parent disappear.
+		CertificatePEM:        string(issued.CertificatePEM) + ca.CertificatePEM,
 		PermittedDNSDomains:   policy.PermittedDNSDomains,
 		ExcludedDNSDomains:    policy.ExcludedDNSDomains,
 		AttestedKeySHA256:     crypto.SHA256Hex(attested.PublicKeySHA256),
@@ -246,10 +249,7 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 	if err != nil {
 		return api.EdgeDelegation{}, err
 	}
-	view := edgeDelegationView(delegation, time.Now().UTC())
-	// The chain travels with the delegation so the edge host can serve it.
-	view.CertificatePEM = string(issued.CertificatePEM) + ca.CertificatePEM
-	return view, nil
+	return edgeDelegationView(delegation, time.Now().UTC()), nil
 }
 
 func (s *edgeDelegationService) ListDelegations(ctx context.Context, tenantID string) ([]api.EdgeDelegation, error) {
@@ -259,8 +259,13 @@ func (s *edgeDelegationService) ListDelegations(ctx context.Context, tenantID st
 	}
 	now := time.Now().UTC()
 	out := make([]api.EdgeDelegation, 0, len(rows))
+	parentChains := make(map[string]string)
 	for _, d := range rows {
-		out = append(out, edgeDelegationView(d, now))
+		view, err := s.edgeDelegationViewWithChain(ctx, tenantID, d, now, parentChains)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, view)
 	}
 	return out, nil
 }
@@ -277,7 +282,11 @@ func (s *edgeDelegationService) GetDelegation(ctx context.Context, tenantID, id 
 	if err != nil {
 		return api.EdgeDelegationDetail{}, err
 	}
-	detail := api.EdgeDelegationDetail{Delegation: edgeDelegationView(d, time.Now().UTC())}
+	view, err := s.edgeDelegationViewWithChain(ctx, tenantID, d, time.Now().UTC(), nil)
+	if err != nil {
+		return api.EdgeDelegationDetail{}, err
+	}
+	detail := api.EdgeDelegationDetail{Delegation: view}
 	for _, i := range issuances {
 		detail.Issuances = append(detail.Issuances, api.EdgeIssuance{
 			Serial: i.Serial, Subject: i.Subject, DNSNames: i.DNSNames,
@@ -287,6 +296,58 @@ func (s *edgeDelegationService) GetDelegation(ctx context.Context, tenantID, id 
 		})
 	}
 	return detail, nil
+}
+
+func (s *edgeDelegationService) edgeDelegationViewWithChain(ctx context.Context, tenantID string, d store.EdgeDelegation, now time.Time, parentChains map[string]string) (api.EdgeDelegation, error) {
+	view := edgeDelegationView(d, now)
+	// Delegations minted before the full-chain event fix retained only their
+	// leaf. Recover a public parent chain only when the exact tenant-bound CA
+	// still verifies as its issuer. A re-keyed or missing parent must not be
+	// silently substituted with a different trust path.
+	if !edgeChainHasOnlyLeaf(view.CertificatePEM) {
+		return view, nil
+	}
+	parentChain := parentChains[d.CAID]
+	if parentChain == "" {
+		parent, err := s.store.GetCAAuthority(ctx, tenantID, d.CAID)
+		if err != nil {
+			return api.EdgeDelegation{}, fmt.Errorf("%w: historical edge CA parent is unavailable: %v", api.ErrEdgeDelegationRefused, err)
+		}
+		parentChain = parent.CertificatePEM
+		if parentChains != nil {
+			parentChains[d.CAID] = parentChain
+		}
+	}
+	var err error
+	view.CertificatePEM, err = recoverLegacyEdgeChain(view.CertificatePEM, parentChain)
+	if err != nil {
+		return api.EdgeDelegation{}, fmt.Errorf("%w: historical edge CA parent does not verify: %v", api.ErrEdgeDelegationRefused, err)
+	}
+	return view, nil
+}
+
+func edgeChainHasOnlyLeaf(chain string) bool {
+	first, rest := pem.Decode([]byte(chain))
+	if first == nil || first.Type != "CERTIFICATE" {
+		return false
+	}
+	second, _ := pem.Decode(rest)
+	return second == nil
+}
+
+func recoverLegacyEdgeChain(leafPEM, parentPEM string) (string, error) {
+	leafDER, err := firstCertDER(leafPEM)
+	if err != nil {
+		return "", err
+	}
+	parentDER, err := firstCertDER(parentPEM)
+	if err != nil {
+		return "", err
+	}
+	if _, err := crypto.InspectEdgeReportedLeaf(parentDER, leafDER); err != nil {
+		return "", err
+	}
+	return leafPEM + parentPEM, nil
 }
 
 func (s *edgeDelegationService) RevokeDelegation(ctx context.Context, tenantID, id, reason string) (api.EdgeDelegation, error) {
@@ -309,7 +370,7 @@ func (s *edgeDelegationService) RevokeDelegation(ctx context.Context, tenantID, 
 			return api.EdgeDelegation{}, err
 		}
 	}
-	return edgeDelegationView(d, time.Now().UTC()), nil
+	return s.edgeDelegationViewWithChain(ctx, tenantID, d, time.Now().UTC(), nil)
 }
 
 func (s *edgeDelegationService) Reconcile(ctx context.Context, tenantID, id string, req api.EdgeReconcileRequest) (api.EdgeReconcileResult, error) {

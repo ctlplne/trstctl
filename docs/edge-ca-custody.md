@@ -114,6 +114,14 @@ for reconciled, already recorded, violated, and rejected leaves. **Revoke
 delegated edge CA** reviews the exact host, delegation ID, certificate serial,
 and reason before sending the request and reading the revoked state back.
 
+The issued event retains the complete public delegated and parent chain, so
+`GET /api/v1/edge/delegations/{id}` recovers exactly what the mint returned
+after a lost response or projection rebuild. For older events that retained
+only the delegated certificate, detail readback adds the current parent chain
+only after checking that its public certificate signed that exact delegated
+certificate. If the historical parent cannot be verified, readback refuses
+instead of presenting a different trust path as recovered.
+
 After the control plane returns the delegated certificate chain:
 
 ```sh

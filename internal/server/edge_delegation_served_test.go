@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"strings"
 	"testing"
@@ -247,6 +248,64 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 	}
 	if minted.KeyProvider != "tpm2" || minted.KeyStorage != "device_bound" || minted.KeyExportable || minted.CustodyAssurance != "hardware_key_attested" {
 		t.Fatalf("TPM custody evidence = %+v, want a non-exportable same-key attestation", minted)
+	}
+	if strings.Count(minted.CertificatePEM, "-----BEGIN CERTIFICATE-----") < 2 {
+		t.Fatal("mint response omitted the parent CA chain needed for host installation")
+	}
+	// A lost mint response must be recoverable from the durable tenant read
+	// model. The host needs the exact parent chain, not just the delegated leaf.
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/edge/delegations/"+minted.ID, operator, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("delegation detail after mint = %d body=%s", code, body)
+	}
+	var mintedReadback struct {
+		Delegation struct {
+			CertificatePEM string `json:"certificate_pem"`
+		} `json:"delegation"`
+	}
+	if err := json.Unmarshal(body, &mintedReadback); err != nil {
+		t.Fatalf("decode delegation detail: %v", err)
+	}
+	if mintedReadback.Delegation.CertificatePEM != minted.CertificatePEM {
+		t.Fatalf("durable delegation chain has %d certificates, mint returned %d; lost response cannot be recovered",
+			strings.Count(mintedReadback.Delegation.CertificatePEM, "-----BEGIN CERTIFICATE-----"),
+			strings.Count(minted.CertificatePEM, "-----BEGIN CERTIFICATE-----"))
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/edge/delegations", operator, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("delegation list after mint = %d body=%s", code, body)
+	}
+	var listReadback struct {
+		Items []struct {
+			ID             string `json:"id"`
+			CertificatePEM string `json:"certificate_pem"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &listReadback); err != nil {
+		t.Fatalf("decode delegation list: %v", err)
+	}
+	listedChain := ""
+	for _, item := range listReadback.Items {
+		if item.ID == minted.ID {
+			listedChain = item.CertificatePEM
+		}
+	}
+	if listedChain != minted.CertificatePEM {
+		t.Fatal("delegation list did not return the same durable public chain as mint and detail")
+	}
+	// Old events contain only the delegated certificate. A read may recover
+	// their public parent chain only if that exact parent verifies the child.
+	leafBlock, _ := pem.Decode([]byte(minted.CertificatePEM))
+	if leafBlock == nil {
+		t.Fatal("mint response lacks a PEM delegated certificate")
+	}
+	legacyLeaf := string(pem.EncodeToMemory(leafBlock))
+	recovered, err := recoverLegacyEdgeChain(legacyLeaf, root.CertificatePEM)
+	if err != nil || recovered != minted.CertificatePEM {
+		t.Fatalf("legacy chain recovery = %v; exact minted chain match=%v", err, recovered == minted.CertificatePEM)
+	}
+	if _, err := recoverLegacyEdgeChain(legacyLeaf, legacyLeaf); err == nil {
+		t.Fatal("legacy chain recovery accepted a non-issuer as the parent")
 	}
 	if until := time.Until(minted.NotAfter); until > 2*time.Hour {
 		t.Fatalf("delegation lives %s, want the requested hour: auto-expiry is the bound", until)
