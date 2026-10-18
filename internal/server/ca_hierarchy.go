@@ -134,6 +134,9 @@ func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID strin
 		if loadErr != nil {
 			return api.CACeremonyPlanPreview{}, loadErr
 		}
+		if err := validateOfflineCeremonyPackage(authority, req); err != nil {
+			return api.CACeremonyPlanPreview{}, err
+		}
 		preview.Authority = caCeremonyPlanAuthority(authority)
 	}
 	return preview, nil
@@ -332,6 +335,15 @@ func (h *caHierarchyService) StartCeremony(ctx context.Context, tenantID string,
 	purpose, _, err := h.ceremonyPurposeAndSpec(ctx, tenantID, req)
 	if err != nil {
 		return api.CAKeyCeremony{}, err
+	}
+	if req.Operation == "import_offline_cross_sign" || req.Operation == "rekey_offline_root" {
+		authority, err := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.AuthorityID))
+		if err != nil {
+			return api.CAKeyCeremony{}, err
+		}
+		if err := validateOfflineCeremonyPackage(authority, req); err != nil {
+			return api.CAKeyCeremony{}, err
+		}
 	}
 	opener := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
@@ -1198,15 +1210,9 @@ func (h *caHierarchyService) ImportOfflineRootCrossSign(ctx context.Context, ten
 	if err != nil {
 		return api.CACrossSign{}, err
 	}
-	if authority.Kind != "root" || authority.SignerHandle != "" || authority.Status != "active" {
-		return api.CACrossSign{}, fmt.Errorf("%w: issuer must be an active imported offline root", api.ErrCAHierarchyInvalid)
-	}
-	issuerDER, err := firstCertDER(authority.CertificatePEM)
+	issuerDER, err := verifyOfflineCrossSignPackage(authority, targetDER, crossDER)
 	if err != nil {
 		return api.CACrossSign{}, err
-	}
-	if err := crypto.VerifyCrossSignedCA(issuerDER, targetDER, crossDER); err != nil {
-		return api.CACrossSign{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
 	purpose := offlineCrossSignPurpose(caID, targetDER, crossDER)
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -1280,18 +1286,8 @@ func (h *caHierarchyService) RekeyOfflineRoot(ctx context.Context, tenantID, caI
 		if err != nil {
 			return err
 		}
-		if predecessor.Kind != "root" || predecessor.SignerHandle != "" || predecessor.Status != "active" {
-			return fmt.Errorf("%w: predecessor must be an active imported offline root", api.ErrCAHierarchyInvalid)
-		}
-		predecessorDER, err := firstCertDER(predecessor.CertificatePEM)
-		if err != nil {
+		if err := verifyOfflineRootRekeyPackage(predecessor, successorDER, newByPreviousDER, previousByNewDER); err != nil {
 			return err
-		}
-		if err := crypto.VerifyCrossSignedCA(predecessorDER, successorDER, newByPreviousDER); err != nil {
-			return fmt.Errorf("%w: new-by-previous cross-certificate: %v", api.ErrCAHierarchyInvalid, err)
-		}
-		if err := crypto.VerifyCrossSignedCA(successorDER, predecessorDER, previousByNewDER); err != nil {
-			return fmt.Errorf("%w: previous-by-new cross-certificate: %v", api.ErrCAHierarchyInvalid, err)
 		}
 		if _, _, err := h.store.ValidateKeyCeremonyWithApprovalEvidenceTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
 			return err

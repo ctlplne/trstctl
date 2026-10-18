@@ -401,6 +401,11 @@ only public certificates and refuses a private-key PEM block.
    `authority_id`, the successor in `certificate_pem`, the two direction-specific
    certificates in `cross_certificate_pem` and `reverse_cross_certificate_pem`,
    the reason, threshold, and exact `CASpec`.
+   Preview and ceremony start verify the active offline predecessor, successor
+   profile, and both public cross-signatures before asking custodians to approve;
+   a `ready` preview means this package passed the same public checks used at
+   activation. Execution still rechecks after approval in case authority state
+   or certificate validity changed.
 3. **Collect approvals** at `POST /api/v1/ca/ceremonies/{ceremony-id}/approvals`.
 4. POST the same public package plus `ceremony_id` to
    `/api/v1/ca/authorities/{predecessor-id}/offline-rekey`. trstctl verifies both
@@ -419,6 +424,8 @@ only public certificates and refuses a private-key PEM block.
    open `operation=import_offline_cross_sign` bound to the successor authority,
    target, and cross-certificate; collect quorum; then POST the same public
    values to `/api/v1/ca/authorities/{successor-id}/offline-cross-signs`.
+   Preview and ceremony start verify the offline issuer and public signature
+   before a custodian is asked to approve; import repeats that check.
    In the console, use **Certificate authorities → Lifecycle → Import an
    offline-root cross-sign**. Select the active imported offline root, paste
    one public target and one root-signed public cross-certificate, and review

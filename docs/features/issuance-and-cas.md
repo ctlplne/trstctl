@@ -239,7 +239,9 @@ console exposes effect-free review, quorum readback, execution, and that receipt
 for both signer-backed cross-signing and public-only offline-root cross-sign
 import. The offline import form accepts only public certificate PEM blocks;
 two distinct custodians approve the exact issuer, target and cross-certificate
-package before the server verifies and records the second trust path.
+package. Preview and ceremony start verify the offline root's status, the
+public signature and the certificate constraints before requesting approvals;
+execution repeats the checks before recording the second trust path.
 Offline-root succession has a separate, indexed, tenant-scoped receipt at
 `GET /api/v1/ca/offline-rekeys/{ceremony-id}` containing the successor lineage
 and both public cross-certificates. It is projected from the same immutable

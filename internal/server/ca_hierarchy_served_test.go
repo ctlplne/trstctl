@@ -1318,6 +1318,66 @@ func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
 	if root.Kind != "root" || root.SignerHandle != "" || root.CertificatePEM == "" {
 		t.Fatalf("offline root = %+v; want imported public root with no signer handle", root)
 	}
+	targetKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(targetKey.Destroy)
+	target, err := crypto.SelfSignedHierarchyCA(targetKey, crypto.HierarchyCAProfile{
+		CommonName: "offline cross-sign preview target", MaxPathLen: 0,
+		TTL: 90 * 24 * time.Hour, PermittedDNSDomains: []string{"offline.example.test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validCross, err := crypto.CrossSignHierarchyCA(offlineRoot.CertificateDER, offlineRootKey, target.CertificateDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previewInput := map[string]any{
+		"operation": "import_offline_cross_sign", "authority_id": root.ID,
+		"target_certificate_pem": string(target.CertificatePEM), "cross_certificate_pem": string(validCross.CertificatePEM),
+		"threshold": 2,
+	}
+	beforeCrossPreviewEvents := servedEventCount(t, h, "ca.ceremony.started")
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", previewInput)
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"ready":true`)) {
+		t.Fatalf("valid offline cross-sign preview = %d body=%s; want ready", code, body)
+	}
+	previewInput["cross_certificate_pem"] = string(target.CertificatePEM)
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", previewInput)
+	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("not signed by the declared issuer")) {
+		t.Fatalf("invalid offline cross-sign preview = %d body=%s; want signature refusal before ceremony", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", operator, "offline-cross-invalid-ceremony", previewInput)
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid offline cross-sign ceremony = %d body=%s; want refusal before custodian work", code, body)
+	}
+	if servedEventCount(t, h, "ca.ceremony.started") != beforeCrossPreviewEvents {
+		t.Fatal("offline cross-sign preview changed durable ceremony state")
+	}
+	invalidRekeyInput := map[string]any{
+		"operation": "rekey_offline_root", "authority_id": root.ID,
+		"certificate_pem": string(target.CertificatePEM), "cross_certificate_pem": string(target.CertificatePEM),
+		"reverse_cross_certificate_pem": rootPEM, "reason": "reject self-signed cross-certificates",
+		"threshold": 2,
+		"spec": map[string]any{
+			"common_name": "offline cross-sign preview target", "max_path_len": 0,
+			"ttl_seconds":           int64((90 * 24 * time.Hour).Seconds()),
+			"permitted_dns_domains": []string{"offline.example.test"}, "signature_algorithm": "ECDSA-P256",
+		},
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", invalidRekeyInput)
+	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("new-by-previous cross-certificate")) {
+		t.Fatalf("invalid offline root re-key preview = %d body=%s; want cross-signature refusal before ceremony", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", operator, "offline-rekey-invalid-ceremony", invalidRekeyInput)
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid offline re-key ceremony = %d body=%s; want refusal before custodian work", code, body)
+	}
+	if servedEventCount(t, h, "ca.ceremony.started") != beforeCrossPreviewEvents {
+		t.Fatal("offline re-key preview changed durable ceremony state")
+	}
 
 	leafCSRDER := hierarchyLeafCSR(t, "root-hotpath.offline.example.test")
 	leafCSRPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: leafCSRDER}))
