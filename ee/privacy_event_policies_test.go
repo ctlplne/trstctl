@@ -138,6 +138,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: depstate.TypeReprotectionCompleted, SchemaVersion: depstate.SchemaV1},
 		{EventType: depstate.TypeRevocationCompleted, SchemaVersion: depstate.SchemaV1},
 		{EventType: reprotect.TypeCredentialSupersession, SchemaVersion: depstate.SchemaV1},
+		{EventType: reprotect.TypeCredentialPlan, SchemaVersion: depstate.SchemaV1},
 		{EventType: retirement.TypeRetirementRequested, SchemaVersion: retirement.SchemaV1},
 		{EventType: retirement.TypeRetirementRefused, SchemaVersion: retirement.SchemaV1},
 		{EventType: retirement.TypeDestructionRecorded, SchemaVersion: retirement.SchemaV1},

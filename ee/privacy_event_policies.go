@@ -435,6 +435,17 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 				licensedPrivacyRule("/NewCredentialID", events.PrivacyFieldSubjectToken),
 				licensedPrivacyRule("/SuccessorKeyID", events.PrivacyFieldSubjectToken),
 			)),
+		entry(reprotect.TypeCredentialPlan, depstate.SchemaV1,
+			typedLicensedPrivacyPolicy[reprotect.CredentialPlan](
+				licensedPrivacyRule("/job/tenant_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/job/key_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/job/dependent/id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/successor_authority_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/target_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/required_agent_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/verify_address", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/verify_server_name", events.PrivacyFieldOpaqueExact),
+			)),
 		entry(retirement.TypeRetirementRequested, retirement.SchemaV1,
 			typedLicensedPrivacyPolicy[retirement.RequestedV1](
 				licensedPrivacyRule("/tenant_id", events.PrivacyFieldOpaqueExact),

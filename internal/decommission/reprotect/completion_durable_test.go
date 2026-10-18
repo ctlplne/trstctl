@@ -173,4 +173,42 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if supersessionCount != 1 {
 		t.Fatalf("durable supersession events = %d, want 1", supersessionCount)
 	}
+	plan := CredentialPlan{
+		Job: Job{ID: ev.JobID, TenantID: ev.TenantID, KeyID: ev.KeyID,
+			Kind: JobKindReIssue, Dependent: ev.Dependent, IdempotencyKey: "qa-job-a"},
+		SuccessorAuthorityID: "ca-b", PredecessorFingerprint: "old-fingerprint",
+		PredecessorSPKISHA256: "old-spki", TargetID: "target-a",
+		TargetRevisionID: "revision-a", RequiredAgentID: "host-a",
+		Connector: "apache", VerifyAddress: "127.0.0.1:10443",
+		VerifyServerName: "reprotect.qa.invalid", TTLSeconds: 3600,
+	}
+	ledger := NewCredentialPlanLedger(log, st)
+	if recorded, err := ledger.Record(ctx, plan); err != nil || !recorded {
+		t.Fatalf("first credential plan recorded=%t: %v", recorded, err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	log, err = events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger = NewCredentialPlanLedger(log, st)
+	if recorded, err := ledger.Record(ctx, plan); err != nil || recorded {
+		t.Fatalf("cold exact plan replay recorded=%t: %v", recorded, err)
+	}
+	loaded, found, err := ledger.Load(ctx, plan.Job.TenantID, plan.Job.ID)
+	if err != nil || !found || loaded.SuccessorAuthorityID != plan.SuccessorAuthorityID || loaded.TargetRevisionID != plan.TargetRevisionID {
+		t.Fatalf("cold plan readback = %#v found=%t: %v", loaded, found, err)
+	}
+	changed := plan
+	changed.SuccessorAuthorityID = "ca-other"
+	if _, err := ledger.Record(ctx, changed); !errors.Is(err, ErrCompletionConflict) {
+		t.Fatalf("changed successor after restart = %v, want conflict", err)
+	}
+	changed = plan
+	changed.TargetRevisionID = "revision-other"
+	if _, err := ledger.Record(ctx, changed); !errors.Is(err, ErrCompletionConflict) {
+		t.Fatalf("changed target revision after restart = %v, want conflict", err)
+	}
 }
