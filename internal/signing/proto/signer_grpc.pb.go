@@ -30,24 +30,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SignerService_GenerateKey_FullMethodName              = "/trstctl.signing.v1.SignerService/GenerateKey"
-	SignerService_GetPublicKey_FullMethodName             = "/trstctl.signing.v1.SignerService/GetPublicKey"
-	SignerService_Sign_FullMethodName                     = "/trstctl.signing.v1.SignerService/Sign"
-	SignerService_SignArtifact_FullMethodName             = "/trstctl.signing.v1.SignerService/SignArtifact"
-	SignerService_VerifyOperation_FullMethodName          = "/trstctl.signing.v1.SignerService/VerifyOperation"
-	SignerService_GatedDestroy_FullMethodName             = "/trstctl.signing.v1.SignerService/GatedDestroy"
-	SignerService_DestroyKey_FullMethodName               = "/trstctl.signing.v1.SignerService/DestroyKey"
-	SignerService_ManageKey_FullMethodName                = "/trstctl.signing.v1.SignerService/ManageKey"
-	SignerService_SignManagedKey_FullMethodName           = "/trstctl.signing.v1.SignerService/SignManagedKey"
-	SignerService_Health_FullMethodName                   = "/trstctl.signing.v1.SignerService/Health"
-	SignerService_MintSuccessor_FullMethodName            = "/trstctl.signing.v1.SignerService/MintSuccessor"
-	SignerService_ApplyDelegation_FullMethodName          = "/trstctl.signing.v1.SignerService/ApplyDelegation"
-	SignerService_GenerateSuccessorKEM_FullMethodName     = "/trstctl.signing.v1.SignerService/GenerateSuccessorKEM"
-	SignerService_Decapsulate_FullMethodName              = "/trstctl.signing.v1.SignerService/Decapsulate"
-	SignerService_ZeroizeKey_FullMethodName               = "/trstctl.signing.v1.SignerService/ZeroizeKey"
-	SignerService_GatedIssue_FullMethodName               = "/trstctl.signing.v1.SignerService/GatedIssue"
-	SignerService_ProvisionAgentRootAnchor_FullMethodName = "/trstctl.signing.v1.SignerService/ProvisionAgentRootAnchor"
-	SignerService_GetAgentRootAnchor_FullMethodName       = "/trstctl.signing.v1.SignerService/GetAgentRootAnchor"
+	SignerService_GenerateKey_FullMethodName                   = "/trstctl.signing.v1.SignerService/GenerateKey"
+	SignerService_GetPublicKey_FullMethodName                  = "/trstctl.signing.v1.SignerService/GetPublicKey"
+	SignerService_Sign_FullMethodName                          = "/trstctl.signing.v1.SignerService/Sign"
+	SignerService_SignArtifact_FullMethodName                  = "/trstctl.signing.v1.SignerService/SignArtifact"
+	SignerService_VerifyOperation_FullMethodName               = "/trstctl.signing.v1.SignerService/VerifyOperation"
+	SignerService_GatedDestroy_FullMethodName                  = "/trstctl.signing.v1.SignerService/GatedDestroy"
+	SignerService_DestroyKey_FullMethodName                    = "/trstctl.signing.v1.SignerService/DestroyKey"
+	SignerService_ManageKey_FullMethodName                     = "/trstctl.signing.v1.SignerService/ManageKey"
+	SignerService_SignManagedKey_FullMethodName                = "/trstctl.signing.v1.SignerService/SignManagedKey"
+	SignerService_Health_FullMethodName                        = "/trstctl.signing.v1.SignerService/Health"
+	SignerService_MintSuccessor_FullMethodName                 = "/trstctl.signing.v1.SignerService/MintSuccessor"
+	SignerService_ApplyDelegation_FullMethodName               = "/trstctl.signing.v1.SignerService/ApplyDelegation"
+	SignerService_GenerateSuccessorKEM_FullMethodName          = "/trstctl.signing.v1.SignerService/GenerateSuccessorKEM"
+	SignerService_Decapsulate_FullMethodName                   = "/trstctl.signing.v1.SignerService/Decapsulate"
+	SignerService_ZeroizeKey_FullMethodName                    = "/trstctl.signing.v1.SignerService/ZeroizeKey"
+	SignerService_GatedIssue_FullMethodName                    = "/trstctl.signing.v1.SignerService/GatedIssue"
+	SignerService_ProvisionAgentRootAnchor_FullMethodName      = "/trstctl.signing.v1.SignerService/ProvisionAgentRootAnchor"
+	SignerService_GetAgentRootAnchor_FullMethodName            = "/trstctl.signing.v1.SignerService/GetAgentRootAnchor"
+	SignerService_ProvisionAgentReachabilityKey_FullMethodName = "/trstctl.signing.v1.SignerService/ProvisionAgentReachabilityKey"
+	SignerService_GetAgentReachabilityKey_FullMethodName       = "/trstctl.signing.v1.SignerService/GetAgentReachabilityKey"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -153,6 +155,10 @@ type SignerServiceClient interface {
 	// GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
 	// compare it with the tenant registry before reporting provisioned=true.
 	GetAgentRootAnchor(ctx context.Context, in *GetAgentRootAnchorRequest, opts ...grpc.CallOption) (*GetAgentRootAnchorResponse, error)
+	// Bind one public reachability-verdict signer in the isolated signer. The
+	// control plane retains its sealed private key; changed first writers refuse.
+	ProvisionAgentReachabilityKey(ctx context.Context, in *ProvisionAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*ProvisionAgentReachabilityKeyResponse, error)
+	GetAgentReachabilityKey(ctx context.Context, in *GetAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*GetAgentReachabilityKeyResponse, error)
 }
 
 type signerServiceClient struct {
@@ -343,6 +349,26 @@ func (c *signerServiceClient) GetAgentRootAnchor(ctx context.Context, in *GetAge
 	return out, nil
 }
 
+func (c *signerServiceClient) ProvisionAgentReachabilityKey(ctx context.Context, in *ProvisionAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*ProvisionAgentReachabilityKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProvisionAgentReachabilityKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_ProvisionAgentReachabilityKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) GetAgentReachabilityKey(ctx context.Context, in *GetAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*GetAgentReachabilityKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentReachabilityKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_GetAgentReachabilityKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -446,6 +472,10 @@ type SignerServiceServer interface {
 	// GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
 	// compare it with the tenant registry before reporting provisioned=true.
 	GetAgentRootAnchor(context.Context, *GetAgentRootAnchorRequest) (*GetAgentRootAnchorResponse, error)
+	// Bind one public reachability-verdict signer in the isolated signer. The
+	// control plane retains its sealed private key; changed first writers refuse.
+	ProvisionAgentReachabilityKey(context.Context, *ProvisionAgentReachabilityKeyRequest) (*ProvisionAgentReachabilityKeyResponse, error)
+	GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -509,6 +539,12 @@ func (UnimplementedSignerServiceServer) ProvisionAgentRootAnchor(context.Context
 }
 func (UnimplementedSignerServiceServer) GetAgentRootAnchor(context.Context, *GetAgentRootAnchorRequest) (*GetAgentRootAnchorResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgentRootAnchor not implemented")
+}
+func (UnimplementedSignerServiceServer) ProvisionAgentReachabilityKey(context.Context, *ProvisionAgentReachabilityKeyRequest) (*ProvisionAgentReachabilityKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProvisionAgentReachabilityKey not implemented")
+}
+func (UnimplementedSignerServiceServer) GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentReachabilityKey not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -855,6 +891,42 @@ func _SignerService_GetAgentRootAnchor_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_ProvisionAgentReachabilityKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProvisionAgentReachabilityKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).ProvisionAgentReachabilityKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_ProvisionAgentReachabilityKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).ProvisionAgentReachabilityKey(ctx, req.(*ProvisionAgentReachabilityKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_GetAgentReachabilityKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentReachabilityKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).GetAgentReachabilityKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_GetAgentReachabilityKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).GetAgentReachabilityKey(ctx, req.(*GetAgentReachabilityKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -933,6 +1005,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgentRootAnchor",
 			Handler:    _SignerService_GetAgentRootAnchor_Handler,
+		},
+		{
+			MethodName: "ProvisionAgentReachabilityKey",
+			Handler:    _SignerService_ProvisionAgentReachabilityKey_Handler,
+		},
+		{
+			MethodName: "GetAgentReachabilityKey",
+			Handler:    _SignerService_GetAgentReachabilityKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

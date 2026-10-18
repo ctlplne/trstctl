@@ -2967,6 +2967,190 @@ func (x *GetAgentRootAnchorResponse) GetAuthRef() string {
 	return ""
 }
 
+type ProvisionAgentReachabilityKeyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	PublicDer     []byte                 `protobuf:"bytes,2,opt,name=public_der,json=publicDer,proto3" json:"public_der,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProvisionAgentReachabilityKeyRequest) Reset() {
+	*x = ProvisionAgentReachabilityKeyRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProvisionAgentReachabilityKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProvisionAgentReachabilityKeyRequest) ProtoMessage() {}
+
+func (x *ProvisionAgentReachabilityKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProvisionAgentReachabilityKeyRequest.ProtoReflect.Descriptor instead.
+func (*ProvisionAgentReachabilityKeyRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *ProvisionAgentReachabilityKeyRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+func (x *ProvisionAgentReachabilityKeyRequest) GetPublicDer() []byte {
+	if x != nil {
+		return x.PublicDer
+	}
+	return nil
+}
+
+type ProvisionAgentReachabilityKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublicDer     []byte                 `protobuf:"bytes,1,opt,name=public_der,json=publicDer,proto3" json:"public_der,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProvisionAgentReachabilityKeyResponse) Reset() {
+	*x = ProvisionAgentReachabilityKeyResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProvisionAgentReachabilityKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProvisionAgentReachabilityKeyResponse) ProtoMessage() {}
+
+func (x *ProvisionAgentReachabilityKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProvisionAgentReachabilityKeyResponse.ProtoReflect.Descriptor instead.
+func (*ProvisionAgentReachabilityKeyResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *ProvisionAgentReachabilityKeyResponse) GetPublicDer() []byte {
+	if x != nil {
+		return x.PublicDer
+	}
+	return nil
+}
+
+type GetAgentReachabilityKeyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentReachabilityKeyRequest) Reset() {
+	*x = GetAgentReachabilityKeyRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentReachabilityKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentReachabilityKeyRequest) ProtoMessage() {}
+
+func (x *GetAgentReachabilityKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentReachabilityKeyRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentReachabilityKeyRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *GetAgentReachabilityKeyRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+type GetAgentReachabilityKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublicDer     []byte                 `protobuf:"bytes,1,opt,name=public_der,json=publicDer,proto3" json:"public_der,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentReachabilityKeyResponse) Reset() {
+	*x = GetAgentReachabilityKeyResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentReachabilityKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentReachabilityKeyResponse) ProtoMessage() {}
+
+func (x *GetAgentReachabilityKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentReachabilityKeyResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentReachabilityKeyResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *GetAgentReachabilityKeyResponse) GetPublicDer() []byte {
+	if x != nil {
+		return x.PublicDer
+	}
+	return nil
+}
+
 var File_internal_signing_proto_signer_proto protoreflect.FileDescriptor
 
 const file_internal_signing_proto_signer_proto_rawDesc = "" +
@@ -3178,7 +3362,19 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x1aGetAgentRootAnchorResponse\x12\x1d\n" +
 	"\n" +
 	"public_der\x18\x01 \x01(\fR\tpublicDer\x12\x19\n" +
-	"\bauth_ref\x18\x02 \x01(\tR\aauthRef*\xf2\x02\n" +
+	"\bauth_ref\x18\x02 \x01(\tR\aauthRef\"\\\n" +
+	"$ProvisionAgentReachabilityKeyRequest\x12\x15\n" +
+	"\x06key_id\x18\x01 \x01(\tR\x05keyId\x12\x1d\n" +
+	"\n" +
+	"public_der\x18\x02 \x01(\fR\tpublicDer\"F\n" +
+	"%ProvisionAgentReachabilityKeyResponse\x12\x1d\n" +
+	"\n" +
+	"public_der\x18\x01 \x01(\fR\tpublicDer\"7\n" +
+	"\x1eGetAgentReachabilityKeyRequest\x12\x15\n" +
+	"\x06key_id\x18\x01 \x01(\tR\x05keyId\"@\n" +
+	"\x1fGetAgentReachabilityKeyResponse\x12\x1d\n" +
+	"\n" +
+	"public_der\x18\x01 \x01(\fR\tpublicDer*\xf2\x02\n" +
 	"\tAlgorithm\x12\x19\n" +
 	"\x15ALGORITHM_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ALGORITHM_RSA_2048\x10\x01\x12\x16\n" +
@@ -3221,7 +3417,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x19MANAGED_KEY_ACTION_ROTATE\x10\x02\x12\x1d\n" +
 	"\x19MANAGED_KEY_ACTION_REVOKE\x10\x03\x12\x1e\n" +
 	"\x1aMANAGED_KEY_ACTION_ZEROIZE\x10\x04\x12%\n" +
-	"!MANAGED_KEY_ACTION_VERIFY_CUSTODY\x10\x052\x98\x0e\n" +
+	"!MANAGED_KEY_ACTION_VERIFY_CUSTODY\x10\x052\xb4\x10\n" +
 	"\rSignerService\x12^\n" +
 	"\vGenerateKey\x12&.trstctl.signing.v1.GenerateKeyRequest\x1a'.trstctl.signing.v1.GenerateKeyResponse\x12a\n" +
 	"\fGetPublicKey\x12'.trstctl.signing.v1.GetPublicKeyRequest\x1a(.trstctl.signing.v1.GetPublicKeyResponse\x12I\n" +
@@ -3243,7 +3439,9 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\n" +
 	"GatedIssue\x12%.trstctl.signing.v1.GatedIssueRequest\x1a&.trstctl.signing.v1.GatedIssueResponse\x12\x85\x01\n" +
 	"\x18ProvisionAgentRootAnchor\x123.trstctl.signing.v1.ProvisionAgentRootAnchorRequest\x1a4.trstctl.signing.v1.ProvisionAgentRootAnchorResponse\x12s\n" +
-	"\x12GetAgentRootAnchor\x12-.trstctl.signing.v1.GetAgentRootAnchorRequest\x1a..trstctl.signing.v1.GetAgentRootAnchorResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
+	"\x12GetAgentRootAnchor\x12-.trstctl.signing.v1.GetAgentRootAnchorRequest\x1a..trstctl.signing.v1.GetAgentRootAnchorResponse\x12\x94\x01\n" +
+	"\x1dProvisionAgentReachabilityKey\x128.trstctl.signing.v1.ProvisionAgentReachabilityKeyRequest\x1a9.trstctl.signing.v1.ProvisionAgentReachabilityKeyResponse\x12\x82\x01\n" +
+	"\x17GetAgentReachabilityKey\x122.trstctl.signing.v1.GetAgentReachabilityKeyRequest\x1a3.trstctl.signing.v1.GetAgentReachabilityKeyResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
 
 var (
 	file_internal_signing_proto_signer_proto_rawDescOnce sync.Once
@@ -3258,51 +3456,55 @@ func file_internal_signing_proto_signer_proto_rawDescGZIP() []byte {
 }
 
 var file_internal_signing_proto_signer_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_internal_signing_proto_signer_proto_goTypes = []any{
-	(Algorithm)(0),                           // 0: trstctl.signing.v1.Algorithm
-	(Hash)(0),                                // 1: trstctl.signing.v1.Hash
-	(RSAPadding)(0),                          // 2: trstctl.signing.v1.RSAPadding
-	(KeyPurpose)(0),                          // 3: trstctl.signing.v1.KeyPurpose
-	(ManagedKeyAction)(0),                    // 4: trstctl.signing.v1.ManagedKeyAction
-	(HealthResponse_Status)(0),               // 5: trstctl.signing.v1.HealthResponse.Status
-	(*KeyHandle)(nil),                        // 6: trstctl.signing.v1.KeyHandle
-	(*GenerateKeyRequest)(nil),               // 7: trstctl.signing.v1.GenerateKeyRequest
-	(*GenerateKeyResponse)(nil),              // 8: trstctl.signing.v1.GenerateKeyResponse
-	(*GetPublicKeyRequest)(nil),              // 9: trstctl.signing.v1.GetPublicKeyRequest
-	(*GetPublicKeyResponse)(nil),             // 10: trstctl.signing.v1.GetPublicKeyResponse
-	(*SignRequest)(nil),                      // 11: trstctl.signing.v1.SignRequest
-	(*SignResponse)(nil),                     // 12: trstctl.signing.v1.SignResponse
-	(*SignArtifactRequest)(nil),              // 13: trstctl.signing.v1.SignArtifactRequest
-	(*SignArtifactResponse)(nil),             // 14: trstctl.signing.v1.SignArtifactResponse
-	(*OperationRequest)(nil),                 // 15: trstctl.signing.v1.OperationRequest
-	(*OperationResponse)(nil),                // 16: trstctl.signing.v1.OperationResponse
-	(*GatedDestroyRequest)(nil),              // 17: trstctl.signing.v1.GatedDestroyRequest
-	(*GatedDestroyResponse)(nil),             // 18: trstctl.signing.v1.GatedDestroyResponse
-	(*DestroyKeyRequest)(nil),                // 19: trstctl.signing.v1.DestroyKeyRequest
-	(*DestroyKeyResponse)(nil),               // 20: trstctl.signing.v1.DestroyKeyResponse
-	(*ManageKeyRequest)(nil),                 // 21: trstctl.signing.v1.ManageKeyRequest
-	(*ManageKeyResponse)(nil),                // 22: trstctl.signing.v1.ManageKeyResponse
-	(*SignManagedKeyRequest)(nil),            // 23: trstctl.signing.v1.SignManagedKeyRequest
-	(*SignManagedKeyResponse)(nil),           // 24: trstctl.signing.v1.SignManagedKeyResponse
-	(*HealthRequest)(nil),                    // 25: trstctl.signing.v1.HealthRequest
-	(*HealthResponse)(nil),                   // 26: trstctl.signing.v1.HealthResponse
-	(*MintSuccessorRequest)(nil),             // 27: trstctl.signing.v1.MintSuccessorRequest
-	(*MintSuccessorResponse)(nil),            // 28: trstctl.signing.v1.MintSuccessorResponse
-	(*ApplyDelegationRequest)(nil),           // 29: trstctl.signing.v1.ApplyDelegationRequest
-	(*ApplyDelegationResponse)(nil),          // 30: trstctl.signing.v1.ApplyDelegationResponse
-	(*GenerateSuccessorKEMRequest)(nil),      // 31: trstctl.signing.v1.GenerateSuccessorKEMRequest
-	(*GenerateSuccessorKEMResponse)(nil),     // 32: trstctl.signing.v1.GenerateSuccessorKEMResponse
-	(*DecapsulateRequest)(nil),               // 33: trstctl.signing.v1.DecapsulateRequest
-	(*DecapsulateResponse)(nil),              // 34: trstctl.signing.v1.DecapsulateResponse
-	(*ZeroizeKeyRequest)(nil),                // 35: trstctl.signing.v1.ZeroizeKeyRequest
-	(*ZeroizeKeyResponse)(nil),               // 36: trstctl.signing.v1.ZeroizeKeyResponse
-	(*GatedIssueRequest)(nil),                // 37: trstctl.signing.v1.GatedIssueRequest
-	(*GatedIssueResponse)(nil),               // 38: trstctl.signing.v1.GatedIssueResponse
-	(*ProvisionAgentRootAnchorRequest)(nil),  // 39: trstctl.signing.v1.ProvisionAgentRootAnchorRequest
-	(*ProvisionAgentRootAnchorResponse)(nil), // 40: trstctl.signing.v1.ProvisionAgentRootAnchorResponse
-	(*GetAgentRootAnchorRequest)(nil),        // 41: trstctl.signing.v1.GetAgentRootAnchorRequest
-	(*GetAgentRootAnchorResponse)(nil),       // 42: trstctl.signing.v1.GetAgentRootAnchorResponse
+	(Algorithm)(0),                                // 0: trstctl.signing.v1.Algorithm
+	(Hash)(0),                                     // 1: trstctl.signing.v1.Hash
+	(RSAPadding)(0),                               // 2: trstctl.signing.v1.RSAPadding
+	(KeyPurpose)(0),                               // 3: trstctl.signing.v1.KeyPurpose
+	(ManagedKeyAction)(0),                         // 4: trstctl.signing.v1.ManagedKeyAction
+	(HealthResponse_Status)(0),                    // 5: trstctl.signing.v1.HealthResponse.Status
+	(*KeyHandle)(nil),                             // 6: trstctl.signing.v1.KeyHandle
+	(*GenerateKeyRequest)(nil),                    // 7: trstctl.signing.v1.GenerateKeyRequest
+	(*GenerateKeyResponse)(nil),                   // 8: trstctl.signing.v1.GenerateKeyResponse
+	(*GetPublicKeyRequest)(nil),                   // 9: trstctl.signing.v1.GetPublicKeyRequest
+	(*GetPublicKeyResponse)(nil),                  // 10: trstctl.signing.v1.GetPublicKeyResponse
+	(*SignRequest)(nil),                           // 11: trstctl.signing.v1.SignRequest
+	(*SignResponse)(nil),                          // 12: trstctl.signing.v1.SignResponse
+	(*SignArtifactRequest)(nil),                   // 13: trstctl.signing.v1.SignArtifactRequest
+	(*SignArtifactResponse)(nil),                  // 14: trstctl.signing.v1.SignArtifactResponse
+	(*OperationRequest)(nil),                      // 15: trstctl.signing.v1.OperationRequest
+	(*OperationResponse)(nil),                     // 16: trstctl.signing.v1.OperationResponse
+	(*GatedDestroyRequest)(nil),                   // 17: trstctl.signing.v1.GatedDestroyRequest
+	(*GatedDestroyResponse)(nil),                  // 18: trstctl.signing.v1.GatedDestroyResponse
+	(*DestroyKeyRequest)(nil),                     // 19: trstctl.signing.v1.DestroyKeyRequest
+	(*DestroyKeyResponse)(nil),                    // 20: trstctl.signing.v1.DestroyKeyResponse
+	(*ManageKeyRequest)(nil),                      // 21: trstctl.signing.v1.ManageKeyRequest
+	(*ManageKeyResponse)(nil),                     // 22: trstctl.signing.v1.ManageKeyResponse
+	(*SignManagedKeyRequest)(nil),                 // 23: trstctl.signing.v1.SignManagedKeyRequest
+	(*SignManagedKeyResponse)(nil),                // 24: trstctl.signing.v1.SignManagedKeyResponse
+	(*HealthRequest)(nil),                         // 25: trstctl.signing.v1.HealthRequest
+	(*HealthResponse)(nil),                        // 26: trstctl.signing.v1.HealthResponse
+	(*MintSuccessorRequest)(nil),                  // 27: trstctl.signing.v1.MintSuccessorRequest
+	(*MintSuccessorResponse)(nil),                 // 28: trstctl.signing.v1.MintSuccessorResponse
+	(*ApplyDelegationRequest)(nil),                // 29: trstctl.signing.v1.ApplyDelegationRequest
+	(*ApplyDelegationResponse)(nil),               // 30: trstctl.signing.v1.ApplyDelegationResponse
+	(*GenerateSuccessorKEMRequest)(nil),           // 31: trstctl.signing.v1.GenerateSuccessorKEMRequest
+	(*GenerateSuccessorKEMResponse)(nil),          // 32: trstctl.signing.v1.GenerateSuccessorKEMResponse
+	(*DecapsulateRequest)(nil),                    // 33: trstctl.signing.v1.DecapsulateRequest
+	(*DecapsulateResponse)(nil),                   // 34: trstctl.signing.v1.DecapsulateResponse
+	(*ZeroizeKeyRequest)(nil),                     // 35: trstctl.signing.v1.ZeroizeKeyRequest
+	(*ZeroizeKeyResponse)(nil),                    // 36: trstctl.signing.v1.ZeroizeKeyResponse
+	(*GatedIssueRequest)(nil),                     // 37: trstctl.signing.v1.GatedIssueRequest
+	(*GatedIssueResponse)(nil),                    // 38: trstctl.signing.v1.GatedIssueResponse
+	(*ProvisionAgentRootAnchorRequest)(nil),       // 39: trstctl.signing.v1.ProvisionAgentRootAnchorRequest
+	(*ProvisionAgentRootAnchorResponse)(nil),      // 40: trstctl.signing.v1.ProvisionAgentRootAnchorResponse
+	(*GetAgentRootAnchorRequest)(nil),             // 41: trstctl.signing.v1.GetAgentRootAnchorRequest
+	(*GetAgentRootAnchorResponse)(nil),            // 42: trstctl.signing.v1.GetAgentRootAnchorResponse
+	(*ProvisionAgentReachabilityKeyRequest)(nil),  // 43: trstctl.signing.v1.ProvisionAgentReachabilityKeyRequest
+	(*ProvisionAgentReachabilityKeyResponse)(nil), // 44: trstctl.signing.v1.ProvisionAgentReachabilityKeyResponse
+	(*GetAgentReachabilityKeyRequest)(nil),        // 45: trstctl.signing.v1.GetAgentReachabilityKeyRequest
+	(*GetAgentReachabilityKeyResponse)(nil),       // 46: trstctl.signing.v1.GetAgentReachabilityKeyResponse
 }
 var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	0,  // 0: trstctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
@@ -3350,26 +3552,30 @@ var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	37, // 42: trstctl.signing.v1.SignerService.GatedIssue:input_type -> trstctl.signing.v1.GatedIssueRequest
 	39, // 43: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:input_type -> trstctl.signing.v1.ProvisionAgentRootAnchorRequest
 	41, // 44: trstctl.signing.v1.SignerService.GetAgentRootAnchor:input_type -> trstctl.signing.v1.GetAgentRootAnchorRequest
-	8,  // 45: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
-	10, // 46: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
-	12, // 47: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
-	14, // 48: trstctl.signing.v1.SignerService.SignArtifact:output_type -> trstctl.signing.v1.SignArtifactResponse
-	16, // 49: trstctl.signing.v1.SignerService.VerifyOperation:output_type -> trstctl.signing.v1.OperationResponse
-	18, // 50: trstctl.signing.v1.SignerService.GatedDestroy:output_type -> trstctl.signing.v1.GatedDestroyResponse
-	20, // 51: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
-	22, // 52: trstctl.signing.v1.SignerService.ManageKey:output_type -> trstctl.signing.v1.ManageKeyResponse
-	24, // 53: trstctl.signing.v1.SignerService.SignManagedKey:output_type -> trstctl.signing.v1.SignManagedKeyResponse
-	26, // 54: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
-	28, // 55: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
-	30, // 56: trstctl.signing.v1.SignerService.ApplyDelegation:output_type -> trstctl.signing.v1.ApplyDelegationResponse
-	32, // 57: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:output_type -> trstctl.signing.v1.GenerateSuccessorKEMResponse
-	34, // 58: trstctl.signing.v1.SignerService.Decapsulate:output_type -> trstctl.signing.v1.DecapsulateResponse
-	36, // 59: trstctl.signing.v1.SignerService.ZeroizeKey:output_type -> trstctl.signing.v1.ZeroizeKeyResponse
-	38, // 60: trstctl.signing.v1.SignerService.GatedIssue:output_type -> trstctl.signing.v1.GatedIssueResponse
-	40, // 61: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:output_type -> trstctl.signing.v1.ProvisionAgentRootAnchorResponse
-	42, // 62: trstctl.signing.v1.SignerService.GetAgentRootAnchor:output_type -> trstctl.signing.v1.GetAgentRootAnchorResponse
-	45, // [45:63] is the sub-list for method output_type
-	27, // [27:45] is the sub-list for method input_type
+	43, // 45: trstctl.signing.v1.SignerService.ProvisionAgentReachabilityKey:input_type -> trstctl.signing.v1.ProvisionAgentReachabilityKeyRequest
+	45, // 46: trstctl.signing.v1.SignerService.GetAgentReachabilityKey:input_type -> trstctl.signing.v1.GetAgentReachabilityKeyRequest
+	8,  // 47: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
+	10, // 48: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
+	12, // 49: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
+	14, // 50: trstctl.signing.v1.SignerService.SignArtifact:output_type -> trstctl.signing.v1.SignArtifactResponse
+	16, // 51: trstctl.signing.v1.SignerService.VerifyOperation:output_type -> trstctl.signing.v1.OperationResponse
+	18, // 52: trstctl.signing.v1.SignerService.GatedDestroy:output_type -> trstctl.signing.v1.GatedDestroyResponse
+	20, // 53: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
+	22, // 54: trstctl.signing.v1.SignerService.ManageKey:output_type -> trstctl.signing.v1.ManageKeyResponse
+	24, // 55: trstctl.signing.v1.SignerService.SignManagedKey:output_type -> trstctl.signing.v1.SignManagedKeyResponse
+	26, // 56: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
+	28, // 57: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
+	30, // 58: trstctl.signing.v1.SignerService.ApplyDelegation:output_type -> trstctl.signing.v1.ApplyDelegationResponse
+	32, // 59: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:output_type -> trstctl.signing.v1.GenerateSuccessorKEMResponse
+	34, // 60: trstctl.signing.v1.SignerService.Decapsulate:output_type -> trstctl.signing.v1.DecapsulateResponse
+	36, // 61: trstctl.signing.v1.SignerService.ZeroizeKey:output_type -> trstctl.signing.v1.ZeroizeKeyResponse
+	38, // 62: trstctl.signing.v1.SignerService.GatedIssue:output_type -> trstctl.signing.v1.GatedIssueResponse
+	40, // 63: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:output_type -> trstctl.signing.v1.ProvisionAgentRootAnchorResponse
+	42, // 64: trstctl.signing.v1.SignerService.GetAgentRootAnchor:output_type -> trstctl.signing.v1.GetAgentRootAnchorResponse
+	44, // 65: trstctl.signing.v1.SignerService.ProvisionAgentReachabilityKey:output_type -> trstctl.signing.v1.ProvisionAgentReachabilityKeyResponse
+	46, // 66: trstctl.signing.v1.SignerService.GetAgentReachabilityKey:output_type -> trstctl.signing.v1.GetAgentReachabilityKeyResponse
+	47, // [47:67] is the sub-list for method output_type
+	27, // [27:47] is the sub-list for method input_type
 	27, // [27:27] is the sub-list for extension type_name
 	27, // [27:27] is the sub-list for extension extendee
 	0,  // [0:27] is the sub-list for field type_name
@@ -3386,7 +3592,7 @@ func file_internal_signing_proto_signer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_signing_proto_signer_proto_rawDesc), len(file_internal_signing_proto_signer_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   37,
+			NumMessages:   41,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

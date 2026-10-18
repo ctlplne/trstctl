@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/agentid/verify"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
@@ -348,6 +349,7 @@ type harness struct {
 	keystore string
 	kekFile  string
 	attestor crypto.Signer
+	wrapper  *seal.LocalKEK
 }
 
 type issuedAgent struct {
@@ -408,6 +410,11 @@ func newHarness(t *testing.T, tenant string) *harness {
 		keystore: filepath.Join(t.TempDir(), "keystore"),
 		kekFile:  filepath.Join(t.TempDir(), "signer.kek"),
 	}
+	h.wrapper, err = seal.NewLocalKEK(bytes.Repeat([]byte{0x7b}, 32))
+	if err != nil {
+		t.Fatalf("test reachability wrapper: %v", err)
+	}
+	t.Cleanup(h.wrapper.Destroy)
 	rootKey := generateSigner(t)
 	h.api = agidapi.NewServiceWithRootAnchorProvisioner(st, log, h.outbox, delegation.NewDurableAnchorStore(h.keystore))
 	if _, err := h.api.RegisterRootAnchor(ctx, tenant, agidapi.RootAnchorRequest{
@@ -531,10 +538,12 @@ func (h *harness) restartControlPlane(t *testing.T) {
 	h.outbox = newTestOutbox(h.store)
 	h.api = agidapi.NewServiceWithRootAnchorProvisioner(h.store, h.log, h.outbox, delegation.NewDurableAnchorStore(h.keystore))
 	licensed, err := agidorch.NewLicensedOutboxFactory()(editionseam.LicensedOutboxDeps{
-		Store:             h.store,
-		Log:               h.log,
-		SignerKeyStoreDir: h.keystore,
-		IssuanceGate:      h.client,
+		Store:                h.store,
+		Log:                  h.log,
+		SignerKeyStoreDir:    h.keystore,
+		OutboxIntegrityKey:   h.wrapper,
+		AGIDReachabilityKeys: h.client,
+		IssuanceGate:         h.client,
 	})
 	if err != nil {
 		t.Fatalf("NewLicensedOutboxFactory: %v", err)

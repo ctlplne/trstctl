@@ -49,10 +49,6 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 		t.Fatalf("verdict signer: %v", err)
 	}
 	verdictKey := reach.VerdictKeyRef{ID: "agentid-reach-verdict", Algorithm: string(verdictSigner.Algorithm())}
-	reachTrust := NewDurableReachabilityTrustStore(keystore)
-	if err := reachTrust.PutVerdictSigner(context.Background(), verdictKey.ID, verdictSigner.Public().DER); err != nil {
-		t.Fatalf("PutVerdictSigner: %v", err)
-	}
 	subjectDigest, err := CanonicalDigest(envs[len(envs)-1].Record.Authority, nil)
 	if err != nil {
 		t.Fatalf("authority digest: %v", err)
@@ -120,6 +116,23 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 	}
 
 	client1, stop1 := start(t)
+	if err := client1.ProvisionAgentReachabilityKey(context.Background(), verdictKey.ID, verdictSigner.Public().DER); err != nil {
+		t.Fatalf("provision verdict key over authenticated transport: %v", err)
+	}
+	if err := client1.ProvisionAgentReachabilityKey(context.Background(), verdictKey.ID, verdictSigner.Public().DER); err != nil {
+		t.Fatalf("exact verdict key retry: %v", err)
+	}
+	otherVerdict, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client1.ProvisionAgentReachabilityKey(context.Background(), verdictKey.ID, otherVerdict.Public().DER); status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("changed verdict key binding = %v, want AlreadyExists", err)
+	}
+	verdictReadback, err := client1.ReadAgentReachabilityKey(context.Background(), verdictKey.ID)
+	if err != nil || string(verdictReadback) != string(verdictSigner.Public().DER) {
+		t.Fatalf("signer verdict key readback differs: %v", err)
+	}
 	wantAnchor := anchors["root-key"]
 	if err := client1.ProvisionAgentRootAnchor(context.Background(), tenantID, "root-key", wantAnchor.PublicDER, wantAnchor.AuthRef); err != nil {
 		t.Fatalf("provision signer root over authenticated transport: %v", err)
@@ -139,6 +152,10 @@ func TestSignerBinaryAGIDRootAnchorsSurviveRestart(t *testing.T) {
 
 	client2, stop2 := start(t)
 	defer stop2()
+	verdictReadback, err = client2.ReadAgentReachabilityKey(context.Background(), verdictKey.ID)
+	if err != nil || string(verdictReadback) != string(verdictSigner.Public().DER) {
+		t.Fatalf("cold signer verdict readback differs: %v", err)
+	}
 	second := issue(t, client2, "leaf-second")
 
 	if string(first.EncodedRecord) == string(second.EncodedRecord) {

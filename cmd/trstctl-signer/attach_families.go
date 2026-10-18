@@ -43,7 +43,9 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 		anchorStore := agiddelegation.NewDurableAnchorStore(floorDir)
 		anchorSource = anchorStore
 		opts = append(opts, signing.WithAgentRootAnchorStore(anchorStore))
-		reachabilityTrust = agiddelegation.NewDurableReachabilityTrustStore(floorDir).TrustLookup
+		reachStore := agiddelegation.NewDurableReachabilityTrustStore(floorDir)
+		reachabilityTrust = reachStore.TrustLookup
+		opts = append(opts, signing.WithAgentReachabilityKeyStore(reachStore))
 		attestor = agiddelegation.NewDurableAttestationTrustStore(floorDir)
 	}
 	// Issuance-precondition gate (AGID-04a seam; AGID-04b verifier). Attached in

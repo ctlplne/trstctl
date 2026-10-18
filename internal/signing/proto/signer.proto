@@ -130,6 +130,11 @@ service SignerService {
   // GetAgentRootAnchor reads the exact signer-held public AGID root. Callers
   // compare it with the tenant registry before reporting provisioned=true.
   rpc GetAgentRootAnchor(GetAgentRootAnchorRequest) returns (GetAgentRootAnchorResponse);
+
+  // Bind one public reachability-verdict signer in the isolated signer. The
+  // control plane retains its sealed private key; changed first writers refuse.
+  rpc ProvisionAgentReachabilityKey(ProvisionAgentReachabilityKeyRequest) returns (ProvisionAgentReachabilityKeyResponse);
+  rpc GetAgentReachabilityKey(GetAgentReachabilityKeyRequest) returns (GetAgentReachabilityKeyResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -546,4 +551,21 @@ message GetAgentRootAnchorRequest {
 message GetAgentRootAnchorResponse {
   bytes public_der = 1;
   string auth_ref = 2;
+}
+
+message ProvisionAgentReachabilityKeyRequest {
+  string key_id = 1;
+  bytes public_der = 2;
+}
+
+message ProvisionAgentReachabilityKeyResponse {
+  bytes public_der = 1;
+}
+
+message GetAgentReachabilityKeyRequest {
+  string key_id = 1;
+}
+
+message GetAgentReachabilityKeyResponse {
+  bytes public_der = 1;
 }

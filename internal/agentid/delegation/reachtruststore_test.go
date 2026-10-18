@@ -3,6 +3,7 @@
 package delegation
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -27,6 +28,32 @@ func TestDurableReachabilityTrustStore_PutAndLookup(t *testing.T) {
 	}
 	if string(got) != string(signer.Public().DER) {
 		t.Fatal("trusted reachability verdict key DER changed")
+	}
+}
+
+func TestDurableReachabilityTrustStore_FirstWriterSurvivesRestart(t *testing.T) {
+	first, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	store := NewDurableReachabilityTrustStore(dir)
+	if err := store.PutVerdictSigner(context.Background(), "verdict-1", first.Public().DER); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.PutVerdictSigner(context.Background(), "verdict-1", first.Public().DER); err != nil {
+		t.Fatalf("same-key retry: %v", err)
+	}
+	if err := NewDurableReachabilityTrustStore(dir).PutVerdictSigner(context.Background(), "verdict-1", second.Public().DER); err == nil {
+		t.Fatal("changed verdict authority replaced the first writer")
+	}
+	got, ok := NewDurableReachabilityTrustStore(dir).TrustLookup("verdict-1")
+	if !ok || !bytes.Equal(got, first.Public().DER) {
+		t.Fatal("restart readback lost the original verdict key")
 	}
 }
 

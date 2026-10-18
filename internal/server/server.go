@@ -1956,18 +1956,19 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		var err error
 		licensed, err = d.LicensedOutboxFactory(LicensedOutboxDeps{
 			Store: d.Store, Log: d.Log, Idempotency: idem,
-			IssueProtocolLeaf:  s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
-			TLSPostureDeployer: d.ConnectorRegistry,
-			OutboxIntegrityKey: d.KEK,
-			TenantCrypto:       d.TenantCrypto,
-			FeatureObserver:    s.featureObserver(),
-			SignerKeyStoreDir:  d.SignerKeyStoreDir,
-			Minter:             s.successionMinter(),
-			IssuanceGate:       s.issuanceGate(),
-			KEMCustody:         s.kemCustody(),
-			ManagedKeyCustody:  s.managedKeyCustody(),
-			GatedDestruction:   s.gatedDestruction(),
-			Transit:            s.transit,
+			IssueProtocolLeaf:    s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
+			TLSPostureDeployer:   d.ConnectorRegistry,
+			OutboxIntegrityKey:   d.KEK,
+			TenantCrypto:         d.TenantCrypto,
+			FeatureObserver:      s.featureObserver(),
+			SignerKeyStoreDir:    d.SignerKeyStoreDir,
+			AGIDReachabilityKeys: s.agidReachabilityKeys(),
+			Minter:               s.successionMinter(),
+			IssuanceGate:         s.issuanceGate(),
+			KEMCustody:           s.kemCustody(),
+			ManagedKeyCustody:    s.managedKeyCustody(),
+			GatedDestruction:     s.gatedDestruction(),
+			Transit:              s.transit,
 		})
 		if err != nil {
 			return err
@@ -2025,6 +2026,13 @@ func (s *Server) successionMinter() SuccessionMinter {
 }
 
 func (s *Server) agidRootAnchors() editionseam.AgentRootAnchorProvisioner {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) agidReachabilityKeys() editionseam.AgentReachabilityKeyProvisioner {
 	if s.signer == nil {
 		return nil
 	}

@@ -65,6 +65,13 @@ type AgentRootAnchorProvisioner interface {
 	ReadAgentRootAnchor(context.Context, string, string) ([]byte, string, error)
 }
 
+// AgentReachabilityKeyProvisioner binds the control plane's public verdict key
+// inside the isolated signer and reads it back. Private key material never crosses.
+type AgentReachabilityKeyProvisioner interface {
+	ProvisionAgentReachabilityKey(context.Context, string, []byte) error
+	ReadAgentReachabilityKey(context.Context, string) ([]byte, error)
+}
+
 // PCASLeafIssuer is the existing managed-CA issuance path, narrowed to one
 // exact tenant-owned signer handle and public CA certificate. The implementation
 // enforces the CA profile and signer authorization, then records the issued
@@ -143,10 +150,10 @@ type LicensedOutboxDeps struct {
 	// on served licensed outbox hot paths. Labels must be closed, non-tenant, and
 	// non-secret so the shared metrics endpoint never leaks AN-1/AN-8 material.
 	FeatureObserver func(feature, action, outcome string, seconds float64)
-	// SignerKeyStoreDir is the shared signer provisioning floor. Licensed handlers may
-	// write public, non-secret trust material here for the isolated signer to read without
-	// linking SQL, NATS, or HTTP.
-	SignerKeyStoreDir string
+	// SignerKeyStoreDir is this process's durable key directory. It need not share
+	// a volume with the isolated signer; public AGID trust crosses its RPC instead.
+	SignerKeyStoreDir    string
+	AGIDReachabilityKeys AgentReachabilityKeyProvisioner
 	// Minter is the out-of-process signer as a succession minter (INT-04); nil when no
 	// signer is configured. A PCAS licensed-outbox handler uses it to mint on a
 	// pcas.succession-request message.

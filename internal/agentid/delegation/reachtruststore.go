@@ -3,14 +3,20 @@
 package delegation
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 const durableReachVerdictDir = "agid-reach-verdict-keys"
+
+var ErrReachabilityTrustConflict = signing.ErrAgentReachabilityConflict
 
 // DurableReachabilityTrustStore is the AN-4-safe signer provisioning store for trusted
 // reachability-verdict public keys. The control plane writes public DER into the signer
@@ -33,14 +39,52 @@ func (s *DurableReachabilityTrustStore) PutVerdictSigner(_ context.Context, keyI
 	if err != nil {
 		return err
 	}
-	if len(publicDER) == 0 {
-		return errors.New("delegation: reachability verdict public DER is required")
+	if err := crypto.ValidatePublicKeyDER(publicDER); err != nil {
+		return fmt.Errorf("delegation: invalid reachability verdict public key: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dirPath := filepath.Dir(path)
+	if err := os.MkdirAll(dirPath, 0o700); err != nil {
 		return fmt.Errorf("delegation: create reachability trust directory: %w", err)
 	}
-	if err := os.WriteFile(path, append([]byte(nil), publicDER...), 0o600); err != nil {
-		return fmt.Errorf("delegation: write reachability verdict public key: %w", err)
+	// Publish only a fully synced public key. Link is an atomic first-writer fence:
+	// concurrent provisioners cannot replace each other's signer trust.
+	tmp, err := os.CreateTemp(dirPath, ".reach-verdict-*")
+	if err != nil {
+		return fmt.Errorf("delegation: stage verdict public key: %w", err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(publicDER); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(tmp.Name(), path); err != nil && !errors.Is(err, os.ErrExist) {
+		return fmt.Errorf("delegation: publish verdict public key: %w", err)
+	}
+	stored, err := readUnderRoot(path)
+	if err != nil {
+		return fmt.Errorf("delegation: read verdict public key: %w", err)
+	}
+	if !bytes.Equal(stored, publicDER) {
+		return ErrReachabilityTrustConflict
+	}
+	dir, err := os.Open(dirPath) // #nosec G304 -- signer-owned floor and validated key ID; open only to fsync the published directory
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	if err := dir.Sync(); err != nil {
+		return fmt.Errorf("delegation: sync verdict trust directory: %w", err)
 	}
 	return nil
 }
@@ -49,15 +93,29 @@ func (s *DurableReachabilityTrustStore) PutVerdictSigner(_ context.Context, keyI
 // on each verification, so keys provisioned after signer start are visible on the next
 // issuance and remain visible after signer restart.
 func (s *DurableReachabilityTrustStore) TrustLookup(keyID string) ([]byte, bool) {
-	path, err := s.path(keyID)
-	if err != nil {
-		return nil, false
-	}
-	publicDER, err := readUnderRoot(path)
+	publicDER, err := s.ReadVerdictSigner(context.Background(), keyID)
 	if err != nil || len(publicDER) == 0 {
 		return nil, false
 	}
 	return append([]byte(nil), publicDER...), true
+}
+
+// ReadVerdictSigner is the independent signer-local readback used after RPC
+// provisioning and after a cold restart. Missing or unreadable material is an
+// error, never an inferred match from the control-plane file.
+func (s *DurableReachabilityTrustStore) ReadVerdictSigner(_ context.Context, keyID string) ([]byte, error) {
+	path, err := s.path(keyID)
+	if err != nil {
+		return nil, err
+	}
+	publicDER, err := readUnderRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := crypto.ValidatePublicKeyDER(publicDER); err != nil {
+		return nil, err
+	}
+	return append([]byte(nil), publicDER...), nil
 }
 
 func (s *DurableReachabilityTrustStore) path(keyID string) (string, error) {

@@ -46,20 +46,27 @@ The signer’s public-trust floors live under the **signer process's** key store
 sends the tenant-bound public key to that signer over the authenticated signer
 transport; the control plane does not write a local copy and assume it reached
 the signer. For an external signer, configure its durable key store on the
-signer host. Its reachability and attestor trust floors still need operator
-provisioning at that signer:
+signer host. The control plane seals one reachability-verdict private key under
+its own `TRSTCTL_SIGNER_KEY_STORE_DIR` path using the deployment KEK. It sends
+only that key's public DER over the authenticated signer transport and verifies
+the signer's independent readback before starting AGID delivery. The signer
+keeps the first public key for that key ID across restarts and rejects a changed
+binding. Control-plane and signer paths can be separate volumes. The attestor
+trust floor still needs operator provisioning at the signer:
 
 ```text
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.pem      # root anchor, public key DER wrapped as PEM
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.authref  # non-secret auth reference
-<signer key store dir>/agid-reach-verdict-keys/agentid-reach-verdict.der
+<signer key store dir>/agid-reach-verdict-keys/agentid-reach-verdict.der  # RPC-provisioned public key
 <signer key store dir>/agid-attestors/<key_id>.der
 <signer key store dir>/agid-attestor-spent/<evidence_digest>.spent
+<control-plane key store dir>/agid-control-plane/reachability-verdict-v1.sealed  # KEK-sealed private key
 ```
 
-All floor files hold public material only. The control plane holds the
-reachability-verdict signing handle; the signer verifies the verdict signature
-before issuing. Spent-evidence markers are written before an attested key
+The signer floor files hold public material only. The control-plane sealed
+private file never enters the signer volume. The signer verifies each verdict
+signature against its first-writer public key before issuing. Spent-evidence
+markers are written before an attested key
 operation completes, so replayed attestation evidence stays refused across a
 signer restart.
 

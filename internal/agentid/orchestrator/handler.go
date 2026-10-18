@@ -3,12 +3,9 @@
 package orchestrator
 
 import (
-	"context"
 	"fmt"
 
-	"trstctl.com/trstctl/internal/agentid/delegation"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
-	"trstctl.com/trstctl/internal/agentid/reach"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
@@ -53,7 +50,7 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 	if err != nil {
 		return nil, fmt.Errorf("agentid outbox: build policy engine: %w", err)
 	}
-	verdictSigner, verdictKey, err := provisionReachabilityVerdictSigner(d.SignerKeyStoreDir)
+	verdictSigner, verdictKey, err := provisionReachabilityVerdictSigner(d.SignerKeyStoreDir, d.OutboxIntegrityKey, d.AGIDReachabilityKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -80,18 +77,3 @@ func newHandler(d editionseam.LicensedOutboxDeps, signer crypto.Signer) (*handle
 }
 
 const defaultReachabilityVerdictKeyID = "agentid-reach-verdict"
-
-func provisionReachabilityVerdictSigner(floorDir string) (crypto.Signer, reach.VerdictKeyRef, error) {
-	verdictSigner, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
-	if err != nil {
-		return nil, reach.VerdictKeyRef{}, fmt.Errorf("agentid outbox: generate reachability verdict signer: %w", err)
-	}
-	key := reach.VerdictKeyRef{ID: defaultReachabilityVerdictKeyID, Algorithm: string(verdictSigner.Algorithm())}
-	if floorDir != "" {
-		store := delegation.NewDurableReachabilityTrustStore(floorDir)
-		if err := store.PutVerdictSigner(context.Background(), key.ID, verdictSigner.Public().DER); err != nil {
-			return nil, reach.VerdictKeyRef{}, fmt.Errorf("agentid outbox: provision reachability verdict key: %w", err)
-		}
-	}
-	return verdictSigner, key, nil
-}
