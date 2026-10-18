@@ -15,6 +15,12 @@ type CredentialIssuer interface {
 	IssueReplacementCredential(context.Context, CredentialIssueRequest) (CredentialReplacement, error)
 }
 
+// CredentialCutoverVerifier is implemented by the trusted deployment and
+// endpoint-readback path. Issuance alone must never retire the predecessor.
+type CredentialCutoverVerifier interface {
+	VerifyCredentialCutover(context.Context, CredentialReissueRequest, CredentialReplacement) (CredentialCutoverEvidence, error)
+}
+
 type CredentialSupersessionRecorder interface {
 	RecordCredentialSupersession(context.Context, CredentialSupersession) error
 }
@@ -25,6 +31,7 @@ type CredentialSupersessionRecorder interface {
 // replacement identifiers.
 type CredentialReissueExecutor struct {
 	issuer       CredentialIssuer
+	cutover      CredentialCutoverVerifier
 	supersession CredentialSupersessionRecorder
 	recorder     *CompletionRecorder
 }
@@ -35,9 +42,26 @@ type CredentialIssueRequest struct {
 }
 
 type CredentialReplacement struct {
-	OldCredentialID string
-	NewCredentialID string
-	SuccessorKeyID  string
+	OldCredentialID   string
+	NewCredentialID   string
+	SuccessorKeyID    string
+	TargetID          string
+	FingerprintSHA256 string
+}
+
+// CredentialCutoverEvidence binds the deployment receipt to an independent
+// observation of the leaf actually served by the target.
+type CredentialCutoverEvidence struct {
+	TenantID                  string
+	JobID                     string
+	OldCredentialID           string
+	NewCredentialID           string
+	SuccessorKeyID            string
+	TargetID                  string
+	ExpectedFingerprintSHA256 string
+	ServedFingerprintSHA256   string
+	DeploymentReceiptID       string
+	IndependentReadbackID     string
 }
 
 type CredentialSupersession struct {
@@ -60,21 +84,24 @@ type CredentialReissueResult struct {
 	Completion   CompletionResult
 }
 
-func NewCredentialReissueExecutor(issuer CredentialIssuer, supersession CredentialSupersessionRecorder, recorder *CompletionRecorder) (*CredentialReissueExecutor, error) {
+func NewCredentialReissueExecutor(issuer CredentialIssuer, cutover CredentialCutoverVerifier, supersession CredentialSupersessionRecorder, recorder *CompletionRecorder) (*CredentialReissueExecutor, error) {
 	if issuer == nil {
 		return nil, errors.New("reprotect: credential issuer is required")
 	}
 	if supersession == nil {
 		return nil, errors.New("reprotect: credential supersession recorder is required")
 	}
+	if cutover == nil {
+		return nil, errors.New("reprotect: credential cutover verifier is required")
+	}
 	if recorder == nil {
 		return nil, ErrNilCompletionSink
 	}
-	return &CredentialReissueExecutor{issuer: issuer, supersession: supersession, recorder: recorder}, nil
+	return &CredentialReissueExecutor{issuer: issuer, cutover: cutover, supersession: supersession, recorder: recorder}, nil
 }
 
 func (e *CredentialReissueExecutor) Execute(ctx context.Context, req CredentialReissueRequest) (CredentialReissueResult, error) {
-	if e == nil || e.issuer == nil || e.supersession == nil || e.recorder == nil {
+	if e == nil || e.issuer == nil || e.cutover == nil || e.supersession == nil || e.recorder == nil {
 		return CredentialReissueResult{}, errors.New("reprotect: credential reissue executor is not configured")
 	}
 	if err := validateCredentialReissueRequest(req); err != nil {
@@ -86,6 +113,13 @@ func (e *CredentialReissueExecutor) Execute(ctx context.Context, req CredentialR
 	}
 	replacement = normalizeCredentialReplacement(req, replacement)
 	if err := validateCredentialReplacement(req, replacement); err != nil {
+		return CredentialReissueResult{}, err
+	}
+	proof, err := e.cutover.VerifyCredentialCutover(ctx, req, replacement)
+	if err != nil {
+		return CredentialReissueResult{}, err
+	}
+	if err := validateCredentialCutover(req, replacement, proof); err != nil {
 		return CredentialReissueResult{}, err
 	}
 	link := CredentialSupersession{
@@ -148,6 +182,21 @@ func validateCredentialReplacement(req CredentialReissueRequest, replacement Cre
 	}
 	if replacement.SuccessorKeyID != req.SuccessorKeyID {
 		return fmt.Errorf("%w: replacement successor key %s does not match request %s", ErrInvalidState, replacement.SuccessorKeyID, req.SuccessorKeyID)
+	}
+	if strings.TrimSpace(replacement.TargetID) == "" || strings.TrimSpace(replacement.FingerprintSHA256) == "" {
+		return fmt.Errorf("%w: replacement target and certificate fingerprint are required", ErrInvalidState)
+	}
+	return nil
+}
+
+func validateCredentialCutover(req CredentialReissueRequest, replacement CredentialReplacement, proof CredentialCutoverEvidence) error {
+	if proof.TenantID != req.Job.TenantID || proof.JobID != req.Job.ID ||
+		proof.OldCredentialID != replacement.OldCredentialID || proof.NewCredentialID != replacement.NewCredentialID ||
+		proof.SuccessorKeyID != replacement.SuccessorKeyID || proof.TargetID != replacement.TargetID ||
+		proof.ExpectedFingerprintSHA256 != replacement.FingerprintSHA256 ||
+		proof.ServedFingerprintSHA256 != replacement.FingerprintSHA256 ||
+		strings.TrimSpace(proof.DeploymentReceiptID) == "" || strings.TrimSpace(proof.IndependentReadbackID) == "" {
+		return fmt.Errorf("%w: credential cutover evidence does not bind the job, target, deployment and served leaf", ErrInvalidState)
 	}
 	return nil
 }

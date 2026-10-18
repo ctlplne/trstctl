@@ -16,12 +16,15 @@ func TestReprotect_CredentialReissueSupersession(t *testing.T) {
 	// #nosec G101 -- NewCredentialID is public fixture metadata, not credential material (CWE-798).
 	issuer := &recordingCredentialIssuer{
 		replacement: CredentialReplacement{
-			NewCredentialID: "credential:new-serial-100",
+			NewCredentialID:   "credential:new-serial-100",
+			TargetID:          "target:qa-apache",
+			FingerprintSHA256: "aabbcc",
 		},
 	}
+	cutover := &recordingCredentialCutover{}
 	supersessions := &recordingSupersessionRecorder{}
 	sink := &recordingCompletionSink{}
-	exec, err := NewCredentialReissueExecutor(issuer, supersessions, NewCompletionRecorder(sink))
+	exec, err := NewCredentialReissueExecutor(issuer, cutover, supersessions, NewCompletionRecorder(sink))
 	if err != nil {
 		t.Fatalf("NewCredentialReissueExecutor: %v", err)
 	}
@@ -41,6 +44,9 @@ func TestReprotect_CredentialReissueSupersession(t *testing.T) {
 	}
 	if len(supersessions.links) != 1 {
 		t.Fatalf("supersession links = %d, want 1", len(supersessions.links))
+	}
+	if len(cutover.requests) != 1 {
+		t.Fatalf("cutover verifications = %d, want 1", len(cutover.requests))
 	}
 	link := supersessions.links[0]
 	if link.OldCredentialID != job.Dependent.ID || link.NewCredentialID != "credential:new-serial-100" || link.SuccessorKeyID != "key://tenant-a/successor" {
@@ -76,6 +82,63 @@ func TestReprotect_CredentialReissueSupersession(t *testing.T) {
 	if len(sink.events) != 1 {
 		t.Fatalf("completion event count after replay = %d, want 1", len(sink.events))
 	}
+}
+
+func TestReprotect_CredentialMintDoesNotCompleteBeforeCutover(t *testing.T) {
+	issuer := &recordingCredentialIssuer{replacement: CredentialReplacement{NewCredentialID: "leaf-b", TargetID: "target:qa-apache", FingerprintSHA256: "aabbcc"}}
+	supersessions := &recordingSupersessionRecorder{}
+	sink := &recordingCompletionSink{}
+	exec, err := NewCredentialReissueExecutor(issuer, unavailableCredentialCutover{}, supersessions, NewCompletionRecorder(sink))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = exec.Execute(context.Background(), CredentialReissueRequest{
+		Job: credentialJob(), SuccessorKeyID: "key://tenant-a/successor",
+	})
+	if err == nil {
+		t.Fatal("mint without a verified deployment was reported complete")
+	}
+	if len(supersessions.links) != 0 || len(sink.events) != 0 {
+		t.Fatalf("unverified mint wrote supersession=%d completion=%d", len(supersessions.links), len(sink.events))
+	}
+}
+
+func TestReprotect_CredentialRejectsMismatchedServedLeaf(t *testing.T) {
+	issuer := &recordingCredentialIssuer{replacement: CredentialReplacement{NewCredentialID: "leaf-b", TargetID: "target:qa-apache", FingerprintSHA256: "aabbcc"}}
+	cutover := &recordingCredentialCutover{servedFingerprint: "different"}
+	supersessions := &recordingSupersessionRecorder{}
+	sink := &recordingCompletionSink{}
+	exec, err := NewCredentialReissueExecutor(issuer, cutover, supersessions, NewCompletionRecorder(sink))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = exec.Execute(context.Background(), CredentialReissueRequest{Job: credentialJob(), SuccessorKeyID: "key://tenant-a/successor"})
+	if err == nil {
+		t.Fatal("mismatched served leaf was accepted")
+	}
+	if len(supersessions.links) != 0 || len(sink.events) != 0 {
+		t.Fatalf("mismatched served leaf wrote supersession=%d completion=%d", len(supersessions.links), len(sink.events))
+	}
+}
+
+type recordingCredentialCutover struct {
+	requests          []CredentialReissueRequest
+	servedFingerprint string
+}
+
+func (v *recordingCredentialCutover) VerifyCredentialCutover(_ context.Context, req CredentialReissueRequest, replacement CredentialReplacement) (CredentialCutoverEvidence, error) {
+	v.requests = append(v.requests, req)
+	served := v.servedFingerprint
+	if served == "" {
+		served = replacement.FingerprintSHA256
+	}
+	return CredentialCutoverEvidence{
+		TenantID: req.Job.TenantID, JobID: req.Job.ID,
+		OldCredentialID: replacement.OldCredentialID, NewCredentialID: replacement.NewCredentialID,
+		SuccessorKeyID: replacement.SuccessorKeyID, TargetID: replacement.TargetID,
+		ExpectedFingerprintSHA256: replacement.FingerprintSHA256, ServedFingerprintSHA256: served,
+		DeploymentReceiptID: "receipt:qa-apache", IndependentReadbackID: "probe:qa-apache",
+	}, nil
 }
 
 type recordingCredentialIssuer struct {

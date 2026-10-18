@@ -87,7 +87,7 @@ func newHandler(d editionseam.LicensedOutboxDeps, cfg factoryConfig) (Handler, e
 	if err != nil {
 		return Handler{}, err
 	}
-	credential, err := NewCredentialReissueExecutor(unavailableCredentialIssuer{}, eventCredentialSupersessionRecorder{log: d.Log, store: d.Store}, completions)
+	credential, err := NewCredentialReissueExecutor(unavailableCredentialIssuer{}, unavailableCredentialCutover{}, eventCredentialSupersessionRecorder{log: d.Log, store: d.Store}, completions)
 	if err != nil {
 		return Handler{}, err
 	}
@@ -269,6 +269,12 @@ type unavailableCredentialIssuer struct{}
 
 func (unavailableCredentialIssuer) IssueReplacementCredential(context.Context, CredentialIssueRequest) (CredentialReplacement, error) {
 	return CredentialReplacement{}, fmt.Errorf("%w: credential replacement issuer is not provisioned", ErrExecutorUnavailable)
+}
+
+type unavailableCredentialCutover struct{}
+
+func (unavailableCredentialCutover) VerifyCredentialCutover(context.Context, CredentialReissueRequest, CredentialReplacement) (CredentialCutoverEvidence, error) {
+	return CredentialCutoverEvidence{}, fmt.Errorf("%w: credential deployment and served-state verification are not provisioned", ErrExecutorUnavailable)
 }
 
 type eventCredentialSupersessionRecorder struct {
