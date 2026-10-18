@@ -1999,6 +1999,8 @@ describe("CA hierarchy and custody surface", () => {
       ),
     );
     expect(screen.getByText("mint-41 · 41")).toBeInTheDocument();
+    expect(screen.queryByText("Exact CA spec")).not.toBeInTheDocument();
+    expect(screen.queryByText(/"common_name": ""/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start reviewed ceremony" }));
     await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledTimes(1));
     expect(within(release).getByText(ceremonyID, { exact: false })).toBeInTheDocument();

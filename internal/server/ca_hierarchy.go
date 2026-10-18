@@ -203,6 +203,12 @@ func ceremonyPreviewChanges(operation string) []string {
 }
 
 func ceremonyPreviewRisks(operation string) []string {
+	if operation == "release_managed_ca_leaf" {
+		return []string{
+			"The requester held this leaf's private key. Expiry and a local inventory record cannot prove it was never used outside this deployment.",
+			"Releasing this exact dependency after two distinct custodian approvals permits a later retirement request; it does not revoke the certificate or destroy the CA key.",
+		}
+	}
 	risks := []string{
 		"A completed ceremony can authorize a later change to certificate trust or signing authority.",
 		"The server will require distinct custodian approvals and revalidate the exact ceremony purpose before execution.",
@@ -214,6 +220,13 @@ func ceremonyPreviewRisks(operation string) []string {
 }
 
 func ceremonyPreviewVerification(operation string) []string {
+	if operation == "release_managed_ca_leaf" {
+		return []string{
+			"Match the exact certificate ID, public DER digest, original mint event, CA key and explicit external-use risk decision before opening the ceremony.",
+			"Verify two distinct custodian approval events authorize this exact disposition before executing the release.",
+			"After release, read the retirement checklist for this CA key and verify the exact certificate is accounted for; retain the immutable release receipt and audit event.",
+		}
+	}
 	steps := []string{
 		"Confirm the operation, authority identity, CA profile, and required approval threshold match the intended change.",
 		"After the ceremony starts, verify each distinct approval and the immutable ceremony event before executing the CA change.",

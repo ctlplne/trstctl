@@ -119,7 +119,9 @@ instead.
    ```
 
    Review the returned certificate ID, subject, serial, digest, expiry, mint
-   event ID and sequence. The preview writes nothing. Starting the ceremony
+   event ID and sequence. The console review shows the exact dependent and
+   release proof; it does not present an empty CA mint specification as part
+   of this disposition. The preview writes nothing. Starting the ceremony
    rechecks these facts before its immutable purpose is recorded.
 3. Give the ceremony ID to two distinct authenticated custodians. Each loads
    `GET /api/v1/ca/ceremonies/{id}`, checks `release_review`, and approves from

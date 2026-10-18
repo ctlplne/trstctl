@@ -252,7 +252,7 @@ export function CACeremonyReviewDialog({
             value={t("caHierarchy.preview.approvalCount", { count: String(preview.approval_threshold) })}
           />
           <ReviewValue label={t("caHierarchy.preview.permission")} value={preview.required_permission} />
-          <ReviewValue label={t("caHierarchy.preview.commonName")} value={preview.normalized_spec.common_name} />
+          {!preview.release_review && <ReviewValue label={t("caHierarchy.preview.commonName")} value={preview.normalized_spec.common_name} />}
           {preview.release_review && (
             <>
               <ReviewValue label={t("caHierarchy.release.certificate")} value={preview.release_review.certificate_id} />
@@ -277,10 +277,12 @@ export function CACeremonyReviewDialog({
           </div>
         </dl>
 
-        <section className="border-t border-border pt-4">
-          <h3 className="font-semibold">{t("caHierarchy.preview.exactSpec")}</h3>
-          <pre className="mt-2 max-h-48 overflow-auto rounded-control bg-muted p-3 text-xs">{JSON.stringify(preview.normalized_spec, null, 2)}</pre>
-        </section>
+        {!preview.release_review && (
+          <section className="border-t border-border pt-4">
+            <h3 className="font-semibold">{t("caHierarchy.preview.exactSpec")}</h3>
+            <pre className="mt-2 max-h-48 overflow-auto rounded-control bg-muted p-3 text-xs">{JSON.stringify(preview.normalized_spec, null, 2)}</pre>
+          </section>
+        )}
 
         <ReviewList title={t("caHierarchy.preview.changes")} items={preview.changes} />
         <ReviewList title={t("caHierarchy.preview.risks")} items={preview.risks} />
