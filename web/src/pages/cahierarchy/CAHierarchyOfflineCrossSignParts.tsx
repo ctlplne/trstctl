@@ -261,7 +261,9 @@ export function CAOfflineCrossSignPanel({ authorities }: { authorities: CAAuthor
           <p role="status">
             {ceremony.status}; {ceremony.approvals}/{ceremony.threshold} {t("caHierarchy.offlineCross.approvals")};{" "}
             {matching === null
-              ? t("caHierarchy.offlineCross.notCompared")
+              ? receipt
+                ? t("caHierarchy.offlineCross.receiptRecoveredUncompared")
+                : t("caHierarchy.offlineCross.notCompared")
               : matching
                 ? t("caHierarchy.offlineCross.bound")
                 : t("caHierarchy.offlineCross.unbound")}

@@ -113,7 +113,9 @@ it("recovers the durable public receipt by ceremony ID after a browser reload", 
   fireEvent.change(screen.getByLabelText("Offline cross-sign ceremony ID"), { target: { value: ceremonyID } });
   await user.click(screen.getByRole("button", { name: "Refresh offline cross-sign ceremony" }));
   await waitFor(() => expect(apiMock.getCACrossSignReceipt).toHaveBeenCalledWith(ceremonyID));
-  expect(screen.getByText(/No public certificates reviewed in this browser/)).toBeInTheDocument();
+  expect(screen.getByText(/Imported on server; public receipt recovered/)).toBeInTheDocument();
+  expect(screen.getByText(/This browser has not compared the original certificates/)).toBeInTheDocument();
+  expect(screen.queryByText(/No public certificates reviewed in this browser/)).not.toBeInTheDocument();
   expect(screen.queryByText(/reviewed certificates do not match this ceremony/)).not.toBeInTheDocument();
   expect(screen.getByLabelText("Recovered public cross-certificate PEM")).toHaveValue(cross);
 });

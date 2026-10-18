@@ -357,7 +357,9 @@ export function CAOfflineRootRekeyPanel({ authorities, onActivated }: { authorit
           <p role="status">
             {ceremony.status}; {ceremony.approvals}/{ceremony.threshold} {t("caHierarchy.offlineRekey.approvals")};{" "}
             {matching === null
-              ? t("caHierarchy.offlineRekey.notCompared")
+              ? receipt
+                ? t("caHierarchy.offlineRekey.receiptRecoveredUncompared")
+                : t("caHierarchy.offlineRekey.notCompared")
               : matching
                 ? t("caHierarchy.offlineRekey.bound")
                 : t("caHierarchy.offlineRekey.unbound")}

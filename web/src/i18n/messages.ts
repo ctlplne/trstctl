@@ -10195,6 +10195,10 @@ export const messages = {
     defaultMessage: "No public package reviewed in this browser",
     description: "Offline-root ceremony retrieved without a local package comparison.",
   },
+  "caHierarchy.offlineRekey.receiptRecoveredUncompared": {
+    defaultMessage: "Successor active on server; public receipt recovered. This browser has not compared the original package.",
+    description: "Recovered completed offline-root succession without a local input comparison.",
+  },
   "caHierarchy.offlineRekey.unbound": {
     defaultMessage: "reviewed package does not match this ceremony",
     description: "Offline-root negative ceremony binding.",
@@ -10247,6 +10251,10 @@ export const messages = {
   "caHierarchy.offlineCross.notCompared": {
     defaultMessage: "No public certificates reviewed in this browser",
     description: "Offline cross-sign ceremony retrieved without a local certificate comparison.",
+  },
+  "caHierarchy.offlineCross.receiptRecoveredUncompared": {
+    defaultMessage: "Imported on server; public receipt recovered. This browser has not compared the original certificates.",
+    description: "Recovered completed offline cross-sign without a local input comparison.",
   },
   "caHierarchy.offlineCross.unbound": { defaultMessage: "reviewed certificates do not match this ceremony", description: "Negative ceremony binding." },
   "caHierarchy.offlineCross.imported": { defaultMessage: "Offline cross-sign imported", description: "Completed import status." },

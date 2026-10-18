@@ -272,7 +272,9 @@ re-key event as the authority state and can be recovered by ceremony ID after a
 lost response or restart. The Imports workspace in the console previews the
 exact public package, starts the bound two-custodian ceremony, reads the quorum,
 activates the successor, and recovers that receipt. Offline private keys never
-enter the browser or control plane. The full
+enter the browser or control plane. On a fresh browser session, the console
+labels a recovered completed receipt as a server result and says that the
+original public inputs were not compared in that browser. The full
 operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
