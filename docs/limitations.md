@@ -3146,6 +3146,16 @@ than sending an operator looking for a credential that was never there.
   signer's frozen event-set check uses the same derivation, including issuance
   after the frozen cut. A serial-only historical issuance remains a conservative
   `serial:` dependent rather than an invented certificate inventory row.
+  An expired requester-held managed leaf with no managed deployment can be
+  dispositioned through `release_managed_ca_leaf` after two distinct custodians
+  approve its exact public certificate digest, immutable mint event and bounded
+  external-use risk decision. The operator previews and starts the ceremony in
+  the API or console, then calls
+  `POST /api/v1/ca/keys/{id}/dependencies/release` or
+  `trstctl-cli ca keys dependent release`. A durable first-writer fence survives
+  restart and backup; its event and approval evidence rebuild the checklist.
+  This deliberately does not claim that expiry proves the leaf was unused
+  outside trstctl, and serial-only historical rows are not eligible.
   If the tenant has no recorded dependency state for the requested key, the
   checklist returns HTTP 404 with an explanation to verify the key ID and collect
   dependency evidence. This does not establish whether the key itself exists;

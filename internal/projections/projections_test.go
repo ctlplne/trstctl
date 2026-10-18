@@ -83,7 +83,7 @@ func newStore(t *testing.T) *store.Store {
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE oidc_session_locators, oidc_logout_receipts,
-		          ca_ceremony_cancel_commands, provider_suspend_commands,
+		          ca_ceremony_cancel_commands, ca_ceremony_effect_commands, provider_suspend_commands,
 		          workload_attester_trust_commands, workload_attester_trust_receipts,
 		          identity_terminal_commands, identity_terminal_receipts,
 		          certificate_revocation_authority_fences, certificate_revocation_authority_commands,

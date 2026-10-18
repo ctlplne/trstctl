@@ -173,7 +173,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
 		          agents, agent_cert_revocations, agent_removal_commands, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, api_token_revocation_commands, oidc_session_locators, oidc_logout_receipts, certificates, acme_upstream_ari, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          identity_terminal_commands, identity_terminal_receipts,
-		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals, ca_ceremony_cancel_commands,
+		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals, ca_ceremony_cancel_commands, ca_ceremony_effect_commands,
 		          certificate_revocation_authority_commands, certificate_revocation_authority_fences,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,

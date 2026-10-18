@@ -21,6 +21,10 @@ const (
 const (
 	SchemaV1 = 1
 	SchemaV2 = 2
+	// ReleaseReasonExpiredRequesterCustody is deliberately a bounded reason
+	// code. Free text inside a custodian-approved immutable purpose would make
+	// subject erasure change the approval binding on replay.
+	ReleaseReasonExpiredRequesterCustody = "expired-requester-custody-external-use-risk-accepted"
 )
 
 type DependentClass string
@@ -112,6 +116,20 @@ func ReleasePurposeV2(v DependencyReleasedV2) string {
 		v.CertificateSHA256, strings.TrimSpace(v.Reason), v.RiskAccepted}
 	raw, _ := json.Marshal(public) // fixed scalar structure cannot fail to marshal
 	return "release-managed-ca-leaf-v2:" + string(raw)
+}
+
+func ParseReleasePurposeV2(purpose string) (DependencyReleasedV2, bool, error) {
+	if !strings.HasPrefix(purpose, "release-managed-ca-leaf-v2:") {
+		return DependencyReleasedV2{}, false, nil
+	}
+	var review DependencyReleasedV2
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(purpose, "release-managed-ca-leaf-v2:")), &review); err != nil {
+		return DependencyReleasedV2{}, true, err
+	}
+	if ReleasePurposeV2(review) != purpose {
+		return DependencyReleasedV2{}, true, fmt.Errorf("depstate: release ceremony purpose is not canonical")
+	}
+	return review, true, nil
 }
 
 type DependencyErasureDesignatedV1 struct {

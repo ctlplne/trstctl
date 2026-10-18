@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/decommission/depstate"
+	"trstctl.com/trstctl/internal/decommission/release"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
 	"trstctl.com/trstctl/internal/decommission/retirement"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
@@ -195,6 +196,46 @@ type RetirementRetryRequest struct {
 	ConfirmIrreversible bool   `json:"confirm_irreversible"`
 }
 
+type DependentReleaseRequest struct {
+	CertificateID             string `json:"certificate_id"`
+	ExpectedCertificateSHA256 string `json:"expected_certificate_sha256"`
+	CeremonyID                string `json:"ceremony_id"`
+	Reason                    string `json:"reason"`
+	RiskAccepted              bool   `json:"risk_accepted"`
+}
+
+func dependentReleaseHandler(a *api.API, coordinator *release.Coordinator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+			start := time.Now()
+			var opErr error
+			defer func() { a.ObserveFeature("vdec_retirement", "release_dependent", start, opErr) }()
+			var input DependentReleaseRequest
+			if err := api.DecodeJSONStrict(r, &input); err != nil {
+				opErr = api.ErrWithStatus(http.StatusBadRequest, err)
+				return 0, nil, opErr
+			}
+			receipt, err := coordinator.Execute(ctx, tenantID, r.PathValue("id"), input.CeremonyID,
+				release.Request{CertificateID: input.CertificateID,
+					ExpectedCertificateSHA256: input.ExpectedCertificateSHA256,
+					Reason:                    input.Reason, RiskAccepted: input.RiskAccepted})
+			if err != nil {
+				switch {
+				case errors.Is(err, pgx.ErrNoRows):
+					err = api.ErrStatus(http.StatusNotFound, "CA authority, certificate, or ceremony not found")
+				case errors.Is(err, release.ErrInvalid):
+					err = api.ErrStatus(http.StatusBadRequest, err.Error())
+				case errors.Is(err, release.ErrConflict):
+					err = api.ErrStatus(http.StatusConflict, err.Error())
+				}
+				opErr = err
+				return 0, nil, err
+			}
+			return http.StatusOK, receipt, nil
+		})
+	}
+}
+
 func retirementRetryHandler(a *api.API, coordinator *retirement.Coordinator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -279,7 +320,7 @@ func retirementHandler(a *api.API, coordinator *retirement.Coordinator) http.Han
 // Routes declares the licensed VDEC REST surface. The start-re-protection route
 // is a mutation with no request body: the key id in the path and the header
 // idempotency key are the whole request (AN-5).
-func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator) []api.LicensedRoute {
+func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator, releaser *release.Coordinator) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
 			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect", OperationID: "startCAKeyReprotection",
@@ -288,6 +329,14 @@ func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator) []api.
 			PathParams:     []api.RouteParam{api.PathStringParam("id", "stable key identifier")},
 			ResponseSchema: "VDECReprotectionReceipt", SuccessCode: "202", Mutation: true,
 			Permission: authz.KeysWrite,
+		},
+		{
+			Method: "POST", Path: "/api/v1/ca/keys/{id}/dependencies/release", OperationID: "releaseCAKeyDependent",
+			Summary:       "Release one exact expired requester-custody CA leaf after distinct custodian approval and explicit external-use risk acceptance",
+			Handler:       func(a *api.API) http.HandlerFunc { return dependentReleaseHandler(a, releaser) },
+			PathParams:    []api.RouteParam{api.PathStringParam("id", "managed CA authority identifier")},
+			RequestSchema: "VDECDependentReleaseRequest", ResponseSchema: "VDECDependentReleaseReceipt", SuccessCode: "200",
+			Mutation: true, Permission: authz.KeysWrite,
 		},
 		{
 			Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", OperationID: "retireCAKey",
@@ -349,6 +398,15 @@ func schemas() map[string]*api.Schema {
 			"attempt_limit":    api.IntegerSchema(),
 			"status":           api.StringSchema(),
 		}, "key_id", "command_event_id", "grant_event_id", "outbox_id", "attempts_before", "attempt_limit", "status"),
+		"VDECDependentReleaseRequest": api.ObjectSchema(map[string]*api.Schema{
+			"certificate_id": api.StringSchema(), "expected_certificate_sha256": api.StringSchema(),
+			"ceremony_id": api.StringSchema(), "reason": api.StringSchema(), "risk_accepted": api.BooleanSchema(),
+		}, "certificate_id", "expected_certificate_sha256", "ceremony_id", "reason", "risk_accepted"),
+		"VDECDependentReleaseReceipt": api.ObjectSchema(map[string]*api.Schema{
+			"key_id": api.StringSchema(), "certificate_id": api.StringSchema(),
+			"ceremony_id": api.StringSchema(), "release_event_id": api.StringSchema(),
+			"certificate_sha256": api.StringSchema(), "status": api.StringSchema(),
+		}, "key_id", "certificate_id", "ceremony_id", "release_event_id", "certificate_sha256", "status"),
 	}
 }
 
@@ -370,9 +428,10 @@ func NewAPIOptionsFactory(retirementProjections ...*retirement.Projection) editi
 		}
 		enq := reprotect.NewEnqueuer(d.Store, repo, outbox, reprotect.NewCredentialPlanLedger(d.Log, d.Store))
 		coordinator := retirement.NewCoordinator(d.Store, d.Log, retirementProjection)
+		releaser := release.NewCoordinator(d.Store, d.Log)
 		return []api.Option{
 			api.WithRetirementChecklist(NewChecklistSource(repo, retirementProjection)),
-			api.WithCoreRoutes(Routes(enq, coordinator)...),
+			api.WithCoreRoutes(Routes(enq, coordinator, releaser)...),
 			api.WithLicensedSchemas(schemas()),
 		}, nil
 	}

@@ -464,8 +464,9 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root"}},
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root", "release_managed_ca_leaf"}},
 		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(),
+		"dependent_id": uuid(), "expected_certificate_sha256": str(), "risk_accepted": {Type: "boolean"},
 		"target_certificate_pem": str(), "cross_certificate_pem": str(), "reverse_cross_certificate_pem": str(),
 		"reason": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
 	}, "operation", "threshold")
@@ -473,7 +474,13 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
 		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),
 		"closed_at": timestamp(), "closed_by": str(), "close_reason": str(),
+		"release_review": ref("CAReleaseCeremonyReview"),
 	}, "id", "tenant_id", "purpose", "threshold", "status", "approvals", "created_at")
+	caReleaseReview := object(map[string]*Schema{
+		"key_id": uuid(), "certificate_id": uuid(), "source_event_id": str(),
+		"source_sequence": {Type: "integer"}, "serial": str(), "certificate_sha256": str(),
+		"subject": str(), "not_after": timestamp(), "reason": str(), "risk_accepted": {Type: "boolean"},
+	}, "key_id", "certificate_id", "source_event_id", "source_sequence", "serial", "certificate_sha256", "reason", "risk_accepted")
 	caCeremonyCancelReq := object(map[string]*Schema{"reason": str()}, "reason")
 	caCeremonyPlanAuthority := object(map[string]*Schema{
 		"id": uuid(), "common_name": str(), "kind": str(), "status": str(),
@@ -488,6 +495,7 @@ func componentSchemas() map[string]*Schema {
 		"normalized_spec":          ref("CASpec"),
 		"parent":                   ref("CACeremonyPlanAuthority"),
 		"authority":                ref("CACeremonyPlanAuthority"),
+		"release_review":           ref("CAReleaseCeremonyReview"),
 		"changes":                  {Type: "array", Items: str()},
 		"risks":                    {Type: "array", Items: str()},
 		"verification_steps":       {Type: "array", Items: str()},
@@ -6988,6 +6996,7 @@ func componentSchemas() map[string]*Schema {
 		"CASpec":                                   caSpec,
 		"CACeremonyStartRequest":                   caCeremonyStartReq,
 		"CAKeyCeremony":                            caCeremony,
+		"CAReleaseCeremonyReview":                  caReleaseReview,
 		"CACeremonyCancelRequest":                  caCeremonyCancelReq,
 		"CACeremonyPlanAuthority":                  caCeremonyPlanAuthority,
 		"CACeremonyPlanPreview":                    caCeremonyPlanPreview,

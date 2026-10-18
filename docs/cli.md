@@ -823,6 +823,15 @@ trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f
 trstctl-cli ca keys retirement <predecessor-ca-authority-id>
 trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 
+# For one expired requester-held managed CA leaf with no managed deployment,
+# review a release_managed_ca_leaf ceremony through ca ceremonies preview/create.
+# Two other authenticated custodians approve its exact mint ID and public digest.
+# The release body binds that ceremony, certificate ID, digest and bounded reason.
+trstctl-cli ca keys dependent release <ca-authority-id> -f dependent-release.json
+# {"certificate_id":"<inventory id>","expected_certificate_sha256":"<public DER digest>",
+#  "ceremony_id":"<approved ceremony id>",
+#  "reason":"expired-requester-custody-external-use-risk-accepted","risk_accepted":true}
+
 # If the exact retirement outbox command has failed after its delivery budget,
 # read its command_event_id and delivery_attempts from the checklist. Review the
 # failure, then grant ONE attempt to that same frozen command and signer journal.

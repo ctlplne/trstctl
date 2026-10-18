@@ -653,6 +653,13 @@ func (s *Store) LockPendingKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantI
 	if fenced {
 		return ErrKeyCeremonyNotPending
 	}
+	effectClaimed, err := s.CACeremonyEffectCommandExistsTx(ctx, tx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if effectClaimed {
+		return ErrKeyCeremonyNotPending
+	}
 	return nil
 }
 
@@ -814,6 +821,13 @@ func (s *Store) keyCeremonyWithApprovalEvidenceTx(ctx context.Context, tx pgx.Tx
 		return c, nil, err
 	}
 	if fenced {
+		return c, nil, ErrKeyCeremonyNotPending
+	}
+	effectClaimed, err := s.CACeremonyEffectCommandExistsTx(ctx, tx, tenantID, id)
+	if err != nil {
+		return c, nil, err
+	}
+	if effectClaimed {
 		return c, nil, ErrKeyCeremonyNotPending
 	}
 	if c.Purpose != expectedPurpose {

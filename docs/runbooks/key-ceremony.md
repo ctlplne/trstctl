@@ -93,6 +93,53 @@ signing CA).
 The ceremony and its approvals are tenant-scoped rows under row-level security:
 `ca_key_ceremonies` (with the `threshold`) and `ca_ceremony_approvals`.
 
+## Release one historical managed CA leaf dependency
+
+Use this narrow path only when a managed CA leaf was minted with requester-held
+subject-key custody, has expired, and has no managed deployment or later served
+observation. Expiry alone cannot prove that an off-product service stopped using
+it. The operator explicitly accepts that residual risk; the two custodians
+approve the exact public certificate and original mint event. A serial-only
+historical dependent, a still-valid leaf, a host-managed leaf, or a leaf with a
+managed deployment cannot use this path. Reissue and verify such credentials
+instead.
+
+1. Read `GET /api/v1/ca/keys/{id}/retirement` and
+   `GET /api/v1/certificates/{certificate_id}`. Keep the certificate ID and its
+   public SHA-256 fingerprint. In the console, **Certificate authorities →
+   Lifecycle → Release an expired CA leaf dependency** displays those facts.
+2. Preview, then start a `release_managed_ca_leaf` ceremony with
+   `issuers:write`, a fresh `Idempotency-Key`, and the same body for both calls:
+
+   ```json
+   {"operation":"release_managed_ca_leaf","authority_id":"<CA id>",
+    "dependent_id":"<certificate id>","expected_certificate_sha256":"<public DER digest>",
+    "reason":"expired-requester-custody-external-use-risk-accepted",
+    "risk_accepted":true,"threshold":2}
+   ```
+
+   Review the returned certificate ID, subject, serial, digest, expiry, mint
+   event ID and sequence. The preview writes nothing. Starting the ceremony
+   rechecks these facts before its immutable purpose is recorded.
+3. Give the ceremony ID to two distinct authenticated custodians. Each loads
+   `GET /api/v1/ca/ceremonies/{id}`, checks `release_review`, and approves from
+   their own session. The opener cannot approve. The console provides the same
+   readback and approval action.
+4. After quorum, submit `POST /api/v1/ca/keys/{id}/dependencies/release` with
+   `keys:write`, a fresh `Idempotency-Key`, the same certificate ID, digest,
+   reason and risk acceptance, plus `ceremony_id`. `trstctl-cli ca keys dependent
+   release <id> -f dependent-release.json` sends this body. The result names the
+   immutable release event. Read the retirement checklist again and verify that
+   the exact dependent is accounted for before requesting key destruction.
+
+The release event binds the original managed-CA mint, the certificate's public
+DER hash, the ceremony and all distinct approval event IDs. A PostgreSQL
+first-writer command fences cancellation and later approvals before the event
+append; restart recovery publishes only that saved event after a lost response.
+Its temporary actor and payload are scrubbed after projection, while the
+opaque event identity remains for recovery and audit. A mismatched certificate,
+tenant, CA, ceremony, reason or risk decision fails closed.
+
 ## Procedure: standing up a new CA
 
 1. **Convene the custodians.** Choose *n* trusted custodians and a threshold *m*

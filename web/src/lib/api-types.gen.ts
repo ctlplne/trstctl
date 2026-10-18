@@ -1610,11 +1610,12 @@ export interface CACeremonyPlanPreview {
   capability: "F48";
   changes: string[];
   normalized_spec: CASpec;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
   parent?: CACeremonyPlanAuthority;
   preview_external_effects: string[];
   preview_writes: string[];
   ready: boolean;
+  release_review?: CAReleaseCeremonyReview;
   request_fingerprint: string;
   required_permission: string;
   risks: string[];
@@ -1627,10 +1628,13 @@ export interface CACeremonyStartRequest {
   certificate_pem?: string;
   cross_certificate_pem?: string;
   csr_pem?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+  dependent_id?: string;
+  expected_certificate_sha256?: string;
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
   parent_id?: string;
   reason?: string;
   reverse_cross_certificate_pem?: string;
+  risk_accepted?: boolean;
   signer_handle?: string;
   spec?: CASpec;
   target_certificate_pem?: string;
@@ -1763,6 +1767,7 @@ export interface CAKeyCeremony {
   id: string;
   opener?: string;
   purpose: string;
+  release_review?: CAReleaseCeremonyReview;
   status: string;
   tenant_id: string;
   threshold: number;
@@ -1795,6 +1800,19 @@ export interface CAPrepareExistingImportCSRRequest {
   certificate_pem: string;
   parent_id?: string;
   spec: CASpec;
+}
+
+export interface CAReleaseCeremonyReview {
+  certificate_id: string;
+  certificate_sha256: string;
+  key_id: string;
+  not_after?: string;
+  reason: string;
+  risk_accepted: boolean;
+  serial: string;
+  source_event_id: string;
+  source_sequence: number;
+  subject?: string;
 }
 
 export interface CASpec {

@@ -763,6 +763,9 @@ func seedRecoveredFromPostgresTables(
 		`{"request_id":%q,"intent_digest":%q,"resource_kind":"code_signing","resource_id":"code_signing:full-dr","action":"sign","required_approvals":1}`,
 		approvedTargetRequestID, approvedTargetIntentDigest,
 	)
+	caReleasePayload := []byte(fmt.Sprintf(
+		`{"tenant_id":%q,"key_id":"00000000-0000-0000-0000-00000000a039","ceremony_id":"00000000-0000-0000-0000-00000000a037","dependent":{"class":"credential","id":"00000000-0000-0000-0000-00000000a040"}}`,
+		tenantA))
 	err = st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		statements := []struct {
 			sql  string
@@ -955,6 +958,16 @@ func seedRecoveredFromPostgresTables(
 			        (tenant_id, ceremony_id, event_id, event_time, status)
 			  VALUES ($1, $2, $3, $4, 'completed')`,
 				[]any{tenantA, "00000000-0000-0000-0000-00000000a035", "00000000-0000-0000-0000-00000000a036", now}},
+			{`INSERT INTO ca_ceremony_effect_commands
+			        (tenant_id, ceremony_id, key_id, certificate_id, operation, event_id, event_time,
+			         event_actor, actor_sha256, event_payload, payload_sha256)
+			  VALUES ($1,$2,$3,$4,'release_managed_ca_leaf',$5,$6,$7,$8,$9,$10)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a037",
+					"00000000-0000-0000-0000-00000000a039", "00000000-0000-0000-0000-00000000a040",
+					"00000000-0000-0000-0000-00000000a038", now,
+					[]byte(`{"subject":"full-dr-release-operator"}`),
+					crypto.SHA256Hex([]byte(`{"subject":"full-dr-release-operator"}`)),
+					caReleasePayload, crypto.SHA256Hex(caReleasePayload)}},
 			{`INSERT INTO provider_suspend_commands
 			        (tenant_id, event_id, event_time, status, projected_sequence)
 			  VALUES ($1, $2, $3, 'completed', 5)`,

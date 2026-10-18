@@ -91,6 +91,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "CA governance",
 		},
 		{
+			ID:             "ca_ceremony_effect_commands.pending-actor",
+			Location:       "ca_ceremony_effect_commands.event_actor/event_payload",
+			Category:       "transient CA dependent-release operator identity",
+			Purpose:        "recover the exact first release across an ambiguous event append or projection failure",
+			RetentionClass: "transient:until-ca-release-projection",
+			Erasure:        "privacy.subject.erased pseudonymizes a pending command; completion removes its actor and payload while retaining digests",
+			Owner:          "CA governance",
+		},
+		{
 			ID:             "provider_suspend_commands.pending-actor",
 			Location:       "provider_suspend_commands.event_actor/event_payload",
 			Category:       "transient Provider suspension operator identity",

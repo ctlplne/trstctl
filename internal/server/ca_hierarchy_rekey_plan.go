@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/decommission/release"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -27,6 +29,22 @@ func rekeyAuthoritySpec(ca store.CAAuthority, ttlSeconds int64) api.CASpec {
 // profile, the requested lifetime, and the operator's reason. Preview and
 // start share this validation so the displayed plan is the executed plan.
 func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (string, api.CASpec, error) {
+	if req.Operation == "release_managed_ca_leaf" {
+		if req.Threshold < 2 {
+			return "", api.CASpec{}, fmt.Errorf("%w: release requires at least two distinct custodians", api.ErrCAHierarchyInvalid)
+		}
+		review, err := release.NewReviewer(h.store, h.log).Preview(ctx, tenantID, req.AuthorityID,
+			release.Request{CertificateID: req.DependentID,
+				ExpectedCertificateSHA256: req.ExpectedCertificateSHA256,
+				Reason:                    req.Reason, RiskAccepted: req.RiskAccepted}, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, release.ErrInvalid) {
+				return "", api.CASpec{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+			}
+			return "", api.CASpec{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyConflict, err)
+		}
+		return review.Purpose(), api.CASpec{}, nil
+	}
 	if req.Operation != "rekey_ca" {
 		if (req.Operation == "import_existing_ca" || req.Operation == "prepare_existing_ca") && req.ParentID != "" {
 			chainDER, _, err := certificateChainPEM(req.CertificatePEM)

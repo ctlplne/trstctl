@@ -253,6 +253,19 @@ export function CACeremonyReviewDialog({
           />
           <ReviewValue label={t("caHierarchy.preview.permission")} value={preview.required_permission} />
           <ReviewValue label={t("caHierarchy.preview.commonName")} value={preview.normalized_spec.common_name} />
+          {preview.release_review && (
+            <>
+              <ReviewValue label={t("caHierarchy.release.certificate")} value={preview.release_review.certificate_id} />
+              <ReviewValue label={t("caHierarchy.release.subject")} value={preview.release_review.subject ?? ""} />
+              <ReviewValue label={t("caHierarchy.release.sha256")} value={preview.release_review.certificate_sha256} />
+              <ReviewValue label={t("caHierarchy.release.expires")} value={preview.release_review.not_after ?? ""} />
+              <ReviewValue
+                label={t("caHierarchy.release.sourceEvent")}
+                value={`${preview.release_review.source_event_id} · ${preview.release_review.source_sequence}`}
+              />
+              <ReviewValue label={t("caHierarchy.release.reason")} value={preview.release_review.reason} />
+            </>
+          )}
           {authority ? (
             <ReviewValue label={t("caHierarchy.preview.authority")} value={`${authority.common_name} · ${authority.kind} · ${authority.status}`} />
           ) : null}
@@ -532,6 +545,20 @@ export function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCer
         </div>
         <dl className="grid gap-3 sm:grid-cols-2">
           <CeremonyValue label="Purpose" value={ceremony.purpose} mono />
+          {ceremony.release_review && (
+            <>
+              <CeremonyValue label={t("caHierarchy.release.certificate")} value={ceremony.release_review.certificate_id} mono />
+              <CeremonyValue label={t("caHierarchy.release.subject")} value={ceremony.release_review.subject ?? ""} />
+              <CeremonyValue label={t("caHierarchy.release.sha256")} value={ceremony.release_review.certificate_sha256} mono />
+              <CeremonyValue label={t("caHierarchy.release.expires")} value={ceremony.release_review.not_after ?? ""} />
+              <CeremonyValue
+                label={t("caHierarchy.release.sourceEvent")}
+                value={`${ceremony.release_review.source_event_id} · ${ceremony.release_review.source_sequence}`}
+                mono
+              />
+              <CeremonyValue label={t("caHierarchy.release.reason")} value={ceremony.release_review.reason} />
+            </>
+          )}
           <CeremonyValue label="Opened by" value={ceremony.opener || "-"} />
           <CeremonyValue label="Created" value={ceremony.created_at} />
           <CeremonyValue label="Threshold" value={`${ceremony.threshold} approvals required`} />

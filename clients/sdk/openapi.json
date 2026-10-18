@@ -6616,7 +6616,8 @@
               "rekey_ca",
               "cross_sign_ca",
               "import_offline_cross_sign",
-              "rekey_offline_root"
+              "rekey_offline_root",
+              "release_managed_ca_leaf"
             ],
             "type": "string"
           },
@@ -6637,6 +6638,9 @@
           },
           "ready": {
             "type": "boolean"
+          },
+          "release_review": {
+            "$ref": "#/components/schemas/CAReleaseCeremonyReview"
           },
           "request_fingerprint": {
             "type": "string"
@@ -6695,6 +6699,13 @@
           "csr_pem": {
             "type": "string"
           },
+          "dependent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expected_certificate_sha256": {
+            "type": "string"
+          },
           "operation": {
             "enum": [
               "create_root",
@@ -6707,7 +6718,8 @@
               "rekey_ca",
               "cross_sign_ca",
               "import_offline_cross_sign",
-              "rekey_offline_root"
+              "rekey_offline_root",
+              "release_managed_ca_leaf"
             ],
             "type": "string"
           },
@@ -6720,6 +6732,9 @@
           },
           "reverse_cross_certificate_pem": {
             "type": "string"
+          },
+          "risk_accepted": {
+            "type": "boolean"
           },
           "signer_handle": {
             "type": "string"
@@ -7179,6 +7194,9 @@
           "purpose": {
             "type": "string"
           },
+          "release_review": {
+            "$ref": "#/components/schemas/CAReleaseCeremonyReview"
+          },
           "status": {
             "type": "string"
           },
@@ -7298,6 +7316,54 @@
           "ceremony_id",
           "certificate_pem",
           "spec"
+        ],
+        "type": "object"
+      },
+      "CAReleaseCeremonyReview": {
+        "properties": {
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_sha256": {
+            "type": "string"
+          },
+          "key_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "risk_accepted": {
+            "type": "boolean"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "source_event_id": {
+            "type": "string"
+          },
+          "source_sequence": {
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "certificate_id",
+          "source_event_id",
+          "source_sequence",
+          "serial",
+          "certificate_sha256",
+          "reason",
+          "risk_accepted"
         ],
         "type": "object"
       },

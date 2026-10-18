@@ -70,6 +70,9 @@ type CACeremonyStartRequest struct {
 	Operation                  string `json:"operation"`
 	ParentID                   string `json:"parent_id"`
 	AuthorityID                string `json:"authority_id,omitempty"`
+	DependentID                string `json:"dependent_id,omitempty"`
+	ExpectedCertificateSHA256  string `json:"expected_certificate_sha256,omitempty"`
+	RiskAccepted               bool   `json:"risk_accepted,omitempty"`
 	CSRPem                     string `json:"csr_pem,omitempty"`
 	CertificatePEM             string `json:"certificate_pem,omitempty"`
 	TargetCertificatePEM       string `json:"target_certificate_pem,omitempty"`
@@ -105,12 +108,29 @@ type CACeremonyPlanPreview struct {
 	NormalizedSpec         CASpec                   `json:"normalized_spec"`
 	Parent                 *CACeremonyPlanAuthority `json:"parent,omitempty"`
 	Authority              *CACeremonyPlanAuthority `json:"authority,omitempty"`
+	ReleaseReview          *CAReleaseCeremonyReview `json:"release_review,omitempty"`
 	Changes                []string                 `json:"changes"`
 	Risks                  []string                 `json:"risks"`
 	VerificationSteps      []string                 `json:"verification_steps"`
 	SensitiveInputs        []string                 `json:"sensitive_inputs"`
 	PreviewWrites          []string                 `json:"preview_writes"`
 	PreviewExternalEffects []string                 `json:"preview_external_effects"`
+}
+
+// CAReleaseCeremonyReview is the public evidence a custodian sees before
+// approving a historical managed-certificate disposition. A digest without
+// these fields would not provide an informed two-person decision.
+type CAReleaseCeremonyReview struct {
+	KeyID             string     `json:"key_id"`
+	CertificateID     string     `json:"certificate_id"`
+	SourceEventID     string     `json:"source_event_id"`
+	SourceSequence    uint64     `json:"source_sequence"`
+	Serial            string     `json:"serial"`
+	CertificateSHA256 string     `json:"certificate_sha256"`
+	Subject           string     `json:"subject,omitempty"`
+	NotAfter          *time.Time `json:"not_after,omitempty"`
+	Reason            string     `json:"reason"`
+	RiskAccepted      bool       `json:"risk_accepted"`
 }
 
 type CACreateRootRequest struct {
@@ -247,17 +267,18 @@ type CAIntermediateCSR struct {
 }
 
 type CAKeyCeremony struct {
-	ID          string     `json:"id"`
-	TenantID    string     `json:"tenant_id"`
-	Purpose     string     `json:"purpose"`
-	Threshold   int        `json:"threshold"`
-	Status      string     `json:"status"`
-	Approvals   int        `json:"approvals"`
-	Opener      string     `json:"opener,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ClosedAt    *time.Time `json:"closed_at,omitempty"`
-	ClosedBy    string     `json:"closed_by,omitempty"`
-	CloseReason string     `json:"close_reason,omitempty"`
+	ID            string                   `json:"id"`
+	TenantID      string                   `json:"tenant_id"`
+	Purpose       string                   `json:"purpose"`
+	Threshold     int                      `json:"threshold"`
+	Status        string                   `json:"status"`
+	Approvals     int                      `json:"approvals"`
+	Opener        string                   `json:"opener,omitempty"`
+	CreatedAt     time.Time                `json:"created_at"`
+	ClosedAt      *time.Time               `json:"closed_at,omitempty"`
+	ClosedBy      string                   `json:"closed_by,omitempty"`
+	CloseReason   string                   `json:"close_reason,omitempty"`
+	ReleaseReview *CAReleaseCeremonyReview `json:"release_review,omitempty"`
 }
 
 type caCeremonyCancelJSON struct {

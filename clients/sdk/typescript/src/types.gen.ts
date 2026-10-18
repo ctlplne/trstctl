@@ -9116,11 +9116,12 @@ export interface components {
             changes: string[];
             normalized_spec: components["schemas"]["CASpec"];
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
             parent?: components["schemas"]["CACeremonyPlanAuthority"];
             preview_external_effects: string[];
             preview_writes: string[];
             ready: boolean;
+            release_review?: components["schemas"]["CAReleaseCeremonyReview"];
             request_fingerprint: string;
             required_permission: string;
             risks: string[];
@@ -9133,12 +9134,16 @@ export interface components {
             certificate_pem?: string;
             cross_certificate_pem?: string;
             csr_pem?: string;
+            /** Format: uuid */
+            dependent_id?: string;
+            expected_certificate_sha256?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
             /** Format: uuid */
             parent_id?: string;
             reason?: string;
             reverse_cross_certificate_pem?: string;
+            risk_accepted?: boolean;
             signer_handle?: string;
             spec?: components["schemas"]["CASpec"];
             target_certificate_pem?: string;
@@ -9278,6 +9283,7 @@ export interface components {
             id: string;
             opener?: string;
             purpose: string;
+            release_review?: components["schemas"]["CAReleaseCeremonyReview"];
             status: string;
             /** Format: uuid */
             tenant_id: string;
@@ -9312,6 +9318,21 @@ export interface components {
             /** Format: uuid */
             parent_id?: string;
             spec: components["schemas"]["CASpec"];
+        };
+        CAReleaseCeremonyReview: {
+            /** Format: uuid */
+            certificate_id: string;
+            certificate_sha256: string;
+            /** Format: uuid */
+            key_id: string;
+            /** Format: date-time */
+            not_after?: string;
+            reason: string;
+            risk_accepted: boolean;
+            serial: string;
+            source_event_id: string;
+            source_sequence: number;
+            subject?: string;
         };
         CASpec: {
             common_name: string;

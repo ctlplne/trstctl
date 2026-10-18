@@ -8930,6 +8930,52 @@ export const messages = {
     defaultMessage: "Review managed intermediate ceremony",
     description: "Open the effect-free review for an exact managed intermediate ceremony.",
   },
+  "caHierarchy.release.heading": { defaultMessage: "Release an expired CA leaf dependency", description: "CA retirement dependent-release workspace heading." },
+  "caHierarchy.release.explanation": {
+    defaultMessage:
+      "Only an expired requester-held leaf with no managed deployment can use this path. Two other custodians must approve the exact certificate and risk decision. External use cannot be ruled out by expiry alone.",
+    description: "Explain the narrow eligibility and external-use risk of a historical CA leaf release.",
+  },
+  "caHierarchy.release.certificate": { defaultMessage: "Certificate ID", description: "Exact dependent certificate in a CA release review." },
+  "caHierarchy.release.subject": { defaultMessage: "Certificate subject", description: "Public subject of the reviewed CA leaf." },
+  "caHierarchy.release.sha256": { defaultMessage: "Certificate SHA-256", description: "Public digest of the exact reviewed certificate." },
+  "caHierarchy.release.expires": { defaultMessage: "Expires", description: "Expiry of the reviewed CA leaf." },
+  "caHierarchy.release.custody": { defaultMessage: "Key custody", description: "Who held the reviewed leaf private key." },
+  "caHierarchy.release.sourceEvent": { defaultMessage: "Original mint event", description: "Immutable event and sequence that registered the dependent." },
+  "caHierarchy.release.reason": { defaultMessage: "Release reason code", description: "Bounded non-personal reason approved by custodians." },
+  "caHierarchy.release.risk": {
+    defaultMessage: "I accept that expiry and absent managed deployment do not prove this certificate was never used outside trstctl.",
+    description: "Explicit external-use risk acknowledgement before CA release review.",
+  },
+  "caHierarchy.release.review": { defaultMessage: "Review exact release", description: "Open effect-free review of one CA dependent release." },
+  "caHierarchy.release.ceremony": { defaultMessage: "Release ceremony", description: "Approval ceremony for one bound CA leaf release." },
+  "caHierarchy.release.distinctApprovers": {
+    defaultMessage: "Each custodian must use their own authenticated session. The opener cannot approve.",
+    description: "Operator instruction for two-person CA release governance.",
+  },
+  "caHierarchy.release.approve": {
+    defaultMessage: "Approve as this custodian",
+    description: "Approve an exact CA release from the current custodian session.",
+  },
+  "caHierarchy.release.refresh": { defaultMessage: "Refresh approvals", description: "Read back CA release ceremony approval count." },
+  "caHierarchy.release.activate": { defaultMessage: "Release approved dependency", description: "Execute the source-bound CA leaf disposition after quorum." },
+  "caHierarchy.release.receipt": { defaultMessage: "Immutable release event", description: "Event ID returned after release projection." },
+  "caHierarchy.release.certificateLoadFailed": {
+    defaultMessage: "Could not read the public certificate",
+    description: "CA release certificate readback failure.",
+  },
+  "caHierarchy.release.previewChanged": {
+    defaultMessage: "The reviewed certificate changed; refresh before starting approval",
+    description: "CA release preview refused because exact public facts differed.",
+  },
+  "caHierarchy.release.previewFailed": { defaultMessage: "Could not review the CA release", description: "CA release effect-free preview failure." },
+  "caHierarchy.release.ceremonyFailed": { defaultMessage: "Could not start the release ceremony", description: "CA release ceremony start failure." },
+  "caHierarchy.release.ceremonyReadFailed": { defaultMessage: "Could not read release approvals", description: "CA release approval readback failure." },
+  "caHierarchy.release.approvalFailed": {
+    defaultMessage: "This custodian could not approve the release",
+    description: "CA release approval refusal or server error.",
+  },
+  "caHierarchy.release.activationFailed": { defaultMessage: "Could not complete the approved CA release", description: "CA release execution failure." },
   "caHierarchy.preview.title": {
     defaultMessage: "Review CA ceremony",
     description: "Heading for the server-owned effect-free review shown before a CA key ceremony is created.",

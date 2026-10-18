@@ -523,6 +523,19 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("vault.compat.policy.put", catalogPrivacyRule("/name", token), catalogPrivacyRule("/policy", clear)),
 	}
 	catalog = append(catalog, productionPrivacyEventPolicy{
+		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "dependency.released", SchemaVersion: 2},
+		Policy: catalogPrivacyPolicy(catalogPrivacyPayloadShape(
+			`{"tenant_id":"","key_id":"","dependent":{"class":"credential","id":""},"source_event_id":"","source_sequence":1,"serial":"","certificate_sha256":"","ceremony_id":"","actor":"","approval_event_ids":[""],"reason":"expired-requester-custody-external-use-risk-accepted","risk_accepted":true}`,
+			catalogPrivacyShapeOptions{}),
+			catalogPrivacyRule("/tenant_id", opaque), catalogPrivacyRule("/key_id", opaque),
+			catalogPrivacyRule("/dependent/class", opaque), catalogPrivacyRule("/dependent/id", opaque),
+			catalogPrivacyRule("/source_event_id", opaque), catalogPrivacyRule("/source_sequence", opaque),
+			catalogPrivacyRule("/serial", opaque), catalogPrivacyRule("/certificate_sha256", opaque),
+			catalogPrivacyRule("/ceremony_id", opaque), catalogPrivacyRule("/actor", exact),
+			catalogPrivacyRule("/approval_event_ids/*", opaque), catalogPrivacyRule("/reason", opaque),
+			catalogPrivacyRule("/risk_accepted", opaque)),
+	})
+	catalog = append(catalog, productionPrivacyEventPolicy{
 		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "vault.compat.mount.enabled", SchemaVersion: 2},
 		Policy: catalogPrivacyPolicy(catalogPrivacyPayloadShape(
 			`{"path":"","type":"","description":"","options":{"key":""},"namespace_version":1}`,

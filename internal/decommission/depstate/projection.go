@@ -451,7 +451,7 @@ func (b *keyBuilder) validateSourceBoundRelease(e eventspec.Event, release Depen
 		release.Dependent.Class != DependentCredential || release.Dependent.ID == "" ||
 		release.SourceEventID == "" || release.SourceSequence == 0 || release.Serial == "" ||
 		release.CertificateSHA256 == "" || release.CeremonyID == "" || release.Actor == "" ||
-		strings.TrimSpace(release.Reason) == "" || !release.RiskAccepted || len(release.ApprovalEventIDs) < 2 {
+		release.Reason != ReleaseReasonExpiredRequesterCustody || !release.RiskAccepted || len(release.ApprovalEventIDs) < 2 {
 		return fmt.Errorf("source-bound certificate release lacks required identity, approvals, reason, or risk acceptance")
 	}
 	seen := make(map[string]struct{}, len(release.ApprovalEventIDs))

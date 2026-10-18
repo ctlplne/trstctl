@@ -30,7 +30,7 @@ func TestSourceBoundReleaseRequiresEarlierExactManagedLeaf(t *testing.T) {
 		SourceEventID: issued.ID, SourceSequence: issued.Sequence,
 		Serial: "7a", CertificateSHA256: crypto.SHA256Hex(der),
 		CeremonyID: "approved-ceremony", Actor: "operator", ApprovalEventIDs: []string{"approval-one", "approval-two"},
-		Reason: "expired local QA certificate; external use reviewed", RiskAccepted: true}
+		Reason: ReleaseReasonExpiredRequesterCustody, RiskAccepted: true}
 	encoded, err := Encode(release)
 	if err != nil {
 		t.Fatal(err)

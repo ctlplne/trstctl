@@ -119,6 +119,11 @@ func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID strin
 		PreviewWrites:          []string{},
 		PreviewExternalEffects: []string{},
 	}
+	if req.Operation == "release_managed_ca_leaf" {
+		if err := h.fillManagedLeafReleasePreview(ctx, tenantID, req, purpose, &preview); err != nil {
+			return api.CACeremonyPlanPreview{}, err
+		}
+	}
 	if req.Operation == "rekey_ca" {
 		preview.Changes = append(preview.Changes, "Re-key reason: "+strings.TrimSpace(req.Reason))
 	}
@@ -190,6 +195,8 @@ func ceremonyPreviewChanges(operation string) []string {
 		return []string{"Prepare an m-of-n ceremony to verify and import the supplied public cross-certificate from the reviewed offline root."}
 	case "rekey_offline_root":
 		return []string{"Prepare an m-of-n ceremony to activate the supplied offline-root successor and its bidirectional public cross-signatures."}
+	case "release_managed_ca_leaf":
+		return []string{"Prepare a two-custodian disposition of the exact expired managed CA leaf, its original mint event and the operator's explicit external-use risk decision. The preview writes nothing."}
 	default:
 		return []string{"Prepare the reviewed CA hierarchy ceremony without creating a ceremony, key, certificate, or external request during preview."}
 	}
@@ -381,7 +388,7 @@ func (h *caHierarchyService) GetCeremony(ctx context.Context, tenantID, id strin
 			c.Status = "cancellation_pending"
 		}
 	}
-	return ceremonyResponse(c), nil
+	return h.enrichManagedLeafReleaseCeremony(ctx, tenantID, ceremonyResponse(c), c.Purpose)
 }
 
 func (h *caHierarchyService) ApproveCeremony(ctx context.Context, tenantID, id string) (api.CAKeyCeremony, error) {

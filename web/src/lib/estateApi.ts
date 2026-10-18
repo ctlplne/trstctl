@@ -12,6 +12,8 @@ import type {
   CARetirementRequest,
   CARetirementRetryReceipt,
   CARetirementRetryRequest,
+  CAKeyDependentReleaseRequest,
+  CAKeyDependentReleaseReceipt,
   RetirementChecklist,
   UnownedQueue,
 } from "./api";
@@ -67,3 +69,7 @@ export const retireCAKey = (keyId: string, request: CARetirementRequest) =>
 /** H4: one audited attempt on the same failed outbox row and frozen signer command. */
 export const retryCAKeyRetirement = (keyId: string, request: CARetirementRetryRequest) =>
   mutate<CARetirementRetryReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/retirement/retry`, request);
+
+/** H4: source-bound, two-custodian disposition of one expired requester-held leaf. */
+export const releaseCAKeyDependent = (keyId: string, request: CAKeyDependentReleaseRequest) =>
+  mutate<CAKeyDependentReleaseReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/dependencies/release`, request);

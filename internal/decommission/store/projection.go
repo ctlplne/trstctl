@@ -8,7 +8,6 @@ import (
 	"math"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -142,7 +141,7 @@ func (p *DependencyProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 	case depstate.DependencyReleasedV1:
 		return p.applyBoundChange(ctx, tx, ev.TenantID, v.TenantID, v.KeyID, v.Dependent, position, dependencyRelease)
 	case depstate.DependencyReleasedV2:
-		return p.applySourceBoundRelease(ctx, tx, ev.TenantID, v, position, ev.Time)
+		return p.applySourceBoundRelease(ctx, tx, ev, v, position)
 	case depstate.DependencyErasureDesignatedV1:
 		return p.applyBoundChange(ctx, tx, ev.TenantID, v.TenantID, v.KeyID, v.Dependent, position, dependencyErasure)
 	case depstate.ReprotectionCompletedV1:
@@ -163,12 +162,13 @@ func (p *DependencyProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 // the original issued leaf, its exact event ordinal, and its public DER before
 // it accounts for the release. The isolated signer's fold independently checks
 // the immutable mint event, so both views fail closed if source proof drifts.
-func (p *DependencyProjection) applySourceBoundRelease(ctx context.Context, tx pgx.Tx, envelopeTenant string, v depstate.DependencyReleasedV2, position int64, completedAt time.Time) error {
+func (p *DependencyProjection) applySourceBoundRelease(ctx context.Context, tx pgx.Tx, ev eventspec.Event, v depstate.DependencyReleasedV2, position int64) error {
+	envelopeTenant := ev.TenantID
 	if envelopeTenant == "" || v.TenantID != envelopeTenant || v.KeyID == "" ||
 		v.Dependent.Class != depstate.DependentCredential || v.Dependent.ID == "" ||
 		v.SourceEventID == "" || v.SourceSequence == 0 || v.SourceSequence > math.MaxInt64 ||
 		v.CertificateSHA256 == "" || v.Serial == "" || v.CeremonyID == "" ||
-		v.Actor == "" || strings.TrimSpace(v.Reason) == "" || !v.RiskAccepted || len(v.ApprovalEventIDs) < 2 {
+		v.Actor == "" || v.Reason != depstate.ReleaseReasonExpiredRequesterCustody || !v.RiskAccepted || len(v.ApprovalEventIDs) < 2 {
 		return fmt.Errorf("vdec dependencies: source-bound release lacks exact public source, approval, or risk evidence")
 	}
 	sourcePosition := int64(v.SourceSequence) // #nosec G115 -- rejected values above MaxInt64 immediately above.
@@ -203,7 +203,10 @@ func (p *DependencyProjection) applySourceBoundRelease(ctx context.Context, tx p
 	if err := upsertDependencyChange(ctx, tx, envelopeTenant, v.KeyID, v.Dependent, position, dependencyRelease); err != nil {
 		return err
 	}
-	return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, envelopeTenant, v.CeremonyID, completedAt)
+	if err := p.store.CompleteCACeremonyEffectCommandTx(ctx, tx, envelopeTenant, v.CeremonyID, ev); err != nil {
+		return err
+	}
+	return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, envelopeTenant, v.CeremonyID, ev.Time)
 }
 
 func validateSourceBoundReleaseApprovals(ctx context.Context, tx pgx.Tx, tenantID string, v depstate.DependencyReleasedV2) error {

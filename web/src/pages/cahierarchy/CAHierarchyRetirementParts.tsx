@@ -1,10 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { translateNow } from "@/i18n/I18nProvider";
-import { api, ApiError, type CAAuthority, type RetirementChecklist } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type CAAuthority,
+  type CAKeyCeremony,
+  type CACeremonyPlanPreview,
+  type CACeremonyStartRequest,
+  type Certificate,
+  type RetirementChecklist,
+} from "@/lib/api";
+import { CACeremonyReviewDialog } from "./CAHierarchyCeremonyParts";
+
+const releaseReason = "expired-requester-custody-external-use-risk-accepted" as const;
 
 const retrySchema = z.object({
   reason: z.string().trim().min(8, translateNow("source.retirement.retry.reason.required.h4ret00020")).max(1024),
@@ -95,6 +107,133 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
   const [busy, setBusy] = useState(false);
   const [finalEpoch, setFinalEpoch] = useState("1");
   const [confirmed, setConfirmed] = useState(false);
+  const [releaseCertificateID, setReleaseCertificateID] = useState("");
+  const [releaseCertificate, setReleaseCertificate] = useState<Certificate | null>(null);
+  const [releaseRiskAccepted, setReleaseRiskAccepted] = useState(false);
+  const [releasePreview, setReleasePreview] = useState<CACeremonyPlanPreview | null>(null);
+  const [releaseRequest, setReleaseRequest] = useState<CACeremonyStartRequest | null>(null);
+  const [releaseCeremony, setReleaseCeremony] = useState<CAKeyCeremony | null>(null);
+  const [releaseReceiptID, setReleaseReceiptID] = useState("");
+  const [releaseBusy, setReleaseBusy] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+
+  const releasable = useMemo(() => (checklist?.outstanding ?? []).filter((dep) => dep.kind === "credential"), [checklist]);
+
+  useEffect(() => {
+    const id = releasable[0]?.ref ?? "";
+    if (!id || (releaseCertificateID && releasable.some((dep) => dep.ref === releaseCertificateID))) return;
+    setReleaseCertificateID(id);
+  }, [releasable, releaseCertificateID]);
+
+  useEffect(() => {
+    let active = true;
+    setReleaseCertificate(null);
+    if (!releaseCertificateID) return;
+    api
+      .getCertificate(releaseCertificateID)
+      .then((certificate) => {
+        if (active) setReleaseCertificate(certificate);
+      })
+      .catch((err) => {
+        if (active) setReleaseError(errorText(err, translateNow("caHierarchy.release.certificateLoadFailed")));
+      });
+    return () => {
+      active = false;
+    };
+  }, [releaseCertificateID]);
+
+  async function previewRelease() {
+    if (!releaseCertificate || !releaseRiskAccepted || releaseCertificate.id !== releaseCertificateID) return;
+    setReleaseBusy(true);
+    setReleaseError(null);
+    const request: CACeremonyStartRequest = {
+      operation: "release_managed_ca_leaf",
+      authority_id: keyId,
+      dependent_id: releaseCertificateID,
+      expected_certificate_sha256: releaseCertificate.fingerprint,
+      reason: releaseReason,
+      risk_accepted: true,
+      threshold: 2,
+    };
+    try {
+      const preview = await api.previewCACeremony(request);
+      if (
+        !preview.ready ||
+        preview.release_review?.certificate_id !== releaseCertificateID ||
+        preview.release_review.certificate_sha256 !== releaseCertificate.fingerprint
+      ) {
+        throw new Error(translateNow("caHierarchy.release.previewChanged"));
+      }
+      setReleaseRequest(request);
+      setReleasePreview(preview);
+    } catch (err) {
+      setReleaseError(errorText(err, translateNow("caHierarchy.release.previewFailed")));
+    } finally {
+      setReleaseBusy(false);
+    }
+  }
+
+  async function createReleaseCeremony() {
+    if (!releaseRequest) return;
+    setReleaseBusy(true);
+    setReleaseError(null);
+    try {
+      setReleaseCeremony(await api.createCACeremony(releaseRequest));
+      setReleasePreview(null);
+    } catch (err) {
+      setReleaseError(errorText(err, translateNow("caHierarchy.release.ceremonyFailed")));
+    } finally {
+      setReleaseBusy(false);
+    }
+  }
+
+  async function refreshReleaseCeremony() {
+    if (!releaseCeremony) return;
+    setReleaseBusy(true);
+    setReleaseError(null);
+    try {
+      setReleaseCeremony(await api.caCeremony(releaseCeremony.id));
+    } catch (err) {
+      setReleaseError(errorText(err, translateNow("caHierarchy.release.ceremonyReadFailed")));
+    } finally {
+      setReleaseBusy(false);
+    }
+  }
+
+  async function approveReleaseCeremony() {
+    if (!releaseCeremony) return;
+    setReleaseBusy(true);
+    setReleaseError(null);
+    try {
+      setReleaseCeremony(await api.approveCACeremony(releaseCeremony.id));
+    } catch (err) {
+      setReleaseError(errorText(err, translateNow("caHierarchy.release.approvalFailed")));
+    } finally {
+      setReleaseBusy(false);
+    }
+  }
+
+  async function activateRelease() {
+    if (!releaseCeremony || !releaseCertificate || releaseCeremony.approvals < releaseCeremony.threshold) return;
+    setReleaseBusy(true);
+    setReleaseError(null);
+    try {
+      const receipt = await api.releaseCAKeyDependent(keyId, {
+        certificate_id: releaseCertificate.id,
+        expected_certificate_sha256: releaseCertificate.fingerprint,
+        ceremony_id: releaseCeremony.id,
+        reason: releaseReason,
+        risk_accepted: true,
+      });
+      setReleaseReceiptID(receipt.release_event_id);
+      setReleaseCeremony(await api.caCeremony(releaseCeremony.id));
+      await refresh();
+    } catch (err) {
+      setReleaseError(errorText(err, translateNow("caHierarchy.release.activationFailed")));
+    } finally {
+      setReleaseBusy(false);
+    }
+  }
 
   async function refresh() {
     try {
@@ -187,6 +326,116 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
             </li>
           ))}
         </ul>
+      )}
+      {releasable.length > 0 && !destroyed && (
+        <section className="grid gap-3 rounded-md border p-3" aria-label={translateNow("caHierarchy.release.heading")}>
+          <h4 className="font-semibold">{translateNow("caHierarchy.release.heading")}</h4>
+          <p className="text-sm text-muted-foreground">{translateNow("caHierarchy.release.explanation")}</p>
+          <label className="grid gap-1 text-sm">
+            {translateNow("caHierarchy.release.certificate")}
+            <select
+              className="ui-input"
+              value={releaseCertificateID}
+              onChange={(event) => {
+                setReleaseCertificateID(event.target.value);
+                setReleaseCeremony(null);
+                setReleaseRiskAccepted(false);
+              }}
+            >
+              {releasable.map((dep) => (
+                <option key={dep.ref} value={dep.ref}>
+                  {dep.ref}
+                </option>
+              ))}
+            </select>
+          </label>
+          {releaseCertificate && (
+            <dl className="grid gap-1 break-all text-xs sm:grid-cols-2">
+              <dt>{translateNow("caHierarchy.release.subject")}</dt>
+              <dd>{releaseCertificate.subject}</dd>
+              <dt>{translateNow("caHierarchy.release.sha256")}</dt>
+              <dd className="font-mono">{releaseCertificate.fingerprint}</dd>
+              <dt>{translateNow("caHierarchy.release.expires")}</dt>
+              <dd>{releaseCertificate.not_after ?? ""}</dd>
+              <dt>{translateNow("caHierarchy.release.custody")}</dt>
+              <dd>{releaseCertificate.key_origin ?? ""}</dd>
+            </dl>
+          )}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={releaseRiskAccepted} onChange={(event) => setReleaseRiskAccepted(event.target.checked)} />
+            <span>{translateNow("caHierarchy.release.risk")}</span>
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={releaseBusy || !releaseCertificate || !releaseRiskAccepted || !!releaseCeremony}
+            onClick={() => void previewRelease()}
+          >
+            {translateNow("caHierarchy.release.review")}
+          </Button>
+          {releaseCeremony && (
+            <div className="grid gap-2 text-sm">
+              <p>
+                {translateNow("caHierarchy.release.ceremony")}: <span className="font-mono">{releaseCeremony.id}</span> · {releaseCeremony.approvals}/
+                {releaseCeremony.threshold}
+              </p>
+              {releaseCeremony.release_review && (
+                <dl className="grid gap-1 break-all text-xs sm:grid-cols-2">
+                  <dt>{translateNow("caHierarchy.release.certificate")}</dt>
+                  <dd className="font-mono">{releaseCeremony.release_review.certificate_id}</dd>
+                  <dt>{translateNow("caHierarchy.release.sha256")}</dt>
+                  <dd className="font-mono">{releaseCeremony.release_review.certificate_sha256}</dd>
+                  <dt>{translateNow("caHierarchy.release.sourceEvent")}</dt>
+                  <dd className="font-mono">
+                    {releaseCeremony.release_review.source_event_id} · {releaseCeremony.release_review.source_sequence}
+                  </dd>
+                  <dt>{translateNow("caHierarchy.release.reason")}</dt>
+                  <dd>{releaseCeremony.release_review.reason}</dd>
+                </dl>
+              )}
+              <p>{translateNow("caHierarchy.release.distinctApprovers")}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={releaseBusy || releaseCeremony.status !== "pending"}
+                  onClick={() => void approveReleaseCeremony()}
+                >
+                  {translateNow("caHierarchy.release.approve")}
+                </Button>
+                <Button type="button" variant="outline" disabled={releaseBusy} onClick={() => void refreshReleaseCeremony()}>
+                  {translateNow("caHierarchy.release.refresh")}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={releaseBusy || releaseCeremony.status !== "pending" || releaseCeremony.approvals < releaseCeremony.threshold}
+                  onClick={() => void activateRelease()}
+                >
+                  {translateNow("caHierarchy.release.activate")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {releaseError && (
+            <p className="text-sm text-destructive" role="alert">
+              {releaseError}
+            </p>
+          )}
+        </section>
+      )}
+      {releaseReceiptID && (
+        <p className="text-sm">
+          {translateNow("caHierarchy.release.receipt")}: <span className="font-mono">{releaseReceiptID}</span>
+        </p>
+      )}
+      {releasePreview && (
+        <CACeremonyReviewDialog
+          busy={releaseBusy}
+          error={releaseError}
+          preview={releasePreview}
+          onClose={() => setReleasePreview(null)}
+          onConfirm={() => void createReleaseCeremony()}
+        />
       )}
       <dl className="grid gap-1 text-sm sm:grid-cols-2">
         <dt className="text-muted-foreground">{translateNow("source.retirement.status.h4ret00004")}</dt>

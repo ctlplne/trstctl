@@ -44,6 +44,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/decommission/release"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/egress"
@@ -1177,6 +1178,16 @@ func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchest
 		d.Logger.Warn("reconciled API-token revocations missed by an append/project crash", slog.Int("healed", healed))
 	}
 	if d.Store != nil && d.Log != nil {
+		if healed, err := release.NewCoordinator(d.Store, d.Log).ReconcilePending(ctx); err != nil {
+			if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+				return fmt.Errorf("server: reconcile CA dependent-release commands: %w", err)
+			}
+			if d.Logger != nil {
+				d.Logger.Warn("CA dependent-release recovery is blocked by active privacy erasure; ceremonies remain fenced")
+			}
+		} else if healed > 0 && d.Logger != nil {
+			d.Logger.Warn("reconciled CA dependent releases missed by an append/project crash", slog.Int("healed", healed))
+		}
 		if healed, err := reconcilePendingCACeremonyCancels(ctx, d.Store, d.Log); err != nil {
 			if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
 				return fmt.Errorf("server: reconcile CA ceremony cancellation commands: %w", err)
@@ -3087,6 +3098,13 @@ func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 			s.logger.Warn("reconciled pending API-token revocations", slog.Int("healed", healed))
 		}
 		if s.caHierarchy != nil {
+			if healed, err := release.NewCoordinator(s.caHierarchy.store, s.caHierarchy.log).ReconcilePending(ctx); err != nil {
+				if s.logger != nil {
+					s.logger.Warn("CA dependent-release recovery sweep incomplete", slog.String("error", err.Error()))
+				}
+			} else if healed > 0 && s.logger != nil {
+				s.logger.Warn("reconciled pending CA dependent releases", slog.Int("healed", healed))
+			}
 			if healed, err := reconcilePendingCACeremonyCancels(ctx, s.caHierarchy.store, s.caHierarchy.log); err != nil {
 				if s.logger != nil {
 					s.logger.Warn("CA ceremony cancellation recovery sweep incomplete", slog.String("error", err.Error()))

@@ -110,6 +110,13 @@ func (s *Store) ClaimCACeremonyCancelCommand(ctx context.Context, candidate CACe
 				if ceremonyStatus != "pending" {
 					return ErrKeyCeremonyNotPending
 				}
+				effectClaimed, err := s.CACeremonyEffectCommandExistsTx(barrierCtx, tx, candidate.TenantID, candidate.CeremonyID)
+				if err != nil {
+					return err
+				}
+				if effectClaimed {
+					return ErrKeyCeremonyNotPending
+				}
 				if existing != "" {
 					canonical, err = scanCACeremonyCancelCommand(tx.QueryRow(barrierCtx,
 						`SELECT `+caCeremonyCancelColumns+` FROM ca_ceremony_cancel_commands

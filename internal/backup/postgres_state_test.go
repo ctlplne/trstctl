@@ -114,6 +114,23 @@ func TestAPITokenRevocationCommandBackupAndRestoreOrder(t *testing.T) {
 	}
 }
 
+func TestCACeremonyEffectCommandBackupAndRestoreOrder(t *testing.T) {
+	const table = "ca_ceremony_effect_commands"
+	if class, found := Classify(table); !found || class != ClassPostgresBackup {
+		t.Fatalf("%s must preserve a pending append-gap fence: class=%v found=%v", table, class, found)
+	}
+	if !slices.Contains(postgresStateTables(), table) {
+		t.Fatalf("PostgreSQL backup omits %s", table)
+	}
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(order, table) {
+		t.Fatalf("PostgreSQL restore omits %s", table)
+	}
+}
+
 func TestAgentRemovalCommandBackupAndRestoreOrder(t *testing.T) {
 	const table = "agent_removal_commands"
 	if class, found := Classify(table); !found || class != ClassPostgresBackup {

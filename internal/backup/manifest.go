@@ -46,6 +46,9 @@ var RecoveredFromPostgresBackup = []string{
 	"api_token_revocation_commands",
 	// A pending CA cancellation denies signing before its event projection.
 	"ca_ceremony_cancel_commands",
+	// A release command can commit before its event append. Keep the exact
+	// pending first-writer fence across restore and projection rebuild.
+	"ca_ceremony_effect_commands",
 	// A Provider suspension denies service before its event projects.
 	"provider_suspend_commands",
 	// Attester trust removal blocks new proofs before its event projects.

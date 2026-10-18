@@ -312,8 +312,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// VDEC's failed retirement delivery now has an exact-command, one-attempt
 	// recovery command; the count grows with its feature-map entry.
 	// F48 adds existing-CA CSR preparation and exact readback commands.
-	if len(out) != 541 {
-		t.Fatalf("CLI commands = %d, want 541", len(out))
+	if len(out) != 542 {
+		t.Fatalf("CLI commands = %d, want 542", len(out))
 	}
 	return out
 }
