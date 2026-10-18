@@ -350,6 +350,10 @@ type harness struct {
 	kekFile  string
 	attestor crypto.Signer
 	wrapper  *seal.LocalKEK
+	// Direct GatedIssue tests use one separate stable test authority. The
+	// production control-plane verdict key is already first-writer bound when
+	// this harness starts and must never be replaced by a test request.
+	testReachSigner crypto.Signer
 }
 
 type issuedAgent struct {
@@ -595,11 +599,15 @@ func (h *harness) gatedIssue(t *testing.T, req signing.IssuancePreconditions, al
 
 func (h *harness) preconditionsWithReach(t *testing.T, chain []delegation.RecordEnvelope, class string) []byte {
 	t.Helper()
-	verdictSigner := generateSigner(t)
-	key := reach.VerdictKeyRef{ID: "agentid-reach-verdict", Algorithm: string(verdictSigner.Algorithm())}
-	if err := delegation.NewDurableReachabilityTrustStore(h.keystore).PutVerdictSigner(h.ctx, key.ID, verdictSigner.Public().DER); err != nil {
-		t.Fatalf("PutVerdictSigner: %v", err)
+	const testReachKeyID = "agentid-intwire-test-reach-verdict"
+	if h.testReachSigner == nil {
+		h.testReachSigner = generateSigner(t)
+		if err := delegation.NewDurableReachabilityTrustStore(h.keystore).PutVerdictSigner(h.ctx, testReachKeyID, h.testReachSigner.Public().DER); err != nil {
+			t.Fatalf("PutVerdictSigner: %v", err)
+		}
 	}
+	verdictSigner := h.testReachSigner
+	key := reach.VerdictKeyRef{ID: testReachKeyID, Algorithm: string(verdictSigner.Algorithm())}
 	subjectDigest, err := delegation.CanonicalDigest(chain[len(chain)-1].Record.Authority, nil)
 	if err != nil {
 		t.Fatalf("authority digest: %v", err)
