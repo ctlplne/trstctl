@@ -71,6 +71,26 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed projected member for pending offboard: %v", err)
 	}
+	// A key-claim reservation can be backed up between the first durable
+	// PostgreSQL write and the event append. Its public CSR and exact pending
+	// event must survive full DR so a retry cannot generate a second signer key.
+	const claimCeremony = "00000000-0000-4000-8000-00000000ca02"
+	const claimHandle = "full-dr-pending-ca-signer-handle"
+	if err := src.ClaimCASignerHandle(ctx, tenantA, claimCeremony, claimHandle); err != nil {
+		t.Fatalf("seed global CA signer claim: %v", err)
+	}
+	srcClaim, err := src.ReserveCASignerPreparation(ctx, store.CASignerPreparation{
+		TenantID: tenantA, CeremonyID: claimCeremony, Handle: claimHandle,
+		IssuerSHA256: strings.Repeat("c", 64), Purpose: "prepare-existing-ca:full-dr",
+		CSRPEM:       "-----BEGIN CERTIFICATE REQUEST-----\nFULLDRPUBLICCSR\n-----END CERTIFICATE REQUEST-----",
+		EventID:      "full-dr-pending-ca-csr-event",
+		EventTime:    time.Now().UTC().Truncate(time.Microsecond),
+		EventActor:   []byte(`{"subject":"full-dr-ca-operator","roles":["admin"]}`),
+		EventPayload: []byte(`{"ceremony_id":"00000000-0000-4000-8000-00000000ca02","csr_sha256":"full-dr-public-csr"}`),
+	})
+	if err != nil || srcClaim.Status != "pending" {
+		t.Fatalf("seed pending CA signer preparation: status=%q err=%v", srcClaim.Status, err)
+	}
 	seedRecoveredFromPostgresTables(t, src, registration.ID, registration.Sequence)
 	// This command is deliberately pending before its event append. Its token
 	// row is still active, so only the independent PostgreSQL fence can deny
@@ -183,6 +203,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		t.Errorf("certificates after full restore = %v, want %v", got, srcCerts)
 	}
 	dstCounts := recoveredTableCounts(t, dst)
+	dstClaim, err := dst.GetCASignerPreparation(ctx, tenantA, claimCeremony, claimHandle)
+	if err != nil || dstClaim.Status != "pending" ||
+		dstClaim.TenantID != srcClaim.TenantID || dstClaim.CeremonyID != srcClaim.CeremonyID ||
+		dstClaim.Handle != srcClaim.Handle || dstClaim.IssuerSHA256 != srcClaim.IssuerSHA256 ||
+		dstClaim.Purpose != srcClaim.Purpose || dstClaim.CSRPEM != srcClaim.CSRPEM ||
+		dstClaim.EventID != srcClaim.EventID || !dstClaim.EventTime.Equal(srcClaim.EventTime) ||
+		!bytes.Equal(dstClaim.EventActor, srcClaim.EventActor) ||
+		!bytes.Equal(dstClaim.EventPayload, srcClaim.EventPayload) {
+		t.Fatalf("restored pending CA signer claim changed: status=%q err=%v", dstClaim.Status, err)
+	}
 	dstPending, err := dst.ListPendingAPITokenRevocations(ctx, tenantA, 10)
 	if err != nil || len(dstPending) != 1 ||
 		dstPending[0].TokenID != srcPending[0].TokenID ||
