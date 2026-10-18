@@ -76,6 +76,27 @@ func (r *crlPublicationReplay) observe(e events.Event) error {
 				tenantID: e.TenantID, caID: issued.CAID, sequence: e.Sequence,
 			}
 		}
+	case EventEdgeDelegationIssued:
+		var issued EdgeDelegationIssued
+		if err := json.Unmarshal(e.Data, &issued); err != nil {
+			return fmt.Errorf("projections: decode edge CRL issuance source: %w", err)
+		}
+		if issued.CAID != "" {
+			r.sources[crlPublicationKey(e.TenantID, e.ID, issued.CAID)] = crlPublicationSource{
+				tenantID: e.TenantID, caID: issued.CAID, sequence: e.Sequence,
+			}
+		}
+	case EventEdgeDelegationRevoked:
+		var revoked EdgeDelegationRevoked
+		if err := json.Unmarshal(e.Data, &revoked); err != nil {
+			return fmt.Errorf("projections: decode edge CRL revocation source: %w", err)
+		}
+		if revoked.CAID != "" && revoked.Serial != "" {
+			r.sources[crlPublicationKey(e.TenantID, e.ID, revoked.CAID)] = crlPublicationSource{
+				tenantID: e.TenantID, caID: revoked.CAID, sequence: e.Sequence,
+				serials: []string{revoked.Serial},
+			}
+		}
 	case EventCertificateRevocationBatchApplied:
 		var batch CertificateRevocationBatchApplied
 		if err := json.Unmarshal(e.Data, &batch); err != nil {

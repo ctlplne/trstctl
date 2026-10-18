@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -249,6 +250,32 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 	if minted.KeyProvider != "tpm2" || minted.KeyStorage != "device_bound" || minted.KeyExportable || minted.CustodyAssurance != "hardware_key_attested" {
 		t.Fatalf("TPM custody evidence = %+v, want a non-exportable same-key attestation", minted)
 	}
+	// The delegated CA is itself a certificate issued by the parent. Its
+	// initial signed status must be published before a relying party sees it.
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("publish initial edge parent CRL: %v", err)
+	}
+	parentDER := caCertDER(t, []byte(root.CertificatePEM))
+	readParentCRL := func() crypto.CRLInfo {
+		t.Helper()
+		response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + root.ID)
+		if err != nil {
+			t.Fatalf("read edge parent CRL: %v", err)
+		}
+		der, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK {
+			t.Fatalf("edge parent CRL = HTTP %d read %v, want published signed CRL", response.StatusCode, readErr)
+		}
+		parsed, err := crypto.ParseCRL(der, parentDER)
+		if err != nil {
+			t.Fatalf("parse signed edge parent CRL: %v", err)
+		}
+		return parsed
+	}
+	if initial := readParentCRL(); protoContains(initial.RevokedSerials, minted.Serial) {
+		t.Fatalf("initial edge parent CRL already revoked active delegation %s", minted.Serial)
+	}
 	if strings.Count(minted.CertificatePEM, "-----BEGIN CERTIFICATE-----") < 2 {
 		t.Fatal("mint response omitted the parent CA chain needed for host installation")
 	}
@@ -453,8 +480,27 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 		t.Fatalf("parent ledger after revoke: found=%v revoked=%v err=%v; revocation must ride "+
 			"the existing OCSP/CRL machinery", found, issued.Revoked(), err)
 	}
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("publish revoked edge parent CRL: %v", err)
+	}
+	if published := readParentCRL(); !protoContains(published.RevokedSerials, minted.Serial) {
+		t.Fatalf("signed edge parent CRL omitted revoked delegation %s", minted.Serial)
+	}
 	code, _ = doBearer(t, h.ts, http.MethodPost, "/api/v1/edge/delegations/"+minted.ID+"/revoke", operator, "edge-revoke-again", map[string]any{})
 	if code != http.StatusOK {
 		t.Fatalf("second revoke = %d, want idempotent 200", code)
+	}
+	publications := exactRevocationOutboxCount(t, h)
+	if publications < 2 {
+		t.Fatalf("edge issuance and revocation left %d durable CRL publication intents", publications)
+	}
+	if err := h.srv.proj.Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("rebuild edge issuance and revocation projections: %v", err)
+	}
+	if got := exactRevocationOutboxCount(t, h); got != publications {
+		t.Fatalf("edge CRL publication intents after replay = %d, want original %d", got, publications)
+	}
+	if published := readParentCRL(); !protoContains(published.RevokedSerials, minted.Serial) {
+		t.Fatalf("replayed signed edge parent CRL omitted revoked delegation %s", minted.Serial)
 	}
 }

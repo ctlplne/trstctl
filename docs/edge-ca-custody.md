@@ -116,7 +116,11 @@ and reason before sending the request and reading the revoked state back.
 The host agent may write an empty `host` field in its journal; the console
 binds that journal to the operator-selected delegation host before sending it.
 
-The issued event retains the complete public delegated and parent chain, so
+The delegated CA's initial and revoked status also enqueue signed parent-CA
+CRL publication in the same event transaction. Publication is retried by the
+outbox worker; an issued-ledger row alone does not mean relying clients can
+reject a revoked delegation. The issued event retains the complete public
+delegated and parent chain, so
 `GET /api/v1/edge/delegations/{id}` recovers exactly what the mint returned
 after a lost response or projection rebuild. For older events that retained
 only the delegated certificate, detail readback adds the current parent chain

@@ -4381,7 +4381,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		// The delegated CA's certificate is an issuance OF THE PARENT CA, so it
 		// joins the parent's issued ledger: OCSP answers for it and revoking
 		// the delegation from the brain rides the existing CRL machinery.
-		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time)
+		if err := p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time); err != nil {
+			return err
+		}
+		// The initial signed CRL and OCSP responder must be usable as soon as
+		// the parent CA's new delegated serial is visible. The intent is in
+		// this event transaction, and replay preserves a delivered intent.
+		return p.store.EnsureCertificateCRLPublicationTx(ctx, tx, e.TenantID, e.ID, pl.CAID)
 	case EventEdgeDelegationRevoked:
 		var pl EdgeDelegationRevoked
 		if err := decode(e, &pl); err != nil {
@@ -4394,7 +4400,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := p.store.ApplyEdgeDelegationRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, revokedAt, e.Sequence); err != nil {
 			return err
 		}
-		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, 0, revokedAt)
+		if err := p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, 0, revokedAt); err != nil {
+			return err
+		}
+		// The ledger alone does not update the signed CRL served to clients.
+		// Publish that exact parent's new status from a durable outbox intent.
+		return p.store.EnsureCertificateCRLPublicationTx(ctx, tx, e.TenantID, e.ID, pl.CAID)
 	case EventEdgeIssuanceReconciled:
 		var pl EdgeIssuanceReconciled
 		if err := decode(e, &pl); err != nil {
