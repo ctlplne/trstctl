@@ -4698,8 +4698,10 @@ func componentSchemas() map[string]*Schema {
 		"destruction_record": str(), "retirement_status": str(),
 		"refusal_record": str(), "command_event_id": str(),
 		"delivery_status": str(), "delivery_attempts": {Type: "integer"},
-		"delivery_attempt_limit": {Type: "integer"}, "guidance": str(),
-	}, "key_id", "blocked", "outstanding", "accounted", "total", "guidance")
+		"delivery_attempt_limit": {Type: "integer"}, "final_epoch": {Type: "integer"},
+		"recovery_action": {Type: "string", Enum: []string{"none", "retry_delivery", "fresh_command"}},
+		"guidance":        str(),
+	}, "key_id", "blocked", "outstanding", "accounted", "total", "recovery_action", "guidance")
 	// H2: read-only migration assessment.
 	migrationAssessRequest := object(map[string]*Schema{
 		"plan_id": str(),

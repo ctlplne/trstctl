@@ -8943,6 +8943,15 @@ export const messages = {
   "caHierarchy.release.custody": { defaultMessage: "Key custody", description: "Who held the reviewed leaf private key." },
   "caHierarchy.release.sourceEvent": { defaultMessage: "Original mint event", description: "Immutable event and sequence that registered the dependent." },
   "caHierarchy.release.reason": { defaultMessage: "Release reason code", description: "Bounded non-personal reason approved by custodians." },
+  "caHierarchy.retirement.freshCommand": {
+    defaultMessage: "Start fresh retirement command",
+    description: "Queue a new CA-key destruction command against dependency evidence updated since the old failed command.",
+  },
+  "caHierarchy.retirement.freshCommandExplanation": {
+    defaultMessage:
+      "The failed command used older dependency evidence and cannot be retried. This request freezes the current checklist in a new command; the signer still makes the final destruction decision.",
+    description: "Explain why a failed CA retirement command requires a new reviewed request rather than another delivery attempt.",
+  },
   "caHierarchy.release.risk": {
     defaultMessage: "I accept that expiry and absent managed deployment do not prove this certificate was never used outside trstctl.",
     description: "Explicit external-use risk acknowledgement before CA release review.",

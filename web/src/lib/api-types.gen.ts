@@ -7038,9 +7038,11 @@ export interface RetirementChecklist {
   delivery_attempts?: number;
   delivery_status?: string;
   destruction_record?: string;
+  final_epoch?: number;
   guidance: string;
   key_id: string;
   outstanding: RetirementDependent[];
+  recovery_action: "none" | "retry_delivery" | "fresh_command";
   refusal_record?: string;
   retirement_status?: string;
   total: number;

@@ -56,7 +56,11 @@ type RetirementChecklist struct {
 	DeliveryStatus       string `json:"delivery_status,omitempty"`
 	DeliveryAttempts     int    `json:"delivery_attempts,omitempty"`
 	DeliveryAttemptLimit int    `json:"delivery_attempt_limit,omitempty"`
-	Guidance             string `json:"guidance"`
+	// RecoveryAction is derived from the projected dependency position and
+	// frozen command. A stale command must never be retried after new evidence.
+	RecoveryAction string `json:"recovery_action"`
+	FinalEpoch     uint64 `json:"final_epoch,omitempty"`
+	Guidance       string `json:"guidance"`
 }
 
 // RetirementChecklistSource is the licensed seam that answers the checklist.
@@ -104,7 +108,16 @@ func (a *API) getCARetirementChecklist(w http.ResponseWriter, r *http.Request) {
 	}
 	list.KeyID = keyID
 	list.Blocked = len(list.Outstanding) > 0
+	if list.RecoveryAction == "" {
+		list.RecoveryAction = "none"
+	}
 	list.Guidance = retirementGuidance
+	switch list.RecoveryAction {
+	case "fresh_command":
+		list.Guidance = "The failed pending command froze older dependency evidence. Do not retry it. Review the current checklist and start a fresh irreversible retirement command; the old command and audit record remain retained. " + retirementGuidance
+	case "retry_delivery":
+		list.Guidance = "The failed command still matches the dependency evidence it froze. Review the exact command and grant only one bounded delivery attempt. " + retirementGuidance
+	}
 	a.writeJSON(w, http.StatusOK, list)
 }
 

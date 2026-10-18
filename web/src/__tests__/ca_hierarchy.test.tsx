@@ -1813,7 +1813,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(apiMock.retireCAKey).not.toHaveBeenCalled();
 
     await user.click(within(panel).getByRole("button", { name: "Refresh retirement evidence" }));
-    expect(await within(panel).findByText("leaf-2")).toBeInTheDocument();
+    expect(await within(within(panel).getByRole("list")).findByText("leaf-2")).toBeInTheDocument();
     expect(within(panel).queryByRole("alert")).not.toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Irreversibly retire key" })).toBeDisabled();
     expect(apiMock.caRetirementChecklist).toHaveBeenNthCalledWith(1, "ca-untracked");
@@ -2049,6 +2049,7 @@ describe("CA hierarchy and custody surface", () => {
         retirement_status: "pending",
         delivery_status: "failed",
         delivery_attempts: 10,
+        recovery_action: "retry_delivery",
         guidance: "Delivery exhausted; review and grant one attempt.",
       })
       .mockResolvedValueOnce({
@@ -2096,5 +2097,57 @@ describe("CA hierarchy and custody surface", () => {
     );
     expect(await within(panel).findByText("pending (10)")).toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: "Grant one delivery attempt" })).not.toBeInTheDocument();
+  });
+
+  it("starts a fresh reviewed retirement command when new dependency evidence makes the failed command stale", async () => {
+    const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "ca-stale",
+          tenant_id: "tenant-1",
+          common_name: "Superseded Root CA",
+          kind: "root",
+          status: "superseded",
+          certificate_pem: "public certificate",
+          signer_handle: "signer-handle-stale",
+          serial: "44",
+          max_path_len: 1,
+          created_at: "2026-08-12T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.caRetirementChecklist.mockResolvedValue({
+      key_id: "ca-stale",
+      blocked: false,
+      accounted: 4,
+      total: 4,
+      outstanding: [],
+      command_event_id: "vdec-old-command",
+      retirement_status: "pending",
+      final_epoch: 7,
+      delivery_status: "failed",
+      delivery_attempts: 10,
+      delivery_attempt_limit: 10,
+      recovery_action: "fresh_command",
+      guidance: "The old command froze older evidence; start a fresh command.",
+    });
+    apiMock.retireCAKey.mockResolvedValue({ key_id: "ca-stale", command_event_id: "vdec-new-command", status: "pending", ledger_position: 50, final_epoch: 7 });
+
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+    const panel = await screen.findByRole("region", { name: "Key retirement" });
+    expect(within(panel).queryByRole("button", { name: "Grant one delivery attempt" })).not.toBeInTheDocument();
+    expect(within(panel).getByLabelText("Final dependency epoch")).toHaveValue(7);
+    const fresh = within(panel).getByRole("button", { name: "Start fresh retirement command" });
+    expect(fresh).toBeDisabled();
+    await user.click(within(panel).getByLabelText("I understand this permanently destroys the signer-held key"));
+    await user.click(fresh);
+    await waitFor(() =>
+      expect(apiMock.retireCAKey).toHaveBeenCalledWith("ca-stale", {
+        final_epoch: 7,
+        confirm_irreversible: true,
+      }),
+    );
+    expect(apiMock.retryCAKeyRetirement).not.toHaveBeenCalled();
   });
 });

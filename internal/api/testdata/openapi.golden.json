@@ -28790,6 +28790,9 @@
           "destruction_record": {
             "type": "string"
           },
+          "final_epoch": {
+            "type": "integer"
+          },
           "guidance": {
             "type": "string"
           },
@@ -28801,6 +28804,14 @@
               "$ref": "#/components/schemas/RetirementDependent"
             },
             "type": "array"
+          },
+          "recovery_action": {
+            "enum": [
+              "none",
+              "retry_delivery",
+              "fresh_command"
+            ],
+            "type": "string"
           },
           "refusal_record": {
             "type": "string"
@@ -28818,6 +28829,7 @@
           "outstanding",
           "accounted",
           "total",
+          "recovery_action",
           "guidance"
         ],
         "type": "object"

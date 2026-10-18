@@ -134,6 +134,17 @@ instead.
    immutable release event. Read the retirement checklist again and verify that
    the exact dependent is accounted for before requesting key destruction.
 
+If an earlier retirement command has failed after this release, its frozen
+dependency set is stale. The checklist reports `recovery_action: fresh_command`
+and the console offers **Start fresh retirement command** with the prior final
+epoch prefilled. Review the now-current checklist and confirm the irreversible
+request. The older command cannot receive another delivery attempt; it and its
+audit trail remain retained. `recovery_action: retry_delivery` is reserved for
+an exhausted failed command whose dependency evidence has not changed, and
+grants only one attempt to the exact original command. The signer still makes
+the terminal destruction or refusal decision. Read its signed record before
+claiming the key was destroyed.
+
 The release event binds the original managed-CA mint, the certificate's public
 DER hash, the ceremony and all distinct approval event IDs. A PostgreSQL
 first-writer command fences cancellation and later approvals before the event

@@ -239,6 +239,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
     try {
       const next = await api.caRetirementChecklist(keyId);
       setChecklist(next);
+      if (Number.isSafeInteger(next.final_epoch) && (next.final_epoch ?? 0) > 0) setFinalEpoch(String(next.final_epoch));
       setLoadError(false);
       return next;
     } catch {
@@ -252,12 +253,14 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
     let active = true;
     setChecklist(null);
     setLoadError(false);
+    setFinalEpoch("1");
     if (!keyId || typeof api.caRetirementChecklist !== "function") return;
     api
       .caRetirementChecklist(keyId)
       .then((res) => {
         if (active) {
           setChecklist(res);
+          if (Number.isSafeInteger(res.final_epoch) && (res.final_epoch ?? 0) > 0) setFinalEpoch(String(res.final_epoch));
           setLoadError(false);
         }
       })
@@ -455,7 +458,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
           </>
         )}
       </dl>
-      {checklist.retirement_status === "pending" && checklist.delivery_status === "failed" && <RetryDeliveryForm checklist={checklist} onRecovered={refresh} />}
+      {checklist.recovery_action === "retry_delivery" && <RetryDeliveryForm checklist={checklist} onRecovered={refresh} />}
       {checklist.refusal_record && (
         <details className="text-sm">
           <summary>{translateNow("source.retirement.signed.refusal.h4ret00013")}</summary>
@@ -473,8 +476,9 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
           </details>
         </div>
       )}
-      {!destroyed && checklist.retirement_status !== "pending" && (
+      {!destroyed && (checklist.retirement_status !== "pending" || checklist.recovery_action === "fresh_command") && (
         <div className="grid gap-3 rounded-md border border-destructive/40 p-3">
+          {checklist.recovery_action === "fresh_command" && <p className="text-sm">{translateNow("caHierarchy.retirement.freshCommandExplanation")}</p>}
           <label className="grid gap-1 text-sm" htmlFor={`retirement-final-epoch-${keyId}`}>
             {translateNow("source.retirement.final.epoch.h4ret00006")}
             <input
@@ -494,10 +498,14 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
             <Button
               type="button"
               variant="destructive"
-              disabled={busy || !confirmed || !Number.isSafeInteger(epoch) || epoch <= 0}
+              disabled={
+                busy || (checklist.recovery_action === "fresh_command" && checklist.blocked) || !confirmed || !Number.isSafeInteger(epoch) || epoch <= 0
+              }
               onClick={() => void requestRetirement()}
             >
-              {translateNow("source.retirement.irreversible.action.h4ret00009")}
+              {checklist.recovery_action === "fresh_command"
+                ? translateNow("caHierarchy.retirement.freshCommand")
+                : translateNow("source.retirement.irreversible.action.h4ret00009")}
             </Button>
             <Button type="button" variant="outline" disabled={busy} onClick={() => void refresh()}>
               {translateNow("source.retirement.refresh.h4ret00007")}

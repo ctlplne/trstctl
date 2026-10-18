@@ -82,6 +82,7 @@ func (s *ChecklistSource) RetirementChecklist(r *http.Request, tenantID, keyID s
 		}
 		if found {
 			checklist.RetirementStatus = retired.Status
+			checklist.FinalEpoch = retired.FinalEpoch
 			checklist.RefusalRecord = string(retired.RefusalRecord)
 			checklist.DestructionRecord = string(retired.DestructionRecord)
 			checklist.CommandEventID = retired.CommandEventID
@@ -93,10 +94,27 @@ func (s *ChecklistSource) RetirementChecklist(r *http.Request, tenantID, keyID s
 				checklist.DeliveryStatus = delivery.Status
 				checklist.DeliveryAttempts = delivery.Attempts
 				checklist.DeliveryAttemptLimit = delivery.AttemptLimit
+				checklist.RecoveryAction = retirementRecoveryAction(state.LedgerPosition, retired.LedgerPosition, retired.Status, delivery)
 			}
 		}
 	}
 	return checklist, nil
+}
+
+// retirementRecoveryAction is read-only guidance. The coordinator repeats all
+// checks under the command fence at mutation time; this hint cannot authorize
+// a stale retry or make a destruction decision for the isolated signer.
+func retirementRecoveryAction(statePosition, frozenPosition uint64, status string, delivery retirement.DeliveryState) string {
+	if status != retirement.StatusPending || delivery.Status != "failed" {
+		return "none"
+	}
+	if statePosition > frozenPosition {
+		return "fresh_command"
+	}
+	if delivery.Attempts > 0 && delivery.AttemptLimit <= delivery.Attempts {
+		return "retry_delivery"
+	}
+	return "none"
 }
 
 // resolutionDetail says what would resolve one outstanding dependent, in the
