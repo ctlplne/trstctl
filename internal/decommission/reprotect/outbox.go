@@ -87,7 +87,7 @@ func newHandler(d editionseam.LicensedOutboxDeps, cfg factoryConfig) (Handler, e
 	if err != nil {
 		return Handler{}, err
 	}
-	credential, err := NewCredentialReissueExecutor(unavailableCredentialIssuer{}, eventCredentialSupersessionRecorder{log: d.Log}, completions)
+	credential, err := NewCredentialReissueExecutor(unavailableCredentialIssuer{}, eventCredentialSupersessionRecorder{log: d.Log, store: d.Store}, completions)
 	if err != nil {
 		return Handler{}, err
 	}
@@ -202,64 +202,37 @@ type eventSink struct {
 }
 
 func (s eventSink) AppendReprotectionCompleted(ctx context.Context, ev depstate.ReprotectionCompletedV1) (bool, error) {
-	if s.log == nil || s.store == nil {
-		return false, fmt.Errorf("%w: event log and tenant store are required", ErrExecutorUnavailable)
-	}
 	encoded, err := depstate.Encode(ev)
 	if err != nil {
 		return false, err
 	}
 	identity := ev.TenantID + "\x1f" + ev.KeyID + "\x1f" + ev.JobID + "\x1f" +
 		string(ev.Dependent.Class) + "\x1f" + ev.Dependent.ID
-	encoded.ID = "vdec-completion:" + crypto.SHA256Hex([]byte(identity))
-	var recorded bool
-	err = s.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
-		// A row lock cannot protect a completion that has not yet been appended.
-		// This transaction-scoped lock fences competing workers before the event
-		// append. The canonical event ID is the durable answer after a crash.
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-			"vdec-completion/v1/"+identity); err != nil {
-			return err
-		}
-		prior, found, err := s.log.EventByID(ctx, encoded.ID)
-		if err != nil {
-			return err
-		}
-		if found {
-			if prior.TenantID != encoded.TenantID || prior.Type != encoded.Type ||
-				prior.SchemaVersion != encoded.SchemaVersion || !bytes.Equal(prior.Data, encoded.Data) {
-				return ErrCompletionConflict
-			}
-			return nil
-		}
-		appended, err := s.log.Append(ctx, encoded)
-		if err != nil {
-			return err
-		}
-		if appended.ID != encoded.ID || !bytes.Equal(appended.Data, encoded.Data) {
-			return ErrCompletionConflict
-		}
-		recorded = true
-		return nil
-	})
-	return recorded, err
+	return s.appendBoundEventOnce(ctx, "vdec-completion", identity, encoded)
 }
 
 func (s eventSink) AppendRevocationCompleted(ctx context.Context, ev depstate.RevocationCompletedV1) (bool, error) {
-	if s.log == nil || s.store == nil {
-		return false, fmt.Errorf("%w: event log and tenant store are required", ErrExecutorUnavailable)
-	}
 	encoded, err := depstate.Encode(ev)
 	if err != nil {
 		return false, err
 	}
 	identity := ev.TenantID + "\x1f" + ev.KeyID + "\x1f" + ev.JobID + "\x1f" +
 		string(ev.Dependent.Class) + "\x1f" + ev.Dependent.ID + "\x1f" + ev.Destination
-	encoded.ID = "vdec-revocation-completion:" + crypto.SHA256Hex([]byte(identity))
+	return s.appendBoundEventOnce(ctx, "vdec-revocation-completion", identity, encoded)
+}
+
+func (s eventSink) appendBoundEventOnce(ctx context.Context, kind, identity string, encoded events.Event) (bool, error) {
+	if s.log == nil || s.store == nil {
+		return false, fmt.Errorf("%w: event log and tenant store are required", ErrExecutorUnavailable)
+	}
+	encoded.ID = kind + ":" + crypto.SHA256Hex([]byte(identity))
 	var recorded bool
-	err = s.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+	err := s.store.WithTenant(ctx, encoded.TenantID, func(tx pgx.Tx) error {
+		// A row lock cannot protect an event that has not yet been appended.
+		// This transaction-scoped lock fences competing workers; the canonical
+		// event ID is the durable answer after a crash or lost append response.
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-			"vdec-revocation-completion/v1/"+identity); err != nil {
+			kind+"/v1/"+identity); err != nil {
 			return err
 		}
 		prior, found, err := s.log.EventByID(ctx, encoded.ID)
@@ -299,23 +272,23 @@ func (unavailableCredentialIssuer) IssueReplacementCredential(context.Context, C
 }
 
 type eventCredentialSupersessionRecorder struct {
-	log *events.Log
+	log   *events.Log
+	store *corestore.Store
 }
 
 func (r eventCredentialSupersessionRecorder) RecordCredentialSupersession(ctx context.Context, s CredentialSupersession) error {
-	if r.log == nil {
-		return fmt.Errorf("%w: event log is required", ErrExecutorUnavailable)
-	}
 	raw, err := json.Marshal(s)
 	if err != nil {
 		return fmt.Errorf("reprotect: encode credential supersession: %w", err)
 	}
-	_, err = r.log.Append(ctx, events.Event{
-		Type:          TypeCredentialSupersession,
-		TenantID:      s.TenantID,
-		SchemaVersion: depstate.SchemaV1,
-		Data:          raw,
-	})
+	identity := s.TenantID + "\x1f" + s.JobID + "\x1f" + s.OldCredentialID
+	_, err = eventSink(r).appendBoundEventOnce(ctx,
+		"vdec-credential-supersession", identity, events.Event{
+			Type:          TypeCredentialSupersession,
+			TenantID:      s.TenantID,
+			SchemaVersion: depstate.SchemaV1,
+			Data:          raw,
+		})
 	return err
 }
 

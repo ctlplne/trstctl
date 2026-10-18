@@ -105,6 +105,17 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if recorded, err := first.AppendRevocationCompleted(ctx, revocation); err != nil || recorded {
 		t.Fatalf("repeated revocation completion recorded = %t: %v", recorded, err)
 	}
+	link := CredentialSupersession{
+		TenantID: ev.TenantID, JobID: ev.JobID, IdempotencyKey: "qa-job-a",
+		OldCredentialID: "leaf-a", NewCredentialID: "leaf-b", SuccessorKeyID: "ca-b",
+	}
+	firstSupersession := eventCredentialSupersessionRecorder{log: log, store: st}
+	if err := firstSupersession.RecordCredentialSupersession(ctx, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := firstSupersession.RecordCredentialSupersession(ctx, link); err != nil {
+		t.Fatal(err)
+	}
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +130,15 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	if recorded, err := second.AppendRevocationCompleted(ctx, revocation); err != nil || recorded {
 		t.Fatalf("cold replay of exact revocation completion recorded = %t: %v", recorded, err)
 	}
+	secondSupersession := eventCredentialSupersessionRecorder{log: log, store: st}
+	if err := secondSupersession.RecordCredentialSupersession(ctx, link); err != nil {
+		t.Fatalf("cold replay of exact supersession: %v", err)
+	}
+	changedLink := link
+	changedLink.NewCredentialID = "leaf-other"
+	if err := secondSupersession.RecordCredentialSupersession(ctx, changedLink); !errors.Is(err, ErrCompletionConflict) {
+		t.Fatalf("changed replacement after restart = %v, want ErrCompletionConflict", err)
+	}
 	conflict := ev
 	conflict.SuccessorKeyID = "ca-other"
 	if _, err := second.AppendReprotectionCompleted(ctx, conflict); !errors.Is(err, ErrCompletionConflict) {
@@ -126,6 +146,7 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	}
 	count := 0
 	revocationCount := 0
+	supersessionCount := 0
 	if err := log.Replay(ctx, 0, func(item events.Event) error {
 		if item.TenantID == ev.TenantID && item.Type == depstate.TypeReprotectionCompleted &&
 			strings.Contains(string(item.Data), `"job_id":"job-a"`) {
@@ -134,6 +155,10 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 		if item.TenantID == revocation.TenantID && item.Type == depstate.TypeRevocationCompleted &&
 			strings.Contains(string(item.Data), `"destination":"qa-local-relying-party"`) {
 			revocationCount++
+		}
+		if item.TenantID == link.TenantID && item.Type == TypeCredentialSupersession &&
+			strings.Contains(string(item.Data), `"JobID":"job-a"`) {
+			supersessionCount++
 		}
 		return nil
 	}); err != nil {
@@ -144,5 +169,8 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	}
 	if revocationCount != 1 {
 		t.Fatalf("durable revocation completion events = %d, want 1", revocationCount)
+	}
+	if supersessionCount != 1 {
+		t.Fatalf("durable supersession events = %d, want 1", supersessionCount)
 	}
 }
