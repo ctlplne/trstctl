@@ -740,9 +740,21 @@ JSON
 trstctl-cli ca authorities import-offline-intermediate <offline-root-authority-id> -f offline-intermediate-import.json
 
 # Sign an external intermediate CA CSR, for example SPIRE's local server CA.
-cat > spire-intermediate.json <<'JSON'
-{"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"]}}
+# Keep the private key on the external host. Reuse the exact public CSR and spec
+# in both files; a changed field will not match the approved ceremony.
+cat > spire-intermediate-ceremony.json <<'JSON'
+{"operation":"issue_intermediate_csr","parent_id":"<ca-authority-id>","threshold":2,"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"]}}
 JSON
+trstctl-cli ca ceremonies preview -f spire-intermediate-ceremony.json
+trstctl-cli ca ceremonies start -f spire-intermediate-ceremony.json
+# Run each approval with a different custodian's own token.
+trstctl-cli ca ceremonies approve <approved-intermediate-csr-ceremony-id>
+trstctl-cli ca ceremonies approve <approved-intermediate-csr-ceremony-id>
+cat > spire-intermediate.json <<'JSON'
+{"ceremony_id":"<approved-intermediate-csr-ceremony-id>","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"]}}
+JSON
+# The console can review/open/refresh this ceremony from the authority Details
+# → Sign intermediate CSR dialog; the ID in this request must be that ceremony.
 trstctl-cli --idempotency-key spire-upstream-root-1 ca authorities issue-intermediate-csr <ca-authority-id> -f spire-intermediate.json
 
 # Review a zero-downtime rotation first. The preview applies the same eligibility

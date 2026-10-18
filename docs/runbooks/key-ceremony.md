@@ -44,6 +44,20 @@ Purpose values are deliberately concrete:
 | `offline-root-rekey:<sha256-of-authority/successor/both-cross-certs/reason/spec>` | Importing an offline-root successor plus both direction-specific cross-certificates; private keys stay on the disconnected systems. |
 | `offline-cross-sign:<sha256-of-authority/target/cross-cert>` | Importing an already-produced offline-root cross-certificate for a target. |
 
+For an externally held intermediate key, create its CSR on the external host and
+keep that private key there. In **Certificate authorities → Overview**, open
+the active signer-backed parent authority, then **Sign intermediate CSR**.
+Paste the public CSR and complete spec, choose **Review CSR ceremony**, and
+check the request SHA-256 before opening the two-custodian ceremony. A field
+change invalidates that review. Give the ceremony ID to two distinct
+custodians, who sign in and approve separately; refresh the ceremony in the
+dialog and sign only after it shows 2 of 2. The server binds the parent, exact
+CSR and spec to the ceremony purpose and refuses mismatches. The same request
+is available through `POST /api/v1/ca/authorities/{id}/intermediates/csr` and
+`trstctl-cli ca authorities issue-intermediate-csr`, both with `ceremony_id`.
+Save the returned public certificate chain and independently verify that its
+leaf public key matches the CSR and that it chains to the selected parent.
+
 In the hierarchy manager, `StartCeremony` opens an m-of-n ceremony and
 `Approve` records one de-duplicated custodian approval. **Every procedure below
 collects approvals the same way**: each custodian calls

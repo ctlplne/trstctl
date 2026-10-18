@@ -26006,6 +26006,33 @@ export const messages = {
     defaultMessage: "Start incident response for this node",
     description: "S-C11: link from the selected graph node into the incident response form.",
   },
+  "ca.externalCSR.invalidCSR": { defaultMessage: "CSR PEM must contain a certificate request.", description: "External intermediate CSR validation." },
+  "ca.externalCSR.previewBlocked": {
+    defaultMessage: "This CSR ceremony is not ready. Review the returned blockers before opening it.",
+    description: "External intermediate ceremony preview.",
+  },
+  "ca.externalCSR.previewFailed": { defaultMessage: "Could not review the CSR ceremony.", description: "External intermediate ceremony preview error." },
+  "ca.externalCSR.openFailed": { defaultMessage: "Could not open the CSR ceremony.", description: "External intermediate ceremony start error." },
+  "ca.externalCSR.refreshFailed": { defaultMessage: "Could not refresh the CSR ceremony.", description: "External intermediate ceremony readback error." },
+  "ca.externalCSR.approvalRequired": {
+    defaultMessage: "Review the exact CSR and wait for two distinct approvals before signing.",
+    description: "External intermediate signing guard.",
+  },
+  "ca.externalCSR.refreshCeremony": { defaultMessage: "Refresh CSR ceremony", description: "External intermediate ceremony readback action." },
+  "ca.externalCSR.of": { defaultMessage: "of", description: "External intermediate ceremony approval count." },
+  "ca.externalCSR.approvals": { defaultMessage: "approvals", description: "External intermediate ceremony approval count." },
+  "ca.externalCSR.distinctCustodians": {
+    defaultMessage: "Give this ceremony ID to two custodians. Each must sign in and approve it from their own session.",
+    description: "External intermediate ceremony approval instructions.",
+  },
+  "ca.externalCSR.reviewCeremony": { defaultMessage: "Review CSR ceremony", description: "Effect-free external intermediate ceremony review action." },
+  "ca.externalCSR.openCeremony": { defaultMessage: "Open reviewed CSR ceremony", description: "External intermediate ceremony start action." },
+  "ca.externalCSR.reviewFingerprint": { defaultMessage: "Reviewed request SHA-256", description: "External intermediate ceremony digest." },
+  "ca.externalCSR.reviewStale": { defaultMessage: "Inputs changed; review again", description: "External intermediate ceremony stale review warning." },
+  "ca.externalCSR.reviewHelp": {
+    defaultMessage: "Review makes no change. Opening the ceremony requires two other custodians; signing uses the exact reviewed CSR and spec.",
+    description: "External intermediate ceremony workflow help.",
+  },
   "ca.lineage.heading": {
     defaultMessage: "Lineage",
     description: "S-C12: heading of the CA lineage tree under the served authorities table.",

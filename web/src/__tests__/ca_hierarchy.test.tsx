@@ -47,6 +47,7 @@ const { apiMock } = vi.hoisted(() => ({
     caAuthorities: vi.fn(),
     createRootCA: vi.fn(),
     issueLeafFromCA: vi.fn(),
+    signIntermediateCSR: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
     caRetirementChecklist: vi.fn(),
@@ -823,6 +824,70 @@ describe("CA hierarchy and custody surface", () => {
       }),
     );
     expect(await within(dialog).findByText("leaf-1")).toBeInTheDocument();
+  });
+
+  it("reviews and opens the exact external intermediate CSR ceremony before signing", async () => {
+    const user = userEvent.setup();
+    const authority = {
+      id: "root-csr-1",
+      tenant_id: "tenant-1",
+      common_name: "QA CSR Root",
+      kind: "root",
+      status: "active",
+      certificate_pem: "public root",
+      signer_handle: "ca/root-csr-1",
+      serial: "44",
+      max_path_len: 1,
+      created_at: "2026-10-18T00:00:00Z",
+    };
+    const ceremonyID = "00000000-0000-4000-8000-000000000044";
+    const csr = "-----BEGIN CERTIFICATE REQUEST-----\nPUBLIC\n-----END CERTIFICATE REQUEST-----";
+    const spec = { common_name: "QA External Intermediate", max_path_len: 0, ttl_seconds: 86400 };
+    apiMock.caAuthorities.mockResolvedValue({ items: [authority] });
+    apiMock.previewCACeremony.mockResolvedValue({ ready: true, request_fingerprint: "csr-review-44", changes: ["Sign public CSR"] });
+    apiMock.createCACeremony.mockResolvedValue({ id: ceremonyID, purpose: "intermediate-csr:root-csr-1", threshold: 2, approvals: 0, status: "pending" });
+    apiMock.caCeremony.mockResolvedValue({ id: ceremonyID, purpose: "intermediate-csr:root-csr-1", threshold: 2, approvals: 2, status: "pending" });
+    apiMock.signIntermediateCSR.mockResolvedValue({
+      certificate_pem: "-----BEGIN CERTIFICATE-----\nISSUED\n-----END CERTIFICATE-----",
+      serial: "external-44",
+      not_after: "2026-10-19T00:00:00Z",
+    });
+    renderCAHierarchy();
+
+    await within(await screen.findByRole("table", { name: "Served CA authorities" })).findByText("QA CSR Root");
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "QA CSR Root" })).getByRole("button", { name: /Sign intermediate CSR/ }));
+    const dialog = await screen.findByRole("dialog", { name: /Sign intermediate CSR with QA CSR Root/ });
+    fireEvent.change(within(dialog).getByLabelText("CSR PEM"), { target: { value: csr } });
+    fireEvent.change(within(dialog).getByLabelText(/Spec JSON/), { target: { value: JSON.stringify(spec) } });
+    await user.click(within(dialog).getByRole("button", { name: "Review CSR ceremony" }));
+    await waitFor(() =>
+      expect(apiMock.previewCACeremony).toHaveBeenCalledWith({
+        operation: "issue_intermediate_csr",
+        parent_id: authority.id,
+        csr_pem: csr,
+        spec,
+        threshold: 2,
+      }),
+    );
+    expect(within(dialog).getByText("csr-review-44")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Spec JSON/), { target: { value: JSON.stringify({ ...spec, ttl_seconds: 3600 }) } });
+    expect(within(dialog).getByRole("button", { name: "Open reviewed CSR ceremony" })).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/Spec JSON/), { target: { value: JSON.stringify(spec) } });
+    await user.click(within(dialog).getByRole("button", { name: "Open reviewed CSR ceremony" }));
+    await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledWith(apiMock.previewCACeremony.mock.calls[0][0]));
+    expect(within(dialog).getByRole("button", { name: "Sign intermediate CSR" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Refresh CSR ceremony" }));
+    expect(await within(dialog).findByText(/2 of 2 approvals/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Sign intermediate CSR" }));
+    await waitFor(() =>
+      expect(apiMock.signIntermediateCSR).toHaveBeenCalledWith(authority.id, {
+        ceremony_id: ceremonyID,
+        csr_pem: csr,
+        spec,
+      }),
+    );
+    expect(await within(dialog).findByText("external-44")).toBeInTheDocument();
   });
 
   it("routes an imported offline root to a signer-held intermediate without offering signing", async () => {

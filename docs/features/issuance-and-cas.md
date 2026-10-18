@@ -224,7 +224,14 @@ signer-held public key. Rotation and re-key activations both promote a signer-ba
 successor (re-key from a fresh `ca-rekey-v2` ceremony), mark the predecessor
 `superseded`, record `replaces_id`, and keep both issue URLs live while new
 certificates chain to the successor; offline-root re-key works the same way but stays
-an operator ceremony since the offline key never enters trstctl. Every served step
+an operator ceremony since the offline key never enters trstctl.
+
+External intermediate CSR signing is also a protected workflow:
+the console reviews the public CSR and spec, opens an exact two-custodian
+ceremony, refreshes its quorum and signs only after approval. API and CLI
+callers supply that ceremony ID with the same CSR and spec; the external
+private key stays with its requester. The operator verifies the returned chain
+and CSR public key with a stock X.509 client. Every served step
 (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.ceremony.cancelled`, `ca.root.created`,
 `ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
 `ca.authority.rotated`, `ca.authority.rekeyed`, `ca.cross_signed`,

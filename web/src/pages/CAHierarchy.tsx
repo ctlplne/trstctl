@@ -2323,15 +2323,79 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
   const { t } = useTranslation();
   const [ceremonyID, setCeremonyID] = useState("");
   const [csrPEM, setCSRPEM] = useState("");
-  const [specJSON, setSpecJSON] = useState(() => JSON.stringify({ common_name: "Issuing Intermediate CA", max_path_len: 0 }, null, 2));
+  const [specJSON, setSpecJSON] = useState(() =>
+    JSON.stringify({ common_name: "Issuing Intermediate CA", max_path_len: 0, ttl_seconds: 86400, signature_algorithm: "ECDSA-P256" }, null, 2),
+  );
+  const [review, setReview] = useState<{ input: string; request: CACeremonyStartRequest; preview: CACeremonyPlanPreview } | null>(null);
+  const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CAIssuedIntermediate | null>(null);
-  const ceremonyInputRef = useRef<HTMLInputElement>(null);
+  const csrInputRef = useRef<HTMLTextAreaElement>(null);
   const titleId = "sign-intermediate-csr-heading";
+  const reviewedInput = JSON.stringify({ csr_pem: csrPEM.trim(), spec_json: specJSON.trim() });
+  const reviewCurrent = review !== null && review.input === reviewedInput && review.preview.ready;
+  const approved = ceremony?.id === ceremonyID.trim() && ceremony.status === "pending" && ceremony.approvals >= ceremony.threshold;
+
+  async function reviewPlan() {
+    const csr = csrPEM.trim();
+    if (!csr.includes("BEGIN CERTIFICATE REQUEST")) {
+      setError(t("ca.externalCSR.invalidCSR"));
+      return;
+    }
+    const spec = parseSpecJSON(specJSON);
+    if (typeof spec === "string") {
+      setError(spec);
+      return;
+    }
+    const request: CACeremonyStartRequest = { operation: "issue_intermediate_csr", parent_id: authority.id, csr_pem: csr, spec, threshold: 2 };
+    setBusy(true);
+    setError(null);
+    try {
+      const preview = await api.previewCACeremony(request);
+      setReview({ input: reviewedInput, request, preview });
+      if (!preview.ready) setError(t("ca.externalCSR.previewBlocked"));
+    } catch (err) {
+      setError(errorText(err, t("ca.externalCSR.previewFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openCeremony() {
+    if (!reviewCurrent || !review) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const opened = await api.createCACeremony(review.request);
+      setCeremony(opened);
+      setCeremonyID(opened.id);
+    } catch (err) {
+      setError(errorText(err, t("ca.externalCSR.openFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshCeremony() {
+    if (!ceremonyID.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setCeremony(await api.caCeremony(ceremonyID.trim()));
+    } catch (err) {
+      setError(errorText(err, t("ca.externalCSR.refreshFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!reviewCurrent || !approved) {
+      setError(t("ca.externalCSR.approvalRequired"));
+      return;
+    }
     const csr = csrPEM.trim();
     if (!csr.includes("BEGIN CERTIFICATE REQUEST")) {
       setError("CSR PEM must contain a BEGIN CERTIFICATE REQUEST block.");
@@ -2358,7 +2422,7 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
       open
       onClose={onClose}
       titleId={titleId}
-      initialFocusRef={ceremonyInputRef}
+      initialFocusRef={csrInputRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       overlayClassName="absolute inset-0 bg-black/55"
       panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
@@ -2389,21 +2453,39 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
           <label className="grid gap-1 text-body font-medium">
             {t("parity.ceremonyId_6f8ee6")}
             <input
-              ref={ceremonyInputRef}
               required
               value={ceremonyID}
-              onChange={(event) => setCeremonyID(event.target.value)}
+              onChange={(event) => {
+                setCeremonyID(event.target.value);
+                setCeremony(null);
+              }}
               className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
             />
             <span className="text-caption font-normal text-muted-foreground">{t("parity.quorumApprovedCeremonyId_df8e12")}</span>
           </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" disabled={busy || !ceremonyID.trim()} onClick={() => void refreshCeremony()}>
+              {t("ca.externalCSR.refreshCeremony")}
+            </Button>
+            {ceremony && (
+              <span className="text-caption">
+                {ceremony.approvals} {t("ca.externalCSR.of")} {ceremony.threshold} {t("ca.externalCSR.approvals")}
+              </span>
+            )}
+          </div>
+          {ceremony && <p className="text-caption text-muted-foreground">{t("ca.externalCSR.distinctCustodians")}</p>}
           <label className="grid gap-1 text-body font-medium">
             {t("parity.csrPem_c5931f")}
             <textarea
+              ref={csrInputRef}
               required
               rows={6}
               value={csrPEM}
-              onChange={(event) => setCSRPEM(event.target.value)}
+              onChange={(event) => {
+                setCSRPEM(event.target.value);
+                setCeremonyID("");
+                setCeremony(null);
+              }}
               placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
               className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
             />
@@ -2414,16 +2496,37 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
               required
               rows={5}
               value={specJSON}
-              onChange={(event) => setSpecJSON(event.target.value)}
+              onChange={(event) => {
+                setSpecJSON(event.target.value);
+                setCeremonyID("");
+                setCeremony(null);
+              }}
               className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
             />
             <span className="text-caption font-normal text-muted-foreground">{t("parity.theServedContractRequiresASpec_bf854f")}</span>
           </label>
+          <div className="grid gap-2 rounded-control border border-border p-3 text-caption">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" disabled={busy || csrPEM.trim() === ""} onClick={() => void reviewPlan()}>
+                {t("ca.externalCSR.reviewCeremony")}
+              </Button>
+              <Button type="button" disabled={busy || !reviewCurrent || !!ceremonyID.trim()} onClick={() => void openCeremony()}>
+                {t("ca.externalCSR.openCeremony")}
+              </Button>
+            </div>
+            {review && (
+              <p>
+                {t("ca.externalCSR.reviewFingerprint")}: <code className="break-all">{review.preview.request_fingerprint}</code>
+                {!reviewCurrent && ` — ${t("ca.externalCSR.reviewStale")}`}
+              </p>
+            )}
+            <p className="text-muted-foreground">{t("ca.externalCSR.reviewHelp")}</p>
+          </div>
           <footer className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               {translateNow("source.cancel.19766ed6cc")}
             </Button>
-            <Button type="submit" disabled={busy || ceremonyID.trim() === "" || csrPEM.trim() === ""}>
+            <Button type="submit" disabled={busy || !reviewCurrent || !approved}>
               {t("parity.signIntermediateCsr_e1f90b")}
             </Button>
           </footer>
