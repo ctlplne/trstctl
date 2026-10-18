@@ -419,6 +419,8 @@ func (c *Coordinator) dependencyChangedBetween(ctx context.Context, tenantID, ke
 				changed = changed || value.KeyID == keyID
 			case depstate.DependencyReleasedV1:
 				changed = changed || value.KeyID == keyID
+			case depstate.DependencyReleasedV2:
+				changed = changed || value.KeyID == keyID
 			case depstate.DependencyErasureDesignatedV1:
 				changed = changed || value.KeyID == keyID
 			case depstate.ReprotectionCompletedV1:

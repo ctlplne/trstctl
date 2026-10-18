@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1549 annotated sites across 26 rules. Each row is
+1550 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -411,7 +411,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (255 sites)
+### G115 — CWE-190 Integer overflow or wraparound (256 sites)
 
 | Location | Reason |
 |---|---|
@@ -457,6 +457,7 @@ not this file.
 | `internal/crypto/sshkeys/property_test.go:117` | generator bounds the value to 0..2 (CWE-190) |
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
+| `internal/decommission/store/projection.go:174` | rejected values above MaxInt64 immediately above. |
 | `internal/discovery/adcs/acl.go:76` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:205` | the fixed malformed fixture is below MaxUint16 (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:232` | test SID inputs have at most 255 sub-authorities (CWE-190). |

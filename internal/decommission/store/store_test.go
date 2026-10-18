@@ -181,6 +181,38 @@ func TestDependencyProjectionRecoversManagedCAIssuanceAndDisposition(t *testing.
 	}
 }
 
+func TestSourceBoundReleaseCannotAccountARegistrationThatArrivesLater(t *testing.T) {
+	core := newCoreStoreOn(t, "vdec_release_order")
+	projection := decstore.NewDependencyProjection(core)
+	repo := decstore.New(core)
+	ctx := context.Background()
+	const caID = "44444444-4444-4444-8444-444444444444"
+	const leafID = "55555555-5555-4555-8555-555555555555"
+	release := mustEncode(t, depstate.DependencyReleasedV2{
+		TenantID: tenantA, KeyID: caID, Dependent: dep(depstate.DependentCredential, leafID),
+		SourceEventID: "issued-leaf-72", SourceSequence: 17, Serial: "72", CertificateSHA256: strings.Repeat("a", 64),
+		CeremonyID: "66666666-6666-4666-8666-666666666666", Actor: "operator",
+		ApprovalEventIDs: []string{"approval-one", "approval-two"}, Reason: "reviewed external use", RiskAccepted: true,
+	}, 18)
+	if err := projection.Apply(ctx, release); err == nil {
+		t.Fatal("source-bound release created an unregistered dependent")
+	}
+	leaf, err := json.Marshal(projections.CAEndEntityInventoried{ID: leafID, CAID: caID, Serial: "72"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := eventspec.Event{ID: "issued-leaf-72", Type: projections.EventCAEndEntityIssued,
+		TenantID: tenantA, SchemaVersion: projections.CAEndEntityInventorySchemaVersion,
+		Sequence: 17, Data: leaf}
+	if err := projection.Apply(ctx, issued); err != nil {
+		t.Fatal(err)
+	}
+	state, found, err := repo.FetchKeyState(ctx, tenantA, caID)
+	if err != nil || !found || len(state.Unaccounted()) != 1 {
+		t.Fatalf("future registration was neutralized: found=%t state=%+v error=%v", found, state, err)
+	}
+}
+
 func mustEncode(t *testing.T, p depstate.Payload, seq uint64) eventspec.Event {
 	t.Helper()
 	e, err := depstate.Encode(p)

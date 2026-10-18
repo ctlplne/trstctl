@@ -6,9 +6,13 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/projections"
@@ -137,6 +141,8 @@ func (p *DependencyProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 		return p.applyBoundChange(ctx, tx, ev.TenantID, v.TenantID, v.KeyID, v.Dependent, position, dependencyRegister)
 	case depstate.DependencyReleasedV1:
 		return p.applyBoundChange(ctx, tx, ev.TenantID, v.TenantID, v.KeyID, v.Dependent, position, dependencyRelease)
+	case depstate.DependencyReleasedV2:
+		return p.applySourceBoundRelease(ctx, tx, ev.TenantID, v, position, ev.Time)
 	case depstate.DependencyErasureDesignatedV1:
 		return p.applyBoundChange(ctx, tx, ev.TenantID, v.TenantID, v.KeyID, v.Dependent, position, dependencyErasure)
 	case depstate.ReprotectionCompletedV1:
@@ -151,6 +157,96 @@ func (p *DependencyProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev events
 		return nil
 	}
 	return insertCompletionFromEvent(ctx, tx, ev.TenantID, ev, uint64(position))
+}
+
+// A v2 release cannot create a placeholder dependent. The read model must see
+// the original issued leaf, its exact event ordinal, and its public DER before
+// it accounts for the release. The isolated signer's fold independently checks
+// the immutable mint event, so both views fail closed if source proof drifts.
+func (p *DependencyProjection) applySourceBoundRelease(ctx context.Context, tx pgx.Tx, envelopeTenant string, v depstate.DependencyReleasedV2, position int64, completedAt time.Time) error {
+	if envelopeTenant == "" || v.TenantID != envelopeTenant || v.KeyID == "" ||
+		v.Dependent.Class != depstate.DependentCredential || v.Dependent.ID == "" ||
+		v.SourceEventID == "" || v.SourceSequence == 0 || v.SourceSequence > math.MaxInt64 ||
+		v.CertificateSHA256 == "" || v.Serial == "" || v.CeremonyID == "" ||
+		v.Actor == "" || strings.TrimSpace(v.Reason) == "" || !v.RiskAccepted || len(v.ApprovalEventIDs) < 2 {
+		return fmt.Errorf("vdec dependencies: source-bound release lacks exact public source, approval, or risk evidence")
+	}
+	sourcePosition := int64(v.SourceSequence) // #nosec G115 -- rejected values above MaxInt64 immediately above.
+	if sourcePosition >= position {
+		return fmt.Errorf("vdec dependencies: source-bound release precedes its managed CA mint")
+	}
+	var registered int64
+	var accounted, released *int64
+	if err := tx.QueryRow(ctx, `SELECT registered_ordinal, accounted_ordinal, released_ordinal
+		FROM decommission_dependents WHERE tenant_id=$1 AND key_id=$2 AND dependent_class=$3 AND dependent_id=$4 FOR UPDATE`,
+		envelopeTenant, v.KeyID, string(v.Dependent.Class), v.Dependent.ID).Scan(&registered, &accounted, &released); err != nil {
+		return fmt.Errorf("vdec dependencies: source-bound release has no registered dependent: %w", err)
+	}
+	if registered <= 0 || uint64(registered) != v.SourceSequence ||
+		(accounted != nil && (*accounted != position || released == nil || *released != position)) {
+		return fmt.Errorf("vdec dependencies: source-bound release source position or outstanding state changed")
+	}
+	var issuanceEventID, fingerprint, serial string
+	var der []byte
+	if err := tx.QueryRow(ctx, `SELECT issuance_event_id,fingerprint,serial,certificate_der
+		FROM certificates WHERE tenant_id=$1 AND id=$2`, envelopeTenant, v.Dependent.ID).
+		Scan(&issuanceEventID, &fingerprint, &serial, &der); err != nil {
+		return fmt.Errorf("vdec dependencies: source-bound release has no exact inventory leaf: %w", err)
+	}
+	if issuanceEventID != v.SourceEventID || serial != v.Serial ||
+		!strings.EqualFold(fingerprint, v.CertificateSHA256) || crypto.SHA256Hex(der) != v.CertificateSHA256 {
+		return fmt.Errorf("vdec dependencies: source-bound release differs from issued public certificate")
+	}
+	if err := validateSourceBoundReleaseApprovals(ctx, tx, envelopeTenant, v); err != nil {
+		return err
+	}
+	if err := upsertDependencyChange(ctx, tx, envelopeTenant, v.KeyID, v.Dependent, position, dependencyRelease); err != nil {
+		return err
+	}
+	return p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, envelopeTenant, v.CeremonyID, completedAt)
+}
+
+func validateSourceBoundReleaseApprovals(ctx context.Context, tx pgx.Tx, tenantID string, v depstate.DependencyReleasedV2) error {
+	var purpose, status, opener string
+	var threshold int
+	if err := tx.QueryRow(ctx, `SELECT purpose,status,COALESCE(opener,''),threshold
+		FROM ca_key_ceremonies WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, tenantID, v.CeremonyID).
+		Scan(&purpose, &status, &opener, &threshold); err != nil {
+		return fmt.Errorf("vdec dependencies: source-bound release ceremony missing: %w", err)
+	}
+	if purpose != depstate.ReleasePurposeV2(v) || (status != "pending" && status != "completed") || threshold < 2 {
+		return fmt.Errorf("vdec dependencies: source-bound release differs from the reviewed ceremony")
+	}
+	rows, err := tx.Query(ctx, `SELECT custodian,approval_event_id FROM ca_ceremony_approvals
+		WHERE tenant_id=$1 AND ceremony_id=$2 AND approval_event_id IS NOT NULL ORDER BY custodian`, tenantID, v.CeremonyID)
+	if err != nil {
+		return err
+	}
+	var approved []string
+	for rows.Next() {
+		var custodian, eventID string
+		if err := rows.Scan(&custodian, &eventID); err != nil {
+			rows.Close()
+			return err
+		}
+		if custodian == "" || custodian == opener || eventID == "" {
+			rows.Close()
+			return fmt.Errorf("vdec dependencies: release approval is not a distinct custodian event")
+		}
+		approved = append(approved, eventID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	claimed := append([]string(nil), v.ApprovalEventIDs...)
+	slices.Sort(approved)
+	slices.Sort(claimed)
+	if len(approved) < threshold || !slices.Equal(approved, claimed) {
+		return fmt.Errorf("vdec dependencies: release approval events differ from the ceremony quorum")
+	}
+	return nil
 }
 
 func (p *DependencyProjection) ProjectsTenantLifecycle() {}
