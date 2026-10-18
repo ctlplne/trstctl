@@ -3131,7 +3131,10 @@ than sending an operator looking for a credential that was never there.
   refusal and leaves the key alive. Complete evidence destroys the signer-local
   handle first, then mints one full public record bound to the command ID, tenant,
   stable key ID, final epoch, required/completion/revocation digests, quorum and
-  audit head. Both outcomes are immutable events and rebuild the tenant-RLS
+  audit head. A signed refusal is fsynced under the exact frozen command hash
+  before the signer replies, so a lost response or restart returns the same
+  refusal bytes without another signature. Both outcomes are immutable events
+  and rebuild the tenant-RLS
   projection after restart. The console displays signed refusals and downloads the
   complete destruction record for offline verification.
   VDEC attaches in every build and remains fail-closed on missing evidence.

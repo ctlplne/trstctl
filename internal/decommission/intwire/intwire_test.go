@@ -131,6 +131,15 @@ func TestVDEC_Wire_LargeTenantHistoryStillSignsRetirementRefusal(t *testing.T) {
 	if decision.Approved || len(decision.RefusalRecord) == 0 {
 		t.Fatalf("GatedDestroy = approved %v, refusal bytes %d; want signed refusal", decision.Approved, len(decision.RefusalRecord))
 	}
+	replayed, err := h.signer.GatedDestroy(h.ctx, request)
+	if err != nil || !bytes.Equal(replayed.RefusalRecord, decision.RefusalRecord) {
+		t.Fatalf("large-history refusal replay changed after lost response: err=%v", err)
+	}
+	h.restartSigner(t)
+	restarted, err := h.signer.GatedDestroy(h.ctx, request)
+	if err != nil || !bytes.Equal(restarted.RefusalRecord, decision.RefusalRecord) {
+		t.Fatalf("large-history refusal changed after signer restart: err=%v", err)
+	}
 	if _, err := h.signer.SignerForHandle(h.ctx, handle); err != nil {
 		t.Fatalf("large-history refusal removed signer key: %v", err)
 	}

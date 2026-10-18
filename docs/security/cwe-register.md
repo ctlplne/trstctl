@@ -1379,7 +1379,7 @@ not this file.
 | `internal/server/server.go:2573` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/signing/gated_destruction_journal.go:227` | exact signer-owned journal path. |
+| `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore.go:346` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/keystore.go:428` | path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22). |

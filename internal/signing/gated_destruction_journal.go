@@ -86,10 +86,35 @@ func (s *Server) loadGatedDestroyOperation(operationID string, req GatedDestroyR
 	if existing.State != "executing" && existing.State != "completed" {
 		return GatedDestroyDecision{}, "", false, fmt.Errorf("signing: unknown gated destruction journal state %q", existing.State)
 	}
-	if !existing.Decision.Approved {
-		return GatedDestroyDecision{}, "", false, errors.New("signing: gated destruction journal omitted its approved decision")
+	if !existing.Decision.Approved && (existing.State != "completed" || len(existing.Decision.RefusalRecord) == 0) {
+		return GatedDestroyDecision{}, "", false, errors.New("signing: gated destruction journal omitted its approved decision or signed refusal")
 	}
 	return cloneGatedDestroyDecision(existing.Decision), existing.State, true, nil
+}
+
+// A signed refusal is terminal for this exact frozen request. Persisting it
+// before replying makes an outbox retry or signer restart return the same bytes
+// instead of signing a second, conflicting refusal under one event identity.
+func (s *Server) recordGatedDestroyRefusal(operationID string, req GatedDestroyRequest, decision GatedDestroyDecision) error {
+	if decision.Approved || len(decision.RefusalRecord) == 0 {
+		return errors.New("signing: only a signed refusal can be journaled")
+	}
+	requestHash, err := gatedDestroyRequestHash(req)
+	if err != nil {
+		return err
+	}
+	record := gatedDestroyJournalRecord{
+		Version: gatedDestroyJournalVersion, OperationID: operationID,
+		RequestHash: requestHash, State: "completed", Decision: cloneGatedDestroyDecision(decision),
+	}
+	if s.store != nil {
+		return s.store.createGatedDestroyOperation(record)
+	}
+	if s.gatedDestroyOps == nil {
+		s.gatedDestroyOps = make(map[string]gatedDestroyJournalRecord)
+	}
+	s.gatedDestroyOps[operationID] = record
+	return nil
 }
 
 func (s *Server) beginGatedDestroyOperation(operationID string, req GatedDestroyRequest, decision GatedDestroyDecision) error {

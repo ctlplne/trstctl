@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -222,6 +223,56 @@ func TestGatedDestroyRPCRefusalKeepsKeyAndApprovalDestroysKey(t *testing.T) {
 	_, err = approvingServer.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: req.Handle}})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("approved GatedDestroy lookup = %v, want NotFound", status.Code(err))
+	}
+}
+
+func TestGatedDestroyRefusalReplaysExactBytesAfterLostResponseAndRestart(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	rawKEK, err := seal.GenerateKEK()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper, err := seal.NewLocalKEK(rawKEK)
+	secret.Wipe(rawKEK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(wrapper.Destroy)
+	req := GatedDestroyRequest{
+		TenantID: "tenant-a", Handle: "refused-key", SubjectRef: "ca-old",
+		AssertedFinalEpoch: 7, LedgerPosition: 41, RequiredSetDigest: []byte("required-digest"),
+		SatisfactionEvidence: []byte("frozen-evidence"), AuditChainHead: []byte("audit-head"),
+	}
+	var calls int
+	gate := &fakeGatedDestroyer{}
+	gate.onCall = func() {
+		calls++
+		gate.decision = GatedDestroyDecision{RefusalRecord: []byte(fmt.Sprintf("signed-refusal-%d", calls))}
+	}
+	firstServer, err := NewPersistentServer(NewKeyStore(dir, wrapper), WithGatedDestruction(gate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	generateGatedDestroyKey(t, ctx, firstServer, req.Handle)
+	first, err := firstServer.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
+	if err != nil || first.GetApproved() || len(first.GetRefusalRecord()) == 0 {
+		t.Fatalf("first signed refusal = %+v err %v", first, err)
+	}
+	replayed, err := firstServer.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
+	if err != nil || !bytes.Equal(replayed.GetRefusalRecord(), first.GetRefusalRecord()) || calls != 1 {
+		t.Fatalf("same-process refusal replay changed: first=%q replay=%q calls=%d err=%v", first.GetRefusalRecord(), replayed.GetRefusalRecord(), calls, err)
+	}
+	restarted, err := NewPersistentServer(NewKeyStore(dir, wrapper), WithGatedDestruction(&fakeGatedDestroyer{err: errors.New("gate unavailable after restart")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	postRestart, err := restarted.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
+	if err != nil || !bytes.Equal(postRestart.GetRefusalRecord(), first.GetRefusalRecord()) {
+		t.Fatalf("restart refusal replay changed: first=%q restarted=%q err=%v", first.GetRefusalRecord(), postRestart.GetRefusalRecord(), err)
+	}
+	if _, err := restarted.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: req.Handle}}); err != nil {
+		t.Fatalf("refusal replay destroyed key: %v", err)
 	}
 }
 

@@ -140,6 +140,11 @@ func (s *Server) gatedDestroyWithEvidence(ctx context.Context, req GatedDestroyR
 				return GatedDestroyDecision{}, err
 			}
 			if !decision.Approved {
+				if len(decision.RefusalRecord) != 0 {
+					if err := s.recordGatedDestroyRefusal(operationID, req, decision); err != nil {
+						return GatedDestroyDecision{}, err
+					}
+				}
 				return decision, nil
 			}
 			if err := s.beginGatedDestroyOperation(operationID, req, decision); err != nil {
