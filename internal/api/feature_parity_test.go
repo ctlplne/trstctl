@@ -276,8 +276,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// after they leave the recent list; F33 owns the added operation.
 	// F2 adds one exact discovery schedule read and three event-sourced lifecycle controls.
 	// F34 adds bounded and exact signed-issue and CA-result recovery after lost responses.
-	if len(out) != 492 {
-		t.Fatalf("OpenAPI operationIds = %d, want 492", len(out))
+	if len(out) != 493 {
+		t.Fatalf("OpenAPI operationIds = %d, want 493", len(out))
 	}
 	return out
 }

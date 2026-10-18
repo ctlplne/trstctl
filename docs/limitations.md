@@ -2339,6 +2339,10 @@ than sending an operator looking for a credential that was never there.
   a private key: operators produce the successor and both cross-certificates on
   the disconnected root system, then submit only certificates under an exact
   ceremony purpose (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
+  The console's Imports workspace now previews and executes offline-root
+  succession under that purpose. Its event-projected public receipt is read by
+  ceremony ID at `/api/v1/ca/offline-rekeys/{ceremony-id}` after a restart or a
+  lost response; no private key enters the browser or control plane.
   The current offline-root import profile accepts an ECDSA P-256 public key;
   other offline root algorithms need an explicit supported profile and console
   selector. For offline-root import, `ttl_seconds` caps remaining certificate

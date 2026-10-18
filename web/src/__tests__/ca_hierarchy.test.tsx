@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
+import { createHash, webcrypto } from "node:crypto";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -30,6 +31,8 @@ const { apiMock } = vi.hoisted(() => ({
     previewCAAuthorityRotation: vi.fn(),
     rotateCAAuthority: vi.fn(),
     rekeyCAAuthority: vi.fn(),
+    rekeyOfflineRoot: vi.fn(),
+    getOfflineRootRekeyReceipt: vi.fn(),
     managedKeyCustody: vi.fn(),
     listManagedKeys: vi.fn(),
     getManagedKey: vi.fn(),
@@ -108,6 +111,120 @@ function externalCAUnavailableRuntime(): CapabilityView {
 }
 
 describe("CA hierarchy and custody surface", () => {
+  it("offers an offline-root successor ceremony from public cross-certificates", async () => {
+    const predecessor = {
+      id: "00000000-0000-4000-8000-000000000011",
+      tenant_id: "tenant-a",
+      common_name: "Disconnected root",
+      kind: "root",
+      status: "active",
+      signer_handle: "",
+      certificate_pem: "public predecessor",
+      serial: "11",
+      max_path_len: 1,
+      created_at: "2026-10-18T00:00:00Z",
+    };
+    const successor = { ...predecessor, id: "00000000-0000-4000-8000-000000000012", common_name: "New disconnected root", replaces_id: predecessor.id };
+    const ceremonyID = "00000000-0000-4000-8000-000000000013";
+    const purpose = "offline-root-rekey:exact-public-package";
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify({ purpose, threshold: 2 }))
+      .digest("hex");
+    Object.defineProperty(globalThis.crypto, "subtle", { configurable: true, value: webcrypto.subtle });
+    apiMock.caAuthorities.mockResolvedValue({ items: [predecessor] });
+    apiMock.previewCACeremony.mockResolvedValue({
+      ready: true,
+      operation: "rekey_offline_root",
+      approval_threshold: 2,
+      request_fingerprint: fingerprint,
+      preview_writes: [],
+      preview_external_effects: [],
+    });
+    apiMock.createCACeremony.mockResolvedValue({ id: ceremonyID, purpose, threshold: 2, approvals: 0, status: "pending" });
+    apiMock.caCeremony
+      .mockResolvedValueOnce({ id: ceremonyID, purpose, threshold: 2, approvals: 2, status: "pending" })
+      .mockResolvedValueOnce({ id: ceremonyID, purpose, threshold: 2, approvals: 2, status: "completed" });
+    apiMock.rekeyOfflineRoot.mockResolvedValue({
+      ceremony_id: ceremonyID,
+      rotation: { predecessor, successor, issue_path: "", active_issue_path: "", overlap_issuers: [] },
+      new_signed_by_previous_pem: "public forward certificate",
+      previous_signed_by_new_pem: "public reverse certificate",
+    });
+    const user = userEvent.setup();
+    renderCAHierarchy("/ca-hierarchy?tab=imports");
+    await user.selectOptions(await screen.findByLabelText("Active offline root to replace"), predecessor.id);
+    fireEvent.change(screen.getByLabelText("Successor common name"), { target: { value: "New disconnected root" } });
+    fireEvent.change(screen.getByLabelText("Permitted DNS domains (comma separated)"), { target: { value: "qa.internal" } });
+    fireEvent.change(screen.getByLabelText("Extended key usages (comma separated, optional)"), { target: { value: "serverAuth, clientAuth" } });
+    fireEvent.change(screen.getByLabelText("Succession reason"), { target: { value: "planned replacement" } });
+    for (const [label, body] of [
+      ["Self-signed successor certificate PEM", "QUJD"],
+      ["Successor signed by predecessor PEM", "REVG"],
+      ["Predecessor signed by successor PEM", "R0hJ"],
+    ])
+      fireEvent.change(screen.getByLabelText(label), { target: { value: `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----` } });
+    await user.click(screen.getByRole("button", { name: "Review offline root re-key" }));
+    await waitFor(() =>
+      expect(apiMock.previewCACeremony).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "rekey_offline_root",
+          authority_id: predecessor.id,
+          threshold: 2,
+          reason: "planned replacement",
+          spec: expect.objectContaining({
+            common_name: "New disconnected root",
+            ttl_seconds: 315360000,
+            permitted_dns_domains: ["qa.internal"],
+            extended_key_usages: ["serverAuth", "clientAuth"],
+          }),
+          certificate_pem: expect.stringContaining("QUJD"),
+          cross_certificate_pem: expect.stringContaining("REVG"),
+          reverse_cross_certificate_pem: expect.stringContaining("R0hJ"),
+        }),
+      ),
+    );
+    fireEvent.change(screen.getByLabelText("Succession reason"), { target: { value: "changed after review" } });
+    expect(screen.getByRole("button", { name: "Start reviewed succession ceremony" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Succession reason"), { target: { value: "planned replacement" } });
+    await user.click(screen.getByRole("button", { name: "Start reviewed succession ceremony" }));
+    await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledWith(apiMock.previewCACeremony.mock.calls.at(-1)?.[0]));
+    await user.click(screen.getByRole("button", { name: "Refresh offline-root ceremony" }));
+    expect(await screen.findByText(/2\/2 distinct approvals/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Activate approved offline successor" }));
+    await waitFor(() =>
+      expect(apiMock.rekeyOfflineRoot).toHaveBeenCalledWith(
+        predecessor.id,
+        expect.objectContaining({
+          ceremony_id: ceremonyID,
+          reason: "planned replacement",
+          successor_certificate_pem: expect.stringContaining("QUJD"),
+          new_signed_by_previous_pem: expect.stringContaining("REVG"),
+          previous_signed_by_new_pem: expect.stringContaining("R0hJ"),
+        }),
+      ),
+    );
+    expect(await screen.findByText(/Successor active; predecessor superseded/)).toBeInTheDocument();
+  }, 15000);
+
+  it("recovers the exact public offline-root trust paths by ceremony ID after a browser reload", async () => {
+    const user = userEvent.setup();
+    const ceremonyID = "00000000-0000-4000-8000-000000000033";
+    apiMock.caCeremony.mockResolvedValue({ id: ceremonyID, purpose: "offline-root-rekey:completed", threshold: 2, approvals: 2, status: "completed" });
+    apiMock.getOfflineRootRekeyReceipt.mockResolvedValue({
+      ceremony_id: ceremonyID,
+      rotation: { predecessor: { id: "old-root" }, successor: { id: "new-root" } },
+      new_signed_by_previous_pem: "public forward chain",
+      previous_signed_by_new_pem: "public reverse chain",
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=imports");
+    fireEvent.change(screen.getByLabelText("Succession ceremony ID"), { target: { value: ceremonyID } });
+    await user.click(screen.getByRole("button", { name: "Refresh offline-root ceremony" }));
+    await waitFor(() => expect(apiMock.getOfflineRootRekeyReceipt).toHaveBeenCalledWith(ceremonyID));
+    expect(screen.getByText(/old-root → new-root/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Recovered successor signed by predecessor PEM")).toHaveValue("public forward chain");
+    expect(screen.getByLabelText("Recovered predecessor signed by successor PEM")).toHaveValue("public reverse chain");
+  });
+
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();

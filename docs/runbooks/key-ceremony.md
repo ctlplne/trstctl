@@ -407,6 +407,12 @@ only public certificates and refuses a private-key PEM block.
    signatures, overlapping validity, key usages, EKUs, DNS/path constraints,
    subject/public keys, SKI, and AKI before superseding the predecessor and
    recording `ca.authority.rekeyed`.
+   In the console, use **Certificate authorities → Imports → Re-key an offline
+   root** for the same review, ceremony, approval readback, and activation. If
+   the browser loses the activation response, enter the ceremony ID and use
+   **Refresh offline-root ceremony**. The durable public result is also at
+   `GET /api/v1/ca/offline-rekeys/{ceremony-id}`; it requires read access to both
+   predecessor and successor authorities.
 5. Verify both returned cross chains with a client independent of trstctl, for
    example `openssl verify`, before distributing either trust path.
 6. To import a target CA cross-certificate produced by the new offline root,

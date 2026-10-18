@@ -10140,6 +10140,71 @@ export const messages = {
     defaultMessage: "Dismissed",
     description: "Triage status label for a dismissed discovery finding.",
   },
+  "caHierarchy.offlineRekey.heading": { defaultMessage: "Re-key an offline root", description: "Offline CA succession panel heading." },
+  "caHierarchy.offlineRekey.description": {
+    defaultMessage: "Import a public successor and both cross-certificates after two distinct custodian approvals. The private keys stay offline.",
+    description: "Offline CA succession overview.",
+  },
+  "caHierarchy.offlineRekey.predecessor": { defaultMessage: "Active offline root to replace", description: "Offline re-key predecessor field." },
+  "caHierarchy.offlineRekey.selectPredecessor": { defaultMessage: "Select an active offline root", description: "Offline re-key predecessor placeholder." },
+  "caHierarchy.offlineRekey.name": { defaultMessage: "Successor common name", description: "Offline successor CA name." },
+  "caHierarchy.offlineRekey.dns": { defaultMessage: "Permitted DNS domains (comma separated)", description: "Offline successor name constraints." },
+  "caHierarchy.offlineRekey.eku": {
+    defaultMessage: "Extended key usages (comma separated, optional)",
+    description: "Offline successor key-usage constraints.",
+  },
+  "caHierarchy.offlineRekey.pathLen": { defaultMessage: "Maximum path length", description: "Offline successor CA path length." },
+  "caHierarchy.offlineRekey.ttlDays": { defaultMessage: "Certificate lifetime in days", description: "Offline successor CA lifetime." },
+  "caHierarchy.offlineRekey.reason": { defaultMessage: "Succession reason", description: "Offline-root re-key reason." },
+  "caHierarchy.offlineRekey.successor": { defaultMessage: "Self-signed successor certificate PEM", description: "Public successor root certificate." },
+  "caHierarchy.offlineRekey.newByPrevious": { defaultMessage: "Successor signed by predecessor PEM", description: "Forward public cross-certificate." },
+  "caHierarchy.offlineRekey.previousByNew": { defaultMessage: "Predecessor signed by successor PEM", description: "Reverse public cross-certificate." },
+  "caHierarchy.offlineRekey.recoveredNewByPrevious": {
+    defaultMessage: "Recovered successor signed by predecessor PEM",
+    description: "Public forward trust path from durable receipt.",
+  },
+  "caHierarchy.offlineRekey.recoveredPreviousByNew": {
+    defaultMessage: "Recovered predecessor signed by successor PEM",
+    description: "Public reverse trust path from durable receipt.",
+  },
+  "caHierarchy.offlineRekey.publicOnly": {
+    defaultMessage:
+      "Paste one public certificate in each field. Keep all private keys on the offline systems. The server verifies both signatures and exact constraints before activation.",
+    description: "Offline-root key-custody guidance.",
+  },
+  "caHierarchy.offlineRekey.review": { defaultMessage: "Review offline root re-key", description: "Effect-free offline-root succession preview action." },
+  "caHierarchy.offlineRekey.start": { defaultMessage: "Start reviewed succession ceremony", description: "Start bound offline-root succession ceremony." },
+  "caHierarchy.offlineRekey.fingerprint": { defaultMessage: "Reviewed request fingerprint", description: "Fingerprint label for offline-root ceremony." },
+  "caHierarchy.offlineRekey.reviewedPackage": { defaultMessage: "Reviewed public package", description: "Offline-root succession effect-free review summary." },
+  "caHierarchy.offlineRekey.certHash": { defaultMessage: "Certificate SHA-256", description: "Offline-root public certificate fingerprint label." },
+  "caHierarchy.offlineRekey.approvals": { defaultMessage: "distinct approvals", description: "Offline-root ceremony approval count." },
+  "caHierarchy.offlineRekey.changed": {
+    defaultMessage: "Inputs changed after review. Review the exact public package again before starting or activating.",
+    description: "Offline-root review invalidation warning.",
+  },
+  "caHierarchy.offlineRekey.ceremonyID": { defaultMessage: "Succession ceremony ID", description: "Offline-root ceremony recovery lookup." },
+  "caHierarchy.offlineRekey.approvalHelp": {
+    defaultMessage:
+      "Two different custodians sign in separately, open Lifecycle, load this ceremony ID, and approve. Return here and refresh before activation.",
+    description: "Offline-root distinct-custodian approval instructions.",
+  },
+  "caHierarchy.offlineRekey.refresh": { defaultMessage: "Refresh offline-root ceremony", description: "Offline-root ceremony and receipt readback action." },
+  "caHierarchy.offlineRekey.activate": { defaultMessage: "Activate approved offline successor", description: "Offline-root succession activation action." },
+  "caHierarchy.offlineRekey.bound": { defaultMessage: "exact package matches reviewed ceremony", description: "Offline-root positive ceremony binding." },
+  "caHierarchy.offlineRekey.unbound": {
+    defaultMessage: "reviewed package does not match this ceremony",
+    description: "Offline-root negative ceremony binding.",
+  },
+  "caHierarchy.offlineRekey.completed": { defaultMessage: "Successor active; predecessor superseded", description: "Offline-root succession result." },
+  "caHierarchy.offlineRekey.actionFailed": { defaultMessage: "Offline-root succession failed", description: "Offline-root action error." },
+  "caHierarchy.offlineRekey.completeFields": {
+    defaultMessage: "Select an active offline root and enter the exact successor profile, reason, and three public certificates.",
+    description: "Incomplete offline-root review form.",
+  },
+  "caHierarchy.offlineRekey.notReady": {
+    defaultMessage: "The server did not return a safe, effect-free two-approval review.",
+    description: "Offline-root preview refusal.",
+  },
   "caHierarchy.offline.heading": {
     defaultMessage: "Offline root",
     description: "Heading for the CA hierarchy offline root workflow.",

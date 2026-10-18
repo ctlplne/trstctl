@@ -307,9 +307,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// PCAS breadth adds recovery, federation, KEM, issuer and staple operator paths.
 	// Recovery preparation and signed public readback add two commands so a
 	// custodian can approve the exact isolated-signer key.
-	if len(out) != 536 {
+	if len(out) != 537 {
 		// PCAS recovery policy readback is a tenant-scoped stock-client action.
-		t.Fatalf("CLI commands = %d, want 536", len(out))
+		t.Fatalf("CLI commands = %d, want 537", len(out))
 	}
 	return out
 }

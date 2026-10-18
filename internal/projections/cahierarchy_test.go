@@ -371,6 +371,70 @@ func TestCAAuthorityRekeyedEventProjectsReadModel(t *testing.T) {
 	}
 }
 
+func TestOfflineRootRekeyProjectsRecoverableTenantReceipt(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for _, tenantID := range []string{tenantA, tenantB} {
+		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: tenantID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	predecessor, err := s.InsertCAAuthority(ctx, store.CAAuthority{
+		TenantID: tenantA, CommonName: "offline predecessor", Kind: "root", Status: "active",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nPREDECESSOR\n-----END CERTIFICATE-----\n",
+		Serial:         "offline-1", MaxPathLen: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ceremonyID := "00000000-0000-4000-8000-000000000063"
+	when := time.Now().UTC().Truncate(time.Microsecond)
+	for i, payload := range []struct {
+		typ   string
+		value any
+	}{
+		{projections.EventCACeremonyStarted, projections.CACeremonyStarted{CeremonyID: ceremonyID, Purpose: "offline-root-rekey:test", Threshold: 1, Opener: "operator"}},
+		{projections.EventCACeremonyApproved, projections.CACeremonyApproved{CeremonyID: ceremonyID, Custodian: "custodian"}},
+	} {
+		raw, marshalErr := json.Marshal(payload.value)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if applyErr := projections.New(s).Apply(ctx, events.Event{ID: fmt.Sprintf("00000000-0000-4000-8000-00000000006%d", i+4),
+			Sequence: uint64(i + 1), Type: payload.typ, TenantID: tenantA, Time: when, Data: raw}); applyErr != nil {
+			t.Fatal(applyErr)
+		}
+	}
+	successorID := "00000000-0000-4000-8000-000000000066"
+	forward := []byte("public forward DER")
+	reverse := []byte("public reverse DER")
+	raw, err := json.Marshal(projections.CAAuthorityRekeyed{
+		ID: successorID, PredecessorCAID: predecessor.ID, CommonName: "offline successor", Kind: "root",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nSUCCESSOR\n-----END CERTIFICATE-----\n",
+		Serial:         "offline-2", NotAfter: when.Add(365 * 24 * time.Hour), MaxPathLen: 1,
+		CeremonyID: ceremonyID, OfflineRoot: true,
+		NewSignedByPreviousDER: forward, PreviousSignedByNewDER: reverse,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Apply(ctx, events.Event{ID: "ca-offline-root-rekey-" + ceremonyID,
+		Type: projections.EventCAAuthorityRekeyed, TenantID: tenantA, Time: when, Data: raw}); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.GetCAOfflineRekeyReceipt(ctx, tenantA, ceremonyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.PredecessorAuthorityID != predecessor.ID || receipt.SuccessorAuthorityID != successorID ||
+		!bytes.Equal(receipt.NewSignedByPreviousDER, forward) || !bytes.Equal(receipt.PreviousSignedByNewDER, reverse) {
+		t.Fatalf("receipt changed the public trust paths: %+v", receipt)
+	}
+	if _, err := s.GetCAOfflineRekeyReceipt(ctx, tenantB, ceremonyID); !store.IsNotFound(err) {
+		t.Fatalf("other tenant could read offline-root trust paths: %v", err)
+	}
+}
+
 func TestCAAuthorityCreateReplaysFromEvent(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)

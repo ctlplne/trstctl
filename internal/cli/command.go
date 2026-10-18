@@ -143,6 +143,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ca", "cross-signs", "get"}, Method: "GET", Path: "/api/v1/ca/cross-signs/{id}", Summary: "Read a durable CA cross-certificate by ceremony ID"},
 	{Name: []string{"ca", "authorities", "import-offline-cross-sign"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-cross-signs", Body: bodyFile, Summary: "Verify and import an offline-root cross-certificate"},
 	{Name: []string{"ca", "authorities", "rekey-offline-root"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-rekey", Body: bodyFile, Summary: "Activate an offline-root successor with bidirectional cross-signatures"},
+	{Name: []string{"ca", "offline-rekeys", "get"}, Method: "GET", Path: "/api/v1/ca/offline-rekeys/{id}", Summary: "Recover an offline-root successor and both public cross-certificates by ceremony ID"},
 	{Name: []string{"ca", "authorities", "issue"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/issue", Body: bodyFile, Summary: "Issue a leaf certificate from a private CA authority"},
 	{Name: []string{"acme", "dns-01", "providers"}, Method: "GET", Path: "/api/v1/acme/dns-01/providers", Summary: "List served ACME DNS-01 provider coverage"},
 	{Name: []string{"acme", "dns-01", "provider-configs", "create"}, Method: "POST", Path: "/api/v1/acme/dns-01/provider-configs", Body: bodyFile, Summary: "Create a DNS-01 provider config using secret references"},

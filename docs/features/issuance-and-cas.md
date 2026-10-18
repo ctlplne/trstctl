@@ -236,7 +236,14 @@ DNS, path length, subject/public key, and both chain directions first. The full
 public cross-certificate is recoverable by ceremony ID from the event-projected
 `GET /api/v1/ca/cross-signs/{id}` receipt after a restart. The CA hierarchy
 console exposes effect-free review, quorum readback, execution, and that receipt.
-The full
+Offline-root succession has a separate, indexed, tenant-scoped receipt at
+`GET /api/v1/ca/offline-rekeys/{ceremony-id}` containing the successor lineage
+and both public cross-certificates. It is projected from the same immutable
+re-key event as the authority state and can be recovered by ceremony ID after a
+lost response or restart. The Imports workspace in the console previews the
+exact public package, starts the bound two-custodian ceremony, reads the quorum,
+activates the successor, and recovers that receipt. Offline private keys never
+enter the browser or control plane. The full
 operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 

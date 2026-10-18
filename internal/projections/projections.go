@@ -4974,12 +4974,23 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.OfflineRoot && (pl.SignerHandle != "" || len(pl.NewSignedByPreviousDER) == 0 || len(pl.PreviousSignedByNewDER) == 0) {
 			return fmt.Errorf("projections: %s offline-root successor requires no signer handle and both public cross-certificates", e.Type)
 		}
-		return p.store.ApplyCAAuthorityRekeyedTx(ctx, tx, store.CAAuthority{
+		if err := p.store.ApplyCAAuthorityRekeyedTx(ctx, tx, store.CAAuthority{
 			ID: pl.ID, TenantID: e.TenantID, ParentID: pl.ParentID, CommonName: pl.CommonName,
 			Kind: pl.Kind, Status: "active", CertificatePEM: pl.CertificatePEM, SignerHandle: pl.SignerHandle,
 			Serial: pl.Serial, NotAfter: &pl.NotAfter, MaxPathLen: pl.MaxPathLen,
 			PermittedDNSNames: pl.PermittedDNSNames, EKUs: pl.EKUs, CreatedAt: e.Time,
-		}, pl.PredecessorCAID, pl.CeremonyID)
+		}, pl.PredecessorCAID, pl.CeremonyID); err != nil {
+			return err
+		}
+		if pl.OfflineRoot {
+			return p.store.ApplyCAOfflineRekeyReceiptTx(ctx, tx, store.CAOfflineRekeyReceipt{
+				TenantID: e.TenantID, CeremonyID: pl.CeremonyID,
+				PredecessorAuthorityID: pl.PredecessorCAID, SuccessorAuthorityID: pl.ID,
+				NewSignedByPreviousDER: pl.NewSignedByPreviousDER,
+				PreviousSignedByNewDER: pl.PreviousSignedByNewDER, CompletedAt: e.Time,
+			})
+		}
+		return nil
 	case EventCAAuthorityHorizonAlerted:
 		if schemaVersionOf(e) == 1 {
 			// Historical events were audit-only; their SQL stamp and outbox row

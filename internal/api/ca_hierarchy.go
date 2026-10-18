@@ -46,6 +46,7 @@ type CAHierarchyService interface {
 	GetCrossSignReceipt(ctx context.Context, tenantID, ceremonyID string) (CACrossSign, error)
 	ImportOfflineRootCrossSign(ctx context.Context, tenantID, caID string, req CAOfflineCrossSignImportRequest) (CACrossSign, error)
 	RekeyOfflineRoot(ctx context.Context, tenantID, caID string, req CAOfflineRootRekeyRequest) (CAOfflineRootRekey, error)
+	GetOfflineRootRekeyReceipt(ctx context.Context, tenantID, ceremonyID string) (CAOfflineRootRekey, error)
 }
 
 // WithCAHierarchy wires the served CA hierarchy surface. When unset, the routes
@@ -759,6 +760,30 @@ func (a *API) rekeyOfflineRoot(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, result, nil
 	})
+}
+
+func (a *API) getOfflineRootRekeyReceipt(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.caHierarchy == nil {
+		a.writeError(w, ErrCAHierarchyUnavailable)
+		return
+	}
+	receipt, err := a.caHierarchy.GetOfflineRootRekeyReceipt(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principal, ok := r.Context().Value(principalCtxKey).(authz.Principal)
+	if !ok || !principal.Can(authz.IssuersRead, authz.Scope{TenantID: tenantID, Issuer: receipt.Rotation.Predecessor.ID}) ||
+		!principal.Can(authz.IssuersRead, authz.Scope{TenantID: tenantID, Issuer: receipt.Rotation.Successor.ID}) {
+		a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires issuers:read on both re-key authorities"))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, receipt)
 }
 
 func authorizeCARotationSuccessor(ctx context.Context, tenantID, successorID string) error {

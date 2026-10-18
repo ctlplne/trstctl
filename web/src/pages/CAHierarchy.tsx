@@ -45,6 +45,7 @@ import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyPart
 import { KeyValue, LabeledInput, LabeledSelect } from "./cahierarchy/CAHierarchyFormParts";
 import { CARekeyPanel } from "./cahierarchy/CAHierarchyRekeyParts";
 import { CACrossSignPanel } from "./cahierarchy/CAHierarchyCrossSignParts";
+import { CAOfflineRootRekeyPanel } from "./cahierarchy/CAHierarchyOfflineRekeyParts";
 import {
   api,
   ApiError,
@@ -1150,6 +1151,7 @@ export function CAHierarchy() {
       </section>
 
       <div {...tabPanelProps("ca", "imports")} className={tab === "imports" ? undefined : "hidden"}>
+        <CAOfflineRootRekeyPanel authorities={authorities} onActivated={() => void refreshAuthorities()} />
         <OfflineRootWorkflow
           busy={offlineBusy}
           error={offlineError}

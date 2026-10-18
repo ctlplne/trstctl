@@ -165,6 +165,8 @@ import type {
   CAIssuedLeaf,
   CAIssueIntermediateRequest,
   CAIssueLeafRequest,
+  CAOfflineRootRekey,
+  CAOfflineRootRekeyRequest,
   CAKeyCeremony,
   CBOMAsset as GenCBOMAsset,
   CBOMInventory,
@@ -960,6 +962,8 @@ export type {
   CAIssuedLeaf,
   CAIssueIntermediateRequest,
   CAIssueLeafRequest,
+  CAOfflineRootRekey,
+  CAOfflineRootRekeyRequest,
   CAKeyCeremony,
   CBOMInventory,
   CBOMMigrationProgress,
@@ -1860,6 +1864,8 @@ export interface Api {
   previewCAAuthorityRotation(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotationPlanPreview>;
   rotateCAAuthority(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotation>;
   rekeyCAAuthority(id: string, input: CAAuthorityRekeyRequest): Promise<CAAuthorityRotation>;
+  rekeyOfflineRoot(id: string, input: CAOfflineRootRekeyRequest): Promise<CAOfflineRootRekey>;
+  getOfflineRootRekeyReceipt(ceremonyID: string): Promise<CAOfflineRootRekey>;
   crossSignCAAuthority(id: string, input: CACrossSignRequest): Promise<CACrossSign>;
   getCACrossSignReceipt(ceremonyId: string): Promise<CACrossSign>;
   managedKeyCustody(): Promise<ManagedKeyCustodyPlan>;
@@ -2568,6 +2574,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewCAAuthorityRotation: (id, input) => postRead<CAAuthorityRotationPlanPreview>(`/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate/preview`, input),
   rotateCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate`, input),
   rekeyCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rekey`, input),
+  rekeyOfflineRoot: (id, input) => mutate<CAOfflineRootRekey>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-rekey`, input),
+  getOfflineRootRekeyReceipt: (ceremonyID) => req<CAOfflineRootRekey>(`/api/v1/ca/offline-rekeys/${encodeURIComponent(ceremonyID)}`),
   crossSignCAAuthority: (id, input) => mutate<CACrossSign>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/cross-sign`, input),
   getCACrossSignReceipt: (ceremonyId) => req<CACrossSign>(`/api/v1/ca/cross-signs/${encodeURIComponent(ceremonyId)}`),
   managedKeyCustody: () => req<ManagedKeyCustodyPlan>("/api/v1/managed-keys/custody"),

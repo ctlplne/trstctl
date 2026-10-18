@@ -656,7 +656,16 @@ remain UTC.
 - **CA hierarchy** — the m-of-n key ceremony flow, existing-CA-chain import,
   offline-root import/intermediate-CSR workflow, and HSM/KMS managed-key custody
   (generate, list, inspect, rotate, revoke, zeroize), guarded by RBAC. The
-  private key of an imported offline root stays outside trstctl. Its detail view opens the
+  Imports workspace also re-keys an active offline root from one public
+  successor certificate and both public cross-certificates. Its effect-free
+  review binds the predecessor, reason, exact CA profile and all three
+  certificates to a two-custodian ceremony. Editing a reviewed field disables
+  activation. After quorum, the console activates the successor and shows the
+  event-projected public trust-path receipt; a lost browser response is recovered
+  by entering the ceremony ID and refreshing. The private keys stay on the
+  disconnected systems. Independently verify both returned chains before
+  distributing a new trust anchor. The private key of an imported offline root
+  stays outside trstctl. Its detail view opens the
   signer-held intermediate workflow and does not offer direct signing actions.
   The API returns a conflict with that recovery path if a client tries direct
   issuance. Key inventory comes from the durable tenant projection and survives refresh and

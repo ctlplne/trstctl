@@ -286,6 +286,13 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 		"reason": offlineReason, "spec": offlineSpec,
 	}, http.StatusCreated)
 	successorOfflineID := dodBreakglassOfflineSuccessorID(t, offlineRekey)
+	_, offlineReceiptBody := dodBreakglassRequest(t, srv, commander, http.MethodGet, "/api/v1/ca/offline-rekeys/"+offlineRekeyCeremony, "", nil, http.StatusOK)
+	var offlineReceipt api.CAOfflineRootRekey
+	if err := json.Unmarshal(offlineReceiptBody, &offlineReceipt); err != nil || offlineReceipt.CeremonyID != offlineRekeyCeremony ||
+		offlineReceipt.Rotation.Successor.ID != successorOfflineID || offlineReceipt.NewSignedByPreviousPEM != newByPreviousPEM ||
+		offlineReceipt.PreviousSignedByNewPEM != previousByNewPEM {
+		t.Fatalf("offline root receipt does not recover exact public cross-certificates: %+v err=%v", offlineReceipt, err)
+	}
 	_, offlineCrossCeremonyBody := dodBreakglassRequest(t, srv, commander, http.MethodPost, "/api/v1/ca/ceremonies", "dod-offline-cross-ceremony", map[string]any{
 		"operation": "import_offline_cross_sign", "authority_id": successorOfflineID,
 		"target_certificate_pem": string(targetPEM), "cross_certificate_pem": targetByNewPEM,

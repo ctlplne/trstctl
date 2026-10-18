@@ -775,6 +775,7 @@ trstctl-cli ca cross-signs get <cross-sign-ceremony-id>
 # Import an offline-root successor and both public cross-certificates. The private
 # root keys never enter these files or trstctl.
 trstctl-cli ca authorities rekey-offline-root <offline-root-authority-id> -f offline-root-rekey.json
+trstctl-cli ca offline-rekeys get <succession-ceremony-id> # recover both public trust paths after a lost response
 trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f offline-target-cross.json
 
 # Review the exact request and deployment-owned quorum/custody readiness first.

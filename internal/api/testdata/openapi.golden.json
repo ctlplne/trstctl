@@ -42067,6 +42067,64 @@
         "x-trstctl-permission": "keys:read"
       }
     },
+    "/api/v1/ca/offline-rekeys/{id}": {
+      "get": {
+        "operationId": "getOfflineRootRekeyReceipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAOfflineRootRekey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Recover an offline-root successor and both public trust paths by ceremony ID",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
     "/api/v1/capabilities": {
       "get": {
         "operationId": "listCapabilities",
