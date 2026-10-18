@@ -3,9 +3,10 @@ import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { CAAuthority } from "@/lib/api";
+import type { CAExistingImportCSR } from "@/lib/api-types.gen";
 import { KeyValue, LabeledInput, LabeledSelect, OfflineSpecFields, type OfflineCAForm } from "./CAHierarchyFormParts";
 
-export type ExistingCAForm = OfflineCAForm & { parentID: string; signerHandle: string };
+export type ExistingCAForm = OfflineCAForm & { parentID: string; signerHandle: string; issuerCertificatePEM: string };
 
 export function ExistingCAImportWorkflow({
   authorities,
@@ -14,9 +15,14 @@ export function ExistingCAImportWorkflow({
   error,
   form,
   imported,
+  mode,
+  preparation,
   onCeremonyIDChange,
   onFormChange,
   onImport,
+  onModeChange,
+  onPrepare,
+  onReadPreparation,
   onStartCeremony,
 }: {
   authorities: CAAuthority[];
@@ -25,14 +31,25 @@ export function ExistingCAImportWorkflow({
   error: string | null;
   form: ExistingCAForm;
   imported: CAAuthority | null;
+  mode: "prepare" | "preprovisioned";
+  preparation: CAExistingImportCSR | null;
   onCeremonyIDChange: (value: string) => void;
   onFormChange: (patch: Partial<ExistingCAForm>) => void;
   onImport: () => void;
+  onModeChange: (mode: "prepare" | "preprovisioned") => void;
+  onPrepare: () => void;
+  onReadPreparation: () => void;
   onStartCeremony: () => void;
 }) {
   const { t } = useTranslation();
-  const ready = form.certificatePEM.trim() !== "" && form.commonName.trim() !== "" && form.signerHandle.trim() !== "";
-  const importReady = ready && ceremonyID.trim() !== "";
+  const prepared = mode === "prepare";
+  const ready =
+    form.commonName.trim() !== "" &&
+    (prepared ? form.issuerCertificatePEM.trim() !== "" : form.certificatePEM.trim() !== "" && form.signerHandle.trim() !== "");
+  const importReady =
+    form.certificatePEM.trim() !== "" &&
+    ceremonyID.trim() !== "" &&
+    (prepared ? preparation?.ceremony_id === ceremonyID.trim() : form.signerHandle.trim() !== "");
   const parents = authorities.filter((authority) => authority.status === "active");
 
   return (
@@ -59,12 +76,31 @@ export function ExistingCAImportWorkflow({
             <Button type="button" size="sm" variant="outline" onClick={onStartCeremony} disabled={busy || !ready}>
               {t("caHierarchy.existing.startCeremony")}
             </Button>
+            {prepared && (
+              <>
+                <Button type="button" size="sm" variant="outline" onClick={onPrepare} disabled={busy || !ready || !ceremonyID.trim()}>
+                  {t("caHierarchy.existing.prepareCSR")}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={onReadPreparation} disabled={busy || !ceremonyID.trim()}>
+                  {t("caHierarchy.existing.readCSR")}
+                </Button>
+              </>
+            )}
             <Button type="button" size="sm" onClick={onImport} disabled={busy || !importReady}>
               {t("caHierarchy.existing.import")}
             </Button>
           </div>
         </div>
         <div className="mt-4 grid gap-4">
+          <LabeledSelect
+            id="existing-ca-import-mode"
+            label={t("caHierarchy.existing.mode")}
+            value={mode}
+            onChange={(value) => onModeChange(value as "prepare" | "preprovisioned")}
+          >
+            <option value="prepare">{t("caHierarchy.existing.prepareMode")}</option>
+            <option value="preprovisioned">{t("caHierarchy.existing.preprovisionedMode")}</option>
+          </LabeledSelect>
           <OfflineSpecFields
             commonNameId="existing-ca-common-name"
             dnsDomainsId="existing-ca-dns-domains"
@@ -87,17 +123,51 @@ export function ExistingCAImportWorkflow({
             ))}
           </LabeledSelect>
           <p className="text-sm text-muted-foreground">{t("caHierarchy.existing.parentHelp")}</p>
-          <LabeledInput
-            id="existing-ca-signer-handle"
-            label={t("caHierarchy.offline.signerHandle")}
-            value={form.signerHandle}
-            required
-            onChange={(value) => onFormChange({ signerHandle: value })}
-            placeholder={t("caHierarchy.existing.placeholderSignerHandle")}
-          />
+          {prepared ? (
+            <>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium" htmlFor="existing-ca-issuer-chain">
+                  {t("caHierarchy.existing.issuerChainPEM")}
+                </label>
+                <textarea
+                  id="existing-ca-issuer-chain"
+                  rows={6}
+                  value={form.issuerCertificatePEM}
+                  onChange={(event) => onFormChange({ issuerCertificatePEM: event.target.value })}
+                  className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+                  placeholder={t("caHierarchy.offline.placeholderCertificate")}
+                />
+              </div>
+              {preparation && (
+                <div className="grid gap-2">
+                  <KeyValue label={t("caHierarchy.offline.signerHandle")} value={preparation.signer_handle} mono />
+                  <KeyValue label={t("caHierarchy.existing.issuerDigest")} value={preparation.issuer_sha256} mono />
+                  <label className="text-sm font-medium" htmlFor="existing-ca-public-csr">
+                    {t("caHierarchy.existing.publicCSR")}
+                  </label>
+                  <textarea
+                    id="existing-ca-public-csr"
+                    rows={6}
+                    value={preparation.csr_pem}
+                    readOnly
+                    className="min-h-36 rounded-control border border-border bg-muted px-3 py-2 font-mono text-xs"
+                  />
+                </div>
+              )}
+            </>
+          ) : (
+            <LabeledInput
+              id="existing-ca-signer-handle"
+              label={t("caHierarchy.offline.signerHandle")}
+              value={form.signerHandle}
+              required
+              onChange={(value) => onFormChange({ signerHandle: value })}
+              placeholder={t("caHierarchy.existing.placeholderSignerHandle")}
+            />
+          )}
           <div className="grid gap-2">
             <label className="text-sm font-medium" htmlFor="existing-ca-chain">
-              {t("caHierarchy.existing.chainPEM")}
+              {prepared ? t("caHierarchy.existing.signedChainPEM") : t("caHierarchy.existing.chainPEM")}
             </label>
             <textarea
               id="existing-ca-chain"

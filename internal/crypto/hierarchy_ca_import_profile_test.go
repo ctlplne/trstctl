@@ -46,3 +46,37 @@ func TestImportedOfflineRootCannotOutrunReviewedKeyAndValidity(t *testing.T) {
 		t.Fatalf("RSA root reviewed as P-256 = %v; want refusal", err)
 	}
 }
+
+func TestExistingCAIssuerPreparationRequiresUsableSigningChain(t *testing.T) {
+	issuerKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(issuerKey.Destroy)
+	issuer, err := crypto.SelfSignedHierarchyCA(issuerKey, crypto.HierarchyCAProfile{
+		CommonName: "prepared issuer", MaxPathLen: 1, TTL: 30 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := crypto.VerifyExistingCAIssuerChain([][]byte{issuer.CertificateDER}); err != nil {
+		t.Fatalf("usable issuer refused: %v", err)
+	}
+	exhaustedKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(exhaustedKey.Destroy)
+	exhausted, err := crypto.SelfSignedHierarchyCA(exhaustedKey, crypto.HierarchyCAProfile{
+		CommonName: "exhausted issuer", MaxPathLen: 0, TTL: 30 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := crypto.VerifyExistingCAIssuerChain([][]byte{exhausted.CertificateDER}); err == nil || !strings.Contains(err.Error(), "cannot sign another intermediate") {
+		t.Fatalf("exhausted issuer accepted: %v", err)
+	}
+	if _, err := crypto.VerifyExistingCAIssuerChain([][]byte{issuer.CertificateDER, exhausted.CertificateDER}); err == nil || !strings.Contains(err.Error(), "not signed") {
+		t.Fatalf("unrelated issuer chain accepted: %v", err)
+	}
+}

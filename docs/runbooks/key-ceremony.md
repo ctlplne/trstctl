@@ -256,17 +256,43 @@ Leaf issuance then uses `POST /api/v1/ca/authorities/{intermediate-id}/issue`.
 Issuing directly from the imported offline root returns HTTP 409 with the
 signer-held intermediate recovery path: its private key is outside trstctl.
 
-## Procedure: importing an existing signer-backed CA chain
+## Procedure: prepare a signer-held key for an external CA
+
+Use this path when the child CA key does not yet exist. Keep only public
+certificate and CSR bytes in the console or CLI.
+
+1. Obtain the external issuer's public certificate chain, direct issuer first
+   through its self-signed root. If that direct issuer is registered as an active
+   authority in this tenant, select its exact `parent_id`.
+2. Preview and open a `prepare_existing_ca` ceremony with the issuer chain in
+   `certificate_pem`, the child `CASpec`, optional `parent_id`, and threshold 2.
+   Two distinct custodians approve its exact purpose with their own sessions.
+3. Call `POST /api/v1/ca/authorities/imported/csr` with the same issuer chain,
+   profile, parent, and ceremony ID. The signer creates a tenant-bound key and
+   returns a public CSR and handle. A different idempotency key or a cold restart
+   still recovers the first CSR. Read it with
+   `GET /api/v1/ca/authorities/imported/csr/{ceremony_id}` after a lost response.
+4. Have the external issuer sign that exact CSR as a CA certificate under the
+   reviewed profile. Verify the child signature and chain with a stock X.509
+   client. Paste only the signed child certificate followed by the exact
+   reviewed issuer chain into `POST /api/v1/ca/authorities/imported`, using the
+   same ceremony, handle, profile and parent. A changed chain, key, profile or
+   parent fails before authority creation.
+5. Read the registered authority, issue a leaf and independently verify that
+   leaf chains through the imported authority. Record the certificate and
+   ceremony audit events.
+
+## Procedure: importing an already-held signer-backed CA chain
 
 Use this when an existing root/intermediate certificate should become a served
 trstctl authority whose private key lives behind a signer handle. Never
 paste private-key PEM into the API or UI.
 
-1. **Pre-provision the signer handle.** The signer holds the CA private
+1. **Use an already-held signer handle.** The signer holds the CA private
    key under a handle constrained to CA signing; the control plane uses only that
    handle and its public key. If the key is not already held by the signer, use
-   the offline-root and signer-held intermediate CSR procedure above. The
-   existing-chain import form itself does not create or import a private key.
+   the preparation procedure above. The legacy existing-chain import form itself
+   does not create or import a private key.
    A handle belongs to one tenant and one approved ceremony on first use. A
    handle already claimed by another tenant or ceremony is refused before a CA
    event is appended. Keep the original ceremony ID for a retry after a lost

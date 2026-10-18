@@ -26,6 +26,8 @@ const { apiMock } = vi.hoisted(() => ({
     cancelCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
     importExistingCA: vi.fn(),
+    prepareExistingImportCSR: vi.fn(),
+    getExistingImportCSR: vi.fn(),
     createOfflineIntermediateCSR: vi.fn(),
     importOfflineIntermediateCA: vi.fn(),
     previewCAAuthorityRotation: vi.fn(),
@@ -59,6 +61,10 @@ vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
 });
+vi.mock("@/lib/caHierarchyImportClient", () => ({
+  prepareExistingImportCSR: apiMock.prepareExistingImportCSR,
+  getExistingImportCSR: apiMock.getExistingImportCSR,
+}));
 
 function renderCAHierarchy(initialEntry = "/ca-hierarchy", runtime?: CapabilityView) {
   const page = (
@@ -631,6 +637,18 @@ describe("CA hierarchy and custody surface", () => {
       max_path_len: 0,
       status: "active",
       created_at: "2026-06-26T14:00:00Z",
+    });
+    apiMock.prepareExistingImportCSR.mockResolvedValue({
+      ceremony_id: "ceremony-existing-ca",
+      issuer_sha256: "reviewed-issuer-digest",
+      csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nPUBLIC CSR\n-----END CERTIFICATE REQUEST-----",
+      signer_handle: "ca-hierarchy-ceremony-existing-ca",
+    });
+    apiMock.getExistingImportCSR.mockResolvedValue({
+      ceremony_id: "ceremony-existing-ca",
+      issuer_sha256: "reviewed-issuer-digest",
+      csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nPUBLIC CSR\n-----END CERTIFICATE REQUEST-----",
+      signer_handle: "ca-hierarchy-ceremony-existing-ca",
     });
     apiMock.rotateCAAuthority.mockResolvedValue({
       predecessor: {
@@ -1559,12 +1577,14 @@ describe("CA hierarchy and custody surface", () => {
     });
     renderCAHierarchy();
 
+    await user.selectOptions(await screen.findByLabelText("Key preparation path"), "preprovisioned");
+
     const chainPEM = "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----";
     await user.clear(await screen.findByLabelText("Signer handle"));
     await user.type(screen.getByLabelText("Signer handle"), "customer-existing-ca");
     await user.type(screen.getByLabelText("Existing CA chain PEM"), chainPEM);
     await user.selectOptions(screen.getByLabelText("Registered parent authority"), "ca-registered-root");
-    await user.click(screen.getByRole("button", { name: "Start existing-CA ceremony" }));
+    await user.click(screen.getByRole("button", { name: "Review CA import ceremony" }));
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
@@ -1594,6 +1614,54 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("customer-existing-ca").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+  }, 15_000);
+
+  it("prepares a tenant-bound public CSR before accepting the externally signed CA chain", async () => {
+    const user = userEvent.setup();
+    apiMock.createCACeremony.mockResolvedValueOnce({
+      id: "ceremony-existing-ca",
+      purpose: "prepare-existing-ca:reviewed",
+      threshold: 2,
+      approvals: 0,
+      status: "pending",
+    });
+    renderCAHierarchy();
+    const issuerPEM = "-----BEGIN CERTIFICATE-----\nISSUER\n-----END CERTIFICATE-----";
+    const signedChain = "-----BEGIN CERTIFICATE-----\nCHILD\n-----END CERTIFICATE-----\n" + issuerPEM;
+    await user.type(await screen.findByLabelText("External issuer chain PEM"), issuerPEM);
+    await user.click(screen.getByRole("button", { name: "Review CA import ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
+    await waitFor(() =>
+      expect(apiMock.createCACeremony).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "prepare_existing_ca",
+          certificate_pem: issuerPEM,
+          threshold: 2,
+        }),
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Create reviewed public CSR" }));
+    await waitFor(() =>
+      expect(apiMock.prepareExistingImportCSR).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ceremony_id: "ceremony-existing-ca",
+          certificate_pem: issuerPEM,
+        }),
+      ),
+    );
+    expect(((await screen.findByLabelText("Public CSR to sign externally")) as HTMLTextAreaElement).value).toContain("PUBLIC CSR");
+    await user.type(screen.getByLabelText("Signed child CA certificate plus issuer chain PEM"), signedChain);
+    await user.click(screen.getByRole("button", { name: "Import existing CA" }));
+    await waitFor(() =>
+      expect(apiMock.importExistingCA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ceremony_id: "ceremony-existing-ca",
+          signer_handle: "ca-hierarchy-ceremony-existing-ca",
+          certificate_pem: signedChain,
+        }),
+      ),
+    );
+    expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
   }, 15_000);
 
   it("surfaces issuer permission errors without hiding ceremony and custody actions", async () => {

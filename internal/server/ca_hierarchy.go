@@ -174,6 +174,8 @@ func ceremonyPreviewChanges(operation string) []string {
 		return []string{"Prepare an m-of-n ceremony to trust the supplied public offline-root certificate. The offline private key stays outside trstctl."}
 	case "import_existing_ca":
 		return []string{"Prepare an m-of-n ceremony to bind the supplied public CA chain to an existing signer-held key handle."}
+	case "prepare_existing_ca":
+		return []string{"Prepare an m-of-n ceremony to create a tenant-bound signer-held CA key and public CSR for the reviewed external issuer chain. No key is created by this preview."}
 	case "create_intermediate":
 		return []string{"Prepare an m-of-n ceremony for a new signer-backed intermediate under the reviewed parent authority."}
 	case "create_offline_intermediate":
@@ -559,6 +561,33 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	if err != nil {
 		return api.CAAuthority{}, err
 	}
+	ceremony, err := h.store.GetKeyCeremony(ctx, tenantID, req.CeremonyID)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	preparedImport := strings.HasPrefix(ceremony.Purpose, "prepare-existing-ca:")
+	var preparation store.CASignerPreparation
+	if preparedImport {
+		if len(chainDER) < 2 || req.SignerHandle != hierarchySignerHandle(req.CeremonyID) {
+			return api.CAAuthority{}, fmt.Errorf("%w: prepared import requires its signer handle and complete child-to-issuer chain", api.ErrCAHierarchyInvalid)
+		}
+		preparation, err = h.store.GetCASignerPreparation(ctx, tenantID, req.CeremonyID, req.SignerHandle)
+		if err != nil {
+			return api.CAAuthority{}, fmt.Errorf("%w: no completed signer preparation for this ceremony: %v", api.ErrCAHierarchyConflict, err)
+		}
+		if err := h.checkPreparedExistingCSREvent(ctx, preparation); err != nil {
+			return api.CAAuthority{}, err
+		}
+		purpose, err := preparedExistingCAPurpose(chainDER[1:], req.Spec, req.ParentID)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
+		if ceremony.Purpose != purpose || preparation.Purpose != purpose ||
+			preparation.ParentID != req.ParentID ||
+			preparation.IssuerSHA256 != crypto.SHA256Hex(flattenDERChain(chainDER[1:])) {
+			return api.CAAuthority{}, fmt.Errorf("%w: signed CA chain differs from the approved issuer, parent or profile", api.ErrCAHierarchyConflict)
+		}
+	}
 	client := h.signer.Client()
 	if client == nil {
 		return api.CAAuthority{}, api.ErrCAHierarchyUnavailable
@@ -571,9 +600,12 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	if err != nil {
 		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
-	purpose, err := existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
-	if err != nil {
-		return api.CAAuthority{}, err
+	purpose := ceremony.Purpose
+	if !preparedImport {
+		purpose, err = existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
 	}
 	if req.ParentID != "" {
 		parent, err := h.store.GetCAAuthority(ctx, tenantID, req.ParentID)
@@ -588,6 +620,9 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 		return api.CAAuthority{}, err
 	}
 	authorityID := uuid.NewString()
+	if preparedImport {
+		authorityID = crypto.UUIDv5OID([]byte("ca-existing-import:" + tenantID + ":" + req.CeremonyID))
+	}
 	var created store.CAAuthority
 	var appended events.Event
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -1560,6 +1595,15 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 			return "", err
 		}
 		return existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
+	case "prepare_existing_ca":
+		if strings.TrimSpace(req.SignerHandle) != "" {
+			return "", fmt.Errorf("%w: prepare_existing_ca generates its signer handle; do not supply one", api.ErrCAHierarchyInvalid)
+		}
+		issuerChainDER, _, err := certificateChainPEM(req.CertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		return preparedExistingCAPurpose(issuerChainDER, req.Spec, req.ParentID)
 	case "create_offline_intermediate":
 		return offlineIntermediatePurpose(req.ParentID, req.Spec)
 	case "issue_intermediate_csr":
@@ -1687,73 +1731,6 @@ func flattenDERChain(chain [][]byte) []byte {
 		out = append(out, der...)
 	}
 	return out
-}
-
-func csrDERFromPEM(csrPEM string) ([]byte, error) {
-	block, _ := pem.Decode([]byte(csrPEM))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return nil, fmt.Errorf("%w: csr_pem must contain one CERTIFICATE REQUEST PEM block", api.ErrCAHierarchyInvalid)
-	}
-	return block.Bytes, nil
-}
-
-func certificateChainPEM(raw string) ([][]byte, string, error) {
-	rest := []byte(raw)
-	var chain [][]byte
-	var normalized []byte
-	for {
-		block, next := pem.Decode(rest)
-		if block == nil {
-			if strings.TrimSpace(string(rest)) != "" {
-				return nil, "", fmt.Errorf("%w: certificate_pem contains trailing non-PEM data", api.ErrCAHierarchyInvalid)
-			}
-			break
-		}
-		if strings.Contains(block.Type, "PRIVATE KEY") {
-			return nil, "", fmt.Errorf("%w: certificate_pem must not contain private key material", api.ErrCAHierarchyInvalid)
-		}
-		if block.Type != "CERTIFICATE" {
-			return nil, "", fmt.Errorf("%w: certificate_pem contains unsupported PEM block %q", api.ErrCAHierarchyInvalid, block.Type)
-		}
-		der := append([]byte(nil), block.Bytes...)
-		chain = append(chain, der)
-		normalized = append(normalized, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
-		rest = next
-	}
-	if len(chain) == 0 {
-		return nil, "", fmt.Errorf("%w: certificate_pem must contain at least one CERTIFICATE PEM block", api.ErrCAHierarchyInvalid)
-	}
-	return chain, string(normalized), nil
-}
-
-func singleCertificatePEM(raw string) ([]byte, string, error) {
-	rest := []byte(raw)
-	var der []byte
-	for {
-		block, next := pem.Decode(rest)
-		if block == nil {
-			if strings.TrimSpace(string(rest)) != "" {
-				return nil, "", fmt.Errorf("%w: certificate_pem contains trailing non-PEM data", api.ErrCAHierarchyInvalid)
-			}
-			break
-		}
-		if strings.Contains(block.Type, "PRIVATE KEY") {
-			return nil, "", fmt.Errorf("%w: certificate_pem must not contain private key material", api.ErrCAHierarchyInvalid)
-		}
-		if block.Type != "CERTIFICATE" {
-			return nil, "", fmt.Errorf("%w: certificate_pem contains unsupported PEM block %q", api.ErrCAHierarchyInvalid, block.Type)
-		}
-		if der != nil {
-			return nil, "", fmt.Errorf("%w: certificate_pem must contain exactly one CERTIFICATE block", api.ErrCAHierarchyInvalid)
-		}
-		der = append([]byte(nil), block.Bytes...)
-		rest = next
-	}
-	if der == nil {
-		return nil, "", fmt.Errorf("%w: certificate_pem must contain one CERTIFICATE PEM block", api.ErrCAHierarchyInvalid)
-	}
-	normalized := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	return der, normalized, nil
 }
 
 func validateCASpec(spec api.CASpec) error {

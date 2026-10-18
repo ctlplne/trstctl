@@ -34,6 +34,8 @@ type CAHierarchyService interface {
 	CreateRoot(ctx context.Context, tenantID string, req CACreateRootRequest) (CAAuthority, error)
 	ImportOfflineRoot(ctx context.Context, tenantID string, req CAImportOfflineRootRequest) (CAAuthority, error)
 	ImportExisting(ctx context.Context, tenantID string, req CAImportExistingRequest) (CAAuthority, error)
+	PrepareExistingImportCSR(ctx context.Context, tenantID string, req CAPrepareExistingImportCSRRequest) (CAExistingImportCSR, error)
+	GetExistingImportCSR(ctx context.Context, tenantID, ceremonyID string) (CAExistingImportCSR, error)
 	CreateIntermediate(ctx context.Context, tenantID string, req CACreateIntermediateRequest) (CAAuthority, error)
 	CreateOfflineIntermediateCSR(ctx context.Context, tenantID, caID string, req CACreateOfflineIntermediateCSRRequest) (CAIntermediateCSR, error)
 	ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req CAImportOfflineIntermediateRequest) (CAAuthority, error)
@@ -128,6 +130,23 @@ type CAImportExistingRequest struct {
 	SignerHandle   string `json:"signer_handle"`
 	ParentID       string `json:"parent_id,omitempty"`
 	Spec           CASpec `json:"spec"`
+}
+
+// CAPrepareExistingImportCSRRequest binds a new signer-held CA key to one
+// reviewed external issuer chain before returning public signing material.
+type CAPrepareExistingImportCSRRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+	ParentID       string `json:"parent_id,omitempty"`
+	Spec           CASpec `json:"spec"`
+}
+
+type CAExistingImportCSR struct {
+	CeremonyID   string `json:"ceremony_id"`
+	ParentID     string `json:"parent_id,omitempty"`
+	IssuerSHA256 string `json:"issuer_sha256"`
+	CSRPem       string `json:"csr_pem"`
+	SignerHandle string `json:"signer_handle"`
 }
 
 type CACreateIntermediateRequest struct {
@@ -517,6 +536,43 @@ func (a *API) importExistingCA(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, ca, nil
 	})
+}
+
+//trstctl:mutation
+func (a *API) prepareExistingImportCSR(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAPrepareExistingImportCSRRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		csr, err := a.caHierarchy.PrepareExistingImportCSR(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, csr, nil
+	})
+}
+
+func (a *API) getExistingImportCSR(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.caHierarchy == nil {
+		a.writeError(w, ErrCAHierarchyUnavailable)
+		return
+	}
+	csr, err := a.caHierarchy.GetExistingImportCSR(r.Context(), tenantID, r.PathValue("ceremony_id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, csr)
 }
 
 //trstctl:mutation

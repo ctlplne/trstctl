@@ -80,9 +80,18 @@ func TestImportedCAParentRequiresExactNextCertificate(t *testing.T) {
 	if err := validateImportedCAParent(parent, [][]byte{first.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyInvalid) {
 		t.Fatalf("parent on imported root = %v, want invalid", err)
 	}
+	if err := validatePreparedCAIssuerParent(parent, [][]byte{first.CertificateDER}); err != nil {
+		t.Fatalf("exact prepared issuer parent rejected: %v", err)
+	}
+	if err := validatePreparedCAIssuerParent(parent, [][]byte{second.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyInvalid) {
+		t.Fatalf("prepared issuer differs from registered parent = %v, want invalid", err)
+	}
 	parent.Status = "superseded"
 	if err := validateImportedCAParent(parent, [][]byte{second.CertificateDER, first.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyConflict) {
 		t.Fatalf("superseded parent = %v, want conflict", err)
+	}
+	if err := validatePreparedCAIssuerParent(parent, [][]byte{first.CertificateDER}); !errors.Is(err, api.ErrCAHierarchyConflict) {
+		t.Fatalf("superseded prepared issuer = %v, want conflict", err)
 	}
 }
 
@@ -1639,6 +1648,128 @@ func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
 	}
 	if !h.hasEvent(t, "ca.authority.imported") || !h.hasEvent(t, "ca.endentity.issued") {
 		t.Fatal("imported existing CA workflow did not emit the expected events")
+	}
+}
+
+func TestServedCAExistingImportPreparesDurableCSR(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "existing-prep-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverOne := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "existing-prep-custodian-one", []string{"issuers:write", "issuers:read"})
+	approverTwo := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "existing-prep-custodian-two", []string{"issuers:write", "issuers:read"})
+	rootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(rootKey.Destroy)
+	root, err := crypto.SelfSignedHierarchyCA(rootKey, crypto.HierarchyCAProfile{
+		CommonName: "existing prep issuer", MaxPathLen: 1, TTL: 365 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"prepared.example.test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := map[string]any{
+		"common_name": "prepared importing CA", "max_path_len": 0,
+		"ttl_seconds":           int64((30 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"prepared.example.test"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", map[string]any{
+		"operation": "prepare_existing_ca", "threshold": 2,
+		"certificate_pem": string(root.CertificatePEM), "spec": spec,
+	})
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"ready":true`)) {
+		t.Fatalf("prepare existing CA preview = %d body=%s; want reviewed ready plan", code, body)
+	}
+	ceremony := createCACeremonyWithCertificate(t, h, operator, "prepare_existing_ca", string(root.CertificatePEM), spec, 2, "existing-prep-ceremony")
+	preparationBody := map[string]any{"ceremony_id": ceremony.ID, "certificate_pem": string(root.CertificatePEM), "spec": spec}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported/csr", operator, "existing-prep-before-quorum", preparationBody)
+	if code != http.StatusConflict {
+		t.Fatalf("prepare before quorum = %d body=%s; want 409", code, body)
+	}
+	approveCACeremony(t, h, approverOne, ceremony.ID, 1, "existing-prep-approval-one")
+	approveCACeremony(t, h, approverTwo, ceremony.ID, 2, "existing-prep-approval-two")
+	beforePreparation := servedEventCount(t, h, projections.EventCAIntermediateCSRIssued)
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/ca/authorities/imported/csr/"+ceremony.ID, operator, "", nil)
+	if code != http.StatusNotFound || servedEventCount(t, h, projections.EventCAIntermediateCSRIssued) != beforePreparation {
+		t.Fatalf("read before preparation = %d body=%s; want 404 with no event append", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported/csr", operator, "existing-prep-csr-first", preparationBody)
+	if code != http.StatusCreated {
+		t.Fatalf("prepare approved CA CSR = %d body=%s; want 201", code, body)
+	}
+	var prepared api.CAExistingImportCSR
+	if err := json.Unmarshal(body, &prepared); err != nil || prepared.CSRPem == "" || prepared.SignerHandle == "" || prepared.IssuerSHA256 == "" {
+		t.Fatalf("decode prepared CA CSR: %v %+v", err, prepared)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/ca/authorities/imported/csr/"+ceremony.ID, operator, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("read prepared CA CSR = %d body=%s; want 200", code, body)
+	}
+	var readback api.CAExistingImportCSR
+	if err := json.Unmarshal(body, &readback); err != nil || readback != prepared {
+		t.Fatalf("CSR readback differs: %v got=%+v want=%+v", err, readback, prepared)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported/csr", operator, "existing-prep-csr-retry", preparationBody)
+	if code != http.StatusCreated {
+		t.Fatalf("prepare retry = %d body=%s; want 201", code, body)
+	}
+	var retried api.CAExistingImportCSR
+	if err := json.Unmarshal(body, &retried); err != nil || retried != prepared {
+		t.Fatalf("CSR retry differs: %v got=%+v want=%+v", err, retried, prepared)
+	}
+	if got := servedEventCount(t, h, projections.EventCAIntermediateCSRIssued); got != beforePreparation+1 {
+		t.Fatalf("CSR retry appended %d preparation events; want one after %d", got, beforePreparation)
+	}
+	csrBlock, _ := pem.Decode([]byte(prepared.CSRPem))
+	if csrBlock == nil {
+		t.Fatal("prepared CSR is not PEM")
+	}
+	signed, err := crypto.SignIntermediateHierarchyCAFromCSR(root.CertificateDER, rootKey, csrBlock.Bytes, crypto.HierarchyCAProfile{
+		CommonName: "prepared importing CA", MaxPathLen: 0, TTL: 30 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"prepared.example.test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain := string(signed.CertificatePEM) + string(root.CertificatePEM)
+	imported := importExistingCA(t, h, operator, ceremony.ID, chain, prepared.SignerHandle, spec, "existing-prep-import")
+	if imported.Kind != "intermediate" || imported.ParentID != nil || imported.SignerHandle != prepared.SignerHandle {
+		t.Fatalf("prepared authority = %+v", imported)
+	}
+	issued := issueHierarchyLeaf(t, h, operator, imported.ID, "leaf.prepared.example.test", "existing-prep-leaf")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(issued.CertificatePEM)), caCertDER(t, []byte(imported.CertificatePEM))); err != nil {
+		t.Fatalf("prepared imported CA did not serve leaf: %v", err)
+	}
+}
+
+func TestServedCAExistingImportPendingCSRReadDoesNotPublish(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "pending-csr-reader", []string{"issuers:read"})
+	const ceremonyID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	handle := hierarchySignerHandle(ceremonyID)
+	if err := h.store.ClaimCASignerHandle(t.Context(), h.tenant, ceremonyID, handle); err != nil {
+		t.Fatal(err)
+	}
+	receipt := store.CASignerPreparation{
+		TenantID: h.tenant, CeremonyID: ceremonyID, Handle: handle,
+		IssuerSHA256: strings.Repeat("a", 64), Purpose: "prepare-existing-ca:pending",
+		CSRPEM: "public CSR", EventID: "ca-existing-import-csr-" + ceremonyID,
+		EventTime: time.Now().UTC().Truncate(time.Microsecond), EventActor: []byte(`null`),
+		EventPayload: []byte(`{"ca_id":"pending"}`),
+	}
+	if _, err := h.store.ReserveCASignerPreparation(t.Context(), receipt); err != nil {
+		t.Fatal(err)
+	}
+	before := servedEventCount(t, h, projections.EventCAIntermediateCSRIssued)
+	code, body := doBearer(t, h.ts, http.MethodGet, "/api/v1/ca/authorities/imported/csr/"+ceremonyID, operator, "", nil)
+	if code != http.StatusConflict || !bytes.Contains(body, []byte("pending")) {
+		t.Fatalf("pending CSR read = %d body=%s; want 409 pending", code, body)
+	}
+	if got := servedEventCount(t, h, projections.EventCAIntermediateCSRIssued); got != before {
+		t.Fatalf("GET appended %d CSR events; want %d", got, before)
 	}
 }
 

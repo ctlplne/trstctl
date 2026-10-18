@@ -6609,6 +6609,7 @@
               "create_root",
               "import_offline_root",
               "import_existing_ca",
+              "prepare_existing_ca",
               "create_intermediate",
               "create_offline_intermediate",
               "issue_intermediate_csr",
@@ -6699,6 +6700,7 @@
               "create_root",
               "import_offline_root",
               "import_existing_ca",
+              "prepare_existing_ca",
               "create_intermediate",
               "create_offline_intermediate",
               "issue_intermediate_csr",
@@ -6949,6 +6951,34 @@
           "private_count",
           "external_registry_count",
           "authority_count"
+        ],
+        "type": "object"
+      },
+      "CAExistingImportCSR": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "csr_pem": {
+            "type": "string"
+          },
+          "issuer_sha256": {
+            "type": "string"
+          },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "signer_handle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "issuer_sha256",
+          "csr_pem",
+          "signer_handle"
         ],
         "type": "object"
       },
@@ -7243,6 +7273,30 @@
           "new_signed_by_previous_pem",
           "previous_signed_by_new_pem",
           "reason",
+          "spec"
+        ],
+        "type": "object"
+      },
+      "CAPrepareExistingImportCSRRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CASpec"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "certificate_pem",
           "spec"
         ],
         "type": "object"
@@ -40614,6 +40668,132 @@
         ],
         "summary": "Import an existing signer-backed CA certificate chain after ceremony quorum",
         "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/imported/csr": {
+      "post": {
+        "operationId": "prepareExistingImportCSR",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAPrepareExistingImportCSRRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAExistingImportCSR"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Reserve a tenant-bound CA signing key and durable public CSR for an external issuer",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/imported/csr/{ceremony_id}": {
+      "get": {
+        "operationId": "getExistingImportCSR",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ceremony_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAExistingImportCSR"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read a completed public CSR preparation by ceremony",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/ca/authorities/intermediates": {

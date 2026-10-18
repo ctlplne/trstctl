@@ -1,5 +1,15 @@
 # Console bundle budget decisions
 
+## CA import replay — 2026-10-18
+
+The authenticated navigation shell now loads after the browser resolves a
+session. Login remains in the entry bundle, and authenticated routes still load
+the full shell before showing a page. The complete startup graph measures
+232,237 Brotli bytes on this candidate, under the unchanged 240 kB limit;
+the largest page and all-JavaScript limits remain 30 kB and 1,000 kB.
+The route and CA hierarchy tests verify that the deferred shell and import
+controls still render.
+
 ## Current decision — 2026-10-08
 
 The owner raised the all-JavaScript ceiling from **700 kB to 1,000 kB**. That

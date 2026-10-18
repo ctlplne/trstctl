@@ -1290,6 +1290,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/imported/csr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reserve a tenant-bound CA signing key and durable public CSR for an external issuer */
+        post: operations["prepareExistingImportCSR"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/imported/csr/{ceremony_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a completed public CSR preparation by ceremony */
+        get: operations["getExistingImportCSR"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/intermediates": {
         parameters: {
             query?: never;
@@ -9082,7 +9116,7 @@ export interface components {
             changes: string[];
             normalized_spec: components["schemas"]["CASpec"];
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
             parent?: components["schemas"]["CACeremonyPlanAuthority"];
             preview_external_effects: string[];
             preview_writes: string[];
@@ -9100,7 +9134,7 @@ export interface components {
             cross_certificate_pem?: string;
             csr_pem?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
             /** Format: uuid */
             parent_id?: string;
             reason?: string;
@@ -9171,6 +9205,15 @@ export interface components {
             external_registry_count: number;
             private_count: number;
             public_count: number;
+        };
+        CAExistingImportCSR: {
+            /** Format: uuid */
+            ceremony_id: string;
+            csr_pem: string;
+            issuer_sha256: string;
+            /** Format: uuid */
+            parent_id?: string;
+            signer_handle: string;
         };
         CAImportExistingRequest: {
             /** Format: uuid */
@@ -9261,6 +9304,14 @@ export interface components {
             reason: string;
             spec: components["schemas"]["CASpec"];
             successor_certificate_pem: string;
+        };
+        CAPrepareExistingImportCSRRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            /** Format: uuid */
+            parent_id?: string;
+            spec: components["schemas"]["CASpec"];
         };
         CASpec: {
             common_name: string;
@@ -20198,6 +20249,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    prepareExistingImportCSR: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAPrepareExistingImportCSRRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAExistingImportCSR"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getExistingImportCSR: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ceremony_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAExistingImportCSR"];
                 };
             };
             /** @description client error */

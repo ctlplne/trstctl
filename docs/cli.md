@@ -726,6 +726,28 @@ cat > existing-ca-import.json <<'JSON'
 JSON
 trstctl-cli ca authorities import-existing -f existing-ca-import.json
 
+# Preferred path when the child CA key does not already exist in signer custody:
+# pin the external issuer's public chain and child profile in one ceremony.
+# Each custodian approves with their own authenticated CLI token.
+cat > prepared-ca-ceremony.json <<'JSON'
+{"operation":"prepare_existing_ca","threshold":2,"certificate_pem":"<issuer-first public chain PEM>","spec":{"common_name":"Example Imported Issuing CA","ttl_seconds":2592000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca ceremonies preview -f prepared-ca-ceremony.json
+trstctl-cli ca ceremonies start -f prepared-ca-ceremony.json
+trstctl-cli ca ceremonies approve <preparation-ceremony-id>
+trstctl-cli ca ceremonies approve <preparation-ceremony-id>
+cat > prepared-ca-csr.json <<'JSON'
+{"ceremony_id":"<preparation-ceremony-id>","certificate_pem":"<same issuer-first public chain PEM>","spec":{"common_name":"Example Imported Issuing CA","ttl_seconds":2592000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca authorities prepare-import-csr -f prepared-ca-csr.json
+trstctl-cli ca authorities get-import-csr <preparation-ceremony-id>
+# Sign the returned public CSR on the external CA. Import the signed child
+# certificate followed by the exact reviewed issuer chain; never submit a key.
+cat > prepared-ca-import.json <<'JSON'
+{"ceremony_id":"<preparation-ceremony-id>","certificate_pem":"<signed child PEM followed by reviewed issuer chain>","signer_handle":"<returned signer handle>","spec":{"common_name":"Example Imported Issuing CA","ttl_seconds":2592000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca authorities import-existing -f prepared-ca-import.json
+
 cat > offline-intermediate-ceremony.json <<'JSON'
 {"operation":"create_offline_intermediate","parent_id":"<offline-root-authority-id>","threshold":2,"spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
 JSON

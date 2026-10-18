@@ -10386,7 +10386,8 @@ export const messages = {
     description: "Heading for the existing signer-backed CA import workflow.",
   },
   "caHierarchy.existing.description": {
-    defaultMessage: "Bind an already-existing root or intermediate certificate chain to a signer-held key handle after m-of-n review.",
+    defaultMessage:
+      "Prepare a tenant-bound signing key and public CSR for your external CA, then import the signed chain after two distinct custodians approve. Already-held signer keys remain available as an advanced path.",
     description: "Short description for the existing signer-backed CA import workflow.",
   },
   "caHierarchy.existing.errorTitle": {
@@ -10394,11 +10395,11 @@ export const messages = {
     description: "Error title for failed existing CA import workflow actions.",
   },
   "caHierarchy.existing.formHeading": {
-    defaultMessage: "Import signer-backed chain",
+    defaultMessage: "Prepare and import a signer-backed chain",
     description: "Subheading for the existing CA import form.",
   },
   "caHierarchy.existing.startCeremony": {
-    defaultMessage: "Start existing-CA ceremony",
+    defaultMessage: "Review CA import ceremony",
     description: "Button label for opening an existing CA import ceremony.",
   },
   "caHierarchy.existing.import": {
@@ -10409,6 +10410,26 @@ export const messages = {
     defaultMessage: "Existing CA chain PEM",
     description: "Field label for the imported public existing CA chain.",
   },
+  "caHierarchy.existing.mode": { defaultMessage: "Key preparation path", description: "Choice of new tenant-bound signer key or previously provisioned key." },
+  "caHierarchy.existing.prepareMode": { defaultMessage: "Prepare a new tenant-bound key and CSR", description: "Default existing-CA import mode." },
+  "caHierarchy.existing.preprovisionedMode": { defaultMessage: "Use an already-held signer key", description: "Advanced existing-CA import mode." },
+  "caHierarchy.existing.issuerChainPEM": {
+    defaultMessage: "External issuer chain PEM",
+    description: "Public direct issuer first, then its chain to the self-signed root.",
+  },
+  "caHierarchy.existing.signedChainPEM": {
+    defaultMessage: "Signed child CA certificate plus issuer chain PEM",
+    description: "Public signed child certificate first, followed by exact reviewed issuer chain.",
+  },
+  "caHierarchy.existing.prepareCSR": {
+    defaultMessage: "Create reviewed public CSR",
+    description: "Generate a signer-held key and durable CSR after ceremony approval.",
+  },
+  "caHierarchy.existing.readCSR": { defaultMessage: "Recover public CSR", description: "Read the original CSR by ceremony after a lost response or restart." },
+  "caHierarchy.existing.publicCSR": { defaultMessage: "Public CSR to sign externally", description: "Read-only generated CA signing request." },
+  "caHierarchy.existing.issuerDigest": { defaultMessage: "Reviewed issuer chain SHA-256", description: "Digest bound to the CA import preparation." },
+  "caHierarchy.existing.prepareFailed": { defaultMessage: "Could not prepare signer-held CA CSR", description: "CA CSR preparation failure." },
+  "caHierarchy.existing.readFailed": { defaultMessage: "Could not recover prepared CA CSR", description: "CA CSR readback failure." },
   "caHierarchy.existing.parentAuthority": {
     defaultMessage: "Registered parent authority",
     description: "Selector for the exact registered issuer of an imported intermediate CA.",
@@ -10419,7 +10440,7 @@ export const messages = {
   },
   "caHierarchy.existing.parentHelp": {
     defaultMessage:
-      "If the direct issuer is registered here, select it. Its certificate must exactly match the next certificate in the chain. For a new signer-held key under an offline root, use the Offline root and intermediate CSR workflow above.",
+      "If the direct issuer is registered here, select it. Its certificate must exactly match the next certificate in the signed chain. New signer keys are bound to this tenant before the public CSR is returned.",
     description: "Explains exact parent binding and the supported signer-held CSR preparation path.",
   },
   "caHierarchy.existing.ceremonyID": {

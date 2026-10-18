@@ -34,6 +34,41 @@ func existingCAPurpose(chainDER [][]byte, signerHandle string, spec api.CASpec, 
 	return purpose, nil
 }
 
+func preparedExistingCAPurpose(issuerChainDER [][]byte, spec api.CASpec, parentID string) (string, error) {
+	if len(issuerChainDER) == 0 {
+		return "", fmt.Errorf("%w: issuer certificate chain is required", api.ErrCAHierarchyInvalid)
+	}
+	if _, err := crypto.VerifyExistingCAIssuerChain(issuerChainDER); err != nil {
+		return "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	profilePurpose, err := hierarchyPurpose("create_root", "", spec)
+	if err != nil {
+		return "", err
+	}
+	purpose := "prepare-existing-ca:" + crypto.SHA256Hex(flattenDERChain(issuerChainDER)) + ":" + profilePurpose
+	if parentID != "" {
+		purpose += ":parent:" + parentID
+	}
+	return purpose, nil
+}
+
+func validatePreparedCAIssuerParent(parent store.CAAuthority, issuerChainDER [][]byte) error {
+	if parent.Status != "active" {
+		return fmt.Errorf("%w: selected issuer authority is not active", api.ErrCAHierarchyConflict)
+	}
+	if len(issuerChainDER) == 0 {
+		return fmt.Errorf("%w: issuer chain is empty", api.ErrCAHierarchyInvalid)
+	}
+	parentDER, err := firstCertDER(parent.CertificatePEM)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(parentDER, issuerChainDER[0]) {
+		return fmt.Errorf("%w: selected issuer authority differs from reviewed issuer certificate", api.ErrCAHierarchyInvalid)
+	}
+	return nil
+}
+
 // validateImportedCAParent binds a reviewed parent to the next certificate in
 // the supplied chain. A shared subject name or matching key identifier is not
 // enough: the operator selected this exact registered certificate and tenant.

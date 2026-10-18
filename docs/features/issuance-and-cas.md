@@ -181,8 +181,20 @@ reviewed resource: `root:<sha256-of-ca-spec>`,
 `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>`, or
 `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. Existing CA import uses
 `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>`,
-binding the reviewed chain to the exact signer-held key handle, and renewal/re-key
-uses `ca-rekey-v2:<sha256-of-authority/spec/reason>` to create fresh signer-held
+binding the reviewed chain to the exact signer-held key handle.
+
+For a key that trstctl must create, use `prepare_existing_ca` with the public
+external issuer chain and child CA profile. After two distinct custodians
+approve, `POST /api/v1/ca/authorities/imported/csr` reserves a tenant-bound
+signer key before returning its public CSR. The external issuer signs that CSR;
+`GET /api/v1/ca/authorities/imported/csr/{ceremony_id}` recovers the same CSR
+after a lost response or restart. Import the signed child certificate followed
+by the exact reviewed issuer chain with the same ceremony, signer handle and
+profile. The server checks the public key, issuer chain and optional registered
+parent before consuming the ceremony. An already-held signer key uses the
+`import_existing_ca` ceremony above.
+
+CA renewal/re-key uses `ca-rekey-v2:<sha256-of-authority/spec/reason>` to create fresh signer-held
 CA material for the selected authority with the reviewed lifetime and profile.
 Short approvals return `ErrQuorumNotMet`; an opener approving their own
 ceremony, or a ceremony already used or opened for a different resource/spec, fails
@@ -203,6 +215,7 @@ mutation rechecks authorization and state under lock instead of trusting the pre
 The served hierarchy API lives at `/api/v1/ca/ceremonies/preview`,
 `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
 `/api/v1/ca/authorities/offline-roots`, `/api/v1/ca/authorities/imported`,
+`/api/v1/ca/authorities/imported/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
 `/api/v1/ca/authorities/{id}/issue`, with zero-downtime successor activation at

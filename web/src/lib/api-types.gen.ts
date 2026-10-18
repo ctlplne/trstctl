@@ -1610,7 +1610,7 @@ export interface CACeremonyPlanPreview {
   capability: "F48";
   changes: string[];
   normalized_spec: CASpec;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
   parent?: CACeremonyPlanAuthority;
   preview_external_effects: string[];
   preview_writes: string[];
@@ -1627,7 +1627,7 @@ export interface CACeremonyStartRequest {
   certificate_pem?: string;
   cross_certificate_pem?: string;
   csr_pem?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
   parent_id?: string;
   reason?: string;
   reverse_cross_certificate_pem?: string;
@@ -1694,6 +1694,14 @@ export interface CADiscoverySummary {
   external_registry_count: number;
   private_count: number;
   public_count: number;
+}
+
+export interface CAExistingImportCSR {
+  ceremony_id: string;
+  csr_pem: string;
+  issuer_sha256: string;
+  parent_id?: string;
+  signer_handle: string;
 }
 
 export interface CAImportExistingRequest {
@@ -1780,6 +1788,13 @@ export interface CAOfflineRootRekeyRequest {
   reason: string;
   spec: CASpec;
   successor_certificate_pem: string;
+}
+
+export interface CAPrepareExistingImportCSRRequest {
+  ceremony_id: string;
+  certificate_pem: string;
+  parent_id?: string;
+  spec: CASpec;
 }
 
 export interface CASpec {

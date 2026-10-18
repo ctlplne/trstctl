@@ -464,7 +464,7 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root"}},
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root"}},
 		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(),
 		"target_certificate_pem": str(), "cross_certificate_pem": str(), "reverse_cross_certificate_pem": str(),
 		"reason": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
@@ -504,6 +504,12 @@ func componentSchemas() map[string]*Schema {
 	caImportExistingReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(), "signer_handle": str(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "certificate_pem", "signer_handle", "spec")
+	caPrepareExistingImportCSRReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "certificate_pem": str(), "parent_id": uuid(), "spec": ref("CASpec"),
+	}, "ceremony_id", "certificate_pem", "spec")
+	caExistingImportCSR := object(map[string]*Schema{
+		"ceremony_id": uuid(), "parent_id": uuid(), "issuer_sha256": str(), "csr_pem": str(), "signer_handle": str(),
+	}, "ceremony_id", "issuer_sha256", "csr_pem", "signer_handle")
 	caCreateIntermediateReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "parent_id", "spec")
@@ -6986,6 +6992,8 @@ func componentSchemas() map[string]*Schema {
 		"CACreateRootRequest":                      caCreateRootReq,
 		"CAImportOfflineRootRequest":               caImportOfflineRootReq,
 		"CAImportExistingRequest":                  caImportExistingReq,
+		"CAPrepareExistingImportCSRRequest":        caPrepareExistingImportCSRReq,
+		"CAExistingImportCSR":                      caExistingImportCSR,
 		"CACreateIntermediateRequest":              caCreateIntermediateReq,
 		"CACreateOfflineIntermediateCSRRequest":    caCreateOfflineIntermediateCSRReq,
 		"CAImportOfflineIntermediateRequest":       caImportOfflineIntermediateReq,

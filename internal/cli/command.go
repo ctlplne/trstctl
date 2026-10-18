@@ -132,6 +132,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"ca", "authorities", "create-root"}, Method: "POST", Path: "/api/v1/ca/authorities/roots", Body: bodyFile, Summary: "Create a signer-backed root CA after ceremony quorum"},
 	{Name: []string{"ca", "authorities", "import-offline-root"}, Method: "POST", Path: "/api/v1/ca/authorities/offline-roots", Body: bodyFile, Summary: "Import an offline root CA certificate after ceremony quorum"},
 	{Name: []string{"ca", "authorities", "import-existing"}, Method: "POST", Path: "/api/v1/ca/authorities/imported", Body: bodyFile, Summary: "Import an existing signer-backed CA certificate chain after ceremony quorum"},
+	{Name: []string{"ca", "authorities", "prepare-import-csr"}, Method: "POST", Path: "/api/v1/ca/authorities/imported/csr", Body: bodyFile, Summary: "Reserve a tenant-bound signer key and public CSR for external CA signing"},
+	{Name: []string{"ca", "authorities", "get-import-csr"}, Method: "GET", Path: "/api/v1/ca/authorities/imported/csr/{ceremony_id}", Summary: "Read a completed external-CA import CSR by ceremony"},
 	{Name: []string{"ca", "authorities", "create-intermediate"}, Method: "POST", Path: "/api/v1/ca/authorities/intermediates", Body: bodyFile, Summary: "Create a signer-backed intermediate CA after ceremony quorum"},
 	{Name: []string{"ca", "authorities", "offline-intermediate-csr"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-intermediates/csr", Body: bodyFile, Summary: "Create a signer-backed intermediate CSR for an offline root"},
 	{Name: []string{"ca", "authorities", "import-offline-intermediate"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-intermediates", Body: bodyFile, Summary: "Import an offline-root-signed intermediate CA certificate"},

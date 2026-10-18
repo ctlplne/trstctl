@@ -2354,6 +2354,18 @@ CADiscoverySummary = TypedDict(
     total=False,
 )
 
+CAExistingImportCSR = TypedDict(
+    'CAExistingImportCSR',
+    {
+        'ceremony_id': str,
+        'csr_pem': str,
+        'issuer_sha256': str,
+        'parent_id': str,
+        'signer_handle': str,
+    },
+    total=False,
+)
+
 CAImportExistingRequest = TypedDict(
     'CAImportExistingRequest',
     {
@@ -2484,6 +2496,17 @@ CAOfflineRootRekeyRequest = TypedDict(
         'reason': str,
         'spec': dict[str, Any],
         'successor_certificate_pem': str,
+    },
+    total=False,
+)
+
+CAPrepareExistingImportCSRRequest = TypedDict(
+    'CAPrepareExistingImportCSRRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'parent_id': str,
+        'spec': dict[str, Any],
     },
     total=False,
 )

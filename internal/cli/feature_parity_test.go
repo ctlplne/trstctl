@@ -309,8 +309,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// custodian can approve the exact isolated-signer key.
 	// VDEC's CA-key re-protection queue now has the same headless command as its
 	// served mutation; its receipt reports queueing, never deployed completion.
-	if len(out) != 538 {
-		t.Fatalf("CLI commands = %d, want 538", len(out))
+	// F48 adds existing-CA CSR preparation and exact readback commands.
+	if len(out) != 540 {
+		t.Fatalf("CLI commands = %d, want 540", len(out))
 	}
 	return out
 }

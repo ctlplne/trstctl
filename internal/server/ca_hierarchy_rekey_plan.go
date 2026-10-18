@@ -28,7 +28,7 @@ func rekeyAuthoritySpec(ca store.CAAuthority, ttlSeconds int64) api.CASpec {
 // start share this validation so the displayed plan is the executed plan.
 func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (string, api.CASpec, error) {
 	if req.Operation != "rekey_ca" {
-		if req.Operation == "import_existing_ca" && req.ParentID != "" {
+		if (req.Operation == "import_existing_ca" || req.Operation == "prepare_existing_ca") && req.ParentID != "" {
 			chainDER, _, err := certificateChainPEM(req.CertificatePEM)
 			if err != nil {
 				return "", api.CASpec{}, err
@@ -37,7 +37,11 @@ func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantI
 			if err != nil {
 				return "", api.CASpec{}, err
 			}
-			if err := validateImportedCAParent(parent, chainDER); err != nil {
+			if req.Operation == "import_existing_ca" {
+				if err := validateImportedCAParent(parent, chainDER); err != nil {
+					return "", api.CASpec{}, err
+				}
+			} else if err := validatePreparedCAIssuerParent(parent, chainDER); err != nil {
 				return "", api.CASpec{}, err
 			}
 		}

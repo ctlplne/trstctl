@@ -2322,6 +2322,7 @@ than sending an operator looking for a credential that was never there.
   m-of-n approvals, signer-backed leaf issuance, and configured upstream CA
   issuance are served at `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
   `/api/v1/ca/authorities/offline-roots`, `/api/v1/ca/authorities/imported`,
+  `/api/v1/ca/authorities/imported/csr` and its ceremony-ID readback,
   `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
   `/api/v1/ca/authorities/{id}/offline-intermediates`, and
   `/api/v1/external-cas`. Public/private direct-CA discovery is served at

@@ -69,6 +69,8 @@ import {
   type RetirementChecklist,
   type Profile,
 } from "@/lib/api";
+import type { CAExistingImportCSR } from "@/lib/api-types.gen";
+import { getExistingImportCSR, prepareExistingImportCSR as prepareExistingImportCSRRequest } from "@/lib/caHierarchyImportClient";
 import { issuerTypes, type IssuerTypeConfig } from "@/lib/issuerCatalog";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilityExecution } from "@/lib/capabilities";
@@ -133,6 +135,7 @@ const offlineIntermediateDefaults: OfflineIntermediateForm = {
 };
 const existingCADefaults: ExistingCAForm = {
   certificatePEM: "",
+  issuerCertificatePEM: "",
   commonName: "Imported Existing CA",
   dnsDomains: "example.internal",
   maxPathLen: "0",
@@ -390,6 +393,8 @@ export function CAHierarchy() {
   const [offlineBusy, setOfflineBusy] = useState(false);
   const [offlineError, setOfflineError] = useState<string | null>(null);
   const [existingCAForm, setExistingCAForm] = useState<ExistingCAForm>(existingCADefaults);
+  const [existingCAMode, setExistingCAMode] = useState<"prepare" | "preprovisioned">("prepare");
+  const [existingCAPreparation, setExistingCAPreparation] = useState<CAExistingImportCSR | null>(null);
   const [existingCACeremonyID, setExistingCACeremonyID] = useState("");
   const [existingCA, setExistingCA] = useState<CAAuthority | null>(null);
   const [existingCABusy, setExistingCABusy] = useState(false);
@@ -730,11 +735,12 @@ export function CAHierarchy() {
   }
 
   async function startExistingCACeremony() {
+    const prepared = existingCAMode === "prepare";
     const request: CACeremonyStartRequest = {
-      operation: "import_existing_ca",
+      operation: prepared ? "prepare_existing_ca" : "import_existing_ca",
       threshold: 2,
-      certificate_pem: existingCAForm.certificatePEM.trim(),
-      signer_handle: existingCAForm.signerHandle.trim(),
+      certificate_pem: (prepared ? existingCAForm.issuerCertificatePEM : existingCAForm.certificatePEM).trim(),
+      ...(!prepared ? { signer_handle: existingCAForm.signerHandle.trim() } : {}),
       ...(existingCAForm.parentID.trim() ? { parent_id: existingCAForm.parentID.trim() } : {}),
       spec: offlineFormSpec(existingCAForm),
     };
@@ -749,6 +755,37 @@ export function CAHierarchy() {
     );
   }
 
+  async function prepareExistingImportCSR() {
+    setExistingCABusy(true);
+    setExistingCAError(null);
+    try {
+      setExistingCAPreparation(
+        await prepareExistingImportCSRRequest({
+          ceremony_id: existingCACeremonyID.trim(),
+          certificate_pem: existingCAForm.issuerCertificatePEM.trim(),
+          ...(existingCAForm.parentID.trim() ? { parent_id: existingCAForm.parentID.trim() } : {}),
+          spec: offlineFormSpec(existingCAForm),
+        }),
+      );
+    } catch (err) {
+      setExistingCAError(errorText(err, t("caHierarchy.existing.prepareFailed")));
+    } finally {
+      setExistingCABusy(false);
+    }
+  }
+
+  async function readExistingImportCSR() {
+    setExistingCABusy(true);
+    setExistingCAError(null);
+    try {
+      setExistingCAPreparation(await getExistingImportCSR(existingCACeremonyID.trim()));
+    } catch (err) {
+      setExistingCAError(errorText(err, t("caHierarchy.existing.readFailed")));
+    } finally {
+      setExistingCABusy(false);
+    }
+  }
+
   async function importExistingCA() {
     setExistingCABusy(true);
     setExistingCAError(null);
@@ -757,7 +794,7 @@ export function CAHierarchy() {
         await api.importExistingCA({
           ceremony_id: existingCACeremonyID.trim(),
           certificate_pem: existingCAForm.certificatePEM.trim(),
-          signer_handle: existingCAForm.signerHandle.trim(),
+          signer_handle: (existingCAMode === "prepare" ? existingCAPreparation?.signer_handle : existingCAForm.signerHandle)?.trim() || "",
           ...(existingCAForm.parentID.trim() ? { parent_id: existingCAForm.parentID.trim() } : {}),
           spec: offlineFormSpec(existingCAForm),
         }),
@@ -1192,9 +1229,21 @@ export function CAHierarchy() {
           error={existingCAError}
           form={existingCAForm}
           imported={existingCA}
+          mode={existingCAMode}
+          preparation={existingCAPreparation}
           onCeremonyIDChange={setExistingCACeremonyID}
-          onFormChange={(patch) => setExistingCAForm((current) => ({ ...current, ...patch }))}
+          onModeChange={(mode) => {
+            setExistingCAMode(mode);
+            setExistingCAPreparation(null);
+            setExistingCACeremonyID("");
+          }}
+          onFormChange={(patch) => {
+            if (Object.keys(patch).some((key) => key !== "certificatePEM")) setExistingCAPreparation(null);
+            setExistingCAForm((current) => ({ ...current, ...patch }));
+          }}
           onImport={() => void importExistingCA()}
+          onPrepare={() => void prepareExistingImportCSR()}
+          onReadPreparation={() => void readExistingImportCSR()}
           onStartCeremony={() => void startExistingCACeremony()}
         />
       </div>

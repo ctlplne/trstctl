@@ -1,0 +1,1 @@
+function n(n,s){const e=n?.permissions;return!!e&&(e.includes("*")||e.includes(s))}function s(s,e){return!e||0===e.length||e.some(e=>n(s,e))}export{n,s as t};

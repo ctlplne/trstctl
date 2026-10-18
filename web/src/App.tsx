@@ -1,8 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { lazy, type ComponentType, type ReactElement } from "react";
+import { lazy, Suspense, type ComponentType, type ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
-import { AppShell } from "@/components/AppShell";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -23,6 +22,9 @@ function lazyPage<M extends Record<K, ComponentType>, K extends string>(loader: 
   return lazy(() => loader().then((module) => ({ default: module[name] })));
 }
 
+// The navigation shell is needed only after a session is resolved. Keep the
+// sign-in entry light while the authenticated shell remains fully available.
+const AppShell = lazyPage(() => import("@/components/AppShell"), "AppShell");
 const Dashboard = lazyPage(() => import("@/pages/Dashboard"), "Dashboard");
 const TrustOperations = lazyPage(() => import("@/pages/TrustOperations"), "TrustOperations");
 const Certificates = lazyPage(() => import("@/pages/Certificates"), "Certificates");
@@ -87,7 +89,17 @@ function RequireAuth({ children }: { children: ReactElement }) {
   }
   return (
     <RbacProvider permissions={user.permissions ?? null}>
-      <CapabilityProvider enabled={!preview}>{children}</CapabilityProvider>
+      <CapabilityProvider enabled={!preview}>
+        <Suspense
+          fallback={
+            <p role="status" className="p-6">
+              {t("app.loading")}
+            </p>
+          }
+        >
+          {children}
+        </Suspense>
+      </CapabilityProvider>
     </RbacProvider>
   );
 }

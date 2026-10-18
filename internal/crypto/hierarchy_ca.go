@@ -243,6 +243,46 @@ func VerifyImportedCAChain(chainDER [][]byte, signerPublic PublicKey, profile Hi
 	return hierarchyResultFromCert(certs[0]), "intermediate", nil
 }
 
+// VerifyExistingCAIssuerChain checks the public issuer chain an operator pins
+// before trstctl creates a new signer-held child key. It does not claim that
+// trstctl holds the issuer key; the later import must verify the externally
+// signed child against this exact chain and the new signer-held public key.
+func VerifyExistingCAIssuerChain(chainDER [][]byte) (IssuedHierarchyCA, error) {
+	if len(chainDER) == 0 {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer chain is empty")
+	}
+	certs := make([]*x509.Certificate, 0, len(chainDER))
+	for i, der := range chainDER {
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse existing CA issuer certificate %d: %w", i, err)
+		}
+		if err := verifyCAUsable(cert, "existing CA issuer certificate"); err != nil {
+			return IssuedHierarchyCA{}, err
+		}
+		certs = append(certs, cert)
+	}
+	if certs[0].MaxPathLenZero {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer cannot sign another intermediate")
+	}
+	for i := 0; i < len(certs)-1; i++ {
+		if err := certs[i].CheckSignatureFrom(certs[i+1]); err != nil {
+			return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer chain certificate %d is not signed by certificate %d: %w", i, i+1, err)
+		}
+		if err := verifyChildPathLen(certs[i+1], certs[i]); err != nil {
+			return IssuedHierarchyCA{}, err
+		}
+		if certs[i].NotAfter.After(certs[i+1].NotAfter) {
+			return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer certificate %d outlives its issuer", i)
+		}
+	}
+	root := certs[len(certs)-1]
+	if err := root.CheckSignatureFrom(root); err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer root is not self-signed: %w", err)
+	}
+	return hierarchyResultFromCert(certs[0]), nil
+}
+
 // VerifyCertificateSigner proves that certDER names the exact public key held by
 // signerPublic. It is used at production assembly boundaries before a configured
 // CA certificate is paired with an isolated signer handle; accepting two
