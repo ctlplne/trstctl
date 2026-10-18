@@ -34,6 +34,10 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 // PostgreSQL dump in the backup set.
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
+	// CA signer-handle first-writer claims and retired digests are independent
+	// security authority. A log replay cannot reconstruct a reservation that
+	// committed before its CA event append.
+	"ca_signer_handle_claims",
 	// Exact IdP logout assertions and callback cutoffs must survive a database
 	// restore; they cannot be reconstructed from event projections.
 	"oidc_logout_receipts",

@@ -314,6 +314,9 @@ var TenantScopedTables = []string{
 	// are provider-bound replay/cutoff authority and outlive one customer.
 	"oidc_session_locators",
 	"oidc_logout_receipts",
+	// Fixed signer-claim partition: customer ownership is scrubbed under the
+	// lifecycle fence, while handle digests remain as denial tombstones.
+	"ca_signer_handle_claims",
 	"idempotency_keys",
 	"outbox",
 	"rate_limits",
@@ -598,7 +601,16 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 	if err := s.PreflightTenantOffboardTx(ctx, tx, tenantID); err != nil {
 		return att, err
 	}
+	if _, err := RetireCASignerHandleClaimsTx(ctx, tx, tenantID); err != nil {
+		return att, err
+	}
 	for _, table := range TenantScopedTables {
+		if table == "ca_signer_handle_claims" {
+			// This fixed system partition has no customer-scoped rows to delete.
+			// The retirement above removed the only customer ownership fields.
+			att.Deleted[table] = 0
+			continue
+		}
 		if table == "oidc_logout_receipts" {
 			// The fixed auth partition stores provider/JTI cutoffs shared by
 			// customers. This customer's RLS scope can contain no rows here;

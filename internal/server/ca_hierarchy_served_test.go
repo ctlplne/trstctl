@@ -1595,6 +1595,25 @@ func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
 	if imported.ParentID == nil || *imported.ParentID != registeredRoot.ID {
 		t.Fatalf("imported CA parent = %+v, want exact registered root %s", imported.ParentID, registeredRoot.ID)
 	}
+	const neighborTenant = "22222222-2222-4222-8222-222222222222"
+	registerServedTenantID(t, h, neighborTenant, "existing-CA neighbor")
+	neighborOperator := seedServedAPIToken(t, context.Background(), h.store, neighborTenant, "neighbor-ca-operator", []string{"issuers:write", "issuers:read"})
+	neighborCustodianOne := seedServedAPIToken(t, context.Background(), h.store, neighborTenant, "neighbor-ca-custodian-one", []string{"issuers:write", "issuers:read"})
+	neighborCustodianTwo := seedServedAPIToken(t, context.Background(), h.store, neighborTenant, "neighbor-ca-custodian-two", []string{"issuers:write", "issuers:read"})
+	neighborCeremony := createImportExistingCACeremony(t, h, neighborOperator, chainPEM, importedHandle, interSpec, 2, "byo-ca-neighbor-ceremony")
+	approveCACeremony(t, h, neighborCustodianOne, neighborCeremony.ID, 1, "byo-ca-neighbor-approval-one")
+	approveCACeremony(t, h, neighborCustodianTwo, neighborCeremony.ID, 2, "byo-ca-neighbor-approval-two")
+	beforeNeighborImport := servedEventCount(t, h, projections.EventCAAuthorityImported)
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", neighborOperator, "byo-ca-neighbor-import", map[string]any{
+		"ceremony_id": neighborCeremony.ID, "certificate_pem": chainPEM,
+		"signer_handle": importedHandle, "spec": interSpec,
+	})
+	if code != http.StatusConflict {
+		t.Fatalf("neighbor tenant imported another tenant's signer handle = %d body=%s; want 409", code, body)
+	}
+	if got := servedEventCount(t, h, projections.EventCAAuthorityImported); got != beforeNeighborImport {
+		t.Fatalf("neighbor import appended %d authority events after pre-append refusal; want %d", got, beforeNeighborImport)
+	}
 	if strings.Contains(imported.CertificatePEM, "PRIVATE KEY") || strings.Count(imported.CertificatePEM, "BEGIN CERTIFICATE") != 2 {
 		t.Fatalf("imported CA certificate response leaked key material or lost chain: %q", imported.CertificatePEM)
 	}

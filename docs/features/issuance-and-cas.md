@@ -216,7 +216,10 @@ Online root/intermediate private keys live only in the isolated signing service,
 referenced by signer handles; the control plane stores certificates, chains,
 metadata, and ceremony state, never the CA private key. Existing-CA import verifies a
 public chain's first certificate against the supplied signer handle and the
-chain/profile before serving normal leaf issuance. Offline-root import accepts
+chain/profile before serving normal leaf issuance. A durable, global first-writer
+fence binds that handle to one tenant and reviewed ceremony before the authority
+event; a conflicting tenant cannot reuse the same signer-held key, including after
+the first tenant offboards. Offline-root import accepts
 exactly one public certificate PEM (never a private key), generates a signer-held
 intermediate CSR for the operator to sign outside trstctl, and imports the result
 only if it chains to the offline root, matches the reviewed `CASpec`, and carries the

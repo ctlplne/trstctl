@@ -4,12 +4,20 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func (h *caHierarchyService) claimCeremonyCASigner(ctx context.Context, tenantID, ceremonyID, purpose, handle string) error {
+	if err := h.requirePendingCeremonyQuorum(ctx, tenantID, ceremonyID, purpose); err != nil {
+		return caHierarchyConflict(err)
+	}
+	return caHierarchyConflict(h.store.ClaimCASignerHandle(ctx, tenantID, ceremonyID, handle))
+}
 
 func existingCAPurpose(chainDER [][]byte, signerHandle string, spec api.CASpec, parentID string) (string, error) {
 	if signerHandle == "" {

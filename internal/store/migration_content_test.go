@@ -16,8 +16,48 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"trstctl.com/trstctl/internal/crypto"
 	corestore "trstctl.com/trstctl/internal/store"
 )
+
+func testMigration0283ClaimsExistingCASignerHandles(t *testing.T) {
+	const stable = `SELECT id::text, tenant_id::text, common_name, status, signer_handle
+		FROM ca_authorities ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 283, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				id := fmt.Sprintf("28300000-0000-4000-8000-%012d", index+1)
+				if _, err := pool.Exec(ctx, `INSERT INTO ca_authorities
+					(id, tenant_id, common_name, kind, status, certificate_pem, signer_handle)
+					VALUES ($1, $2, $3, 'intermediate', 'active', 'public certificate', $4)`,
+					id, tenantID, fmt.Sprintf("legacy CA %d", index+1), fmt.Sprintf("legacy-handle-%d", index+1)); err != nil {
+					t.Fatalf("seed pre-0283 CA: %v", err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				var owner, ceremony, state string
+				handle := fmt.Sprintf("legacy-handle-%d", index+1)
+				err := pool.QueryRow(ctx, `SELECT owner_tenant_id::text, owner_ceremony_id::text, state
+					FROM ca_signer_handle_claims
+					WHERE tenant_id = '00000000-0000-0000-0000-000000000003'::uuid
+					  AND handle_sha256 = $1`, crypto.SHA256Hex([]byte(handle))).Scan(&owner, &ceremony, &state)
+				if err != nil || owner != tenantID || ceremony != fmt.Sprintf("28300000-0000-4000-8000-%012d", index+1) || state != "claimed" {
+					t.Fatalf("migrated CA signer owner for %s: owner=%q ceremony=%q state=%q err=%v", handle, owner, ceremony, state, err)
+				}
+			}
+			var count int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM ca_signer_handle_claims
+				WHERE tenant_id = '00000000-0000-0000-0000-000000000003'::uuid`).Scan(&count); err != nil || count != want {
+				t.Fatalf("migrated CA claims=%d want=%d err=%v", count, want, err)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name)
+				VALUES ('00000000-0000-0000-0000-000000000003', 'customer impersonating CA claim partition')`); err == nil {
+				t.Fatal("reserved CA claim partition accepted as a customer tenant")
+			}
+		})
+}
 
 // Existing OIDC cookies have only tenant-local subject digests. Their global
 // subject locator cannot be recovered without the original verified claim, so
@@ -891,6 +931,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	283: true, // TestMigrationDataContentBackfills/0283_ca_signer_claims_existing_authorities
 	274: true, // TestMigration0274InvalidatesUnindexedOIDCBrowserSessions
 	272: true, // TestMigrationDataContentBackfills/0272_browser_oidc_binding_starts_unclaimed
 	268: true, // TestMigrationDataContentBackfills/0268_tenant_member_sequence_starts_unclaimed
@@ -1958,6 +1999,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0283_ca_signer_claims_existing_authorities", testMigration0283ClaimsExistingCASignerHandles)
 	t.Run("0272_browser_oidc_binding_starts_unclaimed", testMigration0272BrowserOIDCBindingStartsUnclaimed)
 	t.Run("0268_tenant_member_sequence_starts_unclaimed", testMigration0268TenantMemberSequenceStartsUnclaimed)
 	t.Run("0267_machine_auth_method_sequence_starts_unclaimed", testMigration0267MachineAuthMethodSequenceStartsUnclaimed)

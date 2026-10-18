@@ -267,6 +267,10 @@ paste private-key PEM into the API or UI.
    handle and its public key. If the key is not already held by the signer, use
    the offline-root and signer-held intermediate CSR procedure above. The
    existing-chain import form itself does not create or import a private key.
+   A handle belongs to one tenant and one approved ceremony on first use. A
+   handle already claimed by another tenant or ceremony is refused before a CA
+   event is appended. Keep the original ceremony ID for a retry after a lost
+   response; starting another ceremony cannot take over its handle.
 2. **Export the public CA chain.** Put the imported authority certificate first,
    followed by its issuer chain up to a self-signed root (for a root import, just
    the self-signed root certificate). The PEM bundle must contain only
@@ -300,6 +304,13 @@ paste private-key PEM into the API or UI.
    matches the signer-held key. A selected parent must be active and its public
    certificate must exactly match the next certificate in the chain. The stored
    authority holds only public chain metadata plus the signer handle.
+
+The global signer-claim fence survives database backup and restore. Tenant
+offboarding removes the tenant owner from that fence but retains a digest-only
+denial tombstone, so an orphaned signer key cannot be adopted by another tenant.
+On upgrade, existing CA authorities seed the fence; a legacy database that has
+already assigned one signer handle to more than one tenant fails migration for
+custody review rather than accepting the ambiguous ownership.
 
 Leaf issuance then uses `POST /api/v1/ca/authorities/{imported-ca-id}/issue`.
 
