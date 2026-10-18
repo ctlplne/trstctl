@@ -83,6 +83,20 @@ func TestPostgresStateRestoreOrderReturnsErrors(t *testing.T) {
 	}
 }
 
+func TestCASignerHandleClaimsRestoreWithPreparedCSR(t *testing.T) {
+	const table = "ca_signer_handle_claims"
+	if !slices.Contains(postgresStateTables(), table) {
+		t.Fatalf("%s missing from independent PostgreSQL backup", table)
+	}
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("restore order for %s: %v", table, err)
+	}
+	if !slices.Contains(order, table) {
+		t.Fatalf("%s missing from restore order; a prepared CA CSR could be lost", table)
+	}
+}
+
 func TestAPITokenRevocationCommandBackupAndRestoreOrder(t *testing.T) {
 	const table = "api_token_revocation_commands"
 	if class, found := Classify(table); !found || class != ClassPostgresBackup {

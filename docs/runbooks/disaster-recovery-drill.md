@@ -28,6 +28,13 @@ The drill proves:
 - a restored control plane can pass a smoke test without contacting production
   clients.
 
+The independent PostgreSQL artifact includes `ca_signer_handle_claims`: the
+process-wide first-writer owner of each CA signer handle and any pending public
+CSR preparation receipt. Restore it as independent PostgreSQL state before the
+recovered server accepts CA work. Restoring the event log alone cannot recover
+a reservation made before its CA event was appended; losing that reservation
+could let another tenant claim the same signer-held key.
+
 The built-in scheduled drill performs this same full-set predicate automatically.
 It creates an isolated PostgreSQL database and private file-backed JetStream,
 redirects every mutable signer/key/certificate path to a temporary directory,

@@ -1187,6 +1187,10 @@ func postgresStateTables() []string {
 func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
+		// Restore the global CA signer-handle first-writer fence with the
+		// independent receivers before the recovered server accepts CA work.
+		// Its pending public CSR receipt is not a CA authority projection.
+		"ca_signer_handle_claims",
 		"oidc_logout_receipts",
 		"api_token_revocation_commands",
 		"ca_ceremony_cancel_commands",
