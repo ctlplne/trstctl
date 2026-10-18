@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Building2,
@@ -98,6 +98,9 @@ type RotationReviewState = {
 };
 
 const caWorkspaceTabIDs: readonly CAWorkspaceTab[] = ["overview", "authorities", "lifecycle", "imports", "custody"];
+const CAOfflineCrossSignPanel = lazy(() =>
+  import("./cahierarchy/CAHierarchyOfflineCrossSignParts").then((parts) => ({ default: parts.CAOfflineCrossSignPanel })),
+);
 
 function caWorkspaceTabFromSearchParam(value: string | null): CAWorkspaceTab {
   return caWorkspaceTabIDs.includes(value as CAWorkspaceTab) ? (value as CAWorkspaceTab) : "overview";
@@ -1059,6 +1062,11 @@ export function CAHierarchy() {
       <div className={tab === "lifecycle" ? undefined : "hidden"}>
         <CACrossSignPanel authorities={authorities} />
       </div>
+      {tab === "lifecycle" && (
+        <Suspense fallback={<LoadingState>{t("caHierarchy.offlineCross.loading")}</LoadingState>}>
+          <CAOfflineCrossSignPanel authorities={authorities} />
+        </Suspense>
+      )}
 
       {probe && (
         <div className={tab === "authorities" ? undefined : "hidden"}>

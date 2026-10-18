@@ -167,6 +167,7 @@ import type {
   CAIssueLeafRequest,
   CAOfflineRootRekey,
   CAOfflineRootRekeyRequest,
+  CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
   CBOMAsset as GenCBOMAsset,
   CBOMInventory,
@@ -964,6 +965,7 @@ export type {
   CAIssueLeafRequest,
   CAOfflineRootRekey,
   CAOfflineRootRekeyRequest,
+  CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
   CBOMInventory,
   CBOMMigrationProgress,
@@ -1867,6 +1869,7 @@ export interface Api {
   rekeyOfflineRoot(id: string, input: CAOfflineRootRekeyRequest): Promise<CAOfflineRootRekey>;
   getOfflineRootRekeyReceipt(ceremonyID: string): Promise<CAOfflineRootRekey>;
   crossSignCAAuthority(id: string, input: CACrossSignRequest): Promise<CACrossSign>;
+  importOfflineRootCrossSign(id: string, input: CAOfflineCrossSignImportRequest): Promise<CACrossSign>;
   getCACrossSignReceipt(ceremonyId: string): Promise<CACrossSign>;
   managedKeyCustody(): Promise<ManagedKeyCustodyPlan>;
   listManagedKeys(options?: { limit?: number; cursor?: string }): Promise<ManagedKeyRecordList>;
@@ -2577,6 +2580,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   rekeyOfflineRoot: (id, input) => mutate<CAOfflineRootRekey>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-rekey`, input),
   getOfflineRootRekeyReceipt: (ceremonyID) => req<CAOfflineRootRekey>(`/api/v1/ca/offline-rekeys/${encodeURIComponent(ceremonyID)}`),
   crossSignCAAuthority: (id, input) => mutate<CACrossSign>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/cross-sign`, input),
+  importOfflineRootCrossSign: (id, input) => mutate<CACrossSign>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-cross-signs`, input),
   getCACrossSignReceipt: (ceremonyId) => req<CACrossSign>(`/api/v1/ca/cross-signs/${encodeURIComponent(ceremonyId)}`),
   managedKeyCustody: () => req<ManagedKeyCustodyPlan>("/api/v1/managed-keys/custody"),
   listManagedKeys: (options) => {

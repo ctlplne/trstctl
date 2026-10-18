@@ -419,6 +419,15 @@ only public certificates and refuses a private-key PEM block.
    open `operation=import_offline_cross_sign` bound to the successor authority,
    target, and cross-certificate; collect quorum; then POST the same public
    values to `/api/v1/ca/authorities/{successor-id}/offline-cross-signs`.
+   In the console, use **Certificate authorities → Lifecycle → Import an
+   offline-root cross-sign**. Select the active imported offline root, paste
+   one public target and one root-signed public cross-certificate, and review
+   both certificate hashes and the request fingerprint. Two different
+   custodians approve the ceremony from their own sessions. Refresh the
+   ceremony before import; a changed certificate disables import. After a
+   lost response or browser reload, enter the ceremony ID to recover the
+   public cross-certificate from `GET /api/v1/ca/cross-signs/{id}`. Keep the
+   offline signing key outside the control plane.
 
 ## Procedure: online break-glass issue and CA rotation
 

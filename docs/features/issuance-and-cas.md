@@ -235,7 +235,11 @@ signs inside the signer, while offline-root routes verify validity, key usage, E
 DNS, path length, subject/public key, and both chain directions first. The full
 public cross-certificate is recoverable by ceremony ID from the event-projected
 `GET /api/v1/ca/cross-signs/{id}` receipt after a restart. The CA hierarchy
-console exposes effect-free review, quorum readback, execution, and that receipt.
+console exposes effect-free review, quorum readback, execution, and that receipt
+for both signer-backed cross-signing and public-only offline-root cross-sign
+import. The offline import form accepts only public certificate PEM blocks;
+two distinct custodians approve the exact issuer, target and cross-certificate
+package before the server verifies and records the second trust path.
 Offline-root succession has a separate, indexed, tenant-scoped receipt at
 `GET /api/v1/ca/offline-rekeys/{ceremony-id}` containing the successor lineage
 and both public cross-certificates. It is projected from the same immutable

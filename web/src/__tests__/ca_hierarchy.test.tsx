@@ -111,6 +111,13 @@ function externalCAUnavailableRuntime(): CapabilityView {
 }
 
 describe("CA hierarchy and custody surface", () => {
+  it("shows the public-only offline cross-sign import beside signer-backed lifecycle signing", async () => {
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+    expect(await screen.findByRole("heading", { name: "Import an offline-root cross-sign" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cross-sign a CA" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Active offline root issuer")).toBeInTheDocument();
+  });
+
   it("offers an offline-root successor ceremony from public cross-certificates", async () => {
     const predecessor = {
       id: "00000000-0000-4000-8000-000000000011",
