@@ -1347,7 +1347,7 @@ describe("policy governance surface", () => {
     expect(await screen.findByRole("heading", { name: "Lifecycle policy is enabled" })).toBeInTheDocument();
     expect(await screen.findByText("Approval count unavailable")).toBeInTheDocument();
     await userEvent.setup().click(screen.getByText("Approval and access reviews", { exact: true }));
-    expect(await screen.findByText("access list read failed")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("access list read failed")).toBeInTheDocument());
     expect(screen.queryByText("Protection state is unknown", { exact: true })).not.toBeInTheDocument();
   });
 
