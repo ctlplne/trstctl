@@ -1004,6 +1004,23 @@ func (d *issuanceDispatcher) activeRenewalCertificates(ctx context.Context, tena
 // unresolved profile fails closed: the platform must not silently mint outside a
 // declared governance model.
 func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+	return d.enforceProfileForPurpose(ctx, tenantID, csrDER, dnsNames, ttl, "api", issuance...)
+}
+
+// CA re-protection continues one previously issued, deployed certificate with
+// the same subject key and identifiers under an immutable host plan. There is
+// no new ACME/EST/SCEP/API enrollment here, so allowed_protocols does not
+// describe this administrative action. The key, EKU, names, and TTL still pass
+// the active certificate profile and the decision is audited separately.
+// Only the SignJobCSR path after reprotect.AuthorizeHostCSR may call this.
+func (d *issuanceDispatcher) enforceProfileForCAReprotect(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, error) {
+	return d.enforceProfileForPurpose(ctx, tenantID, csrDER, dnsNames, ttl, "ca-reprotect")
+}
+
+func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, purpose string, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+	if purpose != "api" && purpose != "ca-reprotect" {
+		return crypto.LeafProfile{}, errors.New("server: unsupported served profile purpose")
+	}
 	if len(issuance) > 1 {
 		return crypto.LeafProfile{}, errors.New("server: multiple issuance approval bindings")
 	}
@@ -1041,7 +1058,7 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 			if store.IsNotFound(err) {
 				// Configured profile does not resolve: deny (fail closed) and record it.
 				msg := fmt.Sprintf("served default profile %q not found", profileName)
-				if aerr := d.auditProfileDecision(ctx, tenantID, profileName, 0, "deny", msg); aerr != nil {
+				if aerr := d.auditProfileDecision(ctx, tenantID, profileName, 0, "deny", msg, purpose); aerr != nil {
 					return crypto.LeafProfile{}, aerr
 				}
 				return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
@@ -1056,12 +1073,18 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 	prof.Name, prof.Version = rec.Name, rec.Version
 	info, err := d.inspectSubjectCSR(csrDER)
 	if err != nil {
-		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", "unparseable CSR"); aerr != nil {
+		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", "unparseable CSR", purpose); aerr != nil {
 			return crypto.LeafProfile{}, aerr
 		}
 		return crypto.LeafProfile{}, fmt.Errorf("server: profile %q: unparseable CSR: %w", profileName, err)
 	}
 	requestedEKUs := intendedProfileEKUs(info.RequestedEKUs, prof.AllowedEKUs)
+	protocol := purpose
+	if purpose == "ca-reprotect" {
+		// Empty means no enrollment protocol. This bypasses only the protocol
+		// allowlist; Validate still enforces every certificate property.
+		protocol = ""
+	}
 	preq := profile.Request{
 		KeyAlgorithm:   info.KeyAlgorithm,
 		KeyBits:        info.KeyBits,
@@ -1071,15 +1094,15 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 		IPAddresses:    info.IPAddresses,
 		EmailAddresses: info.EmailAddresses,
 		URIs:           info.URIs,
-		Protocol:       "api",
+		Protocol:       protocol,
 	}
 	if verr := prof.Validate(preq); verr != nil {
-		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", verr.Error()); aerr != nil {
+		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", verr.Error(), purpose); aerr != nil {
 			return crypto.LeafProfile{}, aerr
 		}
 		return crypto.LeafProfile{}, verr
 	}
-	if err := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "allow", ""); err != nil {
+	if err := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "allow", "", purpose); err != nil {
 		return crypto.LeafProfile{}, err
 	}
 	return leafProfileForCertificateProfile(d.leafProfile, prof, requestedEKUs), nil
@@ -1115,7 +1138,7 @@ func issuanceBindingForTrigger(trigger transitionTrigger) (*store.OperationAppro
 // mirroring the IssuanceService's issuance.profile_evaluated record so the served
 // and library paths produce the same audit shape. A nil log is a no-op, but the
 // deny (the returned error in enforceProfile) still rejects the mint.
-func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID, profileName string, version int, decision, reason string) error {
+func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID, profileName string, version int, decision, reason, purpose string) error {
 	if d.log == nil {
 		return nil
 	}
@@ -1125,7 +1148,7 @@ func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID,
 		Decision string `json:"decision"`
 		Reason   string `json:"reason,omitempty"`
 		Protocol string `json:"protocol,omitempty"`
-	}{profileName, version, decision, reason, "api"})
+	}{profileName, version, decision, reason, purpose})
 	if err != nil {
 		return err
 	}

@@ -310,6 +310,16 @@ first-writer table is absent. This is a risk decision about possible external
 use, not proof that every relying party enforced revocation. See the
 [key-ceremony runbook](../runbooks/key-ceremony.md) for the operator path.
 
+For a still-served host certificate, CA succession uses a recorded re-protection
+plan and a retained-key CSR from the assigned host agent. This continues the
+same deployed subject and key under the direct successor CA. The active
+certificate profile still constrains names, key strength, EKU and lifetime;
+its `allowed_protocols` list governs new enrollment, so it does not turn this
+administrative continuation into API enrollment. The audit marks the profile
+decision `ca-reprotect`. The host's signed served-state report, independent
+TLS readback and updated retirement checklist are needed before treating the
+old CA dependent as cleared.
+
 ### Recovering a failed CA-key retirement delivery
 
 The CA Hierarchy lifecycle tab shows the exact frozen retirement command and its

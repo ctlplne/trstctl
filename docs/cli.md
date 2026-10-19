@@ -848,6 +848,9 @@ trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 # registration response is lost, enter the preview's job ID in Recover recorded
 # job ID and load the immutable plan. Queueing is not served-leaf proof: check
 # the signed host result, stock TLS readback and refreshed retirement checklist.
+# The host keeps the original subject key and identifiers. Its CSR passes the
+# active profile's certificate constraints; allowed_protocols governs new
+# enrollment, while this reviewed continuation is audited as ca-reprotect.
 
 # For one expired requester-held or revoked, unserved host-held managed CA leaf,
 # review a release_managed_ca_leaf ceremony through ca ceremonies preview/create.

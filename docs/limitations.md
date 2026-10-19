@@ -3166,6 +3166,14 @@ than sending an operator looking for a credential that was never there.
   can atomically supersede the old inventory certificate and change the identity's
   selected CA. Its source event carries the signed readback, and separate
   first-writer supersession and completion events account for the old CA dependent.
+  This is an administrative continuation of the same deployed subject key and
+  identifiers, not a new API enrollment. The current certificate profile still
+  checks the CSR's names, key algorithm, EKU and requested lifetime. Its
+  `allowed_protocols` list governs new enrollment and does not exclude this
+  CA re-protection path; the profile audit labels the decision `ca-reprotect`.
+  Ordinary API enrollment remains subject to `allowed_protocols`. The host
+  agent cannot ask for a new name or key through this exception because the
+  control plane rechecks the immutable plan and exact predecessor SPKI before signing.
   The CA hierarchy Lifecycle console now exposes the host-held certificate,
   direct successor, enabled target and lifetime selection. Its effect-free
   preview shows the server-derived agent, key, target revision and listener;

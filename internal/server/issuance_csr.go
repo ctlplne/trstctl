@@ -192,6 +192,25 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTL(
 	ttl time.Duration,
 	binding *store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
+	return d.mintServedLeafFromCSRForSelectionAtTTLWithPurpose(ctx, tenantID, ident, selection,
+		issueKey, csrPEM, keyOrigin, ttl, binding, false)
+}
+
+func (d *issuanceDispatcher) mintServedLeafFromCSRForReprotectAtTTL(
+	ctx context.Context, tenantID string, ident store.Identity,
+	selection endpointAuthoritySelection, issueKey string, csrPEM []byte,
+	keyOrigin custody.KeyOrigin, ttl time.Duration,
+) (issuedLeafMaterial, error) {
+	return d.mintServedLeafFromCSRForSelectionAtTTLWithPurpose(ctx, tenantID, ident, selection,
+		issueKey, csrPEM, keyOrigin, ttl, nil, true)
+}
+
+func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTLWithPurpose(
+	ctx context.Context, tenantID string, ident store.Identity,
+	selection endpointAuthoritySelection, issueKey string, csrPEM []byte,
+	keyOrigin custody.KeyOrigin, ttl time.Duration,
+	binding *store.OperationApprovalIssuanceBinding, caReprotect bool,
+) (issuedLeafMaterial, error) {
 	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent {
 		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a known requester or host-agent key origin")
 	}
@@ -208,7 +227,15 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTL(
 	// Same profile gate as the server-keygen path: the origin of the key does not
 	// change what the certificate may assert, and skipping it here would make
 	// "bring your own CSR" a way around policy.
-	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+	var leafProfile crypto.LeafProfile
+	if caReprotect {
+		if keyOrigin != custody.OriginHostAgent || binding != nil {
+			return issuedLeafMaterial{}, errors.New("server: CA re-protection requires an unexported host-agent key and reviewed plan TTL")
+		}
+		leafProfile, err = d.enforceProfileForCAReprotect(ctx, tenantID, csrDER, dnsNames, ttl)
+	} else {
+		leafProfile, err = d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+	}
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}

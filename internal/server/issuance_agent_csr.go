@@ -175,8 +175,8 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		var material issuedLeafMaterial
 		var err error
 		if intent.ReprotectJobID != "" {
-			material, err = d.mintServedLeafFromCSRForSelectionAtTTL(ctx, tenantID, ident, selection,
-				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second, nil)
+			material, err = d.mintServedLeafFromCSRForReprotectAtTTL(ctx, tenantID, ident, selection,
+				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second)
 		} else {
 			material, err = d.mintServedLeafFromCSRForSelection(
 				ctx, tenantID, ident, selection, idemKey, csrPEM, custody.OriginHostAgent, intent.Issuance,
