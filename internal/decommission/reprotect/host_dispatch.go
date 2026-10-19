@@ -71,14 +71,14 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 	if err != nil {
 		return err
 	}
-	if !found || plan.Job != job || plan.SuccessorAuthorityID != successorID {
+	if !found || !samePlannedHostJob(plan.Job, job) || plan.SuccessorAuthorityID != successorID {
 		return ErrCompletionConflict
 	}
 	selection := CredentialPlanSelection{CertificateID: job.Dependent.ID, SuccessorAuthorityID: successorID,
 		TargetID: plan.TargetID, ExpectedTargetRevision: plan.TargetRevisionID,
 		ExpectedFingerprint: plan.PredecessorFingerprint, TTLSeconds: plan.TTLSeconds}
 	current, err := (&Enqueuer{store: h.coreStore, repo: h.store}).PreviewCredentialPlan(ctx, job.TenantID, job.KeyID, selection)
-	if err != nil || !reflect.DeepEqual(current, plan) {
+	if err != nil || !sameCurrentHostPlan(plan, current) {
 		if err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func AuthorizeHostCSR(ctx context.Context, st *corestore.Store, log *events.Log,
 		TargetID: plan.TargetID, ExpectedTargetRevision: plan.TargetRevisionID,
 		ExpectedFingerprint: plan.PredecessorFingerprint, TTLSeconds: plan.TTLSeconds}
 	current, err := NewEnqueuer(st, decstore.New(st), nil).PreviewCredentialPlan(ctx, tenantID, plan.Job.KeyID, selection)
-	if err != nil || !reflect.DeepEqual(current, plan) {
+	if err != nil || !sameCurrentHostPlan(plan, current) {
 		if err != nil {
 			return CredentialPlan{}, err
 		}
@@ -174,6 +174,26 @@ func AuthorizeHostCSR(ctx context.Context, st *corestore.Store, log *events.Log,
 		return CredentialPlan{}, fmt.Errorf("reprotect: target config differs from bound host job: %w", ErrCredentialPlanTargetChanged)
 	}
 	return plan, nil
+}
+
+// The dependency ledger can advance for a different leaf after this plan is
+// recorded. Its position is a source watermark, not part of this leaf's
+// authority. Accept only forward movement and require every stable job field
+// and every certificate, successor, host, route, and TTL binding to match.
+func samePlannedHostJob(recorded, current Job) bool {
+	if current.LedgerPosition < recorded.LedgerPosition {
+		return false
+	}
+	current.LedgerPosition = recorded.LedgerPosition
+	return current == recorded
+}
+
+func sameCurrentHostPlan(recorded, current CredentialPlan) bool {
+	if !samePlannedHostJob(recorded.Job, current.Job) {
+		return false
+	}
+	current.Job.LedgerPosition = recorded.Job.LedgerPosition
+	return reflect.DeepEqual(current, recorded)
 }
 
 func sameHostTargetConfig(current, queued json.RawMessage) bool {

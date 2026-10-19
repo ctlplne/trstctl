@@ -8,8 +8,45 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/decommission/depstate"
 	corestore "trstctl.com/trstctl/internal/store"
 )
+
+func TestHostPlanAllowsOnlyForwardUnrelatedLedgerMovement(t *testing.T) {
+	recorded := CredentialPlan{Job: Job{ID: "job-1", TenantID: "tenant-1", KeyID: "ca-old",
+		LedgerPosition: 12, Kind: JobKindReIssue,
+		Dependent:      depstate.Dependent{Class: depstate.DependentCredential, ID: "cert-1"},
+		IdempotencyKey: "stable-job-key"},
+		IdentityID: "identity-1", SuccessorAuthorityID: "ca-new", PredecessorFingerprint: "old-fingerprint",
+		PredecessorSPKISHA256: "old-spki", TargetID: "target-1", TargetRevisionID: "revision-1",
+		RequiredAgentID: "host-1", Connector: "apache", VerifyAddress: "127.0.0.1:10443",
+		VerifyServerName: "host.qa.invalid", TTLSeconds: 600}
+	current := recorded
+	current.Job.LedgerPosition = 14
+	if !sameCurrentHostPlan(recorded, current) {
+		t.Fatal("unrelated release of another dependent invalidated the unchanged host plan")
+	}
+	backward := current
+	backward.Job.LedgerPosition = 11
+	if sameCurrentHostPlan(recorded, backward) {
+		t.Fatal("older read model accepted after immutable plan")
+	}
+	changed := current
+	changed.SuccessorAuthorityID = "different-ca"
+	if sameCurrentHostPlan(recorded, changed) {
+		t.Fatal("different successor accepted")
+	}
+	changed = current
+	changed.TargetRevisionID = "different-host-revision"
+	if sameCurrentHostPlan(recorded, changed) {
+		t.Fatal("different target revision accepted")
+	}
+	changed = current
+	changed.TTLSeconds++
+	if sameCurrentHostPlan(recorded, changed) {
+		t.Fatal("different certificate lifetime accepted")
+	}
+}
 
 func TestHostReprotectCSRKeepsExactPredecessorKeyAndNames(t *testing.T) {
 	ca, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

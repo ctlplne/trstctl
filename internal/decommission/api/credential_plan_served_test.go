@@ -237,6 +237,21 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err != nil || !found || plan.Job.Dependent.ID != cert.ID || plan.IdentityID != identityID || plan.SuccessorAuthorityID != successor.ID || plan.VerifyAddress != "127.0.0.1:10443" || plan.VerifyServerName != "ca-reprotect.qa.invalid" {
 		t.Fatalf("immutable plan readback = %+v found=%t err=%v", plan, found, err)
 	}
+	// Another leaf can be released while this active leaf's reviewed plan waits
+	// for its host. The unrelated release advances the dependency ledger but
+	// must not invalidate the unchanged certificate, successor, or host route.
+	releasedOther := dep(depstate.DependentCredential, "qa-unserved-revoked-leaf")
+	if err := decstore.New(st).RebuildTenant(ctx, tenantA, []eventspec.Event{
+		mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: old.ID, Dependent: dep(depstate.DependentCredential, cert.ID)}, 1),
+		mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: old.ID, Dependent: releasedOther}, 2),
+		mustEncode(t, depstate.DependencyReleasedV1{TenantID: tenantA, KeyID: old.ID, Dependent: releasedOther, Reason: "qa-approved-release"}, 3),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	current, found, err := decstore.New(st).FetchKeyState(ctx, tenantA, old.ID)
+	if err != nil || !found || len(current.Unaccounted()) != 1 || current.Unaccounted()[0].ID != cert.ID || current.LedgerPosition == plan.Job.LedgerPosition {
+		t.Fatalf("unrelated release changed the active certificate dependency: state=%+v found=%t err=%v", current, found, err)
+	}
 	start := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
 	start.Header.Set("Idempotency-Key", "start-reviewed-plan")
 	queued := httptest.NewRecorder()
