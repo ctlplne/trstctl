@@ -292,6 +292,16 @@ func TestOpenAPISpecCoversRoutes(t *testing.T) {
 	}
 }
 
+func TestDeploymentTargetRevisionIsAnOpaqueGeneration(t *testing.T) {
+	doc := fetchSpec(t)
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	target := schemas["DeploymentTarget"].(map[string]any)
+	revision := target["properties"].(map[string]any)["revision_id"].(map[string]any)
+	if revision["type"] != "string" || revision["format"] != nil {
+		t.Fatalf("target revision schema = %v; direct revisions include a prefix and are not UUIDs", revision)
+	}
+}
+
 func TestApplicationSecretImportContractIsAtomicAndServed(t *testing.T) {
 	doc := fetchSpec(t)
 	op := doc["paths"].(map[string]any)["/api/v1/secrets/store/import"].(map[string]any)["post"].(map[string]any)

@@ -3019,7 +3019,7 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"},
 	}, "name", "connector")
 	deploymentTarget := object(map[string]*Schema{
-		"id": uuid(), "revision_id": uuid(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
+		"id": uuid(), "revision_id": str(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
 	}, "id", "revision_id", "tenant_id", "name", "connector", "config", "enabled", "created_at")
 	identityConnectorTargetReq := object(map[string]*Schema{
 		"target_id": uuid(),

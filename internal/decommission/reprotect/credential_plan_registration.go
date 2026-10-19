@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/decommission/depstate"
+	corestore "trstctl.com/trstctl/internal/store"
 )
 
 var (
@@ -101,6 +102,29 @@ func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID s
 	if cert.Fingerprint != in.ExpectedFingerprint {
 		return CredentialPlan{}, false, ErrCredentialPlanTargetChanged
 	}
+	bindings, err := e.store.CertificateIdentityBindings(ctx, tenantID, []string{cert.ID})
+	if err != nil {
+		return CredentialPlan{}, false, err
+	}
+	identityIDs := bindings[cert.ID]
+	if len(identityIDs) != 1 {
+		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+	}
+	identity, err := e.store.GetIdentity(ctx, tenantID, identityIDs[0])
+	if err != nil {
+		return CredentialPlan{}, false, credentialPlanReadError(err)
+	}
+	var identityRoute struct {
+		DeploymentTargetID     string `json:"deployment_target_id"`
+		IssuingAuthoritySource string `json:"issuing_authority_source"`
+		IssuingAuthorityID     string `json:"issuing_authority_id"`
+	}
+	if identity.Kind != corestore.KindX509Certificate || identity.Status != "deployed" ||
+		json.Unmarshal(identity.Attributes, &identityRoute) != nil ||
+		identityRoute.DeploymentTargetID != in.TargetID ||
+		identityRoute.IssuingAuthoritySource != "private" || identityRoute.IssuingAuthorityID != keyID {
+		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+	}
 	oldDER, err := certinfo.LeafDER([]byte(oldCA.CertificatePEM))
 	if err != nil || crypto.VerifyLeafSignedByCA(cert.CertificateDER, oldDER) != nil {
 		return CredentialPlan{}, false, ErrCredentialPlanNotReady
@@ -130,7 +154,7 @@ func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID s
 	if err != nil || agentID == "" {
 		return CredentialPlan{}, false, ErrCredentialPlanNotReady
 	}
-	plan := CredentialPlan{Job: selected, SuccessorAuthorityID: successor.ID,
+	plan := CredentialPlan{Job: selected, IdentityID: identity.ID, SuccessorAuthorityID: successor.ID,
 		PredecessorFingerprint: cert.Fingerprint, PredecessorSPKISHA256: info.SPKISHA256,
 		TargetID: target.ID, TargetRevisionID: target.RevisionID, RequiredAgentID: agentID,
 		Connector: target.Type, VerifyAddress: host.VerifyAddress,

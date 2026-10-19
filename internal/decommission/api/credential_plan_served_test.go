@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -81,7 +82,7 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	cert, err := st.UpsertCertificate(ctx, corestore.Certificate{TenantID: tenantA, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, CertificateDER: leafDER, CertificatePEM: leafPEM, KeyOrigin: "host_agent", KeyStorage: "file", Status: "active"})
+	cert, err := st.UpsertCertificate(ctx, corestore.Certificate{TenantID: tenantA, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, CertificateDER: leafDER, CertificatePEM: leafPEM, KeyOrigin: "host_agent", KeyStorage: "file", Status: "active", IssuanceIdempotencyKey: "issue:transition:ca-reprotect-identity"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +96,20 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	}
 	target, err := st.GetDeploymentTarget(ctx, tenantA, targetID)
 	if err != nil {
+		t.Fatal(err)
+	}
+	ownerID := uuid.NewString()
+	if err := st.UpsertOwner(ctx, corestore.Owner{ID: ownerID, TenantID: tenantA, Kind: corestore.OwnerService, Name: "qa-reprotect-owner"}); err != nil {
+		t.Fatal(err)
+	}
+	identityID := uuid.NewString()
+	identityAttrs, _ := json.Marshal(map[string]string{"deployment_target_id": targetID, "issuing_authority_source": "private", "issuing_authority_id": old.ID})
+	if err := st.UpsertIdentity(ctx, corestore.Identity{ID: identityID, TenantID: tenantA, Kind: corestore.KindX509Certificate, Name: "ca-reprotect.qa.invalid", OwnerID: ownerID, Status: "deployed", Attributes: identityAttrs}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return st.AppendIdentityTransitionTx(ctx, tx, tenantA, corestore.IdentityTransition{IdentityID: identityID, Seq: 1, FromState: "requested", ToState: "issued", EventType: "identity.issued", IdempotencyKey: "ca-reprotect-identity", OccurredAt: time.Now()})
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := decstore.New(st).RebuildTenant(ctx, tenantA, []eventspec.Event{mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: old.ID, Dependent: dep(depstate.DependentCredential, cert.ID)}, 1)}); err != nil {
@@ -138,12 +153,13 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	}
 	var result struct {
 		JobID                 string `json:"job_id"`
+		IdentityID            string `json:"identity_id"`
 		Recorded              bool   `json:"recorded"`
 		PredecessorSPKISHA256 string `json:"predecessor_spki_sha256"`
 		RequiredAgentID       string `json:"required_agent_id"`
 		TargetRevisionID      string `json:"target_revision_id"`
 	}
-	if err := json.Unmarshal(first.Body.Bytes(), &result); err != nil || !result.Recorded || result.JobID == "" || result.PredecessorSPKISHA256 != info.SPKISHA256 || result.RequiredAgentID != agentID || result.TargetRevisionID != target.RevisionID {
+	if err := json.Unmarshal(first.Body.Bytes(), &result); err != nil || !result.Recorded || result.JobID == "" || result.IdentityID != identityID || result.PredecessorSPKISHA256 != info.SPKISHA256 || result.RequiredAgentID != agentID || result.TargetRevisionID != target.RevisionID {
 		t.Fatalf("reviewed plan lost derived binding: %+v err=%v", result, err)
 	}
 	if again := post("reviewed-plan-retry", target.RevisionID, info.SHA256Fingerprint, successor.ID); again.Code != http.StatusOK {
@@ -153,8 +169,20 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 		t.Fatalf("changed successor = %d %s, want 409", changed.Code, changed.Body.String())
 	}
 	plan, found, err := reprotect.NewCredentialPlanLedger(log, st).Load(ctx, tenantA, result.JobID)
-	if err != nil || !found || plan.Job.Dependent.ID != cert.ID || plan.SuccessorAuthorityID != successor.ID || plan.VerifyAddress != "127.0.0.1:10443" || plan.VerifyServerName != "ca-reprotect.qa.invalid" {
+	if err != nil || !found || plan.Job.Dependent.ID != cert.ID || plan.IdentityID != identityID || plan.SuccessorAuthorityID != successor.ID || plan.VerifyAddress != "127.0.0.1:10443" || plan.VerifyServerName != "ca-reprotect.qa.invalid" {
 		t.Fatalf("immutable plan readback = %+v found=%t err=%v", plan, found, err)
+	}
+	otherIdentityID := uuid.NewString()
+	if err := st.UpsertIdentity(ctx, corestore.Identity{ID: otherIdentityID, TenantID: tenantA, Kind: corestore.KindX509Certificate, Name: "qa-conflicting-identity", OwnerID: ownerID, Status: "deployed", Attributes: identityAttrs}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return st.AppendIdentityTransitionTx(ctx, tx, tenantA, corestore.IdentityTransition{IdentityID: otherIdentityID, Seq: 1, FromState: "requested", ToState: "issued", EventType: "identity.issued", IdempotencyKey: "ca-reprotect-identity", OccurredAt: time.Now()})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if ambiguous := post("ambiguous-identity", target.RevisionID, info.SHA256Fingerprint, successor.ID); ambiguous.Code != http.StatusConflict {
+		t.Fatalf("ambiguous certificate identity binding = %d %s, want 409 before new plan append", ambiguous.Code, ambiguous.Body.String())
 	}
 	start := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
 	start.Header.Set("Idempotency-Key", "start-reviewed-plan")

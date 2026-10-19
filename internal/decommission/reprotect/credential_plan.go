@@ -25,6 +25,7 @@ const TypeCredentialPlan = "reprotection.credential_plan_recorded"
 // from silently moving the operation to another host.
 type CredentialPlan struct {
 	Job                    Job    `json:"job"`
+	IdentityID             string `json:"identity_id"`
 	SuccessorAuthorityID   string `json:"successor_authority_id"`
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
 	PredecessorSPKISHA256  string `json:"predecessor_spki_sha256"`
@@ -106,7 +107,7 @@ func validateCredentialPlan(plan CredentialPlan) error {
 	if plan.Job.Kind != JobKindReIssue || plan.Job.Dependent.Class != depstate.DependentCredential {
 		return fmt.Errorf("%w: credential plan requires a re-issue job", ErrInvalidState)
 	}
-	if plan.SuccessorAuthorityID == "" || plan.SuccessorAuthorityID == plan.Job.KeyID ||
+	if plan.IdentityID == "" || plan.SuccessorAuthorityID == "" || plan.SuccessorAuthorityID == plan.Job.KeyID ||
 		plan.PredecessorFingerprint == "" || plan.PredecessorSPKISHA256 == "" ||
 		plan.TargetID == "" || plan.TargetRevisionID == "" || plan.RequiredAgentID == "" ||
 		plan.Connector == "" || plan.VerifyAddress == "" || plan.VerifyServerName == "" || plan.TTLSeconds <= 0 {

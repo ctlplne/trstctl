@@ -376,7 +376,7 @@ func TestReprotection_CredentialStartRequiresReviewedPlanBeforeOutbox(t *testing
 		t.Fatalf("plan credential job: %+v err=%v", jobs, err)
 	}
 	plan := reprotect.CredentialPlan{
-		Job: jobs[0], SuccessorAuthorityID: "qa-successor",
+		Job: jobs[0], IdentityID: "qa-identity", SuccessorAuthorityID: "qa-successor",
 		PredecessorFingerprint: "qa-old-fingerprint", PredecessorSPKISHA256: "qa-old-spki",
 		TargetID: "qa-target", TargetRevisionID: "qa-target-revision", RequiredAgentID: "qa-agent",
 		Connector: "nginx", VerifyAddress: "127.0.0.1:443", VerifyServerName: "qa.local",

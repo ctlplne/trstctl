@@ -10309,7 +10309,6 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            /** Format: uuid */
             revision_id: string;
             /** Format: uuid */
             tenant_id: string;

@@ -163,6 +163,7 @@ type ReprotectionReceipt struct {
 // worker will enforce. It contains no subject private key or agent credential.
 type CredentialPlanReceipt struct {
 	JobID                  string `json:"job_id"`
+	IdentityID             string `json:"identity_id"`
 	CertificateID          string `json:"certificate_id"`
 	SuccessorAuthorityID   string `json:"successor_authority_id"`
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
@@ -204,7 +205,7 @@ func credentialPlanHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc
 				return 0, nil, err
 			}
 			receipt := CredentialPlanReceipt{
-				JobID: plan.Job.ID, CertificateID: plan.Job.Dependent.ID,
+				JobID: plan.Job.ID, IdentityID: plan.IdentityID, CertificateID: plan.Job.Dependent.ID,
 				SuccessorAuthorityID:   plan.SuccessorAuthorityID,
 				PredecessorFingerprint: plan.PredecessorFingerprint,
 				PredecessorSPKISHA256:  plan.PredecessorSPKISHA256,
@@ -453,14 +454,14 @@ func schemas() map[string]*api.Schema {
 			"expected_fingerprint": api.StringSchema(), "ttl_seconds": api.IntegerSchema(),
 		}, "certificate_id", "successor_authority_id", "target_id", "expected_target_revision", "expected_fingerprint", "ttl_seconds"),
 		"VDECCredentialPlanReceipt": api.ObjectSchema(map[string]*api.Schema{
-			"job_id": api.StringSchema(), "certificate_id": api.StringSchema(),
+			"job_id": api.StringSchema(), "identity_id": api.StringSchema(), "certificate_id": api.StringSchema(),
 			"successor_authority_id": api.StringSchema(), "predecessor_fingerprint": api.StringSchema(),
 			"predecessor_spki_sha256": api.StringSchema(), "target_id": api.StringSchema(),
 			"target_revision_id": api.StringSchema(), "required_agent_id": api.StringSchema(),
 			"connector": api.StringSchema(), "verify_address": api.StringSchema(),
 			"verify_server_name": api.StringSchema(), "ttl_seconds": api.IntegerSchema(),
 			"recorded": api.BooleanSchema(),
-		}, "job_id", "certificate_id", "successor_authority_id", "predecessor_fingerprint",
+		}, "job_id", "identity_id", "certificate_id", "successor_authority_id", "predecessor_fingerprint",
 			"predecessor_spki_sha256", "target_id", "target_revision_id", "required_agent_id",
 			"connector", "verify_address", "verify_server_name", "ttl_seconds", "recorded"),
 		"VDECReprotectionJob": api.ObjectSchema(map[string]*api.Schema{

@@ -176,7 +176,7 @@ func TestReprotect_CompletionEventOneAcrossWorkersAndColdRestart(t *testing.T) {
 	plan := CredentialPlan{
 		Job: Job{ID: ev.JobID, TenantID: ev.TenantID, KeyID: ev.KeyID,
 			Kind: JobKindReIssue, Dependent: ev.Dependent, IdempotencyKey: "qa-job-a"},
-		SuccessorAuthorityID: "ca-b", PredecessorFingerprint: "old-fingerprint",
+		IdentityID: "identity-a", SuccessorAuthorityID: "ca-b", PredecessorFingerprint: "old-fingerprint",
 		PredecessorSPKISHA256: "old-spki", TargetID: "target-a",
 		TargetRevisionID: "revision-a", RequiredAgentID: "host-a",
 		Connector: "apache", VerifyAddress: "127.0.0.1:10443",

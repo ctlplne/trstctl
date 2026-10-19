@@ -828,9 +828,10 @@ trstctl-cli ca keys reprotect plan <predecessor-ca-authority-id> -f reprotect-pl
 #  "expected_target_revision":"<reviewed target revision>",
 #  "expected_fingerprint":"<reviewed predecessor certificate SHA-256>",
 #  "ttl_seconds":600}
-# The server derives the job, old SPKI, assigned host agent, connector and
-# listener probe from tenant-scoped records. The plan receipt shows those exact
-# bindings. A changed target, certificate or successor requires a new review.
+# The server derives the job, one managed identity, old SPKI, assigned host
+# agent, connector and listener probe from tenant-scoped records. The plan
+# receipt shows those exact bindings. Ambiguous certificate-to-identity links
+# refuse. A changed target, certificate or successor requires a new review.
 trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 
 # For one expired requester-held managed CA leaf with no managed deployment,
