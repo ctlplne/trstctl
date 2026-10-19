@@ -246,7 +246,8 @@ func (s *Store) PendingCertificateRevocationFingerprints(ctx context.Context, te
 
 // CompleteCertificateRevocationAuthorityTx releases the pending status only
 // in the transaction that updates issuer state and publication intent.
-func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx pgx.Tx, event events.Event) error {
+func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx pgx.Tx, event events.Event,
+	firstTargets []CertificateRevocationAuthorityTarget) error {
 	if event.Sequence == 0 || event.Sequence > math.MaxInt64 {
 		return errors.New("store: certificate revocation completion needs source sequence")
 	}
@@ -257,7 +258,7 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 		// A fresh event-only rebuild has no independent first-writer table.
 		// Recreate a completed receipt from the retained local-issuer event;
 		// the projector has already applied its exact issuer state in this tx.
-		return restoreCompletedRevocationAuthorityFromEventTx(ctx, tx, event)
+		return restoreCompletedRevocationAuthorityFromEventTx(ctx, tx, event, firstTargets)
 	}
 	if err != nil {
 		return err
@@ -295,7 +296,8 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 	return err
 }
 
-func restoreCompletedRevocationAuthorityFromEventTx(ctx context.Context, tx pgx.Tx, event events.Event) error {
+func restoreCompletedRevocationAuthorityFromEventTx(ctx context.Context, tx pgx.Tx, event events.Event,
+	firstTargets []CertificateRevocationAuthorityTarget) error {
 	if event.Type != "certificate.revocation.batch.applied" {
 		return nil // The older single-certificate format has no bound batch receipt.
 	}
@@ -323,6 +325,20 @@ func restoreCompletedRevocationAuthorityFromEventTx(ctx context.Context, tx pgx.
 		batch.Reason == "removeFromCRL" || len(batch.Items) == 0 || len(batch.Items) > 100 {
 		return errors.New("store: event-only revocation has no bounded request")
 	}
+	// The projector supplies only issuer rows that were active immediately
+	// before this event. A later batch may reconcile inventory while preserving
+	// an earlier issuer revocation; it must not become a second authority proof.
+	firstBySerial := make(map[string]CertificateRevocationAuthorityTarget, len(firstTargets))
+	for _, target := range firstTargets {
+		key := target.CAID + "\x00" + target.Serial
+		if target.CAID == "" || target.Serial == "" || !revocationAuthorityDigest(target.Fingerprint) {
+			return errors.New("store: event-only revocation has an invalid first issuer target")
+		}
+		if _, duplicate := firstBySerial[key]; duplicate {
+			return errors.New("store: event-only revocation repeats a first issuer target")
+		}
+		firstBySerial[key] = target
+	}
 	var targets []CertificateRevocationAuthorityTarget
 	seen := make(map[string]struct{}, len(batch.Items))
 	for _, item := range batch.Items {
@@ -339,8 +355,17 @@ func restoreCompletedRevocationAuthorityFromEventTx(ctx context.Context, tx pgx.
 		if !item.Matched || item.CAID == "" || item.Serial == "" || !revocationAuthorityDigest(item.Fingerprint) {
 			return errors.New("store: event-only revocation has no exact local issuer target")
 		}
-		targets = append(targets, CertificateRevocationAuthorityTarget{
-			CAID: item.CAID, Serial: item.Serial, Fingerprint: item.Fingerprint})
+		key := item.CAID + "\x00" + item.Serial
+		if first, ok := firstBySerial[key]; ok {
+			if first.Fingerprint != item.Fingerprint {
+				return errors.New("store: event-only first issuer target differs from retained item")
+			}
+			targets = append(targets, first)
+			delete(firstBySerial, key)
+		}
+	}
+	if len(firstBySerial) != 0 {
+		return errors.New("store: event-only first issuer target is absent from retained batch")
 	}
 	if len(targets) == 0 {
 		return nil

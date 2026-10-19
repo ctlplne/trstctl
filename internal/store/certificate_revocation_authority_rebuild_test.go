@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestCompletedCertificateRevocationAuthorityRebuildsFromEventWithoutClaim(t *testing.T) {
@@ -31,9 +32,10 @@ func TestCompletedCertificateRevocationAuthorityRebuildsFromEventWithoutClaim(t 
 	event := events.Event{ID: "event-only-revocation", TenantID: tenantA,
 		Type: "certificate.revocation.batch.applied", SchemaVersion: 1,
 		Time: time.Date(2026, 10, 19, 18, 0, 0, 0, time.UTC), Sequence: 17, Data: data}
+	firstTargets := []store.CertificateRevocationAuthorityTarget{{CAID: caID, Serial: "7a", Fingerprint: digest}}
 	for replay := 0; replay < 2; replay++ {
 		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-			return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, event)
+			return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, event, firstTargets)
 		}); err != nil {
 			t.Fatalf("event-only replay %d: %v", replay, err)
 		}
@@ -41,7 +43,7 @@ func TestCompletedCertificateRevocationAuthorityRebuildsFromEventWithoutClaim(t 
 	drifted := event
 	drifted.SchemaVersion = 2
 	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, drifted)
+		return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, drifted, firstTargets)
 	}); err == nil {
 		t.Fatal("completed revocation command accepted an event schema change")
 	}
@@ -56,9 +58,19 @@ func TestCompletedCertificateRevocationAuthorityRebuildsFromEventWithoutClaim(t 
 	other := event
 	other.ID, other.Sequence = "competing-event-only-revocation", 18
 	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, other)
+		return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, other, firstTargets)
 	}); err == nil {
 		t.Fatal("event-only rebuild accepted a competing issuer/serial decision")
+	}
+	reconciliation := event
+	reconciliation.ID, reconciliation.Sequence = "inventory-only-reconciliation", 19
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, reconciliation, nil)
+	}); err != nil {
+		t.Fatalf("inventory-only reconciliation conflicted with first issuer proof: %v", err)
+	}
+	if _, err := s.CertificateRevocationAuthorityCommandByEventID(ctx, tenantA, reconciliation.ID); err == nil {
+		t.Fatal("inventory-only reconciliation became an issuer authority receipt")
 	}
 	command, err := s.CertificateRevocationAuthorityCommandByEventID(ctx, tenantA, event.ID)
 	if err != nil || command.Status != "completed" || command.Event.Sequence != event.Sequence ||

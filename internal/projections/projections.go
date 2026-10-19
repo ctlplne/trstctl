@@ -4695,7 +4695,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.ReasonCode, revokedAt); err != nil {
 			return err
 		}
-		return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, e)
+		return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, e, nil)
 	case EventCertificateRevocationBatchApplied:
 		return p.applyCertificateRevocationBatchTx(ctx, tx, e)
 	case EventCertificateSuperseded:

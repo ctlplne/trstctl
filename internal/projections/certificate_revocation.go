@@ -107,6 +107,7 @@ func (p *Projector) applyCertificateRevocationBatchTx(ctx context.Context, tx pg
 	if event.ID == "" || event.Time.IsZero() {
 		return errors.New("projections: revocation requires the canonical event identity and time")
 	}
+	firstTargets := make([]store.CertificateRevocationAuthorityTarget, 0, len(batch.Items))
 	for _, item := range batch.Items {
 		if item.Status == "queued" {
 			if event.SchemaVersion != CertificateExternalRevocationSchemaVersion {
@@ -123,6 +124,24 @@ func (p *Projector) applyCertificateRevocationBatchTx(ctx context.Context, tx pg
 		if item.Status != "revoked" {
 			continue
 		}
+		// Lock inventory before the issuer row, matching the command path. The
+		// issuer's state before this event distinguishes first revocation from
+		// a later batch that only reconciles divergent inventory.
+		certificate, err := p.store.CertificateForRevocationTx(ctx, tx, event.TenantID, item.ID)
+		if err != nil {
+			return err
+		}
+		if certificate.Fingerprint != item.Fingerprint || certificate.Serial != item.Serial {
+			return errors.New("projections: retained revocation target differs from inventory")
+		}
+		issuer, err := p.store.IssuedCertificateForRevocationTx(ctx, tx, event.TenantID, item.CAID, item.Serial)
+		if err != nil {
+			return err
+		}
+		if !issuer.Revoked() {
+			firstTargets = append(firstTargets, store.CertificateRevocationAuthorityTarget{
+				CAID: item.CAID, Serial: item.Serial, Fingerprint: item.Fingerprint})
+		}
 		if err := p.store.ApplyExactCertificateRevocationTx(ctx, tx, event.TenantID,
 			item.ID, item.Fingerprint, item.Serial, item.CAID, batch.Reason,
 			crypto.CRLReasonCode(crypto.RevocationReason(batch.Reason)), event.Time); err != nil {
@@ -134,5 +153,5 @@ func (p *Projector) applyCertificateRevocationBatchTx(ctx context.Context, tx pg
 			return err
 		}
 	}
-	return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, event)
+	return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, event, firstTargets)
 }
