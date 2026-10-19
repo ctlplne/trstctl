@@ -6,11 +6,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/decommission/depstate"
 )
 
 func TestLockedCertificateMustStillBeUnobservedAtReleaseClaim(t *testing.T) {
 	expired := time.Now().UTC().Add(-time.Minute)
-	review := Review{SourceEventID: "mint", Serial: "7a", CertificateSHA256: strings.Repeat("a", 64), NotAfter: expired}
+	review := Review{SourceEventID: "mint", Serial: "7a", CertificateSHA256: strings.Repeat("a", 64), NotAfter: expired,
+		Reason: depstate.ReleaseReasonExpiredRequesterCustody}
 	facts := lockedCertificateFacts{
 		status: "active", keyOrigin: "requester", notAfter: &expired,
 	}
@@ -33,6 +36,31 @@ func TestLockedCertificateMustStillBeUnobservedAtReleaseClaim(t *testing.T) {
 			change(&changed)
 			if err := changed.validate(review, time.Now().UTC()); err == nil {
 				t.Fatal("changed certificate state passed the pre-append locked-row check")
+			}
+		})
+	}
+}
+
+func TestLockedRevokedHostCertificateMustRemainRevokedAndUnservedAtReleaseClaim(t *testing.T) {
+	valid := time.Now().UTC().Add(time.Hour)
+	review := Review{SourceEventID: "mint", Serial: "7b", CertificateSHA256: strings.Repeat("b", 64), NotAfter: valid,
+		Reason: depstate.ReleaseReasonRevokedUnservedHostCustody}
+	facts := lockedCertificateFacts{status: "revoked", keyOrigin: "host_agent", notAfter: &valid}
+	if err := facts.validate(review, time.Now().UTC()); err != nil {
+		t.Fatalf("unchanged revoked unserved host row refused: %v", err)
+	}
+	for name, change := range map[string]func(*lockedCertificateFacts){
+		"active":   func(f *lockedCertificateFacts) { f.status = "active" },
+		"custody":  func(f *lockedCertificateFacts) { f.keyOrigin = "requester" },
+		"deployed": func(f *lockedCertificateFacts) { f.deploymentLocation = "web-01" },
+		"observed": func(f *lockedCertificateFacts) { now := time.Now().UTC(); f.lastSeen = &now },
+		"validity": func(f *lockedCertificateFacts) { later := valid.Add(time.Hour); f.notAfter = &later },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := facts
+			change(&changed)
+			if err := changed.validate(review, time.Now().UTC()); err == nil {
+				t.Fatal("changed revoked host state passed the pre-append locked-row check")
 			}
 		})
 	}
