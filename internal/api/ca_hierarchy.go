@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -878,6 +879,10 @@ func authorizeCARotationSuccessor(ctx context.Context, tenantID, successorID str
 
 func (a *API) writeCAHierarchyError(w http.ResponseWriter, err error) bool {
 	switch {
+	case errors.Is(err, events.ErrEventIDIndexBehind):
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable,
+			"CA history is catching up; retry with the same Idempotency-Key"))
 	case errors.Is(err, ErrCAHierarchyUnavailable):
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "CA hierarchy surface is not enabled"))
 	case errors.Is(err, ErrCAHierarchyInvalid):
