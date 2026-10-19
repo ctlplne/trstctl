@@ -3146,6 +3146,16 @@ than sending an operator looking for a credential that was never there.
   signer's frozen event-set check uses the same derivation, including issuance
   after the frozen cut. A serial-only historical issuance remains a conservative
   `serial:` dependent rather than an invented certificate inventory row.
+  For a host-held certificate, `POST /api/v1/ca/keys/{id}/reprotect/plans` and
+  `trstctl-cli ca keys reprotect plan` record an immutable public plan only after
+  checking the tenant's outstanding dependent, the exact certificate and its
+  predecessor CA signature, an active direct successor CA, and the enabled host
+  target's current revision and assigned agent. The target supplies the probe
+  address and name; callers cannot redirect them in the plan request. A plan
+  receipt proves that review was recorded, not that issuance, deployment or
+  served-state cutover happened. The VDEC credential worker and console action
+  remain under construction and the retirement checklist continues to block
+  destruction until completion evidence exists.
   An expired requester-held managed leaf with no managed deployment can be
   dispositioned through `release_managed_ca_leaf` after two distinct custodians
   approve its exact public certificate digest, immutable mint event and bounded

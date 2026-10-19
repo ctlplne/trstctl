@@ -159,6 +159,68 @@ type ReprotectionReceipt struct {
 	Jobs     []ReprotectionJobReceipt `json:"jobs"`
 }
 
+// CredentialPlanReceipt is a public readback of the immutable command the
+// worker will enforce. It contains no subject private key or agent credential.
+type CredentialPlanReceipt struct {
+	JobID                  string `json:"job_id"`
+	CertificateID          string `json:"certificate_id"`
+	SuccessorAuthorityID   string `json:"successor_authority_id"`
+	PredecessorFingerprint string `json:"predecessor_fingerprint"`
+	PredecessorSPKISHA256  string `json:"predecessor_spki_sha256"`
+	TargetID               string `json:"target_id"`
+	TargetRevisionID       string `json:"target_revision_id"`
+	RequiredAgentID        string `json:"required_agent_id"`
+	Connector              string `json:"connector"`
+	VerifyAddress          string `json:"verify_address"`
+	VerifyServerName       string `json:"verify_server_name"`
+	TTLSeconds             int64  `json:"ttl_seconds"`
+	Recorded               bool   `json:"recorded"`
+}
+
+func credentialPlanHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+			start := time.Now()
+			var opErr error
+			defer func() { a.ObserveFeature("vdec_reprotection", "record_plan", start, opErr) }()
+			var input reprotect.CredentialPlanSelection
+			if err := api.DecodeJSONStrict(r, &input); err != nil {
+				opErr = api.ErrWithStatus(http.StatusBadRequest, err)
+				return 0, nil, opErr
+			}
+			plan, recorded, err := enq.RegisterCredentialPlan(ctx, tenantID, r.PathValue("id"), input)
+			if err != nil {
+				switch {
+				case errors.Is(err, reprotect.ErrCredentialPlanNotFound):
+					err = api.ErrWithStatus(http.StatusNotFound, err)
+				case errors.Is(err, reprotect.ErrCredentialPlanTargetChanged),
+					errors.Is(err, reprotect.ErrCredentialPlanNotReady),
+					errors.Is(err, reprotect.ErrCompletionConflict):
+					err = api.ErrWithStatus(http.StatusConflict, err)
+				case errors.Is(err, reprotect.ErrInvalidState):
+					err = api.ErrWithStatus(http.StatusBadRequest, err)
+				}
+				opErr = err
+				return 0, nil, err
+			}
+			receipt := CredentialPlanReceipt{
+				JobID: plan.Job.ID, CertificateID: plan.Job.Dependent.ID,
+				SuccessorAuthorityID:   plan.SuccessorAuthorityID,
+				PredecessorFingerprint: plan.PredecessorFingerprint,
+				PredecessorSPKISHA256:  plan.PredecessorSPKISHA256,
+				TargetID:               plan.TargetID, TargetRevisionID: plan.TargetRevisionID,
+				RequiredAgentID: plan.RequiredAgentID, Connector: plan.Connector,
+				VerifyAddress: plan.VerifyAddress, VerifyServerName: plan.VerifyServerName,
+				TTLSeconds: plan.TTLSeconds, Recorded: recorded,
+			}
+			if !recorded {
+				return http.StatusOK, receipt, nil
+			}
+			return http.StatusCreated, receipt, nil
+		})
+	}
+}
+
 func reprotectHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -341,6 +403,14 @@ func retirementHandler(a *api.API, coordinator *retirement.Coordinator) http.Han
 func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator, releaser *release.Coordinator) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
+			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect/plans", OperationID: "registerCAKeyReprotectionPlan",
+			Summary:       "Record one reviewed certificate, successor CA and exact host route before re-protection",
+			Handler:       func(a *api.API) http.HandlerFunc { return credentialPlanHandler(a, enq) },
+			PathParams:    []api.RouteParam{api.PathStringParam("id", "superseded managed CA authority identifier")},
+			RequestSchema: "VDECCredentialPlanSelection", ResponseSchema: "VDECCredentialPlanReceipt",
+			SuccessCode: "201", Mutation: true, Permission: authz.KeysWrite,
+		},
+		{
 			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect", OperationID: "startCAKeyReprotection",
 			Summary:        "Queue re-protection jobs for a CA key's outstanding dependents",
 			Handler:        func(a *api.API) http.HandlerFunc { return reprotectHandler(a, enq) },
@@ -377,6 +447,22 @@ func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator, releas
 
 func schemas() map[string]*api.Schema {
 	return map[string]*api.Schema{
+		"VDECCredentialPlanSelection": api.ObjectSchema(map[string]*api.Schema{
+			"certificate_id": api.StringSchema(), "successor_authority_id": api.StringSchema(),
+			"target_id": api.StringSchema(), "expected_target_revision": api.StringSchema(),
+			"expected_fingerprint": api.StringSchema(), "ttl_seconds": api.IntegerSchema(),
+		}, "certificate_id", "successor_authority_id", "target_id", "expected_target_revision", "expected_fingerprint", "ttl_seconds"),
+		"VDECCredentialPlanReceipt": api.ObjectSchema(map[string]*api.Schema{
+			"job_id": api.StringSchema(), "certificate_id": api.StringSchema(),
+			"successor_authority_id": api.StringSchema(), "predecessor_fingerprint": api.StringSchema(),
+			"predecessor_spki_sha256": api.StringSchema(), "target_id": api.StringSchema(),
+			"target_revision_id": api.StringSchema(), "required_agent_id": api.StringSchema(),
+			"connector": api.StringSchema(), "verify_address": api.StringSchema(),
+			"verify_server_name": api.StringSchema(), "ttl_seconds": api.IntegerSchema(),
+			"recorded": api.BooleanSchema(),
+		}, "job_id", "certificate_id", "successor_authority_id", "predecessor_fingerprint",
+			"predecessor_spki_sha256", "target_id", "target_revision_id", "required_agent_id",
+			"connector", "verify_address", "verify_server_name", "ttl_seconds", "recorded"),
 		"VDECReprotectionJob": api.ObjectSchema(map[string]*api.Schema{
 			"id":              api.StringSchema(),
 			"kind":            api.StringSchema(),

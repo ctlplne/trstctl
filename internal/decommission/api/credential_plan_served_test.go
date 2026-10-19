@@ -1,0 +1,166 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+package api_test
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/decommission/depstate"
+	"trstctl.com/trstctl/internal/decommission/reprotect"
+	decstore "trstctl.com/trstctl/internal/decommission/store"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/orchestrator"
+	corestore "trstctl.com/trstctl/internal/store"
+)
+
+func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *testing.T) {
+	ctx := context.Background()
+	st := openStoreOn(t, "vdec_api_credential_plan_served")
+	oldSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oldSigner.Destroy()
+	oldDER, err := crypto.SelfSignedCACert(oldSigner, "QA predecessor", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldInfo, err := certinfo.Inspect(oldDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := st.InsertCAAuthority(ctx, corestore.CAAuthority{TenantID: tenantA, Kind: "root", CommonName: "QA predecessor", Status: "superseded", CertificatePEM: string(crypto.EncodeCertificatePEM(oldDER)), SignerHandle: "qa-old-handle", Serial: oldInfo.SerialNumber})
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer successorSigner.Destroy()
+	successorDER, err := crypto.SelfSignedCACert(successorSigner, "QA successor", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorInfo, err := certinfo.Inspect(successorDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	successor, err := st.InsertCAAuthority(ctx, corestore.CAAuthority{TenantID: tenantA, Kind: "root", CommonName: "QA successor", Status: "active", CertificatePEM: string(crypto.EncodeCertificatePEM(successorDER)), SignerHandle: "qa-successor-handle", ReplacesID: &old.ID, Serial: successorInfo.SerialNumber})
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer subject.Destroy()
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "ca-reprotect.qa.invalid", DNSNames: []string{"ca-reprotect.qa.invalid"}}, subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafDER, err := crypto.SignLeafFromCSR(oldDER, oldSigner, csr, 30*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafPEM := crypto.EncodeCertificatePEM(leafDER)
+	info, err := certinfo.Inspect(leafPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := st.UpsertCertificate(ctx, corestore.Certificate{TenantID: tenantA, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, CertificateDER: leafDER, CertificatePEM: leafPEM, KeyOrigin: "host_agent", KeyStorage: "file", Status: "active"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentID := uuid.NewString()
+	if err := st.UpsertAgent(ctx, corestore.Agent{ID: agentID, TenantID: tenantA, Name: "qa-host", Status: "online", Roles: []string{"host"}}); err != nil {
+		t.Fatal(err)
+	}
+	targetID := uuid.NewString()
+	if err := st.UpsertDeploymentTarget(ctx, corestore.DeploymentTarget{ID: targetID, TenantID: tenantA, Name: "QA Apache", Type: "apache", Enabled: true, EnabledSet: true, Config: json.RawMessage(`{"executor":"agent","required_agent_role":"host","required_agent_id":"` + agentID + `","cert_path":"/lab/tls/qa.crt","key_path":"/lab/tls/qa.key","verify_address":"127.0.0.1:10443","verify_server_name":"ca-reprotect.qa.invalid"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	target, err := st.GetDeploymentTarget(ctx, tenantA, targetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := decstore.New(st).RebuildTenant(ctx, tenantA, []eventspec.Event{mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: old.ID, Dependent: dep(depstate.DependentCredential, cert.ID)}, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	outbox := orchestrator.NewOutbox(st)
+	served := newServedAPI(t, st, outbox, log)
+	targetRead := httptest.NewRecorder()
+	served.ServeHTTP(targetRead, httptest.NewRequest(http.MethodGet, "/api/v1/connectors/targets/"+targetID, nil))
+	if targetRead.Code != http.StatusOK {
+		t.Fatalf("operator target readback = %d %s", targetRead.Code, targetRead.Body.String())
+	}
+	var reviewedTarget struct {
+		RevisionID string `json:"revision_id"`
+	}
+	if err := json.Unmarshal(targetRead.Body.Bytes(), &reviewedTarget); err != nil || reviewedTarget.RevisionID != target.RevisionID {
+		t.Fatalf("operator cannot obtain target revision for reviewed CA plan: %+v err=%v", reviewedTarget, err)
+	}
+	post := func(idem, revision, fingerprint, successorID string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]any{"certificate_id": cert.ID, "successor_authority_id": successorID, "target_id": targetID, "expected_target_revision": revision, "expected_fingerprint": fingerprint, "ttl_seconds": 600})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect/plans", strings.NewReader(string(body)))
+		req.Header.Set("Idempotency-Key", idem)
+		rr := httptest.NewRecorder()
+		served.ServeHTTP(rr, req)
+		return rr
+	}
+	if rr := post("stale-revision", "stale", info.SHA256Fingerprint, successor.ID); rr.Code != http.StatusConflict {
+		t.Fatalf("stale target revision = %d %s, want 409 before plan append", rr.Code, rr.Body.String())
+	}
+	if rr := post("wrong-cert", target.RevisionID, strings.Repeat("0", 64), successor.ID); rr.Code != http.StatusConflict {
+		t.Fatalf("wrong predecessor = %d %s, want 409 before plan append", rr.Code, rr.Body.String())
+	}
+	first := post("reviewed-plan", target.RevisionID, info.SHA256Fingerprint, successor.ID)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("reviewed plan = %d %s, want 201", first.Code, first.Body.String())
+	}
+	var result struct {
+		JobID                 string `json:"job_id"`
+		Recorded              bool   `json:"recorded"`
+		PredecessorSPKISHA256 string `json:"predecessor_spki_sha256"`
+		RequiredAgentID       string `json:"required_agent_id"`
+		TargetRevisionID      string `json:"target_revision_id"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &result); err != nil || !result.Recorded || result.JobID == "" || result.PredecessorSPKISHA256 != info.SPKISHA256 || result.RequiredAgentID != agentID || result.TargetRevisionID != target.RevisionID {
+		t.Fatalf("reviewed plan lost derived binding: %+v err=%v", result, err)
+	}
+	if again := post("reviewed-plan-retry", target.RevisionID, info.SHA256Fingerprint, successor.ID); again.Code != http.StatusOK {
+		t.Fatalf("exact plan replay = %d %s, want 200", again.Code, again.Body.String())
+	}
+	if changed := post("changed-successor", target.RevisionID, info.SHA256Fingerprint, old.ID); changed.Code != http.StatusConflict {
+		t.Fatalf("changed successor = %d %s, want 409", changed.Code, changed.Body.String())
+	}
+	plan, found, err := reprotect.NewCredentialPlanLedger(log, st).Load(ctx, tenantA, result.JobID)
+	if err != nil || !found || plan.Job.Dependent.ID != cert.ID || plan.SuccessorAuthorityID != successor.ID || plan.VerifyAddress != "127.0.0.1:10443" || plan.VerifyServerName != "ca-reprotect.qa.invalid" {
+		t.Fatalf("immutable plan readback = %+v found=%t err=%v", plan, found, err)
+	}
+	start := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
+	start.Header.Set("Idempotency-Key", "start-reviewed-plan")
+	queued := httptest.NewRecorder()
+	served.ServeHTTP(queued, start)
+	if queued.Code != http.StatusAccepted {
+		t.Fatalf("reviewed plan did not unlock outbox: %d %s", queued.Code, queued.Body.String())
+	}
+}

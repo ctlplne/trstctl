@@ -412,6 +412,27 @@ func TestCAReprotectionCommandQueuesTheExactKeyWithoutInventingCompletion(t *tes
 	}
 }
 
+func TestCAReprotectionPlanCommandSendsOnlyReviewedPublicSelection(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusCreated,
+		`{"job_id":"job-1","certificate_id":"leaf-1","successor_authority_id":"ca-new","predecessor_fingerprint":"old","predecessor_spki_sha256":"spki","target_id":"host-1","target_revision_id":"rev-1","required_agent_id":"agent-1","connector":"apache","verify_address":"127.0.0.1:10443","verify_server_name":"qa.invalid","ttl_seconds":600,"recorded":true}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: "reprotect-plan-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+	body := `{"certificate_id":"leaf-1","successor_authority_id":"ca-new","target_id":"host-1","expected_target_revision":"rev-1","expected_fingerprint":"old","ttl_seconds":600}`
+	code, stdout, stderr := run(t, []string{"ca", "keys", "reprotect", "plan", "ca-old", "-f", "-"}, env, body)
+	if code != 0 || stderr != "" {
+		t.Fatalf("reprotect plan command = exit %d stderr=%q", code, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/ca/keys/ca-old/reprotect/plans" ||
+		captured.Header.Get("Idempotency-Key") == "" || !sameJSON(captured.Body, []byte(body)) {
+		t.Fatalf("reprotect plan request = %s %s key=%q body=%s", captured.Method, captured.Path,
+			captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+	if !strings.Contains(stdout, `"job_id": "job-1"`) || !strings.Contains(stdout, `"recorded": true`) {
+		t.Fatalf("CLI omitted immutable plan receipt: %s", stdout)
+	}
+}
+
 func TestPCASRetirementCommandsBindIdentityAndPolicy(t *testing.T) {
 	var captured capture
 	srv := mockServer(t, http.StatusOK,

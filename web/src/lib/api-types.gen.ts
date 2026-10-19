@@ -2745,6 +2745,7 @@ export interface DeploymentTarget {
   enabled: boolean;
   id: string;
   name: string;
+  revision_id: string;
   tenant_id: string;
 }
 

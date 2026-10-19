@@ -113,7 +113,7 @@ func openStoreOn(t *testing.T, dbName string) *corestore.Store {
 	return cs
 }
 
-var vdecRole = authz.Role{Name: "vdec-operator", Permissions: []authz.Permission{authz.KeysRead, authz.KeysWrite}}
+var vdecRole = authz.Role{Name: "vdec-operator", Permissions: []authz.Permission{authz.KeysRead, authz.KeysWrite, authz.ConnectorsRead}}
 
 // newServedAPI assembles the core API exactly the way the server does for a
 // VDEC-licensed deployment: the licensed options come from the SAME factory the

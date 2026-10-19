@@ -3793,6 +3793,7 @@ DeploymentTarget = TypedDict(
         'enabled': bool,
         'id': str,
         'name': str,
+        'revision_id': str,
         'tenant_id': str,
     },
     total=False,

@@ -175,13 +175,14 @@ type deploymentTargetRequest struct {
 }
 
 type deploymentTargetResponse struct {
-	ID        string          `json:"id"`
-	TenantID  string          `json:"tenant_id"`
-	Name      string          `json:"name"`
-	Connector string          `json:"connector"`
-	Config    json.RawMessage `json:"config"`
-	Enabled   bool            `json:"enabled"`
-	CreatedAt time.Time       `json:"created_at"`
+	ID         string          `json:"id"`
+	RevisionID string          `json:"revision_id"`
+	TenantID   string          `json:"tenant_id"`
+	Name       string          `json:"name"`
+	Connector  string          `json:"connector"`
+	Config     json.RawMessage `json:"config"`
+	Enabled    bool            `json:"enabled"`
+	CreatedAt  time.Time       `json:"created_at"`
 }
 
 type identityConnectorTargetRequest struct {
@@ -363,7 +364,7 @@ func toDeploymentTargetResponse(t store.DeploymentTarget) deploymentTargetRespon
 		cfg = json.RawMessage("{}")
 	}
 	return deploymentTargetResponse{
-		ID: t.ID, TenantID: t.TenantID, Name: t.Name, Connector: t.Type, Config: cfg, Enabled: t.Enabled, CreatedAt: t.CreatedAt,
+		ID: t.ID, RevisionID: t.RevisionID, TenantID: t.TenantID, Name: t.Name, Connector: t.Type, Config: cfg, Enabled: t.Enabled, CreatedAt: t.CreatedAt,
 	}
 }
 

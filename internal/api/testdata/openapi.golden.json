@@ -11233,6 +11233,10 @@
           "name": {
             "type": "string"
           },
+          "revision_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "tenant_id": {
             "format": "uuid",
             "type": "string"
@@ -11240,6 +11244,7 @@
         },
         "required": [
           "id",
+          "revision_id",
           "tenant_id",
           "name",
           "connector",
