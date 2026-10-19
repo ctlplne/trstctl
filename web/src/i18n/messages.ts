@@ -8939,7 +8939,7 @@ export const messages = {
   "caHierarchy.reprotect.heading": { defaultMessage: "Re-protect managed certificate", description: "CA retirement host-held dependent workflow heading." },
   "caHierarchy.reprotect.explanation": {
     defaultMessage:
-      "Select the active direct successor and the bound host target. Review the exact old certificate, key fingerprint, target revision, agent and served endpoint before recording or starting work. Record a plan for every outstanding managed certificate. Issuance and deployment must finish before this key can retire.",
+      "Select the active direct successor and the bound host target. Review the exact old certificate, key fingerprint, target revision, agent and TLS listener before recording or starting work. Record a plan for every outstanding managed certificate. Issuance and deployment must finish before this key can retire.",
     description: "Explain the operator steps and completion boundary for CA re-protection.",
   },
   "caHierarchy.reprotect.certificate": { defaultMessage: "Certificate ID", description: "CA re-protection dependent certificate." },
@@ -8969,7 +8969,7 @@ export const messages = {
   "caHierarchy.reprotect.recorded": { defaultMessage: "Plan recorded and read back", description: "CA re-protection plan readback success." },
   "caHierarchy.reprotect.startGuidance": {
     defaultMessage:
-      "Starting queues the bound host job. This receipt is not deployment proof. Refresh the checklist and independently check the served certificate before retirement.",
+      "Starting queues the bound host job. This receipt is not deployment proof. Refresh the checklist and independently check the certificate the TLS listener presents before retirement.",
     description: "CA re-protection enqueue versus completion boundary.",
   },
   "caHierarchy.reprotect.start": { defaultMessage: "Start re-protection", description: "Queue all recorded CA re-protection jobs." },
@@ -8983,7 +8983,7 @@ export const messages = {
   "caHierarchy.reprotect.spki": { defaultMessage: "Retained key SPKI SHA-256", description: "CA re-protection exact subject public key." },
   "caHierarchy.reprotect.agent": { defaultMessage: "Assigned host agent", description: "CA re-protection bound agent." },
   "caHierarchy.reprotect.connector": { defaultMessage: "Connector", description: "CA re-protection host connector." },
-  "caHierarchy.reprotect.probe": { defaultMessage: "Served endpoint probe", description: "CA re-protection verification address and name." },
+  "caHierarchy.reprotect.probe": { defaultMessage: "TLS listener check", description: "CA re-protection verification address and name." },
   "caHierarchy.reprotect.loadFailed": { defaultMessage: "Could not load CA re-protection choices", description: "CA re-protection setup read failure." },
   "caHierarchy.reprotect.changed": {
     defaultMessage: "The reviewed plan changed; refresh public state and review again",

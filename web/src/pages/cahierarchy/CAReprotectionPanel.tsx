@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { translateNow } from "@/i18n/I18nProvider";
 import {
   api,
@@ -222,23 +225,24 @@ export function CAReprotectionPanel({ keyId, certificateIDs, onRefresh }: { keyI
           {loadError}
         </p>
       )}
-      <label className="grid gap-1 text-sm">
-        {translateNow("caHierarchy.reprotect.certificate")}
-        <select
-          className="ui-input"
-          value={certificateID}
-          onChange={(event) => {
-            setCertificateID(event.target.value);
-            clearReview();
-          }}
-        >
-          {certificateIDs.map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Field label={translateNow("caHierarchy.reprotect.certificate")}>
+        {(field) => (
+          <Select
+            {...field}
+            value={certificateID}
+            onChange={(event) => {
+              setCertificateID(event.target.value);
+              clearReview();
+            }}
+          >
+            {certificateIDs.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
       {certificate && (
         <p className="break-all text-xs">
           {certificate.subject} · {translateNow("caHierarchy.reprotect.fingerprint")} {certificate.fingerprint} · {certificate.key_origin}/
@@ -248,62 +252,65 @@ export function CAReprotectionPanel({ keyId, certificateIDs, onRefresh }: { keyI
       {certificate && (certificate.key_origin !== "host_agent" || certificate.key_storage !== "file") && (
         <p className="text-sm">{translateNow("caHierarchy.reprotect.custodyRequired")}</p>
       )}
-      <label className="grid gap-1 text-sm">
-        {translateNow("caHierarchy.reprotect.successor")}
-        <select
-          className="ui-input"
-          value={successorID}
-          onChange={(event) => {
-            setSuccessorID(event.target.value);
-            clearReview();
-          }}
-        >
-          <option value="">{translateNow("caHierarchy.reprotect.chooseSuccessor")}</option>
-          {successors.map((ca) => (
-            <option key={ca.id} value={ca.id}>
-              {ca.common_name} ({ca.id})
-            </option>
-          ))}
-        </select>
-      </label>
+      <Field label={translateNow("caHierarchy.reprotect.successor")}>
+        {(field) => (
+          <Select
+            {...field}
+            value={successorID}
+            onChange={(event) => {
+              setSuccessorID(event.target.value);
+              clearReview();
+            }}
+          >
+            <option value="">{translateNow("caHierarchy.reprotect.chooseSuccessor")}</option>
+            {successors.map((ca) => (
+              <option key={ca.id} value={ca.id}>
+                {ca.common_name} ({ca.id})
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
       {successors.length === 0 && <p className="text-sm">{translateNow("caHierarchy.reprotect.noSuccessor")}</p>}
-      <label className="grid gap-1 text-sm">
-        {translateNow("caHierarchy.reprotect.target")}
-        <select
-          className="ui-input"
-          value={targetID}
-          onChange={(event) => {
-            setTargetID(event.target.value);
-            clearReview();
-          }}
-        >
-          <option value="">{translateNow("caHierarchy.reprotect.chooseTarget")}</option>
-          {enabledTargets.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name} ({item.connector}, {item.id})
-            </option>
-          ))}
-        </select>
-      </label>
+      <Field label={translateNow("caHierarchy.reprotect.target")}>
+        {(field) => (
+          <Select
+            {...field}
+            value={targetID}
+            onChange={(event) => {
+              setTargetID(event.target.value);
+              clearReview();
+            }}
+          >
+            <option value="">{translateNow("caHierarchy.reprotect.chooseTarget")}</option>
+            {enabledTargets.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ({item.connector}, {item.id})
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
       {target && (
         <p className="break-all text-xs">
           {translateNow("caHierarchy.reprotect.targetRevision")}: {target.revision_id}
         </p>
       )}
-      <label className="grid gap-1 text-sm">
-        {translateNow("caHierarchy.reprotect.ttl")}
-        <input
-          className="ui-input"
-          type="number"
-          min={60}
-          max={90 * 24 * 3600}
-          value={ttlText}
-          onChange={(event) => {
-            setTTLText(event.target.value);
-            clearReview();
-          }}
-        />
-      </label>
+      <Field label={translateNow("caHierarchy.reprotect.ttl")}>
+        {(field) => (
+          <Input
+            {...field}
+            type="number"
+            min={60}
+            max={90 * 24 * 3600}
+            value={ttlText}
+            onChange={(event) => {
+              setTTLText(event.target.value);
+              clearReview();
+            }}
+          />
+        )}
+      </Field>
       <Button type="button" variant="outline" disabled={busy || !!loadError || !canPreview} onClick={() => void review()}>
         {translateNow("caHierarchy.reprotect.review")}
       </Button>
@@ -317,10 +324,9 @@ export function CAReprotectionPanel({ keyId, certificateIDs, onRefresh }: { keyI
         </>
       )}
       <div className="grid gap-2 rounded-md border p-3">
-        <label className="grid gap-1 text-sm">
-          {translateNow("caHierarchy.reprotect.recoverID")}
-          <input className="ui-input" value={recoveryJobID} onChange={(event) => setRecoveryJobID(event.target.value)} />
-        </label>
+        <Field label={translateNow("caHierarchy.reprotect.recoverID")}>
+          {(field) => <Input {...field} value={recoveryJobID} onChange={(event) => setRecoveryJobID(event.target.value)} />}
+        </Field>
         <Button type="button" variant="outline" disabled={busy || !recoveryJobID.trim()} onClick={() => void recoverPlan()}>
           {translateNow("caHierarchy.reprotect.loadRecorded")}
         </Button>
