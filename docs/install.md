@@ -320,7 +320,7 @@ enterprise MDM approval.
 
 Install the host agent from the verified release above, or build from source.
 
-**From source** (requires Go 1.26.6+):
+**From source** (requires Go 1.26.9+):
 
 ```bash
 git clone https://github.com/ctlplne/trstctl

@@ -17,7 +17,7 @@
 # .dockerignore). Version metadata is injected via --build-arg, and the release
 # pipeline rewrites layer timestamps to SOURCE_DATE_EPOCH.
 
-ARG GO_VERSION=1.26.6
+ARG GO_VERSION=1.26.9
 
 # Web-build, Go-build, and runtime base images. Declared in the GLOBAL scope
 # (before the first FROM) so every FROM can resolve them — a variable in a FROM is
@@ -25,7 +25,7 @@ ARG GO_VERSION=1.26.6
 # the release pipeline overrides all three with immutable @sha256 digests (see
 # .github/workflows/release.yml).
 ARG WEB_BUILD_IMAGE=node:22-bookworm-slim
-ARG BUILD_IMAGE=golang:1.26.6-bookworm
+ARG BUILD_IMAGE=golang:1.26.9-bookworm
 ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
 
 # Fast audit target used by scripts/ci/docker-context-audit.sh. It exports the
