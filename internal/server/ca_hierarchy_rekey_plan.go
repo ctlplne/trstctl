@@ -64,7 +64,28 @@ func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantI
 			}
 		}
 		purpose, err := hierarchyPurposeFromStartRequest(req)
-		return purpose, req.Spec, err
+		if err != nil {
+			return "", api.CASpec{}, err
+		}
+		switch req.Operation {
+		case "create_intermediate", "issue_intermediate_csr":
+			issuer, err := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.ParentID))
+			if err != nil {
+				return "", api.CASpec{}, err
+			}
+			if err := validateOnlineCeremonyIssuer(issuer); err != nil {
+				return "", api.CASpec{}, err
+			}
+		case "cross_sign_ca":
+			issuer, err := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.AuthorityID))
+			if err != nil {
+				return "", api.CASpec{}, err
+			}
+			if err := validateOnlineCeremonyIssuer(issuer); err != nil {
+				return "", api.CASpec{}, err
+			}
+		}
+		return purpose, req.Spec, nil
 	}
 	if strings.TrimSpace(req.AuthorityID) == "" {
 		return "", api.CASpec{}, fmt.Errorf("%w: authority_id is required for rekey_ca", api.ErrCAHierarchyInvalid)
@@ -82,6 +103,18 @@ func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantI
 	if err := validateAuthorityRekey(authority); err != nil {
 		return "", api.CASpec{}, err
 	}
+	if authority.Kind == "intermediate" {
+		if authority.ParentID == nil || *authority.ParentID == "" {
+			return "", api.CASpec{}, fmt.Errorf("%w: intermediate CA has no parent authority", api.ErrCAHierarchyInvalid)
+		}
+		parent, err := h.store.GetCAAuthority(ctx, tenantID, *authority.ParentID)
+		if err != nil {
+			return "", api.CASpec{}, err
+		}
+		if err := validateOnlineRekeyParent(parent); err != nil {
+			return "", api.CASpec{}, err
+		}
+	}
 	spec := rekeyAuthoritySpec(authority, req.Spec.TTLSeconds)
 	if req.Spec.CommonName != spec.CommonName || req.Spec.MaxPathLen != spec.MaxPathLen ||
 		!sameStringSet(req.Spec.PermittedDNSDomains, spec.PermittedDNSDomains) ||
@@ -91,6 +124,26 @@ func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantI
 	}
 	purpose, err := rekeyCAPurpose(authority.ID, spec, req.Reason)
 	return purpose, spec, err
+}
+
+func validateOnlineCeremonyIssuer(issuer store.CAAuthority) error {
+	if issuer.SignerHandle == "" {
+		return fmt.Errorf("%w: offline issuer cannot perform online signing; use the offline certificate or CSR import ceremony", api.ErrCAHierarchyInvalid)
+	}
+	if issuer.Status != "active" {
+		return fmt.Errorf("%w: online signing issuer must be active", api.ErrCAHierarchyConflict)
+	}
+	return nil
+}
+
+func validateOnlineRekeyParent(parent store.CAAuthority) error {
+	if parent.SignerHandle == "" {
+		return fmt.Errorf("%w: offline parent cannot sign an online CA re-key; use prepare_existing_ca and have the external issuer sign its public CSR", api.ErrCAHierarchyInvalid)
+	}
+	if parent.Status != "active" {
+		return fmt.Errorf("%w: re-key parent CA must be active", api.ErrCAHierarchyConflict)
+	}
+	return nil
 }
 
 func rekeyCAPurpose(authorityID string, spec api.CASpec, reason string) (string, error) {

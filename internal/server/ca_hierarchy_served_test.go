@@ -1443,6 +1443,41 @@ func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
 		"extended_key_usages":   []string{"serverAuth"},
 		"signature_algorithm":   "ecdsa-p256",
 	}
+	for _, attempt := range []struct {
+		name string
+		body map[string]any
+	}{
+		{"managed intermediate", map[string]any{
+			"operation": "create_intermediate", "parent_id": root.ID,
+			"threshold": 2, "spec": interSpec,
+		}},
+		{"external intermediate CSR", map[string]any{
+			"operation": "issue_intermediate_csr", "parent_id": root.ID,
+			"threshold": 2, "spec": interSpec, "csr_pem": leafCSRPEM,
+		}},
+		{"online cross-sign", map[string]any{
+			"operation": "cross_sign_ca", "authority_id": root.ID,
+			"threshold": 2, "target_certificate_pem": string(target.CertificatePEM),
+		}},
+	} {
+		t.Run(attempt.name+" rejects offline issuer before approval", func(t *testing.T) {
+			before := servedEventCount(t, h, "ca.ceremony.started")
+			for _, endpoint := range []string{"/api/v1/ca/ceremonies/preview", "/api/v1/ca/ceremonies"} {
+				idem := ""
+				if endpoint == "/api/v1/ca/ceremonies" {
+					idem = "offline-parent-" + strings.ReplaceAll(attempt.name, " ", "-")
+				}
+				code, body := doBearer(t, h.ts, http.MethodPost, endpoint, operator,
+					idem, attempt.body)
+				if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("offline")) {
+					t.Fatalf("%s %s = %d body=%s; want actionable 422 before approvals", attempt.name, endpoint, code, body)
+				}
+			}
+			if servedEventCount(t, h, "ca.ceremony.started") != before {
+				t.Fatal("refused offline issuer operation started a custodian ceremony")
+			}
+		})
+	}
 	interCeremony := createCACeremony(t, h, operator, "create_offline_intermediate", root.ID, interSpec, 2, "offline-intermediate-ceremony")
 	approveCACeremony(t, h, approverOne, interCeremony.ID, 1, "offline-intermediate-approval-one")
 	approveCACeremony(t, h, approverTwo, interCeremony.ID, 2, "offline-intermediate-approval-two")
@@ -1471,6 +1506,31 @@ func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
 	inter := importOfflineIntermediateCA(t, h, operator, root.ID, interCeremony.ID, string(offlineIntermediate.CertificatePEM), interSpec, "offline-intermediate-import")
 	if inter.Kind != "intermediate" || inter.ParentID == nil || *inter.ParentID != root.ID || inter.SignerHandle != csr.SignerHandle {
 		t.Fatalf("offline intermediate = %+v; want child of offline root bound to CSR signer handle %q", inter, csr.SignerHandle)
+	}
+	rekeyInput := map[string]any{
+		"operation": "rekey_ca", "authority_id": inter.ID, "threshold": 2,
+		"spec": interSpec, "reason": "replace offline-root-signed intermediate",
+	}
+	beforeRekeyCeremonies := servedEventCount(t, h, "ca.ceremony.started")
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", rekeyInput)
+	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("offline parent")) {
+		t.Fatalf("offline-parent online re-key preview = %d body=%s; want actionable 422 before approvals", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", operator, "offline-parent-rekey-start", rekeyInput)
+	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("offline parent")) {
+		t.Fatalf("offline-parent online re-key start = %d body=%s; want actionable 422 before approvals", code, body)
+	}
+	if servedEventCount(t, h, "ca.ceremony.started") != beforeRekeyCeremonies {
+		t.Fatal("refused offline-parent re-key started a custodian ceremony")
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+inter.ID+"/rekey", operator,
+		"offline-parent-rekey-direct", map[string]any{
+			"ceremony_id": "00000000-0000-4000-8000-000000000001",
+			"ttl_seconds": interSpec["ttl_seconds"],
+			"reason":      "replace offline-root-signed intermediate",
+		})
+	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("offline parent")) {
+		t.Fatalf("offline-parent online re-key activation = %d body=%s; want refusal before signer claim", code, body)
 	}
 
 	leafCSRDER = hierarchyLeafCSR(t, "leaf.offline.example.test")

@@ -196,6 +196,14 @@ parent before consuming the ceremony. An already-held signer key uses the
 
 CA renewal/re-key uses `ca-rekey-v2:<sha256-of-authority/spec/reason>` to create fresh signer-held
 CA material for the selected authority with the reviewed lifetime and profile.
+Online intermediate creation, external intermediate CSR signing, cross-signing,
+and intermediate re-key require an active signer-backed issuing CA. If the
+parent is an offline public-only CA, ceremony preview and start refuse the
+online operation before asking custodians to approve it. To replace an
+intermediate under that parent, use `prepare_existing_ca` to obtain a public
+CSR for a new signer-held CA key, have the offline issuer sign the CSR outside
+trstctl, import the signed successor with its reviewed chain, then preview and
+activate the predecessor-to-successor rotation.
 Short approvals return `ErrQuorumNotMet`; an opener approving their own
 ceremony, or a ceremony already used or opened for a different resource/spec, fails
 closed before the CA mutation commits — stopping one compromised admin account from
