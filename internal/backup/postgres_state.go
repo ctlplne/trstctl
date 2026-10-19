@@ -548,6 +548,28 @@ func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Read
 			`INSERT INTO %s OVERRIDING SYSTEM VALUE
 			 SELECT * FROM jsonb_populate_recordset(NULL::%s, $1::jsonb)`,
 			quotedTable, quotedTable)
+		if table == "ca_signer_handle_claims" {
+			// PostgreSQL renders both SQL NULL and the JSONB value `null` as
+			// JSON null in to_jsonb(record). A prepared claim cannot have a SQL
+			// NULL actor, so its preparation_status is the authoritative bit
+			// needed to restore an exact JSONB-null event actor. The generic
+			// recordset conversion would turn that actor into SQL NULL and
+			// violate the preparation-complete constraint before recovery.
+			q = `INSERT INTO ca_signer_handle_claims
+			        (tenant_id, handle_sha256, owner_tenant_id, owner_ceremony_id,
+			         state, created_at, preparation_issuer_sha256, preparation_parent_id,
+			         preparation_purpose, preparation_csr_pem, preparation_event_id,
+			         preparation_event_time, preparation_event_actor,
+			         preparation_event_payload, preparation_status)
+			     SELECT tenant_id, handle_sha256, owner_tenant_id, owner_ceremony_id,
+			            state, created_at, preparation_issuer_sha256, preparation_parent_id,
+			            preparation_purpose, preparation_csr_pem, preparation_event_id,
+			            preparation_event_time,
+			            CASE WHEN preparation_status IS NOT NULL AND preparation_event_actor IS NULL
+			                 THEN 'null'::jsonb ELSE preparation_event_actor END,
+			            preparation_event_payload, preparation_status
+			       FROM jsonb_populate_recordset(NULL::ca_signer_handle_claims, $1::jsonb)`
+		}
 		if _, err := tx.Exec(ctx, q, payload); err != nil {
 			return summary, fmt.Errorf("backup: restore %s: %w", table, err)
 		}

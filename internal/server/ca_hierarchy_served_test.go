@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -1760,7 +1761,8 @@ func TestServedCAExistingImportPendingCSRReadDoesNotPublish(t *testing.T) {
 		EventTime: time.Now().UTC().Truncate(time.Microsecond), EventActor: []byte(`null`),
 		EventPayload: []byte(`{"ca_id":"pending"}`),
 	}
-	if _, err := h.store.ReserveCASignerPreparation(t.Context(), receipt); err != nil {
+	prepared, err := h.store.ReserveCASignerPreparation(t.Context(), receipt)
+	if err != nil {
 		t.Fatal(err)
 	}
 	before := servedEventCount(t, h, projections.EventCAIntermediateCSRIssued)
@@ -1770,6 +1772,22 @@ func TestServedCAExistingImportPendingCSRReadDoesNotPublish(t *testing.T) {
 	}
 	if got := servedEventCount(t, h, projections.EventCAIntermediateCSRIssued); got != before {
 		t.Fatalf("GET appended %d CSR events; want %d", got, before)
+	}
+	var artifact bytes.Buffer
+	if _, err := backup.WritePostgresStateAtCut(t.Context(), h.store, &artifact, 0); err != nil {
+		t.Fatalf("back up pending CA signer preparation: %v", err)
+	}
+	restored := newServerTestStore(t)
+	if _, err := backup.RestorePostgresState(t.Context(), restored, bytes.NewReader(artifact.Bytes())); err != nil {
+		t.Fatalf("restore pending CA signer preparation: %v", err)
+	}
+	got, err := restored.GetCASignerPreparation(t.Context(), h.tenant, ceremonyID, handle)
+	if err != nil || got.Status != "pending" || got.EventID != prepared.EventID ||
+		!bytes.Equal(got.EventActor, prepared.EventActor) ||
+		!bytes.Equal(got.EventPayload, prepared.EventPayload) {
+		t.Fatalf("pending CA signer preparation changed across backup and restore: status=%q event_id=%q actor_equal=%t payload_equal=%t err=%v",
+			got.Status, got.EventID, bytes.Equal(got.EventActor, prepared.EventActor),
+			bytes.Equal(got.EventPayload, prepared.EventPayload), err)
 	}
 }
 
