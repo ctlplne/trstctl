@@ -12,8 +12,8 @@ import (
 
 // conformanceKeyPEM is the published connector conformance vector, copied byte
 // for byte from internal/connector/conformance.go. It is a deterministic
-// published test vector, not a live secret, and it is the ONE thing the
-// repository's .gitleaks.toml still allowlists (by exact key body).
+// published test vector, not a live secret. The repository's .gitleaks.toml
+// allows it only in five named files under the private-key rule.
 const conformanceKeyPEM = `-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2drNvkGQeqFUx3xE
 zejpKQlXChZFd7J3qw/JXoL+x72hRANCAAThNg201ttWU9xWnLOcm66MA1dNuxpE
@@ -58,7 +58,8 @@ func TestGitleaksConfigHasNoPathBasedTestSourceExemption(t *testing.T) {
 		}
 		if strings.HasPrefix(directive, "paths") {
 			const exactGeneratedPath = "paths = ['''(^|/)internal/webui/dist/assets/Journeys-[A-Za-z0-9_-]+\\.js$''']"
-			if section != "[[rules.allowlists]]" || directive != exactGeneratedPath {
+			const exactFixturePaths = "paths = ['''(^|/)internal/(connector/conformance\\.go|connector/iis/iis_test\\.go|projections/iis_connector_test\\.go|server/run_connectors_test\\.go|secretscan/gitleaks_repo_config_test\\.go)$''']"
+			if section != "[[rules.allowlists]]" || (directive != exactGeneratedPath && directive != exactFixturePaths) {
 				t.Errorf(".gitleaks.toml:%d declares an unbounded path allowance in %s: %s", i+1, section, directive)
 			}
 			scopedPaths++
@@ -67,7 +68,7 @@ func TestGitleaksConfigHasNoPathBasedTestSourceExemption(t *testing.T) {
 			t.Errorf(".gitleaks.toml:%d declares targetRules (%s); the pinned gitleaks %s silently disables the entire allowlist block when it is present, which widens rather than narrows the suppression", i+1, directive, GitleaksPinnedVersion)
 		}
 	}
-	if scopedPaths != 1 || strings.Count(cfg, "id = \"generic-api-key\"") != 1 ||
+	if scopedPaths != 2 || strings.Count(cfg, "id = \"generic-api-key\"") != 1 || strings.Count(cfg, "id = \"private-key\"") != 1 ||
 		!strings.Contains(cfg, "condition = \"AND\"") ||
 		!strings.Contains(cfg, "regexTarget = \"match\"") ||
 		!strings.Contains(cfg, "regexes = ['''^bodyKey:[\"`]journeys\\.[A-Za-z0-9_.-]+[\"`]$''']") {
@@ -75,7 +76,7 @@ func TestGitleaksConfigHasNoPathBasedTestSourceExemption(t *testing.T) {
 	}
 
 	if want := "'''" + conformanceKeyBody() + "'''"; !strings.Contains(cfg, want) {
-		t.Errorf(".gitleaks.toml must keep the exact-key-body allowlist %s for the published connector conformance vector", want)
+		t.Errorf(".gitleaks.toml must keep the exact-key-body allowance %s for the published connector conformance vector", want)
 	}
 
 	// The fixtures the path glob used to hide are pinned individually now, so
@@ -144,10 +145,10 @@ func TestGitleaksHistoricalGeneratedIdentifierPinsAreExact(t *testing.T) {
 //     glob hid while claiming to hide only PEM vectors;
 //   - a PEM private key in a `_test.go` file is reported — so re-widening the
 //     allowlist through `regexes`/`stopwords` for PEM bodies fails here too;
-//   - the published conformance key in the same file is NOT reported — the
-//     negative control proving the repository's .gitleaks.toml was actually
-//     loaded. Without it, gitleaks silently falling back to its built-in default
-//     config would satisfy the first two and prove nothing about this repo.
+//   - the published conformance key in an unrelated test file IS reported;
+//     only the five named source/fixture files may hold that exact vector;
+//   - the same vector in the named conformance path is suppressed, proving
+//     the repository's file-and-rule scoped config was actually loaded.
 func TestServedGitleaksScanDetectsPlantedSecretInTestSource(t *testing.T) {
 	bin, err := NewGitleaksRunner("").resolveBinary()
 	if err != nil {
@@ -181,6 +182,13 @@ func TestServedGitleaksScanDetectsPlantedSecretInTestSource(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(target, plantedName), []byte(fixture), 0o600); err != nil {
 		t.Fatalf("write the planted test-source fixture: %v", err)
 	}
+	conformancePath := filepath.Join(target, "internal", "connector", "conformance.go")
+	if err := os.MkdirAll(filepath.Dir(conformancePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(conformancePath, []byte("package connector\nconst publishedVector = `"+conformanceKeyPEM+"`\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	report, err := (&GitleaksRunner{Binary: bin, AllowedRoots: []string{target}}).ScanWithOptions(context.Background(), target, ScanOptions{})
 	if err != nil {
@@ -202,8 +210,8 @@ func TestServedGitleaksScanDetectsPlantedSecretInTestSource(t *testing.T) {
 			t.Errorf("gitleaks reported no %q finding in %s under the repository's .gitleaks.toml; a secret planted in a test source is being suppressed. findings=%v", want, plantedName, seen)
 		}
 	}
-	if byRule["private-key"] > 1 {
-		t.Errorf("the allowlisted conformance vector in the same fixture was reported as well (%d private-key findings: %v); that means the repository .gitleaks.toml was NOT the config in force — gitleaks fell back to its built-in default — so the assertions above prove nothing about this repository's configuration", byRule["private-key"], seen)
+	if byRule["private-key"] != 2 {
+		t.Errorf("private-key findings in unlisted test source = %d, want 2; an exact published vector must not be allowed in an arbitrary file. findings=%v", byRule["private-key"], seen)
 	}
 }
 

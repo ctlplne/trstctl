@@ -8,9 +8,9 @@
 # Scope of the allowlists, and why they do not hide credentials (02-GUARDRAILS):
 #   - There is no whole-file or test-source exemption. A GitHub PAT, Slack bot
 #     token, or private key committed into a `_test.go` file fails the scan.
-#   - The global allowlist pins the exact published connector conformance key
-#     body. Other historical test vectors are pinned in .gitleaksignore by
-#     commit/path/rule/line fingerprint.
+#   - The private-key rule allows the exact published connector conformance
+#     vector only in its five named source/fixture files. Other historical test
+#     vectors are pinned in .gitleaksignore by commit/path/rule/line fingerprint.
 #   - The rule-specific allowance below requires BOTH a generated Journeys
 #     chunk path AND a static `bodyKey:"journeys.*"` lookup match. Another
 #     generic API key in that same chunk still fails. Gitleaks v8.27.2 ignores
@@ -23,15 +23,17 @@
 [extend]
 useDefault = true
 
-[allowlist]
-description = "The published connector conformance keypair (a deterministic vector, not a live secret)."
-# The one published conformance keypair that lives in non-_test source
-# (internal/connector/conformance.go) — a deterministic ECDSA P-256 vector
-# (CN conformance.connector.test) shipped so forks/plugins can self-validate the
-# connector suite (the conformance-oracle carve-out). Pinned by its EXACT key body so a future real
-# finding in that file is NOT suppressed. The full-history scan also sees this
-# fixture's earlier placeholder form; .gitleaksignore pins that one historical
-# finding by exact fingerprint instead of broadening this rule.
+[[rules]]
+id = "private-key"
+path = '''.*'''
+
+[[rules.allowlists]]
+description = "Published connector conformance vector in its five named files only"
+condition = "AND"
+paths = ['''(^|/)internal/(connector/conformance\.go|connector/iis/iis_test\.go|projections/iis_connector_test\.go|server/run_connectors_test\.go|secretscan/gitleaks_repo_config_test\.go)$''']
+# These five files share one deterministic ECDSA P-256 conformance vector
+# (CN conformance.connector.test). The path AND exact body are both required;
+# another key in any one file, or this vector in a new file, remains visible.
 regexTarget = "match"
 regexes = [
   '''MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2drNvkGQeqFUx3xE''',
