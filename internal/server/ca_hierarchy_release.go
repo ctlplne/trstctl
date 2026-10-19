@@ -25,6 +25,20 @@ func (h *caHierarchyService) fillManagedLeafReleasePreview(
 	}
 	preview.ReleaseReview = caReleaseReview(review)
 	preview.RequiredPermission = "issuers:write"
+	if review.Reason == depstate.ReleaseReasonRevokedUnservedHostCustody {
+		preview.Changes = []string{
+			"Prepare a two-custodian disposition of the exact revoked host-held CA leaf that was never served, its original mint and local revocation events, and the operator's explicit external-use risk decision. The preview writes nothing.",
+		}
+		preview.Risks = []string{
+			"The host agent held this leaf's private key. Local revocation and no observed deployment cannot prove it was never used elsewhere or that every relying party rejects it.",
+			"Releasing this exact dependency after two distinct custodian approvals permits a later retirement request; it does not perform revocation or destroy the CA key.",
+		}
+		preview.VerificationSteps = []string{
+			"Match the exact certificate ID, public DER digest, original mint event, exact local revocation event, CA key and explicit external-use risk decision before opening the ceremony.",
+			"Verify two distinct custodian approval events authorize this exact disposition before executing the release.",
+			"After release, read the retirement checklist for this CA key and verify the exact certificate is accounted for; retain the immutable release receipt and audit event.",
+		}
+	}
 	return nil
 }
 

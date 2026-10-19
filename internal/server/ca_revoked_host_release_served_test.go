@@ -110,6 +110,17 @@ func TestServedCARevokedUnservedHostLeafReleaseBindsExactRevocation(t *testing.T
 	if status != http.StatusOK || !strings.Contains(string(body), `"revocation_event_id"`) {
 		t.Fatalf("review exact revoked host leaf = %d: %s", status, body)
 	}
+	previewCopy := strings.ToLower(string(body))
+	for _, required := range []string{"revoked host-held", "exact local revocation"} {
+		if !strings.Contains(previewCopy, required) {
+			t.Fatalf("revoked host release preview omits %q: %s", required, body)
+		}
+	}
+	for _, misleading := range []string{"expired managed ca leaf", "the requester held this leaf"} {
+		if strings.Contains(previewCopy, misleading) {
+			t.Fatalf("revoked host release preview claims %q: %s", misleading, body)
+		}
+	}
 	request["expected_certificate_sha256"] = strings.Repeat("a", 64)
 	status, _ = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operator, "", request)
 	if status != http.StatusConflict {
