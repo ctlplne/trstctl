@@ -67,6 +67,7 @@ type keyBuilder struct {
 	released    map[string]struct{}
 	erased      map[string]struct{}
 	leafSources map[string]managedLeafSource
+	revocations map[string]managedLeafRevocation
 	ceremonies  map[string]*releaseCeremony
 }
 
@@ -85,6 +86,13 @@ type managedLeafSource struct {
 	certificateSHA256 string
 }
 
+type managedLeafRevocation struct {
+	eventID           string
+	sequence          uint64
+	serial            string
+	certificateSHA256 string
+}
+
 func newKeyBuilder(tenantID, keyID string) *keyBuilder {
 	return &keyBuilder{
 		state:       KeyState{KeyID: keyID, TenantID: tenantID},
@@ -93,6 +101,7 @@ func newKeyBuilder(tenantID, keyID string) *keyBuilder {
 		released:    make(map[string]struct{}),
 		erased:      make(map[string]struct{}),
 		leafSources: make(map[string]managedLeafSource),
+		revocations: make(map[string]managedLeafRevocation),
 		ceremonies:  make(map[string]*releaseCeremony),
 	}
 }
@@ -166,6 +175,12 @@ func Fold(seq []eventspec.Event) (Projection, error) {
 			}
 			b.advance(ledgerPosition(e, position))
 		}
+		if err := rememberRevokedManagedLeaves(e, func(keyID, certID, serial, digest string) error {
+			b := builderFor(builders, e.TenantID, keyID)
+			return b.rememberRevocation(e, certID, serial, digest)
+		}); err != nil {
+			return nil, fmt.Errorf("depstate: fold revocation event %d: %w", i, err)
+		}
 		payload, err := Decode(e)
 		if err != nil {
 			return nil, fmt.Errorf("depstate: fold event %d (%s): %w", i, e.Type, err)
@@ -180,8 +195,17 @@ func Fold(seq []eventspec.Event) (Projection, error) {
 				return nil, fmt.Errorf("depstate: fold event %d (%s): %w", i, e.Type, err)
 			}
 		}
+		if released, ok := payload.(DependencyReleasedV3); ok {
+			if err := b.validateRevokedSourceBoundRelease(e, released); err != nil {
+				return nil, fmt.Errorf("depstate: fold event %d (%s): %w", i, e.Type, err)
+			}
+		}
 		b.apply(c.op, c.dependent)
 		if released, ok := payload.(DependencyReleasedV2); ok {
+			delete(b.ceremonies, released.CeremonyID)
+			delete(ceremonyIndex, released.CeremonyID)
+		}
+		if released, ok := payload.(DependencyReleasedV3); ok {
 			delete(b.ceremonies, released.CeremonyID)
 			delete(ceremonyIndex, released.CeremonyID)
 		}
@@ -228,6 +252,14 @@ func (f *KeyFolder) Apply(e eventspec.Event) error {
 			f.touched = true
 		}
 	}
+	if err := rememberRevokedManagedLeaves(e, func(keyID, certID, serial, digest string) error {
+		if e.TenantID != f.tenantID || keyID != f.keyID {
+			return nil
+		}
+		return f.builder.rememberRevocation(e, certID, serial, digest)
+	}); err != nil {
+		return err
+	}
 	payload, err := Decode(e)
 	if err != nil {
 		return err
@@ -239,8 +271,16 @@ func (f *KeyFolder) Apply(e eventspec.Event) error {
 				return err
 			}
 		}
+		if released, ok := payload.(DependencyReleasedV3); ok {
+			if err := f.builder.validateRevokedSourceBoundRelease(e, released); err != nil {
+				return err
+			}
+		}
 		f.builder.apply(change.op, change.dependent)
 		if released, ok := payload.(DependencyReleasedV2); ok {
+			delete(f.builder.ceremonies, released.CeremonyID)
+		}
+		if released, ok := payload.(DependencyReleasedV3); ok {
 			delete(f.builder.ceremonies, released.CeremonyID)
 		}
 		f.builder.advance(ledgerPosition(e, f.position))
@@ -250,20 +290,24 @@ func (f *KeyFolder) Apply(e eventspec.Event) error {
 }
 
 const (
-	caCeremonyStarted    = "ca.ceremony.started"
-	caCeremonyApproved   = "ca.ceremony.approved"
-	caCeremonyCancelled  = "ca.ceremony.cancelled"
-	releasePurposePrefix = "release-managed-ca-leaf-v2:"
+	caCeremonyStarted      = "ca.ceremony.started"
+	caCeremonyApproved     = "ca.ceremony.approved"
+	caCeremonyCancelled    = "ca.ceremony.cancelled"
+	releasePurposePrefix   = "release-managed-ca-leaf-v2:"
+	releasePurposePrefixV3 = "release-managed-ca-leaf-v3:"
 )
 
 func releasePurposeKey(purpose string) (string, bool) {
-	if !strings.HasPrefix(purpose, releasePurposePrefix) {
+	prefix := releasePurposePrefix
+	if strings.HasPrefix(purpose, releasePurposePrefixV3) {
+		prefix = releasePurposePrefixV3
+	} else if !strings.HasPrefix(purpose, releasePurposePrefix) {
 		return "", false
 	}
 	var review struct {
 		KeyID string `json:"key_id"`
 	}
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(purpose, releasePurposePrefix)), &review); err != nil || review.KeyID == "" {
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(purpose, prefix)), &review); err != nil || review.KeyID == "" {
 		return "", false
 	}
 	return review.KeyID, true
@@ -402,6 +446,8 @@ func payloadChange(p Payload) (change, bool) {
 	case DependencyReleasedV1:
 		return change{v.TenantID, v.KeyID, v.Dependent, opRelease}, true
 	case DependencyReleasedV2:
+		return change{v.TenantID, v.KeyID, v.Dependent, opRelease}, true
+	case DependencyReleasedV3:
 		return change{v.TenantID, v.KeyID, v.Dependent, opRelease}, true
 	case DependencyErasureDesignatedV1:
 		return change{v.TenantID, v.KeyID, v.Dependent, opErase}, true

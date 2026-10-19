@@ -849,7 +849,7 @@ trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 # job ID and load the immutable plan. Queueing is not served-leaf proof: check
 # the signed host result, stock TLS readback and refreshed retirement checklist.
 
-# For one expired requester-held managed CA leaf with no managed deployment,
+# For one expired requester-held or revoked, unserved host-held managed CA leaf,
 # review a release_managed_ca_leaf ceremony through ca ceremonies preview/create.
 # Two other authenticated custodians approve its exact mint ID and public digest.
 # The release body binds that ceremony, certificate ID, digest and bounded reason.
@@ -857,6 +857,9 @@ trstctl-cli ca keys dependent release <ca-authority-id> -f dependent-release.jso
 # {"certificate_id":"<inventory id>","expected_certificate_sha256":"<public DER digest>",
 #  "ceremony_id":"<approved ceremony id>",
 #  "reason":"expired-requester-custody-external-use-risk-accepted","risk_accepted":true}
+# For the revoked host-held case, set reason to
+# "revoked-unserved-host-custody-external-use-risk-accepted" and confirm the
+# review includes its exact completed local-issuer revocation event.
 
 # If the exact retirement outbox command has failed after its delivery budget,
 # read its command_event_id and delivery_attempts from the checklist. Review the

@@ -479,6 +479,7 @@ func componentSchemas() map[string]*Schema {
 	caReleaseReview := object(map[string]*Schema{
 		"key_id": uuid(), "certificate_id": uuid(), "source_event_id": str(),
 		"source_sequence": {Type: "integer"}, "serial": str(), "certificate_sha256": str(),
+		"revocation_event_id": str(), "revocation_sequence": {Type: "integer"},
 		"subject": str(), "not_after": timestamp(), "reason": str(), "risk_accepted": {Type: "boolean"},
 	}, "key_id", "certificate_id", "source_event_id", "source_sequence", "serial", "certificate_sha256", "reason", "risk_accepted")
 	caCeremonyCancelReq := object(map[string]*Schema{"reason": str()}, "reason")

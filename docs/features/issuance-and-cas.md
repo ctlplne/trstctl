@@ -300,6 +300,16 @@ public PEM; an import is an observation and does not by itself prove trstctl
 issued or can revoke that leaf. A failed replay leaves startup closed with an
 error rather than guessing a certificate or CA.
 
+A CA key retirement checklist also accepts a narrowly reviewed disposition
+for a revoked, unserved host-held leaf. The release binds the immutable mint,
+completed local-issuer revocation event, public digest, and two distinct
+custodian approvals. The signer independently folds both events before
+accounting for the dependent. Event-only recovery rebuilds the completed
+revocation authority receipt from that retained event if the independent
+first-writer table is absent. This is a risk decision about possible external
+use, not proof that every relying party enforced revocation. See the
+[key-ceremony runbook](../runbooks/key-ceremony.md) for the operator path.
+
 ### Recovering a failed CA-key retirement delivery
 
 The CA Hierarchy lifecycle tab shows the exact frozen retirement command and its

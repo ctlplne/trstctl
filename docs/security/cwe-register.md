@@ -457,7 +457,7 @@ not this file.
 | `internal/crypto/sshkeys/property_test.go:117` | generator bounds the value to 0..2 (CWE-190) |
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
-| `internal/decommission/store/projection.go:174` | rejected values above MaxInt64 immediately above. |
+| `internal/decommission/store/projection.go:180` | rejected values above MaxInt64 immediately above. |
 | `internal/discovery/adcs/acl.go:76` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:205` | the fixed malformed fixture is below MaxUint16 (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:232` | test SID inputs have at most 255 sub-authorities (CWE-190). |
@@ -768,7 +768,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3858` | closed test table list above |
+| `internal/store/migration_content_test.go:3910` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

@@ -30,7 +30,7 @@ type CACeremonyEffectCommand struct {
 	Status        string
 }
 
-const caCeremonyEffectColumns = `tenant_id::text,ceremony_id::text,key_id::text,certificate_id::text,event_id,event_time,
+const caCeremonyEffectColumns = `tenant_id::text,ceremony_id::text,key_id::text,certificate_id::text,event_id,event_time,event_schema_version,
 	event_actor,actor_sha256,event_payload,payload_sha256,status`
 
 func scanCACeremonyEffectCommand(row pgx.Row) (CACeremonyEffectCommand, error) {
@@ -38,13 +38,12 @@ func scanCACeremonyEffectCommand(row pgx.Row) (CACeremonyEffectCommand, error) {
 	var actorBytes, payload []byte
 	var actorDigest, payloadDigest string
 	if err := row.Scan(&command.TenantID, &command.CeremonyID, &command.KeyID, &command.CertificateID, &command.Event.ID,
-		&command.Event.Time, &actorBytes, &actorDigest, &payload,
+		&command.Event.Time, &command.Event.SchemaVersion, &actorBytes, &actorDigest, &payload,
 		&payloadDigest, &command.Status); err != nil {
 		return command, err
 	}
 	command.Event.TenantID = command.TenantID
 	command.Event.Type = "dependency.released"
-	command.Event.SchemaVersion = 2
 	command.Event.Data = payload
 	switch command.Status {
 	case "pending":
@@ -73,7 +72,7 @@ func (s *Store) ReserveCACeremonyEffectCommandTx(ctx context.Context, tx pgx.Tx,
 	ev := command.Event
 	if command.TenantID == "" || command.CeremonyID == "" || command.KeyID == "" || command.CertificateID == "" || ev.ID == "" ||
 		ev.TenantID != command.TenantID || ev.Type != "dependency.released" ||
-		ev.SchemaVersion != 2 || ev.Time.IsZero() || ev.Actor == nil || len(ev.Data) == 0 ||
+		(ev.SchemaVersion != 2 && ev.SchemaVersion != 3) || ev.Time.IsZero() || ev.Actor == nil || len(ev.Data) == 0 ||
 		!ev.Time.Equal(ev.Time.UTC().Truncate(time.Microsecond)) {
 		return errors.New("store: incomplete CA ceremony effect command")
 	}
@@ -99,10 +98,10 @@ func (s *Store) ReserveCACeremonyEffectCommandTx(ctx context.Context, tx pgx.Tx,
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO ca_ceremony_effect_commands
-		(tenant_id,ceremony_id,key_id,certificate_id,operation,event_id,event_time,event_actor,actor_sha256,event_payload,payload_sha256)
-		VALUES ($1,$2,$3,$4,'release_managed_ca_leaf',$5,$6,$7,$8,$9,$10)`,
-		command.TenantID, command.CeremonyID, command.KeyID, command.CertificateID, ev.ID, ev.Time, actor,
-		crypto.SHA256Hex(actor), ev.Data, crypto.SHA256Hex(ev.Data))
+		(tenant_id,ceremony_id,key_id,certificate_id,operation,event_id,event_time,event_schema_version,event_actor,actor_sha256,event_payload,payload_sha256)
+		VALUES ($1,$2,$3,$4,'release_managed_ca_leaf',$5,$6,$7,$8,$9,$10,$11)`,
+		command.TenantID, command.CeremonyID, command.KeyID, command.CertificateID, ev.ID, ev.Time,
+		ev.SchemaVersion, actor, crypto.SHA256Hex(actor), ev.Data, crypto.SHA256Hex(ev.Data))
 	return err
 }
 
@@ -177,10 +176,11 @@ func (s *Store) CompleteCACeremonyEffectCommandTx(ctx context.Context, tx pgx.Tx
 	var eventID, actorDigest, digest, status string
 	var actorBytes []byte
 	var eventTime time.Time
+	var eventSchemaVersion int
 	var payload []byte
-	if err := tx.QueryRow(ctx, `SELECT event_id,event_time,event_actor,actor_sha256,event_payload,payload_sha256,status
+	if err := tx.QueryRow(ctx, `SELECT event_id,event_time,event_schema_version,event_actor,actor_sha256,event_payload,payload_sha256,status
 		FROM ca_ceremony_effect_commands WHERE tenant_id=$1 AND ceremony_id=$2 FOR UPDATE`, tenantID, ceremonyID).
-		Scan(&eventID, &eventTime, &actorBytes, &actorDigest, &payload, &digest, &status); err != nil {
+		Scan(&eventID, &eventTime, &eventSchemaVersion, &actorBytes, &actorDigest, &payload, &digest, &status); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Event-only rebuild runs before independent PostgreSQL receivers
 			// are restored. The immutable release and approvals are authority;
@@ -196,7 +196,7 @@ func (s *Store) CompleteCACeremonyEffectCommandTx(ctx context.Context, tx pgx.Tx
 	if err != nil {
 		return err
 	}
-	if ev.ID != eventID || ev.TenantID != tenantID || ev.Type != "dependency.released" || ev.SchemaVersion != 2 ||
+	if ev.ID != eventID || ev.TenantID != tenantID || ev.Type != "dependency.released" || ev.SchemaVersion != eventSchemaVersion ||
 		!ev.Time.Equal(eventTime) || crypto.SHA256Hex(eventActor) != actorDigest ||
 		crypto.SHA256Hex(ev.Data) != digest ||
 		(status != "pending" && status != "completed") {

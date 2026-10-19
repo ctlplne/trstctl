@@ -3184,6 +3184,12 @@ than sending an operator looking for a credential that was never there.
   restart and backup; its event and approval evidence rebuild the checklist.
   This deliberately does not claim that expiry proves the leaf was unused
   outside trstctl, and serial-only historical rows are not eligible.
+  A revoked, unserved host-held leaf can use a separate bounded reason only
+  when the exact local-issuer revocation fence is completed and the immutable
+  revocation event matches its mint and public certificate. The same
+  two-custodian, first-writer release flow records this risk decision. A local
+  revocation record cannot prove that every external relying party rejected
+  the leaf; a deployed or observed host leaf remains ineligible.
   If the tenant has no recorded dependency state for the requested key, the
   checklist returns HTTP 404 with an explanation to verify the key ID and collect
   dependency evidence. This does not establish whether the key itself exists;

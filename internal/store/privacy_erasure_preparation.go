@@ -1500,10 +1500,11 @@ func (s *Store) prepareCACeremonyEffectFencesTx(
 ) ([]PrivacyRecoveryFenceDisposition, error) {
 	type pendingRow struct {
 		ceremonyID, eventID string
+		schemaVersion       int
 		actor, payload      []byte
 		actorDigest, digest string
 	}
-	rows, err := tx.Query(ctx, `SELECT ceremony_id::text,event_id,event_actor,event_payload,
+	rows, err := tx.Query(ctx, `SELECT ceremony_id::text,event_id,event_schema_version,event_actor,event_payload,
 		actor_sha256,payload_sha256 FROM ca_ceremony_effect_commands
 		WHERE tenant_id=$1 AND status='pending' ORDER BY ceremony_id FOR UPDATE`, tenantID)
 	if err != nil {
@@ -1512,7 +1513,7 @@ func (s *Store) prepareCACeremonyEffectFencesTx(
 	var pending []pendingRow
 	for rows.Next() {
 		var row pendingRow
-		if err := rows.Scan(&row.ceremonyID, &row.eventID, &row.actor,
+		if err := rows.Scan(&row.ceremonyID, &row.eventID, &row.schemaVersion, &row.actor,
 			&row.payload, &row.actorDigest, &row.digest); err != nil {
 			rows.Close()
 			return nil, err
@@ -1531,7 +1532,7 @@ func (s *Store) prepareCACeremonyEffectFencesTx(
 			return nil, fmt.Errorf("store: CA ceremony effect command %s digest mismatch", row.eventID)
 		}
 		rewritten, payloadChanged, err := events.PseudonymizeEventDataForSubject(
-			row.payload, tenantID, subject, "dependency.released", 2)
+			row.payload, tenantID, subject, "dependency.released", row.schemaVersion)
 		if err != nil {
 			return nil, err
 		}

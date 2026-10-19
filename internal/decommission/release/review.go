@@ -40,18 +40,20 @@ type Request struct {
 // Review contains only public certificate facts and the operator's explicit
 // risk decision. Custodians see these fields before approving the ceremony.
 type Review struct {
-	TenantID          string    `json:"tenant_id"`
-	KeyID             string    `json:"key_id"`
-	CertificateID     string    `json:"certificate_id"`
-	SourceEventID     string    `json:"source_event_id"`
-	SourceSequence    uint64    `json:"source_sequence"`
-	Serial            string    `json:"serial"`
-	CertificateSHA256 string    `json:"certificate_sha256"`
-	Subject           string    `json:"subject"`
-	NotAfter          time.Time `json:"not_after"`
-	KeyOrigin         string    `json:"key_origin"`
-	Reason            string    `json:"reason"`
-	RiskAccepted      bool      `json:"risk_accepted"`
+	TenantID           string    `json:"tenant_id"`
+	KeyID              string    `json:"key_id"`
+	CertificateID      string    `json:"certificate_id"`
+	SourceEventID      string    `json:"source_event_id"`
+	SourceSequence     uint64    `json:"source_sequence"`
+	RevocationEventID  string    `json:"revocation_event_id,omitempty"`
+	RevocationSequence uint64    `json:"revocation_sequence,omitempty"`
+	Serial             string    `json:"serial"`
+	CertificateSHA256  string    `json:"certificate_sha256"`
+	Subject            string    `json:"subject"`
+	NotAfter           time.Time `json:"not_after"`
+	KeyOrigin          string    `json:"key_origin"`
+	Reason             string    `json:"reason"`
+	RiskAccepted       bool      `json:"risk_accepted"`
 }
 
 func (r Review) releasePayload() depstate.DependencyReleasedV2 {
@@ -64,7 +66,17 @@ func (r Review) releasePayload() depstate.DependencyReleasedV2 {
 	}
 }
 
-func (r Review) Purpose() string { return depstate.ReleasePurposeV2(r.releasePayload()) }
+func (r Review) releasePayloadV3() depstate.DependencyReleasedV3 {
+	return depstate.DependencyReleasedV3{DependencyReleasedV2: r.releasePayload(),
+		RevocationEventID: r.RevocationEventID, RevocationSequence: r.RevocationSequence}
+}
+
+func (r Review) Purpose() string {
+	if r.Reason == depstate.ReleaseReasonRevokedUnservedHostCustody {
+		return depstate.ReleasePurposeV3(r.releasePayloadV3())
+	}
+	return depstate.ReleasePurposeV2(r.releasePayload())
+}
 
 type Reviewer struct {
 	store *corestore.Store
@@ -86,7 +98,8 @@ func (r *Reviewer) Preview(ctx context.Context, tenantID, keyID string, request 
 	request.Reason = strings.TrimSpace(request.Reason)
 	if tenantID == "" || keyID == "" || request.CertificateID == "" ||
 		len(request.ExpectedCertificateSHA256) != 64 ||
-		request.Reason != depstate.ReleaseReasonExpiredRequesterCustody ||
+		(request.Reason != depstate.ReleaseReasonExpiredRequesterCustody &&
+			request.Reason != depstate.ReleaseReasonRevokedUnservedHostCustody) ||
 		!request.RiskAccepted {
 		return empty, fmt.Errorf("%w: exact certificate, SHA-256, supported reason code and external-use risk acceptance are required", ErrInvalid)
 	}
@@ -94,10 +107,19 @@ func (r *Reviewer) Preview(ctx context.Context, tenantID, keyID string, request 
 	if err != nil {
 		return empty, err
 	}
-	if cert.IssuanceEventID == "" || cert.Status != "active" ||
-		cert.KeyOrigin != string(custody.OriginRequester) || cert.NotAfter == nil ||
-		!now.After(*cert.NotAfter) || cert.DeploymentLocation != "" || cert.LastSeenAt != nil {
-		return empty, fmt.Errorf("%w: certificate is not an expired, unobserved requester-custody managed leaf", ErrConflict)
+	if cert.IssuanceEventID == "" || cert.NotAfter == nil ||
+		cert.DeploymentLocation != "" || cert.LastSeenAt != nil {
+		return empty, fmt.Errorf("%w: certificate has no bounded unobserved managed-leaf disposition", ErrConflict)
+	}
+	switch request.Reason {
+	case depstate.ReleaseReasonExpiredRequesterCustody:
+		if cert.Status != "active" || cert.KeyOrigin != string(custody.OriginRequester) || !now.After(*cert.NotAfter) {
+			return empty, fmt.Errorf("%w: certificate is not an expired requester-custody leaf", ErrConflict)
+		}
+	case depstate.ReleaseReasonRevokedUnservedHostCustody:
+		if cert.Status != "revoked" || cert.KeyOrigin != string(custody.OriginHostAgent) || cert.RevokedAt == nil {
+			return empty, fmt.Errorf("%w: certificate is not a revoked host-custody leaf", ErrConflict)
+		}
 	}
 	source, found, err := r.log.EventByID(ctx, cert.IssuanceEventID)
 	if err != nil {
@@ -109,7 +131,21 @@ func (r *Reviewer) Preview(ctx context.Context, tenantID, keyID string, request 
 			source.SchemaVersion != caevent.CAEndEntityInventorySchemaVersion) {
 		return empty, fmt.Errorf("%w: no exact historical managed-CA mint event", ErrConflict)
 	}
-	return r.reviewMint(ctx, tenantID, keyID, request, cert, source)
+	review, err := r.reviewMint(ctx, tenantID, keyID, request, cert, source)
+	if err != nil || request.Reason != depstate.ReleaseReasonRevokedUnservedHostCustody {
+		return review, err
+	}
+	revocation, err := r.store.CompletedCertificateRevocationForSerial(ctx, tenantID, keyID, cert.Serial)
+	if err != nil || revocation.Fingerprint != review.CertificateSHA256 || revocation.Sequence <= review.SourceSequence {
+		return empty, fmt.Errorf("%w: no completed exact local-issuer revocation authority receipt: %v", ErrConflict, err)
+	}
+	revokedEvent, found, err := r.log.EventByID(ctx, revocation.EventID)
+	if err != nil || !found || revokedEvent.TenantID != tenantID || revokedEvent.Sequence != revocation.Sequence ||
+		depstate.ExactRevokedLeaf(revokedEvent, keyID, cert.ID, cert.Serial, review.CertificateSHA256) != nil {
+		return empty, fmt.Errorf("%w: completed revocation receipt has no exact immutable outcome: %v", ErrConflict, err)
+	}
+	review.RevocationEventID, review.RevocationSequence = revocation.EventID, revocation.Sequence
+	return review, nil
 }
 
 func (r *Reviewer) reviewMint(ctx context.Context, tenantID, keyID string, request Request, cert corestore.Certificate, source eventspec.Event) (Review, error) {

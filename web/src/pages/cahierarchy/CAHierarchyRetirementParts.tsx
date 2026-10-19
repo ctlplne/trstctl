@@ -17,7 +17,12 @@ import {
 import { CACeremonyReviewDialog } from "./CAHierarchyCeremonyParts";
 import { CAReprotectionPanel } from "./CAReprotectionPanel";
 
-const releaseReason = "expired-requester-custody-external-use-risk-accepted" as const;
+const releaseReasonFor = (
+  certificate: Certificate,
+): "revoked-unserved-host-custody-external-use-risk-accepted" | "expired-requester-custody-external-use-risk-accepted" =>
+  certificate.status === "revoked" && certificate.key_origin === "host_agent"
+    ? "revoked-unserved-host-custody-external-use-risk-accepted"
+    : "expired-requester-custody-external-use-risk-accepted";
 
 const retrySchema = z.object({
   reason: z.string().trim().min(8, translateNow("source.retirement.retry.reason.required.h4ret00020")).max(1024),
@@ -152,7 +157,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
       authority_id: keyId,
       dependent_id: releaseCertificateID,
       expected_certificate_sha256: releaseCertificate.fingerprint,
-      reason: releaseReason,
+      reason: releaseReasonFor(releaseCertificate),
       risk_accepted: true,
       threshold: 2,
     };
@@ -223,7 +228,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
         certificate_id: releaseCertificate.id,
         expected_certificate_sha256: releaseCertificate.fingerprint,
         ceremony_id: releaseCeremony.id,
-        reason: releaseReason,
+        reason: releaseReasonFor(releaseCertificate),
         risk_accepted: true,
       });
       setReleaseReceiptID(receipt.release_event_id);
@@ -344,6 +349,8 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
               onChange={(event) => {
                 setReleaseCertificateID(event.target.value);
                 setReleaseCeremony(null);
+                setReleasePreview(null);
+                setReleaseRequest(null);
                 setReleaseRiskAccepted(false);
               }}
             >
@@ -396,6 +403,14 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
                   </dd>
                   <dt>{translateNow("caHierarchy.release.reason")}</dt>
                   <dd>{releaseCeremony.release_review.reason}</dd>
+                  {releaseCeremony.release_review.revocation_event_id && (
+                    <>
+                      <dt>{translateNow("caHierarchy.release.revocationEvent")}</dt>
+                      <dd className="font-mono">
+                        {releaseCeremony.release_review.revocation_event_id} · {releaseCeremony.release_review.revocation_sequence}
+                      </dd>
+                    </>
+                  )}
                 </dl>
               )}
               <p>{translateNow("caHierarchy.release.distinctApprovers")}</p>

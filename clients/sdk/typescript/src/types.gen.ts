@@ -9328,6 +9328,8 @@ export interface components {
             /** Format: date-time */
             not_after?: string;
             reason: string;
+            revocation_event_id?: string;
+            revocation_sequence?: number;
             risk_accepted: boolean;
             serial: string;
             source_event_id: string;

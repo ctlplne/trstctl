@@ -5,10 +5,13 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +24,33 @@ import (
 // inventory label. Only locally served authority targets enter this receiver.
 type CertificateRevocationAuthorityTarget struct {
 	CAID, Serial, Fingerprint string
+}
+
+// CertificateRevocationAuthorityReceipt is the bounded indexed readback of
+// one completed local issuer decision. It carries public evidence only.
+type CertificateRevocationAuthorityReceipt struct {
+	EventID     string
+	Sequence    uint64
+	Fingerprint string
+}
+
+func (s *Store) CompletedCertificateRevocationForSerial(ctx context.Context, tenantID, caID, serial string) (CertificateRevocationAuthorityReceipt, error) {
+	var receipt CertificateRevocationAuthorityReceipt
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var sequence int64
+		if err := tx.QueryRow(ctx, `SELECT event_id,projected_sequence,fingerprint
+			FROM certificate_revocation_authority_fences
+			WHERE tenant_id=$1 AND ca_id=$2 AND serial=$3 AND status='completed'`,
+			tenantID, caID, serial).Scan(&receipt.EventID, &sequence, &receipt.Fingerprint); err != nil {
+			return err
+		}
+		if sequence <= 0 {
+			return errors.New("store: completed certificate revocation has no event sequence")
+		}
+		receipt.Sequence = uint64(sequence)
+		return nil
+	})
+	return receipt, err
 }
 
 type CertificateRevocationAuthorityCommand struct {
@@ -224,14 +254,27 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 		`SELECT `+certificateRevocationAuthorityColumns+` FROM certificate_revocation_authority_commands
 		 WHERE tenant_id=$1 AND event_id=$2 FOR UPDATE`, event.TenantID, event.ID))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil // Historical event predates this authority receiver.
+		// A fresh event-only rebuild has no independent first-writer table.
+		// Recreate a completed receipt from the retained local-issuer event;
+		// the projector has already applied its exact issuer state in this tx.
+		return restoreCompletedRevocationAuthorityFromEventTx(ctx, tx, event)
 	}
 	if err != nil {
 		return err
 	}
 	if command.Status == "completed" {
-		if command.Event.Sequence != event.Sequence {
+		if command.Event.Sequence != event.Sequence || command.Event.Type != event.Type ||
+			command.Event.SchemaVersion != event.SchemaVersion || !command.Event.Time.Equal(event.Time) {
 			return ErrIdempotencyConflict
+		}
+		if event.Type == "certificate.revocation.batch.applied" {
+			var receipt struct {
+				RequestBinding string `json:"request_binding"`
+			}
+			if err := json.Unmarshal(event.Data, &receipt); err != nil ||
+				receipt.RequestBinding != command.RequestBinding {
+				return ErrIdempotencyConflict
+			}
 		}
 		return nil
 	}
@@ -250,6 +293,80 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 		WHERE tenant_id=$1 AND event_id=$2 AND status='pending'`,
 		event.TenantID, event.ID, int64(event.Sequence))
 	return err
+}
+
+func restoreCompletedRevocationAuthorityFromEventTx(ctx context.Context, tx pgx.Tx, event events.Event) error {
+	if event.Type != "certificate.revocation.batch.applied" {
+		return nil // The older single-certificate format has no bound batch receipt.
+	}
+	if event.TenantID == "" || event.ID == "" || event.Time.IsZero() ||
+		event.Sequence == 0 || event.Sequence > math.MaxInt64 ||
+		(event.SchemaVersion != 1 && event.SchemaVersion != 2) {
+		return errors.New("store: event-only revocation has no canonical event identity")
+	}
+	var batch struct {
+		RequestBinding string `json:"request_binding"`
+		Reason         string `json:"reason"`
+		Items          []struct {
+			ID          string `json:"id"`
+			Matched     bool   `json:"matched"`
+			Status      string `json:"status"`
+			CAID        string `json:"ca_id"`
+			Serial      string `json:"serial"`
+			Fingerprint string `json:"fingerprint"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(event.Data, &batch); err != nil {
+		return err
+	}
+	if !revocationAuthorityDigest(batch.RequestBinding) || !crypto.IsValidRevocationReason(batch.Reason) ||
+		batch.Reason == "removeFromCRL" || len(batch.Items) == 0 || len(batch.Items) > 100 {
+		return errors.New("store: event-only revocation has no bounded request")
+	}
+	var targets []CertificateRevocationAuthorityTarget
+	seen := make(map[string]struct{}, len(batch.Items))
+	for _, item := range batch.Items {
+		if item.ID == "" {
+			return errors.New("store: event-only revocation has empty certificate identity")
+		}
+		if _, duplicate := seen[item.ID]; duplicate {
+			return errors.New("store: event-only revocation repeats certificate")
+		}
+		seen[item.ID] = struct{}{}
+		if item.Status != "revoked" {
+			continue
+		}
+		if !item.Matched || item.CAID == "" || item.Serial == "" || !revocationAuthorityDigest(item.Fingerprint) {
+			return errors.New("store: event-only revocation has no exact local issuer target")
+		}
+		targets = append(targets, CertificateRevocationAuthorityTarget{
+			CAID: item.CAID, Serial: item.Serial, Fingerprint: item.Fingerprint})
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO certificate_revocation_authority_commands
+		(tenant_id,event_id,event_type,event_time,event_schema_version,event_payload,
+		 payload_sha256,request_binding,status,projected_sequence)
+		VALUES ($1,$2,$3,$4,$5,NULL,NULL,$6,'completed',$7)`,
+		event.TenantID, event.ID, event.Type, event.Time, event.SchemaVersion,
+		batch.RequestBinding, int64(event.Sequence)); err != nil {
+		return err
+	}
+	for _, target := range targets {
+		if _, err := tx.Exec(ctx, `INSERT INTO certificate_revocation_authority_fences
+			(tenant_id,ca_id,serial,fingerprint,event_id,status,projected_sequence)
+			VALUES ($1,$2,$3,$4,$5,'completed',$6)`, event.TenantID, target.CAID,
+			target.Serial, target.Fingerprint, event.ID, int64(event.Sequence)); err != nil {
+			return fmt.Errorf("%w: event-only revocation conflicts with issuer serial: %v", ErrIdempotencyConflict, err)
+		}
+	}
+	return nil
+}
+
+func revocationAuthorityDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 32 && value == strings.ToLower(value)
 }
 
 func (s *Store) PendingCertificateRevocationKeysSystem(ctx context.Context, afterTenant, afterEvent string, limit int) ([][2]string, error) {

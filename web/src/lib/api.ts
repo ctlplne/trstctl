@@ -1593,7 +1593,7 @@ export interface CAKeyDependentReleaseRequest {
   certificate_id: string;
   expected_certificate_sha256: string;
   ceremony_id: string;
-  reason: "expired-requester-custody-external-use-risk-accepted";
+  reason: "expired-requester-custody-external-use-risk-accepted" | "revoked-unserved-host-custody-external-use-risk-accepted";
   risk_accepted: true;
 }
 

@@ -66,10 +66,21 @@ func (f lockedDependencyFacts) validate(sourceSequence uint64) error {
 }
 
 func (f lockedCertificateFacts) validate(review Review, now time.Time) error {
-	if f.status != "active" || f.keyOrigin != string(custody.OriginRequester) ||
-		f.notAfter == nil || !f.notAfter.Equal(review.NotAfter) || !now.After(*f.notAfter) ||
+	if f.notAfter == nil || !f.notAfter.Equal(review.NotAfter) ||
 		f.deploymentLocation != "" || f.lastSeen != nil {
 		return fmt.Errorf("%w: locked certificate eligibility changed after review", ErrConflict)
+	}
+	switch review.Reason {
+	case depstate.ReleaseReasonExpiredRequesterCustody:
+		if f.status != "active" || f.keyOrigin != string(custody.OriginRequester) || !now.After(*f.notAfter) {
+			return fmt.Errorf("%w: locked requester certificate is no longer expired and active", ErrConflict)
+		}
+	case depstate.ReleaseReasonRevokedUnservedHostCustody:
+		if f.status != "revoked" || f.keyOrigin != string(custody.OriginHostAgent) {
+			return fmt.Errorf("%w: locked host certificate is no longer revoked", ErrConflict)
+		}
+	default:
+		return ErrInvalid
 	}
 	return nil
 }
@@ -118,8 +129,16 @@ func (c *Coordinator) Execute(ctx context.Context, tenantID, keyID, ceremonyID s
 	if err != nil {
 		return Receipt{}, err
 	}
-	v, ok := decoded.(depstate.DependencyReleasedV2)
-	if !ok || v.TenantID != tenantID || v.KeyID != keyID || v.CeremonyID != ceremonyID ||
+	var v depstate.DependencyReleasedV2
+	switch retained := decoded.(type) {
+	case depstate.DependencyReleasedV2:
+		v = retained
+	case depstate.DependencyReleasedV3:
+		v = retained.DependencyReleasedV2
+	default:
+		return Receipt{}, fmt.Errorf("%w: ceremony has no supported release event", ErrConflict)
+	}
+	if v.TenantID != tenantID || v.KeyID != keyID || v.CeremonyID != ceremonyID ||
 		v.Dependent != (depstate.Dependent{Class: depstate.DependentCredential, ID: request.CertificateID}) ||
 		v.CertificateSHA256 != strings.ToLower(strings.TrimSpace(request.ExpectedCertificateSHA256)) ||
 		v.Reason != strings.TrimSpace(request.Reason) || v.RiskAccepted != request.RiskAccepted {
@@ -176,6 +195,21 @@ func (c *Coordinator) claim(ctx context.Context, tenantID, keyID, ceremonyID str
 			if err := facts.validate(review, time.Now().UTC()); err != nil {
 				return err
 			}
+			if review.Reason == depstate.ReleaseReasonRevokedUnservedHostCustody {
+				var eventID, fingerprint, status string
+				var sequence int64
+				if err := tx.QueryRow(barrierCtx, `SELECT event_id,projected_sequence,fingerprint,status
+					FROM certificate_revocation_authority_fences
+					WHERE tenant_id=$1 AND ca_id=$2 AND serial=$3`, tenantID, keyID, review.Serial).
+					Scan(&eventID, &sequence, &fingerprint, &status); err != nil {
+					return fmt.Errorf("%w: exact local revocation receipt disappeared: %v", ErrConflict, err)
+				}
+				if status != "completed" || eventID != review.RevocationEventID ||
+					sequence <= 0 || uint64(sequence) != review.RevocationSequence ||
+					fingerprint != review.CertificateSHA256 {
+					return fmt.Errorf("%w: exact local revocation receipt changed", ErrConflict)
+				}
+			}
 			ceremony, approvals, err := c.store.ValidateKeyCeremonyWithApprovalEvidenceTx(
 				barrierCtx, tx, tenantID, ceremonyID, review.Purpose())
 			if err != nil {
@@ -190,7 +224,12 @@ func (c *Coordinator) claim(ctx context.Context, tenantID, keyID, ceremonyID str
 				v.ApprovalEventIDs = append(v.ApprovalEventIDs, approval.EventID)
 			}
 			slices.Sort(v.ApprovalEventIDs)
-			ev, err := depstate.Encode(v)
+			var payload depstate.Payload = v
+			if review.Reason == depstate.ReleaseReasonRevokedUnservedHostCustody {
+				payload = depstate.DependencyReleasedV3{DependencyReleasedV2: v,
+					RevocationEventID: review.RevocationEventID, RevocationSequence: review.RevocationSequence}
+			}
+			ev, err := depstate.Encode(payload)
 			if err != nil {
 				return err
 			}

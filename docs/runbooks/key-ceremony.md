@@ -95,19 +95,21 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
 
 ## Release one historical managed CA leaf dependency
 
-Use this narrow path only when a managed CA leaf was minted with requester-held
-subject-key custody, has expired, and has no managed deployment or later served
-observation. Expiry alone cannot prove that an off-product service stopped using
-it. The operator explicitly accepts that residual risk; the two custodians
-approve the exact public certificate and original mint event. A serial-only
-historical dependent, a still-valid leaf, a host-managed leaf, or a leaf with a
-managed deployment cannot use this path. Reissue and verify such credentials
-instead.
+Use this narrow path for either an expired requester-held managed CA leaf, or
+a revoked host-held managed CA leaf that was never recorded as deployed or
+observed. The host-held path requires a completed, exact local-issuer
+revocation receipt. Expiry and local revocation cannot prove that an off-product
+service stopped using the certificate or that every relying party checks the
+CRL or OCSP response. The operator accepts that residual risk; two custodians
+approve the exact public certificate, original mint and, for a revoked host
+leaf, revocation event. A serial-only historical dependent or a leaf with a
+managed deployment cannot use either release path. Reissue and independently
+verify still-serving credentials instead.
 
 1. Read `GET /api/v1/ca/keys/{id}/retirement` and
    `GET /api/v1/certificates/{certificate_id}`. Keep the certificate ID and its
    public SHA-256 fingerprint. In the console, **Certificate authorities →
-   Lifecycle → Release an expired CA leaf dependency** displays those facts.
+   Lifecycle → Release a CA leaf dependency** displays those facts.
 2. Preview, then start a `release_managed_ca_leaf` ceremony with
    `issuers:write`, a fresh `Idempotency-Key`, and the same body for both calls:
 
@@ -118,8 +120,14 @@ instead.
     "risk_accepted":true,"threshold":2}
    ```
 
+   For a revoked, unserved host-held leaf, use
+   `"reason":"revoked-unserved-host-custody-external-use-risk-accepted"`
+   instead. The preview must also show `revocation_event_id` and
+   `revocation_sequence`. A revoked certificate without the exact completed
+   local-issuer receipt remains blocked.
+
    Review the returned certificate ID, subject, serial, digest, expiry, mint
-   event ID and sequence. The console review shows the exact dependent and
+   event ID and sequence, plus the revocation event when applicable. The console review shows the exact dependent and
    release proof; it does not present an empty CA mint specification as part
    of this disposition. The preview writes nothing. Starting the ceremony
    rechecks these facts before its immutable purpose is recorded.

@@ -122,16 +122,18 @@ type CACeremonyPlanPreview struct {
 // approving a historical managed-certificate disposition. A digest without
 // these fields would not provide an informed two-person decision.
 type CAReleaseCeremonyReview struct {
-	KeyID             string     `json:"key_id"`
-	CertificateID     string     `json:"certificate_id"`
-	SourceEventID     string     `json:"source_event_id"`
-	SourceSequence    uint64     `json:"source_sequence"`
-	Serial            string     `json:"serial"`
-	CertificateSHA256 string     `json:"certificate_sha256"`
-	Subject           string     `json:"subject,omitempty"`
-	NotAfter          *time.Time `json:"not_after,omitempty"`
-	Reason            string     `json:"reason"`
-	RiskAccepted      bool       `json:"risk_accepted"`
+	KeyID              string     `json:"key_id"`
+	CertificateID      string     `json:"certificate_id"`
+	SourceEventID      string     `json:"source_event_id"`
+	SourceSequence     uint64     `json:"source_sequence"`
+	RevocationEventID  string     `json:"revocation_event_id,omitempty"`
+	RevocationSequence uint64     `json:"revocation_sequence,omitempty"`
+	Serial             string     `json:"serial"`
+	CertificateSHA256  string     `json:"certificate_sha256"`
+	Subject            string     `json:"subject,omitempty"`
+	NotAfter           *time.Time `json:"not_after,omitempty"`
+	Reason             string     `json:"reason"`
+	RiskAccepted       bool       `json:"risk_accepted"`
 }
 
 type CACreateRootRequest struct {

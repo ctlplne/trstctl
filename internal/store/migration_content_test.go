@@ -20,6 +20,56 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+func testMigration0286RetainsCACeremonyEffectSchema(t *testing.T) {
+	const stable = `SELECT tenant_id::text,ceremony_id::text,key_id::text,certificate_id::text,
+		event_id,event_time::text,encode(COALESCE(event_actor,''::bytea),'hex'),actor_sha256,
+		encode(COALESCE(event_payload,''::bytea),'hex'),payload_sha256,status
+		FROM ca_ceremony_effect_commands ORDER BY tenant_id,ceremony_id`
+	runPopulatedDefaultMigrationHarness(t, 286, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				actor := []byte(fmt.Sprintf(`{"subject":"migration-operator-%d"}`, index))
+				payload := []byte(fmt.Sprintf(`{"certificate_id":"migration-leaf-%d"}`, index))
+				status := "pending"
+				var actorValue, payloadValue any = actor, payload
+				if index == 1 {
+					status, actorValue, payloadValue = "completed", nil, nil
+				}
+				if _, err := pool.Exec(ctx, `INSERT INTO ca_ceremony_effect_commands
+					(tenant_id,ceremony_id,key_id,certificate_id,operation,event_id,event_time,
+					event_actor,actor_sha256,event_payload,payload_sha256,status)
+					VALUES ($1,$2,$3,$4,'release_managed_ca_leaf',$5,now(),$6,$7,$8,$9,$10)`,
+					tenantID, fmt.Sprintf("28600000-0000-4000-8000-%012d", index+1),
+					fmt.Sprintf("28610000-0000-4000-8000-%012d", index+1),
+					fmt.Sprintf("28620000-0000-4000-8000-%012d", index+1),
+					fmt.Sprintf("migration-release-%d", index+1), actorValue, crypto.SHA256Hex(actor),
+					payloadValue, crypto.SHA256Hex(payload), status); err != nil {
+					t.Fatalf("seed pre-0286 ceremony effect: %v", err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var count, v2 int
+			if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE event_schema_version=2)
+				FROM ca_ceremony_effect_commands`).Scan(&count, &v2); err != nil || count != want || v2 != want {
+				t.Fatalf("0286 historical release schemas: rows=%d v2=%d want=%d err=%v", count, v2, want, err)
+			}
+			actor, payload := []byte(`{"subject":"new-operator"}`), []byte(`{"reason":"revoked-host"}`)
+			insert := `INSERT INTO ca_ceremony_effect_commands
+				(tenant_id,ceremony_id,key_id,certificate_id,operation,event_id,event_time,
+				 event_schema_version,event_actor,actor_sha256,event_payload,payload_sha256)
+				VALUES ($1,'28600000-0000-4000-8000-000000000003',
+				'28610000-0000-4000-8000-000000000003','28620000-0000-4000-8000-000000000003',
+				'release_managed_ca_leaf','migration-release-3',now(),$2,$3,$4,$5,$6)`
+			if _, err := pool.Exec(ctx, insert, tenantA, 3, actor, crypto.SHA256Hex(actor), payload, crypto.SHA256Hex(payload)); err != nil {
+				t.Fatalf("0286 rejected new V3 release claim: %v", err)
+			}
+			if _, err := pool.Exec(ctx, insert, tenantB, 4, actor, crypto.SHA256Hex(actor), payload, crypto.SHA256Hex(payload)); err == nil {
+				t.Fatal("0286 accepted unknown release event schema")
+			}
+		})
+}
+
 func testMigration0283ClaimsExistingCASignerHandles(t *testing.T) {
 	const stable = `SELECT id::text, tenant_id::text, common_name, status, signer_handle
 		FROM ca_authorities ORDER BY tenant_id, id`
@@ -931,6 +981,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	286: true, // TestMigrationDataContentBackfills/0286_ca_release_schema_preserves_v2
 	283: true, // TestMigrationDataContentBackfills/0283_ca_signer_claims_existing_authorities
 	274: true, // TestMigration0274InvalidatesUnindexedOIDCBrowserSessions
 	272: true, // TestMigrationDataContentBackfills/0272_browser_oidc_binding_starts_unclaimed
@@ -1999,6 +2050,7 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0286_ca_release_schema_preserves_v2", testMigration0286RetainsCACeremonyEffectSchema)
 	t.Run("0283_ca_signer_claims_existing_authorities", testMigration0283ClaimsExistingCASignerHandles)
 	t.Run("0272_browser_oidc_binding_starts_unclaimed", testMigration0272BrowserOIDCBindingStartsUnclaimed)
 	t.Run("0268_tenant_member_sequence_starts_unclaimed", testMigration0268TenantMemberSequenceStartsUnclaimed)

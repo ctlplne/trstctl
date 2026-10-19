@@ -2524,6 +2524,8 @@ CAReleaseCeremonyReview = TypedDict(
         'key_id': str,
         'not_after': str,
         'reason': str,
+        'revocation_event_id': str,
+        'revocation_sequence': int,
         'risk_accepted': bool,
         'serial': str,
         'source_event_id': str,

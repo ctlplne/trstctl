@@ -8935,7 +8935,7 @@ export const messages = {
     defaultMessage: "Review managed intermediate ceremony",
     description: "Open the effect-free review for an exact managed intermediate ceremony.",
   },
-  "caHierarchy.release.heading": { defaultMessage: "Release an expired CA leaf dependency", description: "CA retirement dependent-release workspace heading." },
+  "caHierarchy.release.heading": { defaultMessage: "Release a CA leaf dependency", description: "CA retirement dependent-release workspace heading." },
   "caHierarchy.reprotect.heading": { defaultMessage: "Re-protect managed certificate", description: "CA retirement host-held dependent workflow heading." },
   "caHierarchy.reprotect.explanation": {
     defaultMessage:
@@ -9002,7 +9002,7 @@ export const messages = {
   "caHierarchy.reprotect.startFailed": { defaultMessage: "Could not start CA re-protection", description: "CA re-protection enqueue failure." },
   "caHierarchy.release.explanation": {
     defaultMessage:
-      "Only an expired requester-held leaf with no managed deployment can use this path. Two other custodians must approve the exact certificate and risk decision. External use cannot be ruled out by expiry alone.",
+      "An expired requester-held leaf or a revoked, unserved host-held leaf can use this path. Two other custodians must approve its exact mint, any revocation, and the external-use risk. A recorded revocation does not prove every relying party rejects the certificate.",
     description: "Explain the narrow eligibility and external-use risk of a historical CA leaf release.",
   },
   "caHierarchy.release.certificate": { defaultMessage: "Certificate ID", description: "Exact dependent certificate in a CA release review." },
@@ -9011,6 +9011,10 @@ export const messages = {
   "caHierarchy.release.expires": { defaultMessage: "Expires", description: "Expiry of the reviewed CA leaf." },
   "caHierarchy.release.custody": { defaultMessage: "Key custody", description: "Who held the reviewed leaf private key." },
   "caHierarchy.release.sourceEvent": { defaultMessage: "Original mint event", description: "Immutable event and sequence that registered the dependent." },
+  "caHierarchy.release.revocationEvent": {
+    defaultMessage: "Local revocation event",
+    description: "Immutable event and sequence that revoked the exact host-held dependent.",
+  },
   "caHierarchy.release.reason": { defaultMessage: "Release reason code", description: "Bounded non-personal reason approved by custodians." },
   "caHierarchy.retirement.freshCommand": {
     defaultMessage: "Start fresh retirement command",
@@ -9022,7 +9026,8 @@ export const messages = {
     description: "Explain why a failed CA retirement command requires a new reviewed request rather than another delivery attempt.",
   },
   "caHierarchy.release.risk": {
-    defaultMessage: "I accept that expiry and absent managed deployment do not prove this certificate was never used outside trstctl.",
+    defaultMessage:
+      "I accept that expiry or local revocation and absent managed deployment do not prove the certificate was never used elsewhere or rejected by every relying party.",
     description: "Explicit external-use risk acknowledgement before CA release review.",
   },
   "caHierarchy.release.review": { defaultMessage: "Review exact release", description: "Open effect-free review of one CA dependent release." },

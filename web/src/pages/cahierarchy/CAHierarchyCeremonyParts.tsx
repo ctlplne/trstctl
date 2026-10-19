@@ -264,6 +264,12 @@ export function CACeremonyReviewDialog({
                 value={`${preview.release_review.source_event_id} · ${preview.release_review.source_sequence}`}
               />
               <ReviewValue label={t("caHierarchy.release.reason")} value={preview.release_review.reason} />
+              {preview.release_review.revocation_event_id && (
+                <ReviewValue
+                  label={t("caHierarchy.release.revocationEvent")}
+                  value={`${preview.release_review.revocation_event_id} · ${preview.release_review.revocation_sequence}`}
+                />
+              )}
             </>
           )}
           {authority ? (
@@ -559,6 +565,13 @@ export function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCer
                 mono
               />
               <CeremonyValue label={t("caHierarchy.release.reason")} value={ceremony.release_review.reason} />
+              {ceremony.release_review.revocation_event_id && (
+                <CeremonyValue
+                  label={t("caHierarchy.release.revocationEvent")}
+                  value={`${ceremony.release_review.revocation_event_id} · ${ceremony.release_review.revocation_sequence}`}
+                  mono
+                />
+              )}
             </>
           )}
           <CeremonyValue label="Opened by" value={ceremony.opener || "-"} />

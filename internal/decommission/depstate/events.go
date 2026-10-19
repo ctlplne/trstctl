@@ -21,10 +21,15 @@ const (
 const (
 	SchemaV1 = 1
 	SchemaV2 = 2
+	SchemaV3 = 3
 	// ReleaseReasonExpiredRequesterCustody is deliberately a bounded reason
 	// code. Free text inside a custodian-approved immutable purpose would make
 	// subject erasure change the approval binding on replay.
 	ReleaseReasonExpiredRequesterCustody = "expired-requester-custody-external-use-risk-accepted"
+	// ReleaseReasonRevokedUnservedHostCustody covers a host-held certificate
+	// whose exact local-issuer revocation is durable but whose external use
+	// cannot be disproved. Two custodians must accept that residual risk.
+	ReleaseReasonRevokedUnservedHostCustody = "revoked-unserved-host-custody-external-use-risk-accepted"
 )
 
 type DependentClass string
@@ -95,6 +100,52 @@ type DependencyReleasedV2 struct {
 }
 
 func (DependencyReleasedV2) isDepStatePayload() {}
+
+// DependencyReleasedV3 additionally binds a revoked host-held leaf to the
+// immutable revocation event. Its embedded v2 fields preserve the exact mint,
+// ceremony, and approval identities without changing historical v2 events.
+type DependencyReleasedV3 struct {
+	DependencyReleasedV2
+	RevocationEventID  string `json:"revocation_event_id"`
+	RevocationSequence uint64 `json:"revocation_sequence"`
+}
+
+func (DependencyReleasedV3) isDepStatePayload() {}
+
+func ReleasePurposeV3(v DependencyReleasedV3) string {
+	public := struct {
+		TenantID           string    `json:"tenant_id"`
+		KeyID              string    `json:"key_id"`
+		Dependent          Dependent `json:"dependent"`
+		SourceEventID      string    `json:"source_event_id"`
+		SourceSequence     uint64    `json:"source_sequence"`
+		Serial             string    `json:"serial"`
+		CertificateSHA256  string    `json:"certificate_sha256"`
+		RevocationEventID  string    `json:"revocation_event_id"`
+		RevocationSequence uint64    `json:"revocation_sequence"`
+		Reason             string    `json:"reason"`
+		RiskAccepted       bool      `json:"risk_accepted"`
+	}{v.TenantID, v.KeyID, v.Dependent, v.SourceEventID, v.SourceSequence,
+		v.Serial, v.CertificateSHA256, v.RevocationEventID, v.RevocationSequence,
+		strings.TrimSpace(v.Reason), v.RiskAccepted}
+	raw, _ := json.Marshal(public)
+	return "release-managed-ca-leaf-v3:" + string(raw)
+}
+
+func ParseReleasePurposeV3(purpose string) (DependencyReleasedV3, bool, error) {
+	const prefix = "release-managed-ca-leaf-v3:"
+	if !strings.HasPrefix(purpose, prefix) {
+		return DependencyReleasedV3{}, false, nil
+	}
+	var review DependencyReleasedV3
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(purpose, prefix)), &review); err != nil {
+		return DependencyReleasedV3{}, true, err
+	}
+	if ReleasePurposeV3(review) != purpose {
+		return DependencyReleasedV3{}, true, fmt.Errorf("depstate: revoked release ceremony purpose is not canonical")
+	}
+	return review, true, nil
+}
 
 // ReleasePurposeV2 is the human-readable, canonical ceremony purpose. The
 // custodians approve these public facts and the risk decision, rather than an
@@ -183,6 +234,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeDependencyReleased, SchemaV1, v.TenantID, v)
 	case DependencyReleasedV2:
 		return marshalEvent(TypeDependencyReleased, SchemaV2, v.TenantID, v)
+	case DependencyReleasedV3:
+		return marshalEvent(TypeDependencyReleased, SchemaV3, v.TenantID, v)
 	case DependencyErasureDesignatedV1:
 		return marshalEvent(TypeDependencyErasureDesignated, SchemaV1, v.TenantID, v)
 	case ReprotectionCompletedV1:
@@ -211,6 +264,9 @@ func Decode(e eventspec.Event) (Payload, error) {
 	case TypeDependencyRegistered:
 		return decodeKnown[DependencyRegisteredV1](e, ver)
 	case TypeDependencyReleased:
+		if ver == SchemaV3 {
+			return decodeVersion[DependencyReleasedV3](e, ver, SchemaV3)
+		}
 		if ver == SchemaV2 {
 			return decodeVersion[DependencyReleasedV2](e, ver, SchemaV2)
 		}

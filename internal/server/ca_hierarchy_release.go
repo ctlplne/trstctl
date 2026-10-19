@@ -36,17 +36,33 @@ func (h *caHierarchyService) enrichManagedLeafReleaseCeremony(
 		return api.CAKeyCeremony{}, err
 	}
 	if !relevant {
-		return response, nil
+		var revoked depstate.DependencyReleasedV3
+		revoked, relevant, err = depstate.ParseReleasePurposeV3(purpose)
+		if err != nil {
+			return api.CAKeyCeremony{}, err
+		}
+		if !relevant {
+			return response, nil
+		}
+		reviewed = revoked.DependencyReleasedV2
+		response.ReleaseReview = &api.CAReleaseCeremonyReview{
+			RevocationEventID: revoked.RevocationEventID, RevocationSequence: revoked.RevocationSequence,
+		}
 	}
 	if reviewed.TenantID != tenantID {
 		return api.CAKeyCeremony{}, fmt.Errorf("%w: release ceremony tenant differs from request", api.ErrCAHierarchyConflict)
 	}
-	response.ReleaseReview = &api.CAReleaseCeremonyReview{
+	review := api.CAReleaseCeremonyReview{
 		KeyID: reviewed.KeyID, CertificateID: reviewed.Dependent.ID,
 		SourceEventID: reviewed.SourceEventID, SourceSequence: reviewed.SourceSequence,
 		Serial: reviewed.Serial, CertificateSHA256: reviewed.CertificateSHA256,
 		Reason: reviewed.Reason, RiskAccepted: reviewed.RiskAccepted,
 	}
+	if response.ReleaseReview != nil {
+		review.RevocationEventID = response.ReleaseReview.RevocationEventID
+		review.RevocationSequence = response.ReleaseReview.RevocationSequence
+	}
+	response.ReleaseReview = &review
 	if cert, lookupErr := h.store.GetCertificate(ctx, tenantID, reviewed.Dependent.ID); lookupErr == nil {
 		response.ReleaseReview.Subject = cert.Subject
 		response.ReleaseReview.NotAfter = cert.NotAfter
@@ -59,6 +75,7 @@ func caReleaseReview(review release.Review) *api.CAReleaseCeremonyReview {
 	return &api.CAReleaseCeremonyReview{
 		KeyID: review.KeyID, CertificateID: review.CertificateID,
 		SourceEventID: review.SourceEventID, SourceSequence: review.SourceSequence,
+		RevocationEventID: review.RevocationEventID, RevocationSequence: review.RevocationSequence,
 		Serial: review.Serial, CertificateSHA256: review.CertificateSHA256,
 		Subject: review.Subject, NotAfter: &notAfter,
 		Reason: review.Reason, RiskAccepted: review.RiskAccepted,

@@ -1890,141 +1890,160 @@ describe("CA hierarchy and custody surface", () => {
     expect(within(panel).getByText("destroyed")).toBeInTheDocument();
   });
 
-  it("reviews one exact expired CA leaf, shows the custodian quorum, and releases only after approval", async () => {
-    const user = userEvent.setup();
-    const keyID = "00000000-0000-4000-8000-000000000041";
-    const certID = "00000000-0000-4000-8000-000000000042";
-    const ceremonyID = "00000000-0000-4000-8000-000000000043";
-    const digest = "b".repeat(64);
-    const reason = "expired-requester-custody-external-use-risk-accepted";
-    apiMock.caAuthorities.mockResolvedValue({
-      items: [
-        {
-          id: keyID,
-          tenant_id: "tenant-a",
-          common_name: "Old Root",
-          kind: "root",
-          status: "superseded",
-          signer_handle: "qa-signer",
-          certificate_pem: "public",
-          serial: "41",
-          max_path_len: 1,
-          created_at: "2026-01-01T00:00:00Z",
-        },
-      ],
-    });
-    apiMock.caRetirementChecklist.mockResolvedValue({
-      key_id: keyID,
-      blocked: true,
-      accounted: 0,
-      total: 1,
-      outstanding: [{ kind: "credential", ref: certID }],
-      guidance: "One leaf remains",
-    });
-    apiMock.getCertificate.mockResolvedValue({
-      id: certID,
-      tenant_id: "tenant-a",
+  it.each([
+    {
+      kind: "expired requester",
       status: "active",
-      subject: "CN=old-leaf",
-      fingerprint: digest,
-      not_after: "2026-09-01T00:00:00Z",
-      key_origin: "requester",
-    });
-    const review = {
-      key_id: keyID,
-      certificate_id: certID,
-      source_event_id: "mint-41",
-      source_sequence: 41,
-      serial: "41",
-      certificate_sha256: digest,
-      subject: "CN=old-leaf",
-      not_after: "2026-09-01T00:00:00Z",
-      reason,
-      risk_accepted: true,
-    };
-    apiMock.previewCACeremony.mockResolvedValue({
-      capability: "F48",
-      operation: "release_managed_ca_leaf",
-      ready: true,
-      approval_threshold: 2,
-      request_fingerprint: "c".repeat(64),
-      required_permission: "issuers:write",
-      normalized_spec: { common_name: "", permitted_dns_domains: [], max_path_len: 0, extended_key_usages: [], ttl_seconds: 0, signature_algorithm: "" },
-      changes: [],
-      risks: [],
-      verification_steps: [],
-      sensitive_inputs: [],
-      preview_writes: [],
-      preview_external_effects: [],
-      release_review: review,
-    });
-    apiMock.createCACeremony.mockResolvedValue({
-      id: ceremonyID,
-      tenant_id: "tenant-a",
-      purpose: "exact-release",
-      threshold: 2,
-      approvals: 0,
-      status: "pending",
-      created_at: "2026-10-18T00:00:00Z",
-      release_review: review,
-    });
-    apiMock.caCeremony.mockResolvedValue({
-      id: ceremonyID,
-      tenant_id: "tenant-a",
-      purpose: "exact-release",
-      threshold: 2,
-      approvals: 2,
-      status: "pending",
-      created_at: "2026-10-18T00:00:00Z",
-      release_review: review,
-    });
-    apiMock.releaseCAKeyDependent.mockResolvedValue({
-      key_id: keyID,
-      certificate_id: certID,
-      ceremony_id: ceremonyID,
-      release_event_id: "release-41",
-      certificate_sha256: digest,
-      status: "released",
-    });
-
-    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
-    const release = await screen.findByRole("region", { name: "Release an expired CA leaf dependency" });
-    expect(await within(release).findByText(digest)).toBeInTheDocument();
-    await user.click(within(release).getByRole("checkbox"));
-    await user.click(within(release).getByRole("button", { name: "Review exact release" }));
-    await waitFor(() =>
-      expect(apiMock.previewCACeremony).toHaveBeenCalledWith(
-        expect.objectContaining({
-          authority_id: keyID,
-          dependent_id: certID,
-          expected_certificate_sha256: digest,
-          reason,
-          risk_accepted: true,
-          threshold: 2,
-        }),
-      ),
-    );
-    expect(screen.getByText("mint-41 · 41")).toBeInTheDocument();
-    expect(screen.queryByText("Exact CA spec")).not.toBeInTheDocument();
-    expect(screen.queryByText(/"common_name": ""/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Start reviewed ceremony" }));
-    await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledTimes(1));
-    expect(within(release).getByText(ceremonyID, { exact: false })).toBeInTheDocument();
-    expect(within(release).getByRole("button", { name: "Release approved dependency" })).toBeDisabled();
-    await user.click(within(release).getByRole("button", { name: "Refresh approvals" }));
-    await waitFor(() => expect(within(release).getByRole("button", { name: "Release approved dependency" })).toBeEnabled());
-    await user.click(within(release).getByRole("button", { name: "Release approved dependency" }));
-    await waitFor(() =>
-      expect(apiMock.releaseCAKeyDependent).toHaveBeenCalledWith(keyID, {
+      keyOrigin: "requester",
+      reason: "expired-requester-custody-external-use-risk-accepted",
+      revocationEvent: "",
+    },
+    {
+      kind: "revoked host",
+      status: "revoked",
+      keyOrigin: "host_agent",
+      reason: "revoked-unserved-host-custody-external-use-risk-accepted",
+      revocationEvent: "revoke-42",
+    },
+  ])(
+    "reviews one exact $kind CA leaf, shows the custodian quorum, and releases only after approval",
+    async ({ status, keyOrigin, reason, revocationEvent }) => {
+      const user = userEvent.setup();
+      const keyID = "00000000-0000-4000-8000-000000000041";
+      const certID = "00000000-0000-4000-8000-000000000042";
+      const ceremonyID = "00000000-0000-4000-8000-000000000043";
+      const digest = "b".repeat(64);
+      apiMock.caAuthorities.mockResolvedValue({
+        items: [
+          {
+            id: keyID,
+            tenant_id: "tenant-a",
+            common_name: "Old Root",
+            kind: "root",
+            status: "superseded",
+            signer_handle: "qa-signer",
+            certificate_pem: "public",
+            serial: "41",
+            max_path_len: 1,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      });
+      apiMock.caRetirementChecklist.mockResolvedValue({
+        key_id: keyID,
+        blocked: true,
+        accounted: 0,
+        total: 1,
+        outstanding: [{ kind: "credential", ref: certID }],
+        guidance: "One leaf remains",
+      });
+      apiMock.getCertificate.mockResolvedValue({
+        id: certID,
+        tenant_id: "tenant-a",
+        status,
+        subject: "CN=old-leaf",
+        fingerprint: digest,
+        not_after: "2026-09-01T00:00:00Z",
+        key_origin: keyOrigin,
+      });
+      const review = {
+        key_id: keyID,
         certificate_id: certID,
-        expected_certificate_sha256: digest,
-        ceremony_id: ceremonyID,
+        source_event_id: "mint-41",
+        source_sequence: 41,
+        serial: "41",
+        certificate_sha256: digest,
+        subject: "CN=old-leaf",
+        not_after: "2026-09-01T00:00:00Z",
         reason,
         risk_accepted: true,
-      }),
-    );
-    expect(await screen.findByText("release-41")).toBeInTheDocument();
-  });
+        ...(revocationEvent ? { revocation_event_id: revocationEvent, revocation_sequence: 42 } : {}),
+      };
+      apiMock.previewCACeremony.mockResolvedValue({
+        capability: "F48",
+        operation: "release_managed_ca_leaf",
+        ready: true,
+        approval_threshold: 2,
+        request_fingerprint: "c".repeat(64),
+        required_permission: "issuers:write",
+        normalized_spec: { common_name: "", permitted_dns_domains: [], max_path_len: 0, extended_key_usages: [], ttl_seconds: 0, signature_algorithm: "" },
+        changes: [],
+        risks: [],
+        verification_steps: [],
+        sensitive_inputs: [],
+        preview_writes: [],
+        preview_external_effects: [],
+        release_review: review,
+      });
+      apiMock.createCACeremony.mockResolvedValue({
+        id: ceremonyID,
+        tenant_id: "tenant-a",
+        purpose: "exact-release",
+        threshold: 2,
+        approvals: 0,
+        status: "pending",
+        created_at: "2026-10-18T00:00:00Z",
+        release_review: review,
+      });
+      apiMock.caCeremony.mockResolvedValue({
+        id: ceremonyID,
+        tenant_id: "tenant-a",
+        purpose: "exact-release",
+        threshold: 2,
+        approvals: 2,
+        status: "pending",
+        created_at: "2026-10-18T00:00:00Z",
+        release_review: review,
+      });
+      apiMock.releaseCAKeyDependent.mockResolvedValue({
+        key_id: keyID,
+        certificate_id: certID,
+        ceremony_id: ceremonyID,
+        release_event_id: "release-41",
+        certificate_sha256: digest,
+        status: "released",
+      });
+
+      renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+      const release = await screen.findByRole("region", { name: "Release a CA leaf dependency" });
+      expect(await within(release).findByText(digest)).toBeInTheDocument();
+      await user.click(within(release).getByRole("checkbox"));
+      await user.click(within(release).getByRole("button", { name: "Review exact release" }));
+      await waitFor(() =>
+        expect(apiMock.previewCACeremony).toHaveBeenCalledWith(
+          expect.objectContaining({
+            authority_id: keyID,
+            dependent_id: certID,
+            expected_certificate_sha256: digest,
+            reason,
+            risk_accepted: true,
+            threshold: 2,
+          }),
+        ),
+      );
+      expect(screen.getByText("mint-41 · 41")).toBeInTheDocument();
+      if (revocationEvent) expect(screen.getByText("revoke-42 · 42")).toBeInTheDocument();
+      expect(screen.queryByText("Exact CA spec")).not.toBeInTheDocument();
+      expect(screen.queryByText(/"common_name": ""/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Start reviewed ceremony" }));
+      await waitFor(() => expect(apiMock.createCACeremony).toHaveBeenCalledTimes(1));
+      expect(within(release).getByText(ceremonyID, { exact: false })).toBeInTheDocument();
+      expect(within(release).getByRole("button", { name: "Release approved dependency" })).toBeDisabled();
+      await user.click(within(release).getByRole("button", { name: "Refresh approvals" }));
+      await waitFor(() => expect(within(release).getByRole("button", { name: "Release approved dependency" })).toBeEnabled());
+      await user.click(within(release).getByRole("button", { name: "Release approved dependency" }));
+      await waitFor(() =>
+        expect(apiMock.releaseCAKeyDependent).toHaveBeenCalledWith(keyID, {
+          certificate_id: certID,
+          expected_certificate_sha256: digest,
+          ceremony_id: ceremonyID,
+          reason,
+          risk_accepted: true,
+        }),
+      );
+      expect(await screen.findByText("release-41")).toBeInTheDocument();
+    },
+  );
 
   it("recovers only the exact failed retirement delivery after a reviewed one-attempt grant", async () => {
     const user = userEvent.setup();
