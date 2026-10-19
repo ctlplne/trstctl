@@ -57,6 +57,10 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a renewal intent")
 		return false
 	}
+	if intent.ReprotectJobID != "" || intent.ReprotectPredecessorFingerprint != "" ||
+		intent.ReprotectPredecessorSPKISHA256 != "" || intent.ReprotectTTLSeconds != 0 {
+		return runHostReprotect(ctx, ch, client, profile, hostRollback, job, intent)
+	}
 
 	signer, ok := ch.(CSRSigner)
 	if !ok {

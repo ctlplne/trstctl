@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -169,8 +170,33 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	keyOrigin custody.KeyOrigin,
 	issuance ...*store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
+	ttl, binding, err := approvedIssuanceTTL(issuance)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	return d.mintServedLeafFromCSRForSelectionAtTTL(ctx, tenantID, ident, selection, issueKey,
+		csrPEM, keyOrigin, ttl, binding)
+}
+
+// An immutable host re-protection plan supplies its reviewed TTL directly.
+// This keeps its lifetime independent from approval-binding metadata while
+// sharing the exact CSR, profile, and authority signing path.
+func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTL(
+	ctx context.Context,
+	tenantID string,
+	ident store.Identity,
+	selection endpointAuthoritySelection,
+	issueKey string,
+	csrPEM []byte,
+	keyOrigin custody.KeyOrigin,
+	ttl time.Duration,
+	binding *store.OperationApprovalIssuanceBinding,
+) (issuedLeafMaterial, error) {
 	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent {
 		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a known requester or host-agent key origin")
+	}
+	if ttl <= 0 {
+		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a positive TTL")
 	}
 	csrDER, dnsNames, err := decodeSubjectCSRWithInspector(csrPEM, d.inspectSubjectCSR)
 	if err != nil {
@@ -182,10 +208,6 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	// Same profile gate as the server-keygen path: the origin of the key does not
 	// change what the certificate may assert, and skipping it here would make
 	// "bring your own CSR" a way around policy.
-	ttl, binding, err := approvedIssuanceTTL(issuance)
-	if err != nil {
-		return issuedLeafMaterial{}, err
-	}
 	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
 	if err != nil {
 		return issuedLeafMaterial{}, err

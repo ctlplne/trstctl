@@ -19,6 +19,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventCertificateCustodyAttested:               "EventCertificateCustodyAttested",
 	projections.EventCertificateRevoked:                       "EventCertificateRevoked",
 	projections.EventCertificateSuperseded:                    "EventCertificateSuperseded",
+	projections.EventCertificateReprotectionCutover:           "EventCertificateReprotectionCutover",
 	projections.EventCACeremonyStarted:                        "EventCACeremonyStarted",
 	projections.EventCACeremonyApproved:                       "EventCACeremonyApproved",
 	projections.EventCACeremonyCancelled:                      "EventCACeremonyCancelled",

@@ -819,7 +819,10 @@ trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f
 # Inspect the predecessor CA key's registered dependents before retirement.
 # The re-protection response lists queued job IDs; it does not assert that a
 # replacement was issued or deployed. Credential jobs require an immutable
-# successor/host plan before this command will queue them.
+# successor/host plan before this command will queue them. The assigned host
+# agent retains the existing subject key, and the signed served-leaf report
+# drives inventory cutover and durable VDEC completion; inspect the retirement
+# checklist again before requesting CA destruction.
 trstctl-cli ca keys retirement <predecessor-ca-authority-id>
 trstctl-cli ca keys reprotect preview <predecessor-ca-authority-id> -f reprotect-plan.json
 trstctl-cli ca keys reprotect plan <predecessor-ca-authority-id> -f reprotect-plan.json

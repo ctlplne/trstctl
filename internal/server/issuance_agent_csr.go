@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/decommission/reprotect"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -116,6 +117,15 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	if err != nil {
 		return nil, err
 	}
+	var hostPlan reprotect.CredentialPlan
+	if intent.ReprotectJobID != "" || intent.ReprotectPredecessorFingerprint != "" ||
+		intent.ReprotectPredecessorSPKISHA256 != "" || intent.ReprotectTTLSeconds != 0 {
+		hostPlan, err = reprotect.AuthorizeHostCSR(ctx, d.store, d.log, tenantID,
+			job.RequiredAgentID, job.IdempotencyKey, job.Payload, csrDER)
+		if err != nil {
+			return nil, status.Errorf(codes.PermissionDenied, "CA re-protection signing plan drifted: %v", err)
+		}
+	}
 
 	// Idempotency keyed on the CSR'S OWN BYTES, not on the job attempt alone.
 	//
@@ -133,7 +143,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	// is stable across attempts, so a crash after signing replays the exact leaf.
 	// Ordinary renewals retain their per-attempt key and existing semantics.
 	issuanceSlot := attempt
-	if intent.PQCRunID != "" {
+	if intent.PQCRunID != "" || intent.ReprotectJobID != "" {
 		issuanceSlot = 0
 	}
 	idemKey := fmt.Sprintf("agentcsr:%d:%d:%s", jobID, issuanceSlot, crypto.SHA256Hex(csrDER)[:16])
@@ -164,40 +174,23 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 				selection = endpointAuthoritySelection{Source: "private", ID: strings.TrimSpace(intent.IssuingAuthorityID)}
 			}
 		}
-		material, err := d.mintServedLeafFromCSRForSelection(
-			ctx, tenantID, ident, selection, idemKey, csrPEM, custody.OriginHostAgent, intent.Issuance,
-		)
+		var material issuedLeafMaterial
+		var err error
+		if intent.ReprotectJobID != "" {
+			material, err = d.mintServedLeafFromCSRForSelectionAtTTL(ctx, tenantID, ident, selection,
+				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second, nil)
+		} else {
+			material, err = d.mintServedLeafFromCSRForSelection(
+				ctx, tenantID, ident, selection, idemKey, csrPEM, custody.OriginHostAgent, intent.Issuance,
+			)
+		}
 		if err != nil {
 			return nil, err
 		}
 		// No KeyPEM to wipe: the CSR path never produces one. That absence IS
 		// the epic — every other issuance path here has a `defer
 		// secret.Wipe(material.KeyPEM)` because it has key bytes to be rid of.
-		cert := material.Certificate
-		cert.IssuanceIdempotencyKey = idemKey
-		// Keep the host origin recorded by the shared CSR path, and add the
-		// agent identity that actually generated the subject key.
-		cert.KeyOrigin = string(custody.OriginHostAgent)
-		cert.KeyGeneratedBy = agentName
-		if predecessor := strings.TrimSpace(intent.PredecessorCertificateID); predecessor != "" {
-			// RecordSuccessorCertificate, not RecordCertificate. The difference
-			// is ReplacesID, and without it the projector never runs the
-			// `SET status='superseded'` update — leaving the identity with two
-			// certificates reading active, which inflates expiry alerts, fleet
-			// counts and D3's three-state view all at once.
-			recorded, err := d.orch.RecordSuccessorCertificate(ctx, tenantID, cert, predecessor)
-			if err != nil {
-				return nil, err
-			}
-			usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
-			return marshalAgentCSRResult(recorded.Fingerprint, material)
-		}
-		recorded, err := d.orch.RecordCertificate(ctx, tenantID, cert)
-		if err != nil {
-			return nil, err
-		}
-		usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
-		return marshalAgentCSRResult(recorded.Fingerprint, material)
+		return d.recordAgentCSRMaterial(ctx, tenantID, agentName, idemKey, intent, material)
 	})
 	if err != nil {
 		return nil, agentCSRSigningError(err)
@@ -218,6 +211,46 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
+}
+
+func (d *issuanceDispatcher) recordAgentCSRMaterial(ctx context.Context, tenantID, agentName, idemKey string,
+	intent RelayDeployIntent, material issuedLeafMaterial) ([]byte, error) {
+	cert := material.Certificate
+	cert.IssuanceIdempotencyKey = idemKey
+	// Keep the host origin recorded by the shared CSR path, and add the
+	// agent identity that actually generated the subject key.
+	cert.KeyOrigin = string(custody.OriginHostAgent)
+	cert.KeyGeneratedBy = agentName
+	if intent.ReprotectJobID != "" {
+		// The predecessor remains active until the signed report proves the
+		// successor is served. A certificate.recorded event with replaces_id
+		// here would supersede it before the host changes one file.
+		recorded, err := d.orch.RecordCertificate(ctx, tenantID, cert)
+		if err != nil {
+			return nil, err
+		}
+		usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
+		return marshalAgentCSRResult(recorded.Fingerprint, material)
+	}
+	if predecessor := strings.TrimSpace(intent.PredecessorCertificateID); predecessor != "" {
+		// RecordSuccessorCertificate, not RecordCertificate. The difference
+		// is ReplacesID, and without it the projector never runs the
+		// `SET status='superseded'` update — leaving the identity with two
+		// certificates reading active, which inflates expiry alerts, fleet
+		// counts and D3's three-state view all at once.
+		recorded, err := d.orch.RecordSuccessorCertificate(ctx, tenantID, cert, predecessor)
+		if err != nil {
+			return nil, err
+		}
+		usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
+		return marshalAgentCSRResult(recorded.Fingerprint, material)
+	}
+	recorded, err := d.orch.RecordCertificate(ctx, tenantID, cert)
+	if err != nil {
+		return nil, err
+	}
+	usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
+	return marshalAgentCSRResult(recorded.Fingerprint, material)
 }
 
 func (d *issuanceDispatcher) agentCSRIdentityUnderFence(ctx context.Context, tenantID, identityID string) (store.Identity, error) {

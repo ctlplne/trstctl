@@ -90,6 +90,12 @@ type DeployIntent struct {
 	PQCRunID                  string `json:"pqc_run_id,omitempty"`
 	PQCAssetID                string `json:"pqc_asset_id,omitempty"`
 	PQCPredecessorFingerprint string `json:"pqc_predecessor_fingerprint,omitempty"`
+	// CA re-protection keeps the installed subject key. The bound job and old
+	// public digests are checked again by the agent and SignJobCSR.
+	ReprotectJobID                  string `json:"reprotect_job_id,omitempty"`
+	ReprotectPredecessorFingerprint string `json:"reprotect_predecessor_fingerprint,omitempty"`
+	ReprotectPredecessorSPKISHA256  string `json:"reprotect_predecessor_spki_sha256,omitempty"`
+	ReprotectTTLSeconds             int64  `json:"reprotect_ttl_seconds,omitempty"`
 	// PredecessorCertificateID is control-plane bookkeeping the agent never
 	// reads. It is declared so the intent round-trips without loss.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
@@ -99,7 +105,8 @@ type DeployIntent struct {
 	// IssuingAuthorityID freezes the signer-backed CA selected by an executable
 	// migration manifest. The agent does not interpret it; SignJobCSR re-reads
 	// this immutable job field and refuses to mint through any other authority.
-	IssuingAuthorityID string `json:"issuing_authority_id,omitempty"`
+	IssuingAuthoritySource string `json:"issuing_authority_source,omitempty"`
+	IssuingAuthorityID     string `json:"issuing_authority_id,omitempty"`
 	// MigrationRunID/WaveID bind this renewal to the trust gate that licensed
 	// it. They are control-plane correlation fields; the executor never chooses
 	// or edits them.

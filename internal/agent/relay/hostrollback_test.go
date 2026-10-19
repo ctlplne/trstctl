@@ -253,6 +253,61 @@ func TestHostRollbackStorePinsReprotectPredecessorAcrossRestartAndRenewal(t *tes
 	}
 }
 
+func TestHostRollbackStoreRetainsOneBoundReprotectCSRAndLeafAcrossRestart(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "host-rollbacks")
+	st, err := relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PinReprotectPredecessor("apache", "target-a", "job-a", "old", []byte("old-cert"), []byte("old-private-key")); err != nil {
+		t.Fatal(err)
+	}
+	csr := []byte("public-retained-key-csr")
+	if err := st.RecordReprotectCSR("apache", "target-a", "job-a", csr); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordReprotectCSR("apache", "target-a", "job-a", csr); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordReprotectCSR("apache", "target-a", "job-a", []byte("second-csr")); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+		t.Fatalf("second CSR admitted: %v", err)
+	}
+	restarted, err := relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := restarted.LoadReprotectPending("apache", "target-a", "job-a")
+	if err != nil || pending == nil || !bytes.Equal(pending.CSRDER, csr) {
+		t.Fatalf("pending CSR after restart: %v %#v", err, pending)
+	}
+	if err := restarted.RecordReprotectCertificate("apache", "target-a", "job-a", []byte("new-cert"), []byte("chain"), "new"); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err = relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err = restarted.LoadReprotectPending("apache", "target-a", "job-a")
+	if err != nil || pending == nil || !bytes.Equal(pending.CertPEM, []byte("new-cert")) || pending.Fingerprint != "new" {
+		t.Fatalf("signed leaf after restart: %v %#v", err, pending)
+	}
+	for _, entry := range []string{"old-private-key", "public-retained-key-csr", "new-cert"} {
+		files, err := os.ReadDir(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			raw, err := os.ReadFile(filepath.Join(root, file.Name())) // #nosec G304 -- test-owned state root (CWE-22)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(raw, []byte(entry)) {
+				t.Fatalf("pending state stored plaintext %s", entry)
+			}
+		}
+	}
+}
+
 func TestHostRollbackStoreReprotectPinRefusesExistingMismatchAndConcurrentPQC(t *testing.T) {
 	st, err := relay.NewHostRollbackStore(filepath.Join(t.TempDir(), "state"), "tenant-a")
 	if err != nil {

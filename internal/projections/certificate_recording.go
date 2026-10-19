@@ -251,6 +251,7 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 var certificateMetadataEventTypes = [...]string{
 	EventCertificateRecorded, EventCAEndEntityIssued, EventCAIssuedCertificate, EventEdgeIssuanceReconciled,
 	EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
+	EventCertificateReprotectionCutover,
 	EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,
 	EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
 	EventEndpointVerified, EventOwnershipAssigned,

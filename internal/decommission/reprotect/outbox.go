@@ -43,6 +43,9 @@ func WithStore(repo *decstore.Repo) Option {
 }
 
 type Handler struct {
+	coreStore            *corestore.Store
+	outbox               *orchestrator.Outbox
+	plans                *CredentialPlanLedger
 	store                *decstore.Repo
 	ciphertext           *CiphertextExecutor
 	credential           *CredentialReissueExecutor
@@ -108,6 +111,9 @@ func newHandler(d editionseam.LicensedOutboxDeps, cfg factoryConfig) (Handler, e
 		return Handler{}, err
 	}
 	return Handler{
+		coreStore:            d.Store,
+		outbox:               orchestrator.NewOutbox(d.Store),
+		plans:                NewCredentialPlanLedger(d.Log, d.Store),
 		store:                cfg.store,
 		ciphertext:           ciphertext,
 		credential:           credential,
@@ -169,7 +175,7 @@ func (h Handler) DeliverLicensed(ctx context.Context, m orchestrator.Message) (b
 			SuccessorKeyID: payload.SuccessorKeyID,
 		})
 	case JobKindReIssue:
-		_, err = h.credential.Execute(ctx, CredentialReissueRequest{Job: job, SuccessorKeyID: payload.SuccessorKeyID})
+		err = h.dispatchHostCredentialReissue(ctx, job, payload.SuccessorKeyID)
 	case JobKindRevokeLease:
 		_, err = h.lease.Execute(ctx, LeaseRevocationRequest{Job: job, LeaseID: payload.LeaseID})
 	case JobKindReDerive:

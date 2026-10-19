@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/decommission/reprotect"
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
@@ -448,6 +449,10 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if a.outbox == nil {
 		return nil, status.Error(codes.Internal, "agent job outbox completion is not configured")
 	}
+	if hostReprotectJob(claim) && req.Outcome != transport.JobOutcomeVerified {
+		return a.refuseExecutedReportPermanently(ctx, info, agentID, req, now,
+			errors.New("CA re-protection requires a signed verified served-leaf readback"))
+	}
 
 	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
 		if claim.Destination == relay.KindDiscoveryRun && errors.Is(ingestErr, segmentscan.ErrFindingCountMismatch) {
@@ -488,6 +493,25 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 
 	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
 		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
+	}
+	if hostReprotectJob(claim) {
+		if a.orch == nil || a.log == nil || req.EvidenceDigest == "" {
+			return nil, status.Error(codes.Unavailable, "CA re-protection signed readback receiver is unavailable")
+		}
+		cutover, err := reprotect.AuthorizeVerifiedHostResult(ctx, a.store, a.log, info.TenantID,
+			agentID, claim.IdempotencyKey, req.JobID, claim.Payload, req.CredentialFingerprint, req.Attempt)
+		if err != nil {
+			return nil, status.Errorf(codes.Unavailable, "CA re-protection result could not be bound to its reviewed plan: %v", err)
+		}
+		cutover.ReceiptStatement = string(jobReceiptStatement(info, req).Canonical())
+		cutover.ReceiptSignature = base64.StdEncoding.EncodeToString(req.Signature)
+		cutover.ReceiptSignerFingerprint = info.FingerprintSHA256
+		if err := a.orch.RecordCertificateReprotectionCutover(ctx, info.TenantID, cutover); err != nil {
+			return nil, status.Errorf(codes.Unavailable, "CA re-protection cutover could not be recorded: %v", err)
+		}
+		if err := reprotect.RecordVerifiedHostCompletion(ctx, a.store, a.log, info.TenantID, cutover); err != nil {
+			return nil, status.Errorf(codes.Unavailable, "CA re-protection completion could not be recorded: %v", err)
+		}
 	}
 	// Closing the exact claim and retiring its outbox intent is ONE durable
 	// transition. A crash before it leaves the claim retryable; after it, both
@@ -1250,6 +1274,16 @@ func pqcCertificateJob(claim store.AgentJobResultClaim) bool {
 	}
 	var intent RelayDeployIntent
 	return json.Unmarshal(claim.Payload, &intent) == nil && intent.PQCRunID != ""
+}
+
+func hostReprotectJob(claim store.AgentJobResultClaim) bool {
+	if claim.Destination != agentJobKindEndpointRenew {
+		return false
+	}
+	var intent RelayDeployIntent
+	return json.Unmarshal(claim.Payload, &intent) == nil &&
+		(intent.ReprotectJobID != "" || intent.ReprotectPredecessorFingerprint != "" ||
+			intent.ReprotectPredecessorSPKISHA256 != "" || intent.ReprotectTTLSeconds != 0)
 }
 
 func pqcCertificateRollbackJob(claim store.AgentJobResultClaim) bool {

@@ -59,17 +59,131 @@ type hostRollbackSnapshot struct {
 }
 
 type hostRollbackState struct {
-	Version         int                   `json:"version"`
-	TenantID        string                `json:"tenant_id"`
-	Connector       string                `json:"connector"`
-	TargetID        string                `json:"target_id"`
-	Active          *hostRollbackSnapshot `json:"active,omitempty"`
-	Previous        *hostRollbackSnapshot `json:"previous,omitempty"`
-	PQCRunID        string                `json:"pqc_run_id,omitempty"`
-	PQCPinned       *hostRollbackSnapshot `json:"pqc_pinned,omitempty"`
-	PQCPending      *hostPQCPending       `json:"pqc_pending,omitempty"`
-	ReprotectJobID  string                `json:"reprotect_job_id,omitempty"`
-	ReprotectPinned *hostRollbackSnapshot `json:"reprotect_pinned,omitempty"`
+	Version          int                   `json:"version"`
+	TenantID         string                `json:"tenant_id"`
+	Connector        string                `json:"connector"`
+	TargetID         string                `json:"target_id"`
+	Active           *hostRollbackSnapshot `json:"active,omitempty"`
+	Previous         *hostRollbackSnapshot `json:"previous,omitempty"`
+	PQCRunID         string                `json:"pqc_run_id,omitempty"`
+	PQCPinned        *hostRollbackSnapshot `json:"pqc_pinned,omitempty"`
+	PQCPending       *hostPQCPending       `json:"pqc_pending,omitempty"`
+	ReprotectJobID   string                `json:"reprotect_job_id,omitempty"`
+	ReprotectPinned  *hostRollbackSnapshot `json:"reprotect_pinned,omitempty"`
+	ReprotectPending *hostReprotectPending `json:"reprotect_pending,omitempty"`
+}
+
+// One CSR and one signed certificate survive a claim retry. The subject key is
+// already retained in ReprotectPinned; duplicating it here would widen custody.
+type hostReprotectPending struct {
+	JobID       string `json:"job_id"`
+	CSRDER      []byte `json:"csr_der"`
+	CertPEM     []byte `json:"cert_pem,omitempty"`
+	ChainPEM    []byte `json:"chain_pem,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+func cloneReprotectPending(in *hostReprotectPending) *hostReprotectPending {
+	if in == nil {
+		return nil
+	}
+	return &hostReprotectPending{JobID: in.JobID, CSRDER: append([]byte(nil), in.CSRDER...),
+		CertPEM: append([]byte(nil), in.CertPEM...), ChainPEM: append([]byte(nil), in.ChainPEM...), Fingerprint: in.Fingerprint}
+}
+
+func wipeReprotectPending(in *hostReprotectPending) {
+	if in == nil {
+		return
+	}
+	secret.Wipe(in.CSRDER)
+	secret.Wipe(in.CertPEM)
+	secret.Wipe(in.ChainPEM)
+}
+
+func (s *HostRollbackStore) LoadReprotectPending(connectorName, targetID, jobID string) (*hostReprotectPending, error) {
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer wipeHostRollbackState(state)
+	if state.ReprotectJobID != jobID || state.ReprotectPinned == nil {
+		return nil, ErrHostRollbackStateMismatch
+	}
+	return cloneReprotectPending(state.ReprotectPending), nil
+}
+
+func (s *HostRollbackStore) RecordReprotectCSR(connectorName, targetID, jobID string, csrDER []byte) error {
+	if jobID == "" || len(csrDER) == 0 {
+		return ErrHostRollbackStateMismatch
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.ReprotectJobID != jobID || state.ReprotectPinned == nil {
+		return ErrHostRollbackStateMismatch
+	}
+	if state.ReprotectPending != nil {
+		if state.ReprotectPending.JobID != jobID || !bytes.Equal(state.ReprotectPending.CSRDER, csrDER) {
+			return ErrHostRollbackStateMismatch
+		}
+		return nil
+	}
+	state.ReprotectPending = &hostReprotectPending{JobID: jobID, CSRDER: append([]byte(nil), csrDER...)}
+	return s.save(state)
+}
+
+func (s *HostRollbackStore) RecordReprotectCertificate(connectorName, targetID, jobID string, certPEM, chainPEM []byte, fingerprint string) error {
+	if len(certPEM) == 0 || fingerprint == "" {
+		return ErrHostRollbackStateMismatch
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	pending := state.ReprotectPending
+	if state.ReprotectJobID != jobID || pending == nil || pending.JobID != jobID {
+		return ErrHostRollbackStateMismatch
+	}
+	if len(pending.CertPEM) != 0 {
+		if !bytes.Equal(pending.CertPEM, certPEM) || !bytes.Equal(pending.ChainPEM, chainPEM) || pending.Fingerprint != fingerprint {
+			return ErrHostRollbackStateMismatch
+		}
+		return nil
+	}
+	pending.CertPEM = append([]byte(nil), certPEM...)
+	pending.ChainPEM = append([]byte(nil), chainPEM...)
+	pending.Fingerprint = fingerprint
+	return s.save(state)
+}
+
+func (s *HostRollbackStore) ClearReprotectPending(connectorName, targetID, jobID, fingerprint string) error {
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.ReprotectJobID != jobID || state.ReprotectPinned == nil || state.ReprotectPending == nil ||
+		state.ReprotectPending.Fingerprint != fingerprint || state.Active == nil || state.Active.Fingerprint != fingerprint {
+		return ErrHostRollbackStateMismatch
+	}
+	wipeReprotectPending(state.ReprotectPending)
+	state.ReprotectPending = nil
+	return s.save(state)
 }
 
 // A pending host CSR stays encrypted on this machine until the signed terminal
@@ -473,6 +587,8 @@ func (s *HostRollbackStore) FinalizeReprotect(connectorName, targetID, jobID, pr
 	wipeHostRollbackSnapshot(state.ReprotectPinned)
 	state.ReprotectPinned = nil
 	state.ReprotectJobID = ""
+	wipeReprotectPending(state.ReprotectPending)
+	state.ReprotectPending = nil
 	return s.save(state)
 }
 
@@ -755,4 +871,5 @@ func wipeHostRollbackState(state *hostRollbackState) {
 		wipeHostRollbackSnapshot(state.ReprotectPinned)
 	}
 	wipePQCPending(state.PQCPending)
+	wipeReprotectPending(state.ReprotectPending)
 }

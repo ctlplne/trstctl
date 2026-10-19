@@ -5,6 +5,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,9 +20,11 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	eedecommission "trstctl.com/trstctl/internal/decommission"
 	"trstctl.com/trstctl/internal/decommission/depstate"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
 	decstore "trstctl.com/trstctl/internal/decommission/store"
+	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -31,6 +34,16 @@ import (
 func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *testing.T) {
 	ctx := context.Background()
 	st := openStoreOn(t, "vdec_api_credential_plan_served")
+	if err := st.UpsertTenant(ctx, corestore.Tenant{TenantID: tenantA, Name: "CA re-protection QA"}); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	outbox := orchestrator.NewOutbox(st)
+	fixtureOrch := orchestrator.NewOrchestrator(log, st, outbox)
 	oldSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +96,7 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	cert, err := st.UpsertCertificate(ctx, corestore.Certificate{TenantID: tenantA, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, CertificateDER: leafDER, CertificatePEM: leafPEM, KeyOrigin: "host_agent", KeyStorage: "file", Status: "active", IssuanceIdempotencyKey: "issue:transition:ca-reprotect-identity"})
+	cert, err := fixtureOrch.RecordCertificate(ctx, tenantA, corestore.Certificate{TenantID: tenantA, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, CertificateDER: leafDER, CertificatePEM: leafPEM, KeyOrigin: "host_agent", KeyStorage: "file", Status: "active", IssuanceIdempotencyKey: "issue:transition:ca-reprotect-identity"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,12 +129,6 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err := decstore.New(st).RebuildTenant(ctx, tenantA, []eventspec.Event{mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: old.ID, Dependent: dep(depstate.DependentCredential, cert.ID)}, 1)}); err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
-	outbox := orchestrator.NewOutbox(st)
 	served := newServedAPI(t, st, outbox, log)
 	contract := httptest.NewRecorder()
 	served.ServeHTTP(contract, httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil))
@@ -230,6 +237,102 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err != nil || !found || plan.Job.Dependent.ID != cert.ID || plan.IdentityID != identityID || plan.SuccessorAuthorityID != successor.ID || plan.VerifyAddress != "127.0.0.1:10443" || plan.VerifyServerName != "ca-reprotect.qa.invalid" {
 		t.Fatalf("immutable plan readback = %+v found=%t err=%v", plan, found, err)
 	}
+	start := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
+	start.Header.Set("Idempotency-Key", "start-reviewed-plan")
+	queued := httptest.NewRecorder()
+	served.ServeHTTP(queued, start)
+	if queued.Code != http.StatusAccepted {
+		t.Fatalf("reviewed plan did not unlock outbox: %d %s", queued.Code, queued.Body.String())
+	}
+	pending, err := outbox.Pending(ctx, tenantA)
+	if err != nil || len(pending) != 1 || pending[0].Destination != reprotect.DestinationJob {
+		t.Fatalf("reviewed start did not queue one VDEC job: %+v err=%v", pending, err)
+	}
+	runtime, err := eedecommission.NewRuntime(eedecommission.RuntimeConfig{Store: st, Log: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := runtime.ReprotectionOutboxFactory(editionseam.LicensedOutboxDeps{Store: st, Log: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handled, err := handler.DeliverLicensed(ctx, orchestrator.Message{ID: pending[0].ID, TenantID: tenantA,
+		Destination: pending[0].Destination, IdempotencyKey: pending[0].IdempotencyKey, Payload: pending[0].Payload})
+	if !handled || err != nil {
+		t.Fatalf("reviewed VDEC job did not dispatch to bound host work: handled=%t err=%v", handled, err)
+	}
+	pending, err = outbox.Pending(ctx, tenantA)
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("re-protection did not create one durable host job: %+v err=%v", pending, err)
+	}
+	var hostJob struct {
+		IdentityID               string `json:"identity_id"`
+		TargetID                 string `json:"target_id"`
+		Revision                 string `json:"target_revision"`
+		IssuingAuthorityID       string `json:"issuing_authority_id"`
+		PredecessorCertificateID string `json:"predecessor_certificate_id"`
+		ReprotectJobID           string `json:"reprotect_job_id"`
+	}
+	var hostPayload []byte
+	var hostKey string
+	var hostID int64
+	for _, row := range pending {
+		if row.Destination != "endpoint.renew" {
+			continue
+		}
+		hostPayload, hostKey, hostID = row.Payload, row.IdempotencyKey, row.ID
+		if err := json.Unmarshal(row.Payload, &hostJob); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hostJob.IdentityID != identityID || hostJob.TargetID != targetID || hostJob.Revision != target.RevisionID ||
+		hostJob.IssuingAuthorityID != successor.ID || hostJob.PredecessorCertificateID != cert.ID || hostJob.ReprotectJobID != result.JobID {
+		t.Fatalf("host job lost immutable VDEC bindings: %+v", hostJob)
+	}
+	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, csr); err != nil {
+		t.Fatalf("bound retained-key CSR refused: %v", err)
+	}
+	wrongSubject, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrongSubject.Destroy()
+	wrongCSR, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "ca-reprotect.qa.invalid", DNSNames: []string{"ca-reprotect.qa.invalid"}}, wrongSubject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, wrongCSR); err == nil {
+		t.Fatal("different subject key reached signer")
+	}
+	newDER, err := crypto.SignLeafFromCSR(successorDER, successorSigner, csr, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newInfo, err := certinfo.Inspect(newDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCert, err := fixtureOrch.RecordCertificate(ctx, tenantA, corestore.Certificate{TenantID: tenantA,
+		Subject: newInfo.Subject, SANs: newInfo.DNSNames, Issuer: newInfo.Issuer, Serial: newInfo.SerialNumber,
+		Fingerprint: newInfo.SHA256Fingerprint, CertificateDER: newDER, CertificatePEM: crypto.EncodeCertificatePEM(newDER),
+		KeyOrigin: "host_agent", Status: "active", IssuanceIdempotencyKey: fmt.Sprintf("agentcsr:%d:0:retained", hostID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutover, err := reprotect.AuthorizeVerifiedHostResult(ctx, st, log, tenantA, agentID, hostKey, hostID,
+		hostPayload, newCert.Fingerprint, 1)
+	if err != nil {
+		t.Fatalf("signed host result binding: %v", err)
+	}
+	if cutover.NewCertificateID != newCert.ID || cutover.OldCertificateID != cert.ID {
+		t.Fatalf("host cutover identity changed: %+v", cutover)
+	}
+	if err := fixtureOrch.RecordCertificateReprotectionCutover(ctx, tenantA, cutover); err == nil {
+		t.Fatal("cutover without the verified signed receipt was recorded")
+	}
+	cutover.ReceiptStatement = fmt.Sprintf("trstctl-agent-job-receipt/v2\ntenant=%s\nagent=qa-host\njob=%d\nattempt=1\noutcome=verified\nevidence=qa-probe-digest\ndetail=qa-detail-digest\ncredential_fingerprint=%s\nkey_origin=host_agent\nkey_storage=file\nkey_exportable=yes\nkey_generated_by=qa-host\nissued_at=1\n", tenantA, hostID, newCert.Fingerprint)
+	cutover.ReceiptSignature = "cWEtc2lnbmF0dXJl"
+	cutover.ReceiptSignerFingerprint = "qa-agent-certificate-fingerprint"
 	otherIdentityID := uuid.NewString()
 	if err := st.UpsertIdentity(ctx, corestore.Identity{ID: otherIdentityID, TenantID: tenantA, Kind: corestore.KindX509Certificate, Name: "qa-conflicting-identity", OwnerID: ownerID, Status: "deployed", Attributes: identityAttrs}); err != nil {
 		t.Fatal(err)
@@ -242,11 +345,62 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if ambiguous := post("ambiguous-identity", target.RevisionID, info.SHA256Fingerprint, successor.ID); ambiguous.Code != http.StatusConflict {
 		t.Fatalf("ambiguous certificate identity binding = %d %s, want 409 before new plan append", ambiguous.Code, ambiguous.Body.String())
 	}
-	start := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
-	start.Header.Set("Idempotency-Key", "start-reviewed-plan")
-	queued := httptest.NewRecorder()
-	served.ServeHTTP(queued, start)
-	if queued.Code != http.StatusAccepted {
-		t.Fatalf("reviewed plan did not unlock outbox: %d %s", queued.Code, queued.Body.String())
+	if err := fixtureOrch.RecordCertificateReprotectionCutover(ctx, tenantA, cutover); err != nil {
+		t.Fatalf("signed readback did not atomically cut over certificate and CA selection: %v", err)
+	}
+	if err := fixtureOrch.RecordCertificateReprotectionCutover(ctx, tenantA, cutover); err != nil {
+		t.Fatalf("lost-response cutover replay: %v", err)
+	}
+	freshSignedRetry := cutover
+	freshSignedRetry.ReceiptStatement = strings.Replace(cutover.ReceiptStatement, "issued_at=1\n", "issued_at=2\n", 1)
+	freshSignedRetry.ReceiptSignature = "bmV3LXFhLXNpZ25hdHVyZQ=="
+	if err := fixtureOrch.RecordCertificateReprotectionCutover(ctx, tenantA, freshSignedRetry); err != nil {
+		t.Fatalf("fresh signature over the same served observation must recover first writer: %v", err)
+	}
+	changedObservation := cutover
+	changedObservation.ReceiptStatement = strings.Replace(cutover.ReceiptStatement, "evidence=qa-probe-digest", "evidence=another-probe", 1)
+	if err := fixtureOrch.RecordCertificateReprotectionCutover(ctx, tenantA, changedObservation); err == nil {
+		t.Fatal("different served readback changed the first-writer cutover")
+	}
+	if err := reprotect.RecordVerifiedHostCompletion(ctx, st, log, tenantA, cutover); err != nil {
+		t.Fatalf("verified host cutover did not account for CA dependent: %v", err)
+	}
+	if err := reprotect.RecordVerifiedHostCompletion(ctx, st, log, tenantA, cutover); err != nil {
+		t.Fatalf("lost-response CA completion replay: %v", err)
+	}
+	var supersessions, completions int
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.TenantID == tenantA && event.Type == reprotect.TypeCredentialSupersession {
+			supersessions++
+		}
+		if event.TenantID == tenantA && event.Type == depstate.TypeReprotectionCompleted {
+			completions++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if supersessions != 1 || completions != 1 {
+		t.Fatalf("CA retirement evidence: supersessions=%d completions=%d, want one each", supersessions, completions)
+	}
+	oldAfter, err := st.GetCertificate(ctx, tenantA, cert.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newAfter, err := st.GetCertificate(ctx, tenantA, newCert.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityAfter, err := st.GetIdentity(ctx, tenantA, identityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selection map[string]string
+	if err := json.Unmarshal(identityAfter.Attributes, &selection); err != nil {
+		t.Fatal(err)
+	}
+	if oldAfter.Status != "superseded" || newAfter.ReplacesID == nil || *newAfter.ReplacesID != cert.ID ||
+		selection["issuing_authority_id"] != successor.ID {
+		t.Fatalf("cutover readback: predecessor=%s successor=%v authority=%s", oldAfter.Status, newAfter.ReplacesID, selection["issuing_authority_id"])
 	}
 }

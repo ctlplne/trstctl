@@ -3159,9 +3159,16 @@ than sending an operator looking for a credential that was never there.
   request. `GET /api/v1/ca/keys/{id}/reprotect/plans/{job_id}` and the CLI plan
   readback recover that immutable public selection after a lost response. A plan
   receipt proves that review was recorded, not that issuance, deployment or
-  served-state cutover happened. The VDEC credential worker and console action
-  remain under construction and the retirement checklist continues to block
-  destruction until completion evidence exists.
+  served-state cutover happened. The host worker dispatches the bound job to its
+  assigned agent. The agent uses the installed subject key to make one encrypted,
+  restart-recoverable CSR, pins the exact predecessor, installs the successor,
+  probes the served leaf, and reports signed custody. Only that verified report
+  can atomically supersede the old inventory certificate and change the identity's
+  selected CA. Its source event carries the signed readback, and separate
+  first-writer supersession and completion events account for the old CA dependent.
+  The console start/recovery action remains under construction. Live target and
+  cold-restart qualification of this path remain open; retirement stays blocked
+  until its completion evidence is present.
   An expired requester-held managed leaf with no managed deployment can be
   dispositioned through `release_managed_ca_leaf` after two distinct custodians
   approve its exact public certificate digest, immutable mint event and bounded

@@ -164,6 +164,7 @@ const (
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventKeyCompromiseCAEffectCompleted           = "identity.key_compromise_ca_effect_completed"
 	EventCertificateSuperseded                    = "certificate.superseded"
+	EventCertificateReprotectionCutover           = "certificate.reprotection_cutover"
 	EventCAIssuedCertificate                      = caevent.EventCAIssuedCertificate
 	EventCACertificateRevoked                     = "ca.certificate.revoked"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
@@ -1813,6 +1814,11 @@ type CertificateSuperseded struct {
 	SupersededBy string    `json:"superseded_by,omitempty"` // successor serial, for the audit trail
 	RenewedAt    time.Time `json:"renewed_at"`
 }
+
+// CertificateReprotectionCutover is emitted only after a signed host receipt
+// proves the successor is served. Projection updates predecessor status,
+// successor link and the identity's selected CA together.
+type CertificateReprotectionCutover = store.CertificateReprotectionCutover
 
 // AgentHeartbeat is the payload of an agent.heartbeat event. The event carries
 // the deterministic agents.id, so replay does not depend on server-package helper
@@ -3838,6 +3844,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventKeyCompromiseCAEffectCompleted:           {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
 	EventCertificateSuperseded:                    {1: true},
+	EventCertificateReprotectionCutover:           {1: true},
 	EventCAIssuedCertificate:                      {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CASecretInventorySchemaVersion: true},
 	EventCACertificateRevoked:                     {1: true},
 	EventCACeremonyStarted:                        {1: true},
@@ -4697,6 +4704,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.SetCertificateSupersededTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.RenewedAt)
+	case EventCertificateReprotectionCutover:
+		var pl CertificateReprotectionCutover
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyCertificateReprotectionCutoverTx(ctx, tx, e.TenantID, pl, e.Time)
 	case EventCAIssuedCertificate:
 		if schemaVersionOf(e) == CASecretInventorySchemaVersion {
 			var pl CASecretCertificateInventoried

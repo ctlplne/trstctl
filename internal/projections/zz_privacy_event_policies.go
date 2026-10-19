@@ -1750,6 +1750,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventAgentUpgradeRingDispatched, 1}:                                        privacyPayloadShape[AgentUpgradeRingDispatched](),
 		{EventIssuerCreated, 1}:                                                     privacyPayloadShape[IssuerCreated](),
 		{EventCertificateSuperseded, 1}:                                             privacyPayloadShape[CertificateSuperseded](),
+		{EventCertificateReprotectionCutover, 1}:                                    privacyPayloadShape[CertificateReprotectionCutover](),
 		{EventCAIssuedCertificate, 1}:                                               privacyPayloadShape[privacyCAIssuedSerialV1](),
 		{EventCACertificateRevoked, 1}:                                              privacyPayloadShape[CACertificateRevoked](),
 		{EventCARootCreated, 1}: events.PrivacyPayloadShapeOneOf(
