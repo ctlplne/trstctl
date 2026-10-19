@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -25,7 +26,7 @@ func WithCertificateRevocationAuthority(resolver CertificateRevocationAuthorityR
 	return func(c *config) { c.certRevocationAuthority = resolver }
 }
 
-func (a *API) revokeSelectedCertificates(ctx context.Context, tenantID, commandKey, route string, principal authz.Principal, request bulkRevokeRequest) (int, any, error) {
+func (a *API) revokeSelectedCertificates(w http.ResponseWriter, ctx context.Context, tenantID, commandKey, route string, principal authz.Principal, request bulkRevokeRequest) (int, any, error) {
 	// Require mutation authority even if every supplied ID is absent. Per-object
 	// policy and approval checks below still narrow this coarse permission.
 	if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
@@ -71,6 +72,11 @@ func (a *API) revokeSelectedCertificates(ctx context.Context, tenantID, commandK
 	}
 	if errors.Is(err, store.ErrIdempotencyConflict) {
 		return 0, nil, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different certificate revocation request")
+	}
+	if errors.Is(err, events.ErrEventIDIndexBehind) {
+		w.Header().Set("Retry-After", "1")
+		return 0, nil, errStatus(http.StatusServiceUnavailable,
+			"certificate revocation history is catching up; retry with the same Idempotency-Key")
 	}
 	if err != nil {
 		return 0, nil, err

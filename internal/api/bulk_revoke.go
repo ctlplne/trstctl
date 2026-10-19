@@ -45,7 +45,7 @@ func (a *API) bulkRevoke(w http.ResponseWriter, r *http.Request) {
 		principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
 		if req.CertificateIDs != nil {
 			req.Reason = reason
-			return a.revokeSelectedCertificates(ctx, tenantID, idempotencyKey, r.URL.EscapedPath(), principal, req)
+			return a.revokeSelectedCertificates(w, ctx, tenantID, idempotencyKey, r.URL.EscapedPath(), principal, req)
 		}
 		result, err := a.orch.BulkRevokeAuthorized(ctx, tenantID, orchestrator.BulkRevokeRequest{
 			IDs:      bulkRevokeIDs(req),

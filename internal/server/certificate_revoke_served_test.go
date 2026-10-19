@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -20,6 +21,40 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestServedExactCertificateRevocationReportsIndexCatchupAsRetryable(t *testing.T) {
+	h, owner, body := servedPublicBrokerRevocationFixture(t)
+	issued := servedBrokerIssue(t, h, owner, "revocation-index-catchup", body, http.StatusCreated)
+	for i := 0; i < 1030; i++ {
+		if _, err := h.log.Append(t.Context(), events.Event{
+			ID: fmt.Sprintf("revocation-index-lag-%d", i), Type: "test.revocation-index-lag",
+			TenantID: h.tenant, Data: []byte(`{}`),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request := map[string]any{"certificate_ids": []string{issued.CertificateID}, "reason": "cessationOfOperation"}
+	const key = "revocation-index-catchup-command"
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/certificates/bulk-revoke", owner, key, request)
+	if status != http.StatusServiceUnavailable || !bytes.Contains(raw, []byte("retry with the same Idempotency-Key")) {
+		t.Fatalf("lagged identity index returned HTTP %d %s, want explicit retryable refusal", status, raw)
+	}
+	if exactRevocationEventCount(t, h) != 0 || exactRevocationOutboxCount(t, h) != 0 {
+		t.Fatal("index catch-up refusal recorded a revocation effect")
+	}
+	for attempt := 0; attempt < 4; attempt++ {
+		status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/certificates/bulk-revoke", owner, key, request)
+		if status == http.StatusOK {
+			break
+		}
+		if status != http.StatusServiceUnavailable {
+			t.Fatalf("retry %d returned HTTP %d %s", attempt+1, status, raw)
+		}
+	}
+	if status != http.StatusOK || !bytes.Contains(raw, []byte(`"total_revoked":1`)) || exactRevocationEventCount(t, h) != 1 {
+		t.Fatalf("bounded same-key retry failed: HTTP %d %s", status, raw)
+	}
+}
 
 func TestServedExactCertificateRevocationAuthorizesWholeSelectionBeforeMutation(t *testing.T) {
 	h, owner, body := servedPublicBrokerRevocationFixture(t)

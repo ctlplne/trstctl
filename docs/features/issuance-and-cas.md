@@ -560,6 +560,9 @@ integers are rejected), and bulk revoke at `/api/v1/certificates/bulk-revoke` /
 `/api/v1/identities/bulk-revoke` returns matched, revoked, skipped, and failed counts
 so a wide incident response is explicit about partial success. OCSP responses echo a
 valid OCSP nonce when the request carries one and sign with the delegated responder;
+if the certificate route's durable event-ID index is catching up, it returns
+`503` with `Retry-After: 1`; repeat the exact request with the same
+`Idempotency-Key` rather than creating a second revocation command.
 CRL serving returns weak ETag validators and honors `If-None-Match` with `304 Not
 Modified` so relying parties don't refetch an unchanged CRL. `GET
 /api/v1/revocation/crls` / `trstctl-cli revocation crls` and the Certificates console
