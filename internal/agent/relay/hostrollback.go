@@ -59,15 +59,17 @@ type hostRollbackSnapshot struct {
 }
 
 type hostRollbackState struct {
-	Version    int                   `json:"version"`
-	TenantID   string                `json:"tenant_id"`
-	Connector  string                `json:"connector"`
-	TargetID   string                `json:"target_id"`
-	Active     *hostRollbackSnapshot `json:"active,omitempty"`
-	Previous   *hostRollbackSnapshot `json:"previous,omitempty"`
-	PQCRunID   string                `json:"pqc_run_id,omitempty"`
-	PQCPinned  *hostRollbackSnapshot `json:"pqc_pinned,omitempty"`
-	PQCPending *hostPQCPending       `json:"pqc_pending,omitempty"`
+	Version         int                   `json:"version"`
+	TenantID        string                `json:"tenant_id"`
+	Connector       string                `json:"connector"`
+	TargetID        string                `json:"target_id"`
+	Active          *hostRollbackSnapshot `json:"active,omitempty"`
+	Previous        *hostRollbackSnapshot `json:"previous,omitempty"`
+	PQCRunID        string                `json:"pqc_run_id,omitempty"`
+	PQCPinned       *hostRollbackSnapshot `json:"pqc_pinned,omitempty"`
+	PQCPending      *hostPQCPending       `json:"pqc_pending,omitempty"`
+	ReprotectJobID  string                `json:"reprotect_job_id,omitempty"`
+	ReprotectPinned *hostRollbackSnapshot `json:"reprotect_pinned,omitempty"`
 }
 
 // A pending host CSR stays encrypted on this machine until the signed terminal
@@ -236,6 +238,9 @@ func (s *HostRollbackStore) PinPQCPredecessor(connectorName, targetID, runID, fi
 	}
 	if state != nil {
 		defer wipeHostRollbackState(state)
+		if state.ReprotectJobID != "" {
+			return ErrHostRollbackStateMismatch
+		}
 		if state.PQCRunID != "" {
 			if state.PQCRunID != runID || state.PQCPinned == nil ||
 				state.PQCPinned.Fingerprint != fingerprint || !bytes.Equal(state.PQCPinned.CertPEM, certPEM) || !bytes.Equal(state.PQCPinned.KeyPEM, keyPEM) {
@@ -323,6 +328,151 @@ func (s *HostRollbackStore) FinalizePQCRestore(connectorName, targetID, runID, f
 	state.PQCRunID = ""
 	wipePQCPending(state.PQCPending)
 	state.PQCPending = nil
+	return s.save(state)
+}
+
+// PinReprotectPredecessor seals the independently verified, installed host
+// bundle before a CA re-protection job issues a replacement. It is bound to one
+// job and cannot be displaced by a renewal or a concurrent PQC migration.
+func (s *HostRollbackStore) PinReprotectPredecessor(connectorName, targetID, jobID, fingerprint string, certPEM, keyPEM []byte) error {
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(jobID) == "" || len(certPEM) == 0 || len(keyPEM) == 0 {
+		return errors.New("relay: CA re-protection predecessor requires job, certificate, and key")
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if state != nil {
+		defer wipeHostRollbackState(state)
+		if state.PQCRunID != "" {
+			return ErrHostRollbackStateMismatch
+		}
+		if state.ReprotectJobID != "" {
+			pinned := state.ReprotectPinned
+			if state.ReprotectJobID != jobID || pinned == nil || pinned.Fingerprint != fingerprint ||
+				!bytes.Equal(pinned.CertPEM, certPEM) || !bytes.Equal(pinned.KeyPEM, keyPEM) {
+				return ErrHostRollbackStateMismatch
+			}
+			return nil
+		}
+		if state.Active == nil || state.Active.Fingerprint != fingerprint ||
+			!bytes.Equal(state.Active.CertPEM, certPEM) || !bytes.Equal(state.Active.KeyPEM, keyPEM) {
+			return ErrHostRollbackStateMismatch
+		}
+		state.ReprotectJobID = jobID
+		state.ReprotectPinned = cloneHostRollbackSnapshot(state.Active)
+		return s.save(state)
+	}
+	state = &hostRollbackState{
+		Version: hostRollbackStateVersion, TenantID: s.tenantID,
+		Connector: connectorName, TargetID: targetID,
+		ReprotectJobID: jobID,
+		Active: &hostRollbackSnapshot{Fingerprint: fingerprint,
+			CertPEM: append([]byte(nil), certPEM...), KeyPEM: append([]byte(nil), keyPEM...)},
+	}
+	state.ReprotectPinned = cloneHostRollbackSnapshot(state.Active)
+	defer wipeHostRollbackState(state)
+	return s.save(state)
+}
+
+// UseReprotectPredecessor lends the pinned bundle only while the target lock is
+// held. The caller may sign a CSR inside the crypto boundary but must not keep
+// or expose the borrowed private-key bytes after the callback returns.
+func (s *HostRollbackStore) UseReprotectPredecessor(connectorName, targetID, jobID, fingerprint string, fn func(certPEM, keyPEM []byte) error) error {
+	if fn == nil || strings.TrimSpace(jobID) == "" {
+		return errors.New("relay: CA re-protection predecessor requires job and callback")
+	}
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ErrHostRollbackPredecessorMissing
+	}
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.ReprotectJobID != jobID || state.ReprotectPinned == nil || state.ReprotectPinned.Fingerprint != fingerprint {
+		return ErrHostRollbackPredecessorMissing
+	}
+	return fn(state.ReprotectPinned.CertPEM, state.ReprotectPinned.KeyPEM)
+}
+
+// RestoreReprotect keeps the job pin until the signed result is accepted. A
+// lost response can retry after a process restart without inventing history.
+func (s *HostRollbackStore) RestoreReprotect(connectorName, targetID, jobID, fingerprint string, fn func(certPEM, keyPEM []byte) (bool, error)) error {
+	if fn == nil || strings.TrimSpace(jobID) == "" {
+		return errors.New("relay: CA re-protection restore requires job and callback")
+	}
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ErrHostRollbackPredecessorMissing
+	}
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.ReprotectJobID != jobID || state.ReprotectPinned == nil || state.ReprotectPinned.Fingerprint != fingerprint {
+		return ErrHostRollbackPredecessorMissing
+	}
+	commit, err := fn(state.ReprotectPinned.CertPEM, state.ReprotectPinned.KeyPEM)
+	if err != nil || !commit {
+		return err
+	}
+	if state.Active.Fingerprint != fingerprint {
+		wipeHostRollbackSnapshot(state.Previous)
+		state.Previous = state.Active
+		state.Active = cloneHostRollbackSnapshot(state.ReprotectPinned)
+	}
+	return s.save(state)
+}
+
+// FinalizeReprotect releases the original only after the caller has received a
+// terminal signed result and independently verified the active leaf. Requiring
+// both fingerprints prevents a stale job from clearing another target state.
+func (s *HostRollbackStore) FinalizeReprotect(connectorName, targetID, jobID, predecessorFingerprint, activeFingerprint string) error {
+	connectorName, targetID, predecessorFingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, predecessorFingerprint)
+	if err != nil {
+		return err
+	}
+	_, _, activeFingerprint, err = normalizeHostRollbackIdentity(connectorName, targetID, activeFingerprint)
+	if err != nil {
+		return err
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if strings.TrimSpace(jobID) == "" || state.ReprotectJobID != jobID || state.ReprotectPinned == nil ||
+		state.ReprotectPinned.Fingerprint != predecessorFingerprint || state.Active == nil || state.Active.Fingerprint != activeFingerprint {
+		return ErrHostRollbackStateMismatch
+	}
+	wipeHostRollbackSnapshot(state.ReprotectPinned)
+	state.ReprotectPinned = nil
+	state.ReprotectJobID = ""
 	return s.save(state)
 }
 
@@ -600,6 +750,9 @@ func wipeHostRollbackState(state *hostRollbackState) {
 	}
 	if state.PQCPinned != state.Active && state.PQCPinned != state.Previous {
 		wipeHostRollbackSnapshot(state.PQCPinned)
+	}
+	if state.ReprotectPinned != state.Active && state.ReprotectPinned != state.Previous && state.ReprotectPinned != state.PQCPinned {
+		wipeHostRollbackSnapshot(state.ReprotectPinned)
 	}
 	wipePQCPending(state.PQCPending)
 }

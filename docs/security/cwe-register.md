@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1550 annotated sites across 26 rules. Each row is
+1551 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1055,7 +1055,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (432 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (433 sites)
 
 | Location | Reason |
 |---|---|
@@ -1184,8 +1184,9 @@ not this file.
 | `internal/agent/relay/host_pqc_predecessor_test.go:47` | test-owned directory (CWE-22) |
 | `internal/agent/relay/hostexec.go:137` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
-| `internal/agent/relay/hostrollback.go:553` | validated agent-local state directory (CWE-22) |
+| `internal/agent/relay/hostrollback.go:703` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
+| `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
 | `internal/agent/relay/mysql_verification_test.go:177` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/plugins.go:141` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:145` | sibling of an operator-configured module (CWE-22) |
@@ -1693,7 +1694,7 @@ not this file.
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
-| `internal/agent/relay/hostrollback.go:577` | both paths are inside the validated agent-local state directory (CWE-22) |
+| `internal/agent/relay/hostrollback.go:727` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sshkrl/install.go:245` | staged path is created in the bound target directory by CreateTemp |
 | `internal/agent/sshkrl/install.go:246` | target is an absolute operator path bound to sshd's effective RevokedKeys path |
 | `internal/agent/sshkrl/install.go:265` | path is a derived predecessor name inside the checked private rollback directory |

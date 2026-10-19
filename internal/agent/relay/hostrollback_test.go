@@ -149,6 +149,138 @@ func TestHostRollbackStorePinsExactUnmanagedPredecessorAcrossRenewal(t *testing.
 	}
 }
 
+func TestHostRollbackStorePinsReprotectPredecessorAcrossRestartAndRenewal(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "host-rollbacks")
+	st, err := relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldCert, oldKey := []byte("reprotect-original-cert"), []byte("reprotect-original-key")
+	if err := st.PinReprotectPredecessor("apache", "target-a", "job-a", "sha256:old", oldCert, oldKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PinReprotectPredecessor("apache", "target-a", "job-a", "old", oldCert, oldKey); err != nil {
+		t.Fatalf("same job redelivery: %v", err)
+	}
+	for _, changed := range []struct {
+		job, fp   string
+		cert, key []byte
+	}{
+		{"job-b", "old", oldCert, oldKey},
+		{"job-a", "different", oldCert, oldKey},
+		{"job-a", "old", []byte("different-cert"), oldKey},
+		{"job-a", "old", oldCert, []byte("different-key")},
+	} {
+		if err := st.PinReprotectPredecessor("apache", "target-a", changed.job, changed.fp, changed.cert, changed.key); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+			t.Fatalf("changed predecessor accepted: %v", err)
+		}
+	}
+	if err := st.PinPQCPredecessor("apache", "target-a", "run-a", "old", oldCert, oldKey); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+		t.Fatalf("concurrent PQC migration accepted: %v", err)
+	}
+	if err := st.UseReprotectPredecessor("apache", "target-a", "job-b", "old", func([]byte, []byte) error {
+		t.Fatal("wrong job accessed private predecessor")
+		return nil
+	}); !errors.Is(err, relay.ErrHostRollbackPredecessorMissing) {
+		t.Fatalf("wrong job predecessor read: %v", err)
+	}
+	for _, entry := range []string{"reprotect-original-cert", "reprotect-original-key"} {
+		files, err := os.ReadDir(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			raw, err := os.ReadFile(filepath.Join(root, file.Name())) // #nosec G304 -- test-owned state root (CWE-22)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(raw, []byte(entry)) {
+				t.Fatalf("host state stored plaintext %s", entry)
+			}
+		}
+	}
+	restarted, err := relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.UseReprotectPredecessor("apache", "target-a", "job-a", "old", func(cert, key []byte) error {
+		if !bytes.Equal(cert, oldCert) || !bytes.Equal(key, oldKey) {
+			t.Fatal("reopened predecessor differs from installed material")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RecordDeploy("apache", "target-a", "new", []byte("new-cert"), oldKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RecordDeploy("apache", "target-a", "renewed", []byte("renewed-cert"), oldKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.FinalizeReprotect("apache", "target-a", "job-a", "old", "not-served"); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+		t.Fatalf("unverified active fingerprint cleared pin: %v", err)
+	}
+	if err := restarted.RestoreReprotect("apache", "target-a", "job-a", "old", func([]byte, []byte) (bool, error) {
+		return false, errors.New("listener still serves successor")
+	}); err == nil {
+		t.Fatal("failed listener verification committed rollback")
+	}
+	if err := restarted.RestoreReprotect("apache", "target-a", "job-a", "old", func(cert, key []byte) (bool, error) {
+		if !bytes.Equal(cert, oldCert) || !bytes.Equal(key, oldKey) {
+			t.Fatal("re-protection rollback lost the exact predecessor")
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A lost completion report must be safe to redeliver after another restart.
+	restarted, err = relay.NewHostRollbackStore(root, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RestoreReprotect("apache", "target-a", "job-a", "old", func([]byte, []byte) (bool, error) {
+		return true, nil
+	}); err != nil {
+		t.Fatalf("lost-response restore: %v", err)
+	}
+	if err := restarted.FinalizeReprotect("apache", "target-a", "job-a", "old", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.RestoreReprotect("apache", "target-a", "job-a", "old", func([]byte, []byte) (bool, error) {
+		return true, nil
+	}); !errors.Is(err, relay.ErrHostRollbackPredecessorMissing) {
+		t.Fatalf("finalized predecessor retained: %v", err)
+	}
+}
+
+func TestHostRollbackStoreReprotectPinRefusesExistingMismatchAndConcurrentPQC(t *testing.T) {
+	st, err := relay.NewHostRollbackStore(filepath.Join(t.TempDir(), "state"), "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordDeploy("nginx", "target-a", "active", []byte("active-cert"), []byte("active-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PinReprotectPredecessor("nginx", "target-a", "job-a", "other", []byte("other-cert"), []byte("other-key")); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+		t.Fatalf("mismatched installed bundle adopted: %v", err)
+	}
+	if err := st.PinReprotectPredecessor("nginx", "target-a", "job-a", "active", []byte("active-cert"), []byte("active-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordDeploy("nginx", "target-a", "successor", []byte("successor-cert"), []byte("active-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.FinalizeReprotect("nginx", "target-a", "job-a", "active", "successor"); err != nil {
+		t.Fatalf("verified successor could not release predecessor: %v", err)
+	}
+	if err := st.PinPQCPredecessor("nginx", "target-a", "pqc-run", "successor", []byte("successor-cert"), []byte("active-key")); err != nil {
+		t.Fatalf("finalized re-protection left false PQC conflict: %v", err)
+	}
+	if err := st.PinReprotectPredecessor("nginx", "target-a", "job-b", "successor", []byte("successor-cert"), []byte("active-key")); !errors.Is(err, relay.ErrHostRollbackStateMismatch) {
+		t.Fatalf("concurrent PQC migration allowed CA re-protection: %v", err)
+	}
+}
+
 // One process can receive a redelivery while another poll goroutine is still
 // restoring the same listener. The second callback must not begin until the
 // first has finished; the database lane supplies the same exclusion across
