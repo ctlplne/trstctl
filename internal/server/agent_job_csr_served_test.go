@@ -528,6 +528,66 @@ func TestOneClaimAuthorizesOneKey(t *testing.T) {
 	}
 }
 
+// The host retains one encrypted CSR/key for the durable job across claims. A
+// lost result must replay the first signed leaf after a lease expires, rather
+// than treating attempt two as permission to mint another active certificate.
+func TestReclaimedHostJobReplaysTheSameSignedCSR(t *testing.T) {
+	ctx := t.Context()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
+	seedRenewalJob(t, ctx, h, "renew:reclaimed-one-leaf", []string{"reclaimed.example.test"})
+	firstClaim := claimOneRenewal(t, ctx, h)
+	key, err := crypto.GenerateHostSubjectKey("reclaimed.example.test", []string{"reclaimed.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	first, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: firstClaim.JobID, Attempt: firstClaim.Attempt, CSRDER: key.CSRDER,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a dead agent after the signer committed, before its response or
+	// terminal report reached the host. The next claim is for the same job.
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET claim_expires_at=now()-interval '1 second', agent_next_attempt_at=now()-interval '1 second'
+			WHERE tenant_id=$1 AND id=$2 AND destination='endpoint.renew'`, h.tenant, firstClaim.JobID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	secondClaim := claimOneRenewal(t, ctx, h)
+	if secondClaim.JobID != firstClaim.JobID || secondClaim.Attempt <= firstClaim.Attempt {
+		t.Fatalf("expected the same job under a new claim: first=%+v second=%+v", firstClaim, secondClaim)
+	}
+	replayed, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: secondClaim.JobID, Attempt: secondClaim.Attempt, CSRDER: key.CSRDER,
+	})
+	replayFingerprint := ""
+	if replayed != nil {
+		replayFingerprint = replayed.Fingerprint
+	}
+	if err != nil || replayFingerprint != first.Fingerprint {
+		t.Fatalf("reclaim minted another certificate: first=%s replay=%s error=%v", first.Fingerprint, replayFingerprint, err)
+	}
+	otherKey, err := crypto.GenerateHostSubjectKey("reclaimed.example.test", []string{"reclaimed.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer otherKey.Destroy()
+	if _, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: secondClaim.JobID, Attempt: secondClaim.Attempt, CSRDER: otherKey.CSRDER,
+	}); err == nil {
+		t.Fatal("a reclaimed job certified a different host key after its first signature")
+	}
+	var count int
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM certificates WHERE tenant_id=$1 AND fingerprint=$2`, h.tenant, first.Fingerprint).Scan(&count)
+	}); err != nil || count != 1 {
+		t.Fatalf("reclaimed job recorded %d copies of the same signed leaf: %v", count, err)
+	}
+}
+
 // The attempt binding must not be optional (epic B2).
 //
 // The check used to read `req.Attempt > 0 && job.ClaimAttempts > 0`, so an agent

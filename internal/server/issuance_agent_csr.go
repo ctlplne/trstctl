@@ -139,13 +139,11 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	// Through the internal/crypto boundary (AN-3), not crypto/sha256 directly.
 	// The rule holds even for a digest that is only ever an idempotency key:
 	// a boundary with exceptions for "harmless" uses stops being checkable.
-	// PQC migration retains the same encrypted CSR/key across reclaims. Slot 0
-	// is stable across attempts, so a crash after signing replays the exact leaf.
-	// Ordinary renewals retain their per-attempt key and existing semantics.
-	issuanceSlot := attempt
-	if intent.PQCRunID != "" || intent.ReprotectJobID != "" {
-		issuanceSlot = 0
-	}
+	// Every production host job now retains its CSR/key in the encrypted host
+	// ledger across reclaims. The signing slot must therefore be stable across
+	// attempts too: a lost reply after the CA append cannot mint a second leaf
+	// when the same durable job is claimed again.
+	issuanceSlot := 0
 	idemKey := fmt.Sprintf("agentcsr:%d:%d:%s", jobID, issuanceSlot, crypto.SHA256Hex(csrDER)[:16])
 
 	if err := d.checkAgentCSRRequestBinding(ctx, tenantID, jobID, issuanceSlot, idemKey, intent); err != nil {

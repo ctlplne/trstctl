@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
 )
@@ -139,6 +140,8 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	var fingerprint string
 	var keyBuf *secret.Buffer
 	var pending *hostPQCPending
+	var ordinaryPending *hostRenewPending
+	ordinaryBinding := crypto.SHA256Hex(job.Payload)
 	if intent.PQCRunID != "" {
 		pending, err = hostRollback.LoadPQCPending(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID)
 		if err != nil {
@@ -146,10 +149,25 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			return false
 		}
 		defer wipePQCPending(pending)
+	} else if hostRollback != nil {
+		ordinaryPending, err = hostRollback.LoadHostRenewPending(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the encrypted pending host key belongs to another job or cannot be read")
+			return false
+		}
+		defer wipeHostRenewPending(ordinaryPending)
+		if ordinaryPending == nil && job.Attempt > 1 {
+			report(ctx, ch, job, OutcomeFailed,
+				"a reclaimed host issuance has no retained subject key; it will not generate another key for this job")
+			return false
+		}
 	}
 	if pending != nil {
 		csrDER, certPEM, chainPEM, fingerprint = pending.CSRDER, pending.CertPEM, pending.ChainPEM, pending.Fingerprint
 		keyBuf, err = secret.NewFrom(pending.KeyPEM)
+	} else if ordinaryPending != nil {
+		csrDER, certPEM, chainPEM, fingerprint = ordinaryPending.CSRDER, ordinaryPending.CertPEM, ordinaryPending.ChainPEM, ordinaryPending.Fingerprint
+		keyBuf, err = secret.NewFrom(ordinaryPending.KeyPEM)
 	} else {
 		key, keyErr := generateHostRenewSubjectKey(intent)
 		if keyErr != nil {
@@ -169,6 +187,8 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		secret.Wipe(exported)
 		if err == nil && intent.PQCRunID != "" {
 			err = hostRollback.RecordPQCKey(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID, csrDER, keyBuf.Bytes())
+		} else if err == nil && hostRollback != nil {
+			err = hostRollback.RecordHostRenewKey(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding, csrDER, keyBuf.Bytes())
 		}
 	}
 	if err != nil {
@@ -183,6 +203,8 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		certPEM, chainPEM, fingerprint, err = signHostCSR(ctx, signer, job, csrDER, claim != nil)
 		if err == nil && intent.PQCRunID != "" {
 			err = hostRollback.RecordPQCCertificate(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID, certPEM, chainPEM, fingerprint)
+		} else if err == nil && hostRollback != nil {
+			err = hostRollback.RecordHostRenewCertificate(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding, certPEM, chainPEM, fingerprint)
 		}
 	}
 	if err != nil {
@@ -277,6 +299,11 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	logReportOutcome(job, outcome, accepted, reportErr)
 	if accepted && reportErr == nil && outcome == transport.OutcomeVerified && intent.PQCRunID != "" {
 		if err := hostRollback.ClearPQCPending(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID); err != nil {
+			return false
+		}
+	} else if intent.PQCRunID == "" && accepted && reportErr == nil &&
+		(outcome == transport.OutcomeVerified || outcome == OutcomeExecuted) && hostRollback != nil {
+		if err := hostRollback.ClearHostRenewPending(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding, fingerprint); err != nil {
 			return false
 		}
 	}

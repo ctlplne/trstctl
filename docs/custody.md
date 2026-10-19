@@ -108,6 +108,15 @@ host agent generates the key, sends only a CSR upward, receives the certificate,
 installs the pair, verifies the live endpoint, and signs the custody receipt. This
 is the shipped B2 path, not future work.
 
+Before requesting a signature, the host agent seals the CSR and private key in
+its tenant-bound, `0600` host rollback directory. If the job is claimed again
+after a lost reply or agent restart, it reuses that exact CSR and key; the
+signer's job-scoped idempotency key returns the same signed leaf. The agent
+removes the pending copy only after the control plane accepts its successful
+terminal report. Keep `--host-rollback-dir` on durable local storage: losing or
+corrupting that state makes the agent refuse recovery rather than silently
+generating another subject key for the same job.
+
 The retained fallback applies only when there is no CSR and the target is not
 agent-executed. It calls the same control-plane key generator for first issuance
 and renewal, and records `issuance.server_side_keygen`. The key is held in locked
