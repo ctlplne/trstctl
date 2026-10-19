@@ -78,6 +78,15 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			"this agent build cannot sign certificate custody receipts")
 		return false
 	}
+	var hostRenewReporter HostRenewReceiptChannel
+	if hostRollback != nil && intent.PQCRunID == "" {
+		hostRenewReporter, ok = ch.(HostRenewReceiptChannel)
+		if !ok {
+			report(ctx, ch, job, OutcomeFailed,
+				"this agent build cannot recover an acknowledged host issuance report")
+			return false
+		}
+	}
 	if !ExecutesOnHost(intent.Connector) {
 		// B2 is host-only by construction. A relay generating a key for an
 		// appliance it merely reaches would rebuild the custody hop this epic
@@ -294,8 +303,15 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "the installed key custody could not be classified")
 		return false
 	}
-	accepted, reportErr := custodyReporter.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt,
-		outcome, detail, evidence, fingerprint, record)
+	var accepted bool
+	var reportErr error
+	if hostRenewReporter != nil {
+		accepted, reportErr = hostRenewReporter.ReportHostRenewResultWithCustody(ctx, job.JobID, job.Attempt,
+			outcome, detail, evidence, fingerprint, record, intent.Connector, intent.TargetID, ordinaryBinding)
+	} else {
+		accepted, reportErr = custodyReporter.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt,
+			outcome, detail, evidence, fingerprint, record)
+	}
 	logReportOutcome(job, outcome, accepted, reportErr)
 	if accepted && reportErr == nil && outcome == transport.OutcomeVerified && intent.PQCRunID != "" {
 		if err := hostRollback.ClearPQCPending(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PQCAssetID); err != nil {

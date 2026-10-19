@@ -113,7 +113,10 @@ its tenant-bound, `0600` host rollback directory. If the job is claimed again
 after a lost reply or agent restart, it reuses that exact CSR and key; the
 signer's job-scoped idempotency key returns the same signed leaf. The agent
 removes the pending copy only after the control plane accepts its successful
-terminal report. Keep `--host-rollback-dir` on durable local storage: losing or
+terminal report. If the acceptance reply is lost, the agent first replays its
+encrypted original report after restart, clears only that job's pending key
+slot, and then acknowledges the local report before claiming another job.
+Keep `--host-rollback-dir` on durable local storage: losing or
 corrupting that state makes the agent refuse recovery rather than silently
 generating another subject key for the same job.
 

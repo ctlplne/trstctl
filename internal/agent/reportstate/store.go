@@ -27,13 +27,22 @@ const maxRecordBytes = 4 << 20
 // signature for a later transmission. Detail can contain untrusted device text;
 // it stays byte-backed and is encrypted on disk, never written to a plain file.
 type Observation struct {
-	JobID                 int64           `json:"job_id"`
-	Attempt               int             `json:"attempt"`
-	Outcome               string          `json:"outcome"`
-	Detail                []byte          `json:"detail"`
-	EvidenceDigest        string          `json:"evidence_digest"`
-	CredentialFingerprint string          `json:"credential_fingerprint"`
-	Custody               *custody.Record `json:"custody,omitempty"`
+	JobID                 int64             `json:"job_id"`
+	Attempt               int               `json:"attempt"`
+	Outcome               string            `json:"outcome"`
+	Detail                []byte            `json:"detail"`
+	EvidenceDigest        string            `json:"evidence_digest"`
+	CredentialFingerprint string            `json:"credential_fingerprint"`
+	Custody               *custody.Record   `json:"custody,omitempty"`
+	HostRenew             *HostRenewCleanup `json:"host_renew,omitempty"`
+}
+
+// HostRenewCleanup is local-only recovery metadata. It is sealed with the
+// terminal observation and never included in the signed wire report.
+type HostRenewCleanup struct {
+	Connector string `json:"connector"`
+	TargetID  string `json:"target_id"`
+	Binding   string `json:"binding"`
 }
 
 func (o *Observation) Destroy() {
@@ -338,6 +347,12 @@ func validate(o Observation) error {
 	if o.JobID <= 0 || o.Attempt <= 0 {
 		return errors.New("reportstate: original job and attempt are required")
 	}
+	if o.HostRenew != nil {
+		if (o.Outcome != "verified" && o.Outcome != "executed") || o.Custody == nil || o.CredentialFingerprint == "" ||
+			o.HostRenew.Connector == "" || o.HostRenew.TargetID == "" || len(o.HostRenew.Binding) != 64 {
+			return errors.New("reportstate: invalid host renewal cleanup binding")
+		}
+	}
 	switch o.Outcome {
 	case "executed", "verified", "verify_failed", "failed":
 		return nil
@@ -350,7 +365,14 @@ func same(a, b Observation) bool {
 		return false
 	}
 	if a.Custody == nil || b.Custody == nil {
-		return a.Custody == nil && b.Custody == nil
+		if a.Custody != nil || b.Custody != nil {
+			return false
+		}
+	} else if *a.Custody != *b.Custody {
+		return false
 	}
-	return *a.Custody == *b.Custody
+	if a.HostRenew == nil || b.HostRenew == nil {
+		return a.HostRenew == nil && b.HostRenew == nil
+	}
+	return *a.HostRenew == *b.HostRenew
 }

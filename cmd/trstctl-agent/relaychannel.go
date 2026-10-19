@@ -35,6 +35,7 @@ type relayChannel struct {
 	now          func() time.Time
 	leaseSeconds int
 	pending      *reportstate.Store
+	hostRollback *relay.HostRollbackStore
 }
 
 func (r relayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt int) (time.Time, error) {
@@ -134,6 +135,30 @@ func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int6
 	}
 	return r.sendSignedReport(ctx, req)
 }
+
+func (r relayChannel) ReportHostRenewResultWithCustody(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record,
+	connectorName, targetID, payloadBinding string) (bool, error) {
+	if outcome != transport.JobOutcomeVerified && outcome != transport.JobOutcomeExecuted {
+		return r.ReportJobResultWithCustody(ctx, jobID, attempt, outcome, detail, evidenceDigest, credentialFingerprint, record)
+	}
+	id := r.id()
+	if id == nil || r.pending == nil || r.hostRollback == nil {
+		return false, errors.New("trstctl-agent: host renewal requires durable report and rollback stores")
+	}
+	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+		record.GeneratedBy = id.CommonName()
+	}
+	value := reportstate.Observation{
+		JobID: jobID, Attempt: attempt, Outcome: outcome, Detail: []byte(detail),
+		EvidenceDigest: evidenceDigest, CredentialFingerprint: credentialFingerprint, Custody: &record,
+		HostRenew: &reportstate.HostRenewCleanup{Connector: connectorName, TargetID: targetID, Binding: payloadBinding},
+	}
+	defer value.Destroy()
+	return r.retainAndSendReport(ctx, value)
+}
+
+var _ relay.HostRenewReceiptChannel = relayChannel{}
 
 var _ relay.CustodyReceiptChannel = relayChannel{}
 

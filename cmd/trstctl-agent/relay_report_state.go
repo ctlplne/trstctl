@@ -75,6 +75,15 @@ func (r relayChannel) sendObservation(ctx context.Context, value reportstate.Obs
 	if err != nil || !accepted || r.pending == nil {
 		return accepted, err
 	}
+	if value.HostRenew != nil {
+		if r.hostRollback == nil {
+			return false, errors.New("trstctl-agent: accepted host report has no rollback store for cleanup")
+		}
+		if err := r.hostRollback.ClearHostRenewPending(value.HostRenew.Connector, value.HostRenew.TargetID,
+			value.JobID, value.HostRenew.Binding, value.CredentialFingerprint); err != nil {
+			return false, fmt.Errorf("clear accepted host renewal key before acknowledging report: %w", err)
+		}
+	}
 	if err := r.pending.Acknowledge(value); err != nil {
 		return false, fmt.Errorf("persist terminal report acknowledgement: %w", err)
 	}

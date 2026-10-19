@@ -45,6 +45,15 @@ type CustodyReceiptChannel interface {
 		evidenceDigest, credentialFingerprint string, record custody.Record) (bool, error)
 }
 
+// HostRenewReceiptChannel binds successful terminal-report recovery to the
+// encrypted host key slot. A channel lacking this capability cannot safely
+// start an ordinary host issuance with a durable rollback store.
+type HostRenewReceiptChannel interface {
+	ReportHostRenewResultWithCustody(ctx context.Context, jobID int64, attempt int, outcome, detail,
+		evidenceDigest, credentialFingerprint string, record custody.Record,
+		connectorName, targetID, payloadBinding string) (bool, error)
+}
+
 // Job is one claimed unit of work as the relay sees it.
 type Job struct {
 	JobID   int64

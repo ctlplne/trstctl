@@ -9,11 +9,116 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/reportstate"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
 )
+
+func TestRecoveredHostReportClearsOnlyItsPendingKeyBeforeNextClaim(t *testing.T) {
+	const tenant = "receipt-retry-tenant"
+	const connector = "apache"
+	const target = "target-a"
+	const jobID int64 = 91
+	binding := strings.Repeat("b", 64)
+	fingerprint := strings.Repeat("a", 64)
+	rollback, err := relay.NewHostRollbackStore(t.TempDir(), tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rollback.RecordHostRenewKey(connector, target, jobID, binding, []byte("csr"), []byte("private-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := rollback.RecordHostRenewCertificate(connector, target, jobID, binding, []byte("certificate"), nil, fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	var permit atomic.Bool
+	var claims atomic.Int32
+	ch := newReceiptRetryChannel(t, func(_ context.Context, req *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
+		if req.JobID != jobID || req.CredentialFingerprint != fingerprint {
+			t.Error("recovered report lost its original certificate identity")
+		}
+		return &transport.ReportJobResultResponse{Accepted: permit.Load()}, nil
+	}, func(s *receiptRetryChannelServer) {
+		s.claim = func(context.Context, *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
+			claims.Add(1)
+			return &transport.ClaimJobsResponse{}, nil
+		}
+	})
+	ch.hostRollback = rollback
+	dir := t.TempDir()
+	pending, err := reportstate.Open(dir, "original-identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch.pending = pending
+	accepted, err := ch.ReportHostRenewResultWithCustody(t.Context(), jobID, 1, transport.JobOutcomeVerified,
+		"served", "", fingerprint, custody.Record{Origin: custody.OriginHostAgent, Storage: custody.StorageFile, Exportable: custody.Exportable},
+		connector, target, binding)
+	if err != nil || accepted {
+		t.Fatalf("first report should remain durable and unacknowledged: %v %v", accepted, err)
+	}
+	if _, err := ch.ClaimJobs(t.Context(), []string{"endpoint.renew"}, 1, 60); err == nil || claims.Load() != 0 {
+		t.Fatal("claimed new work before original report was accepted")
+	}
+	if err := pending.Close(); err != nil {
+		t.Fatal(err)
+	}
+	pending, err = reportstate.Open(dir, "original-identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pending.Close() }()
+	ch.pending = pending
+	permit.Store(true)
+	if _, err := ch.ClaimJobs(t.Context(), []string{"endpoint.renew"}, 1, 60); err != nil || claims.Load() != 1 {
+		t.Fatalf("recovery did not resume claims: %v", err)
+	}
+	if value, err := rollback.LoadHostRenewPending(connector, target, jobID, binding); err != nil || value != nil {
+		t.Fatalf("accepted report left pending key in target slot: %v", err)
+	}
+	if value, err := pending.Pending(); err != nil || value != nil {
+		t.Fatalf("accepted report still retained terminal observation: %v", err)
+	}
+}
+
+func TestAcceptedHostReportWithWrongPendingFingerprintBlocksNextClaim(t *testing.T) {
+	rollback, err := relay.NewHostRollbackStore(t.TempDir(), "receipt-retry-tenant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := strings.Repeat("b", 64)
+	if err := rollback.RecordHostRenewKey("apache", "target-a", 91, binding, []byte("csr"), []byte("private-key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := rollback.RecordHostRenewCertificate("apache", "target-a", 91, binding, []byte("certificate"), nil, strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	var claims atomic.Int32
+	ch := newReceiptRetryChannel(t, func(context.Context, *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
+		return &transport.ReportJobResultResponse{Accepted: true}, nil
+	}, func(s *receiptRetryChannelServer) {
+		s.claim = func(context.Context, *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
+			claims.Add(1)
+			return &transport.ClaimJobsResponse{}, nil
+		}
+	})
+	pending, err := reportstate.Open(t.TempDir(), "original-identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pending.Close() }()
+	ch.pending, ch.hostRollback = pending, rollback
+	if accepted, err := ch.ReportHostRenewResultWithCustody(t.Context(), 91, 1, transport.JobOutcomeVerified,
+		"served", "", strings.Repeat("c", 64), custody.Record{Origin: custody.OriginHostAgent, Storage: custody.StorageFile, Exportable: custody.Exportable},
+		"apache", "target-a", binding); err == nil || accepted {
+		t.Fatalf("mismatched certificate cleared the pending key: %v %v", accepted, err)
+	}
+	if _, err := ch.ClaimJobs(t.Context(), []string{"endpoint.renew"}, 1, 60); err == nil || claims.Load() != 0 {
+		t.Fatal("claimed new work while accepted report could not clear its exact pending key")
+	}
+}
 
 func TestDurableReportRefusalBlocksClaimsAndLaterAttestsOriginal(t *testing.T) {
 	testDurableReportAcknowledgement(t, false)

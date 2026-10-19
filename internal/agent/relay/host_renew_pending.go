@@ -206,6 +206,12 @@ func (s *HostRollbackStore) ClearHostRenewPending(connectorName, targetID string
 	lock.Lock()
 	defer lock.Unlock()
 	p, err := s.loadHostRenew(connectorName, targetID)
+	// A report may be accepted, the slot cleared, and the process stopped
+	// before its encrypted terminal observation is acknowledged. Retrying
+	// that exact report must be able to finish this cleanup again.
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

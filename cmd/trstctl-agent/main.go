@@ -783,6 +783,11 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		}
 		fmt.Printf("trstctl-agent: encrypted host rollback state enabled at %s\n", stateDir)
 	}
+	if pendingReports != nil {
+		reporter := relayCh.(relayChannel)
+		reporter.hostRollback = hostRollback
+		relayCh = reporter
+	}
 	if relayTimer != nil {
 		defer relayTimer.Stop()
 	}

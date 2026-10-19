@@ -51,6 +51,11 @@ func (r *renewChannel) ReportJobResultWithCustody(ctx context.Context, jobID int
 	return r.ReportJobResult(ctx, jobID, attempt, outcome, detail, evidence)
 }
 
+func (r *renewChannel) ReportHostRenewResultWithCustody(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidence, fingerprint string, record custody.Record, _, _, _ string) (bool, error) {
+	return r.ReportJobResultWithCustody(ctx, jobID, attempt, outcome, detail, evidence, fingerprint, record)
+}
+
 func renewJob(t *testing.T, intent relay.DeployIntent) relay.Job {
 	t.Helper()
 	payload, err := json.Marshal(intent)
