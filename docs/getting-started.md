@@ -225,6 +225,9 @@ your user. Keep that key on this machine. `payments.csr` is public and is the on
 file to paste into the wizard. A real deployment must request the DNS name its
 clients actually use; this example does not configure DNS or install a certificate
 on a service.
+The console's copyable CSR command also sets `umask 077` inside a subshell. It
+appears only when the entered credential name can safely serve as a DNS name;
+for another subject shape, generate the key and public CSR with your local tools.
 
 Fill in every field:
 

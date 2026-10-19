@@ -5076,6 +5076,11 @@ export const messages = {
     defaultMessage: "Generate one on that host. This example uses the credential name as its DNS name; change the SAN if clients connect using another name:",
     description: "B1: introduces the CSR command and explains that its DNS SAN must match the name clients use.",
   },
+  "request.csr.exampleNameUnsafe": {
+    defaultMessage:
+      "Enter a DNS name using letters, digits, hyphens, and dots to get a copyable command. For another subject shape, generate the key and public CSR with your local tools.",
+    description: "Do not interpolate a free-form credential name into a shell command or DNS SAN.",
+  },
   "request.csr.help": {
     defaultMessage:
       "Paste a CSR you generated on the host that will use this certificate. trstctl signs it and never sees your private key. This is the fallback for hosts with no agent \u2014 where an agent is enrolled it generates the key and submits the request itself, and you do not touch key material at all.",
@@ -23033,8 +23038,9 @@ export const messages = {
   },
   "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": {
     defaultMessage:
-      'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}" -addext "subjectAltName=DNS:{value1}"',
-    description: "B1: the command that generates a keypair and CSR on the requester's own host. Technical identifiers stay byte-identical in every locale.",
+      '(umask 077; openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}" -addext "subjectAltName=DNS:{value1}")',
+    description:
+      "B1: generate a host-held keypair and CSR in a subshell that makes the private key owner-only. Technical identifiers stay byte-identical in every locale.",
   },
   "source.operate.58c3939c4c": {
     defaultMessage: "Operate",

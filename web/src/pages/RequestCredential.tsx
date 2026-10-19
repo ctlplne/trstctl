@@ -21,6 +21,7 @@ import { api, ApiError, type IssuanceRequest, type IssuanceRequestInput, type Is
 import type { EndpointIssuer } from "@/lib/api-types.gen";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { safeCSRExampleName } from "@/lib/csrCommand";
 
 function problemMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
@@ -163,6 +164,7 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
   const selectedProfileKey = useWatch({ control, name: "profileKey" });
   const selectedIssuerKey = useWatch({ control, name: "issuerKey" });
   const name = useWatch({ control, name: "name" });
+  const csrExampleName = safeCSRExampleName(name.trim() || "service");
   const ownerId = useWatch({ control, name: "ownerId" });
   const purpose = useWatch({ control, name: "purpose" });
   const subjectCSRPEM = useWatch({ control, name: "subjectCSRPEM" });
@@ -595,9 +597,13 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
                   </Field>
                   <div className="grid gap-1 rounded-panel border border-border bg-muted/40 p-3 text-caption">
                     <span className="text-muted-foreground">{t("request.csr.generate")}</span>
-                    <code className="break-all font-mono text-xs">
-                      {translateNow("source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2", { value1: name.trim() || "service" })}
-                    </code>
+                    {csrExampleName ? (
+                      <code className="break-all font-mono text-xs">
+                        {translateNow("source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2", { value1: csrExampleName })}
+                      </code>
+                    ) : (
+                      <span className="text-muted-foreground">{t("request.csr.exampleNameUnsafe")}</span>
+                    )}
                     <span className="text-muted-foreground">{t(replacementID ? "request.recovery.csrRequired" : "request.csr.omitted")}</span>
                   </div>
                 </div>

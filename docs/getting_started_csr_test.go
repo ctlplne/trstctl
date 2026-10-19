@@ -20,10 +20,12 @@ func TestGettingStartedOpenSSLCSRPassesIssuanceParser(t *testing.T) {
 
 	lines := strings.Split(read(t, "getting-started.md"), "\n")
 	var command []string
+	commandLine := -1
 	for i, line := range lines {
 		if !strings.HasPrefix(line, "openssl req -new -newkey ec ") {
 			continue
 		}
+		commandLine = i
 		for ; i < len(lines); i++ {
 			command = append(command, lines[i])
 			if !strings.HasSuffix(strings.TrimSpace(lines[i]), "\\") {
@@ -48,17 +50,33 @@ func TestGettingStartedOpenSSLCSRPassesIssuanceParser(t *testing.T) {
 		t.Fatalf("documented CSR command changed: got %q, want %q", documentedArgs, wantArgs)
 	}
 
+	// Execute the whole documented shell block. OpenSSL itself does not
+	// promise owner-only output on every stock client; the preceding umask is
+	// part of the operator command and must be tested with it.
+	start := -1
+	for i := commandLine; i >= 0; i-- {
+		if lines[i] == "```bash" {
+			start = i + 1
+			break
+		}
+	}
+	end := commandLine
+	for end < len(lines) && lines[end] != "```" {
+		end++
+	}
+	if start < 0 || end == len(lines) || !slices.Contains(lines[start:end], "umask 077") {
+		t.Fatal("first-certificate shell block must set umask 077 before writing a private key")
+	}
 	dir := t.TempDir()
-	cmd := exec.Command("openssl", "req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
-		"-pkeyopt", "ec_param_enc:named_curve", "-nodes", "-keyout", "payments.key", "-out", "payments.csr",
-		"-subj", "/CN=payments.svc", "-addext", "subjectAltName=DNS:payments.svc")
+	cmd := exec.Command("sh")
+	cmd.Stdin = strings.NewReader(strings.Join(lines[start:end], "\n"))
 	cmd.Dir = dir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("documented CSR command failed: %v: %s", err, output)
 	}
 
 	inspect := exec.Command("openssl", "req", "-in", "payments.csr", "-outform", "PEM")
-	inspect.Dir = dir
+	inspect.Dir = filepath.Join(dir, "trstctl-first-certificate")
 	csr, err := inspect.CombinedOutput()
 	if err != nil {
 		t.Fatalf("read generated public CSR: %v: %s", err, csr)
@@ -70,7 +88,7 @@ func TestGettingStartedOpenSSLCSRPassesIssuanceParser(t *testing.T) {
 	if info.KeyAlgorithm != "ECDSA" || info.KeyBits != 256 || info.CommonName != "payments.svc" || !slices.Equal(info.DNSNames, []string{"payments.svc"}) {
 		t.Fatalf("documented CSR lost its intended key or DNS identity: %+v", info)
 	}
-	key, err := os.Stat(filepath.Join(dir, "payments.key"))
+	key, err := os.Stat(filepath.Join(dir, "trstctl-first-certificate", "payments.key"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +117,10 @@ func TestRequestWizardOpenSSLCSRIncludesDNSIdentity(t *testing.T) {
 	message = strings.SplitN(strings.TrimSpace(message), "\n", 2)[0]
 	message = strings.Trim(message, "',")
 	message = strings.ReplaceAll(message, "{value1}", "gui.payments.svc")
-	args := strings.Fields(message)
+	if !strings.HasPrefix(message, "(umask 077; ") || !strings.HasSuffix(message, ")") {
+		t.Fatal("request wizard CSR command must protect the new private key in its own shell")
+	}
+	args := strings.Fields(strings.TrimSuffix(strings.TrimPrefix(message, "(umask 077; "), ")"))
 	for i := range args {
 		args[i] = strings.Trim(args[i], `"`)
 	}
@@ -112,9 +133,8 @@ func TestRequestWizardOpenSSLCSRIncludesDNSIdentity(t *testing.T) {
 		t.Fatalf("wizard OpenSSL command changed: got %q, want %q", args, wantArgs)
 	}
 	dir := t.TempDir()
-	cmd := exec.Command("openssl", "req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
-		"-pkeyopt", "ec_param_enc:named_curve", "-nodes", "-keyout", "gui.payments.svc.key",
-		"-out", "gui.payments.svc.csr", "-subj", "/CN=gui.payments.svc", "-addext", "subjectAltName=DNS:gui.payments.svc")
+	cmd := exec.Command("sh")
+	cmd.Stdin = strings.NewReader("umask 022; " + message)
 	cmd.Dir = dir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("wizard OpenSSL command failed: %v: %s", err, output)
@@ -131,5 +151,12 @@ func TestRequestWizardOpenSSLCSRIncludesDNSIdentity(t *testing.T) {
 	}
 	if info.CommonName != "gui.payments.svc" || !slices.Equal(info.DNSNames, []string{"gui.payments.svc"}) {
 		t.Fatalf("wizard CSR lost requested DNS identity: %+v", info)
+	}
+	privateKeyInfo, err := os.Stat(filepath.Join(dir, "gui.payments.svc.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if privateKeyInfo.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("wizard private key is readable outside its owner: %v", privateKeyInfo.Mode().Perm())
 	}
 }
