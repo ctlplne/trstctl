@@ -821,6 +821,7 @@ trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f
 # replacement was issued or deployed. Credential jobs require an immutable
 # successor/host plan before this command will queue them.
 trstctl-cli ca keys retirement <predecessor-ca-authority-id>
+trstctl-cli ca keys reprotect preview <predecessor-ca-authority-id> -f reprotect-plan.json
 trstctl-cli ca keys reprotect plan <predecessor-ca-authority-id> -f reprotect-plan.json
 # {"certificate_id":"<outstanding inventory certificate ID>",
 #  "successor_authority_id":"<active successor CA ID>",
@@ -830,8 +831,12 @@ trstctl-cli ca keys reprotect plan <predecessor-ca-authority-id> -f reprotect-pl
 #  "ttl_seconds":600}
 # The server derives the job, one managed identity, old SPKI, assigned host
 # agent, connector and listener probe from tenant-scoped records. The plan
-# receipt shows those exact bindings. Ambiguous certificate-to-identity links
-# refuse. A changed target, certificate or successor requires a new review.
+# preview is effect-free and shows those exact bindings. Registration rechecks
+# current state and writes a first-writer plan; a lost response is recovered by
+# job ID (the CLI URL-escapes the job ID, which contains slashes).
+trstctl-cli ca keys reprotect plan get <predecessor-ca-authority-id> <job-id>
+# Ambiguous certificate-to-identity links refuse. A changed target,
+# certificate or successor requires a new review.
 trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 
 # For one expired requester-held managed CA leaf with no managed deployment,

@@ -310,11 +310,12 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// VDEC's CA-key re-protection queue now has the same headless command as its
 	// served mutation; its receipt reports queueing, never deployed completion.
 	// The immutable certificate/host/successor plan adds one reviewed command.
+	// Effect-free plan preview and exact immutable-plan readback add two commands.
 	// VDEC's failed retirement delivery now has an exact-command, one-attempt
 	// recovery command; the count grows with its feature-map entry.
 	// F48 adds existing-CA CSR preparation and exact readback commands.
-	if len(out) != 543 {
-		t.Fatalf("CLI commands = %d, want 543", len(out))
+	if len(out) != 545 {
+		t.Fatalf("CLI commands = %d, want 545", len(out))
 	}
 	return out
 }

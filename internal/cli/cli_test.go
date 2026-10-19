@@ -433,6 +433,21 @@ func TestCAReprotectionPlanCommandSendsOnlyReviewedPublicSelection(t *testing.T)
 	}
 }
 
+func TestCAReprotectionPreviewAndPlanReadbackCommands(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK, `{"job_id":"job-1","ready":true,"effect_free":true}`, &captured)
+	env := cli.Env{Server: srv.URL, Token: "fixture-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+	body := `{"certificate_id":"leaf-1","successor_authority_id":"ca-new","target_id":"host-1","expected_target_revision":"rev-1","expected_fingerprint":"old","ttl_seconds":600}`
+	code, _, stderr := run(t, []string{"ca", "keys", "reprotect", "preview", "ca-old", "-f", "-"}, env, body)
+	if code != 0 || stderr != "" || captured.Method != http.MethodPost || captured.Path != "/api/v1/ca/keys/ca-old/reprotect/plans/preview" || captured.Header.Get("Idempotency-Key") != "" || !sameJSON(captured.Body, []byte(body)) {
+		t.Fatalf("effect-free preview command exit=%d stderr=%q method=%s path=%s idempotency=%q body=%s", code, stderr, captured.Method, captured.Path, captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+	code, _, stderr = run(t, []string{"ca", "keys", "reprotect", "plan", "get", "ca-old", "vdec-reprotect/tenant/key/job"}, env, "")
+	if code != 0 || stderr != "" || captured.Method != http.MethodGet || captured.Path != "/api/v1/ca/keys/ca-old/reprotect/plans/vdec-reprotect/tenant/key/job" {
+		t.Fatalf("plan readback command exit=%d stderr=%q method=%s path=%s", code, stderr, captured.Method, captured.Path)
+	}
+}
+
 func TestPCASRetirementCommandsBindIdentityAndPolicy(t *testing.T) {
 	var captured capture
 	srv := mockServer(t, http.StatusOK,

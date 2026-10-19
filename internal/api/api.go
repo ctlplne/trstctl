@@ -1637,6 +1637,7 @@ func (a *API) extensionRouteRegistry(extensions []LicensedRoute, commercial bool
 			resSchema:         lr.ResponseSchema,
 			successCode:       lr.SuccessCode,
 			mutation:          lr.Mutation,
+			readOnly:          lr.ReadOnly,
 			sensitiveResponse: lr.SensitiveResponse,
 			perm:              lr.Permission,
 		})

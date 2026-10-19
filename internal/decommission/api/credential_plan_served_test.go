@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,6 +123,25 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	t.Cleanup(func() { _ = log.Close() })
 	outbox := orchestrator.NewOutbox(st)
 	served := newServedAPI(t, st, outbox, log)
+	contract := httptest.NewRecorder()
+	served.ServeHTTP(contract, httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil))
+	if contract.Code != http.StatusOK {
+		t.Fatalf("served OpenAPI = %d", contract.Code)
+	}
+	var spec struct {
+		Paths map[string]map[string]struct {
+			OperationID string `json:"operationId"`
+			ReadOnly    bool   `json:"x-trstctl-read-only"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(contract.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	previewOp := spec.Paths["/api/v1/ca/keys/{id}/reprotect/plans/preview"]["post"]
+	readOp := spec.Paths["/api/v1/ca/keys/{id}/reprotect/plans/{job_id}"]["get"]
+	if previewOp.OperationID != "previewCAKeyReprotectionPlan" || !previewOp.ReadOnly || readOp.OperationID != "getCAKeyReprotectionPlan" {
+		t.Fatalf("review/readback OpenAPI contracts missing: preview=%+v read=%+v", previewOp, readOp)
+	}
 	targetRead := httptest.NewRecorder()
 	served.ServeHTTP(targetRead, httptest.NewRequest(http.MethodGet, "/api/v1/connectors/targets/"+targetID, nil))
 	if targetRead.Code != http.StatusOK {
@@ -140,6 +160,31 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 		rr := httptest.NewRecorder()
 		served.ServeHTTP(rr, req)
 		return rr
+	}
+	previewBody, _ := json.Marshal(map[string]any{"certificate_id": cert.ID, "successor_authority_id": successor.ID, "target_id": targetID, "expected_target_revision": target.RevisionID, "expected_fingerprint": info.SHA256Fingerprint, "ttl_seconds": 600})
+	previewRequest := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect/plans/preview", strings.NewReader(string(previewBody)))
+	preview := httptest.NewRecorder()
+	served.ServeHTTP(preview, previewRequest)
+	if preview.Code != http.StatusOK {
+		t.Fatalf("effect-free reviewed plan preview = %d %s, want 200", preview.Code, preview.Body.String())
+	}
+	var previewReceipt struct {
+		JobID      string `json:"job_id"`
+		IdentityID string `json:"identity_id"`
+		Ready      bool   `json:"ready"`
+		EffectFree bool   `json:"effect_free"`
+	}
+	if err := json.Unmarshal(preview.Body.Bytes(), &previewReceipt); err != nil || !previewReceipt.Ready || !previewReceipt.EffectFree || previewReceipt.JobID == "" || previewReceipt.IdentityID != identityID {
+		t.Fatalf("preview lost exact derived plan binding: %+v err=%v", previewReceipt, err)
+	}
+	if _, found, err := reprotect.NewCredentialPlanLedger(log, st).Load(ctx, tenantA, previewReceipt.JobID); err != nil || found {
+		t.Fatalf("preview wrote an immutable plan: found=%t err=%v", found, err)
+	}
+	stalePreview := httptest.NewRecorder()
+	staleBody, _ := json.Marshal(map[string]any{"certificate_id": cert.ID, "successor_authority_id": successor.ID, "target_id": targetID, "expected_target_revision": "stale", "expected_fingerprint": info.SHA256Fingerprint, "ttl_seconds": 600})
+	served.ServeHTTP(stalePreview, httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect/plans/preview", strings.NewReader(string(staleBody))))
+	if stalePreview.Code != http.StatusConflict {
+		t.Fatalf("stale preview = %d %s, want 409", stalePreview.Code, stalePreview.Body.String())
 	}
 	if rr := post("stale-revision", "stale", info.SHA256Fingerprint, successor.ID); rr.Code != http.StatusConflict {
 		t.Fatalf("stale target revision = %d %s, want 409 before plan append", rr.Code, rr.Body.String())
@@ -161,6 +206,19 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	}
 	if err := json.Unmarshal(first.Body.Bytes(), &result); err != nil || !result.Recorded || result.JobID == "" || result.IdentityID != identityID || result.PredecessorSPKISHA256 != info.SPKISHA256 || result.RequiredAgentID != agentID || result.TargetRevisionID != target.RevisionID {
 		t.Fatalf("reviewed plan lost derived binding: %+v err=%v", result, err)
+	}
+	if result.JobID != previewReceipt.JobID {
+		t.Fatalf("registered job %s differs from reviewed job %s", result.JobID, previewReceipt.JobID)
+	}
+	readback := httptest.NewRecorder()
+	served.ServeHTTP(readback, httptest.NewRequest(http.MethodGet, "/api/v1/ca/keys/"+old.ID+"/reprotect/plans/"+url.PathEscape(result.JobID), nil))
+	if readback.Code != http.StatusOK || !strings.Contains(readback.Body.String(), `"recorded":true`) || !strings.Contains(readback.Body.String(), result.JobID) {
+		t.Fatalf("durable plan readback = %d %s", readback.Code, readback.Body.String())
+	}
+	wrongCA := httptest.NewRecorder()
+	served.ServeHTTP(wrongCA, httptest.NewRequest(http.MethodGet, "/api/v1/ca/keys/"+successor.ID+"/reprotect/plans/"+url.PathEscape(result.JobID), nil))
+	if wrongCA.Code != http.StatusNotFound {
+		t.Fatalf("plan readback crossed predecessor CA boundary: %d %s", wrongCA.Code, wrongCA.Body.String())
 	}
 	if again := post("reviewed-plan-retry", target.RevisionID, info.SHA256Fingerprint, successor.ID); again.Code != http.StatusOK {
 		t.Fatalf("exact plan replay = %d %s, want 200", again.Code, again.Body.String())

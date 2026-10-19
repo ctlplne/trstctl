@@ -178,6 +178,79 @@ type CredentialPlanReceipt struct {
 	Recorded               bool   `json:"recorded"`
 }
 
+type CredentialPlanPreview struct {
+	CredentialPlanReceipt
+	Ready      bool `json:"ready"`
+	EffectFree bool `json:"effect_free"`
+}
+
+func credentialPlanReceipt(plan reprotect.CredentialPlan, recorded bool) CredentialPlanReceipt {
+	return CredentialPlanReceipt{
+		JobID: plan.Job.ID, IdentityID: plan.IdentityID, CertificateID: plan.Job.Dependent.ID,
+		SuccessorAuthorityID: plan.SuccessorAuthorityID, PredecessorFingerprint: plan.PredecessorFingerprint,
+		PredecessorSPKISHA256: plan.PredecessorSPKISHA256, TargetID: plan.TargetID,
+		TargetRevisionID: plan.TargetRevisionID, RequiredAgentID: plan.RequiredAgentID,
+		Connector: plan.Connector, VerifyAddress: plan.VerifyAddress,
+		VerifyServerName: plan.VerifyServerName, TTLSeconds: plan.TTLSeconds, Recorded: recorded,
+	}
+}
+
+func credentialPlanError(err error) error {
+	switch {
+	case errors.Is(err, reprotect.ErrCredentialPlanNotFound):
+		return api.ErrWithStatus(http.StatusNotFound, err)
+	case errors.Is(err, reprotect.ErrCredentialPlanTargetChanged),
+		errors.Is(err, reprotect.ErrCredentialPlanNotReady),
+		errors.Is(err, reprotect.ErrCompletionConflict):
+		return api.ErrWithStatus(http.StatusConflict, err)
+	case errors.Is(err, reprotect.ErrInvalidState):
+		return api.ErrWithStatus(http.StatusBadRequest, err)
+	default:
+		return err
+	}
+}
+
+func credentialPlanPreviewHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			a.WriteProblemUnauthorized(w)
+			return
+		}
+		var input reprotect.CredentialPlanSelection
+		if err := api.DecodeJSONStrict(r, &input); err != nil {
+			a.WriteError(w, api.ErrWithStatus(http.StatusBadRequest, err))
+			return
+		}
+		plan, err := enq.PreviewCredentialPlan(r.Context(), tenantID, r.PathValue("id"), input)
+		if err != nil {
+			a.WriteError(w, credentialPlanError(err))
+			return
+		}
+		a.WriteJSON(w, http.StatusOK, CredentialPlanPreview{CredentialPlanReceipt: credentialPlanReceipt(plan, false), Ready: true, EffectFree: true})
+	}
+}
+
+func credentialPlanReadbackHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			a.WriteProblemUnauthorized(w)
+			return
+		}
+		plan, found, err := enq.LoadCredentialPlan(r.Context(), tenantID, r.PathValue("id"), r.PathValue("job_id"))
+		if err != nil {
+			a.WriteError(w, credentialPlanError(err))
+			return
+		}
+		if !found {
+			a.WriteError(w, api.ErrStatus(http.StatusNotFound, "re-protection plan not found for this CA and tenant"))
+			return
+		}
+		a.WriteJSON(w, http.StatusOK, credentialPlanReceipt(plan, true))
+	}
+}
+
 func credentialPlanHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
@@ -191,29 +264,10 @@ func credentialPlanHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc
 			}
 			plan, recorded, err := enq.RegisterCredentialPlan(ctx, tenantID, r.PathValue("id"), input)
 			if err != nil {
-				switch {
-				case errors.Is(err, reprotect.ErrCredentialPlanNotFound):
-					err = api.ErrWithStatus(http.StatusNotFound, err)
-				case errors.Is(err, reprotect.ErrCredentialPlanTargetChanged),
-					errors.Is(err, reprotect.ErrCredentialPlanNotReady),
-					errors.Is(err, reprotect.ErrCompletionConflict):
-					err = api.ErrWithStatus(http.StatusConflict, err)
-				case errors.Is(err, reprotect.ErrInvalidState):
-					err = api.ErrWithStatus(http.StatusBadRequest, err)
-				}
-				opErr = err
-				return 0, nil, err
+				opErr = credentialPlanError(err)
+				return 0, nil, opErr
 			}
-			receipt := CredentialPlanReceipt{
-				JobID: plan.Job.ID, IdentityID: plan.IdentityID, CertificateID: plan.Job.Dependent.ID,
-				SuccessorAuthorityID:   plan.SuccessorAuthorityID,
-				PredecessorFingerprint: plan.PredecessorFingerprint,
-				PredecessorSPKISHA256:  plan.PredecessorSPKISHA256,
-				TargetID:               plan.TargetID, TargetRevisionID: plan.TargetRevisionID,
-				RequiredAgentID: plan.RequiredAgentID, Connector: plan.Connector,
-				VerifyAddress: plan.VerifyAddress, VerifyServerName: plan.VerifyServerName,
-				TTLSeconds: plan.TTLSeconds, Recorded: recorded,
-			}
+			receipt := credentialPlanReceipt(plan, recorded)
 			if !recorded {
 				return http.StatusOK, receipt, nil
 			}
@@ -404,12 +458,27 @@ func retirementHandler(a *api.API, coordinator *retirement.Coordinator) http.Han
 func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator, releaser *release.Coordinator) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
+			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect/plans/preview", OperationID: "previewCAKeyReprotectionPlan",
+			Summary:       "Review the exact certificate, successor CA and host route without appending or queueing",
+			Handler:       func(a *api.API) http.HandlerFunc { return credentialPlanPreviewHandler(a, enq) },
+			PathParams:    []api.RouteParam{api.PathStringParam("id", "superseded managed CA authority identifier")},
+			RequestSchema: "VDECCredentialPlanSelection", ResponseSchema: "VDECCredentialPlanPreview",
+			SuccessCode: "200", ReadOnly: true, Permission: authz.KeysWrite,
+		},
+		{
 			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect/plans", OperationID: "registerCAKeyReprotectionPlan",
 			Summary:       "Record one reviewed certificate, successor CA and exact host route before re-protection",
 			Handler:       func(a *api.API) http.HandlerFunc { return credentialPlanHandler(a, enq) },
 			PathParams:    []api.RouteParam{api.PathStringParam("id", "superseded managed CA authority identifier")},
 			RequestSchema: "VDECCredentialPlanSelection", ResponseSchema: "VDECCredentialPlanReceipt",
 			SuccessCode: "201", Mutation: true, Permission: authz.KeysWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/ca/keys/{id}/reprotect/plans/{job_id}", OperationID: "getCAKeyReprotectionPlan",
+			Summary:        "Read the immutable, tenant-bound plan for one CA re-protection job",
+			Handler:        func(a *api.API) http.HandlerFunc { return credentialPlanReadbackHandler(a, enq) },
+			PathParams:     []api.RouteParam{api.PathStringParam("id", "superseded managed CA authority identifier"), api.PathStringParam("job_id", "stable re-protection job identifier")},
+			ResponseSchema: "VDECCredentialPlanReceipt", SuccessCode: "200", Permission: authz.KeysRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect", OperationID: "startCAKeyReprotection",
@@ -464,6 +533,17 @@ func schemas() map[string]*api.Schema {
 		}, "job_id", "identity_id", "certificate_id", "successor_authority_id", "predecessor_fingerprint",
 			"predecessor_spki_sha256", "target_id", "target_revision_id", "required_agent_id",
 			"connector", "verify_address", "verify_server_name", "ttl_seconds", "recorded"),
+		"VDECCredentialPlanPreview": api.ObjectSchema(map[string]*api.Schema{
+			"job_id": api.StringSchema(), "identity_id": api.StringSchema(), "certificate_id": api.StringSchema(),
+			"successor_authority_id": api.StringSchema(), "predecessor_fingerprint": api.StringSchema(),
+			"predecessor_spki_sha256": api.StringSchema(), "target_id": api.StringSchema(),
+			"target_revision_id": api.StringSchema(), "required_agent_id": api.StringSchema(),
+			"connector": api.StringSchema(), "verify_address": api.StringSchema(),
+			"verify_server_name": api.StringSchema(), "ttl_seconds": api.IntegerSchema(),
+			"recorded": api.BooleanSchema(), "ready": api.BooleanSchema(), "effect_free": api.BooleanSchema(),
+		}, "job_id", "identity_id", "certificate_id", "successor_authority_id", "predecessor_fingerprint",
+			"predecessor_spki_sha256", "target_id", "target_revision_id", "required_agent_id",
+			"connector", "verify_address", "verify_server_name", "ttl_seconds", "recorded", "ready", "effect_free"),
 		"VDECReprotectionJob": api.ObjectSchema(map[string]*api.Schema{
 			"id":              api.StringSchema(),
 			"kind":            api.StringSchema(),

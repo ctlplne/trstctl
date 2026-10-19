@@ -238,6 +238,7 @@ type LicensedRoute struct {
 	ResponseSchema    string
 	SuccessCode       string
 	Mutation          bool
+	ReadOnly          bool // effect-free POST whose request body is a reviewed query
 	SensitiveResponse bool
 	Permission        authz.Permission
 }

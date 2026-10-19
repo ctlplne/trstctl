@@ -42,25 +42,40 @@ type CredentialPlanSelection struct {
 // was actually signed by the retiring CA. The worker repeats the revision,
 // installed-key, and served-leaf checks immediately before each external effect.
 func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID string, in CredentialPlanSelection) (CredentialPlan, bool, error) {
-	if e == nil || e.store == nil || e.repo == nil || e.plans == nil {
+	plan, err := e.PreviewCredentialPlan(ctx, tenantID, keyID, in)
+	if err != nil {
+		return CredentialPlan{}, false, err
+	}
+	if e.plans == nil {
 		return CredentialPlan{}, false, ErrEnqueuerUnavailable
+	}
+	recorded, err := e.plans.Record(ctx, plan)
+	return plan, recorded, err
+}
+
+// PreviewCredentialPlan derives the exact command from current tenant state
+// without appending an event, enqueueing work, or contacting the signer/host.
+// Registration repeats every check against fresh state after operator review.
+func (e *Enqueuer) PreviewCredentialPlan(ctx context.Context, tenantID, keyID string, in CredentialPlanSelection) (CredentialPlan, error) {
+	if e == nil || e.store == nil || e.repo == nil {
+		return CredentialPlan{}, ErrEnqueuerUnavailable
 	}
 	if tenantID == "" || keyID == "" || strings.TrimSpace(in.CertificateID) == "" ||
 		strings.TrimSpace(in.SuccessorAuthorityID) == "" || strings.TrimSpace(in.TargetID) == "" ||
 		strings.TrimSpace(in.ExpectedTargetRevision) == "" || strings.TrimSpace(in.ExpectedFingerprint) == "" ||
 		in.TTLSeconds < 60 || in.TTLSeconds > 90*24*3600 {
-		return CredentialPlan{}, false, fmt.Errorf("%w: certificate, successor, target, reviewed revision/fingerprint, and 60-second to 90-day TTL are required", ErrInvalidState)
+		return CredentialPlan{}, fmt.Errorf("%w: certificate, successor, target, reviewed revision/fingerprint, and 60-second to 90-day TTL are required", ErrInvalidState)
 	}
 	state, found, err := e.repo.FetchKeyState(ctx, tenantID, keyID)
 	if err != nil {
-		return CredentialPlan{}, false, err
+		return CredentialPlan{}, err
 	}
 	if !found {
-		return CredentialPlan{}, false, ErrCredentialPlanNotFound
+		return CredentialPlan{}, ErrCredentialPlanNotFound
 	}
 	jobs, err := PlanFromState(state)
 	if err != nil {
-		return CredentialPlan{}, false, err
+		return CredentialPlan{}, err
 	}
 	var selected Job
 	for _, job := range jobs {
@@ -70,49 +85,49 @@ func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID s
 		}
 	}
 	if selected.ID == "" {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	oldCA, err := e.store.GetCAAuthority(ctx, tenantID, keyID)
 	if err != nil {
-		return CredentialPlan{}, false, credentialPlanReadError(err)
+		return CredentialPlan{}, credentialPlanReadError(err)
 	}
 	successor, err := e.store.GetCAAuthority(ctx, tenantID, in.SuccessorAuthorityID)
 	if err != nil {
-		return CredentialPlan{}, false, credentialPlanReadError(err)
+		return CredentialPlan{}, credentialPlanReadError(err)
 	}
 	if oldCA.Status != "superseded" || successor.Status != "active" || successor.ReplacesID == nil ||
 		*successor.ReplacesID != oldCA.ID || successor.SignerHandle == "" || successor.CertificatePEM == "" {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	if successor.NotAfter != nil && time.Until(*successor.NotAfter) < time.Duration(in.TTLSeconds)*time.Second {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	cert, err := e.store.GetCertificate(ctx, tenantID, in.CertificateID)
 	if err != nil {
-		return CredentialPlan{}, false, credentialPlanReadError(err)
+		return CredentialPlan{}, credentialPlanReadError(err)
 	}
 	if cert.Status != "active" || len(cert.CertificateDER) == 0 || len(cert.CertificatePEM) == 0 ||
 		cert.KeyOrigin != "host_agent" || cert.KeyStorage != "file" {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	info, err := certinfo.Inspect(cert.CertificateDER)
 	if err != nil || info.IsCA || info.SHA256Fingerprint != cert.Fingerprint {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	if cert.Fingerprint != in.ExpectedFingerprint {
-		return CredentialPlan{}, false, ErrCredentialPlanTargetChanged
+		return CredentialPlan{}, ErrCredentialPlanTargetChanged
 	}
 	bindings, err := e.store.CertificateIdentityBindings(ctx, tenantID, []string{cert.ID})
 	if err != nil {
-		return CredentialPlan{}, false, err
+		return CredentialPlan{}, err
 	}
 	identityIDs := bindings[cert.ID]
 	if len(identityIDs) != 1 {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	identity, err := e.store.GetIdentity(ctx, tenantID, identityIDs[0])
 	if err != nil {
-		return CredentialPlan{}, false, credentialPlanReadError(err)
+		return CredentialPlan{}, credentialPlanReadError(err)
 	}
 	var identityRoute struct {
 		DeploymentTargetID     string `json:"deployment_target_id"`
@@ -123,21 +138,21 @@ func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID s
 		json.Unmarshal(identity.Attributes, &identityRoute) != nil ||
 		identityRoute.DeploymentTargetID != in.TargetID ||
 		identityRoute.IssuingAuthoritySource != "private" || identityRoute.IssuingAuthorityID != keyID {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	oldDER, err := certinfo.LeafDER([]byte(oldCA.CertificatePEM))
 	if err != nil || crypto.VerifyLeafSignedByCA(cert.CertificateDER, oldDER) != nil {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	target, err := e.store.GetDeploymentTarget(ctx, tenantID, in.TargetID)
 	if err != nil {
-		return CredentialPlan{}, false, credentialPlanReadError(err)
+		return CredentialPlan{}, credentialPlanReadError(err)
 	}
 	if !target.Enabled || target.RevisionID != in.ExpectedTargetRevision {
-		return CredentialPlan{}, false, ErrCredentialPlanTargetChanged
+		return CredentialPlan{}, ErrCredentialPlanTargetChanged
 	}
 	if !relay.SupportsPQCCertificatePredecessor(target.Type) {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	var host struct {
 		CertPath         string `json:"cert_path"`
@@ -148,19 +163,33 @@ func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID s
 	if json.Unmarshal(target.Config, &host) != nil || host.CertPath == "" || host.KeyPath == "" ||
 		host.VerifyAddress == "" || host.VerifyServerName == "" ||
 		certinfo.VerifyHostname(cert.CertificateDER, host.VerifyServerName) != nil {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	agentID, err := e.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
 	if err != nil || agentID == "" {
-		return CredentialPlan{}, false, ErrCredentialPlanNotReady
+		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	plan := CredentialPlan{Job: selected, IdentityID: identity.ID, SuccessorAuthorityID: successor.ID,
 		PredecessorFingerprint: cert.Fingerprint, PredecessorSPKISHA256: info.SPKISHA256,
 		TargetID: target.ID, TargetRevisionID: target.RevisionID, RequiredAgentID: agentID,
 		Connector: target.Type, VerifyAddress: host.VerifyAddress,
 		VerifyServerName: host.VerifyServerName, TTLSeconds: in.TTLSeconds}
-	recorded, err := e.plans.Record(ctx, plan)
-	return plan, recorded, err
+	return plan, nil
+}
+
+// LoadCredentialPlan reads only the first-writer plan for this tenant and CA.
+func (e *Enqueuer) LoadCredentialPlan(ctx context.Context, tenantID, keyID, jobID string) (CredentialPlan, bool, error) {
+	if e == nil || e.plans == nil {
+		return CredentialPlan{}, false, ErrEnqueuerUnavailable
+	}
+	plan, found, err := e.plans.Load(ctx, tenantID, jobID)
+	if err != nil || !found {
+		return CredentialPlan{}, found, err
+	}
+	if plan.Job.KeyID != keyID {
+		return CredentialPlan{}, false, nil
+	}
+	return plan, true, nil
 }
 
 func credentialPlanReadError(err error) error {

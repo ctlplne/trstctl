@@ -3146,14 +3146,19 @@ than sending an operator looking for a credential that was never there.
   signer's frozen event-set check uses the same derivation, including issuance
   after the frozen cut. A serial-only historical issuance remains a conservative
   `serial:` dependent rather than an invented certificate inventory row.
-  For a host-held certificate, `POST /api/v1/ca/keys/{id}/reprotect/plans` and
-  `trstctl-cli ca keys reprotect plan` record an immutable public plan only after
+  For a host-held certificate, the effect-free
+  `POST /api/v1/ca/keys/{id}/reprotect/plans/preview` and CLI preview derive the
+  exact public plan without recording it. `POST /api/v1/ca/keys/{id}/reprotect/plans`
+  and `trstctl-cli ca keys reprotect plan` recheck current state and record an
+  immutable public plan only after
   checking the tenant's outstanding dependent, the exact certificate and its
   predecessor CA signature, one managed identity bound to that certificate and
   target, an active direct successor CA, and the enabled host target's current
   revision and assigned agent. Ambiguous identity bindings refuse. The target
   supplies the probe address and name; callers cannot redirect them in the plan
-  request. A plan receipt proves that review was recorded, not that issuance, deployment or
+  request. `GET /api/v1/ca/keys/{id}/reprotect/plans/{job_id}` and the CLI plan
+  readback recover that immutable public selection after a lost response. A plan
+  receipt proves that review was recorded, not that issuance, deployment or
   served-state cutover happened. The VDEC credential worker and console action
   remain under construction and the retirement checklist continues to block
   destruction until completion evidence exists.
