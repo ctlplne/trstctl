@@ -53,6 +53,11 @@ const { apiMock } = vi.hoisted(() => ({
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
     caRetirementChecklist: vi.fn(),
+    connectorTargets: vi.fn(),
+    previewCAKeyReprotectionPlan: vi.fn(),
+    registerCAKeyReprotectionPlan: vi.fn(),
+    caKeyReprotectionPlan: vi.fn(),
+    startCAKeyReprotection: vi.fn(),
     getCertificate: vi.fn(),
     releaseCAKeyDependent: vi.fn(),
     retireCAKey: vi.fn(),
@@ -252,6 +257,7 @@ describe("CA hierarchy and custody surface", () => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.listManagedKeys.mockResolvedValue({ items: [], next_cursor: "" });
     apiMock.caAuthorities.mockResolvedValue({ items: [] });
+    apiMock.connectorTargets.mockResolvedValue({ items: [] });
     apiMock.edgeSegmentPolicies.mockResolvedValue({ items: [], guidance: "" });
     apiMock.edgeDelegations.mockResolvedValue({ items: [], guidance: "" });
     apiMock.caRetirementChecklist.mockResolvedValue({

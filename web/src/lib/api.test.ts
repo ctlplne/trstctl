@@ -40,6 +40,30 @@ afterEach(() => {
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("keeps CA re-protection preview read-only and sends bound mutations to the served routes", async () => {
+    mockFetch(200, "{}");
+    const selection = {
+      certificate_id: "cert-1",
+      successor_authority_id: "ca-new",
+      target_id: "target-1",
+      expected_target_revision: "revision-1",
+      expected_fingerprint: "fingerprint-1",
+      ttl_seconds: 3600,
+    };
+    await api.previewCAKeyReprotectionPlan("ca/old", selection);
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/ca/keys/ca%2Fold/reprotect/plans/preview");
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]).toMatchObject({ method: "POST", body: JSON.stringify(selection) });
+    expect((vi.mocked(fetch).mock.calls[0]?.[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+    await api.registerCAKeyReprotectionPlan("ca/old", selection);
+    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe("/api/v1/ca/keys/ca%2Fold/reprotect/plans");
+    expect((vi.mocked(fetch).mock.calls[1]?.[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+    await api.caKeyReprotectionPlan("ca/old", "job/one");
+    expect(vi.mocked(fetch).mock.calls[2]?.[0]).toBe("/api/v1/ca/keys/ca%2Fold/reprotect/plans/job%2Fone");
+    await api.startCAKeyReprotection("ca/old");
+    expect(vi.mocked(fetch).mock.calls[3]?.[0]).toBe("/api/v1/ca/keys/ca%2Fold/reprotect");
+    expect((vi.mocked(fetch).mock.calls[3]?.[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+  });
+
   it("preserves caller-supplied endpoint and direct-deploy request keys", async () => {
     mockFetch(201, "{}");
     await api.createEndpointBinding(
@@ -698,6 +722,9 @@ describe("exported API surface census", () => {
       "/api/v1/notification-routing-policies/preview",
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
+      // VDEC derives a public, effect-free host/CA/agent plan. Recording it is
+      // a separate idempotent mutation at /reprotect/plans.
+      "/api/v1/ca/keys/item%2Fid/reprotect/plans/preview",
       "/api/v1/managed-keys/preview",
       // F50: these bind one exact digest and signer configuration without
       // resolving a signer, attesting identity, writing state, or publishing.

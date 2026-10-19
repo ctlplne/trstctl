@@ -8936,6 +8936,70 @@ export const messages = {
     description: "Open the effect-free review for an exact managed intermediate ceremony.",
   },
   "caHierarchy.release.heading": { defaultMessage: "Release an expired CA leaf dependency", description: "CA retirement dependent-release workspace heading." },
+  "caHierarchy.reprotect.heading": { defaultMessage: "Re-protect managed certificate", description: "CA retirement host-held dependent workflow heading." },
+  "caHierarchy.reprotect.explanation": {
+    defaultMessage:
+      "Select the active direct successor and the bound host target. Review the exact old certificate, key fingerprint, target revision, agent and served endpoint before recording or starting work. Record a plan for every outstanding managed certificate. Issuance and deployment must finish before this key can retire.",
+    description: "Explain the operator steps and completion boundary for CA re-protection.",
+  },
+  "caHierarchy.reprotect.certificate": { defaultMessage: "Certificate ID", description: "CA re-protection dependent certificate." },
+  "caHierarchy.reprotect.custodyRequired": {
+    defaultMessage:
+      "This certificate is not held by a managed host agent with file custody. Use its supported reissue path; do not claim an automatic retained-key cutover.",
+    description: "Explain why host-only re-protection cannot handle requester custody.",
+  },
+  "caHierarchy.reprotect.successor": { defaultMessage: "Successor CA", description: "CA re-protection successor authority." },
+  "caHierarchy.reprotect.chooseSuccessor": { defaultMessage: "Select active direct successor", description: "Prompt for a direct CA successor." },
+  "caHierarchy.reprotect.noSuccessor": {
+    defaultMessage: "No active direct successor is available. Rotate this CA first, then refresh the page.",
+    description: "Missing CA successor guidance.",
+  },
+  "caHierarchy.reprotect.target": { defaultMessage: "Host target", description: "CA re-protection deployment target." },
+  "caHierarchy.reprotect.chooseTarget": { defaultMessage: "Select enabled host target", description: "Prompt for a CA re-protection host target." },
+  "caHierarchy.reprotect.targetRevision": { defaultMessage: "Reviewed target revision", description: "Target revision pinned by the plan." },
+  "caHierarchy.reprotect.ttl": { defaultMessage: "New certificate lifetime in seconds", description: "CA re-protection successor leaf validity." },
+  "caHierarchy.reprotect.review": { defaultMessage: "Review exact re-protection plan", description: "Effect-free CA re-protection plan preview action." },
+  "caHierarchy.reprotect.effectFree": {
+    defaultMessage: "Effect-free review: no certificate was issued and no host was changed.",
+    description: "CA re-protection preview effect boundary.",
+  },
+  "caHierarchy.reprotect.record": { defaultMessage: "Record reviewed plan", description: "Persist the exact public CA re-protection selection." },
+  "caHierarchy.reprotect.recoverID": { defaultMessage: "Recover recorded job ID", description: "Job ID for recovering a lost CA re-protection response." },
+  "caHierarchy.reprotect.loadRecorded": { defaultMessage: "Load recorded plan", description: "Read back an immutable CA re-protection plan." },
+  "caHierarchy.reprotect.recorded": { defaultMessage: "Plan recorded and read back", description: "CA re-protection plan readback success." },
+  "caHierarchy.reprotect.startGuidance": {
+    defaultMessage:
+      "Starting queues the bound host job. This receipt is not deployment proof. Refresh the checklist and independently check the served certificate before retirement.",
+    description: "CA re-protection enqueue versus completion boundary.",
+  },
+  "caHierarchy.reprotect.start": { defaultMessage: "Start re-protection", description: "Queue all recorded CA re-protection jobs." },
+  "caHierarchy.reprotect.queued": {
+    defaultMessage: "Queued {value1} of {value2} planned jobs. Check signed host readback and the retirement checklist.",
+    description: "CA re-protection queue receipt summary.",
+  },
+  "caHierarchy.reprotect.jobID": { defaultMessage: "Job ID", description: "CA re-protection stable job identity." },
+  "caHierarchy.reprotect.identityID": { defaultMessage: "Managed identity", description: "CA re-protection bound identity." },
+  "caHierarchy.reprotect.fingerprint": { defaultMessage: "Old certificate SHA-256", description: "CA re-protection exact predecessor certificate." },
+  "caHierarchy.reprotect.spki": { defaultMessage: "Retained key SPKI SHA-256", description: "CA re-protection exact subject public key." },
+  "caHierarchy.reprotect.agent": { defaultMessage: "Assigned host agent", description: "CA re-protection bound agent." },
+  "caHierarchy.reprotect.connector": { defaultMessage: "Connector", description: "CA re-protection host connector." },
+  "caHierarchy.reprotect.probe": { defaultMessage: "Served endpoint probe", description: "CA re-protection verification address and name." },
+  "caHierarchy.reprotect.loadFailed": { defaultMessage: "Could not load CA re-protection choices", description: "CA re-protection setup read failure." },
+  "caHierarchy.reprotect.changed": {
+    defaultMessage: "The reviewed plan changed; refresh public state and review again",
+    description: "CA re-protection binding mismatch refusal.",
+  },
+  "caHierarchy.reprotect.previewFailed": { defaultMessage: "Could not preview the CA re-protection plan", description: "CA re-protection preview failure." },
+  "caHierarchy.reprotect.recordFailed": {
+    defaultMessage: "Could not record or read back the CA re-protection plan",
+    description: "CA re-protection registration failure.",
+  },
+  "caHierarchy.reprotect.recoverFailed": { defaultMessage: "Could not recover that recorded plan", description: "CA re-protection plan readback failure." },
+  "caHierarchy.reprotect.startMismatch": {
+    defaultMessage: "Start receipt did not include the reviewed job",
+    description: "CA re-protection start receipt mismatch.",
+  },
+  "caHierarchy.reprotect.startFailed": { defaultMessage: "Could not start CA re-protection", description: "CA re-protection enqueue failure." },
   "caHierarchy.release.explanation": {
     defaultMessage:
       "Only an expired requester-held leaf with no managed deployment can use this path. Two other custodians must approve the exact certificate and risk decision. External use cannot be ruled out by expiry alone.",

@@ -1606,6 +1606,46 @@ export interface CAKeyDependentReleaseReceipt {
   status: "released";
 }
 
+// VDEC is attached outside the core OpenAPI generator. These public receipts
+// carry no host key material.
+export interface CAReprotectionSelection {
+  certificate_id: string;
+  successor_authority_id: string;
+  target_id: string;
+  expected_target_revision: string;
+  expected_fingerprint: string;
+  ttl_seconds: number;
+}
+
+export interface CAReprotectionPlan {
+  job_id: string;
+  identity_id: string;
+  certificate_id: string;
+  successor_authority_id: string;
+  predecessor_fingerprint: string;
+  predecessor_spki_sha256: string;
+  target_id: string;
+  target_revision_id: string;
+  required_agent_id: string;
+  connector: string;
+  verify_address: string;
+  verify_server_name: string;
+  ttl_seconds: number;
+  recorded: boolean;
+}
+
+export interface CAReprotectionPreview extends CAReprotectionPlan {
+  ready: boolean;
+  effect_free: boolean;
+}
+
+export interface CAReprotectionStartReceipt {
+  key_id: string;
+  planned: number;
+  enqueued: number;
+  jobs: Array<{ id: string; kind: string; dependent_class: string; dependent_ref: string; enqueued: boolean }>;
+}
+
 function enrollmentTokenRequest(input?: EnrollmentTokenRequest): EnrollmentTokenRequest | undefined {
   const allowedIdentity = input?.allowed_identity?.trim();
   const roles = input?.roles ?? [];
@@ -1995,6 +2035,10 @@ export interface Api {
   retireCAKey(keyId: string, input: CARetirementRequest): Promise<CARetirementReceipt>;
   retryCAKeyRetirement(keyId: string, input: CARetirementRetryRequest): Promise<CARetirementRetryReceipt>;
   releaseCAKeyDependent(keyId: string, input: CAKeyDependentReleaseRequest): Promise<CAKeyDependentReleaseReceipt>;
+  previewCAKeyReprotectionPlan(keyId: string, input: CAReprotectionSelection): Promise<CAReprotectionPreview>;
+  registerCAKeyReprotectionPlan(keyId: string, input: CAReprotectionSelection): Promise<CAReprotectionPlan>;
+  caKeyReprotectionPlan(keyId: string, jobId: string): Promise<CAReprotectionPlan>;
+  startCAKeyReprotection(keyId: string): Promise<CAReprotectionStartReceipt>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -2715,6 +2759,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   retireCAKey: estate.retireCAKey,
   retryCAKeyRetirement: estate.retryCAKeyRetirement,
   releaseCAKeyDependent: estate.releaseCAKeyDependent,
+  previewCAKeyReprotectionPlan: estate.previewCAKeyReprotectionPlan,
+  registerCAKeyReprotectionPlan: estate.registerCAKeyReprotectionPlan,
+  caKeyReprotectionPlan: estate.caKeyReprotectionPlan,
+  startCAKeyReprotection: estate.startCAKeyReprotection,
   assessMigration: estate.assessMigration,
   startMigrationRun: estate.startMigrationRun,
   migrationRuns: estate.migrationRuns,

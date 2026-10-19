@@ -14,6 +14,10 @@ import type {
   CARetirementRetryRequest,
   CAKeyDependentReleaseRequest,
   CAKeyDependentReleaseReceipt,
+  CAReprotectionSelection,
+  CAReprotectionPlan,
+  CAReprotectionPreview,
+  CAReprotectionStartReceipt,
   RetirementChecklist,
   UnownedQueue,
 } from "./api";
@@ -73,3 +77,20 @@ export const retryCAKeyRetirement = (keyId: string, request: CARetirementRetryRe
 /** H4: source-bound, two-custodian disposition of one expired requester-held leaf. */
 export const releaseCAKeyDependent = (keyId: string, request: CAKeyDependentReleaseRequest) =>
   mutate<CAKeyDependentReleaseReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/dependencies/release`, request);
+
+/** Review only: the server derives the bound host, key, CA, route and probe. */
+export const previewCAKeyReprotectionPlan = (keyId: string, input: CAReprotectionSelection) =>
+  req<CAReprotectionPreview>(`/api/v1/ca/keys/${encodeURIComponent(keyId)}/reprotect/plans/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+/** Persist the exact public selection after the operator reviews the preview. */
+export const registerCAKeyReprotectionPlan = (keyId: string, input: CAReprotectionSelection) =>
+  mutate<CAReprotectionPlan>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/reprotect/plans`, input);
+
+export const caKeyReprotectionPlan = (keyId: string, jobId: string) =>
+  req<CAReprotectionPlan>(`/api/v1/ca/keys/${encodeURIComponent(keyId)}/reprotect/plans/${encodeURIComponent(jobId)}`);
+
+export const startCAKeyReprotection = (keyId: string) => mutate<CAReprotectionStartReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/reprotect`);

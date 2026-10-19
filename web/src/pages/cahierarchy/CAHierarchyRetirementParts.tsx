@@ -15,6 +15,7 @@ import {
   type RetirementChecklist,
 } from "@/lib/api";
 import { CACeremonyReviewDialog } from "./CAHierarchyCeremonyParts";
+import { CAReprotectionPanel } from "./CAReprotectionPanel";
 
 const releaseReason = "expired-requester-custody-external-use-risk-accepted" as const;
 
@@ -330,6 +331,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
           ))}
         </ul>
       )}
+      {releasable.length > 0 && !destroyed && <CAReprotectionPanel keyId={keyId} certificateIDs={releasable.map((dep) => dep.ref)} onRefresh={refresh} />}
       {releasable.length > 0 && !destroyed && (
         <section className="grid gap-3 rounded-md border p-3" aria-label={translateNow("caHierarchy.release.heading")}>
           <h4 className="font-semibold">{translateNow("caHierarchy.release.heading")}</h4>

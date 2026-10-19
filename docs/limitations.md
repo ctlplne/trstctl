@@ -3166,8 +3166,13 @@ than sending an operator looking for a credential that was never there.
   can atomically supersede the old inventory certificate and change the identity's
   selected CA. Its source event carries the signed readback, and separate
   first-writer supersession and completion events account for the old CA dependent.
-  The console start/recovery action remains under construction. Live target and
-  cold-restart qualification of this path remain open; retirement stays blocked
+  The CA hierarchy Lifecycle console now exposes the host-held certificate,
+  direct successor, enabled target and lifetime selection. Its effect-free
+  preview shows the server-derived agent, key, target revision and listener;
+  it records the reviewed plan, independently reads it back, and can recover a
+  lost response by job ID before queueing. The console never calls a queued job
+  complete. Live target and cold-restart qualification of this path remain open;
+  retirement stays blocked
   until its completion evidence is present.
   An expired requester-held managed leaf with no managed deployment can be
   dispositioned through `release_managed_ca_leaf` after two distinct custodians

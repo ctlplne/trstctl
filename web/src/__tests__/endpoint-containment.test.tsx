@@ -23,6 +23,7 @@ const target: DeploymentTarget = {
   tenant_id: "tenant-1",
   name: "local Apache",
   connector: "apache",
+  revision_id: "revision-1",
   config: {},
   created_at: "2026-10-05T00:00:00Z",
   enabled: false,

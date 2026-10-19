@@ -842,6 +842,13 @@ trstctl-cli ca keys reprotect plan get <predecessor-ca-authority-id> <job-id>
 # certificate or successor requires a new review.
 trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 
+# The same flow is on CA hierarchy > Lifecycle > CA key retirement. Select the
+# outstanding host-held certificate, direct successor CA and enabled target;
+# review the server-derived plan, record it, read it back, then start. If the
+# registration response is lost, enter the preview's job ID in Recover recorded
+# job ID and load the immutable plan. Queueing is not served-leaf proof: check
+# the signed host result, stock TLS readback and refreshed retirement checklist.
+
 # For one expired requester-held managed CA leaf with no managed deployment,
 # review a release_managed_ca_leaf ceremony through ca ceremonies preview/create.
 # Two other authenticated custodians approve its exact mint ID and public digest.
