@@ -5,28 +5,21 @@
 # picked up automatically, then add a DELIBERATELY NARROW allowlist for the
 # project's deterministic test vectors.
 #
-# Scope of the allowlist, and why it does not "hide leaks" (02-GUARDRAILS):
-#   - There is NO path-based exemption. Every tracked file is scanned by every
-#     rule, `_test.go` sources and `testdata/` fixtures included: a GitHub PAT,
-#     a Slack bot token, or a private key committed into a `_test.go` file fails
-#     the scan exactly like one committed into production source.
-#   - The single allowlist below is an exact-secret-body regex for the one
-#     published connector conformance keypair. Every other known false positive
-#     - deterministic PEM vectors in test sources, redactor-corpus sample
-#     tokens, code identifiers, translation keys, documentation examples - is
-#     pinned individually in .gitleaksignore by exact commit/path/rule/line
-#     fingerprint, so a NEW match at any other location still fails the scan.
-#   - Measured against the pinned gitleaks v8.27.2 binary: rule scoping is
-#     unavailable. Adding `targetRules` to either the singular `[allowlist]`
-#     table or a plural `[[allowlists]]` table silently disables that whole
-#     allowlist block rather than narrowing it, so per-fingerprint pinning is
-#     the narrowest suppression this tool version actually honors.
-#   - Guarded by two tests in internal/secretscan: this file's SHAPE (no
-#     `paths`, no `targetRules`, conformance-key body still pinned) by
-#     TestGitleaksConfigHasNoPathBasedTestSourceExemption, and the BEHAVIOR
-#     (a token and a PEM planted in a `*_test.go` file are reported by a scan
-#     running under this very config, while the conformance vector is not) by
-#     TestServedGitleaksScanDetectsPlantedSecretInTestSource.
+# Scope of the allowlists, and why they do not hide credentials (02-GUARDRAILS):
+#   - There is no whole-file or test-source exemption. A GitHub PAT, Slack bot
+#     token, or private key committed into a `_test.go` file fails the scan.
+#   - The global allowlist pins the exact published connector conformance key
+#     body. Other historical test vectors are pinned in .gitleaksignore by
+#     commit/path/rule/line fingerprint.
+#   - The rule-specific allowance below requires BOTH a generated Journeys
+#     chunk path AND a static `bodyKey:"journeys.*"` lookup match. Another
+#     generic API key in that same chunk still fails. Gitleaks v8.27.2 ignores
+#     `targetRules` in global allowlists, and a global path allowlist suppresses
+#     every rule for that file. The `[[rules]]` extension preserves the default
+#     generic rule (the all-path selector is neutral) and attaches its own
+#     AND-scoped allowlist instead.
+#   - internal/secretscan tests check the exact config shape and run the pinned
+#     scanner over planted credentials in test source and a generated chunk.
 [extend]
 useDefault = true
 
@@ -43,3 +36,16 @@ regexTarget = "match"
 regexes = [
   '''MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2drNvkGQeqFUx3xE''',
 ]
+
+[[rules]]
+id = "generic-api-key"
+# The default rule has no path restriction. This equivalent all-path selector
+# lets the extension attach an allowlist without replacing its regex or entropy.
+path = '''.*'''
+
+[[rules.allowlists]]
+description = "Static journey bodyKey lookups in generated console chunks only"
+condition = "AND"
+paths = ['''(^|/)internal/webui/dist/assets/Journeys-[A-Za-z0-9_-]+\.js$''']
+regexTarget = "match"
+regexes = ['''^bodyKey:["`]journeys\.[A-Za-z0-9_.-]+["`]$''']

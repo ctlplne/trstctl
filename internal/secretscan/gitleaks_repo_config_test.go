@@ -27,10 +27,9 @@ func conformanceKeyBody() string { return strings.Split(conformanceKeyPEM, "\n")
 
 // TestGitleaksConfigHasNoPathBasedTestSourceExemption is the SHAPE half of the
 // SF.1 test-source coverage proof: it reads .gitleaks.toml as text and never
-// invokes gitleaks. The BEHAVIORAL half — a token planted in a *_test.go file
-// is actually reported by a scan driven through the repository's own config —
-// is TestServedGitleaksScanDetectsPlantedSecretInTestSource below. Keep both:
-// the shape test always runs, the behavioral test needs the pinned binary.
+// invokes gitleaks. The BEHAVIORAL tests below plant credentials in both test
+// source and a generated chunk using the repository's own config. Keep both:
+// this shape test always runs, while the behavioral tests need the pinned binary.
 //
 // .gitleaks.toml used to carry a top-level `[allowlist] paths` list holding
 // `.*_test\.go$` and `(^|/)testdata/`. A top-level allowlist `paths` entry
@@ -39,23 +38,40 @@ func conformanceKeyBody() string { return strings.Split(conformanceKeyPEM, "\n")
 // tracked tree — from the entire ruleset: GitHub PATs, Slack bot tokens, AWS
 // keys, JWTs, generic high-entropy assignments, all of it. The comment above it
 // meanwhile claimed it suppressed "deterministic PEM private-key vectors only".
-// No path exemption may come back: known fixture false positives are pinned one
-// finding at a time in .gitleaksignore instead.
+// No whole-file path exemption may come back. The one rule-specific path below
+// also requires the exact static translation-lookup match, so a real key in the
+// same generated chunk still fails.
 func TestGitleaksConfigHasNoPathBasedTestSourceExemption(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	cfg := readRepoFile(t, root, ".gitleaks.toml")
 
+	section := ""
+	var scopedPaths int
 	for i, line := range strings.Split(cfg, "\n") {
 		directive := strings.TrimSpace(line)
 		if directive == "" || strings.HasPrefix(directive, "#") {
 			continue
 		}
+		if strings.HasPrefix(directive, "[") {
+			section = directive
+			continue
+		}
 		if strings.HasPrefix(directive, "paths") {
-			t.Errorf(".gitleaks.toml:%d declares a path allowlist (%s); a path glob exempts a whole file from every rule, so pin individual findings in .gitleaksignore instead", i+1, directive)
+			const exactGeneratedPath = "paths = ['''(^|/)internal/webui/dist/assets/Journeys-[A-Za-z0-9_-]+\\.js$''']"
+			if section != "[[rules.allowlists]]" || directive != exactGeneratedPath {
+				t.Errorf(".gitleaks.toml:%d declares an unbounded path allowance in %s: %s", i+1, section, directive)
+			}
+			scopedPaths++
 		}
 		if strings.HasPrefix(directive, "targetRules") {
 			t.Errorf(".gitleaks.toml:%d declares targetRules (%s); the pinned gitleaks %s silently disables the entire allowlist block when it is present, which widens rather than narrows the suppression", i+1, directive, GitleaksPinnedVersion)
 		}
+	}
+	if scopedPaths != 1 || strings.Count(cfg, "id = \"generic-api-key\"") != 1 ||
+		!strings.Contains(cfg, "condition = \"AND\"") ||
+		!strings.Contains(cfg, "regexTarget = \"match\"") ||
+		!strings.Contains(cfg, "regexes = ['''^bodyKey:[\"`]journeys\\.[A-Za-z0-9_.-]+[\"`]$''']") {
+		t.Error("generated Journey allowance must remain rule-specific and require the exact path AND static bodyKey match")
 	}
 
 	if want := "'''" + conformanceKeyBody() + "'''"; !strings.Contains(cfg, want) {
@@ -188,5 +204,58 @@ func TestServedGitleaksScanDetectsPlantedSecretInTestSource(t *testing.T) {
 	}
 	if byRule["private-key"] > 1 {
 		t.Errorf("the allowlisted conformance vector in the same fixture was reported as well (%d private-key findings: %v); that means the repository .gitleaks.toml was NOT the config in force — gitleaks fell back to its built-in default — so the assertions above prove nothing about this repository's configuration", byRule["private-key"], seen)
+	}
+}
+
+func TestServedGitleaksGeneratedJourneyAllowanceKeepsSecretsVisible(t *testing.T) {
+	bin, err := NewGitleaksRunner("").resolveBinary()
+	if err != nil {
+		if strings.TrimSpace(os.Getenv("TRSTCTL_GITLEAKS_BIN")) != "" {
+			t.Fatalf("TRSTCTL_GITLEAKS_BIN is set but no gitleaks binary resolved: %v", err)
+		}
+		t.Skip("generated-bundle allowance test requires the pinned Gitleaks binary")
+	}
+
+	target := t.TempDir()
+	root := filepath.Clean(filepath.Join("..", ".."))
+	if err := os.WriteFile(filepath.Join(target, ".gitleaks.toml"), []byte(readRepoFile(t, root, ".gitleaks.toml")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	generatedDir := filepath.Join(target, "internal", "webui", "dist", "assets")
+	if err := os.MkdirAll(generatedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Build both scanner bait values at run time so this test source does not
+	// itself become a repository-history finding. The first is only a static
+	// translation lookup; the second has the shape of a generic API key.
+	bodyKey := "body" + "Key:" + `"` + strings.Join([]string{"journeys", "qa", "cancel", "CA8a72qZ", "body"}, ".") + `"`
+	genericKey := strings.Join([]string{"q9BZ3sNfH72WmRa4", "T8VkP65cYxU1dLoE"}, "")
+	generated := "const row={" + bodyKey + "};\nconst api_key=\"" + genericKey + "\";\n"
+	generatedName := "Journeys-qa123456.js"
+	if err := os.WriteFile(filepath.Join(generatedDir, generatedName), []byte(generated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "manual.js"), []byte("const row={"+bodyKey+"};\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := (&GitleaksRunner{Binary: bin, AllowedRoots: []string{target}}).ScanWithOptions(context.Background(), target, ScanOptions{})
+	if err != nil {
+		t.Fatalf("scan generated and ordinary files: %v", err)
+	}
+	var generatedLookup, generatedKey, ordinaryLookup int
+	for _, finding := range report.Findings {
+		path := filepath.ToSlash(finding.File)
+		switch {
+		case strings.HasSuffix(path, "/"+generatedName) && finding.RuleID == "generic-api-key" && finding.Line == 1:
+			generatedLookup++
+		case strings.HasSuffix(path, "/"+generatedName) && finding.RuleID == "generic-api-key" && finding.Line == 2:
+			generatedKey++
+		case path == "manual.js" && finding.RuleID == "generic-api-key" && finding.Line == 1:
+			ordinaryLookup++
+		}
+	}
+	if generatedLookup != 0 || generatedKey != 1 || ordinaryLookup != 1 {
+		t.Errorf("generated lookup=%d, planted key in same bundle=%d, ordinary-file lookup=%d; want 0,1,1", generatedLookup, generatedKey, ordinaryLookup)
 	}
 }

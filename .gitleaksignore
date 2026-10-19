@@ -206,3 +206,32 @@ c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.g
 1f628c298458ca53837053304bd3203b9c595c95:internal/webui/dist/assets/Journeys-CJ0EMTMF.js:generic-api-key:7
 3daab5833cfaca39b1285335a6224a1211122dae:internal/webui/dist/assets/Journeys-JUq_i8hM.js:generic-api-key:8
 3daab5833cfaca39b1285335a6224a1211122dae:internal/webui/dist/assets/Journeys-JUq_i8hM.js:generic-api-key:13
+
+# 2026-10-19 pinned Gitleaks 8.27.2 full-history qualification. These ten
+# generated transport/i18n chunks contain a static translation-parity lookup;
+# the twelve source findings are deterministic local test command keys, one
+# local URI password fixture, two public TLS group labels and an invalid PEM
+# refusal vector. Every match was classified in the campaign evidence. These
+# exact commit/path/rule/line pins do not exempt later findings or entire files.
+1203b3fcf580271b3dc4ef8d5f6118d63415548d:internal/webui/dist/assets/transport-BNtmCZkK.js:generic-api-key:1
+2faedda836da8fe9e36b1072fc5d431d06accb05:internal/webui/dist/assets/transport-ySYi059m.js:generic-api-key:1
+3e7d15e9c637bc8a500fd2b5f7d2dd16906769bb:internal/webui/dist/assets/transport-9Etjclei.js:generic-api-key:1
+7178ecdce684f48d1d71e6dfdadb31bd5f446be6:internal/webui/dist/assets/transport-shihtLvh.js:generic-api-key:1
+7e643133e53ac38ce85803f7eb62957c41a35b17:internal/webui/dist/assets/transport-B44pxK-x.js:generic-api-key:1
+a9ecaf3245f9dc17516cb3af9c3fab53eeba31fb:internal/webui/dist/assets/I18nProvider-DKh5FqzP.js:generic-api-key:1
+b23dea3eb0a1aa656e398e77966fc6a3ce2f835a:internal/webui/dist/assets/transport-CH-ISD5G.js:generic-api-key:1
+d6992d93b9f6b578cd04d5fdf035eba077f59aa4:internal/webui/dist/assets/transport-HKtx3acg.js:generic-api-key:1
+e60a55d545f8e026a28c52d0111ee5330a4053e0:internal/webui/dist/assets/transport-CnPCYgbN.js:generic-api-key:1
+e6566f8b04824bbcf5239ccc42e22a418d8b8d1c:internal/webui/dist/assets/transport-OdtEo143.js:generic-api-key:1
+09932a65418140bc818e36534f9c29ae7556f57a:internal/server/vault_compat_served_test.go:generic-api-key:37
+20a8fb9291b57b0af2cc04bbedee18aac7d93cb4:cmd/trstctl/main_test.go:generic-api-key:353
+20a8fb9291b57b0af2cc04bbedee18aac7d93cb4:cmd/trstctl/main_test.go:generic-api-key:382
+6cf166351337e27ee0e406a695588e1d593ac984:internal/server/ssh_raw_routes_served_test.go:generic-api-key:121
+98084cfefac642351d0cc5b6354a8a2d954e6e29:internal/server/breakglass_served_test.go:generic-api-key:426
+98084cfefac642351d0cc5b6354a8a2d954e6e29:internal/server/breakglass_served_test.go:generic-api-key:459
+9fadb9317322e77027e3b856126ab25338f80f28:internal/server/ssh_journey_served_test.go:generic-api-key:236
+a371c593e89921dfe7eade724e059b0ef8e1288c:cmd/trstctl/main_test.go:generic-api-key:337
+a371c593e89921dfe7eade724e059b0ef8e1288c:cmd/trstctl/main_test.go:generic-api-key:355
+ba326cfa0feb7671a3430cbd0fcb87e19f493b2d:internal/server/first_leaf_result_served_test.go:private-key:263
+fc55625f18393739b30eff1066bfe716d1725a7d:internal/crypto/tlsprobe/openssl.go:generic-api-key:141
+fc55625f18393739b30eff1066bfe716d1725a7d:internal/crypto/tlsprobe/tlsprobe.go:generic-api-key:198
