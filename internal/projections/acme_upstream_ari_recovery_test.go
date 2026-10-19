@@ -22,7 +22,10 @@ func TestACMEUpstreamARIObservationSurvivesSnapshotAndEventRebuild(t *testing.T)
 	p := projections.New(s)
 	const certificateID = "00000000-0000-4000-8000-00000000a149"
 	const fingerprint = "external-ari-recovery-fingerprint"
-	issued := time.Now().UTC().Add(-time.Minute)
+	// PostgreSQL stores timestamps at microsecond precision. Keep the fixture
+	// at that precision so the recovery check compares the actual CA window,
+	// not nanoseconds that the datastore cannot retain.
+	issued := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
 	expires := issued.Add(90 * 24 * time.Hour)
 	appendJSON := func(eventType string, payload any) {
 		t.Helper()
@@ -75,7 +78,14 @@ func TestACMEUpstreamARIObservationSurvivesSnapshotAndEventRebuild(t *testing.T)
 		got, err := s.GetACMEUpstreamARI(ctx, tenantA, certificateID)
 		if err != nil || got.Status != "ready" || got.WindowStart == nil ||
 			!got.WindowStart.Equal(start) || got.WindowEnd == nil || !got.WindowEnd.Equal(end) {
-			t.Fatalf("%s lost CA renewal window: %+v, %v", stage, got, err)
+			if err != nil {
+				t.Fatalf("%s lost CA renewal window: %+v, %v", stage, got, err)
+			}
+			startEqual := got.WindowStart != nil && got.WindowStart.Equal(start)
+			endEqual := got.WindowEnd != nil && got.WindowEnd.Equal(end)
+			t.Fatalf("%s lost CA renewal window: status=%q start_equal=%t end_equal=%t want_start=%s got_start=%v want_end=%s got_end=%v",
+				stage, got.Status, startEqual, endEqual, start.Format(time.RFC3339Nano),
+				got.WindowStart, end.Format(time.RFC3339Nano), got.WindowEnd)
 		}
 		var outboxRows int
 		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
