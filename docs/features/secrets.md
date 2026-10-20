@@ -130,6 +130,11 @@ Supported paths are intentionally small:
 | `GET /v1/secret/data/{path}`               | Reads the latest value as Vault KV v2 `data.data` plus version metadata.               |
 | `POST`/`PUT /v1/pki/issue/{role}`          | Issues a short-lived certificate and key via the signer-backed dynamic PKI secret.     |
 | `POST`/`PUT /v1/pki/sign/{role}`           | Signs a requester-generated CSR and returns no private key.                            |
+| `GET /v1/secret/metadata/{path}`           | KV v2 metadata: the retained versions with their write times, current and oldest version. |
+| `LIST /v1/secret/metadata/{folder}` (or `GET ?list=true`) | Direct children of a folder, sub-folders suffixed `/`; an empty folder is `404` as in Vault. |
+| `DELETE /v1/secret/data/{path}`, `DELETE /v1/secret/metadata/{path}` | The native delete: the object leaves reads and listings; history stays under native retention (no soft-delete state). |
+| `POST /v1/sys/capabilities-self`           | Capabilities per path from the token's trstctl permissions and the tenant's Vault ACL policies; `deny` when none. |
+| `POST /v1/auth/token/renew-self`           | `400`: trstctl API tokens are not renewable leases; mint a new token instead.           |
 
 The served compatibility contract also includes tenant-authored KV v2, PKI, and
 transit mounts, Vault ACL policy management, and common transit operations. It

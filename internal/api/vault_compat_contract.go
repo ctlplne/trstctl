@@ -164,7 +164,7 @@ func vaultCompatSchemas() map[string]*Schema {
 	intSchema := &Schema{Type: "integer"}
 	stringArray := &Schema{Type: "array", Items: str()}
 
-	return map[string]*Schema{
+	schemas := map[string]*Schema{
 		"VaultGenericRequest":  object(map[string]*Schema{}),
 		"VaultGenericResponse": vaultCompatEnvelope("VaultGenericData", anySchema),
 		"VaultGenericData":     anySchema,
@@ -236,6 +236,8 @@ func vaultCompatSchemas() map[string]*Schema {
 		"VaultPKIIssueResponse":        vaultCompatEnvelope("VaultPKIIssueData", anySchema),
 		"VaultPKISignResponse":         vaultCompatEnvelope("VaultPKISignData", anySchema),
 	}
+	vaultCompatKVExtraSchemas(schemas)
+	return schemas
 }
 
 func vaultCompatEnvelope(dataSchema string, warnings *Schema) *Schema {

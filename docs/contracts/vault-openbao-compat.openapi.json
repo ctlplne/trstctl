@@ -1,6 +1,60 @@
 {
   "components": {
     "schemas": {
+      "VaultCapabilitiesSelfData": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "VaultCapabilitiesSelfRequest": {
+        "properties": {
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "type": "object"
+      },
+      "VaultCapabilitiesSelfResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultCapabilitiesSelfData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
       "VaultErrorResponse": {
         "properties": {
           "errors": {
@@ -71,6 +125,49 @@
         ],
         "type": "object"
       },
+      "VaultKVListData": {
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
+      "VaultKVListResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultKVListData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
       "VaultKVMetadata": {
         "properties": {
           "created_time": {
@@ -96,6 +193,71 @@
           "destroyed",
           "version",
           "custom_metadata"
+        ],
+        "type": "object"
+      },
+      "VaultKVMetadataReadData": {
+        "properties": {
+          "created_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "custom_metadata": {
+            "type": "object"
+          },
+          "max_versions": {
+            "type": "integer"
+          },
+          "oldest_version": {
+            "type": "integer"
+          },
+          "updated_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "versions": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "created_time",
+          "current_version",
+          "max_versions",
+          "oldest_version",
+          "updated_time",
+          "versions"
+        ],
+        "type": "object"
+      },
+      "VaultKVMetadataReadResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultKVMetadataReadData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
         ],
         "type": "object"
       },
@@ -140,6 +302,26 @@
           "lease_duration",
           "data",
           "warnings"
+        ],
+        "type": "object"
+      },
+      "VaultKVVersionMetadata": {
+        "properties": {
+          "created_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deletion_time": {
+            "type": "string"
+          },
+          "destroyed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "created_time",
+          "deletion_time",
+          "destroyed"
         ],
         "type": "object"
       },
@@ -578,6 +760,69 @@
           }
         ],
         "summary": "Return Vault/OpenBao-shaped metadata for the trstctl API token"
+      }
+    },
+    "/v1/auth/token/renew-self": {
+      "post": {
+        "operationId": "vaultCompatTokenRenewSelf",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused with Vault's own wording: trstctl API tokens are not renewable leases"
       }
     },
     "/v1/pki/issue/{role}": {
@@ -1033,6 +1278,117 @@
       }
     },
     "/v1/secret/data/{name}": {
+      "delete": {
+        "operationId": "vaultCompatKVDelete",
+        "parameters": [
+          {
+            "description": "Vault KV v2 secret path below the secret/ mount.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Delete a Vault KV v2 object from the served trstctl secret store (the native delete; no soft-delete state is kept)",
+        "x-trstctl-permission": "secrets:write"
+      },
       "get": {
         "operationId": "vaultCompatKVRead",
         "parameters": [
@@ -1358,6 +1714,266 @@
         ],
         "summary": "Write a Vault KV v2 object into the served trstctl secret store",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/v1/secret/metadata/{name}": {
+      "delete": {
+        "operationId": "vaultCompatKVMetadataDelete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Delete a Vault KV v2 object and its metadata from the served trstctl secret store",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "get": {
+        "operationId": "vaultCompatKVMetadataRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVMetadataReadResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Read Vault KV v2 metadata (retained versions) for a served trstctl secret, or LIST a folder with ?list=true",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "list": {
+        "operationId": "vaultCompatKVList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVListResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "List the direct children of a Vault KV v2 folder in the served trstctl secret store",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/v1/sys/capabilities-self": {
+      "post": {
+        "operationId": "vaultCompatCapabilitiesSelf",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultCapabilitiesSelfRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultCapabilitiesSelfResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Report the Vault capabilities the presented token holds on each path, from its trstctl permissions and tenant ACL policies"
       }
     },
     "/v1/sys/health": {

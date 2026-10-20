@@ -3594,7 +3594,14 @@ when off, requiring a KEK when on):
   PKI issue/sign commands derive a token-keyed idempotency key when no header is
   sent. Mount and ACL mutations also derive a token-keyed key with the exact
   mount or policy event generation, allowing stock CLI retries and later
-  delete/recreate cycles. A re-enabled tenant KV mount starts an empty namespace;
+  delete/recreate cycles. KV v2 metadata (`GET /v1/secret/metadata/{path}`:
+  retained versions and write times), folder listing (`LIST` or `GET ?list=true`
+  on `/v1/secret/metadata/{folder}`: direct children, sub-folders suffixed `/`,
+  `404` for an empty folder), object deletion (`DELETE` on `data` or `metadata`,
+  the native delete with no soft-delete state), `POST /v1/sys/capabilities-self`
+  (from the token's permissions and ACL policies) and `POST
+  /v1/auth/token/renew-self` (refused: API tokens are not renewable leases) are
+  served. A re-enabled tenant KV mount starts an empty namespace;
   older sealed values remain under native retention and mount disable is not a
   physical-erasure receipt. Transit mutations require an explicit `Idempotency-Key`.
 - Dynamic secrets (F65) are served when tenant providers are configured:
