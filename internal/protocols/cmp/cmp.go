@@ -38,6 +38,7 @@ type Server struct {
 	pool       *bulkhead.Pool
 	log        *events.Log
 	verifyCSR  func([]byte) error
+	inspectCSR func([]byte) (crypto.CSRInfo, error)
 	onFailure  func(context.Context, enrollmentdiag.Diagnosis)
 	mux        *http.ServeMux
 
@@ -69,6 +70,11 @@ type Config struct {
 	// the carried PKCS#10; PKIMessage protection is always verified by the core
 	// parser. Nil uses the strict internal/crypto classical parser.
 	CSRVerifier func([]byte) error
+	// CSRInspector reads the carried CSR's names for the identity-binding
+	// policy through the same PQC-aware seam, so a pure ML-DSA request that
+	// the verifier accepted is bound on its parsed names instead of being
+	// re-parsed by the core parser. Nil binds through the core parser.
+	CSRInspector func([]byte) (crypto.CSRInfo, error)
 	// ClientTrustAnchorsDER are the anchors a PKIMessage's protection identity
 	// must chain to. CMP carries that identity in the message's own extraCerts,
 	// so without anchors the protection check proves only that the sender signed
@@ -99,6 +105,7 @@ func New(cfg Config) *Server {
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
 		verifyCSR:     cfg.CSRVerifier,
+		inspectCSR:    cfg.CSRInspector,
 		onFailure:     cfg.FailureDiagnosis,
 		clientAnchors: anchors,
 		anchorsErr:    anchorsErr,
@@ -158,7 +165,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	req, err := crypto.ParseCMPRequestWithTrust(body, s.verifyCSR, s.clientAnchors, s.bindPolicy)
+	req, err := crypto.ParseCMPRequestWithTrustInspector(body, s.verifyCSR, s.inspectCSR, s.clientAnchors, s.bindPolicy)
 	if errors.Is(err, crypto.ErrCMPCSRNotBound) {
 		// Authenticated, but asking for someone else's names (H1/V22). The
 		// refusal is distinct in the audit trail so an operator can tell a

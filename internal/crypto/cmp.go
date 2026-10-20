@@ -261,6 +261,16 @@ func (a *CMPTrustAnchors) Empty() bool { return a == nil || a.count == 0 }
 // authenticated identity there is nothing to bind to, so harness-only
 // anchorless paths are unaffected. The served endpoint always has anchors.
 func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors *CMPTrustAnchors, policy CMPBindPolicy) (*CMPRequest, error) {
+	return ParseCMPRequestWithTrustInspector(der, verifyCSR, nil, anchors, policy)
+}
+
+// ParseCMPRequestWithTrustInspector is ParseCMPRequestWithTrust with an injected
+// inspector for the carried PKCS#10's names. The identity-binding policy needs
+// the CSR's requested names; the core parser cannot read a pure ML-DSA request,
+// so without an inspector such a CSR passed the verifier seam and was then
+// refused at binding. The inspector is the same PQC-aware seam EST uses; nil
+// keeps the core parser for binding.
+func ParseCMPRequestWithTrustInspector(der []byte, verifyCSR func([]byte) error, inspectCSR func([]byte) (CSRInfo, error), anchors *CMPTrustAnchors, policy CMPBindPolicy) (*CMPRequest, error) {
 	if verifyCSR == nil {
 		verifyCSR = VerifyCertificateRequest
 	}
@@ -295,7 +305,7 @@ func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors 
 		return nil, fmt.Errorf("cmp: body is not a valid CSR: %w", err)
 	}
 	if identityVerified && policy == CMPBindCSRToProtectionIdentity {
-		if err := csrBoundToProtectionIdentity(csrDER, signerCert); err != nil {
+		if err := csrBoundToProtectionIdentity(csrDER, inspectCSR, signerCert); err != nil {
 			return nil, err
 		}
 	}
@@ -314,8 +324,17 @@ func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors 
 // blast radius. It shares CSRBoundToCertificateIdentity with EST/agent so the
 // one binding rule cannot drift between mounts, wrapping the shared refusal in
 // the CMP sentinel the handler maps to its RFC 4210 failInfo.
-func csrBoundToProtectionIdentity(csrDER []byte, protection *x509.Certificate) error {
-	err := CSRBoundToCertificateIdentity(csrDER, protection)
+func csrBoundToProtectionIdentity(csrDER []byte, inspectCSR func([]byte) (CSRInfo, error), protection *x509.Certificate) error {
+	var err error
+	if inspectCSR != nil {
+		info, inspectErr := inspectCSR(csrDER)
+		if inspectErr != nil {
+			return fmt.Errorf("cmp: inspect CSR for identity binding: %w", inspectErr)
+		}
+		err = CSRInfoBoundToCertificateIdentity(info, protection)
+	} else {
+		err = CSRBoundToCertificateIdentity(csrDER, protection)
+	}
 	if errors.Is(err, ErrCSRNotBoundToIdentity) {
 		return fmt.Errorf("%w: %v", ErrCMPCSRNotBound, err)
 	}

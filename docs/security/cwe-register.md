@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1560 annotated sites across 26 rules. Each row is
+1564 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -780,7 +780,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (174 sites)
+### G204 — CWE-78 OS command injection (177 sites)
 
 | Location | Reason |
 |---|---|
@@ -875,6 +875,9 @@ not this file.
 | `internal/projections/server_assembly_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/acme/certbot_client_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/cmp/conformance_test.go:116` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/protocols/cmp/mldsa_csr_test.go:101` | fixed local tool (CWE-78) |
+| `internal/protocols/cmp/mldsa_csr_test.go:123` | fixed local tool and tempdir paths (CWE-78) |
+| `internal/protocols/cmp/mldsa_csr_test.go:131` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/cmp/openssl_client_test.go:48` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/cmp/openssl_client_test.go:114` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
@@ -1058,7 +1061,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (437 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (438 sites)
 
 | Location | Reason |
 |---|---|
@@ -1303,6 +1306,7 @@ not this file.
 | `internal/protocols/acme/certbot_client_test.go:308` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/acme/certbot_client_test.go:333` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/acme/certbot_client_test.go:352` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/protocols/cmp/mldsa_csr_test.go:138` | test reads its own tempdir path (CWE-22) |
 | `internal/protocols/cmp/openssl_client_test.go:80` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/cmp/openssl_client_test.go:133` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/cmp/openssl_client_test.go:172` | test reads its own fixture/tempdir path (CWE-22) |

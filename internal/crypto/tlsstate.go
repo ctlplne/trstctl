@@ -30,6 +30,24 @@ func CSRBoundToCertificateIdentity(csrDER []byte, authority *x509.Certificate) e
 	if err != nil {
 		return fmt.Errorf("crypto: parse CSR for identity binding: %w", err)
 	}
+	info := CSRInfo{CommonName: csr.Subject.CommonName, DNSNames: csr.DNSNames, EmailAddresses: csr.EmailAddresses}
+	for _, ip := range csr.IPAddresses {
+		info.IPAddresses = append(info.IPAddresses, ip.String())
+	}
+	for _, uri := range csr.URIs {
+		info.URIs = append(info.URIs, uri.String())
+	}
+	return CSRInfoBoundToCertificateIdentity(info, authority)
+}
+
+// CSRInfoBoundToCertificateIdentity is CSRBoundToCertificateIdentity on names an
+// inspector already parsed. It is the binding step for subject algorithms the
+// core parser cannot read (a pure ML-DSA PKCS#10 verified through the PQC
+// seam): the names come from that verified parse, and the policy is identical.
+func CSRInfoBoundToCertificateIdentity(info CSRInfo, authority *x509.Certificate) error {
+	if authority == nil {
+		return errors.New("crypto: no authenticated certificate to bind the CSR to")
+	}
 	authorized := map[string]bool{}
 	if cn := strings.TrimSpace(authority.Subject.CommonName); cn != "" {
 		authorized["dns:"+strings.ToLower(cn)] = true
@@ -49,20 +67,20 @@ func CSRBoundToCertificateIdentity(csrDER []byte, authority *x509.Certificate) e
 	}
 
 	var requested []string
-	if cn := strings.TrimSpace(csr.Subject.CommonName); cn != "" {
+	if cn := strings.TrimSpace(info.CommonName); cn != "" {
 		requested = append(requested, "cn:"+strings.ToLower(cn))
 	}
-	for _, dns := range csr.DNSNames {
+	for _, dns := range info.DNSNames {
 		requested = append(requested, "dns:"+strings.ToLower(dns))
 	}
-	for _, ip := range csr.IPAddresses {
-		requested = append(requested, "ip:"+ip.String())
+	for _, ip := range info.IPAddresses {
+		requested = append(requested, "ip:"+ip)
 	}
-	for _, email := range csr.EmailAddresses {
+	for _, email := range info.EmailAddresses {
 		requested = append(requested, "email:"+strings.ToLower(email))
 	}
-	for _, uri := range csr.URIs {
-		requested = append(requested, "uri:"+uri.String())
+	for _, uri := range info.URIs {
+		requested = append(requested, "uri:"+uri)
 	}
 	if len(requested) == 0 {
 		// Nothing to authorize is not authorization: an identifier-free CSR under

@@ -4684,11 +4684,17 @@ carrying the hybrid proof (a classical ECDSA-P256 CSR with the
 composite-binding extension) issues through all four. Pure ML-DSA CSRs are
 narrower today: EST accepts and issues them (the PQC PKCS#10 parser
 sits behind EST's verifier seam, proven against a stock OpenSSL 3.5
-client), and ACME hands the CSR bytes to the same PQC issuer without
-parsing them first; SCEP and CMP still verify CSRs with the core parser
-before the PQC parser is consulted and therefore reject pure ML-DSA —
-SCEP additionally cannot deliver its CMS-enveloped reply to a
-signature-only subject key, a protocol limit rather than a code gap. One
+client), ACME hands the CSR bytes to the same PQC issuer without
+parsing them first, and CMP p10cr carries them under a classically
+protected PKIMessage: the carried CSR is verified and its names are
+inspected through the same PQC-aware seam, so the binding between the
+CSR and the protection identity is evaluated on the parsed names rather
+than by re-parsing the CSR with the core parser (proven with a stock
+`openssl cmp` client carrying an `openssl req` ML-DSA-65 request). SCEP
+still verifies the enveloped CSR with the core parser before the PQC
+parser is consulted and therefore rejects pure ML-DSA — and SCEP
+additionally cannot deliver its CMS-enveloped reply to a signature-only
+transport key, a protocol limit rather than a code gap. One
 ceiling applies everywhere: the issuing CA key itself remains classical
 ECDSA-P256 (post-quantum keys are subject keys, not issuer keys, in the
 served path). Certificate-profile `allowed_key_algorithms` labels accept

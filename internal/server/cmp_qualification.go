@@ -60,7 +60,8 @@ func (s *Server) buildServedCMP(cfg config.Protocols, tenantFallback string, iss
 		AllowRAEnrollment: cfg.CMPAllowRAEnrollment,
 		// Algorithms the core parser cannot check route through the same
 		// licensed verifier seam EST uses; protection stays core-verified.
-		CSRVerifier: issuer.verifyCSR,
+		CSRVerifier:  issuer.verifyCSR,
+		CSRInspector: issuer.inspectCSRInfo,
 		FailureDiagnosis: func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
 			if s.api == nil {
 				return
