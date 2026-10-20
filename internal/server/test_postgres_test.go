@@ -208,11 +208,30 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		`UPDATE projection_checkpoint
 		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
 		        failed_at = NULL, breakglass_issue_checked_through = NULL,
-		        breakglass_authority_checked_through = NULL, updated_at = now()
+		        breakglass_authority_checked_through = NULL,
+		        ca_reprotection_name_checked_through = NULL, updated_at = now()
 		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
 	if _, err := st.SystemPool().Exec(ctx, `UPDATE outbox_reconciliation_checkpoint SET reconciled_seq = 0, updated_at = now() WHERE id = 1`); err != nil {
 		t.Fatalf("reset outbox reconciliation checkpoint: %v", err)
+	}
+}
+
+func TestServerFixtureResetsCAReprotectionNameCursor(t *testing.T) {
+	st := newServerTestStore(t)
+	if _, err := st.SystemPool().Exec(t.Context(),
+		`UPDATE projection_checkpoint SET ca_reprotection_name_checked_through = 9 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	resetServerTestStore(t, st)
+	var checkedThrough *int64
+	if err := st.SystemPool().QueryRow(t.Context(),
+		`SELECT ca_reprotection_name_checked_through FROM projection_checkpoint WHERE id = 1`).
+		Scan(&checkedThrough); err != nil {
+		t.Fatal(err)
+	}
+	if checkedThrough != nil {
+		t.Fatalf("fresh event stream retained CA re-protection name cursor %d", *checkedThrough)
 	}
 }
