@@ -10922,9 +10922,14 @@ SecretSyncJob = TypedDict(
     'SecretSyncJob',
     {
         'attempts': int,
+        'blocked_by_job_id': str,
         'delivered_at': str,
         'job_id': str,
+        'last_error': str,
         'name': str,
+        'receiver_effect_state': str,
+        'receiver_io_starts': int,
+        'reconcilable': bool,
         'remote_key': str,
         'requested_at': str,
         'secret_version': int,
@@ -10958,6 +10963,25 @@ SecretSyncPreview = TypedDict(
         'secret_version': int,
         'target': str,
         'verification_steps': list[str],
+    },
+    total=False,
+)
+
+SecretSyncReconcileRequest = TypedDict(
+    'SecretSyncReconcileRequest',
+    {
+        'observed': str,
+        'operator_verified': bool,
+    },
+    total=False,
+)
+
+SecretSyncReconcileResult = TypedDict(
+    'SecretSyncReconcileResult',
+    {
+        'detail': str,
+        'job': dict[str, Any],
+        'outcome': str,
     },
     total=False,
 )

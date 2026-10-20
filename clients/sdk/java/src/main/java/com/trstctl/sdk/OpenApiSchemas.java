@@ -757,6 +757,8 @@ public final class OpenApiSchemas {
       "SecretSync",
       "SecretSyncJob",
       "SecretSyncPreview",
+      "SecretSyncReconcileRequest",
+      "SecretSyncReconcileResult",
       "SecretSyncRequest",
       "SecretSyncTarget",
       "SecretSyncTargetCatalog",

@@ -163,6 +163,10 @@ type SecretsBackend struct {
 	// write. Nil makes the served mutation fail closed: every HTTP command must
 	// create the event-backed job/order pair enforced by migration 0153.
 	QueueSecretSync func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error
+	// ReconcileSecretSync resolves one sync command whose receiver outcome is
+	// unproven: it reads the receiver back where the target can, or records an
+	// operator's attestation where it cannot. It never sends the value again.
+	ReconcileSecretSync func(ctx context.Context, tenantID, jobID string, operatorVerified bool, observed, actor string) (SecretSyncReconcileOutcome, error)
 	// SecretScanner invokes the configured code/CI secret scanner. The served binary
 	// wires this to a Gitleaks subprocess runner; nil leaves POST /secrets/scans
 	// fail-closed while the rest of the secrets surface remains available.

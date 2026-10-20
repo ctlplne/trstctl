@@ -32618,6 +32618,10 @@
           "attempts": {
             "type": "integer"
           },
+          "blocked_by_job_id": {
+            "description": "The older command on the same target lane that still holds the FIFO barrier in front of this pending job.",
+            "type": "string"
+          },
           "delivered_at": {
             "format": "date-time",
             "type": "string"
@@ -32625,8 +32629,29 @@
           "job_id": {
             "type": "string"
           },
+          "last_error": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
+          },
+          "receiver_effect_state": {
+            "description": "Durable receiver authority behind the status. effect_possible after a delivery with more than one receiver start keeps the target lane closed until the receiver is read back or an operator settles it.",
+            "enum": [
+              "none",
+              "effect_possible",
+              "effect_settled",
+              "failure_authorized",
+              "failure_reconciled"
+            ],
+            "type": "string"
+          },
+          "receiver_io_starts": {
+            "type": "integer"
+          },
+          "reconcilable": {
+            "description": "Whether this job's target can read its receiver back for reconciliation.",
+            "type": "boolean"
           },
           "remote_key": {
             "type": "string"
@@ -32663,7 +32688,9 @@
           "status",
           "attempts",
           "requested_at",
-          "updated_at"
+          "updated_at",
+          "receiver_io_starts",
+          "reconcilable"
         ],
         "type": "object"
       },
@@ -32777,6 +32804,49 @@
           "verification_steps",
           "cli_argv",
           "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "SecretSyncReconcileRequest": {
+        "properties": {
+          "observed": {
+            "description": "What the operator saw at the destination for this exact command's version.",
+            "enum": [
+              "value_present",
+              "value_absent"
+            ],
+            "type": "string"
+          },
+          "operator_verified": {
+            "description": "True only when a person checked the destination; it must come with observed.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SecretSyncReconcileResult": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "job": {
+            "$ref": "#/components/schemas/SecretSyncJob"
+          },
+          "outcome": {
+            "description": "delivered or failed resolve a pending command from the receiver readback or attestation; settled releases a delivered multi-start command's lane; terminal means nothing was left to reconcile.",
+            "enum": [
+              "delivered",
+              "failed",
+              "settled",
+              "terminal"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "detail",
+          "job"
         ],
         "type": "object"
       },
@@ -64284,6 +64354,83 @@
         ],
         "summary": "Read tenant-scoped projected delivery status for a secret-sync job",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/syncs/{id}/reconcile": {
+      "post": {
+        "operationId": "reconcileSecretSync",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "durable secret-sync job id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretSyncReconcileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncReconcileResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Resolve a secret-sync command whose receiver outcome is unproven by reading the destination back, or by recording what the operator saw there",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/unvaulted": {

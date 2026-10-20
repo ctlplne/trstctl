@@ -335,6 +335,12 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 	be.QueueSecretSync = func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
 		return queueSecretSyncEvent(ctx, d.Store, d.Log, d.KEK, tenantID, secretName, secretVersion, target, remoteKey, idempotencyKey, requestBinding, value, d.TenantCrypto)
 	}
+	be.ReconcileSecretSync = func(ctx context.Context, tenantID, jobID string, operatorVerified bool, observed, actor string) (api.SecretSyncReconcileOutcome, error) {
+		if s.secretIntegrations == nil {
+			return api.SecretSyncReconcileOutcome{}, errors.New("server: secret-sync reconciliation is unavailable before the outbox receiver is assembled")
+		}
+		return s.secretIntegrations.ReconcileSecretSyncJob(ctx, tenantID, jobID, operatorVerified, observed, actor)
+	}
 	if s.outbox != nil {
 		be.DynamicRevokeQueue = func(tenantID string) dynsecret.RevokeQueue {
 			return dynamicSecretOutboxQueue{store: d.Store, outbox: s.outbox, tenantID: tenantID}

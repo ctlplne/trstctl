@@ -990,12 +990,14 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 				                                  -- canonical terminal choice releases successors.
 				                                  AND NOT COALESCE(
 				                                      (older_sync_job.status = 'delivered'
-				                                          AND older_sync_outbox.secret_sync_receiver_effect_state = 'effect_possible'
-				                                          AND older_sync_outbox.secret_sync_receiver_io_starts = 1)
+				                                          AND ((older_sync_outbox.secret_sync_receiver_effect_state = 'effect_possible'
+				                                                  AND older_sync_outbox.secret_sync_receiver_io_starts = 1)
+				                                               OR older_sync_outbox.secret_sync_receiver_effect_state = 'effect_settled'))
 				                                      OR
 				                                      (older_sync_job.status = 'failed'
-				                                          AND older_sync_outbox.secret_sync_receiver_effect_state = 'failure_authorized'
-				                                          AND older_sync_outbox.secret_sync_receiver_io_starts BETWEEN 0 AND 1
+				                                          AND ((older_sync_outbox.secret_sync_receiver_effect_state = 'failure_authorized'
+				                                                  AND older_sync_outbox.secret_sync_receiver_io_starts BETWEEN 0 AND 1)
+				                                               OR older_sync_outbox.secret_sync_receiver_effect_state = 'failure_reconciled')
 				                                          AND older_sync_outbox.secret_sync_failure_detail = older_sync_job.last_error
 				                                          AND older_sync_outbox.secret_sync_failure_attempts = older_sync_job.attempts),
 				                                      false

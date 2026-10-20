@@ -316,8 +316,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F48 adds existing-CA CSR preparation and exact readback commands.
 	// The key-compromise command adds a --force-guarded effect retry so a failed
 	// host containment or dead-lettered CA publication recovers headlessly.
-	if len(out) != 546 {
-		t.Fatalf("CLI commands = %d, want 546", len(out))
+	// Secret sync adds one reconcile command for a lost receiver result.
+	if len(out) != 547 {
+		t.Fatalf("CLI commands = %d, want 547", len(out))
 	}
 	return out
 }

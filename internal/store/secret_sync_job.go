@@ -375,6 +375,10 @@ func (s *Store) ApplySecretSyncTerminalEventTx(ctx context.Context, tx pgx.Tx, e
 		outboxTag, err := tx.Exec(ctx, `
 			UPDATE outbox AS queued
 			   SET secret_sync_receiver_effect_state = CASE
+			           -- A settled or reconciled receipt is stronger evidence than the
+			           -- terminal event's producer shape; replay keeps it as it is.
+			           WHEN queued.secret_sync_receiver_effect_state IN ('effect_settled', 'failure_reconciled')
+			           THEN queued.secret_sync_receiver_effect_state
 			           WHEN $6 = 'failed'
 			            AND queued.secret_sync_receiver_effect_state = 'effect_possible'
 			           THEN 'effect_possible'
@@ -383,6 +387,8 @@ func (s *Store) ApplySecretSyncTerminalEventTx(ctx context.Context, tx pgx.Tx, e
 			       secret_sync_receiver_io_starts = GREATEST(
 			           queued.secret_sync_receiver_io_starts,
 			           CASE
+			               WHEN queued.secret_sync_receiver_effect_state IN ('effect_settled', 'failure_reconciled')
+			               THEN queued.secret_sync_receiver_io_starts
 			               WHEN $6 = 'failed'
 			                AND queued.secret_sync_receiver_effect_state = 'effect_possible'
 			               THEN $9::bigint
@@ -390,12 +396,16 @@ func (s *Store) ApplySecretSyncTerminalEventTx(ctx context.Context, tx pgx.Tx, e
 			           END
 			       ),
 			       secret_sync_failure_detail = CASE
+			           WHEN queued.secret_sync_receiver_effect_state IN ('effect_settled', 'failure_reconciled')
+			           THEN queued.secret_sync_failure_detail
 			           WHEN $6 = 'failed'
 			            AND queued.secret_sync_receiver_effect_state = 'effect_possible'
 			           THEN ''
 			           ELSE $7
 			       END,
 			       secret_sync_failure_attempts = CASE
+			           WHEN queued.secret_sync_receiver_effect_state IN ('effect_settled', 'failure_reconciled')
+			           THEN queued.secret_sync_failure_attempts
 			           WHEN $6 = 'failed'
 			            AND queued.secret_sync_receiver_effect_state = 'effect_possible'
 			           THEN 0
@@ -1033,15 +1043,7 @@ func (s *Store) SecretSyncHasOlderNonterminal(ctx context.Context, tenantID, tar
 			        AND older_outbox.destination = current_outbox.destination
 			        AND older_outbox.secret_sync_target_order < current_outbox.secret_sync_target_order
 			        AND NOT COALESCE(
-			            (older_job.status = 'delivered'
-			                AND older_outbox.secret_sync_receiver_effect_state = 'effect_possible'
-			                AND older_outbox.secret_sync_receiver_io_starts = 1)
-			            OR
-			            (older_job.status = 'failed'
-			                AND older_outbox.secret_sync_receiver_effect_state = 'failure_authorized'
-			                AND older_outbox.secret_sync_receiver_io_starts BETWEEN 0 AND 1
-			                AND older_outbox.secret_sync_failure_detail = older_job.last_error
-			                AND older_outbox.secret_sync_failure_attempts = older_job.attempts),
+			            `+secretSyncOlderCommandReleased+`,
 			            false
 			        )
 			 )

@@ -4023,6 +4023,43 @@ export const messages = {
   "secrets.sync.lookupAction": { defaultMessage: "Check delivery", description: "Read an existing secret-sync job by ID." },
   "secrets.sync.attempts": { defaultMessage: "Delivery attempts: {count}", description: "Number of durable secret-sync worker attempts." },
   "secrets.sync.refreshDelivery": { defaultMessage: "Refresh delivery", description: "Manually re-read a secret-sync delivery receipt." },
+  "secrets.sync.blockedBy": {
+    defaultMessage: "Waiting behind job {job}: that earlier command's receiver outcome is not proven yet.",
+    description: "Explains why a later secret-sync version is still queued on its target lane.",
+  },
+  "secrets.sync.receiverState": {
+    defaultMessage: "Receiver authority: {state} after {starts} receiver start(s).",
+    description: "Durable receiver effect state and start count of a secret-sync command.",
+  },
+  "secrets.sync.reconcileTitle": {
+    defaultMessage: "Reconcile with the destination",
+    description: "Section heading for resolving a lost secret-sync receiver result.",
+  },
+  "secrets.sync.reconcileHelpReadback": {
+    defaultMessage: "This target can read its own state back. Reconcile compares the destination with this exact command without sending the value again.",
+    description: "Guidance when the sync target supports receiver readback.",
+  },
+  "secrets.sync.reconcileHelpOperator": {
+    defaultMessage:
+      "This target cannot be read back. Check the destination yourself, say what you saw for this version, then reconcile; your decision is recorded with your name.",
+    description: "Guidance when only an operator can settle the receiver outcome.",
+  },
+  "secrets.sync.observedLabel": { defaultMessage: "What you saw at the destination", description: "Operator attestation choice for a secret-sync reconcile." },
+  "secrets.sync.observedNone": { defaultMessage: "Not checked yet", description: "No operator attestation selected." },
+  "secrets.sync.observedPresent": { defaultMessage: "This version's value is present", description: "Operator saw the command's value at the destination." },
+  "secrets.sync.observedAbsent": {
+    defaultMessage: "This version's value is absent",
+    description: "Operator saw no value from this command at the destination.",
+  },
+  "secrets.sync.reconcileAction": { defaultMessage: "Reconcile with destination", description: "Run the secret-sync reconciliation." },
+  "secrets.sync.reconcileDone": {
+    defaultMessage: "Reconciled: {outcome}. {detail}",
+    description: "Result of a secret-sync reconciliation.",
+  },
+  "secrets.sync.reconcileFailed": {
+    defaultMessage: "Reconciliation was not accepted.",
+    description: "Fallback error for a refused secret-sync reconciliation.",
+  },
   "nav.group.secretsAccess": {
     defaultMessage: "Access & sharing",
     description: "Secrets space navigation group: machine access and one-time shares.",

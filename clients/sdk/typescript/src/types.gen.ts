@@ -6882,6 +6882,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/syncs/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a secret-sync command whose receiver outcome is unproven by reading the destination back, or by recording what the operator saw there */
+        post: operations["reconcileSecretSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/unvaulted": {
         parameters: {
             query?: never;
@@ -15929,10 +15946,21 @@ export interface components {
         };
         SecretSyncJob: {
             attempts: number;
+            /** @description The older command on the same target lane that still holds the FIFO barrier in front of this pending job. */
+            blocked_by_job_id?: string;
             /** Format: date-time */
             delivered_at?: string;
             job_id: string;
+            last_error?: string;
             name: string;
+            /**
+             * @description Durable receiver authority behind the status. effect_possible after a delivery with more than one receiver start keeps the target lane closed until the receiver is read back or an operator settles it.
+             * @enum {string}
+             */
+            receiver_effect_state?: "none" | "effect_possible" | "effect_settled" | "failure_authorized" | "failure_reconciled";
+            receiver_io_starts: number;
+            /** @description Whether this job's target can read its receiver back for reconciliation. */
+            reconcilable: boolean;
             remote_key: string;
             /** Format: date-time */
             requested_at: string;
@@ -15964,6 +15992,24 @@ export interface components {
             secret_version: number;
             target: string;
             verification_steps: string[];
+        };
+        SecretSyncReconcileRequest: {
+            /**
+             * @description What the operator saw at the destination for this exact command's version.
+             * @enum {string}
+             */
+            observed?: "value_present" | "value_absent";
+            /** @description True only when a person checked the destination; it must come with observed. */
+            operator_verified?: boolean;
+        };
+        SecretSyncReconcileResult: {
+            detail: string;
+            job: components["schemas"]["SecretSyncJob"];
+            /**
+             * @description delivered or failed resolve a pending command from the receiver readback or attestation; settled releases a delivered multi-start command's lane; terminal means nothing was left to reconcile.
+             * @enum {string}
+             */
+            outcome: "delivered" | "failed" | "settled" | "terminal";
         };
         SecretSyncRequest: {
             name: string;
@@ -36430,6 +36476,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSyncJob"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reconcileSecretSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description durable secret-sync job id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretSyncReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncReconcileResult"];
                 };
             };
             /** @description client error */

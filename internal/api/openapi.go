@@ -5754,7 +5754,20 @@ func componentSchemas() map[string]*Schema {
 		"status":   {Type: "string", Enum: []string{"pending", "delivered", "failed"}},
 		"attempts": {Type: "integer"}, "requested_at": timestamp(),
 		"updated_at": timestamp(), "delivered_at": timestamp(),
-	}, "job_id", "name", "secret_version", "target", "remote_key", "status", "attempts", "requested_at", "updated_at")
+		"receiver_effect_state": {Type: "string", Enum: []string{"none", "effect_possible", "effect_settled", "failure_authorized", "failure_reconciled"}, Description: "Durable receiver authority behind the status. effect_possible after a delivery with more than one receiver start keeps the target lane closed until the receiver is read back or an operator settles it."},
+		"receiver_io_starts":    {Type: "integer"},
+		"blocked_by_job_id":     {Type: "string", Description: "The older command on the same target lane that still holds the FIFO barrier in front of this pending job."},
+		"reconcilable":          {Type: "boolean", Description: "Whether this job's target can read its receiver back for reconciliation."},
+		"last_error":            str(),
+	}, "job_id", "name", "secret_version", "target", "remote_key", "status", "attempts", "requested_at", "updated_at", "receiver_io_starts", "reconcilable")
+	secretSyncReconcileRequest := object(map[string]*Schema{
+		"operator_verified": {Type: "boolean", Description: "True only when a person checked the destination; it must come with observed."},
+		"observed":          {Type: "string", Enum: []string{"value_present", "value_absent"}, Description: "What the operator saw at the destination for this exact command's version."},
+	})
+	secretSyncReconcileResult := object(map[string]*Schema{
+		"outcome": {Type: "string", Enum: []string{"delivered", "failed", "settled", "terminal"}, Description: "delivered or failed resolve a pending command from the receiver readback or attestation; settled releases a delivered multi-start command's lane; terminal means nothing was left to reconcile."},
+		"detail":  str(), "job": ref("SecretSyncJob"),
+	}, "outcome", "detail", "job")
 	secretSyncTarget := object(map[string]*Schema{
 		"id": str(), "name": str(), "platform": str(),
 		"configured":      {Type: "boolean"},
@@ -7180,6 +7193,8 @@ func componentSchemas() map[string]*Schema {
 		"SecretSyncRequest":                  secretSyncReq,
 		"SecretSyncPreview":                  secretSyncPreview,
 		"SecretSync":                         secretSync,
+		"SecretSyncReconcileRequest":         secretSyncReconcileRequest,
+		"SecretSyncReconcileResult":          secretSyncReconcileResult,
 		"SecretSyncJob":                      secretSyncJob,
 		"SecretSyncTarget":                   secretSyncTarget,
 		"SecretSyncTargetCatalog":            secretSyncTargetCatalog,

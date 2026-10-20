@@ -666,6 +666,10 @@ type Server struct {
 	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
 	outboxGC           *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler          orchestrator.Handler
+	// secretIntegrations is the secret.sync/dynsecret outbox receiver; the
+	// served secret-sync reconciliation resolves it lazily because the API's
+	// secrets backend is built before the dispatcher.
+	secretIntegrations *secretIntegrationOutboxDispatcher
 	// caKeyRetirementState lets the revocation authority resolver refuse a CA
 	// whose signing key was destroyed by signed retirement (see Deps).
 	caKeyRetirementState func(ctx context.Context, tenantID, keyID string) (string, bool, error)
@@ -2006,6 +2010,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		log:                      d.Log,
 		idem:                     idem,
 	}
+	s.secretIntegrations = secretIntegrations
 	var tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 	if d.TenantKeyDomains != nil {
 		tenantKeyDomains = &tenantKeyDomainSealOutboxDispatcher{

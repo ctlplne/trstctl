@@ -3606,7 +3606,7 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 		return nil
 	}
 	if e.Type == EventSecretSyncDelivered || e.Type == EventSecretSyncFailed ||
-		e.Type == EventSecretRotationScheduleRan {
+		e.Type == EventSecretSyncReceiverSettled || e.Type == EventSecretRotationScheduleRan {
 		return p.store.WithTenantProjection(ctx, e.TenantID, func(tx pgx.Tx) error {
 			return p.ApplyTx(ctx, tx, e)
 		})

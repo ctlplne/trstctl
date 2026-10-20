@@ -147,15 +147,20 @@ func validateSecretSyncTerminalOutbox(item store.SecretSyncTerminalHistoryRow, e
 	compatible := false
 	switch job.Status {
 	case store.SecretSyncJobDelivered:
-		compatible = item.OutboxEffectState == store.SecretSyncReceiverEffectPossible &&
+		// A delivery that needed more than one receiver start is settled by an
+		// independent readback or a recorded attestation; both keep the empty
+		// failure fields and the exact start count.
+		compatible = (item.OutboxEffectState == store.SecretSyncReceiverEffectPossible ||
+			item.OutboxEffectState == store.SecretSyncReceiverEffectSettled) &&
 			item.OutboxReceiverStarts > 0 && item.OutboxFailureDetail == "" &&
 			item.OutboxFailureAttempts == 0 &&
 			(item.OutboxStatus == "pending" || item.OutboxStatus == "processing" || item.OutboxStatus == "delivered")
 	case store.SecretSyncJobFailed:
 		// An air-gap-policy rejection records the failed domain fact and returns
 		// success to the generic finalizer, so failed+delivered is intentional.
-		canonicalFailure := item.OutboxEffectState == store.SecretSyncReceiverFailureAuthorized &&
-			item.OutboxReceiverStarts >= 0 && item.OutboxReceiverStarts <= 1 &&
+		canonicalFailure := ((item.OutboxEffectState == store.SecretSyncReceiverFailureAuthorized &&
+			item.OutboxReceiverStarts >= 0 && item.OutboxReceiverStarts <= 1) ||
+			item.OutboxEffectState == store.SecretSyncReceiverFailureReconciled) &&
 			item.OutboxFailureDetail == job.LastError && item.OutboxFailureAttempts == job.Attempts
 		// Neither a v1 failure event nor pre-0153 PostgreSQL state can prove whether
 		// the old generic failure happened before or after receiver I/O. Both
@@ -220,6 +225,7 @@ const (
 	EventDynamicSecretOperationCompleted            = "dynsecret.operation.completed"
 	EventSecretSyncQueued                           = "secret.sync.queued" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretSyncDelivered                        = "secret.sync.delivered"
+	EventSecretSyncReceiverSettled                  = "secret.sync.receiver_settled" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretSyncFailed                           = "secret.sync.failed"
 	EventSecretSyncWorkloadIdentityUpserted         = "secret.sync.workload_identity_source.upserted"
 	EventSecretSyncWorkloadIdentityStatus           = "secret.sync.workload_identity_source.status"
@@ -455,6 +461,39 @@ type SecretSyncFailed struct {
 	Error       string `json:"error"`
 }
 
+// SecretSyncReceiverSettled is the one retained receipt that a delivered
+// command which needed more than one receiver start was read back (method
+// readback) or attested by an operator (method operator) as the receiver's
+// exact value. It releases the per-target FIFO barrier. It carries no value.
+type SecretSyncReceiverSettled struct {
+	ID               string `json:"id"`
+	TenantEpoch      string `json:"tenant_epoch"`
+	OutboxID         int64  `json:"outbox_id"`
+	ReceiverIOStarts int64  `json:"receiver_io_starts"`
+	Method           string `json:"method"`
+	Actor            string `json:"actor,omitempty"`
+	Detail           string `json:"detail"`
+}
+
+func ValidateSecretSyncReceiverSettled(value SecretSyncReceiverSettled) error {
+	if value.ID == "" || value.TenantEpoch == "" || value.OutboxID <= 0 || value.ReceiverIOStarts < 1 || value.Detail == "" {
+		return fmt.Errorf("projections: secret-sync settlement has no exact command, outbox row, start count or detail")
+	}
+	switch value.Method {
+	case "readback":
+		if value.Actor != "" && false {
+			return nil
+		}
+	case "operator":
+		if value.Actor == "" {
+			return fmt.Errorf("projections: an operator settlement names the operator")
+		}
+	default:
+		return fmt.Errorf("projections: secret-sync settlement method %q is unknown", value.Method)
+	}
+	return nil
+}
+
 // SecretSyncWorkloadIdentitySourceUpserted carries reference-only tenant policy.
 // Workload proofs and cloud credentials are forbidden from this event.
 type SecretSyncWorkloadIdentitySourceUpserted struct {
@@ -501,6 +540,7 @@ func init() {
 		EventSecretSyncQueued,
 		EventSecretSyncDelivered,
 		EventSecretSyncFailed,
+		EventSecretSyncReceiverSettled,
 		EventSecretSyncWorkloadIdentityUpserted,
 		EventSecretSyncWorkloadIdentityStatus,
 		EventSecretSyncWorkloadIdentityDeleted,
@@ -915,6 +955,33 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			PayloadDigest:             crypto.SHA256Hex(e.Data),
 			FailureDefinitelyNoEffect: schemaVersionOf(e) >= SecretSyncEventSchemaVersion,
 		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return true, nil
+		}
+		return true, err
+	case EventSecretSyncReceiverSettled:
+		var payload SecretSyncReceiverSettled
+		if err := decode(e, &payload); err != nil {
+			return true, err
+		}
+		if err := ValidateSecretSyncReceiverSettled(payload); err != nil {
+			return true, err
+		}
+		if e.ID != store.SecretSyncReceiverSettledEventID(e.TenantID, payload.ID) {
+			return true, fmt.Errorf("%w: secret-sync settlement event identity is not canonical", store.ErrIdempotencyConflict)
+		}
+		eventSequence, err := secretSyncTargetOrder(e.Sequence)
+		if err != nil {
+			return true, err
+		}
+		tenantEpoch, err := p.store.ResolveSecretSyncTenantEpochTx(ctx, tx, e.TenantID, payload.TenantEpoch, eventSequence)
+		if errors.Is(err, store.ErrApplicationSecretTenantEpochMismatch) {
+			return true, nil
+		}
+		if err != nil {
+			return true, err
+		}
+		err = p.store.ApplySecretSyncReceiverSettledTx(ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.OutboxID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return true, nil
 		}

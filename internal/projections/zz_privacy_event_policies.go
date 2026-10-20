@@ -1915,6 +1915,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventSecretSyncDelivered, SecretSyncEventSchemaVersion}:                           privacyPayloadShape[privacySecretSyncDeliveredV2](),
 		{EventSecretSyncFailed, 1}:                                                         privacyPayloadShape[privacySecretSyncFailedV1](),
 		{EventSecretSyncFailed, SecretSyncEventSchemaVersion}:                              privacyPayloadShape[privacySecretSyncFailedV2](),
+		{EventSecretSyncReceiverSettled, 1}:                                                privacyPayloadShape[SecretSyncReceiverSettled](),
 		{EventSecretSyncWorkloadIdentityUpserted, 1}:                                       privacyPayloadShape[SecretSyncWorkloadIdentitySourceUpserted](),
 		{EventSecretSyncWorkloadIdentityStatus, 1}:                                         privacyPayloadShape[SecretSyncWorkloadIdentitySourceStatus](),
 		{EventSecretSyncWorkloadIdentityDeleted, 1}:                                        privacyPayloadShape[SecretSyncWorkloadIdentitySourceDeleted](),

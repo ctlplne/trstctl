@@ -691,6 +691,25 @@ barrier, and is retried with the same receiver idempotency key until delivery is
 proved. The one exception is a typed local no-network result owned by the first and
 still-only start token. Its closed error and event attempt count are frozen before
 append so crash recovery reproduces the same canonical evidence bytes.
+
+A lost result is proved by reading the receiver back, never by sending the value
+again. Targets whose receiver exposes its state (Vault KV v2, Terraform Cloud and
+OpenTofu through the operation marker, GCP Secret Manager, Azure Key Vault and
+Kubernetes; the catalog lists `receiver-reconcile`) are read back under the same
+operation ID right after an ambiguous error, again when the retry budget is spent,
+and once more after any delivery that needed more than one receiver start. A match
+delivers, or settles the delivered command with one retained
+`secret.sync.receiver_settled` receipt that releases the lane; a provable absence
+fails the command with reconciled authority so the next version proceeds. Targets
+with no readable state (GitHub, GitLab, Vercel and the generic CI JSON receiver)
+keep the lane closed after a multi-start delivery until an operator reconciles the
+job: `POST /api/v1/secrets/syncs/{id}/reconcile`, `trstctl-cli secrets syncs
+reconcile`, or the Secrets console, with `operator_verified` and what they saw at
+the destination (`value_present` or `value_absent`). The attestation is recorded with
+the operator's name; a blind call on such a target is refused with `409 unknown`,
+and `GET /api/v1/secrets/syncs/{id}` names the blocking predecessor
+(`blocked_by_job_id`), the receiver authority (`receiver_effect_state`,
+`receiver_io_starts`) and whether the target is `reconcilable`.
 The command ID also includes the tenant's secret lifecycle epoch, so offboarding and
 re-registering the same tenant UUID cannot reactivate old ciphertext or outcomes.
 

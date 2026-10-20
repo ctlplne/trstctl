@@ -423,6 +423,9 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		), true
 	case "secret.sync.enqueued":
 		return shape(`{"key":"","target":""}`), true
+	case "secret.sync.receiver_settled":
+		return shape(`{"id":"","tenant_epoch":"","outbox_id":1,"receiver_io_starts":1,"method":"","actor":"","detail":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/actor"}}), true
 	case "secret.version.written":
 		return PrivacyPayloadShapeOneOf(
 			shape(`{"path":"","version":1,"sealed":"","envelope":{"format":"","version":1,"wrapped_dek":"","dek_nonce":"","nonce":"","ciphertext":""}}`,

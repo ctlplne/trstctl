@@ -708,12 +708,49 @@ func newConfiguredSyncPusher(cfg config.SecretSyncTargetConfig, credentials inte
 		store: st, log: log, minter: minter,
 	}
 	pusher.push = func(ctx context.Context, key string, value []byte) error {
-		return pushConfiguredSecretSync(ctx, pusher, key, value)
+		return withConfiguredSecretSyncPusher(ctx, pusher, key, func(concrete secretsync.Pusher) error {
+			return concrete.Push(ctx, key, value)
+		})
 	}
 	return pusher
 }
 
-func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key string, value []byte) error {
+// ReconcilesReceiver reports, from the configured type alone, whether this
+// target's receiver exposes state that a readback can compare. The catalog's
+// receiver-reconcile capability and this answer come from the same list.
+func (p *configuredSyncPusher) ReconcilesReceiver() bool {
+	switch p.cfg.Type {
+	case "vault-kv-v2", "terraform-cloud-opentofu", "gcp-secret-manager", "azure-key-vault", "kubernetes-secrets":
+		return true
+	default:
+		return false
+	}
+}
+
+// ReconcileOperation resolves the target's credential for one readback, asks
+// the concrete pusher to compare the receiver with this command's value under
+// the same operation ID, and destroys the credential. It never writes.
+func (p *configuredSyncPusher) ReconcileOperation(ctx context.Context, key string, value []byte) (secretsync.ReceiverReconciliation, error) {
+	if !p.ReconcilesReceiver() {
+		return secretsync.ReceiverStateUnknown, nil
+	}
+	state := secretsync.ReceiverStateUnknown
+	err := withConfiguredSecretSyncPusher(ctx, p, key, func(concrete secretsync.Pusher) error {
+		reconciler, ok := concrete.(secretsync.ReceiverReconciler)
+		if !ok {
+			return nil
+		}
+		var reconcileErr error
+		state, reconcileErr = reconciler.ReconcileOperation(ctx, key, value)
+		return reconcileErr
+	})
+	if err != nil {
+		return secretsync.ReceiverStateUnknown, err
+	}
+	return state, nil
+}
+
+func withConfiguredSecretSyncPusher(ctx context.Context, p *configuredSyncPusher, key string, use func(secretsync.Pusher) error) error {
 	var values []*secret.Buffer
 	destroy := func() {
 		for _, item := range values {
@@ -839,7 +876,7 @@ func pushConfiguredSecretSync(ctx context.Context, p *configuredSyncPusher, key 
 	if closer, ok := concrete.(interface{ Close() }); ok {
 		defer closer.Close()
 	}
-	return concrete.Push(ctx, key, value)
+	return use(concrete)
 }
 
 func (p *configuredSyncPusher) awsSyncCredentials(

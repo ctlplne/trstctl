@@ -82,6 +82,10 @@ export function SecretSyncWorkflow({
   const [previewBusy, setPreviewBusy] = useState(false);
   const [executeBusy, setExecuteBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [observed, setObserved] = useState<"" | "value_present" | "value_absent">("");
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [reconcileNotice, setReconcileNotice] = useState<string | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
   const [result, setResult] = useState<SecretSync | null>(null);
   const [values, setValues] = useState<SecretSyncForm>(() => ({ name: initialName, target: catalog?.configured_targets[0] ?? "", remoteKey: "" }));
@@ -95,6 +99,32 @@ export function SecretSyncWorkflow({
     retry: false,
   });
   const receipt = jobQuery.data ?? result;
+  const job = jobQuery.data;
+  // A command needs reconciling when its receiver outcome is unproven: still
+  // pending after a receiver start, or delivered only after more than one start.
+  const reconcileNeeded = Boolean(
+    job &&
+    job.receiver_effect_state === "effect_possible" &&
+    ((job.status === "pending" && job.receiver_io_starts > 0) || (job.status === "delivered" && job.receiver_io_starts > 1)),
+  );
+  async function reconcile() {
+    if (!job) return;
+    setReconcileBusy(true);
+    setReconcileNotice(null);
+    setReconcileError(null);
+    try {
+      const input = observed ? { operator_verified: true, observed } : {};
+      // One key per exact receiver state: repeating the same decision replays it.
+      const key = `secret-sync-reconcile:${job.job_id}:${observed || "readback"}:${job.receiver_io_starts}:${job.attempts}`;
+      const outcome = await api.reconcileSecretSync(job.job_id, input, key);
+      setReconcileNotice(t("secrets.sync.reconcileDone", { outcome: outcome.outcome, detail: outcome.detail }));
+      await jobQuery.refetch();
+    } catch (cause) {
+      setReconcileError(apiProblemMessage(cause, t("secrets.sync.reconcileFailed")));
+    } finally {
+      setReconcileBusy(false);
+    }
+  }
 
   const { name, target, remoteKey } = values;
   const request = normalizedRequest({ name, target, remoteKey });
@@ -450,6 +480,43 @@ export function SecretSyncWorkflow({
               <p className="break-all font-mono text-xs">{jobID}</p>
               {jobQuery.data ? <p>{t("secrets.sync.attempts", { count: jobQuery.data.attempts })}</p> : null}
               {jobQuery.data?.status === "failed" ? <p>{t("secrets.sync.failedRecovery")}</p> : null}
+              {job?.blocked_by_job_id ? <p>{t("secrets.sync.blockedBy", { job: job.blocked_by_job_id })}</p> : null}
+              {job?.receiver_effect_state ? (
+                <p>{t("secrets.sync.receiverState", { state: job.receiver_effect_state, starts: job.receiver_io_starts })}</p>
+              ) : null}
+              {reconcileNeeded && job ? (
+                <div className="mt-2 grid gap-2" aria-label={t("secrets.sync.reconcileTitle")}>
+                  <p>{job.reconcilable ? t("secrets.sync.reconcileHelpReadback") : t("secrets.sync.reconcileHelpOperator")}</p>
+                  {!job.reconcilable ? (
+                    <Field label={t("secrets.sync.observedLabel")}>
+                      {(field) => (
+                        <Select {...field} value={observed} onChange={(event) => setObserved(event.target.value as "" | "value_present" | "value_absent")}>
+                          <option value="">{t("secrets.sync.observedNone")}</option>
+                          <option value="value_present">{t("secrets.sync.observedPresent")}</option>
+                          {job.status === "pending" ? <option value="value_absent">{t("secrets.sync.observedAbsent")}</option> : null}
+                        </Select>
+                      )}
+                    </Field>
+                  ) : null}
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={reconcileBusy || (!job.reconcilable && !observed)}
+                      loading={reconcileBusy}
+                      onClick={() => void reconcile()}
+                    >
+                      {t("secrets.sync.reconcileAction")}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {reconcileNotice ? <p role="status">{reconcileNotice}</p> : null}
+              {reconcileError ? (
+                <p role="alert" className="text-status-warning">
+                  {reconcileError}
+                </p>
+              ) : null}
               {jobQuery.error ? <p>{t("secrets.sync.statusRecovery")}</p> : null}
               <Button type="button" variant="outline" onClick={jobQuery.refetch}>
                 {t("secrets.sync.refreshDelivery")}

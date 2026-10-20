@@ -3712,7 +3712,12 @@ writes externally. The acceptance proof enforces exact target authentication,
 decrypts GitHub's X25519 sealed box in a separate receiver process, and
 independently reads every destination value back. `GET
 /api/v1/secrets/syncs/targets` shows the catalog and this installation's
-configured targets.
+configured targets. A sync whose receiver result was lost is reconciled by reading
+the destination back where the target can (`receiver-reconcile` in the catalog), and
+a later version never waits forever behind it: a target without readable state holds
+the lane until an operator records what they saw through `POST
+/api/v1/secrets/syncs/{id}/reconcile`; `GET /api/v1/secrets/syncs/{id}` names that
+blocking predecessor.
 
 AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
 of their static target credential. The matching

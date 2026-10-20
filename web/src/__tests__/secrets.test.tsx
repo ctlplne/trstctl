@@ -78,6 +78,7 @@ const { apiMock } = vi.hoisted(() => ({
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
     secretSyncJob: vi.fn(),
+    reconcileSecretSync: vi.fn(),
     identities: vi.fn(),
     apiTokens: vi.fn(),
     createAPIToken: vi.fn(),
@@ -2279,6 +2280,48 @@ describe("secrets surface", () => {
     expect(await screen.findByText("Delivery failed")).toBeInTheDocument();
     expect(screen.getByText(/Check the target and audit events/)).toBeInTheDocument();
     expect(apiMock.secretSyncJob).toHaveBeenCalledWith("sync-test-job");
+    expect(apiMock.syncSecret).not.toHaveBeenCalled();
+  });
+
+  it("settles a delivered sync whose receiver outcome could not be read back", async () => {
+    let current = {
+      job_id: "sync-test-job",
+      name: "app/db/password",
+      secret_version: 5,
+      target: "ci",
+      remote_key: "DB_PASSWORD",
+      status: "delivered",
+      attempts: 2,
+      requested_at: "2026-10-20T00:00:00Z",
+      updated_at: "2026-10-20T00:00:03Z",
+      delivered_at: "2026-10-20T00:00:03Z",
+      receiver_effect_state: "effect_possible",
+      receiver_io_starts: 2,
+      reconcilable: false,
+    };
+    apiMock.secretSyncJob.mockImplementation(async () => current);
+    apiMock.reconcileSecretSync.mockImplementation(async () => {
+      current = { ...current, receiver_effect_state: "effect_settled" };
+      return { outcome: "settled", detail: "operator verified at the destination that this command's value is present", job: current };
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/sync?job_id=sync-test-job");
+    expect(await screen.findByText("Delivered")).toBeInTheDocument();
+    expect(screen.getByText("Receiver authority: effect_possible after 2 receiver start(s).")).toBeInTheDocument();
+    const reconcileButton = screen.getByRole("button", { name: "Reconcile with destination" });
+    expect(reconcileButton).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText("What you saw at the destination"), "value_present");
+    await user.click(reconcileButton);
+    await waitFor(() =>
+      expect(apiMock.reconcileSecretSync).toHaveBeenCalledWith(
+        "sync-test-job",
+        { operator_verified: true, observed: "value_present" },
+        "secret-sync-reconcile:sync-test-job:value_present:2:2",
+      ),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Reconciled: settled.");
+    await waitFor(() => expect(screen.getByText("Receiver authority: effect_settled after 2 receiver start(s).")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Reconcile with destination" })).not.toBeInTheDocument();
     expect(apiMock.syncSecret).not.toHaveBeenCalled();
   });
 

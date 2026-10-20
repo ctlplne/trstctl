@@ -17305,6 +17305,7 @@
                 "previewSecretSync",
                 "syncSecret",
                 "getSecretSyncJob",
+                "reconcileSecretSync",
                 "getKubernetesSecretOperator",
                 "getSecretWorkloadInjection",
                 "getUnvaultedSecretPosture"
@@ -17315,6 +17316,7 @@
                 "secrets syncs preview",
                 "secrets syncs run",
                 "secrets syncs status",
+                "secrets syncs reconcile",
                 "secrets syncs targets",
                 "secrets syncs workload-identities create",
                 "secrets syncs workload-identities list",

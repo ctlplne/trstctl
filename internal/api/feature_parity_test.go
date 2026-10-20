@@ -279,8 +279,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F48 adds tenant-bound existing-CA CSR preparation and exact readback.
 	// The key-compromise command adds one effect retry so a failed host
 	// containment or dead-lettered CA publication recovers on the same command.
-	if len(out) != 496 {
-		t.Fatalf("OpenAPI operationIds = %d, want 496", len(out))
+	// Secret sync adds one reconcile operation for a lost receiver result.
+	if len(out) != 497 {
+		t.Fatalf("OpenAPI operationIds = %d, want 497", len(out))
 	}
 	return out
 }

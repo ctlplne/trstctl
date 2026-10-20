@@ -7954,9 +7954,14 @@ export interface SecretSync {
 
 export interface SecretSyncJob {
   attempts: number;
+  blocked_by_job_id?: string;
   delivered_at?: string;
   job_id: string;
+  last_error?: string;
   name: string;
+  receiver_effect_state?: "none" | "effect_possible" | "effect_settled" | "failure_authorized" | "failure_reconciled";
+  receiver_io_starts: number;
+  reconcilable: boolean;
   remote_key: string;
   requested_at: string;
   secret_version: number;
@@ -7986,6 +7991,17 @@ export interface SecretSyncPreview {
   secret_version: number;
   target: string;
   verification_steps: string[];
+}
+
+export interface SecretSyncReconcileRequest {
+  observed?: "value_present" | "value_absent";
+  operator_verified?: boolean;
+}
+
+export interface SecretSyncReconcileResult {
+  detail: string;
+  job: SecretSyncJob;
+  outcome: "delivered" | "failed" | "settled" | "terminal";
 }
 
 export interface SecretSyncRequest {

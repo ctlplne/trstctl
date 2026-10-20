@@ -99,6 +99,17 @@ type secretSyncJobResponse struct {
 	RequestedAt   string `json:"requested_at"`
 	UpdatedAt     string `json:"updated_at"`
 	DeliveredAt   string `json:"delivered_at,omitempty"`
+	// ReceiverEffectState is the durable receiver authority behind the status:
+	// none, effect_possible, effect_settled, failure_authorized or
+	// failure_reconciled. ReceiverIOStarts counts receiver starts.
+	ReceiverEffectState string `json:"receiver_effect_state,omitempty"`
+	ReceiverIOStarts    int64  `json:"receiver_io_starts"`
+	// BlockedByJobID names the older command on the same target lane that still
+	// holds the FIFO barrier in front of a pending job.
+	BlockedByJobID string `json:"blocked_by_job_id,omitempty"`
+	// Reconcilable says whether this job's target can read its receiver back.
+	Reconcilable bool   `json:"reconcilable"`
+	LastError    string `json:"last_error,omitempty"`
 }
 
 type secretSyncPreviewResponse struct {
@@ -524,16 +535,7 @@ func (a *API) getSecretSyncJob(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	response := secretSyncJobResponse{
-		JobID: job.ID, Name: job.SecretName, SecretVersion: job.SecretVersion,
-		Target: job.Target, RemoteKey: job.RemoteKey, Status: string(job.Status),
-		Attempts: job.Attempts, RequestedAt: job.RequestedAt.UTC().Format(time.RFC3339),
-		UpdatedAt: job.UpdatedAt.UTC().Format(time.RFC3339),
-	}
-	if job.DeliveredAt != nil {
-		response.DeliveredAt = job.DeliveredAt.UTC().Format(time.RFC3339)
-	}
-	a.writeJSON(w, http.StatusOK, response)
+	a.writeJSON(w, http.StatusOK, a.secretSyncJobResponseFor(r.Context(), tenantID, job))
 }
 
 func secretSyncRequestBinding(principal string, req secretSyncRequest) (string, error) {

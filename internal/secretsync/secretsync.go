@@ -313,7 +313,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			DeliveryMode: "projects.secrets.addVersion over HTTPS",
 			AuthMode:     "Bearer token or workload-federated access token supplied by operator config",
 			WireFormat:   "payload.data base64 secret bytes",
-			Capabilities: []string{"cloud-secret-manager", "versioned-secret", "outbox-delivery"},
+			Capabilities: []string{"cloud-secret-manager", "versioned-secret", CapabilityReceiverReconcile, "outbox-delivery"},
 		},
 		{
 			ID:           "azure-key-vault",
@@ -322,7 +322,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			DeliveryMode: "secrets set over HTTPS",
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "base64 value with contentType application/octet-stream;base64",
-			Capabilities: []string{"cloud-secret-manager", "versioned-secret", "outbox-delivery"},
+			Capabilities: []string{"cloud-secret-manager", "versioned-secret", CapabilityReceiverReconcile, "outbox-delivery"},
 		},
 		{
 			ID:           "github-actions",
@@ -367,7 +367,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			DeliveryMode: "core v1 Secret upsert over HTTPS",
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "Opaque Secret data.value base64 payload",
-			Capabilities: []string{"cluster-secret", "namespace-secret", "outbox-delivery"},
+			Capabilities: []string{"cluster-secret", "namespace-secret", CapabilityReceiverReconcile, "outbox-delivery"},
 		},
 		{
 			ID:           "terraform-cloud-opentofu",
@@ -376,7 +376,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			DeliveryMode: "native workspace Variables API read-before-create/update over HTTPS",
 			AuthMode:     "Bearer team token supplied by operator config",
 			WireFormat:   "JSON:API vars resource with sensitive=true and terraform/env category",
-			Capabilities: []string{"workspace-variable", "opentofu", "sensitive-variable", "read-before-write", "outbox-delivery"},
+			Capabilities: []string{"workspace-variable", "opentofu", "sensitive-variable", "read-before-write", CapabilityReceiverReconcile, "outbox-delivery"},
 		},
 		{
 			ID:           "vault-kv-v2",
@@ -385,7 +385,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			DeliveryMode: "KV v2 data API read-before-write with options.cas over HTTPS",
 			AuthMode:     "X-Vault-Token and optional X-Vault-Namespace supplied by operator config",
 			WireFormat:   "KV v2 data field plus check-and-set metadata version",
-			Capabilities: []string{"vault", "openbao", "kv-v2", "cas", "read-before-write", "outbox-delivery"},
+			Capabilities: []string{"vault", "openbao", "kv-v2", "cas", "read-before-write", CapabilityReceiverReconcile, "outbox-delivery"},
 		},
 	}
 	for i := range entries {

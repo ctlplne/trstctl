@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"trstctl.com/trstctl/internal/api"
 
 	"github.com/jackc/pgx/v5"
 
@@ -291,9 +292,21 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		if record.OutboxID != m.ID || record.IdempotencyKey != m.IdempotencyKey || record.Target != targetID || record.RemoteKey != payload.Key || record.RequestBinding != payload.RequestBinding || payload.Target != targetID {
 			return true, errors.New("server: terminal secret-sync failure does not match its projected command")
 		}
+		if cause == nil {
+			return true, errors.New("server: terminal secret-sync failure has no delivery cause")
+		}
 		if !orchestrator.IsDefiniteNoEffect(cause) {
-			if cause == nil {
-				return true, errors.New("server: terminal secret-sync failure has no delivery cause")
+			// The retry budget is spent on an ambiguous receiver. Read the receiver
+			// back where the target can: a match delivers, a provable absence
+			// fails with reconciled authority, and only an unreadable receiver
+			// stays pending for the operator's reconcile command.
+			out, reconcileErr := d.ReconcileSecretSyncJob(ctx, m.TenantID, payload.ID, false, "", "")
+			if reconcileErr != nil {
+				return true, reconcileErr
+			}
+			switch out.Outcome {
+			case api.SecretSyncReconcileDelivered, api.SecretSyncReconcileFailed, api.SecretSyncReconcileSettled, api.SecretSyncReconcileTerminal:
+				return true, nil
 			}
 			return true, orchestrator.DeferDelivery(cause)
 		}
@@ -909,7 +922,10 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 	}); err != nil {
 		return err
 	}
-	return nil
+	// A delivery that needed more than one receiver start keeps its target lane
+	// closed until the receiver state is proved; read it back now so the next
+	// version does not wait for an operator.
+	return d.settleSecretSyncAfterDelivery(ctx, m.TenantID, payload.ID)
 }
 
 // deliverSecretSyncReceiver keeps the receiver-start CAS and the external call
@@ -972,6 +988,14 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSyncReceiver(
 				return terminalErr
 			}
 			return errSecretSyncReceiverNoDelivery
+		}
+		// The receiver may have committed before the result was lost. A readback
+		// under the same operation ID proves it without sending the value again;
+		// a target that cannot read back leaves the retry to the same operation ID.
+		if receiverToken.Load() > 0 {
+			if state, readErr := target.ReconcileOperation(ctx, payload.ID, payload.Key, value); readErr == nil && state == secretsync.ReceiverStateMatches {
+				return nil
+			}
 		}
 		return fmt.Errorf("server: deliver secret-sync job %s to %s: %w", payload.ID, targetID, err)
 	}
@@ -1475,8 +1499,9 @@ func (d *secretIntegrationOutboxDispatcher) appendAndProjectSecretSyncEvidenceLo
 		case projections.EventSecretSyncFailed:
 			expected, ok := payload.(projections.SecretSyncFailed)
 			authorized = ok && authority.JobStatus == store.SecretSyncJobPending &&
-				authority.EffectState == store.SecretSyncReceiverFailureAuthorized &&
-				authority.ReceiverIOStarts >= 0 && authority.ReceiverIOStarts <= 1 &&
+				((authority.EffectState == store.SecretSyncReceiverFailureAuthorized &&
+					authority.ReceiverIOStarts >= 0 && authority.ReceiverIOStarts <= 1) ||
+					authority.EffectState == store.SecretSyncReceiverFailureReconciled) &&
 				authority.FailureDetail == expected.Error &&
 				authority.FailureAttempts == expected.Attempts
 		}
