@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1564 annotated sites across 26 rules. Each row is
+1565 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -780,7 +780,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (177 sites)
+### G204 — CWE-78 OS command injection (178 sites)
 
 | Location | Reason |
 |---|---|
@@ -902,6 +902,7 @@ not this file.
 | `internal/server/compose_e2e_tls_test.go:234` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
+| `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/github_action_served_test.go:224` | the test deliberately executes a generated copy of the fixed shipped action script (CWE-78). |
 | `internal/server/java_sdk_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1684,12 +1685,13 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:709` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (7 sites)
+### G702 — CWE-78 OS command injection (taint) (8 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
+| `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1103` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1145` | test executes a fixed local tool or fixture it built itself (CWE-78) |

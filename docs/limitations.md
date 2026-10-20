@@ -4827,10 +4827,14 @@ renewal is what fixes it, and until it lands the count of successors reading
 
 The control plane's HTTPS listener negotiates TLS 1.3 only by default. Stock device
 enrollment clients that cap at TLS 1.2 (cisco libest `estclient`, some SCEP agents)
-cannot complete the handshake against that default; the conformance job that builds
-libest proves it against a Go test server that still allows TLS 1.2, not against the
-served policy. `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2` (AEAD suites only) is the
-documented opt-in for such fleets. EST `/simplereenroll` authenticates with the
+cannot complete the handshake against that default. The libest conformance job
+proves both sides of that policy against the control plane's own listener code
+(`mtls.ServerCert.ServeHTTPS`, the path `serveControlPlane` runs): with the TLS
+1.3-only default the pinned `estclient` fails its handshake and writes no
+certificate, and with `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2` (AEAD suites only), the
+documented opt-in for such fleets, the same client enrolls. The earlier proof
+against a Go test server that silently allowed TLS 1.2 is retired. EST
+`/simplereenroll` authenticates with the
 bootstrap token rather than the presented client certificate (DP2-037), so devices
 keep the scoped token for renewals. Found by the cold design-partner run
 20260906t143500z (DP2-036, DP2-037).
