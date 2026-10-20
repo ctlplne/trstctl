@@ -263,6 +263,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Single sign-on detail | Served; Kerberos/GSSAPI, NTLM, and SLO not yet implemented | [Single sign-on](#single-sign-on) |
 | CA key custody / HSM / BYOK | Sealed local key store by default; six of six HSM/KMS backends served | [CA key custody](#ca-key-custody) |
 | Post-quantum cryptography | ML-DSA/ML-KEM/SLH-DSA available; compatibility-bounded proofs | [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms) |
+| PCAS KEM data re-wrap | Not built; the served route prepares successor keys but cannot migrate ciphertext | [PCAS KEM data re-wrap](#pcas-kem-data-re-wrap-not-built) |
 | Kubernetes deployment | Helm chart plus a focused Operator; Operator doesn't manage networking yet | [Kubernetes deployment](#kubernetes-deployment) |
 | Performance & usability NFRs | Perf/scale measured in CI; usability evidence-gated, no NPS claim yet | [Non-functional targets](#non-functional-targets-what-is-measured-vs-aspirational) |
 
@@ -1456,6 +1457,20 @@ only when an operator enables or configures a backend, and some have a served
 spine with explicit residual work. The matrix above is the authority for whether
 the running binary serves a capability; this section records the operator-facing
 edges and follow-up integration work.
+
+### PCAS KEM data re-wrap (not built)
+
+`POST /api/v1/pcas/kem/rewraps` can create a tenant-bound request and a signed
+paired successor signing/KEM key record. The projected stages now read
+`key_ready`, with `rewrap_complete=false`. This is key preparation only. The
+request has no ciphertext or target reference, connector, target write, or bound
+readback receipt, so it cannot migrate encrypted data. The PCAS console also
+has no target registration or data re-wrap workflow. The predecessor-retirement
+gate refuses the current key-ready record. Operators
+must keep the predecessor available and must not treat a delivered outbox row or
+the paired public record as migration proof. A real target contract, execution
+worker, per-target bound receipt, recovery, API/CLI/console workflow and stock
+readback are future build work; local QA run 1 does not qualify data re-wrap.
 
 ### Workload-held co-sign mode (off by default)
 

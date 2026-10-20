@@ -438,6 +438,8 @@ shared feature metrics:
 
 The labels are fixed strings. They never include tenant IDs, identities, serials,
 handles, ciphertexts, shared secrets, or other secret material.
+The `pcas_kem` `rewrap/success` counter currently counts successful successor-key
+preparation, not a ciphertext migration; no data re-wrap executor exists yet.
 
 Also watch:
 
@@ -494,7 +496,7 @@ Check a succession chain:
 curl -fsS "$TRSTCTL_URL/api/v1/pcas/chain?identity_id=$IDENTITY_ID"
 ```
 
-Check a KEM re-wrap:
+Check KEM successor-key readiness. This read is not ciphertext migration proof:
 
 ```bash
 curl -fsS "$TRSTCTL_URL/api/v1/pcas/rewrap?identity_id=$IDENTITY_ID&predecessor_epoch=$EPOCH"
@@ -546,7 +548,9 @@ Escalate immediately if:
 - `pcas_succession/mint` errors grow while `trstctl_signer_up` is `1`;
 - retirement worker errors persist after re-wrap completion;
 - two different records appear for the same tenant, identity, and epoch;
-- KEM re-wrap stays incomplete while its outbox rows are delivered;
+- KEM key preparation fails or a stage claims data completion without a bound
+  target receipt. Incomplete data re-wrap after a delivered key-preparation
+  outbox row is the current expected state;
 - `pcas_monitor/misissuance` records a finding.
 
 Do not manually delete PCAS rows. The event log, outbox, and RLS tables are the
