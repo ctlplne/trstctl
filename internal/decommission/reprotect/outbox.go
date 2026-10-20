@@ -44,6 +44,8 @@ func WithStore(repo *decstore.Repo) Option {
 
 type Handler struct {
 	coreStore            *corestore.Store
+	log                  *events.Log
+	defaultProfile       string
 	outbox               *orchestrator.Outbox
 	plans                *CredentialPlanLedger
 	store                *decstore.Repo
@@ -112,6 +114,8 @@ func newHandler(d editionseam.LicensedOutboxDeps, cfg factoryConfig) (Handler, e
 	}
 	return Handler{
 		coreStore:            d.Store,
+		log:                  d.Log,
+		defaultProfile:       d.DefaultProfile,
 		outbox:               orchestrator.NewOutbox(d.Store),
 		plans:                NewCredentialPlanLedger(d.Log, d.Store),
 		store:                cfg.store,

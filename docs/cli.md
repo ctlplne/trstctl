@@ -834,7 +834,11 @@ trstctl-cli ca keys reprotect plan <predecessor-ca-authority-id> -f reprotect-pl
 #  "ttl_seconds":600}
 # The server derives the job, one managed identity, old SPKI, assigned host
 # agent, connector and listener probe from tenant-scoped records. The plan
-# preview is effect-free and shows those exact bindings. Registration rechecks
+# preview is effect-free and shows those exact bindings, including the identity's
+# selected active certificate policy or the configured fallback. A policy/name
+# drift rejects preview, start or signing; an already recorded plan is read
+# back as recorded, never silently replaced with a new policy selection.
+# Registration rechecks
 # current state and writes a first-writer plan; a lost response is recovered by
 # job ID (the CLI URL-escapes the job ID, which contains slashes).
 trstctl-cli ca keys reprotect plan get <predecessor-ca-authority-id> <job-id>
@@ -849,7 +853,8 @@ trstctl-cli ca keys reprotect <predecessor-ca-authority-id>
 # job ID and load the immutable plan. Queueing is not served-leaf proof: check
 # the signed host result, stock TLS readback and refreshed retirement checklist.
 # The host keeps the original subject key and identifiers. Its CSR passes the
-# active profile's certificate constraints; allowed_protocols governs new
+# identity-selected active profile's certificate constraints (configured
+# default only when there is no identity selection); allowed_protocols governs new
 # enrollment, while this reviewed continuation is audited as ca-reprotect.
 
 # For one expired requester-held or revoked, unserved host-held managed CA leaf,

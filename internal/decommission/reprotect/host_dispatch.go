@@ -47,6 +47,7 @@ type hostReprotectIntent struct {
 	ReprotectPredecessorFingerprint string          `json:"reprotect_predecessor_fingerprint"`
 	ReprotectPredecessorSPKISHA256  string          `json:"reprotect_predecessor_spki_sha256"`
 	ReprotectTTLSeconds             int64           `json:"reprotect_ttl_seconds"`
+	ReprotectProfileName            string          `json:"reprotect_profile_name,omitempty"`
 }
 
 func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, successorID string) error {
@@ -77,7 +78,7 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 	selection := CredentialPlanSelection{CertificateID: job.Dependent.ID, SuccessorAuthorityID: successorID,
 		TargetID: plan.TargetID, ExpectedTargetRevision: plan.TargetRevisionID,
 		ExpectedFingerprint: plan.PredecessorFingerprint, TTLSeconds: plan.TTLSeconds}
-	current, err := (&Enqueuer{store: h.coreStore, repo: h.store}).PreviewCredentialPlan(ctx, job.TenantID, job.KeyID, selection)
+	current, err := NewEnqueuer(h.coreStore, h.store, nil).WithProfilePolicy(h.log, h.defaultProfile).PreviewCredentialPlan(ctx, job.TenantID, job.KeyID, selection)
 	if err != nil || !sameCurrentHostPlan(plan, current) {
 		if err != nil {
 			return err
@@ -110,7 +111,8 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 		PredecessorCertificateID: job.Dependent.ID, IssuingAuthoritySource: "private",
 		IssuingAuthorityID: successorID, RequiredAgentID: plan.RequiredAgentID,
 		ReprotectJobID: job.ID, ReprotectPredecessorFingerprint: plan.PredecessorFingerprint,
-		ReprotectPredecessorSPKISHA256: plan.PredecessorSPKISHA256, ReprotectTTLSeconds: plan.TTLSeconds}
+		ReprotectPredecessorSPKISHA256: plan.PredecessorSPKISHA256, ReprotectTTLSeconds: plan.TTLSeconds,
+		ReprotectProfileName: plan.ProfileName}
 	payload, err := json.Marshal(intent)
 	if err != nil {
 		return err
@@ -131,7 +133,7 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 // routing instruction, not authority to ask the signer for a different key,
 // names, CA, target, TTL, or host agent.
 func AuthorizeHostCSR(ctx context.Context, st *corestore.Store, log *events.Log,
-	tenantID, agentID, jobKey string, payload, csrDER []byte) (CredentialPlan, error) {
+	tenantID, agentID, jobKey string, payload, csrDER []byte, defaultProfile string) (CredentialPlan, error) {
 	if st == nil || log == nil || tenantID == "" || agentID == "" {
 		return CredentialPlan{}, ErrExecutorUnavailable
 	}
@@ -159,7 +161,7 @@ func AuthorizeHostCSR(ctx context.Context, st *corestore.Store, log *events.Log,
 	selection := CredentialPlanSelection{CertificateID: plan.Job.Dependent.ID, SuccessorAuthorityID: plan.SuccessorAuthorityID,
 		TargetID: plan.TargetID, ExpectedTargetRevision: plan.TargetRevisionID,
 		ExpectedFingerprint: plan.PredecessorFingerprint, TTLSeconds: plan.TTLSeconds}
-	current, err := NewEnqueuer(st, decstore.New(st), nil).PreviewCredentialPlan(ctx, tenantID, plan.Job.KeyID, selection)
+	current, err := NewEnqueuer(st, decstore.New(st), nil).WithProfilePolicy(log, defaultProfile).PreviewCredentialPlan(ctx, tenantID, plan.Job.KeyID, selection)
 	if err != nil || !sameCurrentHostPlan(plan, current) {
 		if err != nil {
 			return CredentialPlan{}, err
@@ -193,6 +195,11 @@ func sameCurrentHostPlan(recorded, current CredentialPlan) bool {
 		return false
 	}
 	current.Job.LedgerPosition = recorded.Job.LedgerPosition
+	// Plans recorded before profile selection was included retain their exact
+	// predecessor/host authority. Resolve their current policy at every use.
+	if recorded.ProfileName == "" {
+		current.ProfileName = ""
+	}
 	return reflect.DeepEqual(current, recorded)
 }
 
@@ -233,6 +240,7 @@ func validateHostIntentBinding(plan CredentialPlan, intent hostReprotectIntent, 
 		plan.SuccessorAuthorityID != intent.IssuingAuthorityID || intent.IssuingAuthoritySource != "private" ||
 		plan.PredecessorFingerprint != intent.ReprotectPredecessorFingerprint ||
 		plan.PredecessorSPKISHA256 != intent.ReprotectPredecessorSPKISHA256 ||
+		plan.ProfileName != intent.ReprotectProfileName ||
 		plan.TTLSeconds != intent.ReprotectTTLSeconds || plan.VerifyAddress != intent.VerifyAddress ||
 		plan.VerifyServerName != intent.VerifyServerName || predecessor.ID != plan.Job.Dependent.ID ||
 		predecessor.Fingerprint != plan.PredecessorFingerprint {

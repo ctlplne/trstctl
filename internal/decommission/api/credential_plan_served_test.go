@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -44,6 +45,28 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	t.Cleanup(func() { _ = log.Close() })
 	outbox := orchestrator.NewOutbox(st)
 	fixtureOrch := orchestrator.NewOrchestrator(log, st, outbox)
+	setSelectedPolicy := func(suffix string) {
+		t.Helper()
+		spec, err := json.Marshal(profile.CertificateProfile{Name: "qa-reprotect-selected", MaxValidity: profile.Duration(time.Hour), AllowedDNSSuffixes: []string{suffix}, AllowedProtocols: []string{"acme"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fixtureOrch.CreateProfile(ctx, tenantA, "qa-reprotect-selected", spec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, policy := range []profile.CertificateProfile{
+		{Name: "qa-reprotect-selected", MaxValidity: profile.Duration(time.Hour), AllowedDNSSuffixes: []string{"qa.invalid"}, AllowedProtocols: []string{"acme"}},
+		{Name: "qa-reprotect-unrelated-default", MaxValidity: profile.Duration(time.Hour), AllowedDNSSuffixes: []string{"elsewhere.invalid"}},
+	} {
+		spec, err := json.Marshal(policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fixtureOrch.CreateProfile(ctx, tenantA, policy.Name, spec); err != nil {
+			t.Fatal(err)
+		}
+	}
 	oldSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +140,7 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 		t.Fatal(err)
 	}
 	identityID := uuid.NewString()
-	identityAttrs, _ := json.Marshal(map[string]string{"deployment_target_id": targetID, "issuing_authority_source": "private", "issuing_authority_id": old.ID})
+	identityAttrs, _ := json.Marshal(map[string]string{"deployment_target_id": targetID, "issuing_authority_source": "private", "issuing_authority_id": old.ID, "profile_name": "qa-reprotect-selected"})
 	if err := st.UpsertIdentity(ctx, corestore.Identity{ID: identityID, TenantID: tenantA, Kind: corestore.KindX509Certificate, Name: "ca-reprotect.qa.invalid", OwnerID: ownerID, Status: "deployed", Attributes: identityAttrs}); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +152,7 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err := decstore.New(st).RebuildTenant(ctx, tenantA, []eventspec.Event{mustEncode(t, depstate.DependencyRegisteredV1{TenantID: tenantA, KeyID: old.ID, Dependent: dep(depstate.DependentCredential, cert.ID)}, 1)}); err != nil {
 		t.Fatal(err)
 	}
-	served := newServedAPI(t, st, outbox, log)
+	served := newServedAPIWithDefaultProfile(t, st, outbox, log, "qa-reprotect-unrelated-default")
 	contract := httptest.NewRecorder()
 	served.ServeHTTP(contract, httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil))
 	if contract.Code != http.StatusOK {
@@ -168,7 +191,17 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 		served.ServeHTTP(rr, req)
 		return rr
 	}
+	setSelectedPolicy("elsewhere.invalid")
+	if denied := post("incompatible-policy-before-append", target.RevisionID, info.SHA256Fingerprint, successor.ID); denied.Code != http.StatusConflict {
+		t.Fatalf("incompatible selected policy recorded a plan: %d %s", denied.Code, denied.Body.String())
+	}
 	previewBody, _ := json.Marshal(map[string]any{"certificate_id": cert.ID, "successor_authority_id": successor.ID, "target_id": targetID, "expected_target_revision": target.RevisionID, "expected_fingerprint": info.SHA256Fingerprint, "ttl_seconds": 600})
+	deniedPreview := httptest.NewRecorder()
+	served.ServeHTTP(deniedPreview, httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect/plans/preview", strings.NewReader(string(previewBody))))
+	if deniedPreview.Code != http.StatusConflict {
+		t.Fatalf("incompatible selected policy advertised ready: %d %s", deniedPreview.Code, deniedPreview.Body.String())
+	}
+	setSelectedPolicy("qa.invalid")
 	previewRequest := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect/plans/preview", strings.NewReader(string(previewBody)))
 	preview := httptest.NewRecorder()
 	served.ServeHTTP(preview, previewRequest)
@@ -176,12 +209,13 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 		t.Fatalf("effect-free reviewed plan preview = %d %s, want 200", preview.Code, preview.Body.String())
 	}
 	var previewReceipt struct {
-		JobID      string `json:"job_id"`
-		IdentityID string `json:"identity_id"`
-		Ready      bool   `json:"ready"`
-		EffectFree bool   `json:"effect_free"`
+		JobID       string `json:"job_id"`
+		IdentityID  string `json:"identity_id"`
+		ProfileName string `json:"profile_name"`
+		Ready       bool   `json:"ready"`
+		EffectFree  bool   `json:"effect_free"`
 	}
-	if err := json.Unmarshal(preview.Body.Bytes(), &previewReceipt); err != nil || !previewReceipt.Ready || !previewReceipt.EffectFree || previewReceipt.JobID == "" || previewReceipt.IdentityID != identityID {
+	if err := json.Unmarshal(preview.Body.Bytes(), &previewReceipt); err != nil || !previewReceipt.Ready || !previewReceipt.EffectFree || previewReceipt.JobID == "" || previewReceipt.IdentityID != identityID || previewReceipt.ProfileName != "qa-reprotect-selected" {
 		t.Fatalf("preview lost exact derived plan binding: %+v err=%v", previewReceipt, err)
 	}
 	if _, found, err := reprotect.NewCredentialPlanLedger(log, st).Load(ctx, tenantA, previewReceipt.JobID); err != nil || found {
@@ -254,6 +288,18 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	}
 	start := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
 	start.Header.Set("Idempotency-Key", "start-reviewed-plan")
+	setSelectedPolicy("elsewhere.invalid")
+	deniedStart := httptest.NewRecorder()
+	served.ServeHTTP(deniedStart, start)
+	if deniedStart.Code != http.StatusConflict {
+		t.Fatalf("narrowed policy queued host work: %d %s", deniedStart.Code, deniedStart.Body.String())
+	}
+	if pending, err := outbox.Pending(ctx, tenantA); err != nil || len(pending) != 0 {
+		t.Fatalf("narrowed policy wrote outbox intent: %+v err=%v", pending, err)
+	}
+	setSelectedPolicy("qa.invalid")
+	start = httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+old.ID+"/reprotect", nil)
+	start.Header.Set("Idempotency-Key", "start-reviewed-plan")
 	queued := httptest.NewRecorder()
 	served.ServeHTTP(queued, start)
 	if queued.Code != http.StatusAccepted {
@@ -267,10 +313,20 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := runtime.ReprotectionOutboxFactory(editionseam.LicensedOutboxDeps{Store: st, Log: log})
+	handler, err := runtime.ReprotectionOutboxFactory(editionseam.LicensedOutboxDeps{Store: st, Log: log, DefaultProfile: "qa-reprotect-unrelated-default"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	message := orchestrator.Message{ID: pending[0].ID, TenantID: tenantA,
+		Destination: pending[0].Destination, IdempotencyKey: pending[0].IdempotencyKey, Payload: pending[0].Payload}
+	setSelectedPolicy("elsewhere.invalid")
+	if handled, err := handler.DeliverLicensed(ctx, message); !handled || err == nil {
+		t.Fatalf("narrowed policy dispatched a host job: handled=%t err=%v", handled, err)
+	}
+	if pending, err := outbox.Pending(ctx, tenantA); err != nil || len(pending) != 1 {
+		t.Fatalf("narrowed policy created child outbox work: %+v err=%v", pending, err)
+	}
+	setSelectedPolicy("qa.invalid")
 	handled, err := handler.DeliverLicensed(ctx, orchestrator.Message{ID: pending[0].ID, TenantID: tenantA,
 		Destination: pending[0].Destination, IdempotencyKey: pending[0].IdempotencyKey, Payload: pending[0].Payload})
 	if !handled || err != nil {
@@ -304,7 +360,12 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 		hostJob.IssuingAuthorityID != successor.ID || hostJob.PredecessorCertificateID != cert.ID || hostJob.ReprotectJobID != result.JobID {
 		t.Fatalf("host job lost immutable VDEC bindings: %+v", hostJob)
 	}
-	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, csr); err != nil {
+	setSelectedPolicy("elsewhere.invalid")
+	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, csr, "qa-reprotect-unrelated-default"); err == nil {
+		t.Fatal("narrowed policy authorized host CSR signing")
+	}
+	setSelectedPolicy("qa.invalid")
+	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, csr, "qa-reprotect-unrelated-default"); err != nil {
 		t.Fatalf("bound retained-key CSR refused: %v", err)
 	}
 	wrongSubject, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -316,7 +377,7 @@ func TestReprotectionOperatorRegistersOnlyCurrentCertificateHostAndSuccessor(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, wrongCSR); err == nil {
+	if _, err := reprotect.AuthorizeHostCSR(ctx, st, log, tenantA, agentID, hostKey, hostPayload, wrongCSR, "qa-reprotect-unrelated-default"); err == nil {
 		t.Fatal("different subject key reached signer")
 	}
 	newDER, err := crypto.SignLeafFromCSR(successorDER, successorSigner, csr, 10*time.Minute)

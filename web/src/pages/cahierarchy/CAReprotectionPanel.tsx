@@ -32,8 +32,8 @@ const planFields = [
   "ttl_seconds",
 ] as const;
 
-function samePlan(a: CAReprotectionPlan, b: CAReprotectionPlan): boolean {
-  return planFields.every((field) => a[field] === b[field]);
+function samePlan(a: CAReprotectionPlan, b: CAReprotectionPlan, allowLegacyPolicy = false): boolean {
+  return planFields.every((field) => a[field] === b[field]) && (a.profile_name === b.profile_name || (allowLegacyPolicy && !b.profile_name));
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -165,9 +165,9 @@ export function CAReprotectionPanel({ keyId, certificateIDs, onRefresh }: { keyI
     setError(null);
     try {
       const result = await api.registerCAKeyReprotectionPlan(keyId, previewSelection);
-      if (!samePlan(preview, result)) throw new Error(translateNow("caHierarchy.reprotect.changed"));
+      if (!samePlan(preview, result, !result.recorded)) throw new Error(translateNow("caHierarchy.reprotect.changed"));
       const readback = await api.caKeyReprotectionPlan(keyId, preview.job_id);
-      if (!readback.recorded || !samePlan(preview, readback)) throw new Error(translateNow("caHierarchy.reprotect.changed"));
+      if (!readback.recorded || !samePlan(preview, readback, !result.recorded)) throw new Error(translateNow("caHierarchy.reprotect.changed"));
       setRecorded(readback);
       setPreview(null);
       setPreviewSelection(null);
@@ -362,6 +362,8 @@ function PlanEvidence({ plan }: { plan: CAReprotectionPlan }) {
       <dd className="font-mono">{plan.job_id}</dd>
       <dt>{translateNow("caHierarchy.reprotect.identityID")}</dt>
       <dd className="font-mono">{plan.identity_id}</dd>
+      <dt>{translateNow("caHierarchy.reprotect.profile")}</dt>
+      <dd>{plan.profile_name || translateNow("caHierarchy.reprotect.noProfile")}</dd>
       <dt>{translateNow("caHierarchy.reprotect.certificate")}</dt>
       <dd className="font-mono">{plan.certificate_id}</dd>
       <dt>{translateNow("caHierarchy.reprotect.successor")}</dt>

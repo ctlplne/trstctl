@@ -19,6 +19,7 @@ vi.mock("@/lib/api", async (orig) => ({ ...(await orig<typeof import("@/lib/api"
 const plan = {
   job_id: "job-1",
   identity_id: "identity-1",
+  profile_name: "qa-reprotect-selected",
   certificate_id: "cert-1",
   successor_authority_id: "ca-new",
   predecessor_fingerprint: "fingerprint-1",
@@ -80,6 +81,7 @@ describe("CA re-protection console", () => {
       ttl_seconds: 3600,
     });
     expect(await within(panel).findByText(/127\.0\.0\.1:10443/)).toBeInTheDocument();
+    expect(within(panel).getByText("qa-reprotect-selected")).toBeInTheDocument();
     await user.click(within(panel).getByRole("button", { name: "Record reviewed plan" }));
     await waitFor(() => expect(apiMock.caKeyReprotectionPlan).toHaveBeenCalledWith("ca-old", "job-1"));
     expect(within(panel).getByText("Plan recorded and read back")).toBeInTheDocument();
@@ -103,5 +105,22 @@ describe("CA re-protection console", () => {
     await user.click(within(panel).getByRole("button", { name: "Load recorded plan" }));
     expect(await within(panel).findByText("Plan recorded and read back")).toBeInTheDocument();
     expect(apiMock.registerCAKeyReprotectionPlan).not.toHaveBeenCalled();
+  });
+
+  it("recovers an earlier plan without a policy-name field after a lost registration response", async () => {
+    const user = userEvent.setup();
+    const oldPlan = { ...plan, profile_name: undefined, recorded: true };
+    apiMock.registerCAKeyReprotectionPlan.mockResolvedValueOnce({ ...oldPlan, recorded: false });
+    apiMock.caKeyReprotectionPlan.mockResolvedValueOnce(oldPlan);
+    render(<CAReprotectionPanel keyId="ca-old" certificateIDs={["cert-1"]} onRefresh={vi.fn()} />);
+    const panel = await screen.findByRole("region", { name: "Re-protect managed certificate" });
+    await user.selectOptions(within(panel).getByLabelText("Successor CA"), "ca-new");
+    await user.selectOptions(within(panel).getByLabelText("Host target"), "target-1");
+    await user.clear(within(panel).getByLabelText("New certificate lifetime in seconds"));
+    await user.type(within(panel).getByLabelText("New certificate lifetime in seconds"), "3600");
+    await user.click(within(panel).getByRole("button", { name: "Review exact re-protection plan" }));
+    await user.click(await within(panel).findByRole("button", { name: "Record reviewed plan" }));
+    expect(await within(panel).findByText("Plan recorded and read back")).toBeInTheDocument();
+    expect(within(panel).getByText("No policy name recorded; current policy is checked before start")).toBeInTheDocument();
   });
 });

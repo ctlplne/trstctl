@@ -26,6 +26,7 @@ const TypeCredentialPlan = "reprotection.credential_plan_recorded"
 type CredentialPlan struct {
 	Job                    Job    `json:"job"`
 	IdentityID             string `json:"identity_id"`
+	ProfileName            string `json:"profile_name,omitempty"`
 	SuccessorAuthorityID   string `json:"successor_authority_id"`
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
 	PredecessorSPKISHA256  string `json:"predecessor_spki_sha256"`

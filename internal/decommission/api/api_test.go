@@ -120,11 +120,17 @@ var vdecRole = authz.Role{Name: "vdec-operator", Permissions: []authz.Permission
 // attach seam mounts, over the same store and outbox.
 func newServedAPI(t *testing.T, cs *corestore.Store, outbox *orchestrator.Outbox, logs ...*events.Log) *api.API {
 	t.Helper()
-	factory := decapi.NewAPIOptionsFactory()
-	deps := editionseam.LicensedAPIOptionsDeps{Store: cs, Outbox: outbox}
+	var log *events.Log
 	if len(logs) != 0 {
-		deps.Log = logs[0]
+		log = logs[0]
 	}
+	return newServedAPIWithDefaultProfile(t, cs, outbox, log, "")
+}
+
+func newServedAPIWithDefaultProfile(t *testing.T, cs *corestore.Store, outbox *orchestrator.Outbox, log *events.Log, defaultProfile string) *api.API {
+	t.Helper()
+	factory := decapi.NewAPIOptionsFactory()
+	deps := editionseam.LicensedAPIOptionsDeps{Store: cs, Outbox: outbox, Log: log, DefaultProfile: defaultProfile}
 	licensed, err := factory(deps)
 	if err != nil {
 		t.Fatalf("api options factory: %v", err)
@@ -337,7 +343,7 @@ func TestReprotection_UnknownKeyRefuses(t *testing.T) {
 	}
 }
 
-func TestReprotection_CredentialStartRequiresReviewedPlanBeforeOutbox(t *testing.T) {
+func TestReprotection_CredentialStartRequiresCurrentReviewedPlanBeforeOutbox(t *testing.T) {
 	cs := openStoreOn(t, "vdec_api_credential_plan")
 	dependent := dep(depstate.DependentCredential, "qa-leaf-a")
 	if err := decstore.New(cs).RebuildTenant(context.Background(), tenantA, []eventspec.Event{
@@ -389,18 +395,11 @@ func TestReprotection_CredentialStartRequiresReviewedPlanBeforeOutbox(t *testing
 	req.Header.Set("Idempotency-Key", "qa-planned-start")
 	res = httptest.NewRecorder()
 	served.ServeHTTP(res, req)
-	if res.Code != http.StatusAccepted {
-		t.Fatalf("planned credential start = %d %s, want 202", res.Code, res.Body.String())
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("forged stale credential plan start = %d %s, want 400 for invalid referenced IDs", res.Code, res.Body.String())
 	}
 	pending, err = outbox.Pending(context.Background(), tenantA)
-	if err != nil || len(pending) != 1 {
-		t.Fatalf("planned credential start queued %+v: %v", pending, err)
-	}
-	var command reprotect.Payload
-	if err := json.Unmarshal(pending[0].Payload, &command); err != nil {
-		t.Fatalf("decode queued credential command: %v", err)
-	}
-	if command.Job != plan.Job || command.SuccessorKeyID != plan.SuccessorAuthorityID {
-		t.Fatalf("queued command lost reviewed job or successor binding: %+v", command)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("forged stale credential plan queued %+v: %v", pending, err)
 	}
 }

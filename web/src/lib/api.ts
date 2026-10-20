@@ -1620,6 +1620,7 @@ export interface CAReprotectionSelection {
 export interface CAReprotectionPlan {
   job_id: string;
   identity_id: string;
+  profile_name?: string;
   certificate_id: string;
   successor_authority_id: string;
   predecessor_fingerprint: string;

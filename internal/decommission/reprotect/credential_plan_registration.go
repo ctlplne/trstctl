@@ -10,12 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/decommission/depstate"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -50,7 +53,23 @@ func (e *Enqueuer) RegisterCredentialPlan(ctx context.Context, tenantID, keyID s
 		return CredentialPlan{}, false, ErrEnqueuerUnavailable
 	}
 	recorded, err := e.plans.Record(ctx, plan)
-	return plan, recorded, err
+	if err != nil || recorded {
+		return plan, recorded, err
+	}
+	// A lost response may retry after a newer active policy revision was
+	// selected. Return the actual first-writer plan, never a freshly derived
+	// object that was not recorded.
+	current, found, err := e.plans.Load(ctx, tenantID, plan.Job.ID)
+	if err != nil {
+		return CredentialPlan{}, false, err
+	}
+	if !found {
+		return CredentialPlan{}, false, ErrCompletionConflict
+	}
+	if !sameCurrentHostPlan(current, plan) {
+		return CredentialPlan{}, false, ErrCredentialPlanTargetChanged
+	}
+	return current, false, nil
 }
 
 // PreviewCredentialPlan derives the exact command from current tenant state
@@ -65,6 +84,11 @@ func (e *Enqueuer) PreviewCredentialPlan(ctx context.Context, tenantID, keyID st
 		strings.TrimSpace(in.ExpectedTargetRevision) == "" || strings.TrimSpace(in.ExpectedFingerprint) == "" ||
 		in.TTLSeconds < 60 || in.TTLSeconds > 90*24*3600 {
 		return CredentialPlan{}, fmt.Errorf("%w: certificate, successor, target, reviewed revision/fingerprint, and 60-second to 90-day TTL are required", ErrInvalidState)
+	}
+	for _, id := range []string{keyID, in.CertificateID, in.SuccessorAuthorityID, in.TargetID} {
+		if _, err := uuid.Parse(id); err != nil {
+			return CredentialPlan{}, fmt.Errorf("%w: predecessor, certificate, successor and target IDs must be UUIDs", ErrInvalidState)
+		}
 	}
 	state, found, err := e.repo.FetchKeyState(ctx, tenantID, keyID)
 	if err != nil {
@@ -140,6 +164,10 @@ func (e *Enqueuer) PreviewCredentialPlan(ctx context.Context, tenantID, keyID st
 		identityRoute.IssuingAuthoritySource != "private" || identityRoute.IssuingAuthorityID != keyID {
 		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
+	profileName, err := e.validateCurrentCertificatePolicy(ctx, tenantID, identity.ID, info, in.TTLSeconds)
+	if err != nil {
+		return CredentialPlan{}, err
+	}
 	oldDER, err := certinfo.LeafDER([]byte(oldCA.CertificatePEM))
 	if err != nil || crypto.VerifyLeafSignedByCA(cert.CertificateDER, oldDER) != nil {
 		return CredentialPlan{}, ErrCredentialPlanNotReady
@@ -169,12 +197,51 @@ func (e *Enqueuer) PreviewCredentialPlan(ctx context.Context, tenantID, keyID st
 	if err != nil || agentID == "" {
 		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
-	plan := CredentialPlan{Job: selected, IdentityID: identity.ID, SuccessorAuthorityID: successor.ID,
+	plan := CredentialPlan{Job: selected, IdentityID: identity.ID, ProfileName: profileName, SuccessorAuthorityID: successor.ID,
 		PredecessorFingerprint: cert.Fingerprint, PredecessorSPKISHA256: info.SPKISHA256,
 		TargetID: target.ID, TargetRevisionID: target.RevisionID, RequiredAgentID: agentID,
 		Connector: target.Type, VerifyAddress: host.VerifyAddress,
 		VerifyServerName: host.VerifyServerName, TTLSeconds: in.TTLSeconds}
 	return plan, nil
+}
+
+// The reviewed plan is executable only under the identity's selected active
+// policy. An absent identity selection uses the deployment default. The
+// administrative continuation has no enrollment protocol, but all public
+// certificate properties and the requested lifetime remain bounded.
+func (e *Enqueuer) validateCurrentCertificatePolicy(ctx context.Context, tenantID, identityID string, info certinfo.Info, ttlSeconds int64) (string, error) {
+	resolver := e.profileOrch
+	if resolver == nil {
+		resolver = orchestrator.NewOrchestrator(e.log, e.store, nil)
+	}
+	requirement, err := resolver.ProfileApprovalRequirement(ctx, tenantID, identityID)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve identity certificate policy: %v", ErrCredentialPlanNotReady, err)
+	}
+	name := requirement.ProfileName
+	if name == "" {
+		name = strings.TrimSpace(e.defaultProfile)
+	}
+	if name == "" {
+		return "", nil
+	}
+	rec, err := e.store.GetActiveProfile(ctx, tenantID, name)
+	if err != nil {
+		return "", fmt.Errorf("%w: selected certificate policy %q is unavailable: %v", ErrCredentialPlanNotReady, name, err)
+	}
+	var policy profile.CertificateProfile
+	if err := json.Unmarshal(rec.Spec, &policy); err != nil {
+		return "", fmt.Errorf("%w: decode selected certificate policy %q: %v", ErrCredentialPlanNotReady, name, err)
+	}
+	policy.Name, policy.Version = rec.Name, rec.Version
+	if err := policy.Validate(profile.Request{
+		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.PublicKeyBits, RequestedEKUs: info.ExtKeyUsages,
+		TTL: time.Duration(ttlSeconds) * time.Second, DNSNames: info.DNSNames,
+		IPAddresses: info.IPAddresses, EmailAddresses: info.EmailAddresses, URIs: info.URIs,
+	}); err != nil {
+		return "", fmt.Errorf("%w: selected certificate policy rejects the reviewed successor: %v", ErrCredentialPlanNotReady, err)
+	}
+	return name, nil
 }
 
 // LoadCredentialPlan reads only the first-writer plan for this tenant and CA.

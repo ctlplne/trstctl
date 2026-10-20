@@ -141,6 +141,7 @@ var (
 type LicensedOutboxDeps struct {
 	Store              *store.Store
 	Log                *events.Log
+	DefaultProfile     string
 	Idempotency        *orchestrator.Idempotency
 	IssueProtocolLeaf  ProtocolLeafIssuer
 	TLSPostureDeployer connector.TLSPostureDeployer

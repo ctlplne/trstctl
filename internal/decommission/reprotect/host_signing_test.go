@@ -17,7 +17,7 @@ func TestHostPlanAllowsOnlyForwardUnrelatedLedgerMovement(t *testing.T) {
 		LedgerPosition: 12, Kind: JobKindReIssue,
 		Dependent:      depstate.Dependent{Class: depstate.DependentCredential, ID: "cert-1"},
 		IdempotencyKey: "stable-job-key"},
-		IdentityID: "identity-1", SuccessorAuthorityID: "ca-new", PredecessorFingerprint: "old-fingerprint",
+		IdentityID: "identity-1", ProfileName: "selected-host-policy", SuccessorAuthorityID: "ca-new", PredecessorFingerprint: "old-fingerprint",
 		PredecessorSPKISHA256: "old-spki", TargetID: "target-1", TargetRevisionID: "revision-1",
 		RequiredAgentID: "host-1", Connector: "apache", VerifyAddress: "127.0.0.1:10443",
 		VerifyServerName: "host.qa.invalid", TTLSeconds: 600}
@@ -45,6 +45,16 @@ func TestHostPlanAllowsOnlyForwardUnrelatedLedgerMovement(t *testing.T) {
 	changed.TTLSeconds++
 	if sameCurrentHostPlan(recorded, changed) {
 		t.Fatal("different certificate lifetime accepted")
+	}
+	changed = current
+	changed.ProfileName = "different-policy"
+	if sameCurrentHostPlan(recorded, changed) {
+		t.Fatal("different identity policy accepted")
+	}
+	legacy := recorded
+	legacy.ProfileName = ""
+	if !sameCurrentHostPlan(legacy, current) {
+		t.Fatal("legacy plan without profile name could not recover under current selected policy")
 	}
 }
 

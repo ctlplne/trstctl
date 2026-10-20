@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	decstore "trstctl.com/trstctl/internal/decommission/store"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	corestore "trstctl.com/trstctl/internal/store"
 )
@@ -35,10 +36,21 @@ var ErrCredentialPlanRequired = errors.New("reprotect: reviewed credential plan 
 // is EnqueueIfAbsent, so a retried or replayed start enqueues nothing new
 // (AN-5): asking twice never doubles the work.
 type Enqueuer struct {
-	store  *corestore.Store
-	repo   *decstore.Repo
-	outbox *orchestrator.Outbox
-	plans  *CredentialPlanLedger
+	store          *corestore.Store
+	repo           *decstore.Repo
+	outbox         *orchestrator.Outbox
+	plans          *CredentialPlanLedger
+	log            *events.Log
+	defaultProfile string
+	profileOrch    *orchestrator.Orchestrator
+}
+
+// WithProfilePolicy supplies the same event log and configured fallback policy
+// used by the served issuer. Identity-selected policy always takes precedence.
+func (e *Enqueuer) WithProfilePolicy(log *events.Log, defaultProfile string) *Enqueuer {
+	e.log, e.defaultProfile = log, defaultProfile
+	e.profileOrch = orchestrator.NewOrchestrator(log, e.store, nil)
+	return e
 }
 
 // NewEnqueuer builds the producer over the core store, the VDEC read-model
@@ -110,6 +122,16 @@ func (e *Enqueuer) EnqueueOutstanding(ctx context.Context, tenantID, keyID strin
 		if plan.Job.TenantID != job.TenantID || plan.Job.KeyID != job.KeyID ||
 			plan.Job.Dependent != job.Dependent || plan.Job.IdempotencyKey != job.IdempotencyKey {
 			return nil, true, ErrCompletionConflict
+		}
+		selection := CredentialPlanSelection{CertificateID: job.Dependent.ID, SuccessorAuthorityID: plan.SuccessorAuthorityID,
+			TargetID: plan.TargetID, ExpectedTargetRevision: plan.TargetRevisionID,
+			ExpectedFingerprint: plan.PredecessorFingerprint, TTLSeconds: plan.TTLSeconds}
+		current, err := e.PreviewCredentialPlan(ctx, tenantID, keyID, selection)
+		if err != nil {
+			return nil, true, err
+		}
+		if !sameCurrentHostPlan(plan, current) {
+			return nil, true, ErrCredentialPlanTargetChanged
 		}
 		successorByJob[job.ID] = plan.SuccessorAuthorityID
 	}

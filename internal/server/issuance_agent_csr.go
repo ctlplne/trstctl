@@ -118,12 +118,17 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		return nil, err
 	}
 	var hostPlan reprotect.CredentialPlan
+	var hostProfileBinding *store.OperationApprovalIssuanceBinding
 	if intent.ReprotectJobID != "" || intent.ReprotectPredecessorFingerprint != "" ||
 		intent.ReprotectPredecessorSPKISHA256 != "" || intent.ReprotectTTLSeconds != 0 {
 		hostPlan, err = reprotect.AuthorizeHostCSR(ctx, d.store, d.log, tenantID,
-			job.RequiredAgentID, job.IdempotencyKey, job.Payload, csrDER)
+			job.RequiredAgentID, job.IdempotencyKey, job.Payload, csrDER, d.defaultProfile)
 		if err != nil {
 			return nil, status.Errorf(codes.PermissionDenied, "CA re-protection signing plan drifted: %v", err)
+		}
+		hostProfileBinding, err = d.caReprotectProfileBinding(ctx, tenantID, hostPlan)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -175,7 +180,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		var err error
 		if intent.ReprotectJobID != "" {
 			material, err = d.mintServedLeafFromCSRForReprotectAtTTL(ctx, tenantID, ident, selection,
-				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second)
+				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second, hostProfileBinding)
 		} else {
 			material, err = d.mintServedLeafFromCSRForSelection(
 				ctx, tenantID, ident, selection, idemKey, csrPEM, custody.OriginHostAgent, intent.Issuance,

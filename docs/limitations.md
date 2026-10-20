@@ -3158,7 +3158,12 @@ than sending an operator looking for a credential that was never there.
   supplies the probe address and name; callers cannot redirect them in the plan
   request. `GET /api/v1/ca/keys/{id}/reprotect/plans/{job_id}` and the CLI plan
   readback recover that immutable public selection after a lost response. A plan
-  receipt proves that review was recorded, not that issuance, deployment or
+  binds the selected certificate-policy name. Preview and every later execution
+  stage resolve its current active revision, using the configured default only
+  when the identity has no selected or retained policy. Policy narrowing refuses
+  before queue or signature; a legacy plan without a recorded policy name is
+  recovered under the identity's current selection, not an unrelated default.
+  The plan receipt proves that review was recorded, not that issuance, deployment or
   served-state cutover happened. The host worker dispatches the bound job to its
   assigned agent. The agent uses the installed subject key to make one encrypted,
   restart-recoverable CSR, pins the exact predecessor, installs the successor,
@@ -3167,7 +3172,7 @@ than sending an operator looking for a credential that was never there.
   selected CA. Its source event carries the signed readback, and separate
   first-writer supersession and completion events account for the old CA dependent.
   This is an administrative continuation of the same deployed subject key and
-  identifiers, not a new API enrollment. The current certificate profile still
+  identifiers, not a new API enrollment. The identity-selected certificate profile still
   checks the CSR's names, key algorithm, EKU and requested lifetime. Its
   `allowed_protocols` list governs new enrollment and does not exclude this
   CA re-protection path; the profile audit labels the decision `ca-reprotect`.

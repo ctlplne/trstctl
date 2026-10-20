@@ -312,8 +312,11 @@ use, not proof that every relying party enforced revocation. See the
 
 For a still-served host certificate, CA succession uses a recorded re-protection
 plan and a retained-key CSR from the assigned host agent. This continues the
-same deployed subject and key under the direct successor CA. The active
-certificate profile still constrains names, key strength, EKU and lifetime;
+same deployed subject and key under the direct successor CA. The identity's
+selected active certificate profile, or the configured default when the
+identity has none, constrains names, key strength, EKU and lifetime. Preview,
+registration, queueing, worker dispatch and signing recheck that policy. A
+later policy edit that excludes the certificate refuses the cutover;
 its `allowed_protocols` list governs new enrollment, so it does not turn this
 administrative continuation into API enrollment. The audit marks the profile
 decision `ca-reprotect`. The host's signed served-state report, independent

@@ -8979,6 +8979,14 @@ export const messages = {
   },
   "caHierarchy.reprotect.jobID": { defaultMessage: "Job ID", description: "CA re-protection stable job identity." },
   "caHierarchy.reprotect.identityID": { defaultMessage: "Managed identity", description: "CA re-protection bound identity." },
+  "caHierarchy.reprotect.profile": {
+    defaultMessage: "Selected certificate policy",
+    description: "Active identity policy evaluated for the CA successor leaf.",
+  },
+  "caHierarchy.reprotect.noProfile": {
+    defaultMessage: "No policy name recorded; current policy is checked before start",
+    description: "A legacy plan or an identity without a certificate profile has no immutable policy name.",
+  },
   "caHierarchy.reprotect.fingerprint": { defaultMessage: "Old certificate SHA-256", description: "CA re-protection exact predecessor certificate." },
   "caHierarchy.reprotect.spki": { defaultMessage: "Retained key SPKI SHA-256", description: "CA re-protection exact subject public key." },
   "caHierarchy.reprotect.agent": { defaultMessage: "Assigned host agent", description: "CA re-protection bound agent." },

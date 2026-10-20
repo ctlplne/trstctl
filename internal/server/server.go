@@ -1966,7 +1966,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	if d.LicensedOutboxFactory != nil {
 		var err error
 		licensed, err = d.LicensedOutboxFactory(LicensedOutboxDeps{
-			Store: d.Store, Log: d.Log, Idempotency: idem,
+			Store: d.Store, Log: d.Log, Idempotency: idem, DefaultProfile: d.DefaultProfile,
 			IssueProtocolLeaf:    s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
 			TLSPostureDeployer:   d.ConnectorRegistry,
 			OutboxIntegrityKey:   d.KEK,

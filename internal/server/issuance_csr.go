@@ -199,10 +199,10 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTL(
 func (d *issuanceDispatcher) mintServedLeafFromCSRForReprotectAtTTL(
 	ctx context.Context, tenantID string, ident store.Identity,
 	selection endpointAuthoritySelection, issueKey string, csrPEM []byte,
-	keyOrigin custody.KeyOrigin, ttl time.Duration,
+	keyOrigin custody.KeyOrigin, ttl time.Duration, binding *store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
 	return d.mintServedLeafFromCSRForSelectionAtTTLWithPurpose(ctx, tenantID, ident, selection,
-		issueKey, csrPEM, keyOrigin, ttl, nil, true)
+		issueKey, csrPEM, keyOrigin, ttl, binding, true)
 }
 
 func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTLWithPurpose(
@@ -229,10 +229,10 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTLWithPurpose(
 	// "bring your own CSR" a way around policy.
 	var leafProfile crypto.LeafProfile
 	if caReprotect {
-		if keyOrigin != custody.OriginHostAgent || binding != nil {
+		if keyOrigin != custody.OriginHostAgent {
 			return issuedLeafMaterial{}, errors.New("server: CA re-protection requires an unexported host-agent key and reviewed plan TTL")
 		}
-		leafProfile, err = d.enforceProfileForCAReprotect(ctx, tenantID, csrDER, dnsNames, ttl)
+		leafProfile, err = d.enforceProfileForCAReprotect(ctx, tenantID, csrDER, dnsNames, ttl, binding)
 	} else {
 		leafProfile, err = d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
 	}

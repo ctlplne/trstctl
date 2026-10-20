@@ -164,6 +164,7 @@ type ReprotectionReceipt struct {
 type CredentialPlanReceipt struct {
 	JobID                  string `json:"job_id"`
 	IdentityID             string `json:"identity_id"`
+	ProfileName            string `json:"profile_name,omitempty"`
 	CertificateID          string `json:"certificate_id"`
 	SuccessorAuthorityID   string `json:"successor_authority_id"`
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
@@ -186,7 +187,7 @@ type CredentialPlanPreview struct {
 
 func credentialPlanReceipt(plan reprotect.CredentialPlan, recorded bool) CredentialPlanReceipt {
 	return CredentialPlanReceipt{
-		JobID: plan.Job.ID, IdentityID: plan.IdentityID, CertificateID: plan.Job.Dependent.ID,
+		JobID: plan.Job.ID, IdentityID: plan.IdentityID, ProfileName: plan.ProfileName, CertificateID: plan.Job.Dependent.ID,
 		SuccessorAuthorityID: plan.SuccessorAuthorityID, PredecessorFingerprint: plan.PredecessorFingerprint,
 		PredecessorSPKISHA256: plan.PredecessorSPKISHA256, TargetID: plan.TargetID,
 		TargetRevisionID: plan.TargetRevisionID, RequiredAgentID: plan.RequiredAgentID,
@@ -291,10 +292,11 @@ func reprotectHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
 			jobs, found, err := enq.EnqueueOutstanding(ctx, tenantID, keyID)
 			if err != nil {
 				if errors.Is(err, reprotect.ErrCredentialPlanRequired) {
-					err = api.ErrStatus(http.StatusConflict, err.Error())
+					opErr = api.ErrStatus(http.StatusConflict, err.Error())
+				} else {
+					opErr = credentialPlanError(err)
 				}
-				opErr = err
-				return 0, nil, err
+				return 0, nil, opErr
 			}
 			if !found {
 				opErr = api.ErrStatus(http.StatusNotFound,
@@ -523,7 +525,7 @@ func schemas() map[string]*api.Schema {
 			"expected_fingerprint": api.StringSchema(), "ttl_seconds": api.IntegerSchema(),
 		}, "certificate_id", "successor_authority_id", "target_id", "expected_target_revision", "expected_fingerprint", "ttl_seconds"),
 		"VDECCredentialPlanReceipt": api.ObjectSchema(map[string]*api.Schema{
-			"job_id": api.StringSchema(), "identity_id": api.StringSchema(), "certificate_id": api.StringSchema(),
+			"job_id": api.StringSchema(), "identity_id": api.StringSchema(), "profile_name": api.StringSchema(), "certificate_id": api.StringSchema(),
 			"successor_authority_id": api.StringSchema(), "predecessor_fingerprint": api.StringSchema(),
 			"predecessor_spki_sha256": api.StringSchema(), "target_id": api.StringSchema(),
 			"target_revision_id": api.StringSchema(), "required_agent_id": api.StringSchema(),
@@ -534,7 +536,7 @@ func schemas() map[string]*api.Schema {
 			"predecessor_spki_sha256", "target_id", "target_revision_id", "required_agent_id",
 			"connector", "verify_address", "verify_server_name", "ttl_seconds", "recorded"),
 		"VDECCredentialPlanPreview": api.ObjectSchema(map[string]*api.Schema{
-			"job_id": api.StringSchema(), "identity_id": api.StringSchema(), "certificate_id": api.StringSchema(),
+			"job_id": api.StringSchema(), "identity_id": api.StringSchema(), "profile_name": api.StringSchema(), "certificate_id": api.StringSchema(),
 			"successor_authority_id": api.StringSchema(), "predecessor_fingerprint": api.StringSchema(),
 			"predecessor_spki_sha256": api.StringSchema(), "target_id": api.StringSchema(),
 			"target_revision_id": api.StringSchema(), "required_agent_id": api.StringSchema(),
@@ -611,7 +613,7 @@ func NewAPIOptionsFactory(retirementProjections ...*retirement.Projection) editi
 		if outbox == nil {
 			outbox = orchestrator.NewOutbox(d.Store)
 		}
-		enq := reprotect.NewEnqueuer(d.Store, repo, outbox, reprotect.NewCredentialPlanLedger(d.Log, d.Store))
+		enq := reprotect.NewEnqueuer(d.Store, repo, outbox, reprotect.NewCredentialPlanLedger(d.Log, d.Store)).WithProfilePolicy(d.Log, d.DefaultProfile)
 		coordinator := retirement.NewCoordinator(d.Store, d.Log, retirementProjection)
 		releaser := release.NewCoordinator(d.Store, d.Log)
 		return []api.Option{

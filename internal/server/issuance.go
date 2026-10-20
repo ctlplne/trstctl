@@ -1013,8 +1013,8 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 // describe this administrative action. The key, EKU, names, and TTL still pass
 // the active certificate profile and the decision is audited separately.
 // Only the SignJobCSR path after reprotect.AuthorizeHostCSR may call this.
-func (d *issuanceDispatcher) enforceProfileForCAReprotect(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, error) {
-	return d.enforceProfileForPurpose(ctx, tenantID, csrDER, dnsNames, ttl, "ca-reprotect")
+func (d *issuanceDispatcher) enforceProfileForCAReprotect(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+	return d.enforceProfileForPurpose(ctx, tenantID, csrDER, dnsNames, ttl, "ca-reprotect", issuance...)
 }
 
 func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, purpose string, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
@@ -1047,6 +1047,18 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 		}
 		if rec.ID != binding.ProfileID || store.ProfileSpecDigest(rec.Spec) != binding.ProfileSpecDigest {
 			return crypto.LeafProfile{}, fmt.Errorf("server: approved profile %q revision evidence drifted", profileName)
+		}
+		if purpose == "ca-reprotect" {
+			active, activeErr := d.store.GetActiveProfile(ctx, tenantID, profileName)
+			if activeErr != nil {
+				return crypto.LeafProfile{}, fmt.Errorf("server: selected CA re-protection profile %q is unavailable: %w", profileName, activeErr)
+			}
+			if active.ID != rec.ID || active.Version != rec.Version || store.ProfileSpecDigest(active.Spec) != binding.ProfileSpecDigest {
+				if auditErr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", "selected active revision changed before signing", purpose); auditErr != nil {
+					return crypto.LeafProfile{}, auditErr
+				}
+				return crypto.LeafProfile{}, fmt.Errorf("server: selected CA re-protection profile %q changed before signing", profileName)
+			}
 		}
 	} else {
 		profileName = d.defaultProfile
