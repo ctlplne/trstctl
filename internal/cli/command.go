@@ -56,7 +56,7 @@ func (c Command) Destructive() bool {
 	if strings.HasPrefix(name, "identities approve ") {
 		return false
 	}
-	if name == "connector target contain" || name == "identities compromise" {
+	if name == "connector target contain" || name == "identities compromise" || name == "identities compromise-retry" {
 		return true
 	}
 	for _, marker := range []string{
@@ -205,6 +205,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"identities", "compromise-preview"}, Method: "POST", Path: "/api/v1/identities/{id}/compromise/preview", Body: bodyFile, ReadOnly: true, Summary: "Review exact issuing CAs and the deployed host leaf before key-compromise response"},
 	{Name: []string{"identities", "compromise"}, Method: "POST", Path: "/api/v1/identities/{id}/compromise", Body: bodyFile, Summary: "Queue one reviewed CA revocation and exact host containment command"},
 	{Name: []string{"identities", "compromise-status"}, Method: "GET", Path: "/api/v1/identities/{id}/compromise", Query: []string{"request_key"}, Summary: "Read independent CA and host results using the original compromise request key"},
+	{Name: []string{"identities", "compromise-retry"}, Method: "POST", Path: "/api/v1/identities/{id}/compromise/retry", Body: bodyFile, Summary: "Re-queue the failed host containment or dead-lettered CA publication of one retained compromise command"},
 	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Summary: "Approve an identity action using its exact request ID and intent digest"},
 	{Name: []string{"identities", "approve", "issue"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable identity issuance request"},
 	{Name: []string{"identities", "approve", "rotate"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Action: "rotate", Summary: "Approve an exact immutable identity rotation request"},

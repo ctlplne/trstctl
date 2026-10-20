@@ -464,8 +464,21 @@ receipt separately; it requires
 `identities:read` and `connectors:read`. A delivered CA command still needs
 signed CRL/OCSP and a stock client that enforces revocation. A stopped host
 receipt still needs an independent fresh-client TLS check. If one job fails,
-inspect Jobs and queues, its exact receipt, and the live endpoint before a
-new reviewed attempt. Historical commands whose delivered outbox row expired
+inspect Jobs and queues, its exact receipt, and the live endpoint, then retry
+that one effect on the same command: `POST
+/api/v1/identities/{id}/compromise/retry` with `{"request_key": …, "effect":
+"host"}` queues a fresh `endpoint.contain` job for the exact reviewed leaf,
+target and agent on the same receipt after a `containment_failed` or
+`containment_unverified` result; `"effect": "ca"` re-arms a dead-lettered
+`revocation.publish` command with its attempt history kept. Each retry is one
+retained `identity.key_compromise_effect_retried` event, so repeating the same
+retry queues nothing more, a queued or delivered effect is refused with 409,
+and the status read follows the newest retry. The CLI command is
+`identities compromise-retry` with a `{"request_key","effect"}` body; the
+console's revocation center offers the same retry beside each effect. The
+command stays readable and retryable after the identity is retired: the
+compromised leaf, not the identity's later state, is what needs
+containment. Historical commands whose delivered outbox row expired
 before completion receipts were introduced report `evidence_unavailable` for
 the CA effect while retaining the host result. This means the CA outcome is
 unknown, even if the identity says revoked. Check every serial with its issuing

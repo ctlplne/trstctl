@@ -4847,6 +4847,7 @@
                 "previewKeyCompromise",
                 "executeKeyCompromise",
                 "readKeyCompromise",
+                "retryKeyCompromiseEffect",
                 "searchAudit",
                 "bulkRevokeIdentities",
                 "bulkRevokeCertificates",
@@ -4869,7 +4870,8 @@
                 "revocation rogue-certificates",
                 "identities compromise-preview",
                 "identities compromise",
-                "identities compromise-status"
+                "identities compromise-status",
+                "identities compromise-retry"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -12254,6 +12256,7 @@
                 "previewKeyCompromise",
                 "executeKeyCompromise",
                 "readKeyCompromise",
+                "retryKeyCompromiseEffect",
                 "bindIdentityConnectorTarget",
                 "listConnectorDeliveries",
                 "getConnectorDelivery",
@@ -12284,6 +12287,7 @@
                 "identities compromise-preview",
                 "identities compromise",
                 "identities compromise-status",
+                "identities compromise-retry",
                 "connectors deliveries list",
                 "connectors deliveries get",
                 "connectors outbox-circuits",

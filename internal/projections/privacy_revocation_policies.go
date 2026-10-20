@@ -16,6 +16,17 @@ func keyCompromiseCAEffectPrivacyPolicy() events.PrivacyEventPolicy {
 	)
 }
 
+func keyCompromiseEffectRetriedPrivacyPolicy() events.PrivacyEventPolicy {
+	const opaque = events.PrivacyFieldOpaqueExact
+	return privacyRules(
+		privacyRule("/source_event_id", opaque), privacyRule("/identity_id", opaque),
+		privacyRule("/request_key", opaque), privacyRule("/effect", opaque),
+		privacyRule("/attempt", opaque), privacyRule("/outbox_id", opaque),
+		privacyRule("/receipt_id", opaque),
+		privacyRule("/requested_by", events.PrivacyFieldIdentityExact),
+	)
+}
+
 func revocationBatchPrivacyPolicy() events.PrivacyEventPolicy {
 	const opaque = events.PrivacyFieldOpaqueExact
 	return privacyRules(

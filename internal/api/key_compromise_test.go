@@ -20,6 +20,7 @@ func TestKeyCompromiseRequiresBothIdentityAndHostAuthority(t *testing.T) {
 	for _, path := range []string{
 		"/api/v1/identities/11111111-1111-1111-1111-111111111111/compromise/preview",
 		"/api/v1/identities/11111111-1111-1111-1111-111111111111/compromise",
+		"/api/v1/identities/11111111-1111-1111-1111-111111111111/compromise/retry",
 	} {
 		for _, role := range []string{"identity-only", "host-only"} {
 			t.Run(role+path, func(t *testing.T) {

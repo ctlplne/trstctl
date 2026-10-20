@@ -59,4 +59,24 @@ func TestKeyCompromiseCLIReviewsExecutesAndReadsOneExactCommand(t *testing.T) {
 		statusCall.Header.Get("Idempotency-Key") != "" || len(statusCall.Body) != 0 {
 		t.Fatalf("status request = %+v", statusCall)
 	}
+
+	// A failed host effect is re-queued on the same retained command. The retry
+	// repeats an emergency host stop, so it needs the same --force acknowledgment.
+	var retryCall capture
+	retryServer := mockServer(t, http.StatusAccepted,
+		`{"revocation":{"status":"pending"},"containment":{"status":"containment_queued","attempts":1}}`, &retryCall)
+	env.Server, env.HTTPClient, env.IdempotencyKey = retryServer.URL, retryServer.Client(), "incident-one-retry-1"
+	retryBody := `{"request_key":"incident-one","effect":"host"}`
+	code, _, errOut = run(t, []string{"identities", "compromise-retry", identityID, "-f", "-"}, env, retryBody)
+	if code != 2 || !strings.Contains(errOut, "--force") || retryCall.Method != "" {
+		t.Fatalf("unguarded compromise-retry exit=%d stderr=%q request=%+v", code, errOut, retryCall)
+	}
+	code, out, errOut = run(t, []string{"--force", "identities", "compromise-retry", identityID, "-f", "-"}, env, retryBody)
+	if code != 0 || errOut != "" || !strings.Contains(out, "containment_queued") {
+		t.Fatalf("compromise-retry exit=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+	if retryCall.Method != http.MethodPost || retryCall.Path != "/api/v1/identities/identity-1/compromise/retry" ||
+		string(retryCall.Body) != retryBody || retryCall.Header.Get("Idempotency-Key") != "incident-one-retry-1" {
+		t.Fatalf("compromise-retry request = %+v", retryCall)
+	}
 }

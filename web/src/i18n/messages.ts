@@ -7849,6 +7849,22 @@ export const messages = {
     defaultMessage: "Refresh both results",
     description: "Manual refresh of independent CA and host status.",
   },
+  "certificates.revocation.compromiseRetryHost": {
+    defaultMessage: "Retry host containment",
+    description: "Re-queue the exact reviewed host stop on the same retained compromise command after a failed or unverified host result.",
+  },
+  "certificates.revocation.compromiseRetryCA": {
+    defaultMessage: "Retry CA publication",
+    description: "Re-arm the dead-lettered CA revocation publication of the same retained compromise command.",
+  },
+  "certificates.revocation.compromiseRetryQueued": {
+    defaultMessage: "Retry queued on the same command. Both results refresh below; nothing is proven until the receiver reports.",
+    description: "Confirmation after an effect retry was accepted.",
+  },
+  "certificates.revocation.compromiseRetryFailed": {
+    defaultMessage: "Retry was not accepted.",
+    description: "Fallback error when an effect retry is refused.",
+  },
   "certificates.revocation.compromiseJobsLink": {
     defaultMessage: "Open Jobs and queues",
     description: "Link to recover the CA or host command.",

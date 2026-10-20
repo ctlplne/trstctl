@@ -433,6 +433,7 @@ public final class OpenApiSchemas {
       "KeyCompromisePlan",
       "KeyCompromisePlanRequest",
       "KeyCompromiseResult",
+      "KeyCompromiseRetryRequest",
       "KeyCompromiseRevocationAttempt",
       "KubernetesCSRSupport",
       "KubernetesCSRSupportRule",

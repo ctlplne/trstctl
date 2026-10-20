@@ -4429,6 +4429,11 @@ export interface KeyCompromiseResult {
   revocation: KeyCompromiseRevocationAttempt;
 }
 
+export interface KeyCompromiseRetryRequest {
+  effect: "host" | "ca";
+  request_key: string;
+}
+
 export interface KeyCompromiseRevocationAttempt {
   attempts: number;
   delivered_at?: string;

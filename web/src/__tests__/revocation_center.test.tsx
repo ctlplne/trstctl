@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     previewKeyCompromise: vi.fn(),
     executeKeyCompromise: vi.fn(),
     readKeyCompromise: vi.fn(),
+    retryKeyCompromise: vi.fn(),
     previewIdentityTransition: vi.fn(),
     transitionIdentity: vi.fn(),
   },
@@ -151,6 +152,66 @@ describe("RevocationCenter", () => {
     expect(apiMock.readKeyCompromise).toHaveBeenCalledWith(identities[0].id, "original-incident-91");
     expect(apiMock.executeKeyCompromise).not.toHaveBeenCalled();
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed host containment on the same retained command exactly once per attempt", async () => {
+    const failed = {
+      identity: { ...identities[0], status: "retired" },
+      revocation: { id: 41, destination: "revocation.publish", status: "delivered", attempts: 1 },
+      containment: {
+        id: "receipt-failed",
+        tenant_id: "tenant-a",
+        identity_id: identities[0].id,
+        outbox_id: 92,
+        destination: "endpoint.contain",
+        connector: "apache",
+        target: "payments-apache",
+        fingerprint: "b".repeat(64),
+        status: "containment_failed",
+        attempts: 1,
+        reason: "host containment profile is unusable",
+        detail: '{"reason":"host containment profile is unusable"}',
+        created_at: "2026-10-06T00:00:00Z",
+        updated_at: "2026-10-06T00:01:00Z",
+      },
+    };
+    const requeued = {
+      ...failed,
+      containment: { ...failed.containment, outbox_id: 93, status: "containment_queued", reason: "host containment retried", detail: "Retry 1 queued" },
+    };
+    let current = failed;
+    apiMock.readKeyCompromise.mockReset().mockImplementation(async () => current);
+    apiMock.retryKeyCompromise.mockReset().mockImplementation(async () => {
+      current = requeued;
+      return requeued;
+    });
+    apiMock.executeKeyCompromise.mockReset();
+    const user = userEvent.setup();
+    renderWithApp(
+      <MemoryRouter>
+        <RevocationCenter identities={[]} distributions={[]} health={null} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByText("Resume a key-compromise response"));
+    await user.type(screen.getByLabelText("Compromised identity ID"), identities[0].id);
+    await user.type(screen.getByLabelText("Original incident request key"), "incident-93");
+    await user.click(screen.getByRole("button", { name: "Read both incident results" }));
+    const hostJob = await screen.findByRole("region", { name: "Exact host containment job" });
+    expect(hostJob).toHaveTextContent("host containment profile is unusable");
+    expect(screen.queryByRole("button", { name: "Retry CA publication" })).not.toBeInTheDocument();
+    await user.click(within(hostJob).getByRole("button", { name: "Retry host containment" }));
+    await waitFor(() =>
+      expect(apiMock.retryKeyCompromise).toHaveBeenCalledWith(
+        identities[0].id,
+        { request_key: "incident-93", effect: "host" },
+        "identity-compromise-retry:host:incident-93:92:1",
+      ),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Retry queued on the same command.");
+    await waitFor(() => expect(screen.getByRole("region", { name: "Exact host containment job" })).toHaveTextContent("Wait for the exact enrolled host agent"));
+    expect(screen.queryByRole("button", { name: "Retry host containment" })).not.toBeInTheDocument();
+    expect(apiMock.retryKeyCompromise).toHaveBeenCalledTimes(1);
+    expect(apiMock.executeKeyCompromise).not.toHaveBeenCalled();
   });
 
   it("shows historical CA evidence loss separately from the retained host result", async () => {

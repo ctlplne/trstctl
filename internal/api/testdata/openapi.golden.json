@@ -18206,6 +18206,27 @@
         ],
         "type": "object"
       },
+      "KeyCompromiseRetryRequest": {
+        "properties": {
+          "effect": {
+            "description": "host re-queues the exact reviewed host containment after a containment_failed or containment_unverified receipt; ca re-arms a dead-lettered revocation.publish command.",
+            "enum": [
+              "host",
+              "ca"
+            ],
+            "type": "string"
+          },
+          "request_key": {
+            "description": "The original compromise command's Idempotency-Key; the retry binds to that retained command.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_key",
+          "effect"
+        ],
+        "type": "object"
+      },
       "KeyCompromiseRevocationAttempt": {
         "properties": {
           "attempts": {
@@ -48729,6 +48750,83 @@
           }
         ],
         "summary": "Review exact CA revocation and host containment for one compromised X.509 identity",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/identities/{id}/compromise/retry": {
+      "post": {
+        "operationId": "retryKeyCompromiseEffect",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCompromiseRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCompromiseResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Re-queue the failed host containment or dead-lettered CA publication of one retained key-compromise command",
         "x-trstctl-permission": "identities:write"
       }
     },

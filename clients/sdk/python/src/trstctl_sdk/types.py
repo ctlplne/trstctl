@@ -6111,6 +6111,15 @@ KeyCompromiseResult = TypedDict(
     total=False,
 )
 
+KeyCompromiseRetryRequest = TypedDict(
+    'KeyCompromiseRetryRequest',
+    {
+        'effect': str,
+        'request_key': str,
+    },
+    total=False,
+)
+
 KeyCompromiseRevocationAttempt = TypedDict(
     'KeyCompromiseRevocationAttempt',
     {

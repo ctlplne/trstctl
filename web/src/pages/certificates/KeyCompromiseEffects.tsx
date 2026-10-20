@@ -1,16 +1,26 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type KeyCompromiseResult } from "@/lib/api";
+import { apiProblemContext } from "@/lib/apiProblem";
 import { isAccessDenied } from "@/lib/apiTransport";
 import { liveRefetchInterval } from "@/lib/query";
+
+const retryableHostStatuses = new Set(["containment_failed", "containment_unverified"]);
 
 /** One retained command has two separate receivers. Reading them together
  * keeps the console honest across reloads, retries, and a host-agent outage. */
 export function KeyCompromiseEffects({ identityID, requestKey, initial }: { identityID: string; requestKey: string; initial: KeyCompromiseResult }) {
   const { t } = useTranslation();
+  const [retry, setRetry] = useState<{ effect: "host" | "ca" | null; busy: boolean; notice: string | null; error: string | null }>({
+    effect: null,
+    busy: false,
+    notice: null,
+    error: null,
+  });
   const result = useQuery({
     queryKey: ["key-compromise-effects", identityID, requestKey, initial.revocation.id, initial.containment.id],
     initialData: initial,
@@ -21,10 +31,8 @@ export function KeyCompromiseEffects({ identityID, requestKey, initial }: { iden
       const read = await api.readKeyCompromise(identityID, requestKey);
       if (
         read.identity.id !== identityID ||
-        read.revocation.id !== initial.revocation.id ||
         read.revocation.destination !== "revocation.publish" ||
         read.containment.id !== initial.containment.id ||
-        read.containment.outbox_id !== initial.containment.outbox_id ||
         read.containment.identity_id !== identityID ||
         read.containment.fingerprint !== initial.containment.fingerprint
       ) {
@@ -40,6 +48,17 @@ export function KeyCompromiseEffects({ identityID, requestKey, initial }: { iden
     },
   });
   const read = result.isError ? null : result.data;
+  const retryEffect = async (effect: "host" | "ca", bindingID: string | number) => {
+    setRetry({ effect, busy: true, notice: null, error: null });
+    try {
+      // One key per exact failed attempt: a double click replays the same retry.
+      await api.retryKeyCompromise(identityID, { request_key: requestKey, effect }, `identity-compromise-retry:${effect}:${requestKey}:${bindingID}`);
+      setRetry({ effect: null, busy: false, notice: t("certificates.revocation.compromiseRetryQueued"), error: null });
+      await result.refetch({ cancelRefetch: false });
+    } catch (cause) {
+      setRetry({ effect: null, busy: false, notice: null, error: apiProblemContext(cause, t("certificates.revocation.compromiseRetryFailed")) });
+    }
+  };
   return (
     <div className="grid gap-3">
       {read ? (
@@ -66,6 +85,19 @@ export function KeyCompromiseEffects({ identityID, requestKey, initial }: { iden
                 {read.revocation.last_error}
               </p>
             ) : null}
+            {read.revocation.status === "failed" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                loading={retry.busy && retry.effect === "ca"}
+                disabled={retry.busy}
+                onClick={() => void retryEffect("ca", `${read.revocation.id}:${read.revocation.attempts}`)}
+              >
+                {t("certificates.revocation.compromiseRetryCA")}
+              </Button>
+            ) : null}
           </section>
           <section aria-label={t("certificates.revocation.compromiseHostJob")} className="rounded-control border border-border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -88,7 +120,26 @@ export function KeyCompromiseEffects({ identityID, requestKey, initial }: { iden
                 <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{read.containment.detail}</pre>
               </details>
             ) : null}
+            {retryableHostStatuses.has(read.containment.status) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                loading={retry.busy && retry.effect === "host"}
+                disabled={retry.busy}
+                onClick={() => void retryEffect("host", `${read.containment.outbox_id ?? "none"}:${read.containment.attempts}`)}
+              >
+                {t("certificates.revocation.compromiseRetryHost")}
+              </Button>
+            ) : null}
           </section>
+          {retry.notice ? <p role="status">{retry.notice}</p> : null}
+          {retry.error ? (
+            <p role="alert" className="text-status-warning">
+              {retry.error}
+            </p>
+          ) : null}
         </>
       ) : (
         <p role="alert" className="text-status-warning">

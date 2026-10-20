@@ -205,6 +205,7 @@ import type {
   KeyCompromisePlan,
   KeyCompromiseExecutionRequest,
   KeyCompromiseResult,
+  KeyCompromiseRetryRequest,
   RelayPluginRuntime,
   ContextualRiskPriorities as GenContextualRiskPriorities,
   UrgentRiskSummary as GenUrgentRiskSummary,
@@ -1005,6 +1006,7 @@ export type {
   KeyCompromisePlan,
   KeyCompromiseExecutionRequest,
   KeyCompromiseResult,
+  KeyCompromiseRetryRequest,
   RelayPluginRuntime,
   CRLDistribution,
   CRLDistributionList,
@@ -1842,6 +1844,7 @@ export interface Api {
   previewKeyCompromise(id: string, targetID: string): Promise<KeyCompromisePlan>;
   executeKeyCompromise(id: string, input: KeyCompromiseExecutionRequest, idempotencyKey: string): Promise<KeyCompromiseResult>;
   readKeyCompromise(id: string, requestKey: string): Promise<KeyCompromiseResult>;
+  retryKeyCompromise(id: string, input: KeyCompromiseRetryRequest, idempotencyKey: string): Promise<KeyCompromiseResult>;
   /** Compatibility route for identity decisions; the complete immutable request
    * binding is mandatory, just like the canonical approval-request route. */
   approveIdentityAction(id: string, input: ApprovalRequest): Promise<Approval>;
@@ -2537,6 +2540,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<KeyCompromiseResult>("POST", `/api/v1/identities/${encodeURIComponent(id)}/compromise`, input, idempotencyKey),
   readKeyCompromise: (id, requestKey) =>
     req<KeyCompromiseResult>(`/api/v1/identities/${encodeURIComponent(id)}/compromise?request_key=${encodeURIComponent(requestKey)}`),
+  retryKeyCompromise: (id, input, idempotencyKey) =>
+    mutate<KeyCompromiseResult>("POST", `/api/v1/identities/${encodeURIComponent(id)}/compromise/retry`, input, idempotencyKey),
   approveIdentityAction: (id, input) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, input),
   issueCertificate: async (input) => {
     const identity = await api.createIdentity(firstCertificateIdentityRequest(input, input.ownerId));

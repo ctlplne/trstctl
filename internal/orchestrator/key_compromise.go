@@ -185,7 +185,11 @@ func (o *Orchestrator) replayKeyCompromise(ctx context.Context, tenantID, identi
 	if err != nil {
 		return store.ConnectorDeliveryReceipt{}, fmt.Errorf("orchestrator: compromise receipt has not projected from retained event: %w", err)
 	}
-	if receipt.OutboxID == nil || *receipt.OutboxID != c.OutboxID {
+	expectedOutbox, err := o.expectedKeyCompromiseHostOutboxID(ctx, tenantID, ev, c)
+	if err != nil {
+		return store.ConnectorDeliveryReceipt{}, err
+	}
+	if receipt.OutboxID == nil || *receipt.OutboxID != expectedOutbox {
 		return store.ConnectorDeliveryReceipt{}, fmt.Errorf("orchestrator: compromise receipt outbox does not match retained event: %w", store.ErrIdempotencyConflict)
 	}
 	return receipt, nil
@@ -353,7 +357,13 @@ func (o *Orchestrator) KeyCompromiseStatus(ctx context.Context, tenantID, identi
 	if err != nil {
 		return store.OutboxAttempt{}, store.ConnectorDeliveryReceipt{}, err
 	}
-	if host.OutboxID == nil || *host.OutboxID != c.OutboxID || host.IdentityID == nil ||
+	// An operator retry moves the same receipt onto a fresh host job; the newest
+	// retained retry, not the original reservation, is then the exact row.
+	expectedOutbox, err := o.expectedKeyCompromiseHostOutboxID(ctx, tenantID, ev, c)
+	if err != nil {
+		return store.OutboxAttempt{}, store.ConnectorDeliveryReceipt{}, err
+	}
+	if host.OutboxID == nil || *host.OutboxID != expectedOutbox || host.IdentityID == nil ||
 		*host.IdentityID != identityID || host.Fingerprint != c.ExpectedFingerprint {
 		return store.OutboxAttempt{}, store.ConnectorDeliveryReceipt{}, store.ErrIdempotencyConflict
 	}

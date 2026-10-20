@@ -163,6 +163,7 @@ const (
 	CertificateObservationEventSchemaVersion      = 5
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventKeyCompromiseCAEffectCompleted           = "identity.key_compromise_ca_effect_completed"
+	EventKeyCompromiseEffectRetried               = "identity.key_compromise_effect_retried"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCertificateReprotectionCutover           = "certificate.reprotection_cutover"
 	EventCAIssuedCertificate                      = caevent.EventCAIssuedCertificate
@@ -1315,6 +1316,49 @@ func ValidateKeyCompromiseCAEffectCompleted(value KeyCompromiseCAEffectCompleted
 	if _, err := uuid.Parse(value.SourceEventID); err != nil || value.OutboxID <= 0 ||
 		value.Destination != "revocation.publish" || value.Status != "delivered" || value.Attempts < 1 {
 		return fmt.Errorf("projections: key-compromise CA effect receipt has no exact completed command")
+	}
+	return nil
+}
+
+// KeyCompromiseEffectRetried records one operator-requested retry of a single
+// effect of a retained compound key-compromise command. A host retry names the
+// fresh endpoint.contain outbox row that replaces the failed one on the same
+// receipt; a CA retry names the dead-lettered revocation.publish row that was
+// re-armed. The event ID derives from (source event, effect, attempt), so a
+// lost HTTP result replays the same retry instead of queueing another.
+type KeyCompromiseEffectRetried struct {
+	SourceEventID string `json:"source_event_id"`
+	IdentityID    string `json:"identity_id"`
+	RequestKey    string `json:"request_key"`
+	Effect        string `json:"effect"`
+	Attempt       int    `json:"attempt"`
+	OutboxID      int64  `json:"outbox_id"`
+	ReceiptID     string `json:"receipt_id,omitempty"`
+	RequestedBy   string `json:"requested_by"`
+}
+
+// KeyCompromiseEffect names the two independent receivers of one compound command.
+const (
+	KeyCompromiseEffectHost = "host"
+	KeyCompromiseEffectCA   = "ca"
+)
+
+func ValidateKeyCompromiseEffectRetried(value KeyCompromiseEffectRetried) error {
+	if _, err := uuid.Parse(value.SourceEventID); err != nil || value.IdentityID == "" ||
+		value.RequestKey == "" || value.Attempt < 1 || value.OutboxID <= 0 || value.RequestedBy == "" {
+		return fmt.Errorf("projections: key-compromise effect retry has no exact source command, attempt, outbox row or requester")
+	}
+	switch value.Effect {
+	case KeyCompromiseEffectHost:
+		if _, err := uuid.Parse(value.ReceiptID); err != nil {
+			return fmt.Errorf("projections: key-compromise host retry needs the exact receipt id")
+		}
+	case KeyCompromiseEffectCA:
+		if value.ReceiptID != "" {
+			return fmt.Errorf("projections: key-compromise CA retry carries no host receipt")
+		}
+	default:
+		return fmt.Errorf("projections: key-compromise effect retry has an unknown effect %q", value.Effect)
 	}
 	return nil
 }
@@ -3842,6 +3886,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
 	EventKeyCompromiseCAEffectCompleted:           {1: true},
+	EventKeyCompromiseEffectRetried:               {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
 	EventCertificateSuperseded:                    {1: true},
 	EventCertificateReprotectionCutover:           {1: true},
@@ -7253,6 +7298,20 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return ValidateKeyCompromiseCAEffectCompleted(pl)
+	case EventKeyCompromiseEffectRetried:
+		var pl KeyCompromiseEffectRetried
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := ValidateKeyCompromiseEffectRetried(pl); err != nil {
+			return err
+		}
+		if pl.Effect != KeyCompromiseEffectHost {
+			// A CA retry re-arms an outbox command; the outbox is not a projection.
+			return nil
+		}
+		return p.store.ApplyKeyCompromiseHostRetryTx(ctx, tx, e.TenantID, pl.ReceiptID,
+			pl.IdentityID, pl.OutboxID, pl.Attempt, e.Sequence, e.Time)
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model

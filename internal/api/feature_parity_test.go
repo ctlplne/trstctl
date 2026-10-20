@@ -277,8 +277,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F2 adds one exact discovery schedule read and three event-sourced lifecycle controls.
 	// F34 adds bounded and exact signed-issue and CA-result recovery after lost responses.
 	// F48 adds tenant-bound existing-CA CSR preparation and exact readback.
-	if len(out) != 495 {
-		t.Fatalf("OpenAPI operationIds = %d, want 495", len(out))
+	// The key-compromise command adds one effect retry so a failed host
+	// containment or dead-lettered CA publication recovers on the same command.
+	if len(out) != 496 {
+		t.Fatalf("OpenAPI operationIds = %d, want 496", len(out))
 	}
 	return out
 }

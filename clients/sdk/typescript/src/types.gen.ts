@@ -3240,6 +3240,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/compromise/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-queue the failed host containment or dead-lettered CA publication of one retained key-compromise command */
+        post: operations["retryKeyCompromiseEffect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/connector-target": {
         parameters: {
             query?: never;
@@ -12124,6 +12141,15 @@ export interface components {
             containment: components["schemas"]["ConnectorDelivery"];
             identity: components["schemas"]["Identity"];
             revocation: components["schemas"]["KeyCompromiseRevocationAttempt"];
+        };
+        KeyCompromiseRetryRequest: {
+            /**
+             * @description host re-queues the exact reviewed host containment after a containment_failed or containment_unverified receipt; ca re-arms a dead-lettered revocation.publish command.
+             * @enum {string}
+             */
+            effect: "host" | "ca";
+            /** @description The original compromise command's Idempotency-Key; the retry binds to that retained command. */
+            request_key: string;
         };
         KeyCompromiseRevocationAttempt: {
             attempts: number;
@@ -25679,6 +25705,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KeyCompromisePlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retryKeyCompromiseEffect: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyCompromiseRetryRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyCompromiseResult"];
                 };
             };
             /** @description client error */

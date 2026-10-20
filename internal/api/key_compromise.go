@@ -52,6 +52,11 @@ type keyCompromiseExecutionRequest struct {
 	PreviewFingerprint  string `json:"preview_fingerprint"`
 }
 
+type keyCompromiseRetryRequest struct {
+	RequestKey string `json:"request_key"`
+	Effect     string `json:"effect"`
+}
+
 type keyCompromiseResult struct {
 	Identity    identityResponse          `json:"identity"`
 	Revocation  store.OutboxAttempt       `json:"revocation"`
@@ -302,4 +307,66 @@ func (a *API) replayIdentityKeyCompromise(ctx context.Context, tenantID string,
 		Identity: toIdentityResponse(updated), Revocation: revocation,
 		Containment: toConnectorDeliveryResponse(receipt),
 	}, nil
+}
+
+// retryKeyCompromise re-queues one failed effect of a retained compound
+// command. It needs the same host authority as the original command, binds to
+// the original request key, and never re-reviews: the reviewed leaf, target and
+// agent are already fixed in the retained event.
+//
+//trstctl:mutation
+func (a *API) retryKeyCompromise(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	principal, err := a.requireKeyCompromiseAuthority(r, tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	var request keyCompromiseRetryRequest
+	if err := decodeJSON(r, &request); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	request.RequestKey = strings.TrimSpace(request.RequestKey)
+	effect := orchestrator.KeyCompromiseEffect(strings.TrimSpace(request.Effect))
+	if request.RequestKey == "" || (effect != orchestrator.KeyCompromiseEffectHost && effect != orchestrator.KeyCompromiseEffectCA) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "key compromise retry needs the original request_key and an effect of host or ca"))
+		return
+	}
+	if a.orch == nil {
+		a.writeError(w, errors.New("key compromise orchestrator is unavailable"))
+		return
+	}
+	identityID := r.PathValue("id")
+	key := r.Header.Get("Idempotency-Key")
+	bindingBody, err := json.Marshal(struct {
+		Domain     string                    `json:"domain"`
+		Actor      string                    `json:"actor"`
+		IdentityID string                    `json:"identity_id"`
+		Request    keyCompromiseRetryRequest `json:"request"`
+	}{"trstctl.key-compromise-retry.v1", principal.Subject, identityID, request})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, key, crypto.SHA256Hex(bindingBody),
+		func(ctx context.Context, tenantID string) (int, any, error) {
+			revocation, containment, err := a.orch.RetryKeyCompromiseEffect(ctx, tenantID, identityID,
+				request.RequestKey, effect, principal.Subject)
+			if err != nil {
+				return 0, nil, err
+			}
+			identity, err := a.store.GetIdentity(ctx, tenantID, identityID)
+			if err != nil {
+				return 0, nil, err
+			}
+			return http.StatusAccepted, keyCompromiseResult{
+				Identity: toIdentityResponse(identity), Revocation: revocation,
+				Containment: toConnectorDeliveryResponse(containment),
+			}, nil
+		})
 }
