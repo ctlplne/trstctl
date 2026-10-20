@@ -59,6 +59,21 @@ starts. For those fleets set `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2`; the listener 
 offers TLS 1.2 with AEAD suites only and still prefers TLS 1.3 for capable clients.
 Found by the cold design-partner run 20260906t143500z (DP2-036).
 
+#### Re-enrollment by client certificate
+
+A device should renew with the certificate it already holds, not with a bootstrap
+token it has to keep. Set `TRSTCTL_PROTOCOLS_EST_MTLS_ADDR` (for example `:9445`)
+and trstctl serves EST on a second HTTPS listener that requires a client certificate
+issued by the enrollment CA. On that listener `/.well-known/est/simplereenroll`
+authenticates the device by the certificate it presents and binds the renewal CSR
+to that certificate's identifiers: a CSR for another name is refused with `403`,
+a connection without a certificate fails the TLS handshake, and the ordinary
+token-authenticated routes stay on the main listener, which never requests a
+client certificate (so browsers are not prompted). The listener reuses the main
+listener's server identity and TLS floor, so cisco libest `estclient -r -c
+<cert> -k <key>` renews against it with `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2`.
+Closes DP2-037.
+
 #### Check EST safely from the console
 
 Open **Certificates → Enrollment methods**, expand **Set up and operate

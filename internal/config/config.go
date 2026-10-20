@@ -734,10 +734,15 @@ type Protocols struct {
 	EvalSPIFFETrustDomain string         `json:"eval_spiffe_trust_domain,omitempty"`
 	ACME                  ProtocolToggle `json:"acme"`
 	EST                   ProtocolToggle `json:"est"`
-	SCEP                  ProtocolToggle `json:"scep"`
-	CMP                   ProtocolToggle `json:"cmp"`
-	TSA                   ProtocolToggle `json:"tsa"`
-	KMIP                  KMIPProtocol   `json:"kmip"`
+	// ESTMTLSAddr, when set, serves EST on a second HTTPS listener that requires
+	// a client certificate issued by the enrollment CA, so /simplereenroll
+	// authenticates devices by the certificate they present. The main listener
+	// never requests a client certificate. Empty keeps the listener off.
+	ESTMTLSAddr string         `json:"est_mtls_addr,omitempty"`
+	SCEP        ProtocolToggle `json:"scep"`
+	CMP         ProtocolToggle `json:"cmp"`
+	TSA         ProtocolToggle `json:"tsa"`
+	KMIP        KMIPProtocol   `json:"kmip"`
 	// ACMEQuota caps public ACME state retained by the in-process protocol view.
 	// It complements the protocol bulkhead: the bulkhead limits concurrent work,
 	// while these caps bound total nonce/account/order/authz/challenge state.
@@ -2914,6 +2919,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS", &p.ACMEQuota.StateTTLSeconds)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_EST_ENABLED", &p.EST.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_EST_TENANT_ID", &p.EST.TenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_EST_MTLS_ADDR", &p.ESTMTLSAddr)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SCEP_ENABLED", &p.SCEP.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", &p.SCEP.TenantID)
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_SCEP_INTUNE_TRUST_ANCHOR_FILES", &p.SCEPIntuneChallenge.TrustAnchorFiles)

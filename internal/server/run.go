@@ -740,7 +740,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecretScanRoots:             append([]string(nil), cfg.Secrets.ScanRoots...),
 		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
-		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentChannelPublicAddress: cfg.AgentChannel.PublicAddress, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr,
+		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentChannelPublicAddress: cfg.AgentChannel.PublicAddress, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr, ESTMTLSAddr: cfg.Protocols.ESTMTLSAddr, ServerTLS: cfg.Server.TLS,
 		AgentClaimableJobKinds: cfg.AgentChannel.ClaimableJobKinds,
 		AgentCACertFile:        agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
@@ -1429,6 +1429,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
 	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
 	agentHTTPRenewalW := startRuntimeWorker(ctx, srv.RunAgentHTTPRenewal)
+	estMTLSW := startRuntimeWorker(ctx, srv.RunESTMTLS)
 	kmipW := startRuntimeWorker(ctx, srv.RunKMIP)
 	logMountedSurfaces(srv, logger)
 	return func() {
@@ -1439,6 +1440,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		spiffeW.Stop()
 		agentW.Stop()
 		agentHTTPRenewalW.Stop()
+		estMTLSW.Stop()
 		kmipW.Stop()
 	}, nil
 }
@@ -1454,6 +1456,10 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	if addr := srv.AgentHTTPRenewalAddr(); addr != "" {
 		logger.Info("served embedded-agent HTTP renewal mTLS listener mounted",
 			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
+	}
+	if addr := srv.ESTMTLSAddr(); addr != "" {
+		logger.Info("served EST mutual-TLS listener mounted: /simplereenroll authenticates by the presented device certificate",
+			slog.String("addr", addr))
 	}
 	if addr := srv.KMIPAddr(); addr != "" {
 		logger.Info("served KMIP mTLS listener mounted", slog.String("addr", addr))

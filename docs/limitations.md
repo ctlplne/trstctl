@@ -4834,10 +4834,12 @@ proves both sides of that policy against the control plane's own listener code
 certificate, and with `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2` (AEAD suites only), the
 documented opt-in for such fleets, the same client enrolls. The earlier proof
 against a Go test server that silently allowed TLS 1.2 is retired. EST
-`/simplereenroll` authenticates with the
-bootstrap token rather than the presented client certificate (DP2-037), so devices
-keep the scoped token for renewals. Found by the cold design-partner run
-20260906t143500z (DP2-036, DP2-037).
+`/simplereenroll` on the main listener still authenticates with the bootstrap
+token; with `TRSTCTL_PROTOCOLS_EST_MTLS_ADDR` set, a second listener requires a
+client certificate from the enrollment CA and authenticates renewals by that
+certificate, binding the CSR to its identifiers, so devices keep no token for
+renewals (DP2-037 closed; proven with a Go client and with libest `estclient -r`).
+Found by the cold design-partner run 20260906t143500z (DP2-036, DP2-037).
 
 ## ACME certificate profiles
 

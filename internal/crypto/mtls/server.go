@@ -477,3 +477,53 @@ func LoopbackProbeClient(timeout time.Duration) *http.Client {
 		},
 	}
 }
+
+// ServeMutualHTTPS is ServeHTTPS for a listener that admits only clients
+// presenting a certificate chaining to clientCAs (RequireAndVerifyClientCert).
+// It is for dedicated device listeners such as EST re-enrollment by client
+// certificate; the main control-plane listener never requests a client
+// certificate, so browsers are never prompted for one.
+func (s *ServerCert) ServeMutualHTTPS(srv *http.Server, ln net.Listener, clientCAsDER [][]byte) error {
+	if len(clientCAsDER) == 0 {
+		return errors.New("mtls: mutual HTTPS requires client trust anchors")
+	}
+	clientCAs := x509.NewCertPool()
+	for i, der := range clientCAsDER {
+		ca, err := x509.ParseCertificate(der)
+		if err != nil {
+			return fmt.Errorf("mtls: parse client trust anchor %d: %w", i, err)
+		}
+		clientCAs.AddCert(ca)
+	}
+	srv.TLSConfig = &tls.Config{
+		MinVersion:       tls.VersionTLS13,
+		CurvePreferences: CurvePreferences(),
+		ClientAuth:       tls.RequireAndVerifyClientCert,
+		ClientCAs:        clientCAs,
+	}
+	if s.AllowTLS12 {
+		srv.TLSConfig.MinVersion = tls.VersionTLS12
+		srv.TLSConfig.CipherSuites = tls12AEADSuites()
+	}
+	if s.reload != nil {
+		srv.TLSConfig.GetCertificate = s.reload.GetCertificate
+	} else {
+		srv.TLSConfig.Certificates = []tls.Certificate{s.cert}
+	}
+	return srv.ServeTLS(ln, "", "")
+}
+
+// ClientCertSourceFromDER builds a static client-certificate source from a DER
+// certificate and its PKCS#8 private key, for clients that present an
+// enrollment-CA leaf (for example an EST re-enrollment by client certificate).
+func ClientCertSourceFromDER(certDER, keyPKCS8 []byte) (ClientCertSource, error) {
+	key, err := x509.ParsePKCS8PrivateKey(keyPKCS8)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse client key: %w", err)
+	}
+	leaf, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse client certificate: %w", err)
+	}
+	return StaticSource(tls.Certificate{Certificate: [][]byte{certDER}, PrivateKey: key, Leaf: leaf}), nil
+}

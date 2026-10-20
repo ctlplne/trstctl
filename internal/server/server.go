@@ -639,6 +639,11 @@ type Deps struct {
 	// mTLS listener (default :9444). Only honored when EnableAgentChannel is true,
 	// because it uses the same signer-custodied agent CA and client certificates.
 	AgentHTTPRenewalAddr string
+	// ESTMTLSAddr is the listen address of the dedicated EST mutual-TLS listener
+	// (re-enrollment by client certificate); empty keeps it off. ServerTLS is the
+	// control-plane TLS policy that listener reuses for its own server identity.
+	ESTMTLSAddr string
+	ServerTLS   config.TLS
 	// AgentCACertFile is where the agent CA certificate is persisted, so the agent CA
 	// (whose key lives in the signer) is stable across restarts — an agent's pinned CA
 	// does not change on a restart (WIRE-004; the AN-4 deviation the audit flagged).
@@ -713,6 +718,8 @@ type Server struct {
 	agentSvc                agentChannelService
 	agentChannelAddr        string
 	agentHTTPRenewalAddr    string
+	estMTLSAddr             string
+	serverTLS               config.TLS
 	agentHTTPRenewalHandler http.Handler
 	agentChannelServerName  string        // SAN the agent verifies (server-name); from config
 	agentHeartbeatInterval  time.Duration // next-beat hint and stale-heartbeat threshold base
@@ -2217,6 +2224,8 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		s.agentChannelAddr = ":9443"
 	}
 	s.agentHTTPRenewalAddr = d.AgentHTTPRenewalAddr
+	s.estMTLSAddr = strings.TrimSpace(d.ESTMTLSAddr)
+	s.serverTLS = d.ServerTLS
 	if s.agentHTTPRenewalAddr == "" {
 		s.agentHTTPRenewalAddr = ":9444"
 	}

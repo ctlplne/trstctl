@@ -72,6 +72,7 @@ type servedProtocols struct {
 	tenantServiceWork  tenancy.ServiceWork
 	acme               *acme.Server
 	est                http.Handler
+	estServer          *est.Server
 	scep               http.Handler
 	cmp                *cmp.Server
 	tsa                *tsa.Authority
@@ -157,6 +158,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			return nil, fmt.Errorf("server: build served EST dispatcher: %w", err)
 		}
 		sp.est = dispatcher
+		sp.estServer = estSrv
 		sp.names = append(sp.names, "est")
 	}
 

@@ -2038,6 +2038,7 @@ an account without EAB, even if the account predates the configuration change.
 | `TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS` | `600` | TTL for unused ACME replay nonces before the request-time janitor drops them. |
 | `TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS` | `86400` | TTL for pending ACME order/authorization/challenge state before the request-time janitor drops it. |
 | `TRSTCTL_PROTOCOLS_EST_ENABLED` / `…_TENANT_ID` | `false` / — | Serve EST at `/.well-known/est/...` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_EST_MTLS_ADDR` | — (off) | Also serve EST on a second HTTPS listener at this address that requires a client certificate issued by the enrollment CA. On it, `/.well-known/est/simplereenroll` authenticates a device by the certificate it presents and binds the renewal CSR to that certificate's identifiers; no bootstrap token is needed for renewals. The main listener never requests a client certificate, so browsers are not prompted. Uses the same server identity and TLS floor as the main listener; refused under `server.tls.mode=disabled`. |
 | `TRSTCTL_PROTOCOLS_SCEP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve SCEP at `/scep` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_CMP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve CMP at `/cmp` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_TSA_ENABLED` / `…_TENANT_ID` | `false` / — | Serve RFC 3161 timestamp evidence for the named tenant through the signer-held timestamping key, instead of minting inventory certificates. |

@@ -110,3 +110,14 @@ func isMTLSRoute(ctx context.Context) bool {
 	v, _ := ctx.Value(mtlsRouteKey{}).(bool)
 	return v
 }
+
+// MTLSRouteHandler serves this EST server on a listener that has already
+// authenticated the client's TLS certificate (ClientAuth RequireAndVerify).
+// Every request is tagged as an mTLS route: /simplereenroll authenticates by the
+// presented certificate and binds the CSR to its identifiers instead of asking
+// for a bootstrap token. The paths are the standard /.well-known/est/... ones.
+func MTLSRouteHandler(server *Server) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.ServeHTTP(w, r.Clone(routeContext(r.Context(), true)))
+	})
+}

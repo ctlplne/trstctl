@@ -74,3 +74,31 @@ func serverHosts() []string {
 	}
 	return hosts
 }
+
+// controlPlaneServerCert loads the same server identity serveControlPlane serves,
+// for a second listener (the EST mutual-TLS listener) that must present the
+// control plane's public certificate. Plaintext mode has no identity to share.
+func controlPlaneServerCert(tlsCfg config.TLS) (*mtls.ServerCert, error) {
+	switch tlsCfg.Mode {
+	case config.TLSDisabled:
+		return nil, errors.New("server: tls.mode=disabled has no server identity for a mutual-TLS listener")
+	case config.TLSFile:
+		sc, err := mtls.ServerCertFromFiles(tlsCfg.CertFile, tlsCfg.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+		sc.AllowTLS12 = tlsCfg.AllowsTLS12()
+		return sc, nil
+	default:
+		stateFile := strings.TrimSpace(tlsCfg.InternalStateFile)
+		if stateFile == "" {
+			stateFile = defaultInternalTLSStateFile
+		}
+		sc, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, serverHosts(), internalCertTTL)
+		if err != nil {
+			return nil, err
+		}
+		sc.AllowTLS12 = tlsCfg.AllowsTLS12()
+		return sc, nil
+	}
+}
