@@ -4691,10 +4691,15 @@ inspected through the same PQC-aware seam, so the binding between the
 CSR and the protection identity is evaluated on the parsed names rather
 than by re-parsing the CSR with the core parser (proven with a stock
 `openssl cmp` client carrying an `openssl req` ML-DSA-65 request). SCEP
-still verifies the enveloped CSR with the core parser before the PQC
-parser is consulted and therefore rejects pure ML-DSA — and SCEP
-additionally cannot deliver its CMS-enveloped reply to a signature-only
-transport key, a protocol limit rather than a code gap. One
+verifies and inspects the enveloped CSR through the same seam, so a pure
+ML-DSA PKCS#10 enrolls when the client's CMS transport identity (the
+self-signed certificate that signs the pkiMessage and receives the
+CertRep envelope) is RSA; that transport key is separate from the subject
+key in the CSR, and SCEP still cannot deliver its CMS-enveloped reply to
+a signature-only transport key, a protocol limit rather than a code gap.
+Stock SCEP clients (sscep) do not produce ML-DSA requests, so the SCEP
+proof is a Go-built pkiMessage against the served parser, not a stock
+client. One
 ceiling applies everywhere: the issuing CA key itself remains classical
 ECDSA-P256 (post-quantum keys are subject keys, not issuer keys, in the
 served path). Certificate-profile `allowed_key_algorithms` labels accept

@@ -87,6 +87,8 @@ type Server struct {
 	deviceWindow     time.Duration
 	deviceLimiter    *deviceWindowCounter
 	onFailure        func(context.Context, enrollmentdiag.Diagnosis)
+	verifyCSR        func([]byte) error
+	inspectCSR       func([]byte) (crypto.CSRInfo, error)
 	mux              *http.ServeMux
 }
 
@@ -117,6 +119,13 @@ type Config struct {
 	// FailureDiagnosis receives typed refusal evidence for tenant-scoped durable
 	// projection by the served assembly.
 	FailureDiagnosis func(context.Context, enrollmentdiag.Diagnosis)
+	// CSRVerifier/CSRInspector are the feature-neutral production seams for
+	// subject algorithms the core parser cannot check (a pure ML-DSA PKCS#10),
+	// mirroring EST and CMP. The CMS transport stays RSA and core-verified;
+	// only the enveloped CSR's verification and name inspection are delegated.
+	// Nil keeps the core parser.
+	CSRVerifier  func([]byte) error
+	CSRInspector func([]byte) (crypto.CSRInfo, error)
 }
 
 // New builds the SCEP server.
@@ -127,6 +136,10 @@ func New(cfg Config) *Server {
 		challenge: cfg.ChallengeValidator, challengeProfile: cfg.ChallengeProfileValidator,
 		deviceLimit:  cfg.MaxEnrollmentsPerDevice,
 		deviceWindow: cfg.DeviceRateLimitWindow, deviceLimiter: newDeviceWindowCounter(nil), onFailure: cfg.FailureDiagnosis,
+		verifyCSR: cfg.CSRVerifier, inspectCSR: cfg.CSRInspector,
+	}
+	if s.inspectCSR == nil {
+		s.inspectCSR = crypto.InspectCSR
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scep", s.handle)
@@ -192,7 +205,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	req, err := crypto.ParseSCEPRequest(body, s.raCertDER, s.raKeyPKCS8)
+	req, err := crypto.ParseSCEPRequestWithVerifier(body, s.raCertDER, s.raKeyPKCS8, s.verifyCSR)
 	if err != nil {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
 		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepOrder, "badMessageCheck", err),
@@ -200,7 +213,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
-	deviceSerial, err := scepDeviceSerial(req.CSRDER)
+	deviceSerial, err := scepDeviceSerial(s.inspectCSR, req.CSRDER)
 	if err != nil {
 		s.audit(r.Context(), "deny", "invalid csr", req.TransactionID)
 		s.emitAttempt(r.Context(), EventIssuanceObserved, AttemptEvidence{
@@ -211,7 +224,7 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
-	identityRef := scepIdentityRef(req.CSRDER, deviceSerial)
+	identityRef := scepIdentityRef(s.inspectCSR, req.CSRDER, deviceSerial)
 	profile := s.profile
 	baseEvidence := AttemptEvidence{
 		TransactionID: req.TransactionID, DeviceSerial: deviceSerial, Profile: profile,
@@ -333,8 +346,8 @@ func (s *Server) emitFailure(r *http.Request, diagnosis enrollmentdiag.Diagnosis
 	}))
 }
 
-func scepIdentityRef(csrDER []byte, deviceSerial string) string {
-	if info, err := crypto.InspectCSR(csrDER); err == nil && len(info.DNSNames) > 0 {
+func scepIdentityRef(inspect func([]byte) (crypto.CSRInfo, error), csrDER []byte, deviceSerial string) string {
+	if info, err := inspect(csrDER); err == nil && len(info.DNSNames) > 0 {
 		if name := strings.ToLower(strings.TrimSpace(info.DNSNames[0])); name != "" {
 			return "dns:" + name
 		}
@@ -342,8 +355,8 @@ func scepIdentityRef(csrDER []byte, deviceSerial string) string {
 	return "device:" + deviceSerial
 }
 
-func scepDeviceSerial(csrDER []byte) (string, error) {
-	info, err := crypto.InspectCSR(csrDER)
+func scepDeviceSerial(inspect func([]byte) (crypto.CSRInfo, error), csrDER []byte) (string, error) {
+	info, err := inspect(csrDER)
 	if err != nil {
 		return "", err
 	}
@@ -406,7 +419,7 @@ func (s *Server) allowDeviceEnrollment(ctx context.Context, csrDER []byte, profi
 	if s.deviceLimit <= 0 {
 		return true, nil
 	}
-	info, err := crypto.InspectCSR(csrDER)
+	info, err := s.inspectCSR(csrDER)
 	if err != nil {
 		return false, err
 	}

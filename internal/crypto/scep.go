@@ -64,6 +64,19 @@ type SCEPRequest struct {
 // RSA private key, used only here. It fails closed on any malformed, unverifiable, or
 // non-RSA input — this is the SCEP parser fuzz target.
 func ParseSCEPRequest(pkiMessageDER, raCertDER, raKeyPKCS8 []byte) (*SCEPRequest, error) {
+	return ParseSCEPRequestWithVerifier(pkiMessageDER, raCertDER, raKeyPKCS8, nil)
+}
+
+// ParseSCEPRequestWithVerifier is ParseSCEPRequest with an injected verifier for
+// the enveloped PKCS#10 — the same feature-neutral seam EST and CMP use for
+// subject algorithms the core parser cannot check (a pure ML-DSA request). The
+// CMS signature and the RSA envelope are still verified here unconditionally;
+// only the inner CSR's verification is delegated. A nil verifier keeps the
+// strict core parser.
+func ParseSCEPRequestWithVerifier(pkiMessageDER, raCertDER, raKeyPKCS8 []byte, verifyCSR func([]byte) error) (*SCEPRequest, error) {
+	if verifyCSR == nil {
+		verifyCSR = VerifyCertificateRequest
+	}
 	// Untrusted input: route through safeParsePKCS7 so a malformed CMS fails
 	// closed with an error instead of panicking the decoder (FUZZ-001).
 	p7, err := safeParsePKCS7(pkiMessageDER)
@@ -105,7 +118,7 @@ func ParseSCEPRequest(pkiMessageDER, raCertDER, raKeyPKCS8 []byte) (*SCEPRequest
 	if err != nil {
 		return nil, fmt.Errorf("scep: decrypt pkcsPKIEnvelope: %w", err)
 	}
-	if err := VerifyCertificateRequest(csrDER); err != nil {
+	if err := verifyCSR(csrDER); err != nil {
 		return nil, fmt.Errorf("scep: enveloped content is not a valid CSR: %w", err)
 	}
 	return &SCEPRequest{

@@ -382,6 +382,8 @@ func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, is
 	// signer via the Enroller and verifies against the issuing CA.
 	scepSrv := scep.New(scep.Config{
 		Enroller:                  enrollerAdapter{tenantID: tenantID, issuer: issuer},
+		CSRVerifier:               issuer.verifyCSR,
+		CSRInspector:              issuer.inspectCSRInfo,
 		ProfileName:               s.defaultProfile,
 		CAChainDER:                [][]byte{raCertDER, s.caCertDER},
 		RACertDER:                 raCertDER,
