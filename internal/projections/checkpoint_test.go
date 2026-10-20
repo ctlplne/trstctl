@@ -76,7 +76,7 @@ func TestProjectCatchUpReplaysOnlyAfterCheckpoint(t *testing.T) {
 	}
 }
 
-func TestRebuildReplacesStaleBreakglassReceiptCursorsBeforeWarmCatchUp(t *testing.T) {
+func TestRebuildReplacesStaleRecoveryCursorsBeforeWarmCatchUp(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
 	ctx := context.Background()
@@ -89,7 +89,8 @@ func TestRebuildReplacesStaleBreakglassReceiptCursorsBeforeWarmCatchUp(t *testin
 	}
 	if _, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint
 		SET applied_seq=133,breakglass_issue_checked_through=133,
-		    breakglass_authority_checked_through=133 WHERE id=1`); err != nil {
+		    breakglass_authority_checked_through=133,
+		    ca_reprotection_name_checked_through=133 WHERE id=1`); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.Rebuild(ctx, log); err != nil {
@@ -103,8 +104,14 @@ func TestRebuildReplacesStaleBreakglassReceiptCursorsBeforeWarmCatchUp(t *testin
 			t.Fatalf("%s cursor after rebuild = %d, err=%v, want %d", name, got, err, registered.Sequence)
 		}
 	}
+	if checked, err := s.CAReprotectionNameRecoveryCursor(ctx); err != nil || checked != 0 {
+		t.Fatalf("snapshot or rebuild cannot attest the issuer-name recovery pass: cursor=%d err=%v", checked, err)
+	}
 	if err := p.ProjectCatchUp(ctx, log); err != nil {
 		t.Fatalf("warm catch-up after rebuilt history: %v", err)
+	}
+	if checked, err := s.CAReprotectionNameRecoveryCursor(ctx); err != nil || checked != registered.Sequence {
+		t.Fatalf("indexed name recovery cursor=%d err=%v, want %d", checked, err, registered.Sequence)
 	}
 	owner, err := log.Append(ctx, events.Event{
 		Type: projections.EventOwnerCreated, TenantID: tenantA,
@@ -118,6 +125,7 @@ func TestRebuildReplacesStaleBreakglassReceiptCursorsBeforeWarmCatchUp(t *testin
 	}
 	for name, read := range map[string]func(context.Context) (uint64, error){
 		"issue": s.BreakglassIssueRecoveryCursor, "authority": s.BreakglassAuthorityRecoveryCursor,
+		"CA name": s.CAReprotectionNameRecoveryCursor,
 	} {
 		got, err := read(ctx)
 		if err != nil || got != owner.Sequence {

@@ -230,8 +230,11 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 // rather than re-replaying everything. Current-format snapshots contain both
 // break-glass receipt tables, so a complete rebuild or snapshot restore also
 // attests their indexed recovery cursors through this exact head. Warm
-// AdvanceProjectionCheckpoint intentionally does not advance those cursors. It
-// is a system write of the single-row table.
+// AdvanceProjectionCheckpoint intentionally does not advance those cursors.
+// The CA issuer-name cursor is deliberately separate: an older snapshot can
+// contain the stale label even when its applied_seq reaches the head. Only an
+// indexed recovery pass may attest that field. This is a system write of the
+// single-row table.
 func (s *Store) SetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE projection_checkpoint
@@ -265,6 +268,7 @@ func (s *Store) ResetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx) erro
 		        external_issuer_checked_through = 0,
 		        breakglass_issue_checked_through = 0,
 		        breakglass_authority_checked_through = 0,
+		        ca_reprotection_name_checked_through = 0,
 		        updated_at = now()
 		  WHERE id = 1`)
 	if err != nil {

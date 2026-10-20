@@ -53,7 +53,9 @@ func truncateReadModelAndCheckpoint(t *testing.T, s *store.Store) {
 	if _, err := s.SystemPool().Exec(ctx,
 		`UPDATE projection_checkpoint
 		    SET applied_seq = 0, breakglass_issue_checked_through = NULL,
-		        breakglass_authority_checked_through = NULL, failed_seq = NULL, last_error = NULL,
+		        breakglass_authority_checked_through = NULL,
+		        ca_reprotection_name_checked_through = NULL,
+		        failed_seq = NULL, last_error = NULL,
 		        failed_at = NULL, updated_at = now()
 		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset checkpoint: %v", err)

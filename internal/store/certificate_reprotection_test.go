@@ -28,18 +28,26 @@ func TestCertificateReprotectionCutoverIsTenantBoundAndIdempotent(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	oldCA, err := st.InsertCAAuthority(ctx, store.CAAuthority{TenantID: tenantA, CommonName: "Predecessor QA CA", Kind: "intermediate", CertificatePEM: "public-old", Serial: "qa-old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCA, err := st.InsertCAAuthority(ctx, store.CAAuthority{TenantID: tenantA, CommonName: "Successor QA CA", Kind: "intermediate", CertificatePEM: "public-new", Serial: "qa-new"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	identityID := "e416b25d-25bf-4a03-9f0c-bb78ef9b1180"
 	ownerID := "149eab5a-026d-41c2-8a08-17b4f603c957"
 	if err := st.UpsertOwner(ctx, store.Owner{ID: ownerID, TenantID: tenantA, Kind: store.OwnerService, Name: "reprotection-owner"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.UpsertIdentity(ctx, store.Identity{ID: identityID, TenantID: tenantA, Kind: store.KindX509Certificate,
-		Name: "host.qa.invalid", OwnerID: ownerID, Status: "deployed", Attributes: json.RawMessage(`{"deployment_target_id":"target-1","issuing_authority_source":"private","issuing_authority_id":"old-ca"}`)}); err != nil {
+		Name: "host.qa.invalid", OwnerID: ownerID, Status: "deployed", Attributes: json.RawMessage(fmt.Sprintf(`{"deployment_target_id":"target-1","issuing_authority_source":"private","issuing_authority_id":%q,"issuing_authority_name":"Predecessor QA CA"}`, oldCA.ID))}); err != nil {
 		t.Fatal(err)
 	}
 	cutover := store.CertificateReprotectionCutover{IdentityID: identityID, TargetID: "target-1", OldCertificateID: old.ID,
 		OldFingerprint: old.Fingerprint, NewCertificateID: next.ID, NewFingerprint: next.Fingerprint,
-		OldAuthorityID: "old-ca", NewAuthorityID: "new-ca", JobID: "job-1", ReceiptID: "agent-job:42:1:verified",
+		OldAuthorityID: oldCA.ID, NewAuthorityID: newCA.ID, JobID: "job-1", ReceiptID: "agent-job:42:1:verified",
 		ReceiptStatement: fmt.Sprintf("trstctl-agent-job-receipt/v2\ntenant=%s\nagent=qa-host\njob=42\nattempt=1\noutcome=verified\nevidence=qa-probe\ndetail=qa-detail\ncredential_fingerprint=%s\nkey_origin=host_agent\nkey_storage=filesystem\nkey_exportable=false\nkey_generated_by=qa-host\nissued_at=1\n", tenantA, next.Fingerprint),
 		ReceiptSignature: "cWEtc2lnbmF0dXJl", ReceiptSignerFingerprint: "qa-agent-fingerprint"}
 	apply := func(tenant string) error {
@@ -73,7 +81,7 @@ func TestCertificateReprotectionCutoverIsTenantBoundAndIdempotent(t *testing.T) 
 		t.Fatal(err)
 	}
 	if oldAfter.Status != "superseded" || nextAfter.ReplacesID == nil || *nextAfter.ReplacesID != old.ID ||
-		attrs["issuing_authority_id"] != "new-ca" || attrs["issuing_authority_source"] != "private" {
+		attrs["issuing_authority_id"] != newCA.ID || attrs["issuing_authority_name"] != newCA.CommonName || attrs["issuing_authority_source"] != "private" {
 		t.Fatalf("cutover readback: old=%s next=%v issuer=%v", oldAfter.Status, nextAfter.ReplacesID, attrs)
 	}
 }

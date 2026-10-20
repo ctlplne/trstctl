@@ -112,10 +112,15 @@ func (s *Store) ApplyCertificateReprotectionCutoverTx(ctx context.Context, tx pg
 		return ErrCertificateReprotectionConflict
 	}
 	if oldStatus == "superseded" && replacesID == cut.OldCertificateID && authorityID == cut.NewAuthorityID {
-		return nil
+		return s.RepairCertificateReprotectionIssuerNameTx(ctx, tx, tenantID, cut)
 	}
 	if oldStatus != "active" || replacesID != "" || authorityID != cut.OldAuthorityID {
 		return ErrCertificateReprotectionConflict
+	}
+	var successorName string
+	if err := tx.QueryRow(ctx, `SELECT common_name FROM ca_authorities
+		WHERE tenant_id=$1 AND id=$2::uuid`, tenantID, cut.NewAuthorityID).Scan(&successorName); err != nil {
+		return fmt.Errorf("store: resolve successor CA name: %w", err)
 	}
 	if tag, err := tx.Exec(ctx, `UPDATE certificates SET status='superseded', renewed_at=$4
 		WHERE tenant_id=$1 AND id=$2::uuid AND fingerprint=$3 AND status='active'`,
@@ -127,14 +132,38 @@ func (s *Store) ApplyCertificateReprotectionCutoverTx(ctx context.Context, tx pg
 		tenantID, cut.NewCertificateID, cut.NewFingerprint, cut.OldCertificateID); err != nil || tag.RowsAffected() != 1 {
 		return reprotectionWriteResult("successor", tag.RowsAffected(), err)
 	}
-	if tag, err := tx.Exec(ctx, `UPDATE identities SET attributes=attributes || jsonb_build_object('issuing_authority_id',$3::text)
+	if tag, err := tx.Exec(ctx, `UPDATE identities SET attributes=attributes ||
+		jsonb_build_object('issuing_authority_id',$3::text,'issuing_authority_name',$6::text)
 		WHERE tenant_id=$1 AND id=$2::uuid AND status='deployed'
 		AND attributes->>'issuing_authority_source'='private' AND attributes->>'issuing_authority_id'=$4
 		AND attributes->>'deployment_target_id'=$5`,
-		tenantID, cut.IdentityID, cut.NewAuthorityID, cut.OldAuthorityID, cut.TargetID); err != nil || tag.RowsAffected() != 1 {
+		tenantID, cut.IdentityID, cut.NewAuthorityID, cut.OldAuthorityID, cut.TargetID, successorName); err != nil || tag.RowsAffected() != 1 {
 		return reprotectionWriteResult("identity authority", tag.RowsAffected(), err)
 	}
 	return nil
+}
+
+// RepairCertificateReprotectionIssuerNameTx repairs only a derived identity
+// label from an already retained cutover. A later CA change or tenant offboard
+// does not match the event's successor ID, so warm recovery cannot resurrect it.
+func (s *Store) RepairCertificateReprotectionIssuerNameTx(ctx context.Context, tx pgx.Tx,
+	tenantID string, cut CertificateReprotectionCutover) error {
+	if tenantID == "" || cut.IdentityID == "" || cut.NewAuthorityID == "" {
+		return ErrCertificateReprotectionConflict
+	}
+	var successorName string
+	if err := tx.QueryRow(ctx, `SELECT common_name FROM ca_authorities
+		WHERE tenant_id=$1 AND id=$2::uuid`, tenantID, cut.NewAuthorityID).Scan(&successorName); err != nil {
+		return fmt.Errorf("store: resolve re-protection successor name: %w", err)
+	}
+	_, err := tx.Exec(ctx, `UPDATE identities SET attributes=attributes ||
+		jsonb_build_object('issuing_authority_name',$4::text)
+		WHERE tenant_id=$1 AND id=$2::uuid
+		AND attributes->>'issuing_authority_source'='private'
+		AND attributes->>'issuing_authority_id'=$3
+		AND attributes->>'issuing_authority_name' IS DISTINCT FROM $4`,
+		tenantID, cut.IdentityID, cut.NewAuthorityID, successorName)
+	return err
 }
 
 func reprotectionWriteResult(name string, rows int64, err error) error {

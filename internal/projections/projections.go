@@ -8194,6 +8194,9 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			if err := p.backfillCertificateIssuanceReceipts(readCtx, log, replayHead); err != nil {
 				return fmt.Errorf("projections: backfill retained issuance facts: %w", err)
 			}
+			if err := p.backfillCertificateReprotectionIssuerNames(readCtx, log, replayHead); err != nil {
+				return fmt.Errorf("projections: backfill CA re-protection issuer names: %w", err)
+			}
 			secretAuthority, err := classifySecretSyncLifecycleThrough(readCtx, log, replayHead)
 			if err != nil {
 				return fmt.Errorf("projections: classify catch-up secret-sync lifecycle: %w", err)
@@ -8529,7 +8532,7 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 					from, replayHead,
 				)
 			}
-			return p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error {
+			if err := p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error {
 				crlReplay, err := newCRLPublicationReplay(readCtx, tx)
 				if err != nil {
 					return err
@@ -8559,7 +8562,14 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 				// Advance across every position in the pinned tail, including a
 				// trailing or all-gap range that produced no live callbacks.
 				return p.store.SetProjectionCheckpointTx(readCtx, tx, replayHead)
-			})
+			}); err != nil {
+				return err
+			}
+			// Older snapshots can contain a correct successor ID and a stale CA
+			// display name. The restored checkpoint cannot attest this newer
+			// derived field; repair it from the retained type-indexed cutovers
+			// before declaring the restored read model ready.
+			return p.backfillCertificateReprotectionIssuerNames(readCtx, log, replayHead)
 		})
 		if txErr != nil {
 			// The snapshot path failed (e.g. a corrupt payload). The log is the source of

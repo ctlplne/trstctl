@@ -322,6 +322,10 @@ administrative continuation into API enrollment. The audit marks the profile
 decision `ca-reprotect`. The host's signed served-state report, independent
 TLS readback and updated retirement checklist are needed before treating the
 old CA dependent as cleared.
+The cutover event updates the identity's selected authority ID and displayed
+authority name together, using the tenant's successor CA record. A warm restart
+repairs names projected by older builds from the retained cutover events without
+changing a later CA selection or recreating an offboarded identity.
 
 ### Recovering a failed CA-key retirement delivery
 
