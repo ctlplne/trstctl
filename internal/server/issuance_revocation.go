@@ -158,7 +158,60 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 		}
 		selected[cert.Fingerprint] = cert
 	}
+	record := func(cert store.Certificate, origin certificateRevocationOrigin, factDER []byte, factSerial string) error {
+		if !bytes.Equal(factDER, cert.CertificateDER) || factSerial != cert.Serial {
+			return errors.New("server: retained issuance certificate differs from revocation selection")
+		}
+		if prior, ok := origins[cert.Fingerprint]; ok && prior != origin {
+			return errors.New("server: certificate has conflicting retained issuing authorities")
+		}
+		origins[cert.Fingerprint] = origin
+		return nil
+	}
+	// A leaf minted by a private CA hierarchy authority (host-executed first
+	// issuance, renewal or re-protection selects it through the identity's
+	// issuing_authority attributes) carries that authority's id as its CA.
+	// It is revoked through that authority's own issued-certificate ledger
+	// and CRL, never through the platform issuing CA.
+	hierarchyOrigin := func(ctx context.Context, cert store.Certificate, caID string) (certificateRevocationOrigin, bool, error) {
+		if caID == "" || d.store == nil {
+			return certificateRevocationOrigin{}, false, nil
+		}
+		authority, err := d.store.GetCAAuthority(ctx, tenantID, caID)
+		if store.IsNotFound(err) {
+			return certificateRevocationOrigin{}, false, nil
+		}
+		if err != nil {
+			return certificateRevocationOrigin{}, false, err
+		}
+		if authority.SignerHandle == "" || authority.CertificatePEM == "" {
+			return certificateRevocationOrigin{}, false, nil
+		}
+		issuerDER, err := firstCertDER(authority.CertificatePEM)
+		if err != nil || crypto.VerifyLeafSignedByCA(cert.CertificateDER, issuerDER) != nil {
+			return certificateRevocationOrigin{}, false, errors.New("server: certificate was not signed by its retained private CA authority")
+		}
+		return certificateRevocationOrigin{CAID: authority.ID}, true, nil
+	}
 	apply := func(event events.Event) error {
+		if event.Type == projections.EventCAEndEntityIssued {
+			var fact projections.CAIssuedCertificate
+			if err := json.Unmarshal(event.Data, &fact); err != nil {
+				return err
+			}
+			cert, ok := selected[fact.Fingerprint]
+			if !ok || len(fact.CertificateDER) == 0 {
+				return nil
+			}
+			origin, found, err := hierarchyOrigin(ctx, cert, fact.CAID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return nil
+			}
+			return record(cert, origin, fact.CertificateDER, fact.Serial)
+		}
 		var fact projections.CertificateRecorded
 		if err := json.Unmarshal(event.Data, &fact); err != nil {
 			return err
@@ -179,17 +232,19 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 				return errors.New("server: certificate was not signed by the served revocation authority")
 			}
 			origin.CAID = fact.CAID
+		} else if fact.Source == "issued" {
+			resolved, found, err := hierarchyOrigin(ctx, cert, fact.CAID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return nil
+			}
+			origin = resolved
 		} else {
 			return nil
 		}
-		if !bytes.Equal(fact.CertificateDER, cert.CertificateDER) || fact.Serial != cert.Serial {
-			return errors.New("server: retained issuance certificate differs from revocation selection")
-		}
-		if prior, ok := origins[cert.Fingerprint]; ok && prior != origin {
-			return errors.New("server: certificate has conflicting retained issuing authorities")
-		}
-		origins[cert.Fingerprint] = origin
-		return nil
+		return record(cert, origin, fact.CertificateDER, fact.Serial)
 	}
 	// Pin the source generation across the head read and typed replay. A
 	// certificate recorded by another replica before this cut is considered;
@@ -200,7 +255,7 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 			return err
 		}
 		return d.log.ReplayTenantTypesThrough(readCtx, tenantID, 1, head,
-			[]string{projections.EventCertificateRecorded}, apply)
+			[]string{projections.EventCertificateRecorded, projections.EventCAEndEntityIssued}, apply)
 	})
 	if err != nil {
 		return nil, err

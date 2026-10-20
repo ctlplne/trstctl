@@ -424,6 +424,14 @@ transaction: `revocation.publish` and `endpoint.contain`. Acceptance changes
 the lifecycle state but proves neither CA publication nor host stop. A host
 agent outage does not delay the CA dispatcher, and a CA outage does not delay
 the host agent. Never restore a revoked predecessor during recovery.
+The publisher attributes every bounded certificate to the authority that signed
+it from its retained issuance evidence: a leaf from the platform issuing CA
+publishes through the tenant CRL, a leaf from a private CA hierarchy authority
+(for example a host-executed identity whose `issuing_authority_source` is
+`private`) is revoked in that authority's own issued-certificate ledger and CRL,
+and a leaf from an external CA is revoked at that CA. A superseded predecessor
+whose managed CA key was destroyed by signed retirement is excluded by the
+preview and skipped by the publisher, since nothing can sign for it any more.
 
 The downloadable `trstctl-cli` uses the same reviewed API command. Save its
 effect-free preview, inspect every authority and host binding, then copy only
@@ -765,6 +773,27 @@ Choose **Host agent** when adding or editing the destination; the console loads
 enrolled agents, with pagination for larger fleets. The selection is saved as
 `required_agent_id`, the UUID shown on the Agents page. An enabled host destination
 requires an enrolled, same-tenant agent with the host role.
+
+A host-executed first issuance does its work on the host before the identity can
+reach `deployed`: the agent generates the key, the CA signs its CSR, the files are
+installed and the listener is probed. The ownership-readiness authority that guards
+the deployed edge (an attested owner, or a recorded exception) is therefore
+resolved at the deploy call itself. `POST /api/v1/connectors/targets/{id}/deploy`,
+`trstctl-cli connector target deploy` and the console refuse with `409` and the
+ownership reason before any key is generated or any job is queued; attest the
+owner (`trstctl-cli owners attest <owner-id>`) and deploy again. If a lifecycle
+refusal still happens after the host has finished (a policy or owner change in
+between), the job is failed terminally so it never re-executes, and the identity's
+delivery timeline records a failed `lifecycle_transition_refused` receipt naming
+the job and the cause, beside the signed host receipt. The identity stays
+`issued`; repair the cause, then deploy or renew again.
+
+To issue a host-executed identity from a private CA hierarchy authority instead of
+the platform issuer, create the identity with
+`"attributes": {"issuing_authority_source": "private", "issuing_authority_id": "<CA authority id>"}`.
+The selection is never substituted: a superseded or destroyed authority refuses
+signing on the host job rather than issuing from another CA, and the failed attempt
+is recorded on the identity's delivery timeline with that reason.
 
 Preview, deployment, and renewal keep this exact assignment through retries and
 control-plane restart. An offline host leaves its work pending; another host never

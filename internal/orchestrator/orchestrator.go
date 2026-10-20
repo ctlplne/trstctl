@@ -421,6 +421,23 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		(option.verifiedRollback && completedDestination != "connector.rollback") {
 		return errors.New("orchestrator: deployed-to-issued requires a verified host rollback")
 	}
+	if o.ownershipAttestationCadence > 0 && from == StateRequested && to == StateIssued &&
+		boundDeploymentTargetID(ident) != "" {
+		// A deployment-bound first issuance ends at the deployed edge, where the
+		// ownership-readiness gate below is enforced. By then the external work
+		// has happened: a host agent has generated a key, the CA has signed it,
+		// and the listener serves it, so a refusal there can only fail the job
+		// after the fact. Resolve the same authority now, before any effect is
+		// queued, so an unattested owner is refused at the deploy call with the
+		// same reason instead of after the host has done the work.
+		if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			_, resolveErr := o.store.ResolveOwnershipReadinessTx(ctx, tx, tenantID, identityID,
+				time.Now().UTC(), o.ownershipAttestationCadence)
+			return resolveErr
+		}); err != nil {
+			return err
+		}
+	}
 	if approval != nil && from == to {
 		// DoDurableEffectBound may retry after the target transaction committed but
 		// before its HTTP result was cached. The consumed request is not enough by
@@ -2207,4 +2224,19 @@ func (o *Orchestrator) History(ctx context.Context, tenantID, identityID string)
 		})
 	}
 	return hist, nil
+}
+
+// boundDeploymentTargetID returns the deployment target an identity is bound
+// to, or "" when it has none. The binding lives in the identity's attributes,
+// written by BindIdentityDeploymentTarget.
+func boundDeploymentTargetID(ident store.Identity) string {
+	if len(ident.Attributes) == 0 {
+		return ""
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal(ident.Attributes, &attrs); err != nil {
+		return ""
+	}
+	id, _ := attrs["deployment_target_id"].(string)
+	return strings.TrimSpace(id)
 }

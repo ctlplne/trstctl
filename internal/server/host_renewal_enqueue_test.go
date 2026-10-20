@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -755,7 +756,7 @@ func TestHostRenewalUsesTheIdentityBoundDeployedCertificate(t *testing.T) {
 // in the console to explain it.
 func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
 	ctx := t.Context()
-	h, _, _ := servedHostRevocationFixture(t)
+	h, _, identityID := servedHostRevocationFixture(t)
 	job := claimOneRenewal(t, ctx, h)
 	key, err := crypto.GenerateHostSubjectKey("mail.revocation.test", []string{"mail.revocation.test"})
 	if err != nil {
@@ -811,5 +812,19 @@ func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
 	}
 	if rowStatus != "failed" || lastError != "lifecycle_transition_refused" {
 		t.Fatalf("refused job row = %s/%q, want failed/lifecycle_transition_refused", rowStatus, lastError)
+	}
+	// The host did the work and the lifecycle refused it. The operator reading
+	// the identity's delivery timeline must see that outcome and its cause, not
+	// a verified delivery beside an identity that never reached deployed.
+	var receiptStatus, receiptReason, receiptDetail string
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status, reason, detail FROM connector_delivery_receipts
+			 WHERE tenant_id = $1 AND identity_id = $2 AND reason = 'lifecycle_transition_refused'`,
+			h.tenant, identityID).Scan(&receiptStatus, &receiptReason, &receiptDetail)
+	}); err != nil {
+		t.Fatalf("no delivery receipt records the refused lifecycle transition for identity %s: %v", identityID, err)
+	}
+	if receiptStatus != "failed" || !strings.Contains(receiptDetail, "ownership") || !strings.Contains(receiptDetail, strconv.FormatInt(job.JobID, 10)) {
+		t.Fatalf("refusal receipt = %s/%s %q; want failed with the cause and the job id", receiptStatus, receiptReason, receiptDetail)
 	}
 }

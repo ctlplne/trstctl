@@ -450,7 +450,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		return nil, status.Error(codes.Internal, "agent job outbox completion is not configured")
 	}
 	if hostReprotectJob(claim) && req.Outcome != transport.JobOutcomeVerified {
-		return a.refuseExecutedReportPermanently(ctx, info, agentID, req, now,
+		return a.refuseExecutedReportPermanently(ctx, info, agentID, claim, req, now,
 			errors.New("CA re-protection requires a signed verified served-leaf readback"))
 	}
 
@@ -487,7 +487,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, status.Errorf(codes.Unavailable, "complete host-managed lifecycle: %v", err)
 			}
-			return a.refuseExecutedReportPermanently(ctx, info, agentID, req, now, err)
+			return a.refuseExecutedReportPermanently(ctx, info, agentID, claim, req, now, err)
 		}
 	}
 
@@ -855,10 +855,13 @@ func (a *agentService) ingestExecutedReport(
 // operator fixes the cause (re-attest the owner) and re-runs the lifecycle on
 // purpose instead of the fleet doing it by accident.
 func (a *agentService) refuseExecutedReportPermanently(ctx context.Context, info mtls.PeerCertInfo, agentID string,
-	req *transport.ReportJobResultRequest, now time.Time, cause error) (*transport.ReportJobResultResponse, error) {
+	claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest, now time.Time, cause error) (*transport.ReportJobResultResponse, error) {
 	const reason = "lifecycle_transition_refused"
-	if err := a.recordVerifiedReceipt(ctx, info, req, "", now); err != nil {
+	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
 		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
+	}
+	if err := a.recordAgentLifecycleRefusal(ctx, info, claim, req, reason, cause); err != nil {
+		return nil, status.Error(codes.Unavailable, "refused lifecycle outcome could not be recorded; retry the same report")
 	}
 	if a.logger != nil {
 		a.logger.Warn("host lifecycle job finished on the host but its lifecycle transition was refused; job failed terminally to stop re-execution",
@@ -1252,6 +1255,46 @@ func (a *agentService) recordVerifiedReceiptWithAudit(ctx context.Context, info 
 		Signature:         base64.StdEncoding.EncodeToString(req.Signature),
 		ObservedAt:        now,
 	}, audit)
+}
+
+// recordAgentLifecycleRefusal puts a refused lifecycle transition on the
+// identity's delivery timeline. The host finished the job and its signed
+// receipt is retained, but the identity never reached the state that job was
+// meant to prove, so the timeline must not end on a verified delivery: the
+// operator needs the cause (an unattested owner, a drifted policy) and the job
+// id here, where the console and deployment evidence read.
+func (a *agentService) recordAgentLifecycleRefusal(ctx context.Context, info mtls.PeerCertInfo,
+	claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest, reason string, cause error) error {
+	if claim.Destination != "connector.deploy" && claim.Destination != agentJobKindEndpointRenew {
+		return nil
+	}
+	intent, rollback := deployIntentForVerificationReceipt(claim.Payload)
+	if rollback || strings.TrimSpace(intent.Connector) == "" || a.orch == nil {
+		return nil
+	}
+	var identityID *string
+	if value := strings.TrimSpace(intent.IdentityID); value != "" {
+		identityID = &value
+	}
+	why := strings.TrimSpace(cause.Error())
+	if len(why) > 400 {
+		why = why[:400]
+	}
+	detail := fmt.Sprintf("enrolled agent %s completed job %d (%s) on the host, but the identity lifecycle refused the transition: %s. "+
+		"The job will not run again; repair the cause, then deploy or renew again",
+		info.CommonName, req.JobID, strings.TrimSpace(req.Outcome), why)
+	eventKey := fmt.Sprintf("%s:attempt:%d:refused", claim.IdempotencyKey, req.Attempt)
+	_, err := a.orch.RecordConnectorDeliveryWithEventID(ctx, info.TenantID,
+		evidenceID("connector-delivery-refusal-event", info.TenantID, eventKey, req.JobID), store.ConnectorDeliveryReceipt{
+			ID:         evidenceID("connector-delivery-refusal", info.TenantID, claim.IdempotencyKey, req.JobID),
+			IdentityID: identityID,
+			// Same operator-facing destination as the delivery it follows, so the
+			// lifecycle selector and the timeline read one connector.deploy story.
+			Destination: "connector.deploy", Connector: intent.Connector, Target: intent.Target,
+			Status: servedstatus.ConnectorFailed, Attempts: req.Attempt, Reason: reason, Detail: detail,
+			IdempotencyKey: claim.IdempotencyKey + ":lifecycle-refused",
+		})
+	return err
 }
 
 func (a *agentService) recordCertificateCustodyFromJob(ctx context.Context, info mtls.PeerCertInfo,

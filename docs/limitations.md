@@ -3199,9 +3199,18 @@ than sending an operator looking for a credential that was never there.
   preview shows the server-derived agent, key, target revision and listener;
   it records the reviewed plan, independently reads it back, and can recover a
   lost response by job ID before queueing. The console never calls a queued job
-  complete. Live target and cold-restart qualification of this path remain open;
-  retirement stays blocked
-  until its completion evidence is present.
+  complete. The path is qualified on the evaluation stack against a live host
+  target: a host-executed leaf under a predecessor intermediate was re-issued
+  under its rotated successor by the enrolled agent with the same subject key,
+  read back by a stock TLS client, accounted on the retirement checklist, and
+  the predecessor key was then destroyed with a signed destruction record that
+  the API, CLI and console all read back after a control-plane restart and a
+  cold restart. A host-executed first issuance also resolves the identity's
+  ownership readiness at the deploy call: an unattested owner is refused with
+  `409` before any key, signature or host job exists, and a refusal that still
+  happens after the host finished is recorded on the identity's delivery
+  timeline as `lifecycle_transition_refused` with its cause. Retirement stays
+  blocked until its completion evidence is present.
   An expired requester-held managed leaf with no managed deployment can be
   dispositioned through `release_managed_ca_leaf` after two distinct custodians
   approve its exact public certificate digest, immutable mint event and bounded
@@ -5148,6 +5157,13 @@ execution refuses before an event or outbox intent and directs the operator to
 the reviewed CA-and-host command. Without an exact managed host, the operator
 must revoke the exact certificate at its issuing CA and independently stop the
 workload. The product does not infer host containment from the `revoked` state.
+The `revocation.publish` command attributes every bounded leaf to the authority
+that signed it from retained issuance evidence: platform-CA leaves publish on
+the tenant CRL, leaves from a private CA hierarchy authority (host-executed
+identities whose `issuing_authority_source` is `private`) are revoked in that
+authority's issued-certificate ledger and CRL, external-CA leaves at that CA, and
+a superseded predecessor whose managed CA key was destroyed by signed retirement
+is skipped rather than blocking the live successor's publication.
 This is the specific failure the epic exists to remove: an
 operator revoking a compromised key and being told it worked, while the
 authority still considers the certificate valid, is worse off than one told
