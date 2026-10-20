@@ -3627,9 +3627,11 @@ when off, requiring a KEK when on):
   role ARNs and set an explicit 15-minute to 12-hour `max_ttl`.
   New Kubernetes leases record the UIDs of the ServiceAccount, bound Secret,
   and RoleBinding and delete with UID preconditions. Leases issued by older
-  builds have name-only provider references; their cleanup remains name-based
-  during upgrade. Drain those older leases before repurposing generated object
-  names in the same namespace.
+  builds have name-only provider references; revoking one now inspects every
+  same-name object first, leaves any object that carries the lease-owner label
+  to the newer lease that reused the name, and deletes the unlabelled legacy
+  objects under the UIDs seen at inspection, so generated names can be reused
+  without draining older leases first.
 - Honeytokens include the native `trst_` bait (F39 extension) and an
   operator-attached AWS IAM bait-key adapter (F80). The AWS path is a local IAM/
   CloudTrail contract test until a real account runs it: the pinned LocalStack

@@ -816,11 +816,35 @@ func (b *KubernetesBackend) Revoke(ctx context.Context, ref string) error {
 		}
 		return nil
 	}
-	// Legacy references did not carry UIDs or ownership labels. Their exact
-	// generated name remains the only recovery handle for active old leases.
+	// Legacy references did not carry UIDs or ownership labels; their exact
+	// generated name is the only recovery handle for already-issued leases.
+	// Inspect every same-name object before deleting any: an object carrying
+	// the lease-owner label was created by a newer build for a lease that
+	// reused this name and is left to that lease, while an unlabelled object
+	// is the legacy one and is deleted under the UID seen at inspection, so a
+	// replacement racing this revocation cannot be removed by it. Names may
+	// therefore be reused without draining legacy leases first.
 	paths := b.resourcePaths(ref)
-	for _, path := range paths {
-		if err := b.json(ctx, http.MethodDelete, path, nil, nil); err != nil && !statusIs(err, http.StatusNotFound) {
+	var legacy [3]string
+	for index, path := range paths {
+		var object kubernetesObject
+		err := b.json(ctx, http.MethodGet, path, nil, &object)
+		if statusIs(err, http.StatusNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("dynsecret kubernetes: inspect legacy resource %s: %w", path, err)
+		}
+		if _, labelled := object.Metadata.Labels[kubernetesLeaseOwnerLabel]; labelled {
+			continue // a newer lease owns this name now; it carries its own UIDs
+		}
+		if object.Metadata.UID == "" {
+			return fmt.Errorf("dynsecret kubernetes: legacy resource %s has no UID; cannot delete it safely", path)
+		}
+		legacy[index] = object.Metadata.UID
+	}
+	for index, path := range paths {
+		if err := b.deleteWithUID(ctx, paths[index], legacy[index]); err != nil {
 			return fmt.Errorf("dynsecret kubernetes: delete legacy resource %s: %w", path, err)
 		}
 	}

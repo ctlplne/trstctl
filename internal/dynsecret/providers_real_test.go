@@ -1259,3 +1259,54 @@ var (
 	_ = xml.Name{}
 	_ = url.Values{}
 )
+
+// A lease issued by an older build carries only its generated name. Revoking it
+// after the name was reused by a UID-bound lease must not delete the new
+// lease's objects: each object is inspected first, a labelled object belongs
+// to a newer lease and is left alone, and an unlabelled legacy object is
+// deleted under a UID precondition taken from that inspection. Operators no
+// longer have to drain legacy leases before reusing generated names.
+func TestKubernetesLegacyRevokeLeavesReusedNameToItsNewOwner(t *testing.T) {
+	deleted := map[string]string{}
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/secrets/lease-name"):
+			// Reused name: a newer, labelled lease owns the Secret now.
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"uid": "new-secret-uid", "labels": map[string]string{kubernetesLeaseOwnerLabel: "lease-name"}}})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/serviceaccounts/lease-name"):
+			// Still the legacy object: no label, so it is the old lease's.
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"uid": "legacy-sa-uid"}})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/rolebindings/lease-name"):
+			http.Error(w, "not found", http.StatusNotFound)
+		case r.Method == http.MethodDelete:
+			var options struct {
+				Preconditions struct {
+					UID string `json:"uid"`
+				} `json:"preconditions"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&options)
+			deleted[r.URL.Path] = options.Preconditions.UID
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusBadRequest)
+		}
+	}))
+	defer remote.Close()
+	backend, err := NewKubernetesBackend(KubernetesConfig{Endpoint: remote.URL, HTTPClient: remote.Client(), Namespace: "apps", Audience: "https://kubernetes.default.svc", BearerToken: []byte("sa-token")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	if err := backend.Revoke(context.Background(), "lease-name"); err != nil {
+		t.Fatalf("legacy revoke: %v", err)
+	}
+	if _, touched := deleted["/api/v1/namespaces/apps/secrets/lease-name"]; touched {
+		t.Fatalf("legacy revoke deleted the Secret that a newer labelled lease owns: %v", deleted)
+	}
+	if uid := deleted["/api/v1/namespaces/apps/serviceaccounts/lease-name"]; uid != "legacy-sa-uid" {
+		t.Fatalf("legacy ServiceAccount must be deleted under the UID seen at inspection, got %q in %v", uid, deleted)
+	}
+	if len(deleted) != 1 {
+		t.Fatalf("deletes = %v; want exactly the unlabelled legacy object", deleted)
+	}
+}

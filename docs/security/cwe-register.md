@@ -681,7 +681,7 @@ not this file.
 |---|---|
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
 | `internal/dynsecret/aws_sts.go:143` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
-| `internal/dynsecret/providers_real.go:1348` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1372` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:540` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)
