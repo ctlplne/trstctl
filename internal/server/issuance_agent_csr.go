@@ -146,17 +146,16 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	issuanceSlot := 0
 	idemKey := fmt.Sprintf("agentcsr:%d:%d:%s", jobID, issuanceSlot, crypto.SHA256Hex(csrDER)[:16])
 
-	if err := d.checkAgentCSRRequestBinding(ctx, tenantID, jobID, issuanceSlot, idemKey, intent); err != nil {
+	if err := d.checkAgentCSRRequestBinding(ctx, tenantID, jobID, idemKey, intent); err != nil {
 		return nil, err
 	}
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
 		if err := d.authorizeAgentCSRMigrationBinding(ctx, tenantID, job.RequiredAgentID, intent); err != nil {
 			return nil, err
 		}
-		// One exact claimed CSR is one signing operation. Transport retries
+		// One durable job owns one CSR and key across claims. Transport retries
 		// must preserve its serial/time/signature even if recording the result
-		// fails. A new claim can generate a new key only through the existing
-		// claim/attempt fence and one-CSR-per-attempt check above.
+		// fails. A different CSR is refused by the job-wide first-writer check.
 		ctx = withLeafCommand(ctx, d.idem, tenantID, idemKey)
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 		selection := endpointAuthoritySelection{
@@ -320,23 +319,23 @@ func agentCSRSigningError(err error) error {
 
 // checkAgentCSRRequestBinding permits replay of this request's result, including
 // the selected external authority's durable result, and refuses another key on
-// the same claim. The caller holds the identity issuance fence.
+// the same durable job, including a pre-slot-0 historical claim. The caller
+// holds the identity issuance fence.
 func (d *issuanceDispatcher) checkAgentCSRRequestBinding(
-	ctx context.Context, tenantID string, jobID int64, attempt int,
+	ctx context.Context, tenantID string, jobID int64,
 	idemKey string, intent RelayDeployIntent,
 ) error {
 	externalCAID := ""
 	if strings.TrimSpace(intent.IssuingAuthoritySource) == "external" {
 		externalCAID = strings.TrimSpace(intent.IssuingAuthorityID)
 	}
-	other, err := d.store.AgentJobAttemptSignedOtherCSR(ctx, tenantID, jobID, attempt, idemKey, externalCAID)
+	other, err := d.store.AgentJobSignedOtherCSR(ctx, tenantID, jobID, idemKey, externalCAID)
 	if err != nil {
 		return status.Errorf(codes.Internal, "check prior signature: %v", err)
 	}
 	if other {
 		return status.Error(codes.PermissionDenied,
-			"this attempt has already had a different request signed; re-claim the job to "+
-				"certify a new key")
+			"this durable host job has already had a different CSR signed; recover its retained key and result or start a new reviewed job")
 	}
 	return nil
 }

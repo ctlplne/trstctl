@@ -110,7 +110,7 @@ func TestServedAgentCSRPendingKeepsExactRequestRecoverable(t *testing.T) {
 	if response != nil || pendingErr == nil || upstream.calls.Load() != 0 {
 		t.Fatal("unstarted external worker produced a certificate or provider call")
 	}
-	issueKey := fmt.Sprintf("agentcsr:%d:%d:%s:external-ca:%s", job.JobID, job.Attempt, crypto.SHA256Hex(key.CSRDER)[:16], authority)
+	issueKey := fmt.Sprintf("agentcsr:%d:0:%s:external-ca:%s", job.JobID, crypto.SHA256Hex(key.CSRDER)[:16], authority)
 	intentID := externalCAIntentOutboxID(t, h.servedHarness, issueKey)
 	queued, err := h.srv.outbox.Get(ctx, h.tenant, intentID)
 	if err != nil || queued.Status != "pending" || queued.Attempts != 0 {

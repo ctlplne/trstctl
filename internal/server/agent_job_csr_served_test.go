@@ -534,7 +534,7 @@ func TestOneClaimAuthorizesOneKey(t *testing.T) {
 func TestReclaimedHostJobReplaysTheSameSignedCSR(t *testing.T) {
 	ctx := t.Context()
 	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
-	seedRenewalJob(t, ctx, h, "renew:reclaimed-one-leaf", []string{"reclaimed.example.test"})
+	seedRenewalJob(t, ctx, h, "renew:reclaimed-one-leaf", []string{"reclaimed.example.test"}, "127.0.0.1:10443")
 	firstClaim := claimOneRenewal(t, ctx, h)
 	key, err := crypto.GenerateHostSubjectKey("reclaimed.example.test", []string{"reclaimed.example.test"})
 	if err != nil {
@@ -585,6 +585,23 @@ func TestReclaimedHostJobReplaysTheSameSignedCSR(t *testing.T) {
 		return tx.QueryRow(ctx, `SELECT count(*) FROM certificates WHERE tenant_id=$1 AND fingerprint=$2`, h.tenant, first.Fingerprint).Scan(&count)
 	}); err != nil || count != 1 {
 		t.Fatalf("reclaimed job recorded %d copies of the same signed leaf: %v", count, err)
+	}
+	// The second signed claim reports the slot-zero certificate, while its
+	// receipt remains bound to the actual claim attempt. Those are different
+	// identifiers by design; an attempt-index-only custody check loses the job.
+	detail, digest := simulatedHostVerification(t, h, secondClaim, first.Fingerprint, transport.JobOutcomeVerified)
+	id := h.identity.Identity()
+	record := custody.Record{Origin: custody.OriginHostAgent, Storage: custody.StorageFile,
+		Exportable: custody.Exportable, GeneratedBy: id.CommonName()}
+	report, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(),
+		secondClaim.JobID, secondClaim.Attempt, transport.JobOutcomeVerified,
+		detail, digest, first.Fingerprint, record, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := h.client.ReportJobResult(ctx, report)
+	if err != nil || accepted == nil || !accepted.Accepted {
+		t.Fatalf("reclaimed job's exact signed custody report was refused: response=%+v error=%v", accepted, err)
 	}
 }
 

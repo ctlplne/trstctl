@@ -111,7 +111,9 @@ is the shipped B2 path, not future work.
 Before requesting a signature, the host agent seals the CSR and private key in
 its tenant-bound, `0600` host rollback directory. If the job is claimed again
 after a lost reply or agent restart, it reuses that exact CSR and key; the
-signer's job-scoped idempotency key returns the same signed leaf. The agent
+signer's slot-zero, job-scoped idempotency key returns the same signed leaf
+even when the claim attempt changes. A different CSR for that durable job is
+refused, including when an older issuer recorded an attempt-scoped key. The agent
 removes the pending copy only after the control plane accepts its successful
 terminal report. If the acceptance reply is lost, the agent first replays its
 encrypted original report after restart, clears only that job's pending key

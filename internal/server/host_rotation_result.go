@@ -86,7 +86,7 @@ func (a *agentService) recordHostRotationResultLocked(ctx context.Context, tenan
 	}
 	cert, err := a.store.GetCertificateByFingerprint(ctx, tenantID, delivery.Fingerprint)
 	if err != nil || cert.ReplacesID == nil || *cert.ReplacesID != predecessor.ID ||
-		!strings.HasPrefix(cert.IssuanceIdempotencyKey, fmt.Sprintf("agentcsr:%d:%d:", job.ID, job.Attempt)) {
+		!hostCSRKeyMatchesClaim(cert.IssuanceIdempotencyKey, job.ID, job.Attempt) {
 		return errors.New("host rotation successor was not issued for this job and predecessor")
 	}
 	custodyID := orchestrator.CertificateCustodyAttestationEventID(tenantID, delivery.Fingerprint, job.ID, job.Attempt)

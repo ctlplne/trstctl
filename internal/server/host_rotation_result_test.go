@@ -69,7 +69,9 @@ func TestHostRotationResultRecordsTheReportedOutcome(t *testing.T) {
 					t.Fatalf("released attempt was not retryable: %+v %v", jobs, err)
 				}
 				f.job = jobs.Jobs[0]
-				f.fingerprint = signHostRotationFixtureJob(t, f.h, f.job)
+				// The host retains the same encrypted key and signed certificate
+				// across a reclaimed job. A new CSR here would model a different
+				// key and correctly trip the durable job's first-writer fence.
 				result, err := f.h.client.ReportJobResult(t.Context(), f.report(t, transport.JobOutcomeVerified))
 				if err != nil || !result.Accepted {
 					t.Fatalf("reclaimed report: %+v %v", result, err)

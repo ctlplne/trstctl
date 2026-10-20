@@ -120,6 +120,16 @@ func (c *servedHostRelayChannel) ReportJobResultWithCustody(ctx context.Context,
 	return resp.Accepted, nil
 }
 
+// This assembled server fixture exercises the real signed gRPC receipt path.
+// The agent package separately tests fsynced report recovery and key cleanup;
+// this adapter supplies the production channel capability without replacing
+// its server-side custody and lifecycle admission checks.
+func (c *servedHostRelayChannel) ReportHostRenewResultWithCustody(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record,
+	_, _, _ string) (bool, error) {
+	return c.ReportJobResultWithCustody(ctx, jobID, attempt, outcome, detail, evidenceDigest, credentialFingerprint, record)
+}
+
 const aud30HostAgentProcess = "TRSTCTL_AUD30_HOST_AGENT_PROCESS"
 const aud32HostAgentProcess = "TRSTCTL_AUD32_HOST_AGENT_PROCESS"
 

@@ -404,8 +404,8 @@ not this file.
 | `internal/crypto/mtls/server_test.go:215` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:288` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
-| `internal/server/host_agent_remote_served_test.go:285` | loopback fixture is closed below (CWE-400) |
-| `internal/server/host_agent_remote_served_test.go:520` | loopback fixture closed below (CWE-400) |
+| `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
+| `internal/server/host_agent_remote_served_test.go:530` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:439` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_run_served_test.go:96` | loopback fixture is closed below (CWE-400) |
 | `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
@@ -1345,10 +1345,10 @@ not this file.
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
 | `internal/server/external_poller_boundary_test.go:16` | name comes only from the closed literal source-file list above (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:143` | parent-created test fixture path (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:200` | parent-created public fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:406` | test reads its own remote-host fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:792` | test-owned target fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:153` | parent-created test fixture path (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:210` | parent-created public fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:416` | test reads its own remote-host fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:802` | test-owned target fixture (CWE-22) |
 | `internal/server/host_keystore_credentials_served_test.go:117` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/host_keystore_credentials_served_test.go:166` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1557,8 +1557,8 @@ not this file.
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
-| `internal/server/host_agent_remote_served_test.go:380` | public CA certificate fixture (CWE-276) |
-| `internal/server/host_agent_remote_served_test.go:603` | public CA fixture (CWE-276) |
+| `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
+| `internal/server/host_agent_remote_served_test.go:613` | public CA fixture (CWE-276) |
 | `internal/server/pam_served_test.go:826` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:838` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:515` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

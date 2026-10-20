@@ -71,8 +71,9 @@ type HostDeployEvidence struct {
 // Two jobs can install a host certificate. connector.deploy carries an already
 // issued fingerprint in its immutable payload. endpoint.renew generates the key
 // on the host and therefore learns its fingerprint only after the control plane
-// signs that exact job attempt's CSR. For the second path, the certificate row's
-// agentcsr:<job>:<attempt>:... issuance key is the durable public join. Treating
+// signs that exact job's CSR. For the second path, the certificate row's
+// agentcsr:<job>:<slot>:... issuance key is the durable public join. Slot 0
+// survives claim recovery; an older issued job may use its last claim attempt. Treating
 // only connector.deploy as a host deploy makes every host-generated renewal
 // impossible to roll back even though the same agent retained its predecessor.
 func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, targetID string) (HostDeployEvidence, bool, error) {
@@ -107,10 +108,8 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 			                SELECT cert.fingerprint
 			                  FROM certificates cert
 			                 WHERE cert.tenant_id = $1
-			                   AND cert.issuance_idempotency_key LIKE
-			                       format('agentcsr:%s:%s:%%', job.id,
-			                         CASE WHEN COALESCE(convert_from(job.payload, 'UTF8')::jsonb ->> 'pqc_run_id', '') <> ''
-			                              THEN 0 ELSE job.claim_attempts END)
+				   AND (cert.issuance_idempotency_key LIKE format('agentcsr:%s:0:%%', job.id)
+				     OR cert.issuance_idempotency_key LIKE format('agentcsr:%s:%s:%%', job.id, job.claim_attempts))
 			                 ORDER BY cert.created_at DESC, cert.id DESC
 			                 LIMIT 1
 			              ), '')
@@ -790,12 +789,12 @@ func (s *Store) AgentJobRedemptions(ctx context.Context, now time.Time) (AgentJo
 	return out, err
 }
 
-// AgentJobAttemptSignedOtherCSR reports whether this job attempt has already had
-// a DIFFERENT CSR signed (epic B2).
+// AgentJobSignedOtherCSR reports whether this durable job has already had a
+// DIFFERENT CSR signed, including by an older attempt-indexed issuer.
 //
 // It reads the certificates table rather than a new ledger, because the
 // certificate IS the record: every issuance against an agent's CSR is stamped
-// with an idempotency key of the form `agentcsr:<jobID>:<attempt>:<digest>`, so
+// with an idempotency key of the form `agentcsr:<jobID>:<slot>:<digest>`, so
 // the existence of such a row is the fact we need and there is nothing to keep
 // in sync.
 //
@@ -806,13 +805,13 @@ func (s *Store) AgentJobRedemptions(ctx context.Context, now time.Time) (AgentJo
 //     and it is asking again for the certificate belonging to the key it still
 //     holds. Refusing that would lose the certificate for a live key over a
 //     network blip, so it must replay the cached issuance.
-//   - A different CSR on the same attempt is the abuse: the CSR-derived
-//     idempotency key makes every new key a new issuance, so one claim could
+//   - A different CSR on this job is the abuse: the CSR-derived idempotency
+//     key makes every new key a new issuance, so a reclaimed job could
 //     otherwise mint certificates without limit.
 //
-// The bound is per ATTEMPT rather than per job because a genuine retry re-claims
-// the work and gets a new attempt number, which should be allowed to sign again.
-func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID string, jobID int64, attempt int, idempotencyKey, externalCAID string) (bool, error) {
+// The bound is per JOB: the host retains one encrypted CSR/key across claims.
+// The query covers historical attempt-indexed keys as well as slot zero.
+func (s *Store) AgentJobSignedOtherCSR(ctx context.Context, tenantID string, jobID int64, idempotencyKey, externalCAID string) (bool, error) {
 	// The external worker records its exact result under the same CSR key
 	// plus the authority namespace before host custody is recorded under the
 	// base key. Either row belongs to this request, not a different CSR. Only
@@ -829,7 +828,7 @@ func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID stri
 			     WHERE tenant_id = $1
 			       AND issuance_idempotency_key LIKE $2
 			       AND NOT (issuance_idempotency_key = ANY($3::text[]))
-			 )`, tenantID, fmt.Sprintf("agentcsr:%d:%d:%%", jobID, attempt), allowedKeys).Scan(&signed)
+			 )`, tenantID, fmt.Sprintf("agentcsr:%d:%%", jobID), allowedKeys).Scan(&signed)
 	})
 	return signed, err
 }

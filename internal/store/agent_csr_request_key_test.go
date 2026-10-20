@@ -32,7 +32,8 @@ func TestAgentJobCSRMatcherKeepsAuthorityAndTenantExact(t *testing.T) {
 		{name: "near-authority", authority: "approved", rowSuffix: ":external-ca:approved-extra", want: true},
 		{name: "platform-cannot-ignore-external", rowSuffix: ":external-ca:approved", want: true},
 		{name: "other-job", differentCSR: true, otherJob: true},
-		{name: "other-attempt", differentCSR: true, otherAttempt: true},
+		{name: "other-attempt", differentCSR: true, otherAttempt: true, want: true},
+		{name: "other-attempt-same-digest", otherAttempt: true, want: true},
 		{name: "other-tenant", differentCSR: true, otherTenant: tenantB},
 		{name: "literal-authority-metacharacters", authority: "ca_%:name", rowSuffix: ":external-ca:ca_%:name"},
 	}
@@ -63,7 +64,7 @@ func TestAgentJobCSRMatcherKeepsAuthorityAndTenantExact(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := st.AgentJobAttemptSignedOtherCSR(ctx, tenantA, job, attempt, base, tc.authority)
+			got, err := st.AgentJobSignedOtherCSR(ctx, tenantA, job, base, tc.authority)
 			if err != nil || got != tc.want {
 				t.Fatalf("other CSR=%v want=%v err=%v", got, tc.want, err)
 			}

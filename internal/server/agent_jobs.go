@@ -1166,17 +1166,23 @@ func (a *agentService) validateCertificateCustodyReceipt(ctx context.Context, in
 		return "certificate custody differs from the renewal connector and authenticated agent"
 	}
 	cert, err := a.store.GetCertificateByFingerprint(ctx, info.TenantID, req.CredentialFingerprint)
-	issuanceSlot := req.Attempt
-	if intent.PQCRunID != "" {
-		issuanceSlot = 0
-	}
 	if err != nil || cert.KeyOrigin != string(custody.OriginHostAgent) ||
 		cert.KeyGeneratedBy != info.CommonName ||
-		!strings.HasPrefix(cert.IssuanceIdempotencyKey,
-			fmt.Sprintf("agentcsr:%d:%d:", req.JobID, issuanceSlot)) {
+		!hostCSRKeyMatchesClaim(cert.IssuanceIdempotencyKey, req.JobID, req.Attempt) {
 		return "certificate custody names no certificate issued for this renewal attempt"
 	}
 	return ""
+}
+
+// The current signer keeps one CSR and issuance slot (0) for the durable job,
+// even when the lease is reclaimed. A certificate signed by an older binary
+// may use the exact current claim attempt instead. Both forms still bind the
+// signed report's fingerprint to this job; another job or old claim cannot pass.
+func hostCSRKeyMatchesClaim(key string, jobID int64, attempt int) bool {
+	if strings.HasPrefix(key, fmt.Sprintf("agentcsr:%d:0:", jobID)) {
+		return true
+	}
+	return attempt > 0 && strings.HasPrefix(key, fmt.Sprintf("agentcsr:%d:%d:", jobID, attempt))
 }
 
 // attachJobReceipt adds the verified receipt to an event payload.

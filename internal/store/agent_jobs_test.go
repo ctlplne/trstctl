@@ -628,6 +628,35 @@ func TestLastSuccessfulHostDeployAgentIDIsExactRecentAndTenantScoped(t *testing.
 	if err != nil || !found || evidence.AgentID != renewAgent || evidence.IdentityID != "identity-host-renewal" || evidence.Fingerprint != "fingerprint-host-renewal" {
 		t.Fatalf("tenant A latest host evidence = %+v found=%v err=%v", evidence, found, err)
 	}
+	// A current host reclaims the same durable CSR under a later claim, but the
+	// signing record stays at slot zero. Keep the earlier attempt-indexed row
+	// above to prove upgrades do not erase its rollback route.
+	var reclaimedJobID int64
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO outbox
+			        (tenant_id, destination, payload, idempotency_key, status, delivered_at,
+			         required_agent_role, claimed_by_agent_id, claim_attempts,
+			         claim_expires_at, claim_completed_at)
+			 VALUES ($1, 'endpoint.renew', $2, 'aud32-reclaimed-host-renewal', 'delivered', $3,
+			         'host', $4::uuid, 4, $3, $3)
+			 RETURNING id`, tenantA,
+			[]byte(`{"target_id":"target-a","identity_id":"identity-reclaimed-host-renewal"}`),
+			now.Add(time.Minute), renewAgent).Scan(&reclaimedJobID)
+	}); err != nil {
+		t.Fatalf("seed reclaimed host renewal: %v", err)
+	}
+	if _, err := st.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantA, Subject: "reclaimed-host-renewal.example.test", Issuer: "test issuer",
+		Serial: "reclaimed-renewal-serial", Fingerprint: "fingerprint-reclaimed-host-renewal", Source: "issued",
+		IssuanceIdempotencyKey: fmt.Sprintf("agentcsr:%d:0:fixture", reclaimedJobID),
+	}); err != nil {
+		t.Fatalf("seed reclaimed host certificate: %v", err)
+	}
+	evidence, found, err = st.LastSuccessfulHostDeployEvidence(ctx, tenantA, "target-a")
+	if err != nil || !found || evidence.AgentID != renewAgent || evidence.IdentityID != "identity-reclaimed-host-renewal" || evidence.Fingerprint != "fingerprint-reclaimed-host-renewal" {
+		t.Fatalf("tenant A reclaimed host evidence = %+v found=%v err=%v", evidence, found, err)
+	}
 	got, found, err = st.LastSuccessfulHostDeployAgentID(ctx, tenantB, "target-a")
 	if err != nil || !found || got != otherAgent {
 		t.Fatalf("tenant B exact host = %q found=%v err=%v, want %s", got, found, err, otherAgent)
