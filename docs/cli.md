@@ -869,6 +869,14 @@ trstctl-cli ca keys dependent release <ca-authority-id> -f dependent-release.jso
 # "revoked-unserved-host-custody-external-use-risk-accepted" and confirm the
 # review includes its exact completed local-issuer revocation event.
 
+# Once the checklist has no outstanding dependents, request exact-key
+# destruction. The irreversible command can wait for signer recovery and
+# retained dependency verification; the CLI allows up to ten minutes for the
+# response. If the connection still fails, read the checklist before any retry
+# and reuse the original Idempotency-Key. A client timeout is not a refusal.
+trstctl-cli ca keys retire <predecessor-ca-authority-id> --force -f ca-retire.json
+# {"final_epoch":1,"confirm_irreversible":true}
+
 # If the exact retirement outbox command has failed after its delivery budget,
 # read its command_event_id and delivery_attempts from the checklist. Review the
 # failure, then grant ONE attempt to that same frozen command and signer journal.

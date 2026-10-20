@@ -2,6 +2,8 @@
 
 package cli
 
+import "time"
+
 // Commands for API routes attached outside the static route table.
 //
 // Why this is a separate file. These routes are mounted by attach seams rather
@@ -55,7 +57,7 @@ var licensedRouteCommands = []Command{
 	{Name: []string{"ca", "keys", "reprotect", "preview"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect/plans/preview", Body: bodyFile, ReadOnly: true, Summary: "Effect-free review of one exact CA credential re-protection plan"},
 	{Name: []string{"ca", "keys", "reprotect", "plan", "get"}, Method: "GET", Path: "/api/v1/ca/keys/{id}/reprotect/plans/{job_id}", Summary: "Read the immutable plan for one CA re-protection job"},
 	{Name: []string{"ca", "keys", "dependent", "release"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/dependencies/release", Body: bodyFile, Summary: "Release one exact eligible CA leaf after reviewed two-custodian approval"},
-	{Name: []string{"ca", "keys", "retire"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", Body: bodyFile, Summary: "Irreversibly retire a superseded CA key through the isolated signer and retain its signed destruction record"},
+	{Name: []string{"ca", "keys", "retire"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", Body: bodyFile, RequestTimeout: 10 * time.Minute, Summary: "Irreversibly retire a superseded CA key through the isolated signer and retain its signed destruction record"},
 	{Name: []string{"ca", "keys", "retirement", "retry"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement/retry", Body: bodyFile, Summary: "Grant one audited attempt to the same failed CA-key retirement command"},
 	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
 	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a Core PQC migration run over selected CBOM assets"},
