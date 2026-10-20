@@ -121,7 +121,8 @@ func newStore(t *testing.T) *store.Store {
 		`UPDATE projection_checkpoint
 		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
 		        failed_at = NULL, breakglass_issue_checked_through = NULL,
-		        breakglass_authority_checked_through = NULL, updated_at = now()
+		        breakglass_authority_checked_through = NULL,
+		        ca_reprotection_name_checked_through = NULL, updated_at = now()
 		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
