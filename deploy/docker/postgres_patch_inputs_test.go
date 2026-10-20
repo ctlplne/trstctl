@@ -24,11 +24,11 @@ func postgresPatchConstructionErrors(df string) []string {
 		"COPY --from=patches /${TARGETARCH}/ /tmp/trstctl-postgres-patches/",
 		"RUN --network=none apk add --no-network /tmp/trstctl-postgres-patches/*.apk",
 		"&& rm -rf /tmp/trstctl-postgres-patches",
-		"ADD --checksum=sha256:161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk /amd64/libcrypto3-3.5.8-r0.apk",
-		"ADD --checksum=sha256:aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk /amd64/libssl3-3.5.8-r0.apk",
+		"ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk",
+		"ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk",
 		"ADD --checksum=sha256:8306e5bb577696c9069fe1dfd9e1dcc39d2d481c6a1b0e707fd03c3e21aa6aa2 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libuuid-2.42.3-r1.apk /amd64/libuuid-2.42.3-r1.apk",
-		"ADD --checksum=sha256:35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk /arm64/libcrypto3-3.5.8-r0.apk",
-		"ADD --checksum=sha256:d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk /arm64/libssl3-3.5.8-r0.apk",
+		"ADD --checksum=sha256:2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk /arm64/libcrypto3-3.5.9-r0.apk",
+		"ADD --checksum=sha256:20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk /arm64/libssl3-3.5.9-r0.apk",
 		"ADD --checksum=sha256:9ce20c7ffe2ccaa7c321893c10564abbca13c3f2edb82f60a35f1f68e004f86c https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libuuid-2.42.3-r1.apk /arm64/libuuid-2.42.3-r1.apk",
 	}
 	for _, want := range required {
