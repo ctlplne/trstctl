@@ -119,8 +119,11 @@ type issuanceDispatcher struct {
 	idem           *orchestrator.Idempotency
 	outbox         *orchestrator.Outbox
 	store          *store.Store
-	audit          *audit.Service
-	admission      editionseam.AdmissionHook
+	// caKeyRetirementState mirrors Server.caKeyRetirementState for the CA
+	// publisher: a superseded predecessor under a destroyed CA is skipped.
+	caKeyRetirementState func(ctx context.Context, tenantID, keyID string) (string, bool, error)
+	audit                *audit.Service
+	admission            editionseam.AdmissionHook
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the

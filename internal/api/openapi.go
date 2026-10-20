@@ -3127,16 +3127,23 @@ func componentSchemas() map[string]*Schema {
 	keyCompromiseCertificate := object(map[string]*Schema{
 		"id": uuid(), "fingerprint": str(), "serial": str(), "authority": str(),
 	}, "id", "fingerprint", "serial", "authority")
+	keyCompromiseExcludedCertificate := object(map[string]*Schema{
+		"id": uuid(), "fingerprint": str(), "serial": str(), "issuer": str(),
+		"certificate_status": {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
+		"reason":             {Type: "string", Description: "Why this bound leaf is not sent to any CA: today only a superseded predecessor whose managed issuing CA key was destroyed by signed retirement."},
+	}, "id", "fingerprint", "serial", "issuer", "certificate_status", "reason")
 	keyCompromisePlan := object(map[string]*Schema{
 		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"identity_id": uuid(), "expected_version": {Type: "integer"},
-		"target":               ref("EndpointContainmentPreview"),
-		"certificates":         {Type: "array", Items: ref("KeyCompromiseCertificate")},
-		"preview_fingerprint":  str(),
-		"required_permissions": {Type: "array", Items: str()},
-		"execution_effects":    {Type: "array", Items: str()},
-		"verification_steps":   {Type: "array", Items: str()},
-	}, "capability", "ready", "effect_free", "identity_id", "expected_version", "target", "certificates", "preview_fingerprint", "required_permissions", "execution_effects", "verification_steps")
+		"target":                ref("EndpointContainmentPreview"),
+		"certificates":          {Type: "array", Items: ref("KeyCompromiseCertificate")},
+		"excluded_certificates": {Type: "array", Items: ref("KeyCompromiseExcludedCertificate")},
+		"warnings":              {Type: "array", Items: str()},
+		"preview_fingerprint":   str(),
+		"required_permissions":  {Type: "array", Items: str()},
+		"execution_effects":     {Type: "array", Items: str()},
+		"verification_steps":    {Type: "array", Items: str()},
+	}, "capability", "ready", "effect_free", "identity_id", "expected_version", "target", "certificates", "excluded_certificates", "warnings", "preview_fingerprint", "required_permissions", "execution_effects", "verification_steps")
 	keyCompromiseExecutionRequest := object(map[string]*Schema{
 		"target_id": uuid(), "target_revision": str(), "target_name": str(),
 		"connector": str(), "identity_id": uuid(), "expected_fingerprint": str(),
@@ -6689,6 +6696,7 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorDeliveryList":                    list("ConnectorDelivery"),
 		"KeyCompromisePlanRequest":                 keyCompromisePlanRequest,
 		"KeyCompromiseCertificate":                 keyCompromiseCertificate,
+		"KeyCompromiseExcludedCertificate":         keyCompromiseExcludedCertificate,
 		"KeyCompromisePlan":                        keyCompromisePlan,
 		"KeyCompromiseExecutionRequest":            keyCompromiseExecutionRequest,
 		"KeyCompromiseResult":                      keyCompromiseResult,

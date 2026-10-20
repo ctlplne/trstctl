@@ -7783,6 +7783,11 @@ export const messages = {
     defaultMessage: "{count} exact certificate records will be sent to their issuing CA for revocation.",
     description: "Bounded certificate count in the key-compromise preview.",
   },
+  "certificates.revocation.compromiseExcludedCertificates": {
+    defaultMessage:
+      "{count} superseded predecessor certificates are excluded: their issuing CA key was destroyed by signed retirement, so nothing can revoke them.",
+    description: "Count of bound predecessor leaves the key-compromise command cannot revoke because their CA key is gone.",
+  },
   "certificates.revocation.compromiseQueued": {
     defaultMessage: "CA revocation and host containment were queued separately.",
     description: "Accepted compound command is not a claim of external completion.",

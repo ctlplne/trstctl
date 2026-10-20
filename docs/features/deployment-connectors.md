@@ -458,7 +458,13 @@ trstctl connector target compromise-status \
 
 API clients use `POST /api/v1/identities/{id}/compromise/preview`, then echo the
 reviewed bindings to `POST /api/v1/identities/{id}/compromise` with the stable
-`Idempotency-Key`. `GET /api/v1/identities/{id}/compromise?request_key=…` reads
+`Idempotency-Key`. The preview lists only certificates its issuing CA can still
+revoke. A superseded predecessor whose managed CA key was destroyed by signed
+retirement appears under `excluded_certificates` with a warning instead of
+making the preview `ready` for a revocation nothing can sign; relying parties
+that still trust that retired CA must remove it from their trust stores. If the
+served leaf's own CA key was destroyed, the preview refuses with `409` before
+any irreversible command. `GET /api/v1/identities/{id}/compromise?request_key=…` reads
 the CA outbox attempt or retained completed-worker receipt and the exact host
 receipt separately; it requires
 `identities:read` and `connectors:read`. A delivered CA command still needs

@@ -6059,6 +6059,19 @@ KeyCompromiseCertificate = TypedDict(
     total=False,
 )
 
+KeyCompromiseExcludedCertificate = TypedDict(
+    'KeyCompromiseExcludedCertificate',
+    {
+        'certificate_status': str,
+        'fingerprint': str,
+        'id': str,
+        'issuer': str,
+        'reason': str,
+        'serial': str,
+    },
+    total=False,
+)
+
 KeyCompromiseExecutionRequest = TypedDict(
     'KeyCompromiseExecutionRequest',
     {
@@ -6081,6 +6094,7 @@ KeyCompromisePlan = TypedDict(
         'capability': str,
         'certificates': list[dict[str, Any]],
         'effect_free': bool,
+        'excluded_certificates': list[dict[str, Any]],
         'execution_effects': list[str],
         'expected_version': int,
         'identity_id': str,
@@ -6089,6 +6103,7 @@ KeyCompromisePlan = TypedDict(
         'required_permissions': list[str],
         'target': dict[str, Any],
         'verification_steps': list[str],
+        'warnings': list[str],
     },
     total=False,
 )

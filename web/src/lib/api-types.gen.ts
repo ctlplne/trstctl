@@ -4393,6 +4393,15 @@ export interface KeyCompromiseCertificate {
   serial: string;
 }
 
+export interface KeyCompromiseExcludedCertificate {
+  certificate_status: "active" | "superseded" | "revoked";
+  fingerprint: string;
+  id: string;
+  issuer: string;
+  reason: string;
+  serial: string;
+}
+
 export interface KeyCompromiseExecutionRequest {
   connector: string;
   expected_fingerprint: string;
@@ -4409,6 +4418,7 @@ export interface KeyCompromisePlan {
   capability: string;
   certificates: KeyCompromiseCertificate[];
   effect_free: boolean;
+  excluded_certificates: KeyCompromiseExcludedCertificate[];
   execution_effects: string[];
   expected_version: number;
   identity_id: string;
@@ -4417,6 +4427,7 @@ export interface KeyCompromisePlan {
   required_permissions: string[];
   target: EndpointContainmentPreview;
   verification_steps: string[];
+  warnings: string[];
 }
 
 export interface KeyCompromisePlanRequest {

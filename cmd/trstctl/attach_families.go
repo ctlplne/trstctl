@@ -284,6 +284,17 @@ func attachVerifiableDecommission(log *slog.Logger, deps *server.Deps) error {
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.ReprotectionOutboxFactory)
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.RetirementOutboxFactory)
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, runtime.ProjectionOptions...)
+	// The revocation authority resolver and the CA publisher must know when a
+	// managed CA key has a signed destruction record: such a CA can no longer
+	// sign a CRL, so its superseded leaves are excluded from compromise
+	// commands and its served leaves are refused before any irreversible step.
+	deps.CAKeyRetirementState = func(ctx context.Context, tenantID, keyID string) (string, bool, error) {
+		state, found, err := runtime.RetirementProjection.Fetch(ctx, tenantID, keyID)
+		if err != nil || !found {
+			return "", found, err
+		}
+		return state.Status, true, nil
+	}
 	// The H4 surface: the retirement checklist source (without it the core route
 	// answers 501 on every deployment, licensed included — AUD-3) and the
 	// re-protection start route plus the signer-gated retirement producer. The

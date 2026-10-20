@@ -611,6 +611,10 @@ export function RevocationCenter({
                     title={t("certificates.revocation.prerequisites")}
                     items={[
                       t("certificates.revocation.compromiseCertificates", { count: review.plan.certificates.length }),
+                      ...(review.plan.excluded_certificates.length
+                        ? [t("certificates.revocation.compromiseExcludedCertificates", { count: review.plan.excluded_certificates.length })]
+                        : []),
+                      ...review.plan.warnings,
                       ...review.plan.required_permissions,
                     ]}
                   />

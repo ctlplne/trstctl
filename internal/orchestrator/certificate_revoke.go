@@ -23,6 +23,12 @@ import (
 var ErrCertificateRevocationInvalid = errors.New("orchestrator: invalid certificate revocation request")
 var ErrCertificateRevocationUnsupported = errors.New(projections.CertificateRevocationUnsupportedReason)
 
+// ErrCertificateAuthorityKeyDestroyed means the leaf's exact managed issuing CA
+// key was destroyed by signed retirement. It is a kind of unsupported
+// revocation: nothing can sign that CA's CRL or OCSP response any more, so the
+// leaf can only be distrusted at relying parties, never revoked.
+var ErrCertificateAuthorityKeyDestroyed = fmt.Errorf("%w: the issuing CA key was destroyed by signed retirement; nothing can publish its revocation", ErrCertificateRevocationUnsupported)
+
 // ExternalCertificateAuthorityPrefix distinguishes a verified external registry
 // binding from the UUID of a locally served CA ledger. It is never tenant input.
 const ExternalCertificateAuthorityPrefix = "external:"

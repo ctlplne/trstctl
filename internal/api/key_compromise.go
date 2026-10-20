@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -26,18 +27,35 @@ type keyCompromiseCertificate struct {
 	Authority   string `json:"authority"`
 }
 
+// keyCompromiseExcludedCertificate is a leaf bound to the identity that this
+// command will not send to any CA, with the exact reason. Today that is only a
+// superseded predecessor whose managed issuing CA key was destroyed by signed
+// retirement: nothing can sign that CA's revocation any more.
+type keyCompromiseExcludedCertificate struct {
+	ID          string `json:"id"`
+	Fingerprint string `json:"fingerprint"`
+	Serial      string `json:"serial"`
+	Issuer      string `json:"issuer"`
+	Status      string `json:"certificate_status"`
+	Reason      string `json:"reason"`
+}
+
+const keyCompromiseDestroyedPredecessorReason = "issuing CA key destroyed by signed retirement; this superseded predecessor cannot be revoked anywhere and is not part of this command"
+
 type keyCompromisePlan struct {
-	Capability          string                     `json:"capability"`
-	Ready               bool                       `json:"ready"`
-	EffectFree          bool                       `json:"effect_free"`
-	IdentityID          string                     `json:"identity_id"`
-	ExpectedVersion     uint64                     `json:"expected_version"`
-	Target              endpointContainmentPreview `json:"target"`
-	Certificates        []keyCompromiseCertificate `json:"certificates"`
-	PreviewFingerprint  string                     `json:"preview_fingerprint"`
-	RequiredPermissions []string                   `json:"required_permissions"`
-	ExecutionEffects    []string                   `json:"execution_effects"`
-	VerificationSteps   []string                   `json:"verification_steps"`
+	Capability           string                             `json:"capability"`
+	Ready                bool                               `json:"ready"`
+	EffectFree           bool                               `json:"effect_free"`
+	IdentityID           string                             `json:"identity_id"`
+	ExpectedVersion      uint64                             `json:"expected_version"`
+	Target               endpointContainmentPreview         `json:"target"`
+	Certificates         []keyCompromiseCertificate         `json:"certificates"`
+	ExcludedCertificates []keyCompromiseExcludedCertificate `json:"excluded_certificates"`
+	Warnings             []string                           `json:"warnings"`
+	PreviewFingerprint   string                             `json:"preview_fingerprint"`
+	RequiredPermissions  []string                           `json:"required_permissions"`
+	ExecutionEffects     []string                           `json:"execution_effects"`
+	VerificationSteps    []string                           `json:"verification_steps"`
 }
 
 type keyCompromiseExecutionRequest struct {
@@ -125,8 +143,22 @@ func (a *API) keyCompromisePlan(ctx context.Context, tenantID, identityID, targe
 		return keyCompromisePlan{}, errStatus(http.StatusConflict, "exact issuing CA revocation authority is unavailable or exceeds the bounded review")
 	}
 	reviewed := make([]keyCompromiseCertificate, 0, len(certs))
+	excluded := []keyCompromiseExcludedCertificate{}
 	for _, cert := range certs {
 		authority, err := a.certRevocationAuthority(ctx, cert)
+		if errors.Is(err, orchestrator.ErrCertificateAuthorityKeyDestroyed) {
+			// A superseded predecessor under a destroyed CA can only be
+			// distrusted, never revoked. Excluding it keeps the live successor
+			// containable; the served leaf itself under a destroyed CA is refused.
+			if cert.Status == "superseded" && !strings.EqualFold(cert.Fingerprint, target.ExpectedFingerprint) {
+				excluded = append(excluded, keyCompromiseExcludedCertificate{
+					ID: cert.ID, Fingerprint: cert.Fingerprint, Serial: cert.Serial,
+					Issuer: cert.Issuer, Status: cert.Status, Reason: keyCompromiseDestroyedPredecessorReason,
+				})
+				continue
+			}
+			return keyCompromisePlan{}, errStatus(http.StatusConflict, "the served leaf's issuing CA key was destroyed by signed retirement, so nothing can publish its revocation; replace the leaf under a live CA and distrust the retired CA at relying parties before any irreversible command")
+		}
 		if err != nil || authority == "" {
 			return keyCompromisePlan{}, errStatus(http.StatusConflict, "the issuing CA cannot revoke every exact certificate; review certificate inventory")
 		}
@@ -134,22 +166,31 @@ func (a *API) keyCompromisePlan(ctx context.Context, tenantID, identityID, targe
 			ID: cert.ID, Fingerprint: cert.Fingerprint, Serial: cert.Serial, Authority: authority,
 		})
 	}
+	if len(reviewed) == 0 {
+		return keyCompromisePlan{}, errStatus(http.StatusConflict, "every certificate bound to this identity was issued by a CA whose key was destroyed; nothing can publish a revocation for them")
+	}
+	warnings := []string{}
+	if len(excluded) > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d superseded predecessor certificate(s) were issued by a CA whose key was destroyed by signed retirement. This command cannot revoke them; relying parties that still trust that retired CA must remove it from their trust stores.", len(excluded)))
+	}
 	material, err := json.Marshal(struct {
-		Domain       string                     `json:"domain"`
-		TenantID     string                     `json:"tenant_id"`
-		Requester    string                     `json:"requester"`
-		IdentityID   string                     `json:"identity_id"`
-		Version      uint64                     `json:"version"`
-		Target       endpointContainmentPreview `json:"target"`
-		Certificates []keyCompromiseCertificate `json:"certificates"`
-	}{"trstctl.key-compromise-preview.v1", tenantID, requester, identityID, version, target, reviewed})
+		Domain       string                             `json:"domain"`
+		TenantID     string                             `json:"tenant_id"`
+		Requester    string                             `json:"requester"`
+		IdentityID   string                             `json:"identity_id"`
+		Version      uint64                             `json:"version"`
+		Target       endpointContainmentPreview         `json:"target"`
+		Certificates []keyCompromiseCertificate         `json:"certificates"`
+		Excluded     []keyCompromiseExcludedCertificate `json:"excluded_certificates,omitempty"`
+	}{"trstctl.key-compromise-preview.v1", tenantID, requester, identityID, version, target, reviewed, excluded})
 	if err != nil {
 		return keyCompromisePlan{}, err
 	}
 	return keyCompromisePlan{
 		Capability: "key_compromise", Ready: true, EffectFree: true,
 		IdentityID: identityID, ExpectedVersion: version, Target: target,
-		Certificates: reviewed, PreviewFingerprint: crypto.SHA256Hex(material),
+		Certificates: reviewed, ExcludedCertificates: excluded, Warnings: warnings,
+		PreviewFingerprint:  crypto.SHA256Hex(material),
 		RequiredPermissions: []string{string(authz.IdentitiesWrite), string(authz.ConnectorsWrite)},
 		ExecutionEffects: []string{
 			"One immutable identity.revoked event projects the revoked identity and queues separate CA publication and exact-fingerprint host containment jobs in the same tenant transaction.",

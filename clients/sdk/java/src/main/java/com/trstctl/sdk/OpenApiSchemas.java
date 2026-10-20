@@ -429,6 +429,7 @@ public final class OpenApiSchemas {
       "IssuerRequest",
       "KMIPPosture",
       "KeyCompromiseCertificate",
+      "KeyCompromiseExcludedCertificate",
       "KeyCompromiseExecutionRequest",
       "KeyCompromisePlan",
       "KeyCompromisePlanRequest",

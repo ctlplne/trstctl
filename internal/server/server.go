@@ -147,6 +147,11 @@ type Deps struct {
 	Store                *store.Store
 	Log                  *events.Log
 	Signer               SignerProvider // may be nil → issuance is unavailable (fail closed)
+	// CAKeyRetirementState answers whether a managed CA key (keyed by its CA
+	// authority ID) has a VDEC retirement record and in which state. The core
+	// families attach it at the untagged seam; nil means no retirement state is
+	// served, so no CA is treated as destroyed.
+	CAKeyRetirementState func(ctx context.Context, tenantID, keyID string) (status string, found bool, err error)
 	// SignerMode is the topology the production composition actually opened:
 	// "child" when this process supervises the isolated process, or "external"
 	// when it connected to a separately deployed signer. Empty preserves the
@@ -661,12 +666,15 @@ type Server struct {
 	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
 	outboxGC           *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler          orchestrator.Handler
-	handler            http.Handler
-	acmeDNS01          *servedACMEDNS01Automation
-	transit            *transitpkg.Service
-	transitStore       *transitpkg.Store
-	transitStateMu     sync.RWMutex
-	transitStateFound  bool
+	// caKeyRetirementState lets the revocation authority resolver refuse a CA
+	// whose signing key was destroyed by signed retirement (see Deps).
+	caKeyRetirementState func(ctx context.Context, tenantID, keyID string) (string, bool, error)
+	handler              http.Handler
+	acmeDNS01            *servedACMEDNS01Automation
+	transit              *transitpkg.Service
+	transitStore         *transitpkg.Store
+	transitStateMu       sync.RWMutex
+	transitStateFound    bool
 	// codeSignGate is the production adapter over the live OPA evaluator and
 	// distinct-approver store assembled by configurePolicyGate.
 	codeSignGate     codesign.Gate
@@ -1008,6 +1016,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		signAuthz:                 resolveSignTokenProvider(d),
 		signTO:                    d.SignTimeout,
 		obHandler:                 d.OutboxHandler,
+		caKeyRetirementState:      d.CAKeyRetirementState,
 		leafProfile:               d.LeafProfile,
 		licensedLeafSigner:        d.LicensedLeafSigner,
 		preparedSubjectLeafSigner: d.PreparedSubjectLeafSigner,
@@ -2011,9 +2020,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
 	return nil
 }

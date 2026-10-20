@@ -268,6 +268,8 @@ describe("RevocationCenter", () => {
     };
     const compromisePlan = {
       capability: "key_compromise",
+      excluded_certificates: [],
+      warnings: [],
       ready: true,
       effect_free: true,
       identity_id: identities[0].id,

@@ -12105,6 +12105,17 @@ export interface components {
             id: string;
             serial: string;
         };
+        KeyCompromiseExcludedCertificate: {
+            /** @enum {string} */
+            certificate_status: "active" | "superseded" | "revoked";
+            fingerprint: string;
+            /** Format: uuid */
+            id: string;
+            issuer: string;
+            /** @description Why this bound leaf is not sent to any CA: today only a superseded predecessor whose managed issuing CA key was destroyed by signed retirement. */
+            reason: string;
+            serial: string;
+        };
         KeyCompromiseExecutionRequest: {
             connector: string;
             expected_fingerprint: string;
@@ -12123,6 +12134,7 @@ export interface components {
             capability: string;
             certificates: components["schemas"]["KeyCompromiseCertificate"][];
             effect_free: boolean;
+            excluded_certificates: components["schemas"]["KeyCompromiseExcludedCertificate"][];
             execution_effects: string[];
             expected_version: number;
             /** Format: uuid */
@@ -12132,6 +12144,7 @@ export interface components {
             required_permissions: string[];
             target: components["schemas"]["EndpointContainmentPreview"];
             verification_steps: string[];
+            warnings: string[];
         };
         KeyCompromisePlanRequest: {
             /** Format: uuid */

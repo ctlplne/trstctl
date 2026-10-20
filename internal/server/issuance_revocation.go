@@ -70,8 +70,24 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 			return nil, err
 		}
 		var memberErrors []error
+		skipped := 0
 		for _, cert := range certs {
 			origin := origins[cert.Fingerprint]
+			if origin.ExternalID == "" && cert.Status == "superseded" {
+				// A superseded predecessor whose managed CA key was destroyed by
+				// signed retirement cannot be revoked anywhere. The reviewed
+				// preview excluded it; failing the whole command here would block
+				// the live successor's publication for a leaf nothing can sign for.
+				destroyed, err := caKeyDestroyed(ctx, d.caKeyRetirementState, m.TenantID, origin.CAID)
+				if err != nil {
+					memberErrors = append(memberErrors, err)
+					continue
+				}
+				if destroyed {
+					skipped++
+					continue
+				}
+			}
 			if origin.ExternalID != "" {
 				if err := d.revokeExternalCertificate(ctx, m.TenantID, origin.ExternalID, cert, reason); err != nil {
 					// A refused predecessor must not prevent the live successor
@@ -91,7 +107,7 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 		if more {
 			return nil, orchestrator.DeferDelivery(errors.New("server: confirmed one revocation page; further exact certificates remain"))
 		}
-		return []byte(fmt.Sprintf("revoked:%d", len(certs))), nil
+		return []byte(fmt.Sprintf("revoked:%d", len(certs)-skipped)), nil
 	})
 	// Keep publication outside the cached mutation result. If publication fails,
 	// the unchanged outbox retry must retry it even after inventory is revoked.

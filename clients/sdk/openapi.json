@@ -18065,6 +18065,44 @@
         ],
         "type": "object"
       },
+      "KeyCompromiseExcludedCertificate": {
+        "properties": {
+          "certificate_status": {
+            "enum": [
+              "active",
+              "superseded",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why this bound leaf is not sent to any CA: today only a superseded predecessor whose managed issuing CA key was destroyed by signed retirement.",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fingerprint",
+          "serial",
+          "issuer",
+          "certificate_status",
+          "reason"
+        ],
+        "type": "object"
+      },
       "KeyCompromiseExecutionRequest": {
         "properties": {
           "connector": {
@@ -18125,6 +18163,12 @@
           "effect_free": {
             "type": "boolean"
           },
+          "excluded_certificates": {
+            "items": {
+              "$ref": "#/components/schemas/KeyCompromiseExcludedCertificate"
+            },
+            "type": "array"
+          },
           "execution_effects": {
             "items": {
               "type": "string"
@@ -18158,6 +18202,12 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -18168,6 +18218,8 @@
           "expected_version",
           "target",
           "certificates",
+          "excluded_certificates",
+          "warnings",
           "preview_fingerprint",
           "required_permissions",
           "execution_effects",

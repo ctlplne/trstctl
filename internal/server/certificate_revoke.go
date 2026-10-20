@@ -100,6 +100,11 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 			if !found {
 				return "", orchestrator.ErrCertificateRevocationUnsupported
 			}
+			if destroyed, err := caKeyDestroyed(ctx, s.caKeyRetirementState, certificate.TenantID, origin.CAID); err != nil {
+				return "", err
+			} else if destroyed {
+				return "", orchestrator.ErrCertificateAuthorityKeyDestroyed
+			}
 			return origin.CAID, nil
 		}
 		if found && event.Type == projections.EventCAEndEntityIssued && event.SchemaVersion == projections.CAEndEntityInventorySchemaVersion {
@@ -129,6 +134,11 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 			}
 			if !found {
 				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			if destroyed, err := caKeyDestroyed(ctx, s.caKeyRetirementState, certificate.TenantID, origin.CAID); err != nil {
+				return "", err
+			} else if destroyed {
+				return "", orchestrator.ErrCertificateAuthorityKeyDestroyed
 			}
 			return origin.CAID, nil
 		}
@@ -178,4 +188,18 @@ func (d *issuanceDispatcher) handleCertificateCRLPublication(ctx context.Context
 		return errors.New("server: requested managed CA CRL authority is not served")
 	}
 	return d.publishAuthorityCRL(ctx, message.TenantID, command.CAID)
+}
+
+// caKeyDestroyed reports whether a managed CA authority's signing key has a
+// signed destruction record. Without an attached retirement state source no
+// key is treated as destroyed; the resolver then relies on its signer checks.
+func caKeyDestroyed(ctx context.Context, state func(context.Context, string, string) (string, bool, error), tenantID, keyID string) (bool, error) {
+	if state == nil || keyID == "" {
+		return false, nil
+	}
+	status, found, err := state(ctx, tenantID, keyID)
+	if err != nil {
+		return false, err
+	}
+	return found && status == "destroyed", nil
 }
