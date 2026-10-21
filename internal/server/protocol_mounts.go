@@ -276,7 +276,12 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	if s.defaultProfile != "" {
 		acmeSrv = acmeSrv.WithCertificateProfileResolver(acmeActiveCertificateProfile{
 			store: s.store, tenantID: acmeTenant, profileName: s.defaultProfile,
-		}.Resolve)
+		}.Resolve).WithDefaultProfileName(s.defaultProfile)
+	}
+	if s.store != nil {
+		// A55/A56: a credential-pinned or client-requested profile is read by
+		// name from the tenant's active profile versions.
+		acmeSrv = acmeSrv.WithNamedCertificateProfileResolver(acmeNamedCertificateProfile{store: s.store, tenantID: acmeTenant}.Resolve)
 	}
 	if s.acmeDNS01 != nil {
 		var txtResolver acme.Resolver
@@ -359,6 +364,7 @@ func acmeExternalAccountBindingKeys(cfg config.ACMEExternalAccountBinding) ([]ac
 				MaxOrders:          in.MaxOrders,
 				NotAfter:           notAfter,
 				Disabled:           in.Disabled,
+				Profile:            strings.TrimSpace(in.Profile),
 			},
 		})
 	}

@@ -169,8 +169,8 @@ not this file.
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:2444` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:3175` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2448` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3179` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:389` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -545,8 +545,8 @@ not this file.
 | `internal/server/bundled_pg.go:78` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:720` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:918` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/protocol_mounts.go:920` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:924` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:926` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:436` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:217` | bounded small ints from config (CWE-190) |
@@ -1274,7 +1274,7 @@ not this file.
 | `internal/cli/pcas_kem_envelope.go:67` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:2538` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:2542` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:46` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:353` | clean is confined to operator-approved local roots above (CWE-22) |
@@ -1386,10 +1386,10 @@ not this file.
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:119` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:698` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:805` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:870` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1157` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:704` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:811` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:876` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1163` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:590` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:228` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:232` | test reads its own tempdir fixture (CWE-22) |
@@ -1822,9 +1822,9 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/ca/letsencrypt/acmefake/acmefake.go:376` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:400` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:404` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:440` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:464` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:468` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:241` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:218` | test writes fixture bytes to its own recorder/local server (CWE-79) |

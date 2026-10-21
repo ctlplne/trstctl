@@ -219,6 +219,9 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 					letsencrypt.WithChallengeSolver(binding),
 					letsencrypt.WithDVObserver(binding))
 			}
+			if strings.TrimSpace(item.ACMEProfile) != "" {
+				acmeOpts = append(acmeOpts, letsencrypt.WithProfile(item.ACMEProfile))
+			}
 			if strings.TrimSpace(item.EABKeyID) != "" {
 				// A177: the MAC key is a credential reference resolved here and
 				// copied into the driver; the resolved buffer is wiped with the

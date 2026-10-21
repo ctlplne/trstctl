@@ -948,6 +948,10 @@ type ACMEExternalAccountBindingKey struct {
 	// served disable verb can switch a credential off at runtime but cannot
 	// switch a config-disabled one back on.
 	Disabled bool `json:"disabled,omitempty"`
+	// Profile names the tenant certificate profile every order under this
+	// credential is issued with (A55). Empty keeps the tenant's default
+	// profile. The profile must exist and be active when an order arrives.
+	Profile string `json:"profile,omitempty"`
 }
 
 // NotAfterTime parses the credential's validity window ("" = no window).

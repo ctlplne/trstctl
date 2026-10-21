@@ -61,6 +61,9 @@ func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Cl
 	if cfg.eabKeyID != "" {
 		driver = driver.WithExternalAccountBinding(cfg.eabKeyID, cfg.eabHMACKey)
 	}
+	if cfg.profile != "" {
+		driver = driver.WithProfile(cfg.profile)
+	}
 	return &Plugin{name: name, driver: driver}, nil
 }
 
@@ -75,6 +78,14 @@ type options struct {
 	observer   acmekey.DVObserver
 	eabKeyID   string
 	eabHMACKey []byte
+	profile    string
+}
+
+// WithProfile requests the named draft-ietf-acme-profiles profile on every
+// order (A56). The driver refuses to order when the authority does not
+// advertise it.
+func WithProfile(name string) Option {
+	return func(o *options) { o.profile = name }
 }
 
 // WithExternalAccountBinding presents an RFC 8555 §7.3.4 external account

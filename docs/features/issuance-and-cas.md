@@ -61,7 +61,9 @@ resent — it stays explicitly indeterminate rather than guessing the CA did not
 An ACME authority that pre-authorizes accounts out of band (CertiNext, HARICA and
 other EAB-gated CAs) is configured with `eab_key_id` plus `eab_hmac_key_ref`; the
 upstream client then presents the external account binding at registration and
-the MAC key never leaves locked memory.
+the MAC key never leaves locked memory. `acme_profile` names the
+draft-ietf-acme-profiles profile the client requests on every order; the request
+is made only when the authority advertises that profile in its directory.
 
 For ACME, a live attempt that stops before submitting the CSR for finalization can
 prove that signing never began. The worker may then retry the same issuance request

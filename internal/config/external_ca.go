@@ -97,6 +97,12 @@ type ExternalCAConfig struct {
 	EABKeyID      string `json:"eab_key_id,omitempty"`
 	EABHMACKeyRef string `json:"eab_hmac_key_ref,omitempty"`
 
+	// ACMEProfile is the draft-ietf-acme-profiles profile requested on every
+	// order placed with this authority (A56). The client requests it only when
+	// the authority's directory advertises it; otherwise issuance fails before
+	// an order exists. Empty lets the authority apply its default.
+	ACMEProfile string `json:"acme_profile,omitempty"`
+
 	// UpstreamDNS01 enables unattended domain validation against this
 	// authority: trstctl publishes the dns-01 challenge record itself, using
 	// the DNS-01 provider configs that have set allow_upstream_dv (epic B7).
@@ -412,6 +418,9 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 	// entry has stated an intent the platform cannot carry out; accepting the
 	// file and dropping the field would leave them believing validation is
 	// automated right up until the reuse window closes.
+	if c.Type != "letsencrypt" && strings.TrimSpace(c.ACMEProfile) != "" {
+		errs = append(errs, fmt.Errorf("%s.acme_profile applies only to ACME (letsencrypt) authorities, not %q", where, c.Type))
+	}
 	if c.Type != "letsencrypt" && (strings.TrimSpace(c.EABKeyID) != "" || strings.TrimSpace(c.EABHMACKeyRef) != "") {
 		errs = append(errs, fmt.Errorf("%s.eab_key_id/eab_hmac_key_ref apply only to ACME (letsencrypt) authorities, not %q", where, c.Type))
 	}

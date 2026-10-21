@@ -201,6 +201,9 @@ type Driver struct {
 	// registration when the authority pre-authorizes accounts out of band
 	// (A177). The MAC key is this driver's own copy and is wiped on Destroy.
 	eab *acme.ExternalAccountBinding
+	// profile is the draft-ietf-acme-profiles profile requested on every
+	// order (A56); empty lets the authority choose.
+	profile string
 }
 
 // WithExternalAccountBinding attaches the external account binding the
@@ -332,7 +335,7 @@ func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) (chain [][]by
 	if _, err := d.client.Register(ctx, d.registrationAccount(), acme.AcceptTOS); err != nil && !errors.Is(err, acme.ErrAccountAlreadyExists) {
 		return nil, fmt.Errorf("acmekey: register: %w", err)
 	}
-	order, err := d.client.AuthorizeOrder(ctx, acme.DomainIDs(dnsNames...))
+	order, err := d.authorizeOrder(ctx, dnsNames)
 	if err != nil {
 		return nil, fmt.Errorf("acmekey: authorize order: %w", err)
 	}

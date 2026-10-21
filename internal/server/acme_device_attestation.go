@@ -48,6 +48,17 @@ func (p acmeActiveCertificateProfile) Resolve(ctx context.Context) (profile.Cert
 	return certificateProfile, nil
 }
 
+// acmeNamedCertificateProfile resolves any active tenant profile by name for
+// per-credential and client-requested ACME profile selection (A55/A56).
+type acmeNamedCertificateProfile struct {
+	store    *store.Store
+	tenantID string
+}
+
+func (p acmeNamedCertificateProfile) Resolve(ctx context.Context, name string) (profile.CertificateProfile, error) {
+	return acmeActiveCertificateProfile{store: p.store, tenantID: p.tenantID, profileName: name}.Resolve(ctx)
+}
+
 func (p acmeDeviceAttestationProfiles) DeviceAttestationPolicy(
 	ctx context.Context,
 	tenantID, identifier string,

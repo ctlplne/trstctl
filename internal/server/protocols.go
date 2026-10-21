@@ -439,7 +439,15 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	if req.ProviderIdempotencyKey != "" {
 		issuanceKey = "acme-order:" + req.ProviderIdempotencyKey
 	}
-	leafDER, err := a.issuer.issueProtocolLeafWithOrigin(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester)
+	var leafDER []byte
+	var err error
+	if strings.TrimSpace(req.ProfileName) != "" {
+		// A55/A56: the order selected a profile (credential-pinned or
+		// client-requested); sign under that profile, not the mount default.
+		leafDER, err = a.issuer.issueProtocolLeafWithOriginProfile(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester, strings.TrimSpace(req.ProfileName))
+	} else {
+		leafDER, err = a.issuer.issueProtocolLeafWithOrigin(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester)
+	}
 	if err != nil {
 		return ca.Certificate{}, err
 	}

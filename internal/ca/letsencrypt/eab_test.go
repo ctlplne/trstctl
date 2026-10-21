@@ -98,3 +98,53 @@ func TestPluginPresentsExternalAccountBindingToAnEABGatedAuthority(t *testing.T)
 		t.Fatal("the MAC key leaked into the issued material")
 	}
 }
+
+// A56: the client requests the configured draft-ietf-acme-profiles profile on
+// every order, only when the authority advertises it; an unadvertised name is
+// refused before any order exists.
+func TestPluginRequestsTheConfiguredProfileOnlyWhenAdvertised(t *testing.T) {
+	srv, err := acmefake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	srv.AdvertiseProfiles(map[string]string{"short": "six-day leaves", "classic": "ninety-day leaves"})
+	ctx := context.Background()
+	csr := buildCSR(t, "profile.acme.test", []string{"profile.acme.test"})
+	build := func(opts ...letsencrypt.Option) *letsencrypt.Plugin {
+		t.Helper()
+		account, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(account.Destroy)
+		plugin, err := letsencrypt.NewPluginWithRemoteAccountSigner("profiled-ca", srv.DirectoryURL(), http.DefaultClient, account, opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(plugin.Destroy)
+		return plugin
+	}
+	issue := func(p *letsencrypt.Plugin) (ca.Certificate, error) {
+		return p.Issue(ctx, ca.IssueRequest{TenantID: "t1", CSR: csr, DNSNames: []string{"profile.acme.test"}, TTL: 24 * time.Hour})
+	}
+	if _, err := issue(build(letsencrypt.WithProfile("tenday"))); err == nil {
+		t.Fatal("an unadvertised profile must be refused before an order exists")
+	}
+	if got := srv.OrderProfiles(); len(got) != 0 {
+		t.Fatalf("an order was created for an unadvertised profile: %v", got)
+	}
+	cert, err := issue(build(letsencrypt.WithProfile("short")))
+	if err != nil {
+		t.Fatalf("issue with an advertised profile: %v", err)
+	}
+	if cert.Serial == "" {
+		t.Fatal("no certificate issued")
+	}
+	if _, err := issue(build()); err != nil {
+		t.Fatalf("issue without a profile: %v", err)
+	}
+	if got := srv.OrderProfiles(); len(got) != 2 || got[0] != "short" || got[1] != "" {
+		t.Fatalf("orders requested profiles %v, want [short \"\"]", got)
+	}
+}

@@ -42,11 +42,11 @@ type EABPolicy struct {
 	// ("api.example.com") or a wildcard suffix ("*.example.com", which matches
 	// example.com and anything under it). Empty means unscoped.
 	AllowedIdentifiers []string
-	// Profile binding is deliberately absent. The ACME server does not select a
-	// certificate profile — that decision is made at the issuance seam in
-	// internal/server — so a Profile field here would be policy that nothing
-	// reads. Adding one before the seam can honor it would put back exactly the
-	// kind of advertised-but-inert setting the truth-integrity sweep removed.
+	// Profile pins the tenant certificate profile every order under this
+	// credential is issued with (A55). The newOrder handler records it on the
+	// order, the issuance seam signs under it, and a client that asks for a
+	// different profile is refused. Empty keeps the mount's default profile.
+	Profile string
 	// MaxOrders caps how many orders may be created under this credential over
 	// the server's lifetime. Zero means uncapped.
 	MaxOrders int

@@ -68,6 +68,7 @@ type acmeOrderState struct {
 	AuthMode          string    `json:"auth_mode,omitempty"`
 	CertID            string    `json:"cert_id,omitempty"`
 	Replaces          string    `json:"replaces,omitempty"`
+	Profile           string    `json:"profile,omitempty"`
 	AttestedKeySHA256 string    `json:"attested_key_sha256,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 }
@@ -279,6 +280,7 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		authzIDs:          append([]string(nil), payload.Order.AuthzIDs...),
 		status:            payload.Order.Status,
 		authMode:          profileACMEAuthMode(payload.Order.AuthMode),
+		profile:           payload.Order.Profile,
 		certID:            payload.Order.CertID,
 		replaces:          payload.Order.Replaces,
 		attestedKeySHA256: payload.Order.AttestedKeySHA256,
@@ -423,6 +425,7 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 			AuthMode:          string(o.authMode),
 			CertID:            o.certID,
 			Replaces:          o.replaces,
+			Profile:           o.profile,
 			AttestedKeySHA256: o.attestedKeySHA256,
 			CreatedAt:         o.createdAt,
 		},

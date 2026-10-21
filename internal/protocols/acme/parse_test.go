@@ -137,3 +137,19 @@ func TestParseKeyChangeInner(t *testing.T) {
 // FuzzParseKeyChangeInner fuzzes the keyChange inner-payload parser (untrusted
 // input): it must never panic and never return a result missing the account or
 // oldKey with a nil error.
+
+// A56: a newOrder may name a draft-ietf-acme-profiles profile; it is carried
+// through as given and refused when it is not a plain name.
+func TestParseOrderRequestCarriesTheProfile(t *testing.T) {
+	req, err := acmesrv.ParseOrderRequest([]byte(`{"identifiers":[{"type":"dns","value":"a.example.test"}],"profile":"short"}`))
+	if err != nil || req.Profile != "short" {
+		t.Fatalf("req=%+v err=%v", req, err)
+	}
+	req, err = acmesrv.ParseOrderRequest([]byte(`{"identifiers":[{"type":"dns","value":"a.example.test"}]}`))
+	if err != nil || req.Profile != "" {
+		t.Fatalf("req=%+v err=%v; want no profile", req, err)
+	}
+	if _, err := acmesrv.ParseOrderRequest([]byte(`{"identifiers":[{"type":"dns","value":"a.example.test"}],"profile":"bad\nname"}`)); err == nil {
+		t.Fatal("a profile name with control characters was accepted")
+	}
+}

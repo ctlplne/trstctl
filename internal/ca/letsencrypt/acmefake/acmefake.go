@@ -55,6 +55,10 @@ type Server struct {
 	eabKeyID   string
 	eabHMACKey []byte
 	eabSeen    int
+	// A56: draft-ietf-acme-profiles. profiles is what the directory
+	// advertises; orderProfiles records what each newOrder asked for.
+	profiles      map[string]string
+	orderProfiles []string
 	// lastAccountProblem is the RFC 8555 problem type the last newAccount
 	// refusal carried, so a test can tell why the client was turned away even
 	// though the client sanitizes upstream errors.
@@ -67,6 +71,45 @@ func (s *Server) LastAccountProblem() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lastAccountProblem
+}
+
+// AdvertiseProfiles publishes the given profiles in the directory's
+// meta.profiles (draft-ietf-acme-profiles). A newOrder naming a profile that
+// is not advertised is refused with invalidProfile.
+func (s *Server) AdvertiseProfiles(profiles map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.profiles = map[string]string{}
+	for name, description := range profiles {
+		s.profiles[name] = description
+	}
+}
+
+// OrderProfiles reports the profile each accepted newOrder requested, in
+// order ("" for none).
+func (s *Server) OrderProfiles() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.orderProfiles...)
+}
+
+// requestedProfile reads the profile member of a newOrder JWS payload.
+func requestedProfile(body []byte) string {
+	var outer struct {
+		Payload string `json:"payload"`
+	}
+	if json.Unmarshal(body, &outer) != nil {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(outer.Payload)
+	if err != nil {
+		return ""
+	}
+	var order struct {
+		Profile string `json:"profile"`
+	}
+	_ = json.Unmarshal(payload, &order)
+	return order.Profile
 }
 
 // RequireEAB makes account registration require an external account binding
@@ -220,8 +263,17 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		// when the directory offers it (RFC 8555 §7.1.1). A double that omitted
 		// it would make the revoke test pass for the wrong reason — by never
 		// reaching the endpoint at all.
-		_, _ = fmt.Fprintf(w, `{"newNonce":%q,"newAccount":%q,"newOrder":%q,"revokeCert":%q,"meta":{"termsOfService":%q}}`,
-			s.u("/new-nonce"), s.u("/new-account"), s.u("/new-order"), s.u("/revoke-cert"), s.u("/terms"))
+		s.mu.Lock()
+		profiles := s.profiles
+		s.mu.Unlock()
+		meta := map[string]any{"termsOfService": s.u("/terms")}
+		if len(profiles) > 0 {
+			meta["profiles"] = profiles
+		}
+		writeJSON(w, map[string]any{
+			"newNonce": s.u("/new-nonce"), "newAccount": s.u("/new-account"), "newOrder": s.u("/new-order"),
+			"revokeCert": s.u("/revoke-cert"), "meta": meta,
+		})
 		return
 	}
 
@@ -259,7 +311,19 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = fmt.Fprintf(w, `{"status":"valid","orders":%q}`, s.u("/account/1/orders"))
 	case r.URL.Path == "/new-order":
+		orderBody, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		profile := requestedProfile(orderBody)
 		s.mu.Lock()
+		if profile != "" {
+			if _, offered := s.profiles[profile]; !offered {
+				s.mu.Unlock()
+				w.Header().Set("Content-Type", "application/problem+json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:invalidProfile","detail":"profile %s is not offered"}`, profile)
+				return
+			}
+		}
+		s.orderProfiles = append(s.orderProfiles, profile)
 		s.orders++
 		n := s.orders
 		requireDV := s.requireDV

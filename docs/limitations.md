@@ -4210,9 +4210,10 @@ This is a deliberate, documented trust boundary, not an accident.
   external account credentials over the API, because that would mean returning a
   shared MAC secret in a response body; the HMAC key stays byte-backed in locked
   memory where configuration put it and appears in no served response, in any
-  encoding. Per-credential profile selection is **not** served: the tenant's
-  `ca.default_profile` supplies one active profile to every ACME account, and
-  the server reads its authentication mode for each order. The served disable
+  encoding. Per-credential profile selection is served: `keys[].profile` pins
+  the tenant profile every order under that credential is issued with (the
+  server reads that profile's authentication mode and signs under it), and
+  without a pin the tenant's `ca.default_profile` applies. The served disable
   verb cannot re-enable a credential that configuration disables; config is
   the floor.
 - EST (RFC 7030), SCEP (RFC 8894), CMP (RFC 4210/6712), the SPIFFE Workload
@@ -5053,23 +5054,19 @@ Found by the cold design-partner run 20260906t143500z (DP2-036, DP2-037).
 
 ## ACME certificate profiles
 
-trstctl's ACME client (the `letsencrypt` external CA type, built on `x/crypto/acme`)
-does not send the `profile` field of draft-ietf-acme-profiles in `newOrder`, and the
-external CA configuration has no way to name one. The certificate lifetime is therefore
-whatever the authority applies to an order without a profile:
-
-- Let's Encrypt production applies its classic profile today; when the short-lived
-  (six-day) profile becomes a default it will apply without any change on this side.
-- Pebble 2.10 picks a **random** profile for such orders ("in true pebble chaos fashion"),
-  so its stock configuration alternates between 90-day and 6-day certificates. The
-  partner lab pins Pebble to a single 90-day profile (`deploy/demo/lab/pebble-config.json`)
-  so lab issuance is deterministic.
-
-When an external CA returns a certificate whose whole lifetime is shorter than the
-tenant's expiry alert window, the control plane logs a WARN naming the tenant and the
-authority; the ordinary expiry alert then fires immediately, which is honest but noisy.
-Profile selection will follow once the ACME client can express it. Found by the cold
-design-partner run 20260906t143500z (DP2-032).
+Both directions of draft-ietf-acme-profiles are served. trstctl's ACME client (the
+`letsencrypt` external CA type) requests the profile named by the authority's
+`acme_profile` configuration on every `newOrder`, and only when the authority's
+directory advertises it in `meta.profiles`: an unadvertised or misspelled name
+fails before an order exists. With no `acme_profile` the authority applies its
+own default, as before. trstctl's ACME server advertises its offered profiles in
+`meta.profiles` (the mount's default plus every credential-pinned profile), accepts
+a client's `profile` member when it names an advertised profile, and refuses an
+unknown one with `invalidProfile`; a `protocols.acme_eab.keys[].profile` pins the
+profile every order under that credential is issued with, and a client asking for
+a different one is refused. The selected profile is recorded on the order and the
+served issuance signs under it. A live profile request against Let's Encrypt's
+production directory is not part of local evidence.
 
 ## Upstream domain validation
 

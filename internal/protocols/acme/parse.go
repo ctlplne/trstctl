@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/protocols/ari"
@@ -69,6 +70,9 @@ type Identifier struct {
 type OrderRequest struct {
 	Identifiers []Identifier
 	Replaces    string // ARI (RFC 9773): the certificate identifier this order renews
+	// Profile is the draft-ietf-acme-profiles profile the client asks for
+	// (A56). Empty means the server chooses.
+	Profile string
 }
 
 // ParseOrderRequest decodes and validates a newOrder payload. It is the single
@@ -85,14 +89,18 @@ func ParseOrderRequest(payload []byte) (OrderRequest, error) {
 			Value string `json:"value"`
 		} `json:"identifiers"`
 		Replaces string `json:"replaces"`
+		Profile  string `json:"profile"`
 	}
 	if err := json.Unmarshal(payload, &raw); err != nil {
 		return OrderRequest{}, fmt.Errorf("acme: malformed newOrder: %w", err)
 	}
+	if strings.ContainsAny(raw.Profile, "\r\n\t") || len(raw.Profile) > 128 {
+		return OrderRequest{}, fmt.Errorf("acme: profile is not a valid profile name")
+	}
 	if len(raw.Identifiers) == 0 {
 		return OrderRequest{}, fmt.Errorf("acme: newOrder requests no identifiers")
 	}
-	out := OrderRequest{Replaces: raw.Replaces}
+	out := OrderRequest{Replaces: raw.Replaces, Profile: strings.TrimSpace(raw.Profile)}
 	for i, id := range raw.Identifiers {
 		if id.Type != "dns" {
 			return OrderRequest{}, fmt.Errorf("acme: identifier %d has unsupported type %q (only dns)", i, id.Type)
