@@ -240,14 +240,14 @@ export function Connectors() {
     let cancelled = false;
     setTargetReadiness(null);
     if (!selectedTarget) return;
-    api
-      .connectorTarget(selectedTarget)
-      .then((detail) => {
-        if (!cancelled) setTargetReadiness(detail.rollback_readiness ?? null);
-      })
-      .catch(() => {
+    void (async () => {
+      try {
+        const detail = await api.connectorTarget(selectedTarget);
+        if (!cancelled) setTargetReadiness(detail?.rollback_readiness ?? null);
+      } catch {
         if (!cancelled) setTargetReadiness(null);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };

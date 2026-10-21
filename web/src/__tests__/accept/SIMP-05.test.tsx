@@ -179,7 +179,7 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
 
     await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ provider: "aws", algorithm: "ECDSA-P256" }));
     expect(await screen.findByText("kms/root-1")).toBeInTheDocument();
-    expect(screen.getByText("ECDSA-P256")).toBeInTheDocument();
+    expect(screen.getByText("ECDSA-P256", { selector: ":not(option)" })).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY|PRIVATE KEY-----/)).not.toBeInTheDocument();

@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     agentPage: vi.fn(),
     connectorCatalog: vi.fn(),
     connectorTargets: vi.fn(),
+    connectorTarget: vi.fn(),
     identities: vi.fn(),
     identityPage: vi.fn(),
     getIdentity: vi.fn(),
