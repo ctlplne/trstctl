@@ -1351,8 +1351,8 @@ not this file.
 | `internal/secretscan/thirdparty.go:100` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
 | `internal/secretscan/thirdparty.go:104` | operator-owned signature path from the reviewed source config (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
-| `internal/server/agent_roles_served_test.go:487` | path is a t.TempDir fixture (CWE-22). |
-| `internal/server/agent_roles_served_test.go:491` | path is a t.TempDir fixture (CWE-22). |
+| `internal/server/agent_roles_served_test.go:509` | path is a t.TempDir fixture (CWE-22). |
+| `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agentchannel.go:125` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:143` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:207` | operator-invoked backup/restore over its own configured directory (CWE-22) |

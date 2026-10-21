@@ -2481,7 +2481,7 @@ func (o *Orchestrator) recordConnectorDelivery(
 		Connector: r.Connector, Target: r.Target, Fingerprint: r.Fingerprint,
 		Status: r.Status, Attempts: r.Attempts, Reason: r.Reason, Detail: r.Detail,
 		RollbackRef: r.RollbackRef, IdempotencyKey: r.IdempotencyKey,
-		AdoptedPredecessorFingerprint: r.AdoptedPredecessorFingerprint,
+		AdoptedPredecessorFingerprint: r.AdoptedPredecessor,
 	})
 	if err != nil {
 		return store.ConnectorDeliveryReceipt{}, err

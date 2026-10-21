@@ -716,10 +716,10 @@ func (a *agentService) recordAgentConnectorDelivery(
 		Destination: "connector.deploy", Connector: intent.Connector, Target: intent.Target,
 		Fingerprint: fingerprint, Status: receiptStatus,
 		Attempts: req.Attempt, Reason: reason,
-		Detail:                        detail,
-		RollbackRef:                   rollbackRef,
-		IdempotencyKey:                claim.IdempotencyKey,
-		AdoptedPredecessorFingerprint: adopted,
+		Detail:             detail,
+		RollbackRef:        rollbackRef,
+		IdempotencyKey:     claim.IdempotencyKey,
+		AdoptedPredecessor: adopted,
 	})
 	if err != nil {
 		return err

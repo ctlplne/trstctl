@@ -6431,7 +6431,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Fingerprint: pl.Fingerprint, Status: pl.Status, Attempts: pl.Attempts,
 			Reason: pl.Reason, Detail: pl.Detail, RollbackRef: pl.RollbackRef,
 			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
-			AdoptedPredecessorFingerprint: pl.AdoptedPredecessorFingerprint,
+			AdoptedPredecessor: pl.AdoptedPredecessorFingerprint,
 		}
 		if err := p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, receipt); err != nil {
 			return err

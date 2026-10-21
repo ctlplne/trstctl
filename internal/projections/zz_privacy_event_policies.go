@@ -32,6 +32,9 @@ type privacyConnectorDeliveryRecordedV1 struct {
 	Detail           string  `json:"detail,omitempty"`
 	RollbackRef      string  `json:"rollback_ref,omitempty"`
 	IdempotencyKey   string  `json:"idempotency_key,omitempty"`
+	// A45: the pre-trstctl pair a host agent adopted on its first deploy to
+	// the target; absent on every receipt written before adoption existed.
+	AdoptedPredecessorFingerprint string `json:"adopted_predecessor_fingerprint,omitempty"`
 }
 
 // Version-one member events predate explicit provisioning identities. Keep
@@ -84,6 +87,11 @@ type privacyDiscoveryRunQueued struct {
 	BindDN             string `json:"bind_dn,omitempty"`
 	PasswordRef        string `json:"password_ref,omitempty"`
 	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
+	// The AD CS command also carries its bounded enrollment-endpoint checks and
+	// private-egress policy; all three are public target descriptions.
+	EnrollmentEndpoints  []adcsdiscovery.EnrollmentEndpointTarget `json:"enrollment_endpoints,omitempty"`
+	AllowPrivateEndpoint bool                                     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string                                 `json:"private_egress_cidrs,omitempty"`
 }
 
 // privacyADCSTemplateDriftV1 is the historical append-only payload. It is

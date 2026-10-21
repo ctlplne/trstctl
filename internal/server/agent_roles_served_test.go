@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -69,6 +70,11 @@ func newRoleHarnessWithDeps(t *testing.T, roles, claimable []string, options ...
 	return newRoleHarnessWithEventOptions(t, roles, claimable, nil, options...)
 }
 
+// withSyntheticEventTypes opts one role harness out of the binary's privacy
+// policy gate, for tests that append event types no catalog registers (padding,
+// fault injection). Every other harness refuses an unregistered payload.
+var withSyntheticEventTypes events.OpenOption = func(*events.Log) {}
+
 func newRoleHarnessWithEventOptions(t *testing.T, roles, claimable []string, eventOptions []events.OpenOption, options ...func(*Deps)) *roleHarness {
 	return newRoleHarnessNamedWithEventOptions(t, "role-agent", roles, claimable, eventOptions, options...)
 }
@@ -79,6 +85,22 @@ func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, 
 		d.AgentClaimableJobKinds = claimable
 	}}
 	deps = append(deps, options...)
+	// Same gate as the binary: a report whose receipt payload has no registered
+	// privacy shape must fail here, not on the first host deploy. Only a test
+	// that names withSyntheticEventTypes runs without it.
+	gated := true
+	kept := make([]events.OpenOption, 0, len(eventOptions)+1)
+	for _, opt := range eventOptions {
+		if reflect.ValueOf(opt).Pointer() == reflect.ValueOf(withSyntheticEventTypes).Pointer() {
+			gated = false
+			continue
+		}
+		kept = append(kept, opt)
+	}
+	if gated {
+		kept = append(kept, events.WithRequiredPrivacyEventPolicies())
+	}
+	eventOptions = kept
 	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, deps...)
 	if !h.srv.AgentChannelServed() {
 		t.Fatal("agent channel is not served")

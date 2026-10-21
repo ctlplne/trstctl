@@ -187,7 +187,7 @@ func TestHostRotationRejectsUnrelatedTenantAndRetirementGeneration(t *testing.T)
 }
 
 func TestHostRotationReceiptLookupResumesAcrossBoundedPasses(t *testing.T) {
-	f := newHostRotationResultFixture(t)
+	f := newHostRotationResultFixture(t, withSyntheticEventTypes)
 	// Real retained traffic between run creation and the signed host report.
 	// A report has a fixed read budget even when unrelated tenants are busy.
 	for i := 0; i < hostRotationLookupPage*3; i++ {

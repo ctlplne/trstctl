@@ -33,12 +33,12 @@ type ConnectorDeliveryReceipt struct {
 	Detail         string
 	RollbackRef    string
 	IdempotencyKey string
-	// AdoptedPredecessorFingerprint is the pair a host agent found installed
+	// AdoptedPredecessor is the fingerprint of the pair a host agent found installed
 	// before its first deploy to the target and retained as the rollback
 	// predecessor (A45); empty for every other receipt.
-	AdoptedPredecessorFingerprint string
-	CreatedAt                     time.Time
-	UpdatedAt                     time.Time
+	AdoptedPredecessor string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // RotationRun is the projected evidence for one lifecycle renewal/rotation
@@ -78,7 +78,7 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		 ON CONFLICT DO NOTHING`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessorFingerprint)
+		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessor)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
         AND coalesce(latest_event_sequence, 0) <= $16`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessorFingerprint)
+		r.IdempotencyKey, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessor)
 	if err != nil {
 		return err
 	}
@@ -489,7 +489,7 @@ func scanConnectorDeliveryReceipt(row pgx.Row, r *ConnectorDeliveryReceipt) erro
 	)
 	err := row.Scan(&r.ID, &r.TenantID, &outboxID, &identityID, &r.Destination, &r.Connector,
 		&r.Target, &r.Fingerprint, &r.Status, &r.Attempts, &r.Reason, &r.Detail,
-		&r.RollbackRef, &r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt, &r.AdoptedPredecessorFingerprint)
+		&r.RollbackRef, &r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt, &r.AdoptedPredecessor)
 	if err != nil {
 		return err
 	}
