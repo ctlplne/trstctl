@@ -504,6 +504,138 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "remove_trust", 1)
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted)
 	assertMigrationStatusAUD40(t, h, failedRun.ID, migration.RunRolledBack, migration.PhaseRolledBack)
+
+	runOfflineRootMigrationAUD40(t, h, offlineRootMigrationFixture{
+		caOperator: caOperator, caApprover: caApprover, token: token, identityID: identityID,
+		trustPath: trustPath, dnsName: dnsName, fixture: fixture, channel: channel, profile: profile, state: state,
+	})
+}
+
+type offlineRootMigrationFixture struct {
+	caOperator, caApprover, token, identityID, trustPath, dnsName string
+	fixture                                                       *os.Root
+	channel                                                       *servedHostRelayChannel
+	profile                                                       connector.LocalOpsConfig
+	state                                                         *agentrelay.HostRollbackStore
+}
+
+// A migration to an imported offline root (A36): the root cannot sign, so the
+// run is refused until a signer-backed intermediate hangs under it; then the
+// successor is minted by that intermediate while the host receives the ROOT
+// certificate as its trust anchor.
+func runOfflineRootMigrationAUD40(t *testing.T, h *roleHarness, f offlineRootMigrationFixture) {
+	t.Helper()
+	ctx := context.Background()
+	offlineRootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(offlineRootKey.Destroy)
+	rootProfile := crypto.HierarchyCAProfile{
+		CommonName: "AUD40 offline root", MaxPathLen: 1, TTL: 365 * 24 * time.Hour,
+		PermittedDNSDomains: []string{f.dnsName}, EKUs: []string{"serverAuth"},
+	}
+	offlineRoot, err := crypto.SelfSignedHierarchyCA(offlineRootKey, rootProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPEM := string(offlineRoot.CertificatePEM)
+	rootSpec := map[string]any{
+		"common_name": rootProfile.CommonName, "max_path_len": 1,
+		"ttl_seconds":           int64(rootProfile.TTL.Seconds()),
+		"permitted_dns_domains": rootProfile.PermittedDNSDomains, "extended_key_usages": rootProfile.EKUs,
+		"signature_algorithm": "ecdsa-p256",
+	}
+	rootCeremony := createCACeremonyWithCertificate(t, h.servedHarness, f.caOperator, "import_offline_root", rootPEM, rootSpec, 1, "aud40-offline-root-ceremony")
+	approveCACeremony(t, h.servedHarness, f.caApprover, rootCeremony.ID, 1, "aud40-offline-root-approval")
+	root := importOfflineRootCA(t, h.servedHarness, f.caOperator, rootCeremony.ID, rootPEM, rootSpec, "aud40-offline-root-import")
+	if root.SignerHandle != "" {
+		t.Fatalf("offline root = %+v; want no signer handle", root)
+	}
+
+	startBody := map[string]any{
+		"plan_id": "plan-aud40-offline", "new_authority_id": root.ID,
+		"waves": []any{map[string]any{
+			"id": "canary", "ordinal": 1,
+			"members": []any{map[string]any{
+				"identity_id": f.identityID, "agent_id": agentRowID(h.tenant, h.agent),
+				"trust_anchor_path": f.trustPath,
+			}},
+		}},
+	}
+	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs", f.token, "aud40-offline-start-no-intermediate", startBody)
+	if statusCode != http.StatusBadRequest || !bytes.Contains(body, []byte("signer-backed intermediate")) {
+		t.Fatalf("offline root without an issuing intermediate started a migration: %d %s", statusCode, body)
+	}
+
+	interSpec := map[string]any{
+		"common_name": "AUD40 offline issuing intermediate", "max_path_len": 0,
+		"ttl_seconds":           int64((30 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{f.dnsName}, "extended_key_usages": []string{"serverAuth"},
+		"signature_algorithm": "ecdsa-p256",
+	}
+	interCeremony := createCACeremony(t, h.servedHarness, f.caOperator, "create_offline_intermediate", root.ID, interSpec, 1, "aud40-offline-intermediate-ceremony")
+	approveCACeremony(t, h.servedHarness, f.caApprover, interCeremony.ID, 1, "aud40-offline-intermediate-approval")
+	csr := createOfflineIntermediateCSR(t, h.servedHarness, f.caOperator, root.ID, interCeremony.ID, interSpec, "aud40-offline-intermediate-csr")
+	signed, err := crypto.SignIntermediateHierarchyCAFromCSR(offlineRoot.CertificateDER, offlineRootKey, csrDERFromPEMForTest(t, csr.CSRPem), crypto.HierarchyCAProfile{
+		CommonName: "AUD40 offline issuing intermediate", MaxPathLen: 0, TTL: 30 * 24 * time.Hour,
+		PermittedDNSDomains: []string{f.dnsName}, EKUs: []string{"serverAuth"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inter := importOfflineIntermediateCA(t, h.servedHarness, f.caOperator, root.ID, interCeremony.ID, string(signed.CertificatePEM), interSpec, "aud40-offline-intermediate-import")
+
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs", f.token, "aud40-offline-start", startBody)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("start migration to offline root = %d %s", statusCode, body)
+	}
+	var run migration.Run
+	if err := json.Unmarshal(body, &run); err != nil {
+		t.Fatal(err)
+	}
+	binding := run.Waves[0].Members[0].Binding
+	if binding.IssuingAuthorityID != inter.ID || !bytes.Equal(bytes.TrimSpace(binding.TrustAnchorPEM), bytes.TrimSpace([]byte(rootPEM))) {
+		t.Fatalf("offline-root member binding issuer=%s anchor matches root=%v; want the intermediate to issue and the root as anchor",
+			binding.IssuingAuthorityID, bytes.Equal(bytes.TrimSpace(binding.TrustAnchorPEM), bytes.TrimSpace([]byte(rootPEM))))
+	}
+
+	// Trust first, then the successor: the host installs the root anchor and
+	// the intermediate-signed leaf; the static listener still serves the
+	// predecessor, so the live gate fails and the run rolls back as before.
+	runAgentPassAUD40(t, f.channel, f.profile, f.state, transport.JobOutcomeExecuted)
+	installedTrust, err := f.fixture.ReadFile(filepath.Base(f.trustPath))
+	if err != nil || !bytes.Equal(bytes.TrimSpace(installedTrust), bytes.TrimSpace([]byte(rootPEM))) {
+		t.Fatalf("installed trust is not the offline root certificate: err=%v", err)
+	}
+	runAgentPassAUD40(t, f.channel, f.profile, f.state, transport.JobOutcomeVerifyFailed)
+	successorPEM, err := f.fixture.ReadFile("listener.crt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorDER, err := mtls.FirstCertDER(successorPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := crypto.VerifyLeafSignedByCA(successorDER, caCertDER(t, []byte(signed.CertificatePEM))); err != nil {
+		t.Fatalf("successor leaf was not minted by the offline root's intermediate: %v", err)
+	}
+	if err := crypto.VerifyLeafSignedByCA(successorDER, caCertDER(t, []byte(rootPEM))); err == nil {
+		t.Fatal("successor leaf claims to be signed by the offline root, whose key the control plane never held")
+	}
+	successorInfo, err := certinfo.Inspect(successorDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issued, found, err := h.store.LookupIssuedCert(ctx, h.tenant, inter.ID, successorInfo.SerialNumber); err != nil || !found || issued.Revoked() {
+		t.Fatalf("successor responder authority = %+v found=%v err=%v; want the intermediate %s", issued, found, err, inter.ID)
+	}
+	assertMigrationStatusAUD40(t, h, run.ID, migration.RunRollingBack, migration.PhaseVerifyingLive)
+	runAgentPassAUD40(t, f.channel, f.profile, f.state, transport.JobOutcomeVerified)
+	runAgentPassAUD40(t, f.channel, f.profile, f.state, transport.JobOutcomeExecuted)
+	assertMigrationStatusAUD40(t, h, run.ID, migration.RunRolledBack, migration.PhaseRolledBack)
 }
 
 func runAgentPassAUD40(t *testing.T, channel *servedHostRelayChannel, profile connector.LocalOpsConfig, state *agentrelay.HostRollbackStore, wantOutcome string) {

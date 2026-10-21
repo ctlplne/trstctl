@@ -3367,11 +3367,21 @@ than sending an operator looking for a credential that was never there.
   any other address or name, so a client that connects by IP keeps working after
   the migration. The same binding shape serves host-generated renewal and CA
   re-protection, so an IP-SAN leaf renews and re-protects on the host path too.
-  Network-appliance, cloud-store, externally issued, email/URI SAN, and
-  offline-authority migrations are refused at start rather than represented as
-  executable: an rfc822Name or URI identity is not a host listener identity, the
-  binding cannot express it, and narrowing it silently would drop an identifier
-  some client relies on.
+  Network-appliance, cloud-store, externally issued, and email/URI SAN
+  migrations are refused at start rather than represented as executable: an
+  rfc822Name or URI identity is not a host listener identity, the binding cannot
+  express it, and narrowing it silently would drop an identifier some client
+  relies on. An imported offline root may be named as the new authority: its key
+  never enters the signer, so successors are issued by the root's one active
+  signer-backed intermediate (imported through the offline-intermediate
+  ceremony) while the root certificate is the anchor hosts receive; the member
+  binding records that intermediate as the issuing authority. An offline root
+  with no such intermediate is refused at start with the ceremony to run, and
+  one with several is refused until the operator names the issuing intermediate
+  itself, which then makes that intermediate the distributed anchor. A
+  host-generated successor that fails its live gate keeps its sealed key on the
+  host for the same job to resume; rolling that successor back now frees the
+  slot, so the next host-generated job for the target generates its own key.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`
   (store → issuer, oriented the way impact travels) and `HOSTS` (resource → store).

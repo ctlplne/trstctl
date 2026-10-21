@@ -245,8 +245,22 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 		return migration.Run{}, errors.New("plan_id, new_authority_id, and at least one wave are required")
 	}
 	authority, err := a.store.GetCAAuthority(ctx, tenantID, req.NewAuthorityID)
-	if err != nil || authority.Status != "active" || strings.TrimSpace(authority.SignerHandle) == "" {
-		return migration.Run{}, errors.New("new_authority_id must name an active signer-backed CA authority in this tenant")
+	if err != nil || authority.Status != "active" {
+		return migration.Run{}, errors.New("new_authority_id must name an active CA authority in this tenant")
+	}
+	// The named authority is the anchor hosts will trust. It is also the
+	// issuer, unless it is an imported offline root (A36): that key never
+	// enters the signer, so successors are minted by its one active
+	// signer-backed intermediate while the root certificate stays the anchor.
+	issuer := authority
+	if strings.TrimSpace(authority.SignerHandle) == "" {
+		authorities, err := a.store.ListCAAuthorities(ctx, tenantID)
+		if err != nil {
+			return migration.Run{}, err
+		}
+		if issuer, err = migrationIssuingAuthority(authority, authorities); err != nil {
+			return migration.Run{}, err
+		}
 	}
 	anchorPEM := []byte(strings.TrimSpace(authority.CertificatePEM))
 	if len(anchorPEM) == 0 || len(anchorPEM) > 64<<10 {
@@ -260,7 +274,7 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 	for _, requestedWave := range req.Waves {
 		wave := migration.RunWave{ID: strings.TrimSpace(requestedWave.ID), Ordinal: requestedWave.Ordinal}
 		for _, requestedMember := range requestedWave.Members {
-			member, err := a.buildMigrationMember(ctx, tenantID, authority.ID, anchorPEM, anchor.SHA256Fingerprint,
+			member, err := a.buildMigrationMember(ctx, tenantID, issuer.ID, anchorPEM, anchor.SHA256Fingerprint,
 				requestedMember.IdentityID, requestedMember.AgentID, requestedMember.TrustAnchorPath)
 			if err != nil {
 				return migration.Run{}, err
@@ -366,6 +380,44 @@ func (a *API) buildMigrationMember(
 		PredecessorCertificateID: predecessor.ID,
 		PredecessorFingerprint:   cleanMigrationFingerprint(predecessor.Fingerprint),
 	}}, nil
+}
+
+// migrationIssuingAuthority picks the authority that signs successors for a
+// run whose new authority is the given one (A36).
+//
+// A signer-backed authority issues for itself. An imported offline root has no
+// signer handle, so it can be the anchor but never the issuer; the run then
+// issues under the root's one active signer-backed intermediate, imported
+// through the offline-intermediate ceremony. Two such intermediates make the
+// choice an operator's, not a guess: they name the issuing intermediate
+// instead, which also makes that intermediate the distributed anchor. An
+// intermediate without a signer key, or any inactive authority, cannot issue.
+func migrationIssuingAuthority(authority store.CAAuthority, authorities []store.CAAuthority) (store.CAAuthority, error) {
+	if authority.Status != "active" {
+		return store.CAAuthority{}, errors.New("new_authority_id must name an active CA authority in this tenant")
+	}
+	if strings.TrimSpace(authority.SignerHandle) != "" {
+		return authority, nil
+	}
+	if authority.Kind != "root" {
+		return store.CAAuthority{}, errors.New("new_authority_id names an intermediate with no signer key; only a signer-backed authority or an imported offline root with a signer-backed intermediate can issue successors")
+	}
+	var issuers []store.CAAuthority
+	for _, candidate := range authorities {
+		if candidate.Status != "active" || strings.TrimSpace(candidate.SignerHandle) == "" ||
+			candidate.ParentID == nil || *candidate.ParentID != authority.ID {
+			continue
+		}
+		issuers = append(issuers, candidate)
+	}
+	switch len(issuers) {
+	case 0:
+		return store.CAAuthority{}, errors.New("new_authority_id names an offline root with no active signer-backed intermediate; import one through the offline-intermediate ceremony before migrating to this root")
+	case 1:
+		return issuers[0], nil
+	default:
+		return store.CAAuthority{}, errors.New("new_authority_id names an offline root with more than one active signer-backed intermediate; name the issuing intermediate as the new authority instead")
+	}
 }
 
 // migrationMemberSubject freezes what the successor may certify from the

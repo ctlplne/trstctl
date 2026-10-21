@@ -422,9 +422,11 @@ The REST equivalents are `POST /api/v1/migrations/runs`, `GET
 routes below that run. The current executable boundary is internally issued X.509
 identities carrying DNS names, IP addresses or both, deployed by enabled host-agent
 connectors with a configured verification listener; the successor the host requests
-asserts exactly the predecessor's names and addresses. Identities carrying an email
-or URI SAN, and every other unsupported membership, are rejected before any trust
-job is published.
+asserts exactly the predecessor's names and addresses. The new authority may be a
+signer-backed CA or an imported offline root; for an offline root the successors
+are issued by its one active signer-backed intermediate and the root certificate is
+the anchor distributed to hosts. Identities carrying an email or URI SAN, and every
+other unsupported membership, are rejected before any trust job is published.
 The run pins each identity's active certificate-profile revision and effective
 validity into the immutable member and successor job. The current fleet runner
 does not collect distinct issuance approvals, so it refuses an approval-required
