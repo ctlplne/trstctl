@@ -366,7 +366,16 @@ func schemas() map[string]*api.Schema {
 			"rollback_configured":         api.BooleanSchema(),
 			"migration_progress":          api.SchemaRef("CBOMMigrationProgress"),
 			"queued_at":                   api.TimestampSchema(),
-		}, "run_id", "queued", "certificate_reissues_queued", "tls_findings_queued", "target_algorithm", "effective_algorithm", "protocol", "rollback_configured", "migration_progress", "queued_at"),
+			// A start under an approval-required profile answers with these
+			// instead of a run (A40): status is pending_approval and no run_id
+			// exists until the exact approval is consumed by a later start.
+			"status":              {Type: "string", Enum: []string{"pending_approval"}},
+			"approval_request_id": api.StringSchema(),
+			"intent_digest":       api.StringSchema(),
+			"required_approvals":  api.IntegerSchema(),
+			"approval_count":      api.IntegerSchema(),
+			"detail":              api.StringSchema(),
+		}, "target_algorithm", "protocol"),
 		"PQCMigrationFindingProgress": api.ObjectSchema(map[string]*api.Schema{
 			"run_id": api.StringSchema(), "asset_id": api.StringSchema(), "finding_kind": api.StringSchema(),
 			"target_id": api.StringSchema(), "target_revision": api.StringSchema(), "connector": api.StringSchema(),
