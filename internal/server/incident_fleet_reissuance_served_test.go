@@ -16,6 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/audit"
@@ -30,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -576,6 +580,7 @@ func assertIncidentTerminalAUD41(t *testing.T, h *roleHarness, token, runID, ide
 		if !sameMembers(run.ReplacementIdentityIDs, []string{identityID}) || !sameMembers(run.RevokedIdentityIDs, []string{identityID}) {
 			t.Fatalf("executed identity evidence replacements=%v revoked=%v", run.ReplacementIdentityIDs, run.RevokedIdentityIDs)
 		}
+		assertComputedFleetGatesA20A21(t, h, token, run)
 	} else if !sameMembers(run.FailedTargets, []string{identityID}) || len(run.RevokedIdentityIDs) != 0 {
 		t.Fatalf("rollback evidence failed=%v revoked=%v", run.FailedTargets, run.RevokedIdentityIDs)
 	}
@@ -615,4 +620,93 @@ func sameMembers(got, want []string) bool {
 		seen[value]--
 	}
 	return true
+}
+
+// A20/A21: after the run executed, the graph enumeration gate passes because
+// nothing live is signed by the compromised CA outside the run, and the
+// revocation publication gate stays unevaluated until R1 has observed the
+// issuer's endpoints: a fresh observation after the run's last change passes
+// it, a stale one fails it.
+func assertComputedFleetGatesA20A21(t *testing.T, h *roleHarness, token string, run store.IncidentFleetReissuanceRun) {
+	t.Helper()
+	type gateView struct {
+		Name   string `json:"name"`
+		Status string `json:"status"`
+	}
+	type runView struct {
+		HealthGates                        []gateView `json:"health_gates"`
+		GraphEnumerationMissingIdentityIDs []string   `json:"graph_enumeration_missing_identity_ids"`
+		RevocationPublication              struct {
+			Observed bool `json:"observed"`
+			Fresh    int  `json:"fresh"`
+			Stale    int  `json:"stale"`
+			Current  bool `json:"current"`
+		} `json:"revocation_publication"`
+	}
+	read := func() runView {
+		t.Helper()
+		statusCode, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/incidents/fleet-reissuance-runs/"+run.ID, token, nil)
+		if statusCode != http.StatusOK {
+			t.Fatalf("read run: %d %s", statusCode, body)
+		}
+		var view runView
+		if err := json.Unmarshal(body, &view); err != nil {
+			t.Fatalf("decode run: %v", err)
+		}
+		return view
+	}
+	gate := func(view runView, name string) string {
+		for _, g := range view.HealthGates {
+			if g.Name == name {
+				return g.Status
+			}
+		}
+		t.Fatalf("run reports no %q gate: %+v", name, view.HealthGates)
+		return ""
+	}
+	view := read()
+	if got := gate(view, "graph enumeration"); got != servedstatus.FleetGatePassed || len(view.GraphEnumerationMissingIdentityIDs) != 0 {
+		t.Fatalf("graph enumeration after execution = %q missing=%v, want passed with nothing missing", got, view.GraphEnumerationMissingIdentityIDs)
+	}
+	if got := gate(view, "revocation publication"); got != servedstatus.FleetGateNotEvaluated || view.RevocationPublication.Observed {
+		t.Fatalf("revocation publication without observations = %q observed=%t, want not_evaluated", got, view.RevocationPublication.Observed)
+	}
+	issuer, err := h.store.GetIssuer(t.Context(), h.tenant, run.IssuerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caDER, err := certinfo.LeafDER([]byte(issuer.Chain[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := certinfo.Inspect(caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observe := func(key, status string, thisUpdate time.Time) {
+		t.Helper()
+		observed := time.Now().UTC()
+		row := store.RevocationEndpointHealth{
+			TenantID: h.tenant, TargetKey: crypto.SHA256Hex([]byte("target-" + key)), Protocol: "crl", Endpoint: "http://crl.aud41.test/" + key,
+			IssuerSubject: info.Subject, IssuerFingerprint: info.SHA256Fingerprint, Status: status, DetailCode: status,
+			CertificateID: uuid.NewString(), CertificateSubject: "aud41 leaf", CertificateFingerprint: "aud41-" + key, CertificateSerial: "01",
+			ThisUpdate: &thisUpdate, SignatureVerified: true, ProbeID: uuid.NewString(), Bucket: "aud41",
+			ObservedByAgentID: uuid.NewString(), ObservedByAgentName: "aud41-agent", EvidenceDigest: crypto.SHA256Hex([]byte(key)), ObservedAt: observed, BatchIndex: 1, BatchCount: 1,
+		}
+		if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+			return h.store.ApplyRevocationEndpointHealthObservedTx(t.Context(), tx, []store.RevocationEndpointHealth{row})
+		}); err != nil {
+			t.Fatalf("seed revocation health observation: %v", err)
+		}
+	}
+	observe("aud41-fresh", "fresh", run.UpdatedAt.Add(time.Minute))
+	view = read()
+	if got := gate(view, "revocation publication"); got != servedstatus.FleetGatePassed || !view.RevocationPublication.Current || view.RevocationPublication.Fresh != 1 {
+		t.Fatalf("revocation publication with a fresh current observation = %q %+v, want passed", got, view.RevocationPublication)
+	}
+	observe("aud41-stale", "stale", run.UpdatedAt.Add(time.Minute))
+	view = read()
+	if got := gate(view, "revocation publication"); got != servedstatus.FleetGateFailed || view.RevocationPublication.Stale != 1 {
+		t.Fatalf("revocation publication with a stale endpoint = %q %+v, want failed (failure dominates)", got, view.RevocationPublication)
+	}
 }

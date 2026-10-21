@@ -16330,6 +16330,16 @@
             },
             "type": "array"
           },
+          "graph_enumeration_live_identities": {
+            "type": "integer"
+          },
+          "graph_enumeration_missing_identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "graph_impact": {
             "$ref": "#/components/schemas/GraphImpact"
           },
@@ -16393,6 +16403,29 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "revocation_publication": {
+            "properties": {
+              "current": {
+                "type": "boolean"
+              },
+              "expiring": {
+                "type": "integer"
+              },
+              "fresh": {
+                "type": "integer"
+              },
+              "observed": {
+                "type": "boolean"
+              },
+              "stale": {
+                "type": "integer"
+              },
+              "unreachable": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
           },
           "revoked_identity_ids": {
             "items": {

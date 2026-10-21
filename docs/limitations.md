@@ -5082,10 +5082,20 @@ operator asserted is never overwritten by a computed one — they may have
 inspected something this control plane cannot see. Gates evaluate at read time,
 so a fleet that has since diverged stops showing a pass.
 
-The other two gates stay `not_evaluated` because nothing computes them: graph
-enumeration has no completeness oracle, and revocation publication is R1's
-freshness signal, which is not wired to a run. Saying so beats deriving them
-from something adjacent and calling it proof.
+The other two gates are computed on every read as well, and appended to a run
+that never named them. **Graph enumeration** re-reads the live store as its
+completeness oracle: every identity that still holds an active certificate
+signed by the compromised CA must be in the run's affected set, so a leaf the
+plan missed, or one issued under that CA after the plan, fails the gate by name
+(`graph_enumeration_missing_identity_ids`); an oracle that cannot read keeps it
+unevaluated. **Revocation publication** is R1's freshness signal narrowed to the
+compromised issuer: a stale or unreachable CRL/OCSP endpoint fails the gate, a
+fresh artifact whose `thisUpdate` predates the run's revocations keeps it
+unevaluated (it cannot carry them yet), and the gate passes only when a fresh
+or expiring observation postdates the run's last change
+(`revocation_publication` reports the counts). No observation for the issuer
+means no verdict. The watermark is the run's last state change, not each
+predecessor's exact revocation instant, which is the one approximation here.
 
 **Canary-first halts propagation.** Starting a run persists its cursor and
 publishes exactly one internal outbox command for batch one. The bounded worker

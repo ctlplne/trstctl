@@ -101,6 +101,14 @@ type fleetReissuanceRunResponse struct {
 	// is 99% verified has one endpoint nobody looked at, and during an incident
 	// that is exactly the endpoint worth knowing about.
 	UnverifiedReplacements int `json:"unverified_replacements"`
+	// A20: the graph enumeration gate's oracle. Live counts identities that
+	// still hold an active certificate signed by the compromised CA; Missing
+	// names the ones the run does not cover, which is what fails the gate.
+	GraphEnumerationLiveIdentities     int      `json:"graph_enumeration_live_identities"`
+	GraphEnumerationMissingIdentityIDs []string `json:"graph_enumeration_missing_identity_ids"`
+	// A21: R1's freshness observations for the compromised issuer behind the
+	// revocation publication gate.
+	RevocationPublication fleetRevocationPublicationResponse `json:"revocation_publication"`
 	// CanaryState is "pending", "healthy" or "failed" (epic D6). The first
 	// batch gates the rest: a canary that is not being served halts the
 	// remainder before it can propagate to the whole estate.
@@ -116,6 +124,16 @@ type fleetReissuanceRunResponse struct {
 	UpdatedAt             time.Time                   `json:"updated_at"`
 	ReplacementIdentities []identityResponse          `json:"replacement_identities,omitempty"`
 	ConnectorDeliveries   []connectorDeliveryResponse `json:"connector_deliveries,omitempty"`
+}
+
+// fleetRevocationPublicationResponse explains the revocation publication gate.
+type fleetRevocationPublicationResponse struct {
+	Observed    bool `json:"observed"`
+	Fresh       int  `json:"fresh"`
+	Expiring    int  `json:"expiring"`
+	Stale       int  `json:"stale"`
+	Unreachable int  `json:"unreachable"`
+	Current     bool `json:"current"`
 }
 
 type fleetReissuanceEvidenceResponse struct {
@@ -835,6 +853,28 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 		if delivery, err := a.store.GetConnectorDeliveryReceipt(ctx, tenantID, id); err == nil {
 			resp.ConnectorDeliveries = append(resp.ConnectorDeliveries, toConnectorDeliveryResponse(delivery))
 		}
+	}
+	if resp.GraphEnumerationMissingIdentityIDs == nil {
+		resp.GraphEnumerationMissingIdentityIDs = []string{}
+	}
+	// A20/A21: the graph enumeration and revocation publication gates are
+	// computed on every read, for both run shapes, from the live store and the
+	// revocation-health observations. A gate the run never carried is appended
+	// so the verdict is reported rather than implied.
+	if a.store != nil {
+		asserted := operatorAssertedGates(resp.HealthGates)
+		enumeration := a.fleetEnumerationOracle(ctx, tenantID, resp.IssuerID, resp.AffectedIdentityIDs)
+		resp.GraphEnumerationLiveIdentities = enumeration.Live
+		if len(enumeration.Missing) > 0 {
+			resp.GraphEnumerationMissingIdentityIDs = enumeration.Missing
+		}
+		resp.HealthGates = evaluateFleetComputedGate(resp.HealthGates, asserted, fleetGraphEnumerationGateName, fleetGraphEnumerationVerdict(enumeration))
+		publication := a.fleetRevocationPublicationOracle(ctx, tenantID, resp.IssuerID, resp.RevokedIdentityIDs, resp.UpdatedAt)
+		resp.RevocationPublication = fleetRevocationPublicationResponse{
+			Observed: publication.Evaluated, Fresh: publication.Fresh, Expiring: publication.Expiring,
+			Stale: publication.Stale, Unreachable: publication.Unreachable, Current: publication.Current,
+		}
+		resp.HealthGates = evaluateFleetComputedGate(resp.HealthGates, asserted, fleetRevocationPublicationGateName, fleetRevocationPublicationVerdict(publication))
 	}
 	// H3 rows are projections of H2's signed gate receipts. The legacy D6 read
 	// hydration below derives synthetic batch labels from replacement identities;

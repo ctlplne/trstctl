@@ -3962,6 +3962,8 @@ export interface FleetReissuanceRun {
   exact_trust_hosts: string[];
   exact_trust_store_ids: string[];
   failed_targets?: string[];
+  graph_enumeration_live_identities?: number;
+  graph_enumeration_missing_identity_ids?: string[];
   graph_impact: GraphImpact;
   halted_reason?: string;
   health_gates: FleetReissuanceHealthGate[];
@@ -3977,6 +3979,7 @@ export interface FleetReissuanceRun {
   replacement_authority_id?: string;
   replacement_identities?: Identity[];
   replacement_identity_ids: string[];
+  revocation_publication?: { current?: boolean; expiring?: number; fresh?: number; observed?: boolean; stale?: number; unreachable?: number };
   revoked_identity_ids: string[];
   rollback_refs: string[];
   status: string;

@@ -126,6 +126,19 @@ revocation event and CRL publication, the next startup or freshness sweep detect
 the newer revoked serial and republishes the CRL; operators should still verify
 the signed CRL or OCSP answer with a stock client.
 
+Three run-level health gates are computed on every read rather than asserted, and
+a gate an operator asserted is never overwritten. **Replacement deployment** comes
+from verification receipts (one failed replacement fails it; one unprobed
+replacement keeps it unevaluated). **Graph enumeration** re-reads the live store as
+its completeness oracle: an identity that still holds an active certificate signed
+by the compromised CA but is not in the run fails the gate and is named in
+`graph_enumeration_missing_identity_ids`. **Revocation publication** narrows the
+revocation-health observations to the compromised issuer: a stale or unreachable
+CRL/OCSP endpoint fails it, a fresh artifact older than the run's last change
+keeps it unevaluated, and a fresh or expiring observation after that change passes
+it; `revocation_publication` carries the counts, and no observation means no
+verdict.
+
 **Status:** compromised-issuer fleet re-issuance is served through
 `POST /api/v1/incidents/fleet-reissuance-runs`, with list/get evidence at
 `GET /api/v1/incidents/fleet-reissuance-runs{,/{id}}`, pause/resume/rollback evidence
