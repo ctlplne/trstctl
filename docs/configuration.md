@@ -320,6 +320,13 @@ CIDRs, custom roots, and mTLS identities are operator-owned:
     "name": "Let's Encrypt",
     "directory_url": "https://acme-v02.api.letsencrypt.org/directory"
   }, {
+    "id": "harica-tcs",
+    "type": "letsencrypt",
+    "name": "HARICA (GÉANT TCS)",
+    "directory_url": "https://acme.harica.gr/acme/directory",
+    "eab_key_id": "kid-issued-by-the-ca",
+    "eab_hmac_key_ref": "file:/run/secrets/harica-eab-hmac"
+  }, {
     "id": "shell-ca-prod",
     "type": "shellca",
     "name": "Isolated Shell CA",

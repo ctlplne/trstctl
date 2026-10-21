@@ -87,6 +87,16 @@ type ExternalCAConfig struct {
 	// Let's Encrypt or another ACME directory.
 	DirectoryURL string `json:"directory_url,omitempty"`
 
+	// External Account Binding for the upstream ACME account (RFC 8555 §7.3.4,
+	// A177). CAs such as CertiNext (InCommon) and HARICA (GÉANT TCS) admit an
+	// account only when its registration carries a MAC over the account key
+	// under a pre-issued key id. EABKeyID is public; EABHMACKeyRef is a
+	// credential reference (file:/absolute/path), never the key itself, and the
+	// key is held as locked, zeroed bytes while the driver lives. Both must be
+	// set together: one without the other is a configuration error.
+	EABKeyID      string `json:"eab_key_id,omitempty"`
+	EABHMACKeyRef string `json:"eab_hmac_key_ref,omitempty"`
+
 	// UpstreamDNS01 enables unattended domain validation against this
 	// authority: trstctl publishes the dns-01 challenge record itself, using
 	// the DNS-01 provider configs that have set allow_upstream_dv (epic B7).
@@ -358,6 +368,12 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 		credential(c.APISecretRef, "api_secret_ref", false)
 	case "letsencrypt":
 		// The ACME account key is generated and held by the isolated signer.
+		keyID, keyRef := strings.TrimSpace(c.EABKeyID), strings.TrimSpace(c.EABHMACKeyRef)
+		if (keyID == "") != (keyRef == "") {
+			errs = append(errs, fmt.Errorf(
+				"%s.eab_key_id and eab_hmac_key_ref must be set together: external account binding needs both the key id and the MAC key reference", where))
+		}
+		credential(c.EABHMACKeyRef, "eab_hmac_key_ref", true)
 		if c.UpstreamDNS01 && strings.TrimSpace(c.CAAIssuerDomain) == "" {
 			errs = append(errs, fmt.Errorf(
 				"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
@@ -396,6 +412,9 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 	// entry has stated an intent the platform cannot carry out; accepting the
 	// file and dropping the field would leave them believing validation is
 	// automated right up until the reuse window closes.
+	if c.Type != "letsencrypt" && (strings.TrimSpace(c.EABKeyID) != "" || strings.TrimSpace(c.EABHMACKeyRef) != "") {
+		errs = append(errs, fmt.Errorf("%s.eab_key_id/eab_hmac_key_ref apply only to ACME (letsencrypt) authorities, not %q", where, c.Type))
+	}
 	if c.Type != "letsencrypt" && (c.UpstreamDNS01 || strings.TrimSpace(c.CAAIssuerDomain) != "") {
 		errs = append(errs, fmt.Errorf(
 			"%s.upstream_dns01/caa_issuer_domain apply only to ACME (letsencrypt) authorities, not %q",

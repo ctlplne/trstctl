@@ -58,6 +58,9 @@ func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Cl
 	if cfg.observer != nil {
 		driver = driver.WithObserver(cfg.observer)
 	}
+	if cfg.eabKeyID != "" {
+		driver = driver.WithExternalAccountBinding(cfg.eabKeyID, cfg.eabHMACKey)
+	}
 	return &Plugin{name: name, driver: driver}, nil
 }
 
@@ -68,8 +71,18 @@ func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Cl
 type Option func(*options)
 
 type options struct {
-	solver   acmekey.ChallengeSolver
-	observer acmekey.DVObserver
+	solver     acmekey.ChallengeSolver
+	observer   acmekey.DVObserver
+	eabKeyID   string
+	eabHMACKey []byte
+}
+
+// WithExternalAccountBinding presents an RFC 8555 §7.3.4 external account
+// binding at registration (A177), for authorities such as CertiNext and
+// HARICA that pre-authorize accounts out of band. The driver copies the key
+// and wipes its copy on Destroy; the caller keeps custody of its own buffer.
+func WithExternalAccountBinding(keyID string, hmacKey []byte) Option {
+	return func(o *options) { o.eabKeyID, o.eabHMACKey = keyID, hmacKey }
 }
 
 // WithChallengeSolver supplies the domain-validation solver (epic B7). Without

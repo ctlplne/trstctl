@@ -33,6 +33,7 @@ import (
 	"golang.org/x/crypto/acme"
 
 	boundary "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // NewClient returns an ACME client for the directory at directoryURL, with a
@@ -196,6 +197,44 @@ type Driver struct {
 	client   *acme.Client
 	solver   ChallengeSolver
 	observer DVObserver
+	// eab is the External Account Binding (RFC 8555 §7.3.4) presented at
+	// registration when the authority pre-authorizes accounts out of band
+	// (A177). The MAC key is this driver's own copy and is wiped on Destroy.
+	eab *acme.ExternalAccountBinding
+}
+
+// WithExternalAccountBinding attaches the external account binding the
+// authority issued: the public key id and the HMAC key. The key is copied, so
+// the caller may wipe its own buffer; the driver wipes the copy on Destroy and
+// never logs or returns it.
+func (d *Driver) WithExternalAccountBinding(keyID string, hmacKey []byte) *Driver {
+	if d == nil {
+		return nil
+	}
+	keyID = strings.TrimSpace(keyID)
+	if keyID == "" || len(hmacKey) == 0 {
+		d.eab = nil
+		return d
+	}
+	d.eab = &acme.ExternalAccountBinding{KID: keyID, Key: append([]byte(nil), hmacKey...)}
+	return d
+}
+
+// ExternalAccountBound reports whether registration presents an external
+// account binding. It exposes the key id only.
+func (d *Driver) ExternalAccountBound() (string, bool) {
+	if d == nil || d.eab == nil {
+		return "", false
+	}
+	return d.eab.KID, true
+}
+
+func (d *Driver) registrationAccount() *acme.Account {
+	acct := &acme.Account{}
+	if d.eab != nil {
+		acct.ExternalAccountBinding = &acme.ExternalAccountBinding{KID: d.eab.KID, Key: d.eab.Key}
+	}
+	return acct
 }
 
 // WithObserver attaches a DV observer. Separate from construction because the
@@ -250,6 +289,10 @@ func (d *Driver) Destroy() {
 	d.client.Key = nil
 	d.client = nil
 	boundary.WipeECDSAPrivateKey(key)
+	if d.eab != nil {
+		secret.Wipe(d.eab.Key)
+		d.eab = nil
+	}
 }
 
 // ErrIssuanceNotSubmitted proves this invocation stopped before calling the
@@ -286,7 +329,7 @@ func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) (chain [][]by
 	// Reusing one long-lived signer-backed account is the normal second-order and
 	// retry path, not an issuance failure. Register still populates Client.KID
 	// before returning this sentinel, so continuing is both safe and required.
-	if _, err := d.client.Register(ctx, &acme.Account{}, acme.AcceptTOS); err != nil && !errors.Is(err, acme.ErrAccountAlreadyExists) {
+	if _, err := d.client.Register(ctx, d.registrationAccount(), acme.AcceptTOS); err != nil && !errors.Is(err, acme.ErrAccountAlreadyExists) {
 		return nil, fmt.Errorf("acmekey: register: %w", err)
 	}
 	order, err := d.client.AuthorizeOrder(ctx, acme.DomainIDs(dnsNames...))

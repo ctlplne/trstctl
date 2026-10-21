@@ -219,6 +219,16 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 					letsencrypt.WithChallengeSolver(binding),
 					letsencrypt.WithDVObserver(binding))
 			}
+			if strings.TrimSpace(item.EABKeyID) != "" {
+				// A177: the MAC key is a credential reference resolved here and
+				// copied into the driver; the resolved buffer is wiped with the
+				// rest of this attempt's secrets.
+				hmacKey, loadErr := secrets.Load(item.EABHMACKeyRef)
+				if loadErr != nil {
+					return fail(loadErr)
+				}
+				acmeOpts = append(acmeOpts, letsencrypt.WithExternalAccountBinding(item.EABKeyID, hmacKey))
+			}
 			implementation, err = letsencrypt.NewPluginWithRemoteAccountSigner(item.Name, externalCAConfigEndpoint(item), client, acmeAccountSigner, acmeOpts...)
 			if err != nil {
 				return fail(err)

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
@@ -48,6 +49,91 @@ type Server struct {
 	accepted         map[string]bool
 	challengeAccepts int
 	asyncFinalize    bool
+	// A177: external account binding. When set, newAccount must carry an
+	// RFC 8555 §7.3.4 binding under this kid whose HMAC verifies; otherwise the
+	// authority answers externalAccountRequired or unauthorized.
+	eabKeyID   string
+	eabHMACKey []byte
+	eabSeen    int
+	// lastAccountProblem is the RFC 8555 problem type the last newAccount
+	// refusal carried, so a test can tell why the client was turned away even
+	// though the client sanitizes upstream errors.
+	lastAccountProblem string
+}
+
+// LastAccountProblem reports the problem type of the most recent newAccount
+// refusal ("" when the last registration was accepted).
+func (s *Server) LastAccountProblem() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastAccountProblem
+}
+
+// RequireEAB makes account registration require an external account binding
+// under keyID signed with hmacKey (RFC 8555 §7.3.4). The double checks the
+// MAC and the kid; it does not re-derive the inner JWK payload.
+func (s *Server) RequireEAB(keyID string, hmacKey []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.eabKeyID = keyID
+	s.eabHMACKey = append([]byte(nil), hmacKey...)
+}
+
+// EABRegistrations reports how many registrations carried a verified binding.
+func (s *Server) EABRegistrations() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.eabSeen
+}
+
+// checkEAB inspects the newAccount JWS body for the external account binding
+// and answers the RFC 8555 problem the authority would send.
+func (s *Server) checkEAB(body []byte) (problemType, detail string) {
+	s.mu.Lock()
+	keyID, hmacKey := s.eabKeyID, s.eabHMACKey
+	s.mu.Unlock()
+	if keyID == "" {
+		return "", ""
+	}
+	var outer struct {
+		Payload string `json:"payload"`
+	}
+	if err := json.Unmarshal(body, &outer); err != nil {
+		return "urn:ietf:params:acme:error:malformed", "newAccount body is not a JWS"
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(outer.Payload)
+	if err != nil {
+		return "urn:ietf:params:acme:error:malformed", "newAccount payload is not base64url"
+	}
+	var account struct {
+		EAB *struct {
+			Protected string `json:"protected"`
+			Payload   string `json:"payload"`
+			Signature string `json:"signature"`
+		} `json:"externalAccountBinding"`
+	}
+	if err := json.Unmarshal(payload, &account); err != nil || account.EAB == nil {
+		return "urn:ietf:params:acme:error:externalAccountRequired", "this authority requires an external account binding"
+	}
+	protected, err := base64.RawURLEncoding.DecodeString(account.EAB.Protected)
+	if err != nil {
+		return "urn:ietf:params:acme:error:malformed", "external account binding header is not base64url"
+	}
+	var header struct {
+		Alg string `json:"alg"`
+		KID string `json:"kid"`
+	}
+	if err := json.Unmarshal(protected, &header); err != nil || header.Alg != "HS256" || header.KID != keyID {
+		return "urn:ietf:params:acme:error:unauthorized", "external account binding names an unknown key id or algorithm"
+	}
+	want := base64.RawURLEncoding.EncodeToString(trstcrypto.HMACSHA256(hmacKey, []byte(account.EAB.Protected+"."+account.EAB.Payload)))
+	if want != account.EAB.Signature {
+		return "urn:ietf:params:acme:error:unauthorized", "external account binding MAC does not verify"
+	}
+	s.mu.Lock()
+	s.eabSeen++
+	s.mu.Unlock()
+	return "", ""
 }
 
 // NewServer starts a fake ACME CA backed by a fresh internal CA.
@@ -146,6 +232,21 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/new-nonce":
 		return
 	case r.URL.Path == "/new-account":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		problem, detail := s.checkEAB(body)
+		s.mu.Lock()
+		s.lastAccountProblem = problem
+		s.mu.Unlock()
+		if problem != "" {
+			w.Header().Set("Content-Type", "application/problem+json")
+			status := http.StatusBadRequest
+			if strings.HasSuffix(problem, ":unauthorized") {
+				status = http.StatusUnauthorized
+			}
+			w.WriteHeader(status)
+			_, _ = fmt.Fprintf(w, `{"type":%q,"detail":%q}`, problem, detail)
+			return
+		}
 		s.mu.Lock()
 		alreadyRegistered := s.accountRegistered
 		s.accountRegistered = true

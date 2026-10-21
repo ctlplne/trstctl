@@ -58,6 +58,11 @@ retry lane, while every unproven adapter stays at-most-once. A completed result
 replays byte-for-byte from the `certificate.recorded` projection, so a changed command
 gets 409 before provider I/O, and an interrupted tokenless submission is never
 resent — it stays explicitly indeterminate rather than guessing the CA did nothing.
+An ACME authority that pre-authorizes accounts out of band (CertiNext, HARICA and
+other EAB-gated CAs) is configured with `eab_key_id` plus `eab_hmac_key_ref`; the
+upstream client then presents the external account binding at registration and
+the MAC key never leaves locked memory.
+
 For ACME, a live attempt that stops before submitting the CSR for finalization can
 prove that signing never began. The worker may then retry the same issuance request
 after the directory, account, order, or domain-validation service recovers. Account

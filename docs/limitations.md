@@ -4172,6 +4172,15 @@ This is a deliberate, documented trust boundary, not an accident.
   leaf without authenticated issuer provenance has no upstream poll path.
   Local Pebble evidence qualifies the supported client contract, not a public
   CA's production availability or network behavior.
+  The upstream client presents an RFC 8555 §7.3.4 external account binding
+  when the `letsencrypt`-type authority sets `eab_key_id` and
+  `eab_hmac_key_ref` together (CertiNext/InCommon, HARICA/GÉANT TCS and other
+  EAB-gated CAs); the MAC key is a credential reference held as locked, zeroed
+  bytes, never logged or served, and one field without the other refuses to
+  start. The binding is proven against a local EAB-requiring ACME double
+  (registration without a binding or with the wrong key is refused, with it
+  issuance and revocation run); a live proof against CertiNext or HARICA needs
+  a design partner's credentials.
   Roadmap residual: a dedicated ACME admin console for account/order/challenge
   drilldown, revocation operations, and richer client setup controls remains
   outside the F5 GA-served protocol denominator.
