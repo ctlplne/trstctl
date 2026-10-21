@@ -269,8 +269,9 @@ for ceremonies.
 
 1. **Create the offline root certificate outside trstctl.** Keep the root private
    key on the offline system. Export only the public root certificate PEM. The
-   current import contract accepts an ECDSA P-256 root public key. Set
-   `signature_algorithm` to `ECDSA-P256`; the server checks the certificate's
+   import contract accepts ECDSA P-256/P-384/P-521, Ed25519 and RSA-2048/3072/4096
+   root public keys. Set `signature_algorithm` to the algorithm the root's key
+   actually uses (for example `ECDSA-P256`); the server checks the certificate's
    actual public key against that reviewed choice. For imported certificates,
    `ttl_seconds` is the **maximum remaining validity at import**, so use a value
    at least as long as the certificate's remaining life. The preview and import

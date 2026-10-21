@@ -124,6 +124,7 @@ const offlineRootDefaults: OfflineCAForm = {
   dnsDomains: "example.internal",
   maxPathLen: "1",
   ttlDays: "3650",
+  signatureAlgorithm: "ECDSA-P256",
 };
 const offlineIntermediateDefaults: OfflineIntermediateForm = {
   parentID: "",
@@ -132,6 +133,7 @@ const offlineIntermediateDefaults: OfflineIntermediateForm = {
   dnsDomains: "example.internal",
   maxPathLen: "0",
   ttlDays: "825",
+  signatureAlgorithm: "ECDSA-P256",
 };
 const existingCADefaults: ExistingCAForm = {
   certificatePEM: "",
@@ -142,6 +144,7 @@ const existingCADefaults: ExistingCAForm = {
   parentID: "",
   signerHandle: "",
   ttlDays: "825",
+  signatureAlgorithm: "ECDSA-P256",
 };
 const externalCAIssueDefaults: ExternalCAIssueForm = {
   caID: "",
@@ -2671,7 +2674,7 @@ function offlineFormSpec(form: OfflineCAForm): NonNullable<CACeremonyStartReques
     common_name: form.commonName.trim(),
     max_path_len: positiveInteger(form.maxPathLen, 0),
     permitted_dns_domains: permitted.length ? permitted : undefined,
-    signature_algorithm: "ECDSA-P256",
+    signature_algorithm: form.signatureAlgorithm || "ECDSA-P256",
     ttl_seconds: positiveInteger(form.ttlDays, 1) * 86_400,
   };
 }

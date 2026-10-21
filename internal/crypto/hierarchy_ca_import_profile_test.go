@@ -45,6 +45,51 @@ func TestImportedOfflineRootCannotOutrunReviewedKeyAndValidity(t *testing.T) {
 	if _, err := crypto.VerifyImportedOfflineRoot(rsaRoot.CertificateDER, profile); err == nil || !strings.Contains(err.Error(), "ECDSA-P256") {
 		t.Fatalf("RSA root reviewed as P-256 = %v; want refusal", err)
 	}
+
+	// A25: every verifiable key algorithm imports under its own reviewed label,
+	// and only under its own label.
+	for _, tc := range []struct {
+		algorithm crypto.Algorithm
+		label     string
+	}{
+		{crypto.ECDSAP384, "ecdsa-p384"}, {crypto.ECDSAP521, "ECDSA-P521"},
+		{crypto.RSA2048, "rsa-2048"}, {crypto.RSA3072, "RSA-3072"},
+	} {
+		key, err := crypto.GenerateLockedKey(tc.algorithm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(key.Destroy)
+		reviewed := profile
+		reviewed.SignatureAlgorithm = tc.label
+		root, err := crypto.SelfSignedHierarchyCA(key, reviewed)
+		if err != nil {
+			t.Fatalf("%s root: %v", tc.label, err)
+		}
+		if _, err := crypto.VerifyImportedOfflineRoot(root.CertificateDER, reviewed); err != nil {
+			t.Fatalf("%s root reviewed as %s refused: %v", tc.algorithm, tc.label, err)
+		}
+		if _, err := crypto.VerifyImportedOfflineRoot(root.CertificateDER, profile); err == nil || !strings.Contains(err.Error(), "does not match") {
+			t.Fatalf("%s root reviewed as P-256 = %v; want a mismatch refusal", tc.algorithm, err)
+		}
+	}
+	// Ed25519 roots are minted outside trstctl (the served signer does not
+	// hold Ed25519 CA keys), so the fixture is built with the standard library
+	// the way an air-gapped tool would build it.
+	edRoot := crypto.Ed25519SelfSignedRootDERForTest(t, profile)
+	edReviewed := profile
+	edReviewed.SignatureAlgorithm = "Ed25519"
+	if _, err := crypto.VerifyImportedOfflineRoot(edRoot, edReviewed); err != nil {
+		t.Fatalf("Ed25519 root reviewed as ed25519 refused: %v", err)
+	}
+	if _, err := crypto.VerifyImportedOfflineRoot(edRoot, profile); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("Ed25519 root reviewed as P-256 = %v; want a mismatch refusal", err)
+	}
+	unsupported := profile
+	unsupported.SignatureAlgorithm = "rsa-1024"
+	if _, err := crypto.VerifyImportedOfflineRoot(root.CertificateDER, unsupported); err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("unsupported reviewed label = %v; want refusal", err)
+	}
 }
 
 func TestExistingCAIssuerPreparationRequiresUsableSigningChain(t *testing.T) {

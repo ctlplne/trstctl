@@ -467,6 +467,9 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 	if req.CeremonyID == "" {
 		return api.CAAuthority{}, fmt.Errorf("%w: ceremony_id is required", api.ErrCAHierarchyInvalid)
 	}
+	if err := validateSignerBackedCASpec(req.Spec); err != nil {
+		return api.CAAuthority{}, err
+	}
 	purpose, err := hierarchyPurpose("create_root", "", req.Spec)
 	if err != nil {
 		return api.CAAuthority{}, err
@@ -705,6 +708,9 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 	}
 	parentSigner, err := h.signerForAuthority(ctx, parent)
 	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	if err := validateSignerBackedCASpec(req.Spec); err != nil {
 		return api.CAAuthority{}, err
 	}
 	purpose, err := hierarchyPurpose("create_intermediate", req.ParentID, req.Spec)
@@ -1474,6 +1480,11 @@ func hierarchyPurpose(operation, parentID string, spec api.CASpec) (string, erro
 }
 
 func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, error) {
+	if req.Operation == "create_root" || req.Operation == "create_intermediate" {
+		if err := validateSignerBackedCASpec(req.Spec); err != nil {
+			return "", err
+		}
+	}
 	switch req.Operation {
 	case "import_offline_root":
 		certDER, _, err := singleCertificatePEM(req.CertificatePEM)
@@ -1637,6 +1648,20 @@ func validateCASpec(spec api.CASpec) error {
 	}
 	if spec.TTLSeconds > math.MaxInt64/int64(time.Second) {
 		return fmt.Errorf("%w: ttl_seconds exceeds the supported duration range", api.ErrCAHierarchyInvalid)
+	}
+	// A25: a reviewed label must be one the import path can verify. The served
+	// signer path narrows this further (validateSignerBackedCASpec).
+	if spec.SignatureAlgorithm != "" && !crypto.ImportedCASignatureAlgorithmSupported(spec.SignatureAlgorithm) {
+		return fmt.Errorf("%w: signature_algorithm %q is not a supported CA key algorithm (ecdsa-p256, ecdsa-p384, ecdsa-p521, ed25519, rsa-2048, rsa-3072, rsa-4096)", api.ErrCAHierarchyInvalid, spec.SignatureAlgorithm)
+	}
+	return nil
+}
+
+// validateSignerBackedCASpec binds a CA the served signer mints to the key
+// algorithm that path produces. Imported (offline-held) CAs are not bound by it.
+func validateSignerBackedCASpec(spec api.CASpec) error {
+	if err := validateCASpec(spec); err != nil {
+		return err
 	}
 	switch strings.ToLower(spec.SignatureAlgorithm) {
 	case "", "ecdsa-p256":

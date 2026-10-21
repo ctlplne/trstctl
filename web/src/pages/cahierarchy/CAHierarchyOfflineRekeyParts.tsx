@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/StatePrimitives";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type CAAuthority, type CACeremonyPlanPreview, type CACeremonyStartRequest, type CAKeyCeremony, type CAOfflineRootRekey } from "@/lib/api";
-import { LabeledInput, LabeledSelect } from "./CAHierarchyFormParts";
+import { LabeledInput, LabeledSelect, OFFLINE_CA_SIGNATURE_ALGORITHMS } from "./CAHierarchyFormParts";
 
 type Fields = {
   predecessorID: string;
@@ -17,6 +17,7 @@ type Fields = {
   extendedKeyUsages: string;
   maxPathLen: string;
   ttlDays: string;
+  signatureAlgorithm: string;
 };
 
 const initial: Fields = {
@@ -30,6 +31,7 @@ const initial: Fields = {
   extendedKeyUsages: "",
   maxPathLen: "1",
   ttlDays: "3650",
+  signatureAlgorithm: "ECDSA-P256",
 };
 
 function singlePublicCertificate(value: string): string | null {
@@ -87,7 +89,7 @@ function requestFor(form: Fields): CACeremonyStartRequest | null {
         .filter(Boolean),
       max_path_len: maxPathLen,
       ttl_seconds: ttlDays * 86400,
-      signature_algorithm: "ECDSA-P256",
+      signature_algorithm: form.signatureAlgorithm || "ECDSA-P256",
       ...(extendedKeyUsages.length ? { extended_key_usages: extendedKeyUsages } : {}),
     },
   };
@@ -267,6 +269,18 @@ export function CAOfflineRootRekeyPanel({ authorities, onActivated }: { authorit
             type="number"
             onChange={(v) => change({ ttlDays: v })}
           />
+          <LabeledSelect
+            id="offline-rekey-signature-algorithm"
+            label={t("caHierarchy.offlineRekey.signatureAlgorithm")}
+            value={form.signatureAlgorithm}
+            onChange={(v) => change({ signatureAlgorithm: v })}
+          >
+            {OFFLINE_CA_SIGNATURE_ALGORITHMS.map((algorithm) => (
+              <option key={algorithm} value={algorithm}>
+                {algorithm}
+              </option>
+            ))}
+          </LabeledSelect>
         </div>
         <LabeledInput id="offline-rekey-reason" label={t("caHierarchy.offlineRekey.reason")} value={form.reason} onChange={(v) => change({ reason: v })} />
         {(

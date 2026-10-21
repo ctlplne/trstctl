@@ -4,7 +4,6 @@ package crypto
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -725,19 +724,37 @@ func verifyChildPathLen(parent, child *x509.Certificate) error {
 	return nil
 }
 
+// ImportedCASignatureAlgorithms lists the reviewed public-key algorithms an
+// imported CA certificate may carry, as the platform labels them (A25).
+var ImportedCASignatureAlgorithms = []string{"ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "ed25519", "rsa-2048", "rsa-3072", "rsa-4096"}
+
+// ImportedCASignatureAlgorithmSupported reports whether a reviewed label is one
+// the import path verifies; the comparison is case-insensitive.
+func ImportedCASignatureAlgorithmSupported(label string) bool {
+	label = strings.ToLower(strings.TrimSpace(label))
+	for _, allowed := range ImportedCASignatureAlgorithms {
+		if label == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 func verifyImportedProfile(cert *x509.Certificate, profile HierarchyCAProfile) error {
 	if profile.CommonName != "" && cert.Subject.CommonName != profile.CommonName {
 		return fmt.Errorf("crypto: imported CA common name %q does not match ceremony profile %q", cert.Subject.CommonName, profile.CommonName)
 	}
 	if profile.SignatureAlgorithm != "" {
-		switch strings.ToLower(strings.TrimSpace(profile.SignatureAlgorithm)) {
-		case "ecdsa-p256":
-			key, ok := cert.PublicKey.(*ecdsa.PublicKey)
-			if !ok || key.Curve.Params().Name != "P-256" {
-				return fmt.Errorf("crypto: imported CA public key does not match reviewed ECDSA-P256 signature_algorithm")
-			}
-		default:
+		// A25: an imported (offline-held) CA may use any key algorithm the
+		// platform can verify and label; the reviewed label must name the key
+		// the certificate actually carries. A signer-created CA is still bound
+		// to what the served signer path mints (checked before this).
+		reviewed := strings.ToLower(strings.TrimSpace(profile.SignatureAlgorithm))
+		if !ImportedCASignatureAlgorithmSupported(reviewed) {
 			return fmt.Errorf("crypto: unsupported reviewed CA signature_algorithm %q", profile.SignatureAlgorithm)
+		}
+		if actual := publicKeyAlgorithmLabel(cert); actual != reviewed {
+			return fmt.Errorf("crypto: imported CA public key (%s) does not match reviewed %s signature_algorithm", actual, strings.ToUpper(reviewed))
 		}
 	}
 	if profile.TTL > 0 && cert.NotAfter.After(time.Now().Add(profile.TTL)) {

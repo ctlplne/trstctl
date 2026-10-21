@@ -2406,9 +2406,13 @@ than sending an operator looking for a credential that was never there.
   succession under that purpose. Its event-projected public receipt is read by
   ceremony ID at `/api/v1/ca/offline-rekeys/{ceremony-id}` after a restart or a
   lost response; no private key enters the browser or control plane.
-  The current offline-root import profile accepts an ECDSA P-256 public key;
-  other offline root algorithms need an explicit supported profile and console
-  selector. For offline-root import, `ttl_seconds` caps remaining certificate
+  The offline-root import profile accepts any key algorithm the platform can
+  verify and label — ECDSA P-256/P-384/P-521, Ed25519, RSA-2048/3072/4096 —
+  and the reviewed `signature_algorithm` must name the key the certificate
+  actually carries (a root reviewed as one algorithm and carrying another is
+  refused before the ceremony starts); the console's offline import and
+  offline re-key forms select it. CAs the served signer mints stay ECDSA
+  P-256. For offline-root import, `ttl_seconds` caps remaining certificate
   validity and is checked before the ceremony starts and again at import.
 - All 14 external CA integrations are served when configured. `buildRunDeps`
   constructs tenant-bound AD CS, AWS PCA, Azure Key Vault, DigiCert, EJBCA,

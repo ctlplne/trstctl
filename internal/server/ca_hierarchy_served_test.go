@@ -2137,3 +2137,52 @@ func createIntermediateCA(t *testing.T, h *servedHarness, token, ceremonyID, par
 	}
 	return got
 }
+
+// A25: an offline root may carry any key algorithm the import path can verify,
+// the reviewed label must name the key the certificate actually carries, and a
+// CA the served signer would mint stays bound to ECDSA-P256.
+func TestServedOfflineRootImportReviewsAnyVerifiableKeyAlgorithm(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "offline-root-p384-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	p384, err := crypto.GenerateLockedKey(crypto.ECDSAP384)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(p384.Destroy)
+	rootProfile := crypto.HierarchyCAProfile{CommonName: "offline p384 root", MaxPathLen: 1, TTL: 365 * 24 * time.Hour, SignatureAlgorithm: "ecdsa-p384"}
+	root, err := crypto.SelfSignedHierarchyCA(p384, rootProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := map[string]any{
+		"common_name": rootProfile.CommonName, "max_path_len": rootProfile.MaxPathLen,
+		"ttl_seconds": int64(rootProfile.TTL.Seconds()), "signature_algorithm": "ECDSA-P384",
+	}
+	ceremony := createCACeremonyWithCertificate(t, h, operator, "import_offline_root", string(root.CertificatePEM), spec, 2, "offline-root-p384-ceremony")
+	if ceremony.ID == "" {
+		t.Fatal("a P-384 offline root must start its import ceremony")
+	}
+
+	mismatch := map[string]any{}
+	for k, v := range spec {
+		mismatch[k] = v
+	}
+	mismatch["signature_algorithm"] = "ecdsa-p256"
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", operator, "offline-root-p384-mismatch", map[string]any{
+		"operation": "import_offline_root", "threshold": 2, "certificate_pem": string(root.CertificatePEM), "spec": mismatch,
+	})
+	if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), "does not match") {
+		t.Fatalf("P-384 root reviewed as P-256 = %d %s; want 422 naming the mismatch", code, body)
+	}
+
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", operator, "signer-root-p384", map[string]any{
+		"operation": "create_root", "threshold": 2, "spec": map[string]any{
+			"common_name": "signer p384 root", "max_path_len": 1, "ttl_seconds": 86400 * 365, "signature_algorithm": "ecdsa-p384",
+		},
+	})
+	if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), "served signer path") {
+		t.Fatalf("signer-backed root with P-384 = %d %s; want 422 naming the signer path", code, body)
+	}
+}

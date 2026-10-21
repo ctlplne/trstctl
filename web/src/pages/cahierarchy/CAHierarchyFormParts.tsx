@@ -1,7 +1,12 @@
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "@/i18n/I18nProvider";
 
-export type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDomains: string; maxPathLen: string; ttlDays: string };
+export type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDomains: string; maxPathLen: string; ttlDays: string; signatureAlgorithm: string };
+
+/** Reviewed key algorithms an imported (offline-held) CA may carry (A25). The
+ * served signer still mints ECDSA-P256 only; these labels are what the import
+ * path verifies against the certificate's actual key. */
+export const OFFLINE_CA_SIGNATURE_ALGORITHMS = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "Ed25519", "RSA-2048", "RSA-3072", "RSA-4096"] as const;
 
 export function LabeledSelect({
   children,
@@ -120,6 +125,18 @@ export function OfflineSpecFields({
         type="number"
         onChange={(value) => onChange({ maxPathLen: value })}
       />
+      <LabeledSelect
+        id={`${commonNameId}-signature-algorithm`}
+        label={t("caHierarchy.offline.signatureAlgorithm")}
+        value={form.signatureAlgorithm}
+        onChange={(value) => onChange({ signatureAlgorithm: value })}
+      >
+        {OFFLINE_CA_SIGNATURE_ALGORITHMS.map((algorithm) => (
+          <option key={algorithm} value={algorithm}>
+            {algorithm}
+          </option>
+        ))}
+      </LabeledSelect>
       <LabeledInput
         id={ttlDaysId}
         label={t("caHierarchy.offline.ttlDays")}

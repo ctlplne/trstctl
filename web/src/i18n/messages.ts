@@ -10352,6 +10352,10 @@ export const messages = {
   "caHierarchy.offlineRekey.pathLen": { defaultMessage: "Maximum path length", description: "Offline successor CA path length." },
   "caHierarchy.offlineRekey.ttlDays": { defaultMessage: "Certificate lifetime in days", description: "Offline successor CA lifetime." },
   "caHierarchy.offlineRekey.reason": { defaultMessage: "Succession reason", description: "Offline-root re-key reason." },
+  "caHierarchy.offlineRekey.signatureAlgorithm": {
+    defaultMessage: "Successor key algorithm",
+    description: "Reviewed public-key algorithm of the offline successor root.",
+  },
   "caHierarchy.offlineRekey.successor": { defaultMessage: "Self-signed successor certificate PEM", description: "Public successor root certificate." },
   "caHierarchy.offlineRekey.newByPrevious": { defaultMessage: "Successor signed by predecessor PEM", description: "Forward public cross-certificate." },
   "caHierarchy.offlineRekey.previousByNew": { defaultMessage: "Predecessor signed by successor PEM", description: "Reverse public cross-certificate." },
@@ -10507,6 +10511,10 @@ export const messages = {
   "caHierarchy.offline.maxPathLen": {
     defaultMessage: "Max path length",
     description: "CA path-length constraint field label.",
+  },
+  "caHierarchy.offline.signatureAlgorithm": {
+    defaultMessage: "Key algorithm",
+    description: "Reviewed public-key algorithm of an imported offline CA certificate.",
   },
   "caHierarchy.offline.ttlDays": {
     defaultMessage: "TTL days",
