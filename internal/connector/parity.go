@@ -167,8 +167,6 @@ const (
 // which point it must pass the same gates as everyone else, not skip them.
 var cpRetainedFamilies = []string{
 	"cisco",
-	"fortigate",
-	"paloalto",
 }
 
 // CPRetained reports whether a family's control-plane execution remains as an

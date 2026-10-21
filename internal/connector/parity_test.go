@@ -57,11 +57,14 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		"cisco": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
 			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
 			outstanding: []ParityGate{ParityGateDeviceCSR}},
-		"fortigate": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
-			missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
-		"paloalto": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
-			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
-			outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// FortiGate and PAN-OS migrated once a target can name the binding to
+		// move (A44): bind_to re-points a FortiOS setting, ssl_tls_profile with
+		// a partial commit re-points a PAN-OS SSL/TLS service profile, and the
+		// same binding is what readback asks about. A target without the
+		// binding keeps the in-place deploy and reports its rollback and
+		// readback as not configured.
+		"fortigate": {migrated: true, disposition: ParityDispositionMigrated},
+		"paloalto":  {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
 		// The source plan's six omitted families. None has a network-relay
 		// constructor, relay execution proof, or control-plane refusal. Envoy,
 		// PostgreSQL, and MySQL currently execute on host agents; the cloud

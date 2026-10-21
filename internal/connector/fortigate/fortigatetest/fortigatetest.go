@@ -53,6 +53,7 @@ type Server struct {
 
 	mu       sync.Mutex
 	certs    map[string]LocalCert
+	bound    map[string]string // setting field -> local certificate name
 	puts     int
 	bodies   [][]byte // every request body received, for leak assertions
 	authSeen []string // every Authorization header received, for leak assertions
@@ -71,6 +72,7 @@ func New(token []byte) *Server {
 	s := &Server{
 		token: append([]byte(nil), token...),
 		certs: map[string]LocalCert{},
+		bound: map[string]string{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -102,6 +104,14 @@ func (s *Server) Stored(name string) (LocalCert, bool) {
 // Count is the number of distinct local-certificate objects on the appliance.
 // A redeploy of the same credential must leave this at one: FortiOS addresses the
 // object by name, so an accumulating count means deploys are not converging.
+// Bound reports the local certificate a setting field (admin-server-cert or
+// servercert) currently points at.
+func (s *Server) Bound(field string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bound[field]
+}
+
 func (s *Server) Count() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -196,19 +206,31 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Path == "/api/v2/cmdb/system/global" || r.URL.Path == "/api/v2/cmdb/vpn.ssl/settings" {
+		s.handleBinding(w, r, body)
+		return
+	}
 	if !strings.HasPrefix(r.URL.Path, certPath) {
 		s.refuse(w, r, http.StatusNotFound)
 		return
 	}
-	if r.Method != http.MethodPut {
+	name := strings.TrimPrefix(r.URL.Path, certPath)
+	if name == "" || strings.Contains(name, "/") {
 		s.refuse(w, r, http.StatusMethodNotAllowed)
 		return
 	}
-	// The CMDB addresses one object per request; a PUT at the collection URL has
-	// no mkey to update. Accepting it would let a connector that forgot to append
-	// the object name still look like it deployed something.
-	name := strings.TrimPrefix(r.URL.Path, certPath)
-	if name == "" || strings.Contains(name, "/") {
+	if r.Method == http.MethodGet {
+		s.mu.Lock()
+		_, exists := s.certs[name]
+		s.mu.Unlock()
+		if !exists {
+			writeJSON(w, http.StatusNotFound, response{Status: "error", HTTPStatus: 404, Error: -3})
+			return
+		}
+		writeJSON(w, http.StatusOK, response{Status: "success", HTTPStatus: 200})
+		return
+	}
+	if r.Method != http.MethodPut {
 		s.refuse(w, r, http.StatusMethodNotAllowed)
 		return
 	}
@@ -259,6 +281,43 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 // response is the FortiOS REST envelope. Error carries the FortiOS numeric error
 // code (-8 malformed request, -651 unusable certificate material).
+// handleBinding models the two settings a deploy may point at a local
+// certificate: system.global admin-server-cert and vpn.ssl.settings servercert.
+// A reference to a certificate that is not on the appliance is refused, as
+// FortiOS refuses an invalid object reference.
+func (s *Server) handleBinding(w http.ResponseWriter, r *http.Request, body []byte) {
+	field := "admin-server-cert"
+	if r.URL.Path == "/api/v2/cmdb/vpn.ssl/settings" {
+		field = "servercert"
+	}
+	if r.Method == http.MethodGet {
+		s.mu.Lock()
+		bound := s.bound[field]
+		s.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "http_status": 200, "results": map[string]string{field: bound}})
+		return
+	}
+	if r.Method != http.MethodPut {
+		s.refuse(w, r, http.StatusMethodNotAllowed)
+		return
+	}
+	var in map[string]string
+	if err := json.Unmarshal(body, &in); err != nil || in[field] == "" {
+		writeJSON(w, http.StatusBadRequest, response{Status: "error", HTTPStatus: 400, Error: -8})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.certs[in[field]]; !exists {
+		writeJSON(w, http.StatusBadRequest, response{Status: "error", HTTPStatus: 400, Error: -3})
+		return
+	}
+	s.bound[field] = in[field]
+	writeJSON(w, http.StatusOK, response{Status: "success", HTTPStatus: 200})
+}
+
 type response struct {
 	Status     string `json:"status"`
 	HTTPStatus int    `json:"http_status"`

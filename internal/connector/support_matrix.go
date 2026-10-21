@@ -137,14 +137,21 @@ var supportMatrix = []SupportRow{
 	},
 	{
 		Family:      "fortigate",
-		APIContract: "FortiOS CMDB REST (vpn.certificate/local)",
+		APIContract: "FortiOS CMDB REST (vpn.certificate/local, system/global, vpn.ssl/settings)",
 		ProvenOperations: []string{
-			"deploy: upsert the local-certificate object carrying certificate and key",
+			"deploy: upsert the local-certificate object carrying certificate and key; with bind_to " +
+				"(admin or ssl-vpn) the object is fingerprint-named and the admin-server-cert or " +
+				"SSL-VPN servercert setting is pointed at it",
+			"rollback: re-point the bound setting at a previously installed fingerprint-named " +
+				"local certificate (targets with bind_to only)",
+			"readback: report the local certificate the bound setting points at (targets with " +
+				"bind_to only)",
 		},
 		KnownLimits: []string{
-			"no rollback: the local-certificate object holds the material rather than referencing " +
-				"it, and the deploy replaces its contents in place, so no predecessor survives to " +
-				"bind back to",
+			"a target without bind_to deploys in place under the target name, so no predecessor " +
+				"survives and its rollback is refused as not configured rather than reported done",
+			"FortiOS caps a local-certificate name at 35 characters; a fingerprint-named deploy " +
+				"needs a target name of 22 characters or fewer",
 			"VDOM routing is not modeled; the double serves the root VDOM",
 		},
 	},
@@ -198,16 +205,23 @@ var supportMatrix = []SupportRow{
 	},
 	{
 		Family:      "paloalto",
-		APIContract: "PAN-OS XML API (certificate import)",
+		APIContract: "PAN-OS XML API (certificate import, config set, partial commit)",
 		ProvenOperations: []string{
-			"deploy: import the certificate and the private key as separate calls, in order",
+			"deploy: import the certificate and the private key as separate calls, in order; with " +
+				"ssl_tls_profile the objects are fingerprint-named, the shared SSL/TLS service " +
+				"profile is set to the new certificate and a partial commit scoped to commit_admin " +
+				"pushes only that administrator's changes",
+			"rollback: set the SSL/TLS service profile back to a previously imported " +
+				"fingerprint-named certificate and partial-commit it (targets with ssl_tls_profile only)",
+			"readback: report the certificate the SSL/TLS service profile is set to (targets with " +
+				"ssl_tls_profile only)",
 		},
 		KnownLimits: []string{
-			"no rollback: import both uploads and installs, and the API exposes no call that " +
-				"re-points an installed certificate, so a re-bind is not expressible",
-			"no commit is issued; a candidate configuration is left for the operator's own commit " +
-				"policy, which is deliberate — an automatic commit would push unrelated pending " +
-				"changes somebody else staged",
+			"a target without ssl_tls_profile imports in place under the target name and issues no " +
+				"commit, leaving the candidate configuration to the operator's own commit policy; " +
+				"its rollback is refused as not configured rather than reported done",
+			"the partial commit is scoped to commit_admin; other administrators' staged changes " +
+				"are never pushed, and a profile outside the shared location is not modeled",
 		},
 	},
 	{

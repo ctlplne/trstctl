@@ -35,6 +35,7 @@ package paloalto
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -63,6 +64,31 @@ type Connector struct {
 	baseURL string // PAN-OS management base, e.g. https://fw.example (no trailing slash)
 	host    string // host of baseURL, for the net.dial grant
 	apiKey  []byte // PAN-OS API key (AN-8-adjacent: never logged)
+	// sslTLSProfile is the shared SSL/TLS service profile a deploy points at
+	// the imported certificate (A44); empty keeps the legacy in-place import.
+	sslTLSProfile string
+	// commitAdmin scopes the commit to that administrator's own candidate
+	// changes (a PAN-OS partial commit), so a deploy or rollback never pushes
+	// unrelated changes another admin staged. Required with sslTLSProfile.
+	commitAdmin string
+}
+
+// WithSSLTLSProfile makes imports fingerprint-named and bound to the named
+// shared SSL/TLS service profile, committed on the firewall as a partial
+// commit of commitAdmin's changes, which is what makes the target
+// rollback-capable.
+func WithSSLTLSProfile(profile, commitAdmin string) Option {
+	return func(c *Connector) {
+		c.sslTLSProfile = strings.TrimSpace(profile)
+		c.commitAdmin = strings.TrimSpace(commitAdmin)
+	}
+}
+
+func (c *Connector) bindingConfigured() error {
+	if c.sslTLSProfile != "" && c.commitAdmin == "" {
+		return errors.New("paloalto: ssl_tls_profile requires commit_admin, the administrator whose candidate changes the partial commit pushes")
+	}
+	return nil
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -112,31 +138,151 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 // on the appliance in an HSM).
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
 	name := certName(dep.Target)
+	if err := c.bindingConfigured(); err != nil {
+		return err
+	}
+	if c.sslTLSProfile != "" {
+		// Fingerprint-named so the predecessor survives the next deploy (A44).
+		name = connector.DeployedObjectName(name, dep.Fingerprint)
+	}
 
 	if err := c.importPart(ctx, sb, categoryCertificate, name, dep.CertPEM); err != nil {
 		return fmt.Errorf("paloalto: import certificate %q: %w", name, err)
 	}
 	if len(dep.KeyPEM) > 0 {
 		if err := c.importPart(ctx, sb, categoryPrivateKey, name, dep.KeyPEM); err != nil {
-			// Never include the key (or its bytes) in the error — only the name.
 			return fmt.Errorf("paloalto: import private key for %q: %w", name, err)
 		}
+	}
+	if c.sslTLSProfile == "" {
+		return nil
+	}
+	if err := c.bindAndCommit(ctx, sb, name); err != nil {
+		return fmt.Errorf("paloalto: bind SSL/TLS service profile %q to %q: %w", c.sslTLSProfile, name, err)
 	}
 	return nil
 }
 
-// importPart performs a single PAN-OS import: the parameters travel in the query
-// string and the PEM travels as the request body. The call succeeds only when the
-// HTTP status is 2xx and the PAN-OS XML envelope does not report a failure.
-//
-// PAN-OS signals an outcome two ways, and both must be honored: a non-2xx status,
-// and — because the XML API answers some failures (auth, validation) with a 200
-// carrying <response status="error"> — an error *inside* a 2xx. So a 2xx is
-// necessary but not sufficient: the envelope's status is authoritative. A real
-// PAN-OS import always returns <response status="success">; a body that carries
-// no parseable envelope at all (no status to contradict success) is accepted, so
-// a 2xx from a target that does not speak the XML envelope is not spuriously
-// failed.
+// Rollback points the configured SSL/TLS service profile back at the
+// predecessor's fingerprint-named certificate and commits (A44). The object
+// must still be in the candidate configuration; nothing is imported.
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if c.sslTLSProfile == "" {
+		return connector.ErrRollbackNotConfigured
+	}
+	if err := c.bindingConfigured(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(rb.PredecessorFingerprint) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	name := connector.RollbackObjectName(certName(rb.Target), rb.PredecessorFingerprint)
+	q := url.Values{}
+	q.Set("type", "config")
+	q.Set("action", "get")
+	q.Set("xpath", "/config/shared/certificate/entry[@name='"+name+"']")
+	body, err := c.api(ctx, sb, q)
+	if err != nil {
+		return fmt.Errorf("paloalto: predecessor certificate %q: %w", name, err)
+	}
+	present := containsASCIIFold(body, []byte(`<entry name="`+name+`"`)) || containsASCIIFold(body, []byte(`<entry name='`+name+`'`))
+	secret.Wipe(body)
+	if !present {
+		return fmt.Errorf("paloalto: predecessor certificate %q: %w", name, connector.ErrNoPredecessorInstalled)
+	}
+	if err := c.bindAndCommit(ctx, sb, name); err != nil {
+		return fmt.Errorf("paloalto: re-bind SSL/TLS service profile %q to predecessor %q: %w", c.sslTLSProfile, name, err)
+	}
+	return nil
+}
+
+// Readback reports the certificate the configured SSL/TLS service profile is
+// set to, as the firewall's configuration states it (A44).
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, _ string) (connector.Installed, error) {
+	if c.sslTLSProfile == "" {
+		return connector.Installed{}, connector.ErrReadbackNotConfigured
+	}
+	q := url.Values{}
+	q.Set("type", "config")
+	q.Set("action", "get")
+	q.Set("xpath", "/config/shared/ssl-tls-service-profile/entry[@name='"+c.sslTLSProfile+"']")
+	body, err := c.api(ctx, sb, q)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("paloalto: read back SSL/TLS service profile %q: %w", c.sslTLSProfile, err)
+	}
+	defer secret.Wipe(body)
+	name := strings.TrimSpace(betweenBytes(body, "<certificate>", "</certificate>"))
+	if name == "" {
+		return connector.Installed{ObjectName: c.sslTLSProfile}, nil
+	}
+	return connector.Installed{Fingerprint: connector.FingerprintFromObjectName(name), ObjectName: name, Bound: true}, nil
+}
+
+func betweenBytes(body []byte, start, end string) string {
+	i := bytes.Index(body, []byte(start))
+	if i < 0 {
+		return ""
+	}
+	rest := body[i+len(start):]
+	j := bytes.Index(rest, []byte(end))
+	if j < 0 {
+		return ""
+	}
+	return string(rest[:j])
+}
+
+// bindAndCommit sets the shared SSL/TLS service profile's certificate and
+// commits the candidate configuration so the listener serves it.
+func (c *Connector) bindAndCommit(ctx context.Context, sb connector.Sandbox, name string) error {
+	set := url.Values{}
+	set.Set("type", "config")
+	set.Set("action", "set")
+	set.Set("xpath", "/config/shared/ssl-tls-service-profile/entry[@name='"+c.sslTLSProfile+"']")
+	set.Set("element", "<certificate>"+name+"</certificate>")
+	body, err := c.api(ctx, sb, set)
+	if err != nil {
+		return err
+	}
+	secret.Wipe(body)
+	commit := url.Values{}
+	commit.Set("type", "commit")
+	commit.Set("cmd", "<commit><partial><admin><member>"+c.commitAdmin+"</member></admin></partial></commit>")
+	body, err = c.api(ctx, sb, commit)
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	secret.Wipe(body)
+	return nil
+}
+
+// api performs one PAN-OS XML API call and returns its bounded body; a
+// transport failure, non-2xx status or status="error" envelope is an error.
+func (c *Connector) api(ctx context.Context, sb connector.Sandbox, q url.Values) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-PAN-KEY", secrettext.String(c.apiKey))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return nil, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
+	body, err := secret.ReadBounded(resp.Body, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("read response (details redacted)")
+	}
+	if panFailed(body) {
+		secret.Wipe(body)
+		return nil, fmt.Errorf("PAN-OS reported failure (response body redacted)")
+	}
+	return body, nil
+}
+
 func (c *Connector) importPart(ctx context.Context, sb connector.Sandbox, category, name string, pem []byte) error {
 	q := url.Values{}
 	q.Set("type", "import")

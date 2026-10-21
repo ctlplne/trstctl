@@ -67,7 +67,7 @@ func TestServedConnectorCatalogPublishesAllE1Dispositions(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("served E1 families = %v, want %v", got, want)
 	}
-	if counts["migrated"] != 4 || counts["architecture_exception"] != 3 || counts["unimplemented"] != 6 || len(counts) != 3 {
+	if counts["migrated"] != 6 || counts["architecture_exception"] != 1 || counts["unimplemented"] != 6 || len(counts) != 3 {
 		t.Fatalf("served E1 dispositions = %v", counts)
 	}
 }

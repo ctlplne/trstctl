@@ -757,8 +757,9 @@ instead of being ignored:
 | `f5` | `endpoint`, `client_ssl_profile`, `username`, `password_ref`; optional `object_name` |
 | `netscaler` | `endpoint`, `username`, `password_ref`; optional `file_location` |
 | `a10`, `cisco` | `endpoint`, `username`, `password_ref` |
-| `kemp`, `fortigate` | `endpoint`, `token_ref` |
-| `paloalto` | `endpoint`, `api_key_ref` |
+| `kemp` | `endpoint`, `token_ref` |
+| `fortigate` | `endpoint`, `token_ref`; optional `bind_to` (`admin` or `ssl-vpn`) makes deploys fingerprint-named and the target rollback-capable (target name 22 characters or fewer) |
+| `paloalto` | `endpoint`, `api_key_ref`; optional `ssl_tls_profile` with `commit_admin` makes imports fingerprint-named, points the shared SSL/TLS service profile at them with a partial commit, and makes the target rollback-capable |
 | `aws-acm` | `endpoint`, `region`, `access_key_id`, `secret_access_key_ref`; optional `session_token_ref` |
 | `azure-keyvault` | `endpoint`, `bearer_token_ref`; optional `api_version` |
 | `gcp-certificate-manager` | `endpoint`, `project`, `location`, `bearer_token_ref`; optional `poll_interval` |

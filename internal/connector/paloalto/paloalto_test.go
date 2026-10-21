@@ -5,6 +5,7 @@ package paloalto_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -416,40 +417,20 @@ func TestPaloAltoConformance(t *testing.T) {
 	}
 }
 
-// PAN-OS cannot roll back by re-binding, and the census must keep saying so.
-//
-// A rollback is a re-bind: point an installed object back at a predecessor
-// without re-uploading it. That needs an API call addressing an INSTALLED object
-// separately from the upload, and this connector's entire surface is one call —
-// type=import — whose addressing unit, certificate-name, IS the object the
-// deploy target names. There is no binding to move, and each deploy overwrites
-// the object in place, so no predecessor survives to bind back to. Restoring the
-// previous certificate would mean re-importing its PEM and key, which is a
-// redeploy wearing a different name and needs key material the control plane
-// does not hold after B1.
-//
-// This is asserted, not just written down, because the honest answer is the one
-// that decays silently: someone adds a Rollback method that re-imports, the
-// census gains an entry, and an operator is told a firewall was re-pointed when
-// it was re-uploaded.
-func TestPaloAltoCannotRollBack(t *testing.T) {
-	if connector.CanRollback("paloalto") {
-		t.Error("the rollback census claims paloalto can re-bind; its API has no call that " +
-			"addresses an installed certificate object apart from importing one")
+// A PAN-OS target rolls back only when it names the SSL/TLS service profile to
+// re-point and the admin whose changes the partial commit pushes (A44). A
+// target without that configuration deploys in place and its rollback is
+// refused as not configured, never reported as done.
+func TestPaloAltoWithoutAProfileRefusesRollback(t *testing.T) {
+	if !connector.CanRollback("paloalto") {
+		t.Error("the rollback census no longer lists paloalto; it re-binds the SSL/TLS service profile")
 	}
 	var c connector.Connector = paloalto.New("https://fw.example", testAPIKey)
 	defer c.(*paloalto.Connector).Close()
-	if _, ok := c.(connector.Rollbacker); ok {
-		t.Error("paloalto declares Rollbacker; verify it re-binds rather than re-importing " +
-			"before adding it to the census")
-	}
-
-	// And the SDK reports the honest outcome rather than a silent success, so an
-	// operator staring at a failing firewall learns that nothing happened.
 	_, err := connector.RunRollback(context.Background(), c, connector.NewHTTPOps(nil), connector.Rollback{
 		Target: certName, PredecessorFingerprint: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 	})
-	if err != connector.ErrRollbackUnsupported {
-		t.Errorf("RunRollback err = %v, want ErrRollbackUnsupported", err)
+	if !errors.Is(err, connector.ErrRollbackNotConfigured) {
+		t.Errorf("RunRollback err = %v, want ErrRollbackNotConfigured", err)
 	}
 }

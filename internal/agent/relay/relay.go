@@ -133,6 +133,13 @@ type TargetConfig struct {
 	ClientSSLProfile string `json:"client_ssl_profile,omitempty"`
 	FileLocation     string `json:"file_location,omitempty"`
 	SecretName       string `json:"secret_name,omitempty"`
+	// BindTo (fortigate: admin or ssl-vpn) and SSLTLSProfile (paloalto) name
+	// the binding a deploy points at a fingerprint-named object, which is what
+	// makes those targets rollback-capable (A44). Empty keeps the legacy
+	// in-place deploy under the target name, with no re-bind rollback.
+	BindTo        string `json:"bind_to,omitempty"`
+	SSLTLSProfile string `json:"ssl_tls_profile,omitempty"`
+	CommitAdmin   string `json:"commit_admin,omitempty"`
 	// PeerEndpoint names the standby BIG-IP of an F5 HA pair (epic E1). When
 	// set, the relay deploys, rolls back, and reads back BOTH peers, because an
 	// F5 pair keeps its certificate objects in separate stores — updating only
@@ -396,13 +403,17 @@ func buildRelayConnector(name string, target TargetConfig, material Material) (c
 		if err != nil {
 			return nil, err
 		}
-		return fortigate.New(target.Endpoint, token), nil
+		bind, err := fortigate.ParseBindTo(target.BindTo)
+		if err != nil {
+			return nil, err
+		}
+		return fortigate.New(target.Endpoint, token, fortigate.WithBindTo(bind)), nil
 	case "paloalto":
 		apiKey, err := require(target.APIKeyRef, "palo alto api key")
 		if err != nil {
 			return nil, err
 		}
-		return paloalto.New(target.Endpoint, apiKey), nil
+		return paloalto.New(target.Endpoint, apiKey, paloalto.WithSSLTLSProfile(target.SSLTLSProfile, target.CommitAdmin)), nil
 	default:
 		return nil, fmt.Errorf("relay: connector %q is not relay-executable", name)
 	}

@@ -242,6 +242,9 @@ type nativeTargetConfig struct {
 	ObjectName       string `json:"object_name,omitempty"`
 	ClientSSLProfile string `json:"client_ssl_profile,omitempty"`
 	FileLocation     string `json:"file_location,omitempty"`
+	BindTo           string `json:"bind_to,omitempty"`
+	SSLTLSProfile    string `json:"ssl_tls_profile,omitempty"`
+	CommitAdmin      string `json:"commit_admin,omitempty"`
 
 	Region             string `json:"region,omitempty"`
 	AccessKeyID        string `json:"access_key_id,omitempty"`
@@ -413,14 +416,19 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 			lease.Close()
 			return nil, nil, nil, err
 		}
-		built = fortigate.New(target.Endpoint, token)
+		bind, err := fortigate.ParseBindTo(target.BindTo)
+		if err != nil {
+			lease.Close()
+			return nil, nil, nil, err
+		}
+		built = fortigate.New(target.Endpoint, token, fortigate.WithBindTo(bind))
 	case "paloalto":
 		apiKey, err := require(target.APIKeyRef, "palo alto API key")
 		if err != nil {
 			lease.Close()
 			return nil, nil, nil, err
 		}
-		built = paloalto.New(target.Endpoint, apiKey)
+		built = paloalto.New(target.Endpoint, apiKey, paloalto.WithSSLTLSProfile(target.SSLTLSProfile, target.CommitAdmin))
 	case "aws-acm":
 		accessSecret, err := require(target.SecretAccessKeyRef, "AWS secret access key")
 		if err != nil {

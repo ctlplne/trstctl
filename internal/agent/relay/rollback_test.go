@@ -39,9 +39,9 @@ func rollbackJob(t *testing.T, jobID int64, intent relay.RollbackIntent) relay.J
 func TestRelayRefusesRollbackForANonRebindableConnectorBeforeRedeeming(t *testing.T) {
 	ch := &fakeChannel{
 		jobs: []relay.Job{rollbackJob(t, 1, relay.RollbackIntent{
-			// paloalto is relay-reachable but its API cannot address an
+			// cisco is relay-reachable but its API cannot address an
 			// installed object separately from importing one.
-			Connector: "paloalto", Target: "vsys1", PredecessorFingerprint: "abcd1234",
+			Connector: "cisco", Target: "edge", PredecessorFingerprint: "abcd1234",
 		})},
 		material: map[string][]byte{"secret://appliance-admin": []byte(appliancePassword)},
 	}

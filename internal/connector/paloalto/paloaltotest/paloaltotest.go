@@ -88,11 +88,14 @@ type Server struct {
 	srv    *httptest.Server
 	apiKey []byte
 
-	mu      sync.Mutex
-	objects map[string]Object
-	imports []Import
-	queries [][]byte
-	calls   int
+	mu           sync.Mutex
+	objects      map[string]Object
+	profiles     map[string]string // ssl-tls-service-profile -> certificate name
+	commits      int
+	commitAdmins []string
+	imports      []Import
+	queries      [][]byte
+	calls        int
 
 	failStatus int
 	failBody   []byte
@@ -107,8 +110,9 @@ type Server struct {
 // it into a string.
 func New(apiKey []byte) *Server {
 	s := &Server{
-		apiKey:  append([]byte(nil), apiKey...),
-		objects: map[string]Object{},
+		apiKey:   append([]byte(nil), apiKey...),
+		objects:  map[string]Object{},
+		profiles: map[string]string{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -133,6 +137,28 @@ func (s *Server) Object(name string) (Object, bool) {
 
 // Imports returns the accepted imports in the order they were served, so a test
 // can assert the certificate was imported before the key it anchors.
+// ProfileCertificate reports the certificate a shared SSL/TLS service profile
+// is set to, as committed.
+func (s *Server) ProfileCertificate(profile string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.profiles[profile]
+}
+
+// Commits counts the commit operations the firewall accepted.
+func (s *Server) Commits() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.commits
+}
+
+// CommitAdmins lists the administrator each accepted partial commit was scoped to.
+func (s *Server) CommitAdmins() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.commitAdmins...)
+}
+
 func (s *Server) Imports() []Import {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -261,6 +287,26 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
+	switch q.Get("type") {
+	case "config":
+		s.handleConfig(w, q)
+		return
+	case "commit":
+		admin := between(q.Get("cmd"), "<partial><admin><member>", "</member></admin></partial>")
+		if admin == "" {
+			// A full commit would push every admin's staged changes; the
+			// connector promises a partial commit, so the double refuses the
+			// unscoped form.
+			writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="400"><result><msg>partial commit scoped to an admin is required</msg></result></response>`)
+			return
+		}
+		s.mu.Lock()
+		s.commits++
+		s.commitAdmins = append(s.commitAdmins, admin)
+		s.mu.Unlock()
+		writeEnvelope(w, http.StatusOK, `<response status="success" code="19"><result><msg><line>Commit succeeded</line></msg></result></response>`)
+		return
+	}
 	category := q.Get("category")
 	name := q.Get("certificate-name")
 	switch {
@@ -346,6 +392,72 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 }
 
 // authorized compares the presented key without turning it into a string.
+// handleConfig models the two config operations the connector uses: get on a
+// certificate entry (presence check) and set of a shared SSL/TLS service
+// profile's certificate, which must name an imported object.
+func (s *Server) handleConfig(w http.ResponseWriter, q map[string][]string) {
+	get := func(key string) string {
+		if v := q[key]; len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	}
+	xpath := get("xpath")
+	switch get("action") {
+	case "get":
+		if profile := between(xpath, "/config/shared/ssl-tls-service-profile/entry[@name='", "']"); profile != "" {
+			s.mu.Lock()
+			cert, set := s.profiles[profile]
+			s.mu.Unlock()
+			if !set {
+				writeEnvelope(w, http.StatusOK, `<response status="success" code="7"><result/></response>`)
+				return
+			}
+			writeEnvelope(w, http.StatusOK, `<response status="success" code="19"><result total-count="1" count="1"><entry name="`+profile+`"><certificate>`+cert+`</certificate></entry></result></response>`)
+			return
+		}
+		name := between(xpath, "/config/shared/certificate/entry[@name='", "']")
+		s.mu.Lock()
+		_, exists := s.objects[name]
+		s.mu.Unlock()
+		if name == "" || !exists {
+			writeEnvelope(w, http.StatusOK, `<response status="success" code="7"><result/></response>`)
+			return
+		}
+		writeEnvelope(w, http.StatusOK, `<response status="success" code="19"><result total-count="1" count="1"><entry name="`+name+`"/></result></response>`)
+	case "set":
+		profile := between(xpath, "/config/shared/ssl-tls-service-profile/entry[@name='", "']")
+		cert := between(get("element"), "<certificate>", "</certificate>")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if profile == "" || cert == "" {
+			writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="400"><result><msg>Invalid xpath or element</msg></result></response>`)
+			return
+		}
+		if _, exists := s.objects[cert]; !exists {
+			writeEnvelope(w, http.StatusOK, `<response status="error" code="12"><result><msg>certificate is invalid</msg></result></response>`)
+			return
+		}
+		s.profiles[profile] = cert
+		writeEnvelope(w, http.StatusOK, `<response status="success" code="20"><msg>command succeeded</msg></response>`)
+	default:
+		writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="400"><result><msg>Unsupported action</msg></result></response>`)
+	}
+}
+
+func between(s, start, end string) string {
+	i := bytes.Index([]byte(s), []byte(start))
+	if i < 0 {
+		return ""
+	}
+	rest := s[i+len(start):]
+	j := bytes.Index([]byte(rest), []byte(end))
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
+}
+
 func (s *Server) authorized(r *http.Request) bool {
 	presented := []byte(r.Header.Get("X-PAN-KEY"))
 	return len(presented) > 0 && bytes.Equal(presented, s.apiKey)

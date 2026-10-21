@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -289,7 +290,7 @@ func TestEmulatorRefusesWhatTheApplianceRefuses(t *testing.T) {
 		{"wrong credential", http.MethodPut, object, "Bearer nope", good, http.StatusUnauthorized},
 		{"token in a query parameter is not a credential", http.MethodPut, object + "?access_token=" + string(apiToken), "", good, http.StatusUnauthorized},
 		{"another endpoint", http.MethodPut, srv.URL() + "/api/v2/cmdb/system/admin/admin", "Bearer " + string(apiToken), good, http.StatusNotFound},
-		{"another method", http.MethodGet, object, "Bearer " + string(apiToken), "", http.StatusMethodNotAllowed},
+		{"another method", http.MethodDelete, object, "Bearer " + string(apiToken), "", http.StatusMethodNotAllowed},
 		{"the collection, with no object named", http.MethodPut, srv.URL() + "/api/v2/cmdb/vpn.certificate/local/", "Bearer " + string(apiToken), good, http.StatusMethodNotAllowed},
 		{"malformed body", http.MethodPut, object, "Bearer " + string(apiToken), "{", http.StatusBadRequest},
 		{"body naming a different object", http.MethodPut, object, "Bearer " + string(apiToken), `{"name":"other","certificate":` + quote(certPEM) + `,"private-key":` + quote(keyPEM) + `}`, http.StatusBadRequest},
@@ -352,13 +353,13 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 // this test keeps that honest in both directions, so adding a Rollback that
 // re-uploaded (which is a redeploy, and needs a key the control plane does not
 // hold after B1) would fail here rather than quietly making the census lie.
-func TestFortiGateDoesNotClaimRollback(t *testing.T) {
+func TestFortiGateWithoutBindToRefusesRollback(t *testing.T) {
 	certPEM, keyPEM := material(t)
 	srv := fortigatetest.New(apiToken)
 	defer srv.Close()
 
-	if connector.CanRollback("fortigate") {
-		t.Error("the rollback census claims fortigate can re-bind; its API has no bind call separate from the upload")
+	if !connector.CanRollback("fortigate") {
+		t.Error("the rollback census no longer lists fortigate; with bind_to it re-points a FortiOS setting")
 	}
 
 	c := fortigate.New(srv.URL(), apiToken)
@@ -373,10 +374,10 @@ func TestFortiGateDoesNotClaimRollback(t *testing.T) {
 		Reason:                 "operator asked for a rollback this family cannot execute",
 	})
 	if err == nil {
-		t.Fatal("a rollback reported success on a connector that cannot re-bind")
+		t.Fatal("a rollback reported success on a target with no binding to move")
 	}
-	if err.Error() != connector.ErrRollbackUnsupported.Error() {
-		t.Errorf("rollback error = %v, want %v", err, connector.ErrRollbackUnsupported)
+	if !errors.Is(err, connector.ErrRollbackNotConfigured) {
+		t.Errorf("rollback error = %v, want %v", err, connector.ErrRollbackNotConfigured)
 	}
 	// And nothing moved on the appliance: an unsupported rollback must be inert,
 	// not a partial attempt that leaves the object half-changed.

@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,6 +40,53 @@ import (
 // target does not name one.
 const defaultName = "trstctl"
 
+// BindTo names the FortiOS setting a deploy points at the uploaded
+// certificate (A44). With a binding, deploys upload under a fingerprint-named
+// local certificate and move only the setting, so the predecessor object
+// survives and a rollback is one setting change back to it.
+type BindTo string
+
+const (
+	// BindAdmin binds system.global admin-server-cert (the GUI/API listener).
+	BindAdmin BindTo = "admin"
+	// BindSSLVPN binds vpn.ssl.settings servercert (the SSL-VPN portal).
+	BindSSLVPN BindTo = "ssl-vpn"
+)
+
+const (
+	adminSettingPath  = "/api/v2/cmdb/system/global"
+	sslVPNSettingPath = "/api/v2/cmdb/vpn.ssl/settings"
+	localCertPath     = "/api/v2/cmdb/vpn.certificate/local/"
+)
+
+// ParseBindTo validates an operator-supplied bind_to value.
+func ParseBindTo(value string) (BindTo, error) {
+	switch BindTo(strings.TrimSpace(value)) {
+	case "":
+		return "", nil
+	case BindAdmin:
+		return BindAdmin, nil
+	case BindSSLVPN:
+		return BindSSLVPN, nil
+	default:
+		return "", fmt.Errorf("fortigate: bind_to must be %q or %q", BindAdmin, BindSSLVPN)
+	}
+}
+
+func (b BindTo) settingPath() string {
+	if b == BindSSLVPN {
+		return sslVPNSettingPath
+	}
+	return adminSettingPath
+}
+
+func (b BindTo) settingField() string {
+	if b == BindSSLVPN {
+		return "servercert"
+	}
+	return "admin-server-cert"
+}
+
 // Connector deploys certificates to a Fortinet FortiGate / FortiWeb appliance
 // over the FortiOS REST API.
 //
@@ -49,7 +97,12 @@ type Connector struct {
 	baseURL string // FortiOS management base, e.g. https://fgt.example (no trailing slash)
 	host    string // host of baseURL, for the net.dial grant
 	token   []byte // FortiOS REST API token (AN-8: []byte, never logged, wiped by Close)
+	bindTo  BindTo // empty keeps the legacy in-place deploy under the target name
 }
+
+// WithBindTo makes deploys fingerprint-named and bound to the given setting,
+// which is what makes the target rollback-capable.
+func WithBindTo(bind BindTo) Option { return func(c *Connector) { c.bindTo = bind } }
 
 var _ connector.Connector = (*Connector)(nil)
 
@@ -100,6 +153,15 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 // the object in place with identical material.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
 	name := certName(dep.Target)
+	if c.bindTo != "" {
+		// Fingerprint-named so the predecessor survives (A44). FortiOS caps a
+		// local certificate name at 35 characters; the target base must leave
+		// room for the 13-character fingerprint suffix.
+		name = connector.DeployedObjectName(name, dep.Fingerprint)
+		if len(name) > 35 {
+			return fmt.Errorf("fortigate: object name %q exceeds the 35-character FortiOS limit; shorten the target name", name)
+		}
+	}
 
 	body, err := json.Marshal(localCert{
 		Name:        name,
@@ -113,25 +175,117 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	// transient edge copy (the long-lived key stays []byte in dep.KeyPEM). Wipe it
 	// after the request so the key does not linger in this buffer (AN-8).
 	defer secret.Wipe(body)
-
-	endpoint := c.baseURL + "/api/v2/cmdb/vpn.certificate/local/" + url.PathEscape(name)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return err
+	if err := c.call(ctx, sb, http.MethodPut, localCertPath+url.PathEscape(name), body); err != nil {
+		return fmt.Errorf("fortigate: deploy certificate %q: %w", name, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	// FortiOS REST API token, presented as a bearer credential. Never logged. The
-	// header value is the transient edge form of the []byte token.
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
+	if c.bindTo == "" {
+		return nil
+	}
+	if err := c.bind(ctx, sb, name); err != nil {
+		return fmt.Errorf("fortigate: bind %s to %q: %w", c.bindTo.settingField(), name, err)
+	}
+	return nil
+}
 
+// Rollback re-points the configured setting at the predecessor's
+// fingerprint-named object, which must still be on the appliance (A44).
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if c.bindTo == "" {
+		return connector.ErrRollbackNotConfigured
+	}
+	if strings.TrimSpace(rb.PredecessorFingerprint) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	name := connector.RollbackObjectName(certName(rb.Target), rb.PredecessorFingerprint)
+	if err := c.mustExist(ctx, sb, localCertPath+url.PathEscape(name)); err != nil {
+		return fmt.Errorf("fortigate: predecessor certificate %q: %w", name, err)
+	}
+	if err := c.bind(ctx, sb, name); err != nil {
+		return fmt.Errorf("fortigate: re-bind %s to predecessor %q: %w", c.bindTo.settingField(), name, err)
+	}
+	return nil
+}
+
+// Readback reports the local certificate the configured setting points at
+// (A44). It asks the device, not the deploy: an operator who re-pointed the
+// setting by hand is reported as diverged, not as clean.
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, _ string) (connector.Installed, error) {
+	if c.bindTo == "" {
+		return connector.Installed{}, connector.ErrReadbackNotConfigured
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+c.bindTo.settingPath(), nil)
+	if err != nil {
+		return connector.Installed{}, err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
 	resp, err := sb.Request(req)
 	if err != nil {
-		return fmt.Errorf("fortigate: deploy certificate %q: %w", name, err)
+		return connector.Installed{}, fmt.Errorf("fortigate: read back %s: %w", c.bindTo.settingField(), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		_ = secret.DrainBounded(resp.Body, 4<<10)
-		return fmt.Errorf("fortigate: deploy certificate %q: status %d (response body redacted)", name, resp.StatusCode)
+		return connector.Installed{}, fmt.Errorf("fortigate: read back %s: status %d (response body redacted)", c.bindTo.settingField(), resp.StatusCode)
+	}
+	var body struct {
+		Results map[string]any `json:"results"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
+		return connector.Installed{}, fmt.Errorf("fortigate: decode %s: %w", c.bindTo.settingField(), err)
+	}
+	name, _ := body.Results[c.bindTo.settingField()].(string)
+	if strings.TrimSpace(name) == "" {
+		return connector.Installed{ObjectName: c.bindTo.settingField()}, nil
+	}
+	return connector.Installed{Fingerprint: connector.FingerprintFromObjectName(name), ObjectName: name, Bound: true}, nil
+}
+
+func (c *Connector) bind(ctx context.Context, sb connector.Sandbox, name string) error {
+	body, err := json.Marshal(map[string]string{c.bindTo.settingField(): name})
+	if err != nil {
+		return err
+	}
+	return c.call(ctx, sb, http.MethodPut, c.bindTo.settingPath(), body)
+}
+
+func (c *Connector) mustExist(ctx context.Context, sb connector.Sandbox, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return connector.ErrNoPredecessorInstalled
+	case resp.StatusCode/100 != 2:
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
+	return nil
+}
+
+// call performs one FortiOS REST request with the bearer token. The token
+// header value is the transient edge form of the []byte token; never logged.
+func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 	}
 	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil

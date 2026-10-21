@@ -45,7 +45,7 @@ func TestE1ScopeEveryAcceptedFamilyHasOneTruthfulDisposition(t *testing.T) {
 		}
 	}
 
-	if counts[ParityDispositionMigrated] != 4 || counts[ParityDispositionArchitectureException] != 3 || counts[ParityDispositionUnimplemented] != 6 {
-		t.Errorf("E1 disposition counts = %v, want migrated=4 architecture_exception=3 unimplemented=6", counts)
+	if counts[ParityDispositionMigrated] != 6 || counts[ParityDispositionArchitectureException] != 1 || counts[ParityDispositionUnimplemented] != 6 {
+		t.Errorf("E1 disposition counts = %v, want migrated=6 architecture_exception=1 unimplemented=6", counts)
 	}
 }

@@ -26,12 +26,12 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 | `cisco` | Cisco management certificate-import API (HTTP Basic, JSON) | `architecture_exception` | no | no |
 | `envoy` | Envoy SDS management HTTP resource (v3 Secret payload) | `unimplemented` | yes (host restore) | no |
 | `f5` | F5 BIG-IP iControl REST | `migrated` | yes (re-bind) | no |
-| `fortigate` | FortiOS CMDB REST (vpn.certificate/local) | `architecture_exception` | no | no |
+| `fortigate` | FortiOS CMDB REST (vpn.certificate/local, system/global, vpn.ssl/settings) | `migrated` | yes (re-bind) | no |
 | `gcp-certificate-manager` | Google Cloud Certificate Manager certificates.patch REST API | `unimplemented` | no | no |
 | `kemp` | Kemp LoadMaster RESTful API | `migrated` | yes (re-bind) | no |
 | `mysql` | host-local MySQL TLS files plus a fixed mysql-tls-reload action for ALTER INSTANCE RELOAD TLS | `unimplemented` | yes (host restore) | no |
 | `netscaler` | Citrix NetScaler NITRO REST | `migrated` | yes (re-bind) | no |
-| `paloalto` | PAN-OS XML API (certificate import) | `architecture_exception` | no | no |
+| `paloalto` | PAN-OS XML API (certificate import, config set, partial commit) | `migrated` | yes (re-bind) | no |
 | `postgresql` | host-local PostgreSQL TLS files plus allowlisted pg_ctl reload | `unimplemented` | yes (host restore) | no |
 
 ## a10
@@ -132,17 +132,20 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 ## fortigate
 
-**API/local contract:** FortiOS CMDB REST (vpn.certificate/local)
+**API/local contract:** FortiOS CMDB REST (vpn.certificate/local, system/global, vpn.ssl/settings)
 
-**E1 disposition:** `architecture_exception`
+**E1 disposition:** `migrated`
 
 **Exercised against a faithful management-API double:**
 
-- deploy: upsert the local-certificate object carrying certificate and key
+- deploy: upsert the local-certificate object carrying certificate and key; with bind_to (admin or ssl-vpn) the object is fingerprint-named and the admin-server-cert or SSL-VPN servercert setting is pointed at it
+- rollback: re-point the bound setting at a previously installed fingerprint-named local certificate (targets with bind_to only)
+- readback: report the local certificate the bound setting points at (targets with bind_to only)
 
 **Known limits:**
 
-- no rollback: the local-certificate object holds the material rather than referencing it, and the deploy replaces its contents in place, so no predecessor survives to bind back to
+- a target without bind_to deploys in place under the target name, so no predecessor survives and its rollback is refused as not configured rather than reported done
+- FortiOS caps a local-certificate name at 35 characters; a fingerprint-named deploy needs a target name of 22 characters or fewer
 - VDOM routing is not modeled; the double serves the root VDOM
 
 ## gcp-certificate-manager
@@ -209,18 +212,20 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 ## paloalto
 
-**API/local contract:** PAN-OS XML API (certificate import)
+**API/local contract:** PAN-OS XML API (certificate import, config set, partial commit)
 
-**E1 disposition:** `architecture_exception`
+**E1 disposition:** `migrated`
 
 **Exercised against a faithful management-API double:**
 
-- deploy: import the certificate and the private key as separate calls, in order
+- deploy: import the certificate and the private key as separate calls, in order; with ssl_tls_profile the objects are fingerprint-named, the shared SSL/TLS service profile is set to the new certificate and a partial commit scoped to commit_admin pushes only that administrator's changes
+- rollback: set the SSL/TLS service profile back to a previously imported fingerprint-named certificate and partial-commit it (targets with ssl_tls_profile only)
+- readback: report the certificate the SSL/TLS service profile is set to (targets with ssl_tls_profile only)
 
 **Known limits:**
 
-- no rollback: import both uploads and installs, and the API exposes no call that re-points an installed certificate, so a re-bind is not expressible
-- no commit is issued; a candidate configuration is left for the operator's own commit policy, which is deliberate — an automatic commit would push unrelated pending changes somebody else staged
+- a target without ssl_tls_profile imports in place under the target name and issues no commit, leaving the candidate configuration to the operator's own commit policy; its rollback is refused as not configured rather than reported done
+- the partial commit is scoped to commit_admin; other administrators' staged changes are never pushed, and a profile outside the shared location is not modeled
 
 ## postgresql
 

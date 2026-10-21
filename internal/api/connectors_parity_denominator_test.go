@@ -32,8 +32,8 @@ func TestConnectorCatalogPublishesTheAcceptedThirteenFamilyParityProgram(t *test
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("catalog parity families = %v, want the accepted E1 denominator %v", got, want)
 	}
-	if counts["migrated"] != 4 || counts["architecture_exception"] != 3 || counts["unimplemented"] != 6 || len(counts) != 3 {
-		t.Fatalf("catalog parity dispositions = %v, want migrated=4 architecture_exception=3 unimplemented=6", counts)
+	if counts["migrated"] != 6 || counts["architecture_exception"] != 1 || counts["unimplemented"] != 6 || len(counts) != 3 {
+		t.Fatalf("catalog parity dispositions = %v, want migrated=6 architecture_exception=1 unimplemented=6", counts)
 	}
 }
 

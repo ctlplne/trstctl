@@ -220,7 +220,7 @@ not this file.
 | `internal/connector/cisco/ciscotest/ciscotest_test.go:16` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/connector/paloalto/paloalto_test.go:28` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
@@ -1818,7 +1818,7 @@ not this file.
 | `internal/ca/letsencrypt/acmefake/acmefake.go:275` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/ca/letsencrypt/acmefake/acmefake.go:299` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/ca/letsencrypt/acmefake/acmefake.go:303` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/connector/fortigate/fortigatetest/fortigatetest.go:219` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/connector/fortigate/fortigatetest/fortigatetest.go:241` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:218` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |

@@ -76,6 +76,11 @@ var ErrNoPredecessorInstalled = errors.New("connector: the predecessor object is
 // ErrRollbackUnsupported is returned when a connector cannot re-bind.
 var ErrRollbackUnsupported = errors.New("connector: this connector cannot roll back by re-binding")
 
+// ErrRollbackNotConfigured is returned by a re-bind-capable family whose target
+// configuration names no binding to move (A44): the deploy installed in place
+// under the target name, so no predecessor object survived to bind back to.
+var ErrRollbackNotConfigured = errors.New("connector: this target is not configured for re-bind rollback; set the binding the deploy should point at a fingerprint-named object")
+
 // objectNameFingerprintLen is how much of the fingerprint goes in an object
 // name. Twelve hex characters is 48 bits — far beyond collision risk for the
 // handful of certificates one target sees.
@@ -137,6 +142,12 @@ var rollbackCapableFamilies = []string{
 	"kemp",
 	"netscaler",
 	"a10",
+	// fortigate and paloalto re-bind only when the target names the binding to
+	// move (bind_to, ssl_tls_profile); a target without one deploys in place
+	// under the target name as before and its Rollback answers
+	// ErrRollbackNotConfigured rather than success (A44).
+	"fortigate",
+	"paloalto",
 }
 
 // hostRollbackCapableFamilies is the generated/cross-checked census of native

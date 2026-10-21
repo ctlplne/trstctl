@@ -69,6 +69,11 @@ type Installed struct {
 // ErrReadbackUnsupported is returned when a family cannot report installed state.
 var ErrReadbackUnsupported = errors.New("connector: this family's API cannot report what is installed")
 
+// ErrReadbackNotConfigured is returned by a readback-capable family whose target
+// names no binding to ask about (A44): the deploy installed in place under the
+// target name, so there is no bound setting whose certificate can be read.
+var ErrReadbackNotConfigured = errors.New("connector: this target is not configured for readback; set the binding the deploy points at a fingerprint-named object")
+
 // readbackCapableFamilies are the families whose API can report installed state.
 //
 // Each of these exposes a call that lists or gets an installed object and its
@@ -80,6 +85,11 @@ var readbackCapableFamilies = []string{
 	"kemp",
 	"netscaler",
 	"a10",
+	// fortigate and paloalto answer only for targets that name a binding
+	// (bind_to, ssl_tls_profile); an unconfigured target reports
+	// ErrReadbackNotConfigured rather than a clean readback (A44).
+	"fortigate",
+	"paloalto",
 }
 
 // CanReadback reports whether a family can be asked what it has installed.

@@ -78,10 +78,16 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
     case "cisco":
       return { endpoint: `https://${name}.example.com`, username: "trstctl", password_ref: `secret://connectors/${name}-password` };
     case "kemp":
-    case "fortigate":
       return { endpoint: `https://${name}.example.com`, token_ref: `secret://connectors/${name}-token` };
+    case "fortigate":
+      return { endpoint: "https://fortigate.example.com", token_ref: "secret://connectors/fortigate-token", bind_to: "admin" };
     case "paloalto":
-      return { endpoint: "https://panorama.example.com", api_key_ref: "secret://connectors/paloalto-api-key" };
+      return {
+        endpoint: "https://panorama.example.com",
+        api_key_ref: "secret://connectors/paloalto-api-key",
+        ssl_tls_profile: "web-tls",
+        commit_admin: "trstctl",
+      };
     case "aws-acm":
       return {
         endpoint: "https://acm.us-east-1.amazonaws.com",
