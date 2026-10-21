@@ -25,6 +25,9 @@ type certificateExecutionBinding struct {
 	IssuerSource string
 	IssuerID     string
 	Issuance     store.OperationApprovalIssuanceBinding
+	// RequiresApproval marks a reissue whose profile demands a distinct
+	// issuance approval; the start then runs under an exact approval (A40).
+	RequiresApproval bool
 }
 
 // A CBOM observation alone is not authority to issue a certificate or mutate
@@ -107,9 +110,6 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 			return nil, fmt.Errorf("pqcmigration: decode active profile %q v%d: %w", rec.Name, rec.Version, err)
 		}
 		selected.Name, selected.Version = rec.Name, rec.Version
-		if selected.RequiresApproval {
-			return nil, api.ErrStatus(http.StatusConflict, "PQC certificate profile requires distinct issuance approval; approve the exact profile-bound operation before starting")
-		}
 		if err := validatePQCReissueProfile(selected, reissue.Asset, identity.Name, reissue.Protocol, reissue.TargetAlgorithm); err != nil {
 			return nil, api.ErrStatus(http.StatusConflict, fmt.Sprintf("PQC reissue for asset %s cannot start under profile %s: %v", reissue.Asset.ID, rec.Name, err))
 		}
@@ -120,6 +120,7 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		out[reissue.Asset.ID] = certificateExecutionBinding{
 			Identity: identity, Target: target, AgentID: agentID,
 			IssuerSource: attrs.IssuerSource, IssuerID: attrs.IssuerID,
+			RequiresApproval: selected.RequiresApproval,
 			Issuance: store.OperationApprovalIssuanceBinding{
 				ProfileName: rec.Name, ProfileID: rec.ID, ProfileVersion: rec.Version,
 				ProfileSpecDigest:   store.ProfileSpecDigest(rec.Spec),

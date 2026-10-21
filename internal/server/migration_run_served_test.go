@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -509,6 +511,101 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		caOperator: caOperator, caApprover: caApprover, token: token, identityID: identityID,
 		trustPath: trustPath, dnsName: dnsName, fixture: fixture, channel: channel, profile: profile, state: state,
 	})
+	runApprovalGatedMigrationAUD40(t, h, token, successorAuthority.ID, identityID, trustPath)
+}
+
+// A40: members under an approval-required profile no longer refuse the run.
+// The start becomes the approved operation: the first post records the exact
+// request and answers 202, reviewers approve it by intent digest, the same
+// start posted again consumes that single-use authority with the run record.
+func runApprovalGatedMigrationAUD40(t *testing.T, h *roleHarness, token, authorityID, identityID, trustPath string) {
+	t.Helper()
+	ctx := context.Background()
+	profileWriter := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-profile-writer", "profiles:write")
+	profileReviewer := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-profile-reviewer", "profiles:write")
+	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/profiles", profileWriter, "aud40-profile-approval-version", map[string]any{
+		"name": "migration-api", "spec": map[string]any{
+			"max_validity": "720h", "allowed_protocols": []string{"api"}, "requires_approval": true,
+		},
+	})
+	if statusCode != http.StatusAccepted {
+		t.Fatalf("approval-required profile version = %d %s; want a parked 202", statusCode, body)
+	}
+	var parked struct {
+		ApprovalID string `json:"approval_id"`
+	}
+	if err := json.Unmarshal(body, &parked); err != nil || parked.ApprovalID == "" {
+		t.Fatalf("decode parked profile approval: %v %s", err, body)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/profiles/approvals/"+parked.ApprovalID+"/approvals",
+		profileReviewer, "aud40-profile-approval-review", map[string]string{"reason": "gate migration issuance"})
+	if statusCode != http.StatusOK || !bytes.Contains(body, []byte(`"state":"issued"`)) {
+		t.Fatalf("approve profile version = %d %s", statusCode, body)
+	}
+
+	startBody := map[string]any{
+		"plan_id": "plan-aud40-approval", "new_authority_id": authorityID,
+		"waves": []any{map[string]any{
+			"id": "canary", "ordinal": 1,
+			"members": []any{map[string]any{
+				"identity_id": identityID, "agent_id": agentRowID(h.tenant, h.agent), "trust_anchor_path": trustPath,
+			}},
+		}},
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/runs", token, "aud40-approval-start-1", startBody)
+	if statusCode != http.StatusAccepted {
+		t.Fatalf("gated start = %d %s; want 202 pending approval", statusCode, body)
+	}
+	var pending struct {
+		Status            string `json:"status"`
+		ApprovalRequestID string `json:"approval_request_id"`
+		IntentDigest      string `json:"intent_digest"`
+		RequiredApprovals int    `json:"required_approvals"`
+	}
+	if err := json.Unmarshal(body, &pending); err != nil || pending.Status != "pending_approval" || pending.ApprovalRequestID == "" || pending.IntentDigest == "" {
+		t.Fatalf("pending start body = %s (%v)", body, err)
+	}
+	if runs, err := h.store.SystemPool().Query(ctx, `SELECT 1 FROM outbox WHERE tenant_id=$1 AND idempotency_key LIKE 'migration:%' AND payload::text LIKE '%plan-aud40-approval%'`, h.tenant); err == nil {
+		defer runs.Close()
+		if runs.Next() {
+			t.Fatal("a pending-approval start queued migration work")
+		}
+	}
+	request, err := h.store.GetOperationApproval(ctx, h.tenant, pending.ApprovalRequestID)
+	if err != nil || request.ResourceKind != "migration_run" || request.Action != "start" || request.ResourceID != "plan-aud40-approval" {
+		t.Fatalf("approval request = %+v err=%v; want migration_run/plan/start", request, err)
+	}
+	if !strings.Contains(strings.Join(request.EvidenceRefs, "\n"), "member:"+identityID+":profile:migration-api:") {
+		t.Fatalf("approval evidence does not freeze the gated member's profile: %v", request.EvidenceRefs)
+	}
+	for index := 0; index < pending.RequiredApprovals; index++ {
+		approver := seedScopedTokenSubject(t, h.store, h.tenant, fmt.Sprintf("aud40-migration-approver-%d", index), "certs:issue")
+		statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/approval-requests/"+pending.ApprovalRequestID+"/approvals",
+			approver, fmt.Sprintf("aud40-approval-decision-%d", index), map[string]string{"intent_digest": pending.IntentDigest})
+		if statusCode != http.StatusOK && statusCode != http.StatusCreated {
+			t.Fatalf("approve migration start (%d) = %d %s", index, statusCode, body)
+		}
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/runs", token, "aud40-approval-start-2", startBody)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("approved start = %d %s; want 201", statusCode, body)
+	}
+	var run migration.Run
+	if err := json.Unmarshal(body, &run); err != nil || run.Approval == nil || run.Approval.RequestID != pending.ApprovalRequestID {
+		t.Fatalf("started run does not carry the consumed approval: %s (%v)", body, err)
+	}
+	if issuance := run.Waves[0].Members[0].Binding.Issuance; issuance == nil || issuance.ProfileName != "migration-api" || issuance.ProfileVersion < 2 {
+		t.Fatalf("member issuance binding = %+v; want the approval-required profile revision frozen in the run", issuance)
+	}
+	consumed, err := h.store.GetOperationApproval(ctx, h.tenant, pending.ApprovalRequestID)
+	if err != nil || consumed.Status != store.ApprovalStatusConsumed {
+		t.Fatalf("approval after start = %+v err=%v; want consumed", consumed, err)
+	}
+	// The same authority cannot start a second run.
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/migrations/runs", token, "aud40-approval-start-3", startBody)
+	if statusCode != http.StatusConflict || !bytes.Contains(body, []byte("consumed")) {
+		t.Fatalf("a consumed approval started another run: %d %s", statusCode, body)
+	}
 }
 
 type offlineRootMigrationFixture struct {

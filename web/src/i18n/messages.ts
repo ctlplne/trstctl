@@ -12069,6 +12069,11 @@ export const messages = {
     defaultMessage: "Roll back run",
     description: "Confirmed migration rollback action.",
   },
+  "migration.design.pendingApproval": {
+    defaultMessage:
+      "This start awaits distinct approval because a member issues under an approval-required profile. Ask reviewers to approve request {request} (intent {digest}, {required} approvals), then start the same plan again.",
+    description: "Shown when a migration start was recorded as a pending approval request instead of a run.",
+  },
   "migration.design.operationError": {
     defaultMessage: "The migration action did not complete. Nothing was assumed successful; review the plan and retained run evidence before retrying.",
     description: "Safe generic error for migration assessment and run controls.",

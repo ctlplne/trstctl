@@ -21207,6 +21207,88 @@
         ],
         "type": "object"
       },
+      "MigrationApprovalUse": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "from_state": {
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "issuance": {
+            "properties": {
+              "effective_ttl_seconds": {
+                "type": "integer"
+              },
+              "profile_id": {
+                "type": "string"
+              },
+              "profile_name": {
+                "type": "string"
+              },
+              "profile_spec_digest": {
+                "type": "string"
+              },
+              "profile_version": {
+                "type": "integer"
+              },
+              "requested_ttl_seconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "requested_ttl_seconds",
+              "effective_ttl_seconds"
+            ],
+            "type": "object"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "type": "string"
+          },
+          "target_version": {
+            "type": "integer"
+          },
+          "to_state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "intent_digest",
+          "requester",
+          "resource_kind",
+          "resource_id",
+          "action",
+          "target_version",
+          "required_approvals"
+        ],
+        "type": "object"
+      },
       "MigrationAssessRequest": {
         "properties": {
           "min_trust_percent": {
@@ -21413,6 +21495,9 @@
       },
       "MigrationRun": {
         "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/MigrationApprovalUse"
+          },
           "halt_reason": {
             "type": "string"
           },
@@ -21532,6 +21617,41 @@
           "identity_id",
           "agent_id",
           "trust_anchor_path"
+        ],
+        "type": "object"
+      },
+      "MigrationRunStartPending": {
+        "properties": {
+          "approval_disposition": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending_approval"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "approval_request_id",
+          "intent_digest",
+          "required_approvals",
+          "approval_disposition",
+          "detail"
         ],
         "type": "object"
       },

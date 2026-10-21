@@ -297,6 +297,7 @@ import type {
   MigrationRun,
   MigrationRunActionRequest,
   MigrationRunList,
+  MigrationRunStartPending,
   MigrationRunStartRequest,
   UnownedQueue,
   RetirementChecklist,
@@ -1082,6 +1083,7 @@ export type {
   MigrationRun,
   MigrationRunActionRequest,
   MigrationRunList,
+  MigrationRunStartPending,
   MigrationRunStartRequest,
   UnownedQueue,
   RetirementChecklist,
@@ -2030,7 +2032,7 @@ export interface Api {
   graphTrustStores(id: string): Promise<GraphTrustStores>;
   // H2: read-only assessment of a migration plan.
   assessMigration(request: unknown): Promise<MigrationAssessment>;
-  startMigrationRun(request: MigrationRunStartRequest): Promise<MigrationRun>;
+  startMigrationRun(request: MigrationRunStartRequest): Promise<MigrationRun | MigrationRunStartPending>;
   migrationRuns(): Promise<MigrationRunList>;
   migrationRun(id: string): Promise<MigrationRun>;
   pauseMigrationRun(id: string, request?: MigrationRunActionRequest): Promise<MigrationRun>;

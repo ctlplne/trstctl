@@ -7,6 +7,7 @@ import type {
   MigrationRun,
   MigrationRunActionRequest,
   MigrationRunList,
+  MigrationRunStartPending,
   MigrationRunStartRequest,
   CARetirementReceipt,
   CARetirementRequest,
@@ -47,7 +48,8 @@ export const assessMigration = (request: unknown) =>
   });
 
 /** H2: start one durable trust-before-leaf run. */
-export const startMigrationRun = (request: MigrationRunStartRequest) => mutate<MigrationRun>("POST", "/api/v1/migrations/runs", request);
+export const startMigrationRun = (request: MigrationRunStartRequest) =>
+  mutate<MigrationRun | MigrationRunStartPending>("POST", "/api/v1/migrations/runs", request);
 
 /** H2: tenant-scoped executable runs and their retained gates. */
 export const migrationRuns = () => req<MigrationRunList>("/api/v1/migrations/runs");

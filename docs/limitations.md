@@ -3382,6 +3382,17 @@ than sending an operator looking for a credential that was never there.
   host-generated successor that fails its live gate keeps its sealed key on the
   host for the same job to resume; rolling that successor back now frees the
   slot, so the next host-generated job for the target generates its own key.
+  Members whose certificate profile requires a distinct issuance approval (or a
+  deployment with `require_approval`) no longer refuse the run: the start is the
+  approved operation. The first `POST /api/v1/migrations/runs` records an
+  immutable approval request (`resource_kind: migration_run`, the plan id,
+  the requester, the canonical request digest, the new authority and each gated
+  member's frozen profile revision and lifetime) and answers `202` with
+  `status: pending_approval`, the request id and intent digest; reviewers with
+  `certs:issue` approve it through `/api/v1/approval-requests`, and the same
+  start posted again under a new `Idempotency-Key` records the run with the
+  consumed approval on it (`approval` in the run). Incident fleet reissuance
+  still refuses such members; it has no start approval of its own yet.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`
   (store → issuer, oriented the way impact travels) and `HOSTS` (resource → store).
@@ -4849,8 +4860,16 @@ presented as PQC verification. The issuing CA key remains classical
 ECDSA-P256, so the leaf has an ML-DSA subject key but not a fully post-quantum
 certificate chain. Historical issuance-only runs have no retained host key or
 predecessor and still report `rollback_unverified`. A profile requiring
-distinct issuance approval remains refused by this migration path until the
-exact operation has its own approval workflow; the control is not bypassed.
+distinct issuance approval no longer refuses this path: the start is the
+approved operation. The first `POST /api/v1/pqc/migrations` records an
+immutable approval request bound to the canonical selection, the target
+parameter set and every gated reissue's frozen profile revision and lifetime,
+and answers `202` with `status: pending_approval`, the request id and its
+intent digest; reviewers holding `certs:issue` approve it at
+`/api/v1/approval-requests/{id}/approvals`, and the same start posted again
+under a new `Idempotency-Key` consumes that single-use authority in the
+transaction that records the run. A changed selection or profile edit is a new
+request; a consumed, denied, expired or superseded one answers `409`.
 
 TLS posture rollout is a separate bound-target action.
 The Envoy PQC posture worker now queues an agent job through the outbox to the

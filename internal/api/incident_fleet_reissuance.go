@@ -340,11 +340,18 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 	if err != nil {
 		return plan, err
 	}
-	plan.Run, err = a.buildMigrationRun(ctx, tenantID, idempotencyKey, migrationStartRequest{
+	var gated []migrationGatedMember
+	plan.Run, gated, err = a.buildMigrationRun(ctx, tenantID, idempotencyKey, migrationStartRequest{
 		PlanID: "incident:" + req.IssuerID, NewAuthorityID: req.ReplacementAuthorityID, Waves: req.Cohorts,
 	})
 	if err != nil {
 		return plan, errStatus(http.StatusBadRequest, err.Error())
+	}
+	if len(gated) > 0 {
+		// Incident reissuance has no start approval of its own yet; a cohort
+		// member under an approval-required profile is refused rather than
+		// issued without the control (A40 covers planned migrations).
+		return plan, errStatus(http.StatusConflict, "incident cohort member "+gated[0].IdentityID+" issues under an approval-required certificate profile; incident fleet reissuance cannot carry that approval yet")
 	}
 	if err := a.bindIncidentMigrationMembers(ctx, tenantID, plan.ExactTrustHosts, compromisedCADER, &plan.Run); err != nil {
 		if errors.Is(err, errIncidentPredecessorIssuerMismatch) {

@@ -2721,6 +2721,29 @@ type LicensedCryptoMigrationStarted struct {
 	Queued             int                                 `json:"queued"`
 	Reissues           []LicensedCryptoMigrationReissue    `json:"reissues,omitempty"`
 	TLSPostures        []LicensedCryptoMigrationTLSPosture `json:"tls_postures,omitempty"`
+	// Approval is the exact single-use start approval consumed with this
+	// event when a reissue runs under an approval-required profile (A40).
+	Approval *store.OperationApprovalUse `json:"approval,omitempty"`
+}
+
+// migrationApprovalUse maps the aggregate's storage-independent approval use
+// onto the store's single-use authority.
+func migrationApprovalUse(a migration.ApprovalUse) store.OperationApprovalUse {
+	use := store.OperationApprovalUse{
+		RequestID: a.RequestID, IntentDigest: a.IntentDigest, Requester: a.Requester,
+		ResourceKind: a.ResourceKind, ResourceID: a.ResourceID, Action: a.Action,
+		FromState: a.FromState, ToState: a.ToState, TargetVersion: a.TargetVersion,
+		RequiredApprovals: a.RequiredApprovals, Reason: a.Reason,
+		EvidenceRefs: append([]string(nil), a.EvidenceRefs...),
+	}
+	if a.Issuance != nil {
+		use.Issuance = &store.OperationApprovalIssuanceBinding{
+			ProfileName: a.Issuance.ProfileName, ProfileID: a.Issuance.ProfileID,
+			ProfileVersion: a.Issuance.ProfileVersion, ProfileSpecDigest: a.Issuance.ProfileSpecDigest,
+			RequestedTTLSeconds: a.Issuance.RequestedTTLSeconds, EffectiveTTLSeconds: a.Issuance.EffectiveTTLSeconds,
+		}
+	}
+	return use
 }
 
 // LicensedCryptoMigrationTLSPosture is the replayable external-mutation binding
@@ -5809,6 +5832,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := migration.ValidateActions(pl.Run, pl.Actions); err != nil {
 			return fmt.Errorf("projections: validate migration actions: %w", err)
 		}
+		if pl.Run.Approval != nil {
+			// A40: the exact start approval is consumed with the run record,
+			// so it can never authorize a second start.
+			use := migrationApprovalUse(*pl.Run.Approval)
+			if _, err := p.store.ValidateOperationApprovalUseTx(ctx, tx, e.TenantID, use, e.Time); err != nil {
+				return fmt.Errorf("projections: migration start approval: %w", err)
+			}
+			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, use, e.ID, e.Time); err != nil {
+				return err
+			}
+		}
 		return p.store.ApplyMigrationRunRecordedTx(ctx, tx, e.TenantID, pl.Run, e.Sequence, e.Time)
 	case EventACMEDNS01ProviderConfigUpserted:
 		var pl ACMEDNS01ProviderConfigUpserted
@@ -6324,6 +6358,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if pl.RunID == "" || len(pl.AssetIDs) == 0 || pl.TargetAlgorithm == "" || pl.Protocol == "" {
 			return fmt.Errorf("projections: %s requires run_id, asset_ids, target_algorithm, and protocol", e.Type)
+		}
+		if pl.Approval != nil {
+			if _, err := p.store.ValidateOperationApprovalUseTx(ctx, tx, e.TenantID, *pl.Approval, e.Time); err != nil {
+				return fmt.Errorf("projections: PQC migration start approval: %w", err)
+			}
+			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *pl.Approval, e.ID, e.Time); err != nil {
+				return err
+			}
 		}
 		return nil
 	case EventLicensedCryptoMigrationAssetCompleted:

@@ -7085,6 +7085,26 @@ MemberRequest = TypedDict(
     total=False,
 )
 
+MigrationApprovalUse = TypedDict(
+    'MigrationApprovalUse',
+    {
+        'action': str,
+        'evidence_refs': list[str],
+        'from_state': str,
+        'intent_digest': str,
+        'issuance': dict[str, Any],
+        'reason': str,
+        'request_id': str,
+        'requester': str,
+        'required_approvals': int,
+        'resource_id': str,
+        'resource_kind': str,
+        'target_version': int,
+        'to_state': str,
+    },
+    total=False,
+)
+
 MigrationAssessRequest = TypedDict(
     'MigrationAssessRequest',
     {
@@ -7150,6 +7170,7 @@ MigrationMemberBinding = TypedDict(
 MigrationRun = TypedDict(
     'MigrationRun',
     {
+        'approval': dict[str, Any],
         'halt_reason': str,
         'id': str,
         'pause_reason': str,
@@ -7199,6 +7220,19 @@ MigrationRunStartMember = TypedDict(
         'agent_id': str,
         'identity_id': str,
         'trust_anchor_path': str,
+    },
+    total=False,
+)
+
+MigrationRunStartPending = TypedDict(
+    'MigrationRunStartPending',
+    {
+        'approval_disposition': str,
+        'approval_request_id': str,
+        'detail': str,
+        'intent_digest': str,
+        'required_approvals': int,
+        'status': str,
     },
     total=False,
 )

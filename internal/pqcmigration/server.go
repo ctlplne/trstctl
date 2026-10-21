@@ -354,6 +354,13 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 	if err != nil {
 		return Response{}, err
 	}
+	approval, pending, err := s.authorizePQCMigrationStart(ctx, tenantID, req, certExec)
+	if err != nil {
+		return Response{}, err
+	}
+	if pending != nil {
+		return *pending, nil
+	}
 	targets, err := s.preflightTLSRolloutTargets(ctx, tenantID, plan)
 	if err != nil {
 		return Response{}, err
@@ -459,6 +466,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 		RollbackOnFailure: req.RollbackOnFailure, Queued: totalQueued,
 		Reissues:    append([]projections.LicensedCryptoMigrationReissue(nil), reissuePayloads...),
 		TLSPostures: append([]projections.LicensedCryptoMigrationTLSPosture(nil), tlsPayloads...),
+		Approval:    approval,
 	}
 	data, err := json.Marshal(started)
 	if err != nil {

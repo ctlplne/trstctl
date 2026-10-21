@@ -428,8 +428,11 @@ are issued by its one active signer-backed intermediate and the root certificate
 the anchor distributed to hosts. Identities carrying an email or URI SAN, and every
 other unsupported membership, are rejected before any trust job is published.
 The run pins each identity's active certificate-profile revision and effective
-validity into the immutable member and successor job. The current fleet runner
-does not collect distinct issuance approvals, so it refuses an approval-required
+validity into the immutable member and successor job. A member whose profile requires a
+distinct issuance approval makes the start itself the approved operation: the
+first start answers `202` with an approval request, reviewers approve it by intent
+digest, and the same start posted again records the run with that single-use
+approval consumed. Incident fleet reissuance still refuses an approval-required
 profile before Start. A profile label alone never authorizes signing.
 
 ### Profiles and the registration-authority split (F53)

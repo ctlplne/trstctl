@@ -212,6 +212,29 @@ type Run struct {
 	RollbackStage   ObservationStage `json:"rollback_stage,omitempty"`
 	RollbackAttempt int              `json:"rollback_attempt,omitempty"`
 	PauseReason     string           `json:"pause_reason,omitempty"`
+	// Approval is the exact single-use operation approval that authorized the
+	// start when a member issues under an approval-required profile (A40). It
+	// mirrors the store's approval-use wire shape so the aggregate stays
+	// independent of storage; the projector validates and consumes it in the
+	// same transaction that records the run.
+	Approval *ApprovalUse `json:"approval,omitempty"`
+}
+
+// ApprovalUse is the wire shape of one consumed operation approval.
+type ApprovalUse struct {
+	RequestID         string           `json:"request_id"`
+	IntentDigest      string           `json:"intent_digest"`
+	Requester         string           `json:"requester"`
+	ResourceKind      string           `json:"resource_kind"`
+	ResourceID        string           `json:"resource_id"`
+	Action            string           `json:"action"`
+	FromState         string           `json:"from_state,omitempty"`
+	ToState           string           `json:"to_state,omitempty"`
+	TargetVersion     uint64           `json:"target_version"`
+	RequiredApprovals int              `json:"required_approvals"`
+	Reason            string           `json:"reason,omitempty"`
+	EvidenceRefs      []string         `json:"evidence_refs,omitempty"`
+	Issuance          *IssuanceBinding `json:"issuance,omitempty"`
 }
 
 // StartRun validates and starts only the lowest-ordinal cohort.

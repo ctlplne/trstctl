@@ -4786,7 +4786,21 @@ func componentSchemas() map[string]*Schema {
 		}},
 		"waves":       {Type: "array", Items: ref("MigrationRunWave")},
 		"halt_reason": str(), "rollback_wave_id": str(), "rollback_stage": str(), "rollback_attempt": {Type: "integer"}, "pause_reason": str(),
+		"approval": ref("MigrationApprovalUse"),
 	}, "id", "status", "waves")
+	migrationApprovalUse := object(map[string]*Schema{
+		"request_id": uuid(), "intent_digest": str(), "requester": str(), "resource_kind": str(), "resource_id": str(),
+		"action": str(), "from_state": str(), "to_state": str(), "target_version": {Type: "integer"},
+		"required_approvals": {Type: "integer"}, "reason": str(), "evidence_refs": {Type: "array", Items: str()},
+		"issuance": object(map[string]*Schema{
+			"profile_name": str(), "profile_id": str(), "profile_version": {Type: "integer"}, "profile_spec_digest": str(),
+			"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+		}, "requested_ttl_seconds", "effective_ttl_seconds"),
+	}, "request_id", "intent_digest", "requester", "resource_kind", "resource_id", "action", "target_version", "required_approvals")
+	migrationRunStartPending := object(map[string]*Schema{
+		"status": {Type: "string", Enum: []string{"pending_approval"}}, "approval_request_id": uuid(), "intent_digest": str(),
+		"required_approvals": {Type: "integer"}, "approval_disposition": str(), "detail": str(),
+	}, "status", "approval_request_id", "intent_digest", "required_approvals", "approval_disposition", "detail")
 	migrationRunActionRequest := object(map[string]*Schema{"reason": str()})
 	// H1: who trusts a CA, and where those stores live.
 	graphTrustStores := object(map[string]*Schema{
@@ -7009,6 +7023,8 @@ func componentSchemas() map[string]*Schema {
 		"MigrationRunMember":                       migrationRunMember,
 		"MigrationRunWave":                         migrationRunWave,
 		"MigrationRun":                             migrationRun,
+		"MigrationApprovalUse":                     migrationApprovalUse,
+		"MigrationRunStartPending":                 migrationRunStartPending,
 		"MigrationRunList":                         list("MigrationRun"),
 		"MigrationRunActionRequest":                migrationRunActionRequest,
 		"GraphQueryRequest":                        graphQueryRequest,

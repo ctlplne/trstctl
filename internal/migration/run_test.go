@@ -479,3 +479,25 @@ func TestExecutableRunAcceptsIPAddressSubjects(t *testing.T) {
 		t.Fatal("a binding with no DNS name and no IP address was accepted")
 	}
 }
+
+// A run may carry the exact approval that authorized its start (A40); the
+// aggregate stays executable and the use survives the wire.
+func TestExecutableRunCarriesItsStartApproval(t *testing.T) {
+	binding := completeBindingAUD40("target-approved", "predecessor-approved")
+	run := migration.Run{ID: "run-approved", Waves: []migration.RunWave{{
+		ID: "canary", Ordinal: 1,
+		Members: []migration.RunMember{{IdentityID: "leaf-approved", Binding: binding}},
+	}}, Approval: &migration.ApprovalUse{RequestID: "req-1", IntentDigest: "digest-1", Requester: "operator",
+		ResourceKind: "migration_run", ResourceID: "plan-1", Action: "start", RequiredApprovals: 2}}
+	if err := migration.ValidateExecutableRunForStart(run); err != nil {
+		t.Fatalf("an approved run was refused: %v", err)
+	}
+	raw, err := json.Marshal(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded migration.Run
+	if err := json.Unmarshal(raw, &decoded); err != nil || decoded.Approval == nil || decoded.Approval.RequestID != "req-1" {
+		t.Fatalf("approval did not survive the wire: %+v %v", decoded.Approval, err)
+	}
+}

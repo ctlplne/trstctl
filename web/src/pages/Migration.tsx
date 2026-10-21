@@ -66,7 +66,20 @@ export function Migration() {
     setError(null);
     try {
       if (operation === "start" && reviewed) {
-        await api.startMigrationRun(reviewed);
+        const started = await api.startMigrationRun(reviewed);
+        if ("approval_request_id" in started) {
+          // A40: members issue under an approval-required profile. The exact
+          // start is recorded for review; the same plan is started again once
+          // reviewers approve it.
+          setError(
+            t("migration.design.pendingApproval", {
+              request: started.approval_request_id,
+              digest: started.intent_digest,
+              required: started.required_approvals,
+            }),
+          );
+          return;
+        }
         setAssessment(null);
         setReviewed(null);
         setOpen((current) => ({ ...current, gates: false, history: true }));

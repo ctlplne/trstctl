@@ -64,6 +64,15 @@ type Response struct {
 	RollbackConfigured        bool                   `json:"rollback_configured"`
 	MigrationProgress         cbom.MigrationProgress `json:"migration_progress"`
 	QueuedAt                  time.Time              `json:"queued_at"`
+	// Status is "pending_approval" when a selected reissue runs under an
+	// approval-required profile and the exact start approval is not complete;
+	// no run exists then, and the fields below name the request to review.
+	Status            string `json:"status,omitempty"`
+	ApprovalRequestID string `json:"approval_request_id,omitempty"`
+	IntentDigest      string `json:"intent_digest,omitempty"`
+	RequiredApprovals int    `json:"required_approvals,omitempty"`
+	ApprovalCount     int    `json:"approval_count,omitempty"`
+	Detail            string `json:"detail,omitempty"`
 }
 
 type RunProgressResponse struct {

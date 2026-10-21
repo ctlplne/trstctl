@@ -5139,6 +5139,22 @@ export interface MemberRequest {
   source?: string;
 }
 
+export interface MigrationApprovalUse {
+  action: string;
+  evidence_refs?: string[];
+  from_state?: string;
+  intent_digest: string;
+  issuance?: { effective_ttl_seconds: number; profile_id?: string; profile_name?: string; profile_spec_digest?: string; profile_version?: number; requested_ttl_seconds: number };
+  reason?: string;
+  request_id: string;
+  requester: string;
+  required_approvals: number;
+  resource_id: string;
+  resource_kind: string;
+  target_version: number;
+  to_state?: string;
+}
+
 export interface MigrationAssessRequest {
   min_trust_percent?: number;
   plan_id?: string;
@@ -5186,6 +5202,7 @@ export interface MigrationMemberBinding {
 }
 
 export interface MigrationRun {
+  approval?: MigrationApprovalUse;
   halt_reason?: string;
   id: string;
   pause_reason?: string;
@@ -5219,6 +5236,15 @@ export interface MigrationRunStartMember {
   agent_id: string;
   identity_id: string;
   trust_anchor_path: string;
+}
+
+export interface MigrationRunStartPending {
+  approval_disposition: string;
+  approval_request_id: string;
+  detail: string;
+  intent_digest: string;
+  required_approvals: number;
+  status: "pending_approval";
 }
 
 export interface MigrationRunStartRequest {

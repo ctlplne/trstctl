@@ -411,8 +411,8 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:530` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
-| `internal/server/migration_run_served_test.go:96` | loopback fixture is closed below (CWE-400) |
-| `internal/server/migration_run_served_test.go:465` | loopback fixture is closed below (CWE-400) |
+| `internal/server/migration_run_served_test.go:98` | loopback fixture is closed below (CWE-400) |
+| `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
 ### G115 — CWE-190 Integer overflow or wraparound (258 sites)
@@ -509,10 +509,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5466` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5483` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5496` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5524` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5489` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5506` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5519` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5547` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
