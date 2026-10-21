@@ -467,6 +467,37 @@ SSRF-safe dialer to operator-owned ranges. Any authority id may carry a vault
 source (`vault-prod`, `vault-dr` are separate authorities); the ids
 `cloud-kms` and `kmip` still have no source and fail observation closed.
 
+## Workload-held PCAS co-signers
+
+An identity whose predecessor key lives in a workload agent (not in the isolated
+signer) is registered with `predecessor_custody: "workload"` and the agent key's
+public half, and the agent serves the co-sign RPC with
+`trstctl-agent --workload-cosign-listen`. The control plane reaches it through one
+entry per identity:
+
+```json
+{
+  "pcas": {
+    "workload_cosigners": [{
+      "tenant_id": "YOUR_TENANT_ID",
+      "identity_id": "spiffe://example.org/payments/api",
+      "address": "payments-api.internal:9447",
+      "tls_cert_file": "/etc/trstctl/cosign-client.crt",
+      "tls_key_file": "/etc/trstctl/cosign-client.key",
+      "peer_ca_file": "/etc/trstctl/cosign-agent-ca.pem",
+      "peer_pin_hex": "<hex SHA-256 of the agent listener's SPKI>",
+      "server_name": "payments-api.internal"
+    }]
+  }
+}
+```
+
+A `host:port` endpoint needs all five TLS fields: the same pinned mutual TLS the
+agent requires of its caller. `"address": "unix:/run/trstctl/cosign.sock"` reaches a
+co-located agent over its owner-only socket and needs none. The identity's first
+succession request runs the co-sign flow through this endpoint; after it the
+successor key is in the signer and later successions need no agent.
+
 An empty schedule list compares nothing. Each schedule needs a tenant ID and at
 least two authority entries with nonempty IDs; use the two distinct authorities
 above. Missing, invalid or nonpositive duration values use defaults: one hour for

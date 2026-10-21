@@ -365,6 +365,12 @@
           },
           "identity_id": {
             "type": "string"
+          },
+          "predecessor_custody": {
+            "type": "string"
+          },
+          "public_key_pem": {
+            "type": "string"
           }
         },
         "required": [
@@ -1404,6 +1410,9 @@
             "type": "string"
           },
           "policy_ref": {
+            "type": "string"
+          },
+          "predecessor_custody": {
             "type": "string"
           },
           "target_algorithm": {

@@ -17,6 +17,7 @@ import (
 
 	"trstctl.com/trstctl/internal/signing"
 	corestore "trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/succession"
 	"trstctl.com/trstctl/internal/succession/minter"
 )
 
@@ -70,24 +71,31 @@ func (o *Orchestrator) RunSuccession(ctx context.Context, tenantID string, req s
 	if err != nil {
 		return Result{}, fmt.Errorf("orchestrator: decode minted record: %w", err)
 	}
+	if err := o.recordSuccession(ctx, tenantID, decoded, res.EncodedRecord, idempotencyKey); err != nil {
+		return Result{}, err
+	}
+	return Result{Epoch: res.Epoch, Record: res.EncodedRecord}, nil
+}
 
-	// Same transaction: append the succession record AND the outbox publish intent
-	// (PCAS-claim-6 / INV-4). At-least-once delivery by a separate worker, rendered
-	// exactly-once by idempotency, is the AN-6 discipline.
-	err = o.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+// recordSuccession appends a minted record, its outbox publish intent and the
+// serving high-water in one transaction (PCAS-claim-6 / INV-4): at-least-once
+// delivery by a separate worker, rendered exactly-once by idempotency, is the
+// AN-6 discipline. Both the signer-held and the workload-held mint end here.
+func (o *Orchestrator) recordSuccession(ctx context.Context, tenantID string, decoded succession.SuccessionRecord, encodedRecord []byte, idempotencyKey string) error {
+	err := o.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO succession_records
 			   (tenant_id, identity_id, epoch, predecessor_epoch, predecessor_alg, successor_alg, successor_pub, record, idempotency_key)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8)`,
 			decoded.Fields.IdentityID, decoded.Fields.Epoch, decoded.Fields.PredecessorEpoch,
 			string(decoded.Fields.PredecessorAlg), string(decoded.Fields.SuccessorAlg),
-			decoded.Fields.SuccessorPub, res.EncodedRecord, idempotencyKey); err != nil {
+			decoded.Fields.SuccessorPub, encodedRecord, idempotencyKey); err != nil {
 			return fmt.Errorf("append record: %w", err)
 		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
 			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3)`,
-			PublishDestination, res.EncodedRecord, idempotencyKey); err != nil {
+			PublishDestination, encodedRecord, idempotencyKey); err != nil {
 			return fmt.Errorf("enqueue outbox: %w", err)
 		}
 		// Advance the serving high-water in the SAME transaction, monotonically, so the
@@ -105,9 +113,9 @@ func (o *Orchestrator) RunSuccession(ctx context.Context, tenantID string, req s
 		return nil
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("orchestrator: record+outbox transaction: %w", err)
+		return fmt.Errorf("orchestrator: record+outbox transaction: %w", err)
 	}
-	return Result{Epoch: res.Epoch, Record: res.EncodedRecord}, nil
+	return nil
 }
 
 func (o *Orchestrator) fetchByKey(ctx context.Context, tenantID, key string) (record []byte, epoch uint64, ok bool, err error) {

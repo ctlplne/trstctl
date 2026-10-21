@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	coreorch "trstctl.com/trstctl/internal/orchestrator"
 )
@@ -44,6 +45,8 @@ func NewLicensedOutboxFactory(opts ...FactoryOption) editionseam.LicensedOutboxF
 			hasKEM:     d.KEMCustody != nil,
 			observer:   d.FeatureObserver,
 			topics:     cfg.topics.resolved(),
+			cosigners:  cfg.cosigners,
+			keyCustody: keyCustodyOf(d.KEMCustody),
 		}, nil
 	}
 }
@@ -52,7 +55,35 @@ func NewLicensedOutboxFactory(opts ...FactoryOption) editionseam.LicensedOutboxF
 type FactoryOption func(*factoryConfig)
 
 type factoryConfig struct {
-	topics BreadthTopics
+	topics    BreadthTopics
+	cosigners WorkloadCoSignerDialer
+}
+
+// WithWorkloadCoSigners gives the succession worker the operator-configured
+// workload co-sign endpoints (pcas.workload_cosigners), so an identity anchored
+// in workload custody can run its first succession through its agent (A17).
+func WithWorkloadCoSigners(dialer WorkloadCoSignerDialer) FactoryOption {
+	return func(c *factoryConfig) { c.cosigners = dialer }
+}
+
+// kemCustodyKeys adapts the signer's custody surface to the KeyCustody slice the
+// workload-held succession needs.
+type kemCustodyKeys struct{ custody editionseam.KEMCustody }
+
+func (k kemCustodyKeys) SignerForHandle(ctx context.Context, handle string) (crypto.Signer, error) {
+	rs, err := k.custody.SignerForHandle(ctx, handle)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.SignerFromDigestSigner(rs), nil
+}
+
+func (k kemCustodyKeys) GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string) (crypto.Signer, error) {
+	rs, err := k.custody.GenerateKeyHandle(ctx, algorithm, handle)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.SignerFromDigestSigner(rs), nil
 }
 
 // WithBreadthTopics resolves the breadth destinations from operator
@@ -97,6 +128,15 @@ type licensedOutboxHandler struct {
 	hasKEM     bool
 	observer   func(feature, action, outcome string, seconds float64)
 	topics     BreadthTopics
+	cosigners  WorkloadCoSignerDialer
+	keyCustody KeyCustody
+}
+
+func keyCustodyOf(custody editionseam.KEMCustody) KeyCustody {
+	if custody == nil {
+		return nil
+	}
+	return kemCustodyKeys{custody: custody}
 }
 
 // DeliverLicensed routes the PCAS outbox destinations. It returns handled=false for a
@@ -119,12 +159,14 @@ func (h *licensedOutboxHandler) DeliverLicensed(ctx context.Context, m coreorch.
 		observe(err)
 		return true, err
 	case m.Destination == RequestDestination: // pcas.succession-request
-		if !h.hasMinter {
+		if !h.hasMinter && !h.hasKEM {
 			err := errors.New("pcas: no out-of-process signer configured; cannot mint (fail closed)")
 			observe(err)
 			return true, err
 		}
-		err := NewSuccessionRequestWorker(h.orch).Deliver(ctx, m)
+		// The worker fails closed itself when the path it selects (signer-held
+		// mint, or the workload-held co-sign flow) lacks its signer or dialer.
+		err := NewSuccessionRequestWorker(h.orch).WithWorkloadCoSign(h.keyCustody, h.cosigners).Deliver(ctx, m)
 		observe(err)
 		return true, err
 	case m.Destination == PublishDestination: // pcas.rp-publish

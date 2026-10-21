@@ -109,6 +109,12 @@ type GenesisRecord struct {
 	Algorithm       crypto.Algorithm `json:"algorithm"`
 	PublicKey       []byte           `json:"public_key"` // SubjectPublicKeyInfo (PKIX/DER)
 	Epoch           uint64           `json:"epoch"`      // genesis is epoch 0
+	// PredecessorCustody says who holds the genesis private key: the isolated
+	// signer (default, "") or a workload agent that co-signs the first
+	// succession over the co-sign RPC (PCAS-claim-19). It is anchor metadata,
+	// not part of the attested genesis encoding, so existing anchors keep
+	// their digests.
+	PredecessorCustody string `json:"predecessor_custody,omitempty"`
 
 	TrustRootAtt      []byte `json:"trust_root_att"`               // tenant-trust-root signature over the genesis encoding
 	SignerAttestation []byte `json:"signer_attestation,omitempty"` // optional signer countersignature
@@ -156,3 +162,9 @@ func (g *GenesisRecord) UnmarshalJSON(data []byte) error {
 	*g = GenesisRecord(next)
 	return nil
 }
+
+// Predecessor custody modes recorded on a genesis anchor.
+const (
+	PredecessorCustodySigner   = "signer"
+	PredecessorCustodyWorkload = "workload"
+)

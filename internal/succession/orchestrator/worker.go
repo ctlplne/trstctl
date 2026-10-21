@@ -38,7 +38,9 @@ const (
 // + rp-publish + high-water advance in one transaction. It is idempotent on the
 // request id, so at-least-once outbox delivery yields exactly-once minting (PCAS-claim-6).
 type SuccessionRequestWorker struct {
-	orch *Orchestrator
+	orch      *Orchestrator
+	custody   KeyCustody
+	cosigners WorkloadCoSignerDialer
 }
 
 // NewSuccessionRequestWorker returns a worker that drives successions through orch.
@@ -56,6 +58,8 @@ type requestPayload struct {
 	PolicyRef       string `json:"policy_ref"`
 	DeploymentScope string `json:"deployment_scope"`
 	DelegationScope string `json:"delegation_scope"`
+	// PredecessorCustody mirrors the request; the anchor decides when empty.
+	PredecessorCustody string `json:"predecessor_custody"`
 }
 
 // Deliver implements the core outbox Handler (internal/orchestrator.Handler) for
@@ -98,6 +102,39 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 		return fmt.Errorf("succession worker: read current epoch: %w", err)
 	}
 
+	// Idempotency: the request id renders at-least-once delivery exactly-once. Fall
+	// back to a deterministic per-(identity,epoch) key when a producer omitted one.
+	idempotencyKey := p.RequestID
+	if idempotencyKey == "" {
+		idempotencyKey = "pcas-req:" + p.IdentityID + ":" + strconv.FormatUint(epoch, 10)
+	}
+
+	// Exactly-once before any custody decision: a redelivered request that
+	// already minted returns its record whatever the chain looks like now.
+	if _, _, ok, err := w.orch.fetchByKey(ctx, tenantID, idempotencyKey); err != nil {
+		return fmt.Errorf("succession worker: replay lookup: %w", err)
+	} else if ok {
+		return nil
+	}
+
+	// A17: an identity anchored in workload custody has its predecessor key in a
+	// workload agent while it still sits at genesis; its first succession runs
+	// the co-sign flow. Once the successor lives in the signer, successions are
+	// signer-held again.
+	workloadHeld := anchor.Genesis.PredecessorCustody == succession.PredecessorCustodyWorkload && epoch == 0
+	if p.PredecessorCustody == succession.PredecessorCustodyWorkload && !workloadHeld {
+		return errors.New("succession worker: request asks for workload custody but the identity's predecessor is signer-held")
+	}
+	if workloadHeld {
+		if err := w.handleWorkloadHeld(ctx, tenantID, p, anchor, epoch, idempotencyKey); err != nil {
+			return fmt.Errorf("succession worker: %w", err)
+		}
+		return nil
+	}
+	if w.orch == nil || w.orch.minter == nil {
+		return errors.New("pcas: no out-of-process signer configured; cannot mint (fail closed)")
+	}
+
 	req := signing.MintRequest{
 		IdentityID:               p.IdentityID,
 		TenantID:                 tenantID,
@@ -109,12 +146,6 @@ func (w *SuccessionRequestWorker) Handle(ctx context.Context, tenantID string, p
 		DelegationScope:          p.DelegationScope,
 	}
 
-	// Idempotency: the request id renders at-least-once delivery exactly-once. Fall
-	// back to a deterministic per-(identity,epoch) key when a producer omitted one.
-	idempotencyKey := p.RequestID
-	if idempotencyKey == "" {
-		idempotencyKey = "pcas-req:" + p.IdentityID + ":" + strconv.FormatUint(epoch, 10)
-	}
 	if _, err := w.orch.RunSuccession(ctx, tenantID, req, idempotencyKey); err != nil {
 		return fmt.Errorf("succession worker: run succession: %w", err)
 	}

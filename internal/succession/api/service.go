@@ -134,6 +134,22 @@ func (s *service) RegisterGenesis(ctx context.Context, tenantID string, req Gene
 	if _, err := succession.GenesisDigest(succession.GenesisRecord{Algorithm: crypto.Algorithm(req.Algorithm)}); err != nil {
 		return AsyncRequestResponse{}, api.ErrWithStatus(http.StatusBadRequest, fmt.Errorf("unsupported PCAS genesis algorithm: %w", err))
 	}
+	switch strings.TrimSpace(req.PredecessorCustody) {
+	case "", succession.PredecessorCustodySigner:
+		if strings.TrimSpace(req.PublicKeyPEM) != "" {
+			return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest, "public_key_pem is accepted only with predecessor_custody \"workload\"")
+		}
+	case succession.PredecessorCustodyWorkload:
+		pub, err := crypto.ParsePublicKeyPEM([]byte(req.PublicKeyPEM))
+		if err != nil {
+			return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest, "predecessor_custody \"workload\" needs public_key_pem: the PEM public key of the agent's --workload-predecessor-key")
+		}
+		if pub.Algorithm != crypto.Algorithm(req.Algorithm) {
+			return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest, "public_key_pem algorithm differs from the genesis algorithm")
+		}
+	default:
+		return AsyncRequestResponse{}, api.ErrStatus(http.StatusBadRequest, "predecessor_custody must be \"signer\" or \"workload\"")
+	}
 	if s.repo != nil {
 		if _, found, err := s.repo.GetGenesis(ctx, tenantID, req.IdentityID); err != nil {
 			return AsyncRequestResponse{}, err
@@ -240,6 +256,15 @@ func (s *service) RequestSuccession(ctx context.Context, tenantID string, req Re
 		}
 		if anchor.Genesis.DeploymentScope != req.DeploymentScope {
 			return RequestSuccessionResponse{}, api.ErrStatus(http.StatusConflict, "deployment_scope differs from the registered PCAS genesis")
+		}
+		if custody := strings.TrimSpace(req.PredecessorCustody); custody != "" {
+			anchored := anchor.Genesis.PredecessorCustody
+			if anchored == "" {
+				anchored = succession.PredecessorCustodySigner
+			}
+			if custody != anchored {
+				return RequestSuccessionResponse{}, api.ErrStatus(http.StatusConflict, "predecessor_custody differs from the registered PCAS genesis anchor")
+			}
 		}
 		if err := succession.VerifyGenesis(anchor.TrustRootPublicDER, anchor.Genesis); err != nil {
 			return RequestSuccessionResponse{}, fmt.Errorf("pcas api: stored genesis verification failed: %w", err)

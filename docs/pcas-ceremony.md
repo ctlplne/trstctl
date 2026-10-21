@@ -68,7 +68,11 @@ form, and is usable by the signer only through the module's `DigestSigner` handl
 
 The same ceremony, plus: generate the successor in-module, then mint a **succession
 record** advancing the authority's epoch (predecessor attests, successor possesses).
-The predecessor is retired only after the re-wrap-before-retire gate and the evidence
+For a key the workload keeps (never in the signer), register the genesis with
+`predecessor_custody: "workload"` and the agent's public key, run the agent with
+`--workload-cosign-listen`, and list its endpoint under `pcas.workload_cosigners`;
+the first succession co-signs through the agent and carries a trust-root inclusion
+proof. The predecessor is retired only after the re-wrap-before-retire gate and the evidence
 quorum are satisfied (claims 8/15; INT-12/INT-17). The gate opens when every data-key
 envelope registered for the predecessor KEM epoch has a signer-read-back successor
 envelope and a per-target receipt (`pcas rewrap status` shows `data_keys` against

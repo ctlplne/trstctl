@@ -199,14 +199,20 @@ type FederationPeer struct {
 // The PCAS API and signer transport attach in every build; individual scheduled
 // workers retain their own explicit startup settings.
 type PCAS struct {
-	Recovery    PCASRecovery    `json:"recovery"`
-	Federation  PCASFederation  `json:"federation"`
-	KEM         PCASKEM         `json:"kem"`
-	Checkpoints PCASCheckpoints `json:"checkpoints"`
-	Monitors    PCASMonitors    `json:"monitors"`
-	Retirement  PCASRetirement  `json:"retirement"`
-	Issuer      PCASIssuer      `json:"issuer"`
-	Staple      PCASStaple      `json:"staple"`
+	// WorkloadCoSigners names the workload agents that hold predecessor keys
+	// and serve the co-sign RPC (trstctl-agent --workload-cosign-listen). A
+	// succession for an identity whose genesis anchors workload custody dials
+	// its entry: a unix socket for a co-located agent, or host:port with the
+	// pinned mutual TLS the agent requires (A17).
+	WorkloadCoSigners []PCASWorkloadCoSigner `json:"workload_cosigners,omitempty"`
+	Recovery          PCASRecovery           `json:"recovery"`
+	Federation        PCASFederation         `json:"federation"`
+	KEM               PCASKEM                `json:"kem"`
+	Checkpoints       PCASCheckpoints        `json:"checkpoints"`
+	Monitors          PCASMonitors           `json:"monitors"`
+	Retirement        PCASRetirement         `json:"retirement"`
+	Issuer            PCASIssuer             `json:"issuer"`
+	Staple            PCASStaple             `json:"staple"`
 }
 
 // PCASRecovery configures the threshold-recovery breadth surface. OutboxTopic is
@@ -218,6 +224,22 @@ type PCAS struct {
 type PCASRecovery struct {
 	Enabled     bool   `json:"enabled,omitempty"`
 	OutboxTopic string `json:"outbox_topic,omitempty"`
+}
+
+// PCASWorkloadCoSigner is one workload agent's co-sign endpoint for one identity.
+type PCASWorkloadCoSigner struct {
+	TenantID   string `json:"tenant_id"`
+	IdentityID string `json:"identity_id"`
+	// Address is "unix:/path" or "host:port". A host:port endpoint needs the
+	// control plane's client certificate and key, the CA that anchors the
+	// agent's listener certificate, the agent's SPKI pin and the server name
+	// on its certificate: the same pinned mTLS the isolated signer uses.
+	Address     string `json:"address"`
+	TLSCertFile string `json:"tls_cert_file,omitempty"`
+	TLSKeyFile  string `json:"tls_key_file,omitempty"`
+	PeerCAFile  string `json:"peer_ca_file,omitempty"`
+	PeerPinHex  string `json:"peer_pin_hex,omitempty"`
+	ServerName  string `json:"server_name,omitempty"`
 }
 
 type PCASFederation struct {
@@ -4486,6 +4508,32 @@ func validatePCASConfig(c *Config) []error {
 		}
 		if d <= 0 {
 			errs = append(errs, fmt.Errorf("%s must be positive", name))
+		}
+	}
+	seenCoSigners := map[string]bool{}
+	for i, cs := range c.PCAS.WorkloadCoSigners {
+		label := fmt.Sprintf("pcas.workload_cosigners[%d]", i)
+		if strings.TrimSpace(cs.TenantID) == "" || strings.TrimSpace(cs.IdentityID) == "" {
+			errs = append(errs, fmt.Errorf("%s needs tenant_id and identity_id", label))
+		}
+		key := strings.TrimSpace(cs.TenantID) + "\x00" + strings.TrimSpace(cs.IdentityID)
+		if seenCoSigners[key] {
+			errs = append(errs, fmt.Errorf("%s repeats an identity that already has a co-signer", label))
+		}
+		seenCoSigners[key] = true
+		address := strings.TrimSpace(cs.Address)
+		switch {
+		case address == "":
+			errs = append(errs, fmt.Errorf("%s.address is required (unix:/path or host:port)", label))
+		case strings.HasPrefix(address, "unix:"):
+			if strings.TrimSpace(strings.TrimPrefix(address, "unix:")) == "" {
+				errs = append(errs, fmt.Errorf("%s.address unix socket path is empty", label))
+			}
+		default:
+			if strings.TrimSpace(cs.TLSCertFile) == "" || strings.TrimSpace(cs.TLSKeyFile) == "" ||
+				strings.TrimSpace(cs.PeerCAFile) == "" || strings.TrimSpace(cs.PeerPinHex) == "" || strings.TrimSpace(cs.ServerName) == "" {
+				errs = append(errs, fmt.Errorf("%s: a host:port co-signer needs tls_cert_file, tls_key_file, peer_ca_file, peer_pin_hex and server_name", label))
+			}
 		}
 	}
 	parsePositive("pcas.checkpoints.interval", c.PCAS.Checkpoints.Interval, c.PCAS.Checkpoints.Enabled)

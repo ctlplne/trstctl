@@ -41,6 +41,10 @@ type RequestSuccessionRequest struct {
 	PolicyRef       string `json:"policy_ref"`
 	DeploymentScope string `json:"deployment_scope"`
 	DelegationScope string `json:"delegation_scope,omitempty"`
+	// PredecessorCustody is optional and must agree with the genesis anchor:
+	// "workload" asks for the co-sign flow against the registered workload
+	// agent; the worker also selects it from the anchor when omitted.
+	PredecessorCustody string `json:"predecessor_custody,omitempty"`
 }
 
 // GenesisRegistrationRequest establishes the first signer-held key for one
@@ -49,6 +53,12 @@ type GenesisRegistrationRequest struct {
 	IdentityID      string `json:"identity_id"`
 	Algorithm       string `json:"algorithm"`
 	DeploymentScope string `json:"deployment_scope"`
+	// PredecessorCustody "workload" anchors a key the workload agent holds
+	// (PublicKeyPEM, the agent's --workload-predecessor-key public half) instead
+	// of generating the genesis key in the isolated signer; the first succession
+	// then runs the co-sign flow against that agent (A17).
+	PredecessorCustody string `json:"predecessor_custody,omitempty"`
+	PublicKeyPEM       string `json:"public_key_pem,omitempty"`
 }
 
 // RequestSuccessionResponse acknowledges an accepted (idempotent) succession request.
@@ -1330,9 +1340,11 @@ func writeProblem(w http.ResponseWriter, status int, detail string) {
 func schemas() map[string]*api.Schema {
 	return map[string]*api.Schema{
 		"PCASGenesisRequest": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":      api.StringSchema(),
-			"algorithm":        api.StringSchema(),
-			"deployment_scope": api.StringSchema(),
+			"identity_id":         api.StringSchema(),
+			"algorithm":           api.StringSchema(),
+			"deployment_scope":    api.StringSchema(),
+			"predecessor_custody": api.StringSchema(),
+			"public_key_pem":      api.StringSchema(),
 		}, "identity_id", "algorithm", "deployment_scope"),
 		"PCASKEMDataKeyRequest": api.ObjectSchema(map[string]*api.Schema{
 			"identity_id":    api.StringSchema(),
@@ -1379,12 +1391,13 @@ func schemas() map[string]*api.Schema {
 			"delivered_at": api.TimestampSchema(),
 		}, "request_id", "kind", "status", "attempts", "created_at"),
 		"PCASSuccessionRequest": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":      api.StringSchema(),
-			"credential_type":  api.StringSchema(),
-			"target_algorithm": api.StringSchema(),
-			"policy_ref":       api.StringSchema(),
-			"deployment_scope": api.StringSchema(),
-			"delegation_scope": api.StringSchema(),
+			"identity_id":         api.StringSchema(),
+			"credential_type":     api.StringSchema(),
+			"target_algorithm":    api.StringSchema(),
+			"policy_ref":          api.StringSchema(),
+			"deployment_scope":    api.StringSchema(),
+			"delegation_scope":    api.StringSchema(),
+			"predecessor_custody": api.StringSchema(),
 		}, "identity_id", "credential_type", "target_algorithm"),
 		"PCASSuccessionAck": api.ObjectSchema(map[string]*api.Schema{
 			"request_id":       api.StringSchema(),

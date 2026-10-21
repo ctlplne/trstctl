@@ -23,7 +23,7 @@ it cannot drift from the code it describes.
 | VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 | XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
-Citations parsed: **987 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **990 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -87,7 +87,7 @@ Citations parsed: **987 qualified**, **0 bare** (bare citations infer their fami
 | 16 | `internal/succession/retirement/retirement.go` | `internal/succession/minter/minter_test.go`, `internal/succession/retirement/retirement_test.go` | _[counsel]_ |
 | 17 | `internal/rpverify/verifier.go`, `internal/succession/algclass.go`, `internal/succession/exceptional.go` _(+5 more)_ | `internal/rpverify/verifier_test.go`, `internal/succession/minter/strength_test.go` | _[counsel]_ |
 | 18 | `internal/rpverify/verifier.go`, `internal/translog/log.go` | `internal/translog/log_test.go` | _[counsel]_ |
-| 19 | `internal/succession/agent/agent.go`, `internal/succession/agent/cosignpb/cosign.pb.go`, `internal/succession/agent/cosignpb/cosign_grpc.pb.go` _(+1 more)_ | `internal/succession/agent/agent_test.go`, `internal/succession/agent/transport_test.go` | _[counsel]_ |
+| 19 | `internal/succession/agent/agent.go`, `internal/succession/agent/cosignpb/cosign.pb.go`, `internal/succession/agent/cosignpb/cosign_grpc.pb.go` _(+4 more)_ | `internal/succession/agent/agent_test.go`, `internal/succession/agent/transport_test.go` | _[counsel]_ |
 | 20 | `internal/succession/issuer/issuer.go` | `internal/succession/issuer/issuer_test.go` | _[counsel]_ |
 | 21 | `internal/succession/minter/floorstore_durable.go`, `internal/succession/minter/highwater.go`, `internal/succession/signerwiring/wiring.go` | `internal/succession/minter/floorstore_durable_test.go`, `internal/succession/minter/highwater_test.go` | _[counsel]_ |
 | 22 | `internal/succession/doc.go`, `internal/succession/epoch.go`, `internal/succession/transition.go` | `internal/succession/epoch_test.go` | _[counsel]_ |

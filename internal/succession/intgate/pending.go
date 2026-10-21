@@ -34,11 +34,6 @@ func (p PendingEntry) Qualified() string {
 
 var PendingWiring = []PendingEntry{
 	{
-		Pkg: "internal/succession/agent", Name: "NewRemoteCoSigner",
-		File: "internal/succession/agent/transport.go",
-		Gap:  "gRPC co-signer CLIENT side. cmd/trstctl-agent/cosign_attach.go wires the SERVER (agent.NewCoSignServer); the only caller of the client constructor is internal/succession/agent/transport_test.go.",
-	},
-	{
 		Pkg: "internal/succession/minter", Name: "NewDurableSignedTokenAuthorizer",
 		File: "internal/succession/minter/minter.go",
 		Gap:  "durable dual-control authorizer; sole caller is internal/succession/minter/spentstore_test.go.",

@@ -1492,8 +1492,23 @@ predecessor epoch, since no earlier KEM key exists.
 ### Workload-held co-sign mode (off by default)
 
 `trstctl-agent --workload-cosign-listen` serves the PCAS workload-held predecessor
-co-sign RPC with the workload's predecessor key. No shipped control-plane flow calls it
-yet. The listener authenticates callers:
+co-sign RPC with the workload's predecessor key, and the control plane now calls it.
+Register the identity's genesis with `predecessor_custody: "workload"` and the
+agent key's public half (`public_key_pem`); the anchor records that key instead of
+minting one in the signer. Configure the agent's endpoint under
+`pcas.workload_cosigners` (`unix:/path` for a co-located agent, or `host:port` with
+the control plane's client certificate, the agent's CA, its SPKI pin and server
+name). The identity's first succession request then runs the FIG. 5 flow in the
+succession worker: the control plane forms the commitment over the agent-held
+predecessor and a successor the isolated signer generated, obtains the predecessor
+co-signature over the co-sign RPC, verifies it against the commitment it supplied,
+has the successor sign inside the signer, binds the record to a tenant-root
+transparency-log inclusion proof (mandatory for this mode) and records it with the
+same transaction every succession uses. The agent refuses commitments for any other
+identity, tenant or deployment. After that first succession the successor lives in
+the signer and later successions are signer-held. Boundaries: one endpoint per
+identity, no console flow yet, and the operator supplies the agent's public key at
+genesis. The listener authenticates callers:
 
 - `host:port` requires pinned mutual TLS (`--workload-cosign-tls-cert`,
   `--workload-cosign-tls-key`, `--workload-cosign-peer-ca`, `--workload-cosign-peer-pin`).

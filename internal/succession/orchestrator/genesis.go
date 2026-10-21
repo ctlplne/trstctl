@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -29,9 +30,11 @@ type genesisPayload struct {
 	QueuedAt  time.Time     `json:"queued_at"`
 	Actor     *events.Actor `json:"actor,omitempty"`
 	Request   struct {
-		IdentityID      string `json:"identity_id"`
-		Algorithm       string `json:"algorithm"`
-		DeploymentScope string `json:"deployment_scope"`
+		IdentityID         string `json:"identity_id"`
+		Algorithm          string `json:"algorithm"`
+		DeploymentScope    string `json:"deployment_scope"`
+		PredecessorCustody string `json:"predecessor_custody"`
+		PublicKeyPEM       string `json:"public_key_pem"`
 	} `json:"request"`
 }
 
@@ -80,13 +83,28 @@ func (w *GenesisWorker) Deliver(ctx context.Context, m coreorch.Message) error {
 	if err != nil {
 		return fmt.Errorf("pcas genesis: tenant trust root: %w", err)
 	}
-	key, err := w.signerForOrGenerate(ctx, succession.TenantKeyHandle(m.TenantID, p.Request.IdentityID, 0), algorithm)
-	if err != nil {
-		return fmt.Errorf("pcas genesis: identity key: %w", err)
+	var identityPub []byte
+	custody := strings.TrimSpace(p.Request.PredecessorCustody)
+	if custody == succession.PredecessorCustodyWorkload {
+		// A17: the workload agent holds the genesis key; the anchor records its
+		// public half and the first succession co-signs through the agent.
+		pub, err := crypto.ParsePublicKeyPEM([]byte(p.Request.PublicKeyPEM))
+		if err != nil || pub.Algorithm != algorithm {
+			return errors.New("pcas genesis: workload custody needs the agent's public key PEM in the genesis algorithm")
+		}
+		identityPub = pub.DER
+	} else {
+		custody = ""
+		key, err := w.signerForOrGenerate(ctx, succession.TenantKeyHandle(m.TenantID, p.Request.IdentityID, 0), algorithm)
+		if err != nil {
+			return fmt.Errorf("pcas genesis: identity key: %w", err)
+		}
+		identityPub = key.Public().DER
 	}
 	genesis := succession.GenesisRecord{
 		DeploymentScope: p.Request.DeploymentScope, IdentityID: p.Request.IdentityID,
-		TenantID: m.TenantID, Algorithm: algorithm, PublicKey: key.Public().DER, Epoch: 0,
+		TenantID: m.TenantID, Algorithm: algorithm, PublicKey: identityPub, Epoch: 0,
+		PredecessorCustody: custody,
 	}
 	genesisDigest, err := succession.GenesisDigest(genesis)
 	if err != nil {
@@ -111,8 +129,8 @@ func (w *GenesisWorker) Deliver(ctx context.Context, m coreorch.Message) error {
 	ev, err := succession.Encode(succession.GenesisV1{
 		RequestID: p.RequestID, IdentityID: p.Request.IdentityID, TenantID: m.TenantID,
 		DeploymentScope: p.Request.DeploymentScope, Algorithm: p.Request.Algorithm,
-		PublicKeyDER: key.Public().DER, Epoch: 0, TrustRootAtt: genesis.TrustRootAtt,
-		TrustRootPublicDER: root.Public().DER,
+		PublicKeyDER: identityPub, Epoch: 0, TrustRootAtt: genesis.TrustRootAtt,
+		TrustRootPublicDER: root.Public().DER, PredecessorCustody: custody,
 	})
 	if err != nil {
 		return err

@@ -128,6 +128,7 @@ type GenesisV1 struct {
 	Epoch              uint64 `json:"epoch"`
 	TrustRootAtt       []byte `json:"trust_root_att"`
 	TrustRootPublicDER []byte `json:"trust_root_public_der"`
+	PredecessorCustody string `json:"predecessor_custody,omitempty"`
 }
 
 // DelegationAppliedV1 carries signed public signer state; the serving table is

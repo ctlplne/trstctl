@@ -98,8 +98,17 @@ func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	// drained here and minted over the signer transport, then recorded + published;
 	// pcas.rp-publish is acknowledged. This makes the succession worker a real
 	// production caller — a POST to request-succession yields a record.
+	cosigners := make([]successionorch.WorkloadCoSignerEndpoint, 0, len(pcasCfg.WorkloadCoSigners))
+	for _, cs := range pcasCfg.WorkloadCoSigners {
+		cosigners = append(cosigners, successionorch.WorkloadCoSignerEndpoint{
+			TenantID: cs.TenantID, IdentityID: cs.IdentityID, Address: cs.Address,
+			TLSCertFile: cs.TLSCertFile, TLSKeyFile: cs.TLSKeyFile, PeerCAFile: cs.PeerCAFile,
+			PeerPinHex: cs.PeerPinHex, ServerName: cs.ServerName,
+		})
+	}
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, successionorch.NewLicensedOutboxFactory(
-		successionorch.WithBreadthTopics(pcasCfg.Recovery.OutboxTopic, pcasCfg.Federation.OutboxTopic, pcasCfg.KEM.OutboxTopic)))
+		successionorch.WithBreadthTopics(pcasCfg.Recovery.OutboxTopic, pcasCfg.Federation.OutboxTopic, pcasCfg.KEM.OutboxTopic),
+		successionorch.WithWorkloadCoSigners(successionorch.NewConfiguredWorkloadCoSigners(cosigners))))
 	deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, successionbackground.NewWorkers(successionbackground.Options{
 		Store: deps.Store, Log: deps.Log, Signer: deps.Signer, PCAS: pcasCfg,
 	})...)
