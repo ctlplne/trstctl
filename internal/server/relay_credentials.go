@@ -370,8 +370,10 @@ type RelayDeployIntent struct {
 	// means no verification and no claim of one.
 	VerifyAddress    string `json:"verify_address,omitempty"`
 	VerifyServerName string `json:"verify_server_name,omitempty"`
-	// SubjectCommonName and SubjectDNSNames are the binding a host-generated
-	// renewal may certify (epic B2). Populated for endpoint.renew only.
+	// SubjectCommonName, SubjectDNSNames and SubjectIPAddresses are the binding
+	// a host-generated renewal may certify (epic B2, A35). Populated for
+	// endpoint.renew only. Email and URI identifiers have no field on purpose:
+	// a host listener binding cannot express them, so it never authorizes them.
 	//
 	// They are the AUTHORIZATION for SignJobCSR, not a hint to the agent: the
 	// control plane re-reads them from this payload when the CSR comes back up
@@ -382,6 +384,7 @@ type RelayDeployIntent struct {
 	SubjectKeyAlgorithm             string   `json:"subject_key_algorithm,omitempty"`
 	SubjectCommonName               string   `json:"subject_common_name,omitempty"`
 	SubjectDNSNames                 []string `json:"subject_dns_names,omitempty"`
+	SubjectIPAddresses              []string `json:"subject_ip_addresses,omitempty"`
 	PQCRunID                        string   `json:"pqc_run_id,omitempty"`
 	PQCAssetID                      string   `json:"pqc_asset_id,omitempty"`
 	PQCPredecessorFingerprint       string   `json:"pqc_predecessor_fingerprint,omitempty"`

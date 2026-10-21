@@ -39,6 +39,7 @@ type hostReprotectIntent struct {
 	VerifyServerName                string          `json:"verify_server_name"`
 	SubjectCommonName               string          `json:"subject_common_name"`
 	SubjectDNSNames                 []string        `json:"subject_dns_names"`
+	SubjectIPAddresses              []string        `json:"subject_ip_addresses,omitempty"`
 	PredecessorCertificateID        string          `json:"predecessor_certificate_id"`
 	IssuingAuthoritySource          string          `json:"issuing_authority_source"`
 	IssuingAuthorityID              string          `json:"issuing_authority_id"`
@@ -93,7 +94,7 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 	if err != nil {
 		return err
 	}
-	if len(info.DNSNames) == 0 || len(info.IPAddresses) != 0 || len(info.EmailAddresses) != 0 || len(info.URIs) != 0 {
+	if (len(info.DNSNames) == 0 && len(info.IPAddresses) == 0) || len(info.EmailAddresses) != 0 || len(info.URIs) != 0 {
 		return fmt.Errorf("%w: this host CSR path cannot preserve a non-DNS certificate identifier", ErrCredentialPlanNotReady)
 	}
 	target, err := h.coreStore.GetDeploymentTargetRevision(ctx, job.TenantID, plan.TargetID, plan.TargetRevisionID)
@@ -107,7 +108,7 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 		Revision: plan.TargetRevisionID, IdentityID: plan.IdentityID,
 		TargetConfig: target.Config, CredentialRefs: hostReprotectSecretRefs(target.Config),
 		VerifyAddress: plan.VerifyAddress, VerifyServerName: plan.VerifyServerName,
-		SubjectCommonName: info.CommonName, SubjectDNSNames: info.DNSNames,
+		SubjectCommonName: info.CommonName, SubjectDNSNames: info.DNSNames, SubjectIPAddresses: info.IPAddresses,
 		PredecessorCertificateID: job.Dependent.ID, IssuingAuthoritySource: "private",
 		IssuingAuthorityID: successorID, RequiredAgentID: plan.RequiredAgentID,
 		ReprotectJobID: job.ID, ReprotectPredecessorFingerprint: plan.PredecessorFingerprint,

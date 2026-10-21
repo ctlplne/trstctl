@@ -4,6 +4,7 @@ package crypto
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -43,7 +44,7 @@ type HostSubjectKey struct {
 }
 
 // ErrNoSubjectNames is returned when a request names nothing to certify.
-var ErrNoSubjectNames = errors.New("crypto: a host subject key needs a common name or at least one DNS name")
+var ErrNoSubjectNames = errors.New("crypto: a host subject key needs a common name, a DNS name or an IP address")
 
 // GenerateHostSubjectKey generates a key on this host and builds its CSR.
 //
@@ -53,28 +54,22 @@ var ErrNoSubjectNames = errors.New("crypto: a host subject key needs a common na
 // when it signs — and an agent that could pick would be a way to request a
 // weaker key than policy allows.
 func GenerateHostSubjectKey(commonName string, dnsNames []string) (*HostSubjectKey, error) {
-	commonName = strings.TrimSpace(commonName)
-	cleaned := make([]string, 0, len(dnsNames))
-	for _, n := range dnsNames {
-		if n = strings.TrimSpace(n); n != "" {
-			cleaned = append(cleaned, n)
-		}
-	}
-	if commonName == "" && len(cleaned) == 0 {
-		return nil, ErrNoSubjectNames
-	}
-	if commonName == "" {
-		commonName = cleaned[0]
-	}
+	return GenerateHostSubjectKeyFromTemplate(CertificateRequestTemplate{CommonName: commonName, DNSNames: dnsNames})
+}
 
+// GenerateHostSubjectKeyFromTemplate is GenerateHostSubjectKey for a request
+// that also names IP addresses (A35). The template's names are the binding
+// the control plane handed down; the host adds nothing to them.
+func GenerateHostSubjectKeyFromTemplate(tmpl CertificateRequestTemplate) (*HostSubjectKey, error) {
+	tmpl, err := normalizeHostSubjectTemplate(tmpl)
+	if err != nil {
+		return nil, err
+	}
 	signer, err := GenerateLockedKey(ECDSAP256)
 	if err != nil {
 		return nil, err
 	}
-	csrDER, err := CreateCertificateRequest(CertificateRequestTemplate{
-		CommonName: commonName,
-		DNSNames:   cleaned,
-	}, signer)
+	csrDER, err := CreateCertificateRequest(tmpl, signer)
 	if err != nil {
 		signer.Destroy()
 		return nil, err
@@ -84,6 +79,38 @@ func GenerateHostSubjectKey(commonName string, dnsNames []string) (*HostSubjectK
 		CSRDER:       csrDER,
 		PublicKeyDER: append([]byte(nil), signer.Public().DER...),
 	}, nil
+}
+
+// normalizeHostSubjectTemplate trims the names a host subject may certify and
+// derives the common name from the first DNS name, else the first IP address,
+// when the binding carries none. A template naming nothing is refused.
+func normalizeHostSubjectTemplate(tmpl CertificateRequestTemplate) (CertificateRequestTemplate, error) {
+	tmpl.CommonName = strings.TrimSpace(tmpl.CommonName)
+	cleaned := make([]string, 0, len(tmpl.DNSNames))
+	for _, n := range tmpl.DNSNames {
+		if n = strings.TrimSpace(n); n != "" {
+			cleaned = append(cleaned, n)
+		}
+	}
+	ips := make([]net.IP, 0, len(tmpl.IPAddresses))
+	for _, ip := range tmpl.IPAddresses {
+		if len(ip) != 0 {
+			ips = append(ips, ip)
+		}
+	}
+	if tmpl.CommonName == "" && len(cleaned) == 0 && len(ips) == 0 {
+		return tmpl, ErrNoSubjectNames
+	}
+	if tmpl.CommonName == "" {
+		if len(cleaned) > 0 {
+			tmpl.CommonName = cleaned[0]
+		} else {
+			tmpl.CommonName = ips[0].String()
+		}
+	}
+	tmpl.DNSNames = cleaned
+	tmpl.IPAddresses = ips
+	return tmpl, nil
 }
 
 // PrivateKeyPEM returns a COPY of the private key in PEM form.

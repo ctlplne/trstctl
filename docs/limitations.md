@@ -3359,11 +3359,19 @@ than sending an operator looking for a credential that was never there.
   Served through `/api/v1/migrations/runs` plus `/{id}/pause`, `/{id}/resume`, and
   `/{id}/rollback`, the matching `trstctl migrations` commands, SDKs, and the
   `/migration` console. Scope: executable membership is deliberately narrower than
-  assessment today — one active internally issued DNS-only predecessor per identity,
-  an enabled host-agent connector with `verify_address`, and an active host-role
-  agent. Network-appliance, cloud-store, externally issued, IP/email/URI SAN, and
+  assessment today — one active internally issued predecessor per identity that
+  carries DNS names, IP addresses or both, an enabled host-agent connector with
+  `verify_address`, and an active host-role agent. The member binding freezes the
+  predecessor's DNS names and IP addresses separately; the host-generated
+  successor CSR asserts exactly those identifiers and the control plane refuses
+  any other address or name, so a client that connects by IP keeps working after
+  the migration. The same binding shape serves host-generated renewal and CA
+  re-protection, so an IP-SAN leaf renews and re-protects on the host path too.
+  Network-appliance, cloud-store, externally issued, email/URI SAN, and
   offline-authority migrations are refused at start rather than represented as
-  executable.
+  executable: an rfc822Name or URI identity is not a host listener identity, the
+  binding cannot express it, and narrowing it silently would drop an identifier
+  some client relies on.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`
   (store → issuer, oriented the way impact travels) and `HOSTS` (resource → store).

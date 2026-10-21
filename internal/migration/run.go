@@ -152,6 +152,7 @@ type MemberBinding struct {
 	VerifyServerName         string           `json:"verify_server_name,omitempty"`
 	SubjectCommonName        string           `json:"subject_common_name"`
 	SubjectDNSNames          []string         `json:"subject_dns_names"`
+	SubjectIPAddresses       []string         `json:"subject_ip_addresses,omitempty"`
 	PredecessorCertificateID string           `json:"predecessor_certificate_id"`
 	PredecessorFingerprint   string           `json:"predecessor_fingerprint"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
@@ -603,7 +604,7 @@ func ValidateExecutableRun(run Run) error {
 				strings.TrimSpace(b.RequiredAgentID) == "" || strings.TrimSpace(b.TrustAnchorPath) == "" ||
 				len(b.TrustAnchorPEM) == 0 || strings.TrimSpace(b.TrustAnchorFingerprint) == "" ||
 				strings.TrimSpace(b.VerifyAddress) == "" || strings.TrimSpace(b.SubjectCommonName) == "" ||
-				len(b.SubjectDNSNames) == 0 || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
+				(len(b.SubjectDNSNames) == 0 && len(b.SubjectIPAddresses) == 0) || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
 				strings.TrimSpace(b.PredecessorFingerprint) == "" || len(b.TargetConfig) == 0 {
 				return fmt.Errorf("migration: member %s has incomplete immutable execution authority", member.IdentityID)
 			}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 
@@ -331,8 +332,12 @@ func (a *API) buildMigrationMember(
 	}
 	predecessor := certs[0]
 	info, err := certinfo.Inspect(predecessor.CertificateDER)
-	if err != nil || len(info.DNSNames) == 0 || len(info.IPAddresses) > 0 || len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
-		return migration.RunMember{}, errors.New("migration member predecessor must carry DNS identifiers only")
+	if err != nil {
+		return migration.RunMember{}, errors.New("migration member predecessor certificate could not be read")
+	}
+	subjectCommonName, subjectDNSNames, subjectIPAddresses, err := migrationMemberSubject(info)
+	if err != nil {
+		return migration.RunMember{}, err
 	}
 	verifyAddress, verifyServerName := migrationVerifyTarget(target.Config)
 	if verifyAddress == "" {
@@ -357,10 +362,50 @@ func (a *API) buildMigrationMember(
 		TrustAnchorPath: anchorPath, TrustAnchorPEM: append([]byte(nil), anchorPEM...),
 		TrustAnchorFingerprint: cleanMigrationFingerprint(anchorFingerprint),
 		VerifyAddress:          verifyAddress, VerifyServerName: verifyServerName,
-		SubjectCommonName: info.DNSNames[0], SubjectDNSNames: append([]string(nil), info.DNSNames...),
+		SubjectCommonName: subjectCommonName, SubjectDNSNames: subjectDNSNames, SubjectIPAddresses: subjectIPAddresses,
 		PredecessorCertificateID: predecessor.ID,
 		PredecessorFingerprint:   cleanMigrationFingerprint(predecessor.Fingerprint),
 	}}, nil
+}
+
+// migrationMemberSubject freezes what the successor may certify from the
+// predecessor's identifiers (A35). DNS names and IP addresses are the two
+// kinds a host listener binding can express; an rfc822Name or URI predecessor
+// is refused rather than silently narrowed, because the successor would stop
+// asserting an identity some client relies on. The common name follows the
+// first DNS name, else the first address, so the name set the host may request
+// is exactly the set the binding carries.
+func migrationMemberSubject(info certinfo.Info) (commonName string, dnsNames, ipAddresses []string, err error) {
+	if len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
+		return "", nil, nil, errors.New("migration member predecessor must carry DNS or IP identifiers only")
+	}
+	seen := map[string]bool{}
+	for _, name := range info.DNSNames {
+		name = strings.TrimSpace(name)
+		if key := strings.ToLower(name); name != "" && !seen[key] {
+			seen[key] = true
+			dnsNames = append(dnsNames, name)
+		}
+	}
+	for _, raw := range info.IPAddresses {
+		ip := net.ParseIP(strings.TrimSpace(raw))
+		if ip == nil {
+			return "", nil, nil, errors.New("migration member predecessor carries an unreadable IP address")
+		}
+		if key := ip.String(); !seen["ip:"+key] {
+			seen["ip:"+key] = true
+			ipAddresses = append(ipAddresses, key)
+		}
+	}
+	switch {
+	case len(dnsNames) > 0:
+		commonName = dnsNames[0]
+	case len(ipAddresses) > 0:
+		commonName = ipAddresses[0]
+	default:
+		return "", nil, nil, errors.New("migration member predecessor carries no DNS name or IP address")
+	}
+	return commonName, dnsNames, ipAddresses, nil
 }
 
 func migrationVerifyTarget(cfg json.RawMessage) (string, string) {

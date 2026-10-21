@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -98,13 +99,15 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		return nil, status.Error(codes.FailedPrecondition, "issuance is not configured")
 	}
 
-	if err := authorizeAgentCSRWithInspector(csrDER, permitted, d.inspectSubjectCSR); err != nil {
-		return nil, err
-	}
-
 	var intent RelayDeployIntent
 	if err := json.Unmarshal(job.Payload, &intent); err != nil {
 		return nil, status.Errorf(codes.Internal, "decode renewal job payload: %v", err)
+	}
+	// The IP half of the binding is read from the same job payload the DNS
+	// half came from; neither is taken from the request.
+	if err := authorizeAgentCSRWithInspector(csrDER, permitted,
+		canonicalBoundIPAddresses(intent.SubjectIPAddresses), d.inspectSubjectCSR); err != nil {
+		return nil, err
 	}
 	if err := d.authorizeAgentSubjectAlgorithm(csrDER, intent.SubjectKeyAlgorithm); err != nil {
 		return nil, err
@@ -403,7 +406,7 @@ func (d *issuanceDispatcher) bindAgentCSRMigrationSuccessor(
 // than as a prologue to issuance — and because it is the part worth reading on
 // its own. Everything after it is ordinary minting; everything that stops an
 // agent widening its certificate is here.
-func authorizeAgentCSRWithInspector(csrDER []byte, permitted []string, inspect func([]byte) (crypto.CSRInfo, error)) error {
+func authorizeAgentCSRWithInspector(csrDER []byte, permitted, permittedIPs []string, inspect func([]byte) (crypto.CSRInfo, error)) error {
 	// Parse before trusting anything about it. InspectCSR also verifies the
 	// request's self-signature, which is what makes the CSR proof of possession
 	// rather than an assertion: an agent cannot get a certificate for a public
@@ -423,21 +426,56 @@ func authorizeAgentCSRWithInspector(csrDER []byte, permitted []string, inspect f
 	// api.example.test could add an iPAddress SAN, or a spiffe:// URI, or an
 	// rfc822Name, and the control plane would sign every one of them.
 	//
-	// A renewal binding names DNS hosts and nothing else, so it can authorize
-	// nothing else. The other SAN types are therefore REFUSED outright rather
-	// than compared: there is no value of the binding that could permit them,
-	// and silently dropping them would issue a certificate that does not match
-	// the request the agent proved possession of.
-	if offending, ok := csrCarriesOnlyDNSIdentifiers(info); !ok {
+	// A host listener binding names DNS hosts and IP addresses (A35) and
+	// nothing else, so it can authorize nothing else. rfc822Name and URI SANs
+	// are therefore REFUSED outright rather than compared: there is no value
+	// of the binding that could permit them, and silently dropping them would
+	// issue a certificate that does not match the request the agent proved
+	// possession of.
+	if offending, ok := csrCarriesOnlyHostIdentifiers(info); !ok {
 		return status.Errorf(codes.PermissionDenied,
-			"this renewal job authorizes DNS names only, and the request also asserts %s; a "+
-				"host may request a certificate for the names its binding carries and no others",
+			"this renewal job authorizes DNS names and IP addresses only, and the request also asserts %s; a "+
+				"host may request a certificate for the identifiers its binding carries and no others",
 			offending)
 	}
 
-	requested := append([]string(nil), info.DNSNames...)
+	// IP addresses are compared on their own half of the binding, canonically
+	// spelled, so 2001:db8::1 and 2001:db8:0:0::1 are one address and a DNS
+	// binding with no addresses still refuses every iPAddress SAN.
+	if offending, ok := csrIPAddressesWithinBinding(info.IPAddresses, permittedIPs); !ok {
+		if len(permittedIPs) == 0 {
+			return status.Errorf(codes.PermissionDenied,
+				"this renewal job authorizes DNS names only, and the request also asserts the IP address %s; a "+
+					"host may request a certificate for the names its binding carries and no others", offending)
+		}
+		return status.Errorf(codes.PermissionDenied,
+			"this renewal job does not authorize the IP address %q; a host may request a certificate for "+
+				"the addresses its binding already carries and no others", offending)
+	}
+
+	// An IP literal is never a DNS name. A dNSName SAN spelled as an address
+	// would pass a string comparison against a binding that meant iPAddress,
+	// and the leaf would then carry the address under a type no client
+	// matches by IP — narrower than the request, and not what was authorized.
+	requested := make([]string, 0, len(info.DNSNames)+1)
+	for _, name := range info.DNSNames {
+		if net.ParseIP(strings.TrimSpace(name)) != nil {
+			return status.Errorf(codes.PermissionDenied,
+				"this renewal job does not authorize %q as a DNS name; an IP address may be asserted only as an "+
+					"iPAddress identifier the binding carries", name)
+		}
+		requested = append(requested, name)
+	}
 	if cn := strings.TrimSpace(info.CommonName); cn != "" {
-		requested = append(requested, cn)
+		if ip := net.ParseIP(cn); ip != nil {
+			if offending, ok := csrIPAddressesWithinBinding([]string{ip.String()}, permittedIPs); !ok {
+				return status.Errorf(codes.PermissionDenied,
+					"this renewal job does not authorize the common name %q; a host may request a certificate for "+
+						"the addresses its binding already carries and no others", offending)
+			}
+		} else {
+			requested = append(requested, cn)
+		}
 	}
 	if offending, ok := csrNamesWithinBinding(requested, permitted); !ok {
 		// Named in the error on purpose. This is the one refusal an operator
@@ -452,23 +490,44 @@ func authorizeAgentCSRWithInspector(csrDER []byte, permitted []string, inspect f
 	return nil
 }
 
-// csrCarriesOnlyDNSIdentifiers refuses a renewal CSR asserting anything a DNS
-// binding cannot authorize.
+// csrCarriesOnlyHostIdentifiers refuses a renewal CSR asserting anything a host
+// listener binding cannot authorize.
 //
-// Named separately from the subset rule because it answers a different question.
-// The subset rule asks "is this name one the job carries"; this asks "is this
-// even a KIND of identifier the job could carry". A binding built from
-// SubjectDNSNames has no way to express an IP address or a URI, so a request
-// containing one is outside the vocabulary of the authorization entirely — and
-// an authorization that cannot express a claim must never be read as granting it.
-func csrCarriesOnlyDNSIdentifiers(info crypto.CSRInfo) (string, bool) {
+// Named separately from the subset rules because it answers a different
+// question. The subset rules ask "is this name one the job carries"; this asks
+// "is this even a KIND of identifier the job could carry". A binding built from
+// SubjectDNSNames and SubjectIPAddresses has no way to express an rfc822Name or
+// a URI, so a request containing one is outside the vocabulary of the
+// authorization entirely — and an authorization that cannot express a claim
+// must never be read as granting it.
+func csrCarriesOnlyHostIdentifiers(info crypto.CSRInfo) (string, bool) {
 	switch {
-	case len(info.IPAddresses) > 0:
-		return fmt.Sprintf("the IP address %s", info.IPAddresses[0]), false
 	case len(info.EmailAddresses) > 0:
 		return fmt.Sprintf("the email address %s", info.EmailAddresses[0]), false
 	case len(info.URIs) > 0:
 		return fmt.Sprintf("the URI %s", info.URIs[0]), false
+	}
+	return "", true
+}
+
+// csrIPAddressesWithinBinding is the subset rule for iPAddress SANs. Each
+// requested address is parsed and compared canonically; an unparseable one is
+// refused by its own spelling, since nothing in the binding can match it.
+func csrIPAddressesWithinBinding(requested, permittedIPs []string) (string, bool) {
+	if len(requested) > signJobCSRNameLimit {
+		return "this request asserts more addresses than a renewal binding may carry", false
+	}
+	allowed := make(map[string]bool, len(permittedIPs))
+	for _, ip := range permittedIPs {
+		if parsed := net.ParseIP(strings.TrimSpace(ip)); parsed != nil {
+			allowed[parsed.String()] = true
+		}
+	}
+	for _, raw := range requested {
+		parsed := net.ParseIP(strings.TrimSpace(raw))
+		if parsed == nil || !allowed[parsed.String()] {
+			return raw, false
+		}
 	}
 	return "", true
 }

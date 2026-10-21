@@ -47,7 +47,7 @@ func TestPQCSubjectAdmissionPreservesAllNamesAndRejectsWidenedHostBinding(t *tes
 						!sameRenewalIdentifiers(info.EmailAddresses, tmpl.EmailAddresses) || !sameRenewalIdentifiers(info.URIs, tmpl.URIs) {
 						t.Fatalf("verified algorithm or identifiers were changed: %v", err)
 					}
-					err = authorizeAgentCSRWithInspector(key.CSRDER, []string{"api.example.test"}, d.inspectSubjectCSR)
+					err = authorizeAgentCSRWithInspector(key.CSRDER, []string{"api.example.test"}, nil, d.inspectSubjectCSR)
 					if name == "allowed" && err != nil {
 						t.Fatal(err)
 					}
@@ -56,7 +56,7 @@ func TestPQCSubjectAdmissionPreservesAllNamesAndRejectsWidenedHostBinding(t *tes
 					}
 					bad := bytes.Clone(key.CSRDER)
 					bad[len(bad)-1] ^= 1
-					if err := authorizeAgentCSRWithInspector(bad, []string{"api.example.test"}, d.inspectSubjectCSR); status.Code(err) != codes.InvalidArgument {
+					if err := authorizeAgentCSRWithInspector(bad, []string{"api.example.test"}, nil, d.inspectSubjectCSR); status.Code(err) != codes.InvalidArgument {
 						t.Fatalf("invalid possession proof was not rejected before name admission: %v", err)
 					}
 					if _, _, err := inspectSubjectCSR(key.CSRDER, nil, nil); err == nil {

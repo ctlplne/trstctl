@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"strings"
 	"time"
 
@@ -92,7 +93,8 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 	}
 
 	permitted := signJobCSRPermittedNames(job.Payload)
-	if len(permitted) == 0 {
+	permittedIPs := signJobCSRPermittedIPAddresses(job.Payload)
+	if len(permitted) == 0 && len(permittedIPs) == 0 {
 		return nil, status.Error(codes.FailedPrecondition,
 			"this renewal job names no subject, so there is nothing it authorizes")
 	}
@@ -103,7 +105,7 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 	}
 	a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.csr_signed", map[string]any{
 		"agent": info.CommonName, "job_id": req.JobID,
-		"names": permitted, "fingerprint": resp.Fingerprint,
+		"names": append(append([]string(nil), permitted...), permittedIPs...), "fingerprint": resp.Fingerprint,
 	})
 	return resp, nil
 }
@@ -142,7 +144,40 @@ func signJobCSRPermittedNames(payload []byte) []string {
 	for _, n := range intent.SubjectDNSNames {
 		add(n)
 	}
-	add(intent.SubjectCommonName)
+	// A common name that is an IP literal belongs to the iPAddress half of the
+	// binding; offering it here would let a CSR assert it as a dNSName.
+	if cn := strings.TrimSpace(intent.SubjectCommonName); net.ParseIP(cn) == nil {
+		add(cn)
+	}
+	return out
+}
+
+// signJobCSRPermittedIPAddresses is the iPAddress half of the binding (A35):
+// the job's subject_ip_addresses parsed and spelled canonically, so a CSR
+// writing the same address differently still matches, de-duplicated and
+// bounded like the DNS set. An entry net.ParseIP cannot read authorizes
+// nothing; an authorization that cannot be read must never be read widely.
+func signJobCSRPermittedIPAddresses(payload []byte) []string {
+	var intent RelayDeployIntent
+	if err := json.Unmarshal(payload, &intent); err != nil {
+		return nil
+	}
+	return canonicalBoundIPAddresses(intent.SubjectIPAddresses)
+}
+
+func canonicalBoundIPAddresses(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, entry := range raw {
+		ip := net.ParseIP(strings.TrimSpace(entry))
+		if ip == nil || len(out) >= signJobCSRNameLimit {
+			continue
+		}
+		if key := ip.String(); !seen[key] {
+			seen[key] = true
+			out = append(out, key)
+		}
+	}
 	return out
 }
 

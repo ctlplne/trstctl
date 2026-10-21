@@ -369,6 +369,9 @@ func renewalSubjectNames(intent DeployIntent) []string {
 	for _, n := range intent.SubjectDNSNames {
 		add(n)
 	}
+	for _, n := range intent.SubjectIPAddresses {
+		add(n)
+	}
 	add(intent.SubjectCommonName)
 	return out
 }

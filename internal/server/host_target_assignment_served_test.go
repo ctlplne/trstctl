@@ -63,7 +63,7 @@ func TestHostTargetAssignmentSurvivesCompetingHostAndExpiredLease(t *testing.T) 
 	}
 	d := &issuanceDispatcher{store: h.store, outbox: h.srv.outbox, connectorRegistry: registry}
 	identity := store.Identity{ID: "44444444-4444-4444-8444-44444444a079", Name: "application.example.test"}
-	if err := d.enqueueHostRenewal(ctx, h.tenant, identity, target, identity.Name, []string{identity.Name}, "", "", nil, "assigned-renewal"); err != nil {
+	if err := d.enqueueHostRenewal(ctx, h.tenant, identity, target, identity.Name, []string{identity.Name}, nil, "", "", nil, "assigned-renewal"); err != nil {
 		t.Fatal(err)
 	}
 	payload, err := json.Marshal(connector.DeployPayload{Connector: target.Type, TargetID: target.ID, TargetConfig: target.Config, IdentityID: identity.ID, Fingerprint: "assigned-fingerprint"})

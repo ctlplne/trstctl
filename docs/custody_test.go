@@ -143,7 +143,7 @@ func TestRenewalCustodyRowsFollowTheProductionBranch(t *testing.T) {
 	requireCall(t, hostExecutor, "generateHostRenewSubjectKey",
 		"the queued renewal must reach the host's algorithm-specific key generator")
 	hostGenerator := goFunction(t, "../internal/agent/relay/host_subject_algorithm.go", "generateHostRenewSubjectKey")
-	requireCall(t, hostGenerator, "crypto.GenerateHostSubjectKey",
+	requireCall(t, hostGenerator, "crypto.GenerateHostSubjectKeyFromTemplate",
 		"classical renewal must generate its subject key on the serving host")
 	requireCall(t, hostGenerator, "pqc.GenerateHostMLDSASubjectKey",
 		"ML-DSA renewal must generate its subject key on the serving host")

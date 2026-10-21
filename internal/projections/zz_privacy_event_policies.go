@@ -839,6 +839,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/run/waves/*/members/*/binding/verify_server_name", token),
 		privacyRule("/run/waves/*/members/*/binding/subject_common_name", token),
 		privacyRule("/run/waves/*/members/*/binding/subject_dns_names/*", token),
+		privacyRule("/run/waves/*/members/*/binding/subject_ip_addresses/*", token),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_certificate_id", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_fingerprint", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_ca_id", opaque),

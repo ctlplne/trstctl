@@ -72,8 +72,9 @@ type DeployIntent struct {
 	// than the address host — a virtual host behind an IP, most often.
 	VerifyServerName string `json:"verify_server_name,omitempty"`
 
-	// SubjectCommonName and SubjectDNSNames name what a host-generated renewal
-	// should certify (epic B2). Present on endpoint.renew only.
+	// SubjectCommonName, SubjectDNSNames and SubjectIPAddresses name what a
+	// host-generated renewal should certify (epic B2, A35). Present on
+	// endpoint.renew only.
 	//
 	// They are an INSTRUCTION, not a grant. The control plane re-reads the same
 	// names from the job payload it queued when the CSR arrives and refuses
@@ -84,6 +85,7 @@ type DeployIntent struct {
 	SubjectKeyAlgorithm string   `json:"subject_key_algorithm,omitempty"`
 	SubjectCommonName   string   `json:"subject_common_name,omitempty"`
 	SubjectDNSNames     []string `json:"subject_dns_names,omitempty"`
+	SubjectIPAddresses  []string `json:"subject_ip_addresses,omitempty"`
 	// A PQC certificate migration binds the discovered public predecessor to
 	// this exact host job. The agent verifies it on the listener and seals the
 	// local certificate/key pair before generating any replacement key.

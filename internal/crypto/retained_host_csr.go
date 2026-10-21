@@ -21,18 +21,16 @@ import (
 // pinned public-key digest, so a replaced key cannot silently become the key
 // for a CA re-protection request.
 func CreateRetainedHostKeyCSR(privateKeyPEM []byte, commonName string, dnsNames []string, expectedSPKISHA256 string) ([]byte, error) {
-	commonName = strings.TrimSpace(commonName)
-	cleaned := make([]string, 0, len(dnsNames))
-	for _, name := range dnsNames {
-		if name = strings.TrimSpace(name); name != "" {
-			cleaned = append(cleaned, name)
-		}
-	}
-	if commonName == "" && len(cleaned) == 0 {
-		return nil, ErrNoSubjectNames
-	}
-	if commonName == "" {
-		commonName = cleaned[0]
+	return CreateRetainedHostKeyCSRFromTemplate(privateKeyPEM,
+		CertificateRequestTemplate{CommonName: commonName, DNSNames: dnsNames}, expectedSPKISHA256)
+}
+
+// CreateRetainedHostKeyCSRFromTemplate is CreateRetainedHostKeyCSR for a
+// binding that also names IP addresses (A35).
+func CreateRetainedHostKeyCSRFromTemplate(privateKeyPEM []byte, tmpl CertificateRequestTemplate, expectedSPKISHA256 string) ([]byte, error) {
+	tmpl, err := normalizeHostSubjectTemplate(tmpl)
+	if err != nil {
+		return nil, err
 	}
 	want, err := hex.DecodeString(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(expectedSPKISHA256)), "sha256:"))
 	if err != nil || len(want) != 32 {
@@ -60,7 +58,7 @@ func CreateRetainedHostKeyCSR(privateKeyPEM []byte, commonName string, dnsNames 
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return nil, errors.New("crypto: installed subject key differs from pinned predecessor SPKI")
 	}
-	return CreateCertificateRequest(CertificateRequestTemplate{CommonName: commonName, DNSNames: cleaned}, signer)
+	return CreateCertificateRequest(tmpl, signer)
 }
 
 func lockedRetainedHostSigner(block *pem.Block) (*LockedSigner, error) {

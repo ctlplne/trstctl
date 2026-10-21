@@ -7132,6 +7132,7 @@ MigrationMemberBinding = TypedDict(
         'required_agent_id': str,
         'subject_common_name': str,
         'subject_dns_names': list[str],
+        'subject_ip_addresses': list[str],
         'successor_fingerprint': str,
         'target': str,
         'target_config': dict[str, Any],

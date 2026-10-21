@@ -287,6 +287,7 @@ type migrationEndpointRenewIntent struct {
 	VerifyServerName         string                     `json:"verify_server_name,omitempty"`
 	SubjectCommonName        string                     `json:"subject_common_name"`
 	SubjectDNSNames          []string                   `json:"subject_dns_names"`
+	SubjectIPAddresses       []string                   `json:"subject_ip_addresses,omitempty"`
 	PredecessorCertificateID string                     `json:"predecessor_certificate_id"`
 	MigrationRunID           string                     `json:"migration_run_id"`
 	MigrationWaveID          string                     `json:"migration_wave_id"`
@@ -338,6 +339,7 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 			Revision: b.TargetRevision, IdentityID: action.IdentityID, TargetConfig: b.TargetConfig,
 			VerifyAddress: b.VerifyAddress, VerifyServerName: b.VerifyServerName,
 			SubjectCommonName: b.SubjectCommonName, SubjectDNSNames: b.SubjectDNSNames,
+			SubjectIPAddresses:       b.SubjectIPAddresses,
 			PredecessorCertificateID: b.PredecessorCertificateID,
 			MigrationRunID:           run.ID, MigrationWaveID: action.WaveID,
 			RequiredAgentID: b.RequiredAgentID,

@@ -458,3 +458,24 @@ func assertActionsAUD40(t *testing.T, actions []migration.Action, kind migration
 		}
 	}
 }
+
+// An executable member may be bound to IP addresses instead of, or next to,
+// DNS names; a binding naming neither has nothing to certify (A35).
+func TestExecutableRunAcceptsIPAddressSubjects(t *testing.T) {
+	binding := completeBindingAUD40("target-ip", "predecessor-ip")
+	binding.SubjectCommonName = "10.0.0.7"
+	binding.SubjectDNSNames = nil
+	binding.SubjectIPAddresses = []string{"10.0.0.7"}
+	run := migration.Run{ID: "run-ip", Waves: []migration.RunWave{{
+		ID: "canary", Ordinal: 1,
+		Members: []migration.RunMember{{IdentityID: "leaf-ip", Binding: binding}},
+	}}}
+	if err := migration.ValidateExecutableRunForStart(run); err != nil {
+		t.Fatalf("an IP-only binding was refused: %v", err)
+	}
+	binding.SubjectIPAddresses = nil
+	run.Waves[0].Members[0].Binding = binding
+	if err := migration.ValidateExecutableRunForStart(run); err == nil {
+		t.Fatal("a binding with no DNS name and no IP address was accepted")
+	}
+}

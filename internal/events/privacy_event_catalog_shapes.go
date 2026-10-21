@@ -337,7 +337,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "history.tenant_data_rewrite.continuity":
 		return shape(`{"jws":""}`), true
 	case "issuance.host_renewal_dispatched":
-		return shape(`{"identity_id":"","target_id":"","target_name":"","connector":"","dns_names":[""],"custody":"","detail":""}`), true
+		return shape(`{"identity_id":"","target_id":"","target_name":"","connector":"","dns_names":[""],"ip_addresses":[""],"custody":"","detail":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/ip_addresses"}}), true
 	case "issuance.profile_evaluated":
 		return shape(`{"profile":"","version":1,"decision":"","reason":"","protocol":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/protocol"}}), true

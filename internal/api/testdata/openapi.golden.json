@@ -21353,6 +21353,12 @@
             },
             "type": "array"
           },
+          "subject_ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "successor_fingerprint": {
             "type": "string"
           },

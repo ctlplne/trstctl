@@ -40,31 +40,49 @@ import (
 // addresses, rfc822Names and URIs concatenated with their types erased. Feeding
 // that to a renewal binding as SubjectDNSNames would be wrong in both
 // directions: an IP would be offered as a permitted DNS name, and the renewed
-// certificate would silently STOP asserting the IP, because a host-generated
-// CSR may carry DNS identifiers only.
+// certificate would carry it under a type no client matches by address. The
+// binding therefore keeps DNS names and IP addresses in their own fields (A35).
 //
 // A silent narrowing of what an endpoint asserts is the worst available outcome
 // — the deploy succeeds, verification passes against the fingerprint, and some
-// client that connected by IP starts failing. So a certificate carrying any
-// non-DNS identifier is REFUSED for this path and left on the one that can
+// client that connected by the dropped identifier starts failing. So a
+// certificate carrying an rfc822Name or URI, which a host listener binding
+// cannot express, is REFUSED for this path and left on the one that can
 // represent it. That is a real limitation of host-generated renewal, and acting
 // on it is better than papering over it.
-func hostRenewalSubject(cert store.Certificate) (dnsNames []string, ok bool) {
+func hostRenewalSubject(cert store.Certificate) (dnsNames, ipAddresses []string, ok bool) {
 	if len(cert.CertificateDER) == 0 {
 		// Nothing to inspect means nothing can be asserted about the shape.
-		return nil, false
+		return nil, nil, false
 	}
 	info, err := certinfo.Inspect(cert.CertificateDER)
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
-	if len(info.IPAddresses) > 0 || len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
-		return nil, false
+	if len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
+		return nil, nil, false
 	}
-	if len(info.DNSNames) == 0 {
-		return nil, false
+	ipAddresses = canonicalBoundIPAddresses(info.IPAddresses)
+	if len(ipAddresses) != len(info.IPAddresses) {
+		// An address the binding cannot spell canonically cannot be authorized.
+		return nil, nil, false
 	}
-	return append([]string(nil), info.DNSNames...), true
+	if len(info.DNSNames) == 0 && len(ipAddresses) == 0 {
+		return nil, nil, false
+	}
+	return append([]string(nil), info.DNSNames...), ipAddresses, true
+}
+
+// hostRenewalCommonName follows the first DNS name, else the first address, so
+// the name set the host may request is exactly the set the binding carries.
+func hostRenewalCommonName(dnsNames, ipAddresses []string) string {
+	if len(dnsNames) > 0 {
+		return dnsNames[0]
+	}
+	if len(ipAddresses) > 0 {
+		return ipAddresses[0]
+	}
+	return ""
 }
 
 // hostRenewalTargetFor reports whether this identity's deployment target has
@@ -120,7 +138,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	ident store.Identity,
 	target store.DeploymentTarget,
 	commonName string,
-	dnsNames []string,
+	dnsNames, ipAddresses []string,
 	predecessorCertificateID, rotationRunID string,
 	issuance *store.OperationApprovalIssuanceBinding,
 	idempotencyKey string,
@@ -159,6 +177,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		SubjectKeyAlgorithm:      algorithm,
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
+		SubjectIPAddresses:       ipAddresses,
 		PredecessorCertificateID: predecessorCertificateID,
 		RotationRunID:            rotationRunID,
 		IssuingAuthoritySource:   selection.Source,
@@ -202,22 +221,23 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 // the absence of deploy receipts.
 func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 	ctx context.Context, tenantID string, ident store.Identity,
-	target store.DeploymentTarget, dnsNames []string,
+	target store.DeploymentTarget, dnsNames, ipAddresses []string,
 ) {
 	if d.log == nil {
 		return
 	}
 	body, err := json.Marshal(struct {
-		IdentityID string   `json:"identity_id"`
-		TargetID   string   `json:"target_id"`
-		TargetName string   `json:"target_name"`
-		Connector  string   `json:"connector"`
-		DNSNames   []string `json:"dns_names"`
-		Custody    string   `json:"custody"`
-		Detail     string   `json:"detail"`
+		IdentityID  string   `json:"identity_id"`
+		TargetID    string   `json:"target_id"`
+		TargetName  string   `json:"target_name"`
+		Connector   string   `json:"connector"`
+		DNSNames    []string `json:"dns_names"`
+		IPAddresses []string `json:"ip_addresses,omitempty"`
+		Custody     string   `json:"custody"`
+		Detail      string   `json:"detail"`
 	}{
 		IdentityID: ident.ID, TargetID: target.ID, TargetName: target.Name,
-		Connector: target.Type, DNSNames: dnsNames, Custody: "host_agent",
+		Connector: target.Type, DNSNames: dnsNames, IPAddresses: ipAddresses, Custody: "host_agent",
 		Detail: "this target is marked executor=agent, so the renewal was handed to a host agent " +
 			"that will generate the subject key on the machine serving it; the control plane " +
 			"minted nothing and holds no private key for this renewal",
@@ -343,16 +363,17 @@ func (d *issuanceDispatcher) dispatchHostRenewal(
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}
-	dnsNames, hostRenewable := hostRenewalSubject(predecessor)
+	dnsNames, ipAddresses, hostRenewable := hostRenewalSubject(predecessor)
 	if !hostExecuted || !hostRenewable {
 		return false, nil
 	}
 	if err := d.enqueueHostRenewal(ctx, tenantID, ident, target,
-		dnsNames[0], dnsNames, predecessor.ID, run.ID, issuance, "host-renew:"+idemKey); err != nil {
+		hostRenewalCommonName(dnsNames, ipAddresses), dnsNames, ipAddresses,
+		predecessor.ID, run.ID, issuance, "host-renew:"+idemKey); err != nil {
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}
-	d.recordAgentRenewalDispatch(ctx, tenantID, ident, target, dnsNames)
+	d.recordAgentRenewalDispatch(ctx, tenantID, ident, target, dnsNames, ipAddresses)
 	return true, nil
 }
 

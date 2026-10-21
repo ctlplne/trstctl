@@ -30,7 +30,8 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 	if intent.PQCRunID != "" || intent.MigrationRunID != "" || intent.ReprotectJobID == "" ||
 		intent.ReprotectPredecessorFingerprint == "" || intent.ReprotectPredecessorSPKISHA256 == "" ||
 		intent.PredecessorCertificateID == "" || intent.IdentityID == "" || intent.IssuingAuthoritySource != "private" ||
-		intent.IssuingAuthorityID == "" || len(intent.SubjectDNSNames) == 0 || intent.VerifyAddress == "" || intent.VerifyServerName == "" {
+		intent.IssuingAuthorityID == "" || (len(intent.SubjectDNSNames) == 0 && len(intent.SubjectIPAddresses) == 0) ||
+		intent.VerifyAddress == "" || intent.VerifyServerName == "" {
 		report(ctx, ch, job, OutcomeFailed, "CA re-protection intent is incomplete or mixed with another migration")
 		return false
 	}
@@ -68,9 +69,11 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 	} else {
 		err = rollback.UseReprotectPredecessor(intent.Connector, intent.TargetID, intent.ReprotectJobID,
 			intent.ReprotectPredecessorFingerprint, func(_, keyPEM []byte) error {
-				var createErr error
-				csrDER, createErr = crypto.CreateRetainedHostKeyCSR(keyPEM, intent.SubjectCommonName,
-					intent.SubjectDNSNames, intent.ReprotectPredecessorSPKISHA256)
+				tmpl, createErr := hostSubjectTemplate(intent)
+				if createErr != nil {
+					return createErr
+				}
+				csrDER, createErr = crypto.CreateRetainedHostKeyCSRFromTemplate(keyPEM, tmpl, intent.ReprotectPredecessorSPKISHA256)
 				return createErr
 			})
 		if err == nil {
