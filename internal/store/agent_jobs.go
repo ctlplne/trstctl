@@ -600,6 +600,7 @@ func (s *Store) RedeemAgentJobCredential(
 			           AND COALESCE(o.required_agent_id::text, '') = $10
 			           AND o.claimed_by_agent_id = $3::uuid
 			           AND o.claim_completed_at IS NULL
+			           AND o.agent_recalled_at IS NULL
 			           AND o.claim_expires_at > $6
 			           AND o.claim_attempts = $4
 			           AND ($11::text = '' OR EXISTS (
@@ -733,6 +734,7 @@ func (s *Store) GetAgentJobForRedemption(
 			    AND claimed_by_agent_id = $3::uuid
 			    AND status = 'pending'
 			    AND claim_completed_at IS NULL
+			    AND agent_recalled_at IS NULL
 			    AND claim_expires_at > $4`,
 			tenantID, jobID, agentID, now.UTC()).
 			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts, &out.RequiredAgentID)

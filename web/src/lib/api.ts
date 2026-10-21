@@ -198,6 +198,7 @@ import type {
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
+  ConnectorWorkCancellation,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
   EndpointContainmentPreview,
@@ -1899,6 +1900,7 @@ export interface Api {
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
   deployConnectorTarget(id: string, input: ConnectorTargetActionRequest, idempotencyKey?: string): Promise<Identity>;
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
+  cancelConnectorTargetWork(id: string, input: ConnectorTargetActionRequest, idempotencyKey?: string): Promise<ConnectorWorkCancellation>;
   previewEndpointContainment(id: string): Promise<EndpointContainmentPreview>;
   containEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
@@ -2618,6 +2620,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
   deployConnectorTarget: (id, input, key) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input, key),
   rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),
+  cancelConnectorTargetWork: (id, input, key) =>
+    mutate<ConnectorWorkCancellation>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/cancel`, input, key),
   previewEndpointContainment: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/contain/preview`),
   containEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/contain`, input, key),
   connectorDeliveries: (options) => {

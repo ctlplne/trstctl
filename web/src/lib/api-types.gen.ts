@@ -2513,7 +2513,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -2546,6 +2546,14 @@ export interface ConnectorSupportRow {
 export interface ConnectorTargetActionRequest {
   identity_id: string;
   reason?: string;
+}
+
+export interface ConnectorWorkCancellation {
+  executing_job_ids: number[];
+  recalled_job_ids: number[];
+  receipts: ConnectorDelivery[];
+  target_id: string;
+  withdrawn_job_ids: number[];
 }
 
 export interface ContextualRiskPriorities {

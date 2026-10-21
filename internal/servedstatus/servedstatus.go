@@ -210,6 +210,11 @@ const (
 	ConnectorContainmentDifferentLeaf = "containment_different_leaf"
 	ConnectorContainmentUnverified    = "containment_unverified"
 	ConnectorContainmentFailed        = "containment_failed"
+	// ConnectorCancelled means an operator withdrew a queued command or recalled
+	// a leased one before it completed (A48). Nothing about the target is
+	// claimed: a withdrawn command never ran, and a recalled agent may already
+	// have acted, which the receipt detail says.
+	ConnectorCancelled = "cancelled"
 )
 
 // ConnectorDelivery is the served vocabulary for connector delivery receipts.
@@ -226,6 +231,8 @@ var ConnectorDelivery = Registry{
 			Meaning: "The host agent could not observe a parseable TLS leaf before acting, so it did not run the stop action. Containment remains unverified."},
 		{Value: ConnectorContainmentFailed, ContactedTarget: true,
 			Meaning: "The host agent observed the compromised leaf, but the stop action failed or subsequent probes still saw a TLS listener. Containment is not proven."},
+		{Value: ConnectorCancelled,
+			Meaning: "An operator withdrew the command before any agent or worker claimed it, or recalled it from the agent holding its lease. Nothing was verified; a recalled agent may already have changed the target."},
 		{
 			Value:   ConnectorQueued,
 			Meaning: "Intent committed to the outbox in the same transaction as the state change. No connector has run.",

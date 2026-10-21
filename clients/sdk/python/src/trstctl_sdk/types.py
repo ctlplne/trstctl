@@ -3526,6 +3526,18 @@ ConnectorTargetActionRequest = TypedDict(
     total=False,
 )
 
+ConnectorWorkCancellation = TypedDict(
+    'ConnectorWorkCancellation',
+    {
+        'executing_job_ids': list[int],
+        'recalled_job_ids': list[int],
+        'receipts': list[dict[str, Any]],
+        'target_id': str,
+        'withdrawn_job_ids': list[int],
+    },
+    total=False,
+)
+
 ContextualRiskPriorities = TypedDict(
     'ContextualRiskPriorities',
     {

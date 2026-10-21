@@ -16514,6 +16514,19 @@ export const messages = {
     description: "Containment reason form validation.",
   },
   "connectors.containment.submit": { defaultMessage: "Queue exact host stop", description: "Submit the reviewed host action." },
+  "connectors.cancelled": {
+    defaultMessage: "Cancelled by operator — nothing verified",
+    description: "Receipt status for connector work an operator withdrew or recalled.",
+  },
+  "connectors.cancel.action": {
+    defaultMessage: "Cancel in-flight work",
+    description: "Button that withdraws queued and recalls leased connector work on the selected target.",
+  },
+  "connectors.cancel.result": {
+    defaultMessage:
+      "Cancelled: {withdrawn} withdrawn before any claim, {recalled} recalled from an agent that may already have acted, {executing} still executing on the control plane and left alone.",
+    description: "Outcome line after cancelling a target's in-flight connector work.",
+  },
   "connectors.containment.queued": { defaultMessage: "Host stop queued — listener may still be serving", description: "Pending containment status." },
   "connectors.containment.queuedHelp": {
     defaultMessage: "Wait for the exact enrolled host agent. Check this receipt again; no stop or listener check has been proved yet.",

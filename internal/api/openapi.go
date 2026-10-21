@@ -3127,6 +3127,13 @@ func componentSchemas() map[string]*Schema {
 		"target_enabled", "identity_id", "identity_name", "identity_status", "certificate_status",
 		"expected_fingerprint", "required_agent_id", "preview_fingerprint", "required_permission",
 		"execution_effects", "verification_steps", "warnings")
+	connectorWorkCancellation := object(map[string]*Schema{
+		"target_id":         uuid(),
+		"withdrawn_job_ids": {Type: "array", Items: &Schema{Type: "integer"}},
+		"recalled_job_ids":  {Type: "array", Items: &Schema{Type: "integer"}},
+		"executing_job_ids": {Type: "array", Items: &Schema{Type: "integer"}},
+		"receipts":          {Type: "array", Items: ref("ConnectorDelivery")},
+	}, "target_id", "withdrawn_job_ids", "recalled_job_ids", "executing_job_ids", "receipts")
 	connectorDelivery := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "outbox_id": {Type: "integer"}, "identity_id": uuid(),
 		"destination": str(), "connector": str(), "target": str(), "fingerprint": str(),
@@ -6755,6 +6762,7 @@ func componentSchemas() map[string]*Schema {
 		"EndpointContainmentPreview":               endpointContainmentPreview,
 		"ConnectorDelivery":                        connectorDelivery,
 		"ConnectorDeliveryList":                    list("ConnectorDelivery"),
+		"ConnectorWorkCancellation":                connectorWorkCancellation,
 		"KeyCompromisePlanRequest":                 keyCompromisePlanRequest,
 		"KeyCompromiseCertificate":                 keyCompromiseCertificate,
 		"KeyCompromiseExcludedCertificate":         keyCompromiseExcludedCertificate,

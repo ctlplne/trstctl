@@ -268,6 +268,21 @@ rows select a logical profile name but cannot add a root, executable, or argumen
 
 The containment and combined key-compromise previews return 503 with the exact
 missing job kind when the channel is absent or `endpoint.contain` is disabled.
+
+**Cancel in-flight work.** `POST /api/v1/connectors/targets/{id}/cancel`
+(`trstctl-cli connector target cancel <id> <body.json>`, body `{"reason": ...,
+"identity_id": optional}`) drains the target's deploy/rollback lane and answers
+with three honest dispositions plus a `cancelled` receipt for each stopped
+command. A command nobody holds is *withdrawn*: it stops being claimable and the
+target was not changed by it. A command an enrolled agent holds is *recalled*:
+the agent's next lease extension, credential redemption and rollback
+authorization are refused and a late signed result is retained as a receipt
+rather than applied, but the agent may already have changed the target, so
+verify the listener and roll back if needed. A command the control-plane outbox
+worker is executing inside a connector call right now is reported as
+*executing* and left alone, because interrupting it would leave the appliance
+half-written; cancel again once it lands, or roll back. A second cancel finds
+nothing. Cancellation never undoes an effect that already happened.
 If an operator withdraws that allowlist entry after accepting a command, the
 existing host job remains queued; restore the entry to let the enrolled host
 claim it, then verify the signed receipt and listener independently.

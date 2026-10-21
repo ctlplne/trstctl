@@ -10315,6 +10315,7 @@
               "containment_different_leaf",
               "containment_unverified",
               "containment_failed",
+              "cancelled",
               "queued",
               "delivered",
               "failed",
@@ -10470,6 +10471,46 @@
         },
         "required": [
           "identity_id"
+        ],
+        "type": "object"
+      },
+      "ConnectorWorkCancellation": {
+        "properties": {
+          "executing_job_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "recalled_job_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "receipts": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorDelivery"
+            },
+            "type": "array"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "withdrawn_job_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "target_id",
+          "withdrawn_job_ids",
+          "recalled_job_ids",
+          "executing_job_ids",
+          "receipts"
         ],
         "type": "object"
       },
@@ -45045,6 +45086,83 @@
           }
         ],
         "summary": "Update a deployment connector target",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/connectors/targets/{id}/cancel": {
+      "post": {
+        "operationId": "cancelConnectorTargetWork",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorTargetActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorWorkCancellation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Withdraw queued and recall leased connector work on a deployment target",
         "x-trstctl-permission": "connectors:write"
       }
     },

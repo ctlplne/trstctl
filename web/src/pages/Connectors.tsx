@@ -79,7 +79,7 @@ export function Connectors() {
   // A46: the single-target read says whether a rollback would find a
   // predecessor to restore, and why not, before the operator asks for one.
   const [targetReadiness, setTargetReadiness] = useState<DeploymentTarget["rollback_readiness"] | null>(null);
-  const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | null>(null);
+  const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | "cancel" | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
   const [connectorName, setConnectorName] = useState("nginx");
   const [targetConfig, setTargetConfig] = useState(() => defaultTargetConfig("nginx"));
@@ -318,10 +318,10 @@ export function Connectors() {
     }
   };
 
-  const runTargetAction = async (action: "bind" | "test" | "deploy" | "rollback") => {
+  const runTargetAction = async (action: "bind" | "test" | "deploy" | "rollback" | "cancel") => {
     if (!selectedTarget || targetActionBlocked || targetActionBusy) return;
     if (action !== "test" && identityActionBlocked) return;
-    if ((action === "deploy" || action === "rollback") && !reason.trim()) return;
+    if ((action === "deploy" || action === "rollback" || action === "cancel") && !reason.trim()) return;
     if (action === "rollback" && !selectedConnectorRecord?.executes_rollback) return;
     setTargetActionBusy(action);
     setError(null);
@@ -341,6 +341,15 @@ export function Connectors() {
         if (deployAttempt.current?.body !== body) deployAttempt.current = { body, key: newIdempotencyKey() };
         await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() }, deployAttempt.current.key);
         setActionResult(t("connectors.deploy.accepted"));
+      } else if (action === "cancel") {
+        const cancelled = await api.cancelConnectorTargetWork(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() }, newIdempotencyKey());
+        setActionResult(
+          t("connectors.cancel.result", {
+            withdrawn: String(cancelled.withdrawn_job_ids.length),
+            recalled: String(cancelled.recalled_job_ids.length),
+            executing: String(cancelled.executing_job_ids.length),
+          }),
+        );
       } else {
         setRecoveryReceipt(null);
         const receipt = await api.rollbackConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
@@ -742,6 +751,14 @@ export function Connectors() {
                     disabled={reasonActionBlocked || !selectedConnectorRecord?.executes_rollback || Boolean(targetActionBusy)}
                   >
                     {t("connectors.recovery.review")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void runTargetAction("cancel")}
+                    disabled={reasonActionBlocked || Boolean(targetActionBusy)}
+                  >
+                    {t("connectors.cancel.action")}
                   </Button>
                 </div>
                 {selectedTargetRecord && selectedConnectorRecord?.target_vantage === "host_agent" && (

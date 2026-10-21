@@ -449,6 +449,15 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "critical",
     order: 8,
   },
+  // A48: an operator withdrew a queued command or recalled a leased one. It
+  // claims nothing about the target; a recalled agent may already have acted.
+  cancelled: {
+    get label() {
+      return translateNow("connectors.cancelled");
+    },
+    tone: "neutral",
+    order: 9,
+  },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

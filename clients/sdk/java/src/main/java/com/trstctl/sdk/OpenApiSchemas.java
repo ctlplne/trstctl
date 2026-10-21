@@ -257,6 +257,7 @@ public final class OpenApiSchemas {
       "ConnectorRelayParity",
       "ConnectorSupportRow",
       "ConnectorTargetActionRequest",
+      "ConnectorWorkCancellation",
       "ContextualRiskPriorities",
       "ContextualRiskPriority",
       "ContextualRiskSummary",

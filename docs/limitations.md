@@ -5299,8 +5299,14 @@ or retired. The control plane repeats that check before handing out queued work;
 the updated agent requests fresh authorization before opening its predecessor
 store or redeeming an appliance credential. Upgrade both components to obtain
 all three checks. A control-plane refusal is recorded as `rollback_refused`,
-without claiming agent execution. These checks cannot cancel a remote operation
-already in progress or remove compromised material already installed on a target.
+without claiming agent execution. An operator can cancel a target's in-flight
+connector work (`POST /api/v1/connectors/targets/{id}/cancel`): queued commands
+are withdrawn, agent-leased commands are recalled so the agent is refused at its
+next check-in and its late result is retained rather than applied, and a command
+the control-plane worker is executing inside a connector call is reported and
+left alone rather than interrupted mid-write. Cancellation cannot undo an effect
+that already landed and cannot remove compromised material already installed on
+a target.
 
 **Configuring it.** Local post-deploy verification runs when a deployment target
 carries `verify_address` (and optionally `verify_server_name`) in its config —
