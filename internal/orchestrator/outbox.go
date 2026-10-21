@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"sort"
 	"strings"
@@ -819,6 +820,16 @@ func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutb
 		}
 	}
 	finalizeErr := o.finalizeClaim(ctx, claim, deliverErr)
+	if deliverErr != nil {
+		// The persisted column holds only the closed error class so provider or
+		// storage text never lands in a tenant row; the log carries the class at
+		// WARN for every failure and the error text only at DEBUG, so an operator
+		// can find why a worker rejects a command without reading the database.
+		logger := slog.Default()
+		logger.Warn("outbox delivery failed", "destination", claim.msg.Destination, "attempt", claim.attempts,
+			"class", persistedDeliveryError(deliverErr), "deferred", IsDeliveryDeferred(deliverErr))
+		logger.Debug("outbox delivery error", "destination", claim.msg.Destination, "attempt", claim.attempts, "error", deliverErr.Error())
+	}
 	destroyDeliveryError(deliverErr)
 	return finalizeErr
 }

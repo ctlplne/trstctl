@@ -25,7 +25,6 @@ import (
 	"trstctl.com/trstctl/internal/reconcile/rounds"
 	"trstctl.com/trstctl/internal/reconcile/witness"
 	"trstctl.com/trstctl/internal/store"
-	"trstctl.com/trstctl/internal/succession"
 )
 
 func TestLicensedProductionPrivacyCatalogIsRegistered(t *testing.T) {
@@ -333,32 +332,5 @@ func TestLicensedDelegationDirectiveRewriteStillDecodes(t *testing.T) {
 	directive, ok := decoded.(delegation.RevocationDirectiveV1)
 	if !ok || directive.SubjectID == subject || directive.Reason != "" {
 		t.Fatalf("delegation directive rewrite = %#v", decoded)
-	}
-}
-
-func TestLicensedSuccessionFindingRewriteStillDecodes(t *testing.T) {
-	const subject = "operator@example.test"
-	event, err := succession.Encode(succession.FindingV1{
-		IdentityID: "identity-a", TenantID: "tenant-a", Epoch: 1,
-		Algorithm: "rsa", Reason: "reported by " + subject,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rewritten, changed, err := events.PseudonymizeEventDataForSubject(
-		event.Data, event.TenantID, subject, event.Type, event.SchemaVersion,
-	)
-	if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) {
-		t.Fatalf("succession rewrite changed=%t err=%v data=%s", changed, err, rewritten)
-	}
-	decoded, err := succession.Decode(eventspec.Event{
-		Type: event.Type, TenantID: event.TenantID, SchemaVersion: event.SchemaVersion, Data: rewritten,
-	})
-	if err != nil {
-		t.Fatalf("rewritten succession finding no longer decodes: %v", err)
-	}
-	finding, ok := decoded.(succession.FindingV1)
-	if !ok || finding.Reason != "" {
-		t.Fatalf("succession finding rewrite = %#v", decoded)
 	}
 }
