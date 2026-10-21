@@ -288,7 +288,7 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 	}
 	requestDigest := crypto.SHA256Sum(requestBytes)
 	if err := w.recordKEMRewrapRequest(ctx, tenantID, p.IdentityID, p.PredecessorEpoch,
-		env.RequestID, requestDigest, p.Stages); err != nil {
+		env.RequestID, requestDigest, p.Stages, p.InventorySequence, p.EmptyInventoryAttested); err != nil {
 		return err
 	}
 	recordEventID := succession.KEMRewrapRecordEventID(tenantID, p.IdentityID, p.PredecessorEpoch+1)
@@ -891,10 +891,16 @@ func (w *BreadthWorker) handleFederationImport(ctx context.Context, tenantID str
 }
 
 func (w *BreadthWorker) recordKEMRewrapRequest(ctx context.Context, tenantID, identityID string,
-	predecessorEpoch uint64, requestID string, requestDigest []byte, stages []string) error {
+	predecessorEpoch uint64, requestID string, requestDigest []byte, stages []string,
+	inventorySequence uint64, emptyInventoryAttested bool) error {
+	// The API records this same event when it accepts the request, including
+	// the inventory snapshot and the empty-stage attestation; the worker's
+	// replay check must encode the identical payload or every attested or
+	// populated request is refused as "another immutable request".
 	source, err := succession.Encode(succession.KEMRewrapRequestedV1{
 		TenantID: tenantID, IdentityID: identityID, PredecessorEpoch: predecessorEpoch,
 		RequestID: requestID, RequestDigest: requestDigest, Stages: stages,
+		InventorySequence: inventorySequence, EmptyInventoryAttested: emptyInventoryAttested,
 	})
 	if err != nil {
 		return err
