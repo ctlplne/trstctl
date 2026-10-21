@@ -429,18 +429,44 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 			return nil, nil, nil, err
 		}
 		built = paloalto.New(target.Endpoint, apiKey, paloalto.WithSSLTLSProfile(target.SSLTLSProfile, target.CommitAdmin))
-	case "aws-acm":
-		accessSecret, err := require(target.SecretAccessKeyRef, "AWS secret access key")
+	case "aws-acm", "azure-keyvault", "gcp-certificate-manager":
+		var err error
+		built, destroy, err = buildCloudHTTPConnector(name, target, require)
 		if err != nil {
 			lease.Close()
 			return nil, nil, nil, err
+		}
+	}
+	if built == nil {
+		lease.Close()
+		return nil, nil, nil, fmt.Errorf("connector: no HTTP constructor for %q", name)
+	}
+	cleanup := connectorAttemptCleanup(built, lease, destroy...)
+	return built, connector.NewHTTPOps(httpConnectorClient(r, target.Endpoint)), cleanup, nil
+}
+
+// buildCloudHTTPConnector constructs the cloud certificate-store connectors
+// (AWS ACM, Azure Key Vault, GCP Certificate Manager) from the validated
+// target and the leased credential references. It is the cloud stage of
+// buildHTTPConnector, split out so the startup hotspot guard keeps the
+// appliance and cloud wiring separately reviewable; the caller owns the
+// credential lease and closes it on any error returned here.
+func buildCloudHTTPConnector(name string, target nativeTargetConfig, require func(ref, label string) ([]byte, error)) (connector.Connector, []interface{ Destroy() }, error) {
+	var (
+		built   connector.Connector
+		destroy []interface{ Destroy() }
+	)
+	switch name {
+	case "aws-acm":
+		accessSecret, err := require(target.SecretAccessKeyRef, "AWS secret access key")
+		if err != nil {
+			return nil, nil, err
 		}
 		var session []byte
 		if target.SessionTokenRef != "" {
 			session, err = require(target.SessionTokenRef, "AWS session token")
 			if err != nil {
-				lease.Close()
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
 		}
 		built = acm.New(target.Region, acm.Credentials{
@@ -449,8 +475,7 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 	case "azure-keyvault":
 		token, err := require(target.BearerTokenRef, "Azure bearer token")
 		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		provider := azurekv.StaticToken(token)
 		if d, ok := provider.(interface{ Destroy() }); ok {
@@ -464,8 +489,7 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 	case "gcp-certificate-manager":
 		token, err := require(target.BearerTokenRef, "GCP bearer token")
 		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		provider := gcpcm.StaticToken(token)
 		if d, ok := provider.(interface{ Destroy() }); ok {
@@ -475,19 +499,16 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 		if target.PollInterval != "" {
 			interval, err := time.ParseDuration(target.PollInterval)
 			if err != nil || interval <= 0 {
-				lease.Close()
-				return nil, nil, nil, fmt.Errorf("connector: invalid GCP poll_interval")
+				return nil, nil, fmt.Errorf("connector: invalid GCP poll_interval")
 			}
 			options = append(options, gcpcm.WithPollInterval(interval))
 		}
 		built = gcpcm.New(target.Project, target.Location, provider, options...)
 	}
 	if built == nil {
-		lease.Close()
-		return nil, nil, nil, fmt.Errorf("connector: no HTTP constructor for %q", name)
+		return nil, nil, fmt.Errorf("connector: no cloud constructor for %q", name)
 	}
-	cleanup := connectorAttemptCleanup(built, lease, destroy...)
-	return built, connector.NewHTTPOps(httpConnectorClient(r, target.Endpoint)), cleanup, nil
+	return built, destroy, nil
 }
 
 func validatedHTTPConnectorTarget(cfg config.Connectors, name string, raw json.RawMessage) (nativeTargetConfig, error) {
