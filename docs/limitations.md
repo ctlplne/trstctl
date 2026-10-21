@@ -4139,7 +4139,9 @@ This is a deliberate, documented trust boundary, not an accident.
   capability grants, not raw provider tokens. Tenant DNS-01 provider configs
   are served through `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs`,
   and `POST /api/v1/acme/dns-01/preflight` evaluates delegation, TXT
-  propagation, live CAA, method, and wildcard policy before issuance. Served
+  propagation (read from live DNS unless the caller supplies its own
+  observation, which the response labels), live CAA, method, and wildcard
+  policy before issuance. Served
   ACME DNS-01 challenge acceptance checks live CAA before any DNS write, then
   publishes and cleans through `acme.dns01.present` / `acme.dns01.cleanup`
   outbox rows using tenant provider configs and secret-reference-backed

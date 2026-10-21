@@ -350,6 +350,13 @@ func WithACMEDNS01CAAResolver(resolver acmesrv.CAAResolver) Option {
 	return func(c *config) { c.acmeCAAResolver = resolver }
 }
 
+// WithACMEDNS01TXTResolver supplies the live TXT resolver the DNS-01 preflight
+// uses when the caller supplies no observed values (A57). Without it the
+// preflight can only compare caller-supplied observations.
+func WithACMEDNS01TXTResolver(resolver acmesrv.Resolver) Option {
+	return func(c *config) { c.acmeTXTResolver = resolver }
+}
+
 // ConnectorTestEnqueuer queues a relay-executed dry-run for one deployment
 // target (epic D5) and returns the pending receipt, or (nil, nil) when no relay
 // can take it — in which case the route falls back to the local, honest

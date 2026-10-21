@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1633,6 +1634,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithServiceNowBindings(d.ServiceNowBindings...),
 		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
+		api.WithACMEDNS01TXTResolver(net.DefaultResolver),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
 		api.WithLifecycleAutomationPlan(s),
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),

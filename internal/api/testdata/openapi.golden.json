@@ -341,6 +341,36 @@
           "selected_method": {
             "type": "string"
           },
+          "txt_observation": {
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "observed": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "record_name": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "caller_supplied",
+                  "live_dns",
+                  "none"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "record_name",
+              "observed"
+            ],
+            "type": "object"
+          },
           "wildcard": {
             "type": "boolean"
           }
@@ -354,7 +384,8 @@
           "wildcard",
           "checks",
           "failed_checks",
-          "caa_policy"
+          "caa_policy",
+          "txt_observation"
         ],
         "type": "object"
       },

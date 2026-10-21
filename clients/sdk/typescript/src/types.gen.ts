@@ -7594,6 +7594,13 @@ export interface components {
             ready: boolean;
             record_name: string;
             selected_method: string;
+            txt_observation: {
+                error?: string;
+                observed: string[];
+                record_name: string;
+                /** @enum {string} */
+                source: "caller_supplied" | "live_dns" | "none";
+            };
             wildcard: boolean;
         };
         ACMEDNS01PreflightCheck: {

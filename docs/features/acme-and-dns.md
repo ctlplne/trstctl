@@ -214,7 +214,11 @@ config's refusal. Two eligible DNS-01 providers at the same specificity are
 ambiguous and stop issuance; narrow their zones or remove the duplicate.
 `POST /api/v1/acme/dns-01/preflight` evaluates CNAME delegation, TXT propagation,
 live CAA, method policy, and wildcard policy against one of those configs and records an
-`acme.dns01.preflighted` event. The matching CLI commands are
+`acme.dns01.preflighted` event. TXT propagation is checked against live DNS: with
+`expected_txt` set and no `observed_txt`, the control plane reads the
+`_acme-challenge` record itself (five-second budget) and the response's
+`txt_observation` says what it saw; a caller-supplied `observed_txt` is still
+accepted and labeled as such. An empty answer or a lookup error fails the check. The matching CLI commands are
 `trstctl acme dns-01 provider-configs ...` and `trstctl acme dns-01 preflight`.
 
 The Protocols page also provides a review-before-run provider test:

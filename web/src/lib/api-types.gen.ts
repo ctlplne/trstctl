@@ -84,6 +84,7 @@ export interface ACMEDNS01Preflight {
   ready: boolean;
   record_name: string;
   selected_method: string;
+  txt_observation: { error?: string; observed: string[]; record_name: string; source: "caller_supplied" | "live_dns" | "none" };
   wildcard: boolean;
 }
 

@@ -1451,6 +1451,17 @@ func (f *servedDNSWebhookFixture) setCNAME(name, target string) {
 	f.cnames[strings.TrimSuffix(name, ".")] = strings.TrimSuffix(target, ".")
 }
 
+// setTXT publishes one TXT value for name, as a DNS operator would.
+func (f *servedDNSWebhookFixture) setTXT(name, value string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	name = strings.TrimSuffix(name, ".")
+	if f.records[name] == nil {
+		f.records[name] = map[string]bool{}
+	}
+	f.records[name][value] = true
+}
+
 func (f *servedDNSWebhookFixture) setCAA(name string, records []acmesrv.CAARecord) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

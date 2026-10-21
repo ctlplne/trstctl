@@ -2871,7 +2871,11 @@ func componentSchemas() map[string]*Schema {
 		"checks":        {Type: "array", Items: ref("ACMEDNS01PreflightCheck")},
 		"failed_checks": {Type: "array", Items: str()},
 		"caa_policy":    ref("ACMEDNS01CAAPolicyEvidence"),
-	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks", "caa_policy")
+		"txt_observation": object(map[string]*Schema{
+			"source":      {Type: "string", Enum: []string{"caller_supplied", "live_dns", "none"}},
+			"record_name": str(), "observed": {Type: "array", Items: str()}, "error": str(),
+		}, "source", "record_name", "observed"),
+	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks", "caa_policy", "txt_observation")
 	acmeDNS01QualificationReq := object(map[string]*Schema{
 		"domain": str(),
 	}, "domain")

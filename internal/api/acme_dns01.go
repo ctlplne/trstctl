@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -123,6 +124,17 @@ type dns01CAAPolicyEvidence struct {
 	FailClosed         bool                   `json:"fail_closed"`
 }
 
+// dns01TXTObservation says where the TXT values the propagation check compared
+// came from (A57): the caller's own observation, or a live lookup of the
+// challenge record through the control plane's resolver. Values are public
+// DNS answers and may be returned unredacted.
+type dns01TXTObservation struct {
+	Source     string   `json:"source"` // caller_supplied | live_dns | none
+	RecordName string   `json:"record_name"`
+	Observed   []string `json:"observed"`
+	Error      string   `json:"error,omitempty"`
+}
+
 type dns01PreflightResponse struct {
 	Ready           bool                   `json:"ready"`
 	ConfigID        string                 `json:"config_id"`
@@ -134,6 +146,7 @@ type dns01PreflightResponse struct {
 	Checks          []dns01PreflightCheck  `json:"checks"`
 	FailedChecks    []string               `json:"failed_checks"`
 	CAAPolicy       dns01CAAPolicyEvidence `json:"caa_policy"`
+	TXTObservation  dns01TXTObservation    `json:"txt_observation"`
 }
 
 var servedDNS01ProviderCatalog = []ACMEDNS01ProviderCatalogItem{
@@ -581,7 +594,8 @@ func (a *API) evaluateDNS01Preflight(ctx context.Context, req dns01PreflightRequ
 		}
 	}
 	checks = append(checks, delegationCheck(recordName, cfg.DelegationTarget, req.ObservedCNAME))
-	checks = append(checks, propagationCheck(req.ExpectedTXT, req.ObservedTXT))
+	observation := a.observeDNS01TXT(ctx, recordName, req)
+	checks = append(checks, propagationCheck(req.ExpectedTXT, observation.Observed))
 	caa, caaPolicy := caaPolicyCheck(ctx, a.acmeCAAResolver, domain, wildcard, cfg.CAAIssuerDomain)
 	checks = append(checks, caa)
 
@@ -589,8 +603,63 @@ func (a *API) evaluateDNS01Preflight(ctx context.Context, req dns01PreflightRequ
 	return dns01PreflightResponse{
 		Ready: len(failed) == 0, ConfigID: cfg.ID, Domain: domain, RecordName: recordName,
 		SelectedMethod: method, MethodRationale: rationale, Wildcard: wildcard,
-		Checks: checks, FailedChecks: failed, CAAPolicy: caaPolicy,
+		Checks: checks, FailedChecks: failed, CAAPolicy: caaPolicy, TXTObservation: observation,
 	}
+}
+
+// dns01LiveTXTTimeout bounds the live challenge-record lookup.
+const dns01LiveTXTTimeout = 5 * time.Second
+
+// observeDNS01TXT returns the TXT values the propagation check compares. A
+// caller-supplied observation is used as given; otherwise, when an expected
+// value is set and a resolver is configured, the challenge record is read from
+// live DNS, so the preflight answers what DNS serves rather than what the
+// caller believes (A57). A lookup error is reported, and the propagation check
+// then fails closed on an empty observation.
+func (a *API) observeDNS01TXT(ctx context.Context, recordName string, req dns01PreflightRequest) dns01TXTObservation {
+	out := dns01TXTObservation{Source: "none", RecordName: recordName, Observed: []string{}}
+	if len(req.ObservedTXT) > 0 {
+		out.Source = "caller_supplied"
+		out.Observed = append(out.Observed, req.ObservedTXT...)
+		return out
+	}
+	if strings.TrimSpace(req.ExpectedTXT) == "" || a.acmeTXTResolver == nil {
+		return out
+	}
+	out.Source = "live_dns"
+	lookupCtx, cancel := context.WithTimeout(ctx, dns01LiveTXTTimeout)
+	defer cancel()
+	records, err := a.acmeTXTResolver.LookupTXT(lookupCtx, recordName)
+	if err != nil {
+		out.Error = "live TXT lookup failed: " + sanitizeDNSLookupError(err)
+		return out
+	}
+	for _, record := range records {
+		out.Observed = append(out.Observed, strings.TrimSpace(record))
+	}
+	return out
+}
+
+// sanitizeDNSLookupError keeps the resolver's classification and drops any
+// server address or packet detail from the served response.
+func sanitizeDNSLookupError(err error) string {
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		switch {
+		case dnsErr.IsNotFound:
+			return "no such record"
+		case dnsErr.IsTimeout:
+			return "lookup timed out"
+		case dnsErr.IsTemporary:
+			return "temporary resolver failure"
+		default:
+			return "resolver error"
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "lookup timed out"
+	}
+	return "resolver error"
 }
 
 func delegationCheck(recordName, wantTarget, got string) dns01PreflightCheck {
@@ -609,6 +678,9 @@ func propagationCheck(expected string, observed []string) dns01PreflightCheck {
 	expected = strings.TrimSpace(expected)
 	if expected == "" {
 		return dns01PreflightCheck{Name: "txt_propagation", Status: "skipped", Detail: "expected_txt was not supplied"}
+	}
+	if len(observed) == 0 {
+		return dns01PreflightCheck{Name: "txt_propagation", Status: "fail", Detail: "no TXT value was observed for the challenge record; it has not propagated or the lookup failed"}
 	}
 	for _, txt := range observed {
 		if strings.TrimSpace(txt) == expected {

@@ -104,6 +104,7 @@ ACMEDNS01Preflight = TypedDict(
         'ready': bool,
         'record_name': str,
         'selected_method': str,
+        'txt_observation': dict[str, Any],
         'wildcard': bool,
     },
     total=False,

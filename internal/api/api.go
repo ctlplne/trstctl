@@ -165,6 +165,7 @@ type API struct {
 	acmeDNS01Providers                 []ACMEDNS01ProviderCatalogItem
 	acmeDNS01Qualification             ACMEDNS01QualificationService
 	acmeCAAResolver                    acmesrv.CAAResolver
+	acmeTXTResolver                    acmesrv.Resolver
 	acmeARIPosture                     ACMEARIPostureProvider
 	acmeEAB                            ACMEEABProvider
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
@@ -287,6 +288,7 @@ type config struct {
 	acmeDNS01Providers          []ACMEDNS01ProviderCatalogItem
 	acmeDNS01Qualification      ACMEDNS01QualificationService
 	acmeCAAResolver             acmesrv.CAAResolver
+	acmeTXTResolver             acmesrv.Resolver
 	acmeARIPosture              ACMEARIPostureProvider
 	acmeEAB                     ACMEEABProvider
 	acmeOperatorPlan            ACMEOperatorPlanProvider
@@ -599,6 +601,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeDNS01Providers:          append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
 		acmeDNS01Qualification:      cfg.acmeDNS01Qualification,
 		acmeCAAResolver:             cfg.acmeCAAResolver,
+		acmeTXTResolver:             cfg.acmeTXTResolver,
 		acmeARIPosture:              cfg.acmeARIPosture,
 		acmeEAB:                     cfg.acmeEAB,
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
