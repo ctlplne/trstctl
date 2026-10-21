@@ -1382,6 +1382,12 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		return netscan.Report{}, "", "", err
 	}
 	defer target.Cleanup()
+	signature, sigErr := secretscan.VerifyThirdPartyArtifactSignature(cfg, target.Path)
+	if sigErr != nil {
+		// Nothing was read as scan input: a failing or missing required
+		// signature stops the run before the scanner opens the artifact.
+		return netscan.Report{}, "failed", "artifact signature verification refused the scan: " + sigErr.Error(), nil
+	}
 	report, err := d.secretRepoScanner.Scan(ctx, target.Path)
 	if err != nil {
 		return netscan.Report{}, "", "", err
@@ -1399,18 +1405,20 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 			ref = f.RuleID + "@" + f.File
 		}
 		meta, err := json.Marshal(map[string]any{
-			"capability":     "CAP-SCAN-04",
-			"scanner":        report.Scanner,
-			"engine_version": report.EngineVersion,
-			"rules_active":   report.RulesActive,
-			"provider":       cfg.Provider,
-			"source":         cfg.Source,
-			"artifact_kind":  cfg.ArtifactKind,
-			"event":          cfg.Event,
-			"mode":           target.Mode,
-			"rule_id":        f.RuleID,
-			"file":           f.File,
-			"line":           f.Line,
+			"capability":         "CAP-SCAN-04",
+			"scanner":            report.Scanner,
+			"engine_version":     report.EngineVersion,
+			"rules_active":       report.RulesActive,
+			"provider":           cfg.Provider,
+			"source":             cfg.Source,
+			"artifact_kind":      cfg.ArtifactKind,
+			"event":              cfg.Event,
+			"mode":               target.Mode,
+			"rule_id":            f.RuleID,
+			"file":               f.File,
+			"line":               f.Line,
+			"signature_verified": signature.Verified,
+			"signer_key_sha256":  signature.SignerKeySHA256,
 		})
 		if err != nil {
 			return rep, "", "", err

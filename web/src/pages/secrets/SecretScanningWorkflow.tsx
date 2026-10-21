@@ -58,6 +58,9 @@ export function SecretScanningWorkflow({
   const [thirdPartySource, setThirdPartySource] = useState("");
   const [thirdPartyArtifactPath, setThirdPartyArtifactPath] = useState("");
   const [thirdPartyEvent, setThirdPartyEvent] = useState("");
+  const [thirdPartySignaturePath, setThirdPartySignaturePath] = useState("");
+  const [thirdPartySignerKey, setThirdPartySignerKey] = useState("");
+  const [thirdPartyRequireSignature, setThirdPartyRequireSignature] = useState(false);
   const [thirdPartyBusy, setThirdPartyBusy] = useState(false);
   const [thirdPartyError, setThirdPartyError] = useState<string | null>(null);
   const [thirdPartyReceipt, setThirdPartyReceipt] = useState<ThirdPartySecretScanReceipt | null>(null);
@@ -163,6 +166,9 @@ export function SecretScanningWorkflow({
         source,
         artifact_path: artifactPath,
         ...(thirdPartyEvent.trim() ? { event: thirdPartyEvent.trim() } : {}),
+        ...(thirdPartySignaturePath.trim() ? { signature_path: thirdPartySignaturePath.trim() } : {}),
+        ...(thirdPartySignerKey.trim() ? { signer_public_key_pem: thirdPartySignerKey.trim() } : {}),
+        ...(thirdPartyRequireSignature ? { require_signature: true } : {}),
       });
       setThirdPartyReceipt(receipt);
       setSearchParams((current) => {
@@ -446,6 +452,32 @@ export function SecretScanningWorkflow({
                     onChange={(event) => setThirdPartyEvent(event.target.value)}
                     placeholder={t("secrets.thirdPartyScan.eventPlaceholder")}
                   />
+                </label>
+                <div className="grid gap-1 text-sm md:col-span-2">
+                  <label className="grid gap-1">
+                    <span className="font-medium">{t("secrets.thirdPartyScan.signaturePath")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={thirdPartySignaturePath}
+                      onChange={(event) => setThirdPartySignaturePath(event.target.value)}
+                      placeholder={t("secrets.thirdPartyScan.signaturePlaceholder")}
+                    />
+                  </label>
+                  <p className="text-xs text-muted-foreground">{t("secrets.thirdPartyScan.signatureHelp")}</p>
+                </div>
+                <label className="grid gap-1 text-sm md:col-span-2">
+                  <span className="font-medium">{t("secrets.thirdPartyScan.signerKey")}</span>
+                  <textarea
+                    className="min-h-[5.5rem] rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    value={thirdPartySignerKey}
+                    onChange={(event) => setThirdPartySignerKey(event.target.value)}
+                    placeholder={t("secrets.thirdPartyScan.signerKeyPlaceholder")}
+                    spellCheck={false}
+                  />
+                </label>
+                <label className="flex items-center gap-2 self-end text-sm">
+                  <input type="checkbox" checked={thirdPartyRequireSignature} onChange={(event) => setThirdPartyRequireSignature(event.target.checked)} />
+                  <span>{t("secrets.thirdPartyScan.requireSignature")}</span>
                 </label>
                 <Button type="submit" className="self-end" disabled={thirdPartyBusy || loadingBlocked}>
                   {thirdPartyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}

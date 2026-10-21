@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -112,6 +113,12 @@ type thirdPartySecretScanIngestRequest struct {
 	ArtifactKind  string `json:"artifact_kind,omitempty"`
 	Event         string `json:"event,omitempty"`
 	CredentialRef string `json:"credential_ref,omitempty"`
+	// Provider signature over the artifact bytes (A11): a detached signature
+	// file and the provider's PEM public key; require_signature refuses an
+	// unsigned artifact at ingest and a failing signature at scan time.
+	SignaturePath      string `json:"signature_path,omitempty"`
+	SignerPublicKeyPEM string `json:"signer_public_key_pem,omitempty"`
+	RequireSignature   bool   `json:"require_signature,omitempty"`
 }
 
 type thirdPartySecretScanReceipt struct {
@@ -674,11 +681,12 @@ func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPo
 		OperatorActions: []string{
 			"export CI/CD job logs, container registry layer/config material, Slack messages, or Jira issues to a tenant-local artifact path",
 			"submit only artifact_path and metadata through the authenticated ingest route; do not inline secret-bearing log/chat text",
+			"pass the provider's detached signature (signature_path) and PEM public key (signer_public_key_pem), with require_signature for sources that must never scan an unsigned export; every finding then carries signature_verified and signer_key_sha256",
 			"route redacted leaked-secret findings into discovery, graph, risk, and incident workflows",
 		},
 		Residuals: []string{
 			"native Slack/Jira/registry API polling is not yet implemented; operators provide exported artifacts or callbacks",
-			"provider signature verification and export-chain integrity checks remain architecture follow-ups",
+			"a provider signature is verified only when the operator supplies signature_path and signer_public_key_pem (require_signature refuses unsigned artifacts); export-chain integrity beyond that one detached signature remains an architecture follow-up",
 			"artifact retention, deletion, and access controls are operator-owned outside the trstctl database",
 		},
 		EvidenceRefs: []string{
@@ -829,13 +837,30 @@ func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestR
 	if artifactKind == "" {
 		artifactKind = secretscan.ThirdPartyArtifactKind(provider)
 	}
+	signaturePath := strings.TrimSpace(req.SignaturePath)
+	signerKey := strings.TrimSpace(req.SignerPublicKeyPEM)
+	if (signaturePath == "") != (signerKey == "") {
+		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "signature_path and signer_public_key_pem go together")
+	}
+	if req.RequireSignature && signaturePath == "" {
+		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "require_signature needs signature_path and signer_public_key_pem")
+	}
+	if signerKey != "" {
+		block, _ := pem.Decode([]byte(signerKey))
+		if block == nil || block.Type != "PUBLIC KEY" {
+			return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "signer_public_key_pem must be a PEM PUBLIC KEY")
+		}
+	}
 	return secretscan.ThirdPartyScanConfig{
-		Provider:      provider,
-		Source:        source,
-		ArtifactPath:  artifactPath,
-		ArtifactKind:  artifactKind,
-		Event:         strings.TrimSpace(req.Event),
-		CredentialRef: strings.TrimSpace(req.CredentialRef),
+		Provider:           provider,
+		Source:             source,
+		ArtifactPath:       artifactPath,
+		ArtifactKind:       artifactKind,
+		Event:              strings.TrimSpace(req.Event),
+		CredentialRef:      strings.TrimSpace(req.CredentialRef),
+		SignaturePath:      signaturePath,
+		SignerPublicKeyPEM: signerKey,
+		RequireSignature:   req.RequireSignature,
 	}, nil
 }
 

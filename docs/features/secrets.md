@@ -1133,8 +1133,15 @@ Third-party artifacts use the same shape: `GET /api/v1/secrets/scans/third-party
 `artifact_path` queues a `secret_third_party` discovery run against the same Gitleaks
 runner. Raw CI logs, registry exports, chat transcripts, and issue exports stay outside
 trstctl storage; events record only provider, artifact kind, rule id, file, line,
-scanner version, and credential-ref. Native Slack/Jira/container-registry API polling,
-signature validation, and provider-native annotations remain shortfalls, not served.
+scanner version, and credential-ref. When the provider signs its export, add
+`signature_path` (a detached RSA or ECDSA signature over the artifact bytes, raw or
+base64) and `signer_public_key_pem`: trstctl verifies the signature before the scanner
+opens the artifact, fails the run without scanning when it does not verify, and stamps
+every finding with `signature_verified` and the signer key's SHA-256. Set
+`require_signature` on sources that must never scan an unsigned export; the ingest is
+refused with 400 when the signature inputs are missing. Native
+Slack/Jira/container-registry API polling and provider-native annotations remain
+shortfalls, not served.
 
 ```bash
 cat > third-party-scan.json <<'JSON'

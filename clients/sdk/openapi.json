@@ -33912,6 +33912,15 @@
           "event": {
             "type": "string"
           },
+          "require_signature": {
+            "type": "boolean"
+          },
+          "signature_path": {
+            "type": "string"
+          },
+          "signer_public_key_pem": {
+            "type": "string"
+          },
           "source": {
             "type": "string"
           }

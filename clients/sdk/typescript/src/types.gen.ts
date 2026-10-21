@@ -16285,6 +16285,9 @@ export interface components {
             artifact_path: string;
             credential_ref?: string;
             event?: string;
+            require_signature?: boolean;
+            signature_path?: string;
+            signer_public_key_pem?: string;
             source: string;
         };
         ThirdPartySecretScanPosture: {

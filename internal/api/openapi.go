@@ -6105,6 +6105,7 @@ func componentSchemas() map[string]*Schema {
 	}, "capability", "served", "generated_at", "providers", "ingest_paths", "queue_model", "scanner", "minimum_rules_active", "redaction_model", "event_flow", "release_gates", "operator_actions", "residuals", "evidence_refs", "architecture_controls")
 	thirdPartySecretScanIngestReq := object(map[string]*Schema{
 		"source": str(), "artifact_path": str(), "artifact_kind": str(), "event": str(), "credential_ref": str(),
+		"signature_path": str(), "signer_public_key_pem": str(), "require_signature": {Type: "boolean"},
 	}, "source", "artifact_path")
 	thirdPartySecretScanReceipt := object(map[string]*Schema{
 		"capability": str(), "provider": str(), "source": str(), "source_id": uuid(),

@@ -19780,6 +19780,31 @@ export const messages = {
     defaultMessage: "workflow_run",
     description: "Placeholder for optional CAP-SCAN-04 event input.",
   },
+  "secrets.thirdPartyScan.signaturePath": {
+    defaultMessage: "Provider signature path",
+    description: "Label for the optional CAP-SCAN-04 detached signature file input.",
+  },
+  "secrets.thirdPartyScan.signaturePlaceholder": {
+    defaultMessage: "/var/lib/trstctl/exports/slack.jsonl.sig",
+    description: "Placeholder for the optional CAP-SCAN-04 detached signature file.",
+  },
+  "secrets.thirdPartyScan.signatureHelp": {
+    defaultMessage:
+      "Detached RSA or ECDSA signature over the artifact bytes, raw or base64. trstctl verifies it before the scanner opens the artifact and stamps every finding with the signer key's SHA-256.",
+    description: "Help text for the optional CAP-SCAN-04 provider signature.",
+  },
+  "secrets.thirdPartyScan.signerKey": {
+    defaultMessage: "Signer public key (PEM)",
+    description: "Label for the CAP-SCAN-04 provider public key textarea.",
+  },
+  "secrets.thirdPartyScan.signerKeyPlaceholder": {
+    defaultMessage: "-----BEGIN PUBLIC KEY-----",
+    description: "Placeholder for the CAP-SCAN-04 provider public key textarea.",
+  },
+  "secrets.thirdPartyScan.requireSignature": {
+    defaultMessage: "Refuse unsigned artifacts",
+    description: "Checkbox label that sets require_signature on a CAP-SCAN-04 ingest.",
+  },
   "secrets.thirdPartyScan.queueing": {
     defaultMessage: "Queueing",
     description: "Button label while CAP-SCAN-04 ingest is in flight.",

@@ -3328,9 +3328,14 @@ than sending an operator looking for a credential that was never there.
   restart, shows its terminal state and redacted findings, and links to the full
   filtered Discovery triage. This is an operator workflow over the local export;
   it does not collect native provider events.
-  Native provider API polling, provider signature verification, artifact
-  retention automation, and provider-native annotations remain architecture
-  shortfalls.
+  Provider signature verification is served: an ingest may carry
+  `signature_path` (the provider's detached RSA or ECDSA signature over the
+  artifact bytes, raw or base64) and `signer_public_key_pem`; the signature is
+  checked before the scanner opens the artifact, a failing signature fails the
+  run without scanning, `require_signature` refuses unsigned artifacts at
+  ingest, and every finding records `signature_verified` and
+  `signer_key_sha256`. Native provider API polling, artifact retention
+  automation, and provider-native annotations remain architecture shortfalls.
 - React console scale work: cursor-aware inventory pages consume `next_cursor`
   and accumulate additional pages on explicit operator action. Every
   DataGrid-backed large table switches to a bounded, overscanned DOM window
