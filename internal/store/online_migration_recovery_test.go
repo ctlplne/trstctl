@@ -166,6 +166,10 @@ func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
 				assertHistoricalOnlineLedger(t, pool, target)
 				remove := "-'latest_event_sequence'"
 				switch version {
+				case 211:
+					// 0294 (A45) adds the adopted-predecessor column to delivery
+					// receipts; a historical receipt carries its empty default.
+					remove = "-ARRAY['latest_event_sequence','adopted_predecessor_fingerprint']"
 				case 219:
 					remove = "-ARRAY['routing_source','routing_policy_id','routing_policy_scope','routing_policy_digest']"
 				case 253:
