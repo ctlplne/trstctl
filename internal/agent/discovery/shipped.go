@@ -69,7 +69,7 @@ func ShippedSourceKinds() []ShippedSourceKind {
 		{
 			Kind:        SourceKubernetes,
 			Constructor: "NewKubernetesSecretSource",
-			Flags:       []string{"--inventory-k8s-secrets"},
+			Flags:       []string{"--inventory-k8s-secrets", "--inventory-k8s-namespaces"},
 		},
 		{
 			Kind:        SourceWindowsCert,

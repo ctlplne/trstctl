@@ -18,6 +18,9 @@ in-cluster CA — no `client-go` dependency.
   `Certificate`, and `TrustBundle` CRDs.
 - `rbac.yaml` — the agent's `ServiceAccount` and least-privilege `ClusterRole`
   (write Secrets; read and status-update only on CSRs and trstctl CRDs).
+- `rbac-inventory-namespaces.yaml` — opt-in, read-only cluster grant (list
+  namespaces, list Secrets) for `--inventory-k8s-namespaces`; apply it only
+  when one agent should inventory TLS Secrets across the whole cluster.
 - `daemonset.yaml` — the DaemonSet template; render it with a real release
   digest via `scripts/release/render-kubernetes-agent-daemonset.sh` before
   applying it (see Deploy below).

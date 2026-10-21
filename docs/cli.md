@@ -1250,7 +1250,10 @@ trstctl-cli graph crypto-readiness export > crypto-readiness-evidence.json
 
 # In a cluster, add --inventory-k8s-secrets to inventory the kubernetes.io/tls
 # Secrets in the agent's own namespace (reads tls.crt, never tls.key; needs list
-# access to Secrets in that namespace, and sees only that namespace).
+# access to Secrets in that namespace). Add --inventory-k8s-namespaces all (or a
+# comma-separated list) to cover other namespaces from the same agent; "all"
+# needs the opt-in read-only grant in deploy/kubernetes/rbac-inventory-namespaces.yaml,
+# and a namespace the agent cannot list is reported as an error, not as empty.
 
 # Run a graph query.
 trstctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"

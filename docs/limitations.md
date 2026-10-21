@@ -2426,11 +2426,13 @@ than sending an operator looking for a credential that was never there.
   executor: `agent` sources report through the agent mTLS channel instead
   of the worker. On the agent side, the shipped binary collects filesystem
   certificates, OS/Java/NSS/browser trust stores, and private-key material
-  (each behind its own default-off `--inventory-*` flag). PKCS#11 token,
-  Windows certificate/trust store, and in-cluster Kubernetes Secret
-  collection are **not offered**: the collector boundary exists in
-  `internal/agent/discovery` but the agent constructs no enumerator for
-  those platforms, so adding one is an enumerator plus a flag rather than a
+  (each behind its own default-off `--inventory-*` flag), Windows
+  certificate/trust stores (`--inventory-windows-stores`) and in-cluster
+  Kubernetes TLS Secrets (`--inventory-k8s-secrets`, widened across
+  namespaces with `--inventory-k8s-namespaces`). PKCS#11 token
+  collection is **not offered** in the default agent image: the collector
+  boundary exists in `internal/agent/discovery` and the enumerator is
+  behind the `cgo` build tag, so shipping it is a cgo agent build rather than a
   new discovery path.
   Discovery schedules tick server-side: a leader-only scheduler sweeps every
   minute and queues a run for each enabled schedule whose source has no
@@ -4378,7 +4380,12 @@ This is a deliberate, documented trust boundary, not an accident.
   namespace through the in-cluster service account, reading `tls.crt` and
   never `tls.key`, and reports metadata-only findings over the same mTLS
   inventory path as every other source. It needs list access to Secrets in
-  that namespace and sees only that namespace. `windows-store` left the
+  that namespace. `--inventory-k8s-namespaces all` or a comma-separated
+  list widens one agent's inventory across namespaces (`all` needs
+  cluster-scoped list on namespaces and Secrets, shipped opt-in as
+  `deploy/kubernetes/rbac-inventory-namespaces.yaml`); a namespace the
+  service account cannot list is reported as an error for that namespace
+  after the readable ones, never as an empty result. `windows-store` left the
   unbuilt list when its crypt32 reader shipped: with
   `--inventory-windows-stores` the agent opens the named machine or user
   stores **read-only**, walks each certificate context, and reports

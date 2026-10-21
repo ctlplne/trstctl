@@ -16,7 +16,10 @@ metadata:
 # Namespaced is sufficient because the agent's Secret writes are all scoped to
 # the single namespace Reconcile is called with: issuer_controller.go takes one
 # `namespace` argument and native_certificate.go passes that same value straight
-# to NewSecretDestination. Nothing walks a list of namespaces.
+# to NewSecretDestination. Nothing walks a list of namespaces unless the
+# operator opts into the cross-namespace inventory with
+# --inventory-k8s-namespaces, whose read-only cluster grant lives in the
+# separate rbac-inventory-namespaces.yaml and is never applied by default.
 #
 # ConfigMaps are NOT in this Role, and that distinction is load-bearing —
 # see the ClusterRole below.

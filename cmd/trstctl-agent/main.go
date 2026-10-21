@@ -99,6 +99,7 @@ func main() {
 	inventoryPKCS11PINFile := flag.String("inventory-pkcs11-pin-file", "", "file holding the PKCS#11 user PIN, for tokens whose certificate objects are not public. A file rather than a flag, because process arguments expose credentials — the same rule the bootstrap token follows. Omit it to read only public certificate objects")
 	inventoryWindowsStores := flag.String("inventory-windows-stores", "", "comma-separated Windows certificate stores to inventory (MY, WEBHOSTING, CA, ROOT, TRUSTEDPUBLISHER), or \"all\" for every supported store. Metadata only: reads certificates, never private keys. Windows builds only — on any other platform this reports an error rather than an empty estate")
 	inventoryWindowsLocation := flag.String("inventory-windows-location", "local-machine", "which Windows certificate hierarchy to inventory: local-machine (service and IIS certificates) or current-user")
+	inventoryK8sNamespaces := flag.String("inventory-k8s-namespaces", "", "inventory kubernetes.io/tls Secrets beyond this pod's namespace: \"all\" lists every namespace the service account may list, or a comma-separated list names them; a namespace the account cannot list is reported as an error, never as empty. Implies --inventory-k8s-secrets")
 	inventoryK8sSecrets := flag.Bool("inventory-k8s-secrets", false, "inventory the TLS Secrets in this pod's Kubernetes namespace (metadata only; reads tls.crt, never tls.key). Requires the in-cluster service-account mount and list access to Secrets in the namespace")
 	inventorySSHHostKeyGlobs := flag.String("inventory-ssh-host-key-globs", "", "comma-separated public host-key globs to inventory; empty disables this SSH source")
 	inventorySSHUserKeyGlobs := flag.String("inventory-ssh-user-key-globs", "", "comma-separated public user-key globs to inventory; empty disables this SSH source")
@@ -381,7 +382,8 @@ func main() {
 		inventoryNSSTrustRoots:            splitList(*inventoryNSSTrustRoots),
 		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
 		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
-		inventoryK8sSecrets:               *inventoryK8sSecrets,
+		inventoryK8sSecrets:               *inventoryK8sSecrets || strings.TrimSpace(*inventoryK8sNamespaces) != "",
+		inventoryK8sNamespaces:            strings.TrimSpace(*inventoryK8sNamespaces),
 		inventoryPKCS11Module:             strings.TrimSpace(*inventoryPKCS11Module),
 		inventoryPKCS11Token:              strings.TrimSpace(*inventoryPKCS11Token),
 		inventoryPKCS11PINFile:            strings.TrimSpace(*inventoryPKCS11PINFile),
@@ -476,6 +478,9 @@ type agentOptions struct {
 	inventoryPrivateKeyRoots                                                                                          []string
 	inventorySSH                                                                                                      sshdiscovery.Config
 	inventoryK8sSecrets                                                                                               bool
+	// inventoryK8sNamespaces widens the k8s-secret source beyond the pod's own
+	// namespace: "all", or a comma-separated list (A19).
+	inventoryK8sNamespaces string
 	// inventoryWindowsStores names the Windows certificate stores to inventory
 	// (epic C1). Empty means the source is off — a Windows estate is only
 	// inventoried when an operator says which stores, because "all of them" on a
@@ -718,7 +723,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		}
 	}
 	if o.inventoryK8sSecrets {
-		if err := reportKubernetesSecretInventory(ctx, a, ch); err != nil {
+		if err := reportKubernetesSecretInventory(ctx, a, ch, o.inventoryK8sNamespaces); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes Secret inventory report failed:", err)
 		}
 	}
@@ -985,16 +990,75 @@ func reportFilesystemInventory(ctx context.Context, a *agent.Agent, ch agent.Cha
 // Metadata only: the enumerator reads `tls.crt`, which is public certificate
 // material, and never `tls.key`. The control plane derives the tenant from this
 // connection's verified client certificate.
-func reportKubernetesSecretInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) error {
+//
+// A19: --inventory-k8s-namespaces widens the read beyond the pod's namespace.
+// Every readable namespace is reported; a namespace the service account cannot
+// list fails loudly by name instead of contributing an empty inventory.
+func reportKubernetesSecretInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, namespaces string) error {
 	client, err := k8s.InCluster()
 	if err != nil {
 		return fmt.Errorf("kubernetes in-cluster client: %w", err)
 	}
-	found, err := agentdiscovery.NewKubernetesSecretSource(client.Namespace(), client).Discover(ctx)
-	if err != nil {
-		return err
+	found, collectErr := collectKubernetesSecretInventory(ctx, client.Namespace(), namespaces, client.ListNamespaces, func(ns string) agentdiscovery.KubernetesSecretEnumerator {
+		return client.InNamespace(ns)
+	})
+	if len(found) > 0 {
+		if err := reportFoundInventory(ctx, a, ch, agentdiscovery.SourceKubernetes, found, 30, "kubernetes secret inventory"); err != nil {
+			return errors.Join(err, collectErr)
+		}
 	}
-	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceKubernetes, found, 30, "kubernetes secret inventory")
+	return collectErr
+}
+
+// resolveKubernetesInventoryNamespaces turns the flag into the namespaces to
+// read: own namespace by default, every listable namespace for "all", or the
+// named ones.
+func resolveKubernetesInventoryNamespaces(own, flagValue string, list func(context.Context) ([]string, error), ctx context.Context) ([]string, error) {
+	switch strings.TrimSpace(flagValue) {
+	case "":
+		if own == "" {
+			return nil, errors.New("kubernetes secret inventory: the pod's namespace is unknown; name namespaces with --inventory-k8s-namespaces")
+		}
+		return []string{own}, nil
+	case "all":
+		all, err := list(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("kubernetes secret inventory: list namespaces (needs cluster-scoped list on namespaces): %w", err)
+		}
+		if len(all) == 0 {
+			return nil, errors.New("kubernetes secret inventory: the cluster listed no namespaces")
+		}
+		return all, nil
+	default:
+		names := splitList(flagValue)
+		if len(names) == 0 {
+			return nil, errors.New("kubernetes secret inventory: --inventory-k8s-namespaces names no namespace")
+		}
+		return names, nil
+	}
+}
+
+// collectKubernetesSecretInventory discovers each namespace independently and
+// returns everything readable plus one error naming every namespace that failed.
+func collectKubernetesSecretInventory(ctx context.Context, own, flagValue string, list func(context.Context) ([]string, error), enumerator func(string) agentdiscovery.KubernetesSecretEnumerator) ([]agentdiscovery.Found, error) {
+	namespaces, err := resolveKubernetesInventoryNamespaces(own, flagValue, list, ctx)
+	if err != nil {
+		return nil, err
+	}
+	var found []agentdiscovery.Found
+	var failures []error
+	for _, ns := range namespaces {
+		got, err := agentdiscovery.NewKubernetesSecretSource(ns, enumerator(ns)).Discover(ctx)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("namespace %s: %w", ns, err))
+			continue
+		}
+		found = append(found, got...)
+	}
+	if len(failures) > 0 {
+		return found, fmt.Errorf("kubernetes secret inventory: %d of %d namespaces could not be read (grant list on secrets there or narrow --inventory-k8s-namespaces): %w", len(failures), len(namespaces), errors.Join(failures...))
+	}
+	return found, nil
 }
 
 // reportPKCS11Inventory inventories the certificate objects on the configured

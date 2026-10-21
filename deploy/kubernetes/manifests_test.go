@@ -560,13 +560,48 @@ func daemonSet(t *testing.T) map[string]any {
 
 func clusterRole(t *testing.T) map[string]any {
 	t.Helper()
+	return namedClusterRole(t, "trstctl-agent")
+}
+
+// namedClusterRole finds one ClusterRole by name: rbac.yaml's agent role and
+// the opt-in cross-namespace inventory grant both ship as ClusterRoles.
+func namedClusterRole(t *testing.T, name string) map[string]any {
+	t.Helper()
 	for _, d := range docs(t) {
-		if d["kind"] == "ClusterRole" {
+		if d["kind"] != "ClusterRole" {
+			continue
+		}
+		if meta, _ := d["metadata"].(map[string]any); meta != nil && meta["name"] == name {
 			return d
 		}
 	}
-	t.Fatal("no ClusterRole found")
+	t.Fatalf("no ClusterRole %q found", name)
 	return nil
+}
+
+// TestInventoryRBACIsReadOnlyAndSeparate: the cross-namespace inventory grant
+// (--inventory-k8s-namespaces) is its own opt-in manifest with list-only verbs
+// on namespaces and Secrets, and rbac.yaml's agent role never gains
+// cluster-wide Secret access.
+func TestInventoryRBACIsReadOnlyAndSeparate(t *testing.T) {
+	raw, err := kubernetes.Manifests.ReadFile("rbac-inventory-namespaces.yaml")
+	if err != nil || !bytes.Contains(raw, []byte("--inventory-k8s-namespaces")) {
+		t.Fatalf("rbac-inventory-namespaces.yaml must ship and name the flag it serves (err=%v)", err)
+	}
+	inventory := namedClusterRole(t, "trstctl-agent-inventory")
+	if !hasClusterRoleRule(inventory, "", "namespaces", "list") || !hasClusterRoleRule(inventory, "", "secrets", "list") {
+		t.Fatal("inventory ClusterRole must list namespaces and Secrets")
+	}
+	for _, rule := range asMaps(inventory["rules"]) {
+		for _, verb := range asStringSlice(rule["verbs"]) {
+			if verb != "list" {
+				t.Fatalf("inventory ClusterRole must stay list-only, found verb %q", verb)
+			}
+		}
+	}
+	if hasClusterRoleRule(clusterRole(t), "", "secrets", "list") {
+		t.Fatal("the agent ClusterRole must not regain cluster-wide Secret access; the inventory grant is opt-in")
+	}
 }
 
 func hasClusterRoleRule(role map[string]any, group, resource string, verbs ...string) bool {

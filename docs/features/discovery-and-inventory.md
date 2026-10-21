@@ -301,11 +301,21 @@ Secret's certificate metadata over the same mTLS inventory path as every other s
 
 The exact contract: it reads `tls.crt` — public certificate material — and never
 `tls.key`; no key bytes cross the agent channel. It needs list access to Secrets in that
-namespace, and it sees **only that namespace**, so a cluster-wide inventory means an
-agent per namespace. A Secret whose certificate does not parse is skipped rather than
-failing the pass, so one malformed Secret does not cost you the inventory of the rest;
-an unreachable API server is an error rather than an empty result, because reporting
-"no certificates" for a cluster you could not reach is worse than reporting nothing.
+namespace. A Secret whose certificate does not parse is skipped rather than failing the
+pass, so one malformed Secret does not cost you the inventory of the rest; an
+unreachable API server is an error rather than an empty result, because reporting "no
+certificates" for a cluster you could not reach is worse than reporting nothing.
+
+One agent can cover more than its own namespace. `--inventory-k8s-namespaces all`
+lists every namespace the service account may list and inventories each one;
+`--inventory-k8s-namespaces payments,edge` names the namespaces to read. Each finding
+still carries its namespace and Secret name, and only `tls.crt` is read. The RBAC is
+the operator's choice: `deploy/kubernetes/rbac-inventory-namespaces.yaml` is the
+opt-in, read-only cluster grant (list namespaces, list Secrets) for `all`; for a named
+list, bind a namespaced Role with list on Secrets in each namespace. A namespace the
+service account cannot list is reported as an error naming that namespace, never as
+an empty inventory, and the readable namespaces are reported first, so a missing
+binding shows up as a gap in the run rather than as a clean cluster.
 
 ### CA, trust-store & private-key discovery
 

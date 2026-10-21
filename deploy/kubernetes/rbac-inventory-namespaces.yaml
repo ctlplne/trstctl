@@ -1,0 +1,40 @@
+# OPT-IN, read-only, cluster-scoped grant for a cross-namespace TLS Secret
+# inventory (`trstctl-agent --inventory-k8s-namespaces all|<ns>,<ns>`).
+#
+# rbac.yaml keeps Secret access namespaced on purpose. This manifest widens
+# READ access only, and only when an operator applies it: it lets the agent
+# list namespaces and list Secrets everywhere so one agent can inventory the
+# whole cluster's kubernetes.io/tls Secrets. The agent reads tls.crt and never
+# tls.key, but "list secrets" cluster-wide still returns every Secret body to
+# the agent process, so apply this only where that is acceptable. To inventory
+# a few namespaces instead, bind a namespaced Role with list on secrets in each
+# of them and name them with --inventory-k8s-namespaces; the agent reports a
+# namespace it cannot list as an error, never as empty.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: trstctl-agent-inventory
+  labels:
+    app.kubernetes.io/name: trstctl-agent
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trstctl-agent-inventory
+  labels:
+    app.kubernetes.io/name: trstctl-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: trstctl-agent-inventory
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-agent
+    namespace: trstctl

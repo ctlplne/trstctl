@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/k8s"
@@ -70,4 +71,41 @@ func keys(m map[string][]byte) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// A cross-namespace inventory lists namespaces and reads each one on its own;
+// a namespace the service account may not list is an error for that namespace.
+func TestEnumerateCertificatesAcrossNamespaces(t *testing.T) {
+	crt := base64.StdEncoding.EncodeToString([]byte(discoverCertPEM))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/namespaces":
+			_, _ = fmt.Fprint(w, `{"items":[{"metadata":{"name":"payments"}},{"metadata":{"name":"apps"}},{"metadata":{"name":"locked"}}]}`)
+		case "/api/v1/namespaces/apps/secrets":
+			_, _ = fmt.Fprintf(w, `{"items":[{"metadata":{"name":"web-tls"},"type":"kubernetes.io/tls","data":{"tls.crt":%q}}]}`, crt)
+		case "/api/v1/namespaces/payments/secrets":
+			_, _ = fmt.Fprintf(w, `{"items":[{"metadata":{"name":"api-tls"},"type":"kubernetes.io/tls","data":{"tls.crt":%q}}]}`, crt)
+		case "/api/v1/namespaces/locked/secrets":
+			http.Error(w, `{"reason":"Forbidden"}`, http.StatusForbidden)
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	client := k8s.New(srv.URL, "token", "apps", srv.Client())
+	namespaces, err := client.ListNamespaces(context.Background())
+	if err != nil || len(namespaces) != 3 || namespaces[0] != "apps" || namespaces[2] != "payments" {
+		t.Fatalf("namespaces=%v err=%v", namespaces, err)
+	}
+	certs, err := client.InNamespace("payments").EnumerateCertificates(context.Background())
+	if err != nil || len(certs) != 1 {
+		t.Fatalf("payments: certs=%v err=%v", keys(certs), err)
+	}
+	if _, ok := certs["api-tls"]; !ok {
+		t.Fatalf("payments inventory missed api-tls: %v", keys(certs))
+	}
+	if _, err := client.InNamespace("locked").EnumerateCertificates(context.Background()); err == nil || !strings.Contains(err.Error(), "403") {
+		t.Fatalf("a forbidden namespace must fail, not read as empty: %v", err)
+	}
 }
