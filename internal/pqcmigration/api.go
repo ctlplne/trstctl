@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
@@ -222,8 +223,8 @@ func startHandler(a *api.API, svc Service) http.HandlerFunc {
 			if req.TargetAlgorithm == "" {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "target_algorithm is required")
 			}
-			if req.TargetAlgorithm != pqcMigrationTargetMLDSA65 {
-				return 0, nil, api.ErrStatus(http.StatusBadRequest, "certificate-key PQC migration currently accepts target_algorithm "+pqcMigrationTargetMLDSA65)
+			if !IsMLDSATarget(req.TargetAlgorithm) {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "certificate-key PQC migration accepts target_algorithm "+strings.Join(MLDSATargets(), ", "))
 			}
 			if req.Protocol == "" {
 				req.Protocol = pqcMigrationProtocolACME
@@ -279,7 +280,7 @@ func schemas() map[string]*api.Schema {
 	return map[string]*api.Schema{
 		"PQCMigrationRequest": api.ObjectSchema(map[string]*api.Schema{
 			"asset_ids":            api.ArraySchema(api.StringSchema()),
-			"target_algorithm":     api.StringSchema(),
+			"target_algorithm":     {Type: "string", Enum: MLDSATargets()},
 			"protocol":             api.StringSchema(),
 			"rollback_on_failure":  api.BooleanSchema(),
 			"tls_bindings":         api.ArraySchema(api.SchemaRef("PQCMigrationTLSBinding")),

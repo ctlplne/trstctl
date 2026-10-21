@@ -50,10 +50,10 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		if err := json.Unmarshal(identity.Attributes, &attrs); err != nil {
 			return nil, api.ErrStatus(http.StatusConflict, "PQC identity attributes are not readable")
 		}
-		if attrs.TargetID != reissue.TargetID || attrs.Algorithm != TargetMLDSA65 ||
+		if attrs.TargetID != reissue.TargetID || attrs.Algorithm != reissue.TargetAlgorithm ||
 			strings.TrimSpace(attrs.ProfileName) == "" || strings.TrimSpace(identity.Name) == "" ||
 			attrs.IssuerSource == "" || attrs.IssuerID == "" {
-			return nil, api.ErrStatus(http.StatusConflict, "PQC identity must pin its bound target, ML-DSA-65 subject key, active profile, and exact issuing authority")
+			return nil, api.ErrStatus(http.StatusConflict, "PQC identity must pin its bound target, the run's "+reissue.TargetAlgorithm+" subject key, active profile, and exact issuing authority")
 		}
 		if attrs.IssuerSource != "platform" && attrs.IssuerSource != "private" {
 			return nil, api.ErrStatus(http.StatusConflict, "PQC host certificate migration requires a signer-backed platform or managed private CA")
@@ -70,13 +70,11 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		}
 		var config struct {
 			Executor         string `json:"executor"`
-			CertPath         string `json:"cert_path"`
-			KeyPath          string `json:"key_path"`
 			VerifyAddress    string `json:"verify_address"`
 			VerifyServerName string `json:"verify_server_name"`
 		}
 		if err := json.Unmarshal(target.Config, &config); err != nil || config.Executor != "agent" ||
-			config.CertPath == "" || config.KeyPath == "" || config.VerifyAddress != reissue.Asset.Location ||
+			!relay.HostPredecessorLayoutComplete(target.Type, target.Config) || config.VerifyAddress != reissue.Asset.Location ||
 			config.VerifyServerName != identity.Name {
 			return nil, api.ErrStatus(http.StatusConflict, "PQC certificate target must route to its host agent, name its exact certificate/key files, and verify the observed listener with the identity DNS name")
 		}
@@ -112,7 +110,7 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		if selected.RequiresApproval {
 			return nil, api.ErrStatus(http.StatusConflict, "PQC certificate profile requires distinct issuance approval; approve the exact profile-bound operation before starting")
 		}
-		if err := validatePQCReissueProfile(selected, reissue.Asset, identity.Name, reissue.Protocol); err != nil {
+		if err := validatePQCReissueProfile(selected, reissue.Asset, identity.Name, reissue.Protocol, reissue.TargetAlgorithm); err != nil {
 			return nil, api.ErrStatus(http.StatusConflict, fmt.Sprintf("PQC reissue for asset %s cannot start under profile %s: %v", reissue.Asset.ID, rec.Name, err))
 		}
 		ttl := migrationProtocolLeafTTL
@@ -133,7 +131,7 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 	return out, nil
 }
 
-func validatePQCReissueProfile(selected profile.CertificateProfile, asset Asset, dnsName, protocol string) error {
+func validatePQCReissueProfile(selected profile.CertificateProfile, asset Asset, dnsName, protocol, algorithm string) error {
 	if protocol != ProtocolHostCSR || asset.CertificateFingerprint == "" {
 		return fmt.Errorf("selected certificate requires host-csr and an observed leaf fingerprint")
 	}
@@ -142,7 +140,7 @@ func validatePQCReissueProfile(selected profile.CertificateProfile, asset Asset,
 		ttl = time.Duration(selected.MaxValidity)
 	}
 	return selected.Validate(profile.Request{
-		KeyAlgorithm: TargetMLDSA65, RequestedEKUs: selected.AllowedEKUs,
+		KeyAlgorithm: algorithm, RequestedEKUs: selected.AllowedEKUs,
 		TTL: ttl, DNSNames: []string{dnsName}, Protocol: "api",
 	})
 }

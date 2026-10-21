@@ -20,7 +20,33 @@ function OperationNotice({ action }: { action: RuntimeOperationExecutionPosture 
   );
 }
 
-const pqcTargetAlgorithm = "ML-DSA-65";
+const pqcTargetAlgorithms = ["ML-DSA-44", "ML-DSA-65", "ML-DSA-87"] as const;
+type PQCTargetAlgorithm = (typeof pqcTargetAlgorithms)[number];
+const pqcTargetAlgorithm: PQCTargetAlgorithm = "ML-DSA-65";
+// Host connectors whose installed certificate and key the agent can read back
+// exactly for a pinned predecessor: separate files, the HAProxy bundle, and the
+// Postfix/Dovecot pair.
+const predecessorLayoutComplete = (target: { connector: string; config?: Record<string, unknown> | null }): boolean => {
+  const has = (key: string) => typeof target.config?.[key] === "string" && (target.config?.[key] as string).length > 0;
+  switch (target.connector) {
+    case "haproxy":
+      return has("crt_path");
+    case "postfix":
+      return has("postfix_cert_path") && has("postfix_key_path") && has("dovecot_cert_path") && has("dovecot_key_path");
+    case "apache":
+    case "nginx":
+    case "caddy":
+    case "elasticsearch":
+    case "mysql":
+    case "postgresql":
+    case "rabbitmq":
+    case "tomcat":
+    case "traefik":
+      return has("cert_path") && has("key_path");
+    default:
+      return false;
+  }
+};
 
 const splitList = (value: string): string[] =>
   value
@@ -28,8 +54,8 @@ const splitList = (value: string): string[] =>
     .map((item) => item.trim())
     .filter(Boolean);
 const findingLabel = (asset: CBOMAsset): string => [asset.location, asset.protocol || asset.cipher].filter(Boolean).join(" · ");
-const migrationTarget = (asset: CBOMAsset): string =>
-  asset.migration_target || (asset.kind === "host-config" || asset.kind === "tls-endpoint" ? "X25519MLKEM768" : pqcTargetAlgorithm);
+const migrationTarget = (asset: CBOMAsset, targetAlgorithm: PQCTargetAlgorithm): string =>
+  asset.kind === "host-config" || asset.kind === "tls-endpoint" ? asset.migration_target || "X25519MLKEM768" : targetAlgorithm;
 
 const requestFor = (
   assetIds: string[],
@@ -38,9 +64,10 @@ const requestFor = (
   targetIds: Record<string, string>,
   identityIds: Record<string, string>,
   groups: string,
+  targetAlgorithm: PQCTargetAlgorithm,
 ): PQCMigrationRequest => ({
   asset_ids: assetIds,
-  target_algorithm: pqcTargetAlgorithm,
+  target_algorithm: targetAlgorithm,
   protocol: certAssets.length > 0 ? "host-csr" : "acme",
   rollback_on_failure: true,
   ...(certAssets.length > 0
@@ -73,6 +100,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const [targetIds, setTargetIds] = useState<Record<string, string>>({});
   const [identityIds, setIdentityIds] = useState<Record<string, string>>({});
   const [groups, setGroups] = useState("X25519MLKEM768, X25519");
+  const [targetAlgorithm, setTargetAlgorithm] = useState<PQCTargetAlgorithm>(pqcTargetAlgorithm);
   const [plan, setPlan] = useState<PQCMigrationPlan | null>(null);
   const [reviewedRequest, setReviewedRequest] = useState<PQCMigrationRequest | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -96,17 +124,10 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const identities = useApiQuery(["pqc-migration-identities"], api.identities, { enabled: certAssets.length > 0, retry: false });
   const enabledTargets = targets.data?.items.filter((target) => target.enabled && target.connector === "envoy") ?? [];
   const certificateTargets =
-    targets.data?.items.filter(
-      (target) =>
-        target.enabled &&
-        ["apache", "nginx", "caddy", "elasticsearch", "mysql", "postgresql", "rabbitmq", "tomcat", "traefik"].includes(target.connector) &&
-        target.config?.executor === "agent" &&
-        typeof target.config?.cert_path === "string" &&
-        typeof target.config?.key_path === "string",
-    ) ?? [];
+    targets.data?.items.filter((target) => target.enabled && target.config?.executor === "agent" && predecessorLayoutComplete(target)) ?? [];
   const requestedIdentities =
     identities.data?.filter(
-      (identity) => identity.kind === "x509_certificate" && identity.status === "requested" && identity.attributes?.subject_key_algorithm === "ML-DSA-65",
+      (identity) => identity.kind === "x509_certificate" && identity.status === "requested" && identity.attributes?.subject_key_algorithm === targetAlgorithm,
     ) ?? [];
   const tlsReady =
     tlsAssets.length === 0 ||
@@ -154,7 +175,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
     setError(null);
     setResult(null);
     try {
-      const request = requestFor(selectedIds, tlsAssets, certAssets, targetIds, identityIds, groups);
+      const request = requestFor(selectedIds, tlsAssets, certAssets, targetIds, identityIds, groups, targetAlgorithm);
       setPlan(await api.planPQCMigration(request));
       setReviewedRequest(request);
       setConfirmed(false);
@@ -261,7 +282,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
                 <span>
                   <span className="block font-medium">{asset.location}</span>
                   <span className="text-xs text-muted-foreground">
-                    {asset.protocol || asset.cipher || asset.algorithm} → {migrationTarget(asset)}
+                    {asset.protocol || asset.cipher || asset.algorithm} → {migrationTarget(asset, targetAlgorithm)}
                   </span>
                 </span>
               </label>
@@ -327,6 +348,26 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
                   {targets.error || identities.error}
                 </p>
               ) : null}
+              <label className="grid gap-1 text-sm">
+                <span>{t("posture.pqcMigration.targetAlgorithm")}</span>
+                <select
+                  className="rounded-control border border-border bg-background p-2"
+                  value={targetAlgorithm}
+                  disabled={busy !== null}
+                  onChange={(event) => {
+                    setTargetAlgorithm(event.target.value as PQCTargetAlgorithm);
+                    setIdentityIds({});
+                    clearReview();
+                  }}
+                >
+                  {pqcTargetAlgorithms.map((algorithm) => (
+                    <option key={algorithm} value={algorithm}>
+                      {algorithm}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted-foreground">{t("posture.pqcMigration.targetAlgorithmHint")}</span>
+              </label>
               {certAssets.map((asset) => (
                 <div key={asset.id} className="grid gap-2 rounded-control border border-border p-3">
                   <p className="text-sm font-medium">{findingLabel(asset)}</p>

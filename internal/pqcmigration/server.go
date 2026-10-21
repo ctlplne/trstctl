@@ -372,7 +372,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			TargetID: binding.Target.ID, TargetRevision: binding.Target.RevisionID,
 			IdentityID: binding.Identity.ID, TargetConfig: cfg,
 			VerifyAddress: cfg.VerifyAddress, VerifyServerName: cfg.VerifyServerName,
-			SubjectKeyAlgorithm: TargetMLDSA65, SubjectCommonName: binding.Identity.Name,
+			SubjectKeyAlgorithm: reissue.TargetAlgorithm, SubjectCommonName: binding.Identity.Name,
 			SubjectDNSNames: []string{binding.Identity.Name}, PQCRunID: runID,
 			PQCAssetID: asset.ID, PQCPredecessorFingerprint: asset.CertificateFingerprint,
 			IssuingAuthoritySource: binding.IssuerSource, IssuingAuthorityID: binding.IssuerID,
@@ -451,7 +451,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 	totalQueued := len(reissuePayloads) + len(tlsPayloads)
 	effectiveAlgorithm := EffectiveHybridTLS
 	if len(reissuePayloads) != 0 {
-		effectiveAlgorithm = TargetMLDSA65
+		effectiveAlgorithm = req.TargetAlgorithm
 	}
 	started := projections.LicensedCryptoMigrationStarted{
 		RunID: runID, AssetIDs: append([]string(nil), req.AssetIDs...), TargetAlgorithm: req.TargetAlgorithm,

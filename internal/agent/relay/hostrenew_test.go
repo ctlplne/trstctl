@@ -381,3 +381,25 @@ func TestEveryHostRenewalConnectorHasCompleteTruthfulCustodyAUD25(t *testing.T) 
 		}
 	}
 }
+
+// Every ML-DSA parameter set needs the native readback before files change (A37).
+func TestPQCHostRefusesMissingNativeProbeForEveryMLDSASet(t *testing.T) {
+	t.Parallel()
+	for _, algorithm := range []string{"ML-DSA-44", "ML-DSA-87"} {
+		dir := t.TempDir()
+		ch := &renewChannel{}
+		ch.jobs = []relay.Job{renewJob(t, relay.DeployIntent{
+			Connector: "apache", Target: "lab", TargetID: "target-a",
+			SubjectCommonName: "apache.example.test", SubjectKeyAlgorithm: algorithm,
+			PQCRunID: "run-a", PQCAssetID: "asset-a", PQCPredecessorFingerprint: "predecessor",
+			TargetConfig: renewTargetConfig(t, filepath.Join(dir, "apache.crt"), filepath.Join(dir, "apache.key")),
+		})}
+		if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
+			connector.LocalOpsConfig{AllowedRoots: []string{dir}}, 4, 60); err != nil {
+			t.Fatal(err)
+		}
+		if ch.signCalls != 0 || len(ch.reports) != 1 || !strings.Contains(ch.reports[0].detail, "tls_probe_openssl") {
+			t.Fatalf("%s: signed=%d reports=%+v; want the native-probe refusal before any key", algorithm, ch.signCalls, ch.reports)
+		}
+	}
+}

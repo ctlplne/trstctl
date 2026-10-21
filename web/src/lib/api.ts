@@ -720,7 +720,7 @@ export type {
 // golden: a core-only binary does not mount or advertise licensed routes.
 export interface PQCMigrationRequest {
   asset_ids: string[];
-  target_algorithm: "ML-DSA-65";
+  target_algorithm: "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
   protocol: "acme" | "host-csr";
   rollback_on_failure: boolean;
   tls_bindings?: Array<{

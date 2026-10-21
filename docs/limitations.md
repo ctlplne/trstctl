@@ -4828,13 +4828,21 @@ carries a classical subject key and stays governed by its classical family
 label. The selected profile still controls which algorithms an enrollment may use.
 
 **PQC certificate-key migration limits:** New host-bound runs require an exact
-CBOM leaf fingerprint, a requested ML-DSA-65 identity, an active profile that
+CBOM leaf fingerprint, a requested identity whose `subject_key_algorithm` is
+the run's `target_algorithm` (`ML-DSA-44`, `ML-DSA-65` or `ML-DSA-87`; the
+console offers the choice and defaults to ML-DSA-65), an active profile that
 allows that subject key and DNS name, a signer-backed platform or managed
-private CA, and an enabled file-based host connector with an enrolled agent.
-The current exact-predecessor reader supports Apache, NGINX, Caddy,
-Elasticsearch, MySQL, PostgreSQL, RabbitMQ, Tomcat, and Traefik targets whose
-certificate and private key are separate files under the host execution
-profile. Other connector storage layouts need their own predecessor reader.
+private CA, and an enabled host connector with an enrolled agent whose
+installed certificate and key the agent can read back exactly. The
+exact-predecessor reader covers Apache, NGINX, Caddy, Elasticsearch, MySQL,
+PostgreSQL, RabbitMQ, Tomcat and Traefik targets (separate certificate and key
+files), HAProxy (the certificate+key bundle at `crt_path`, which must hold
+exactly one private key) and Postfix/Dovecot (both pairs must serve the same
+leaf, since one predecessor is restored to both). Java keystores (the store
+password is not available at adoption time), IIS (the key lives in the Windows
+store) and Envoy (the key sits behind SDS) still have no exact predecessor
+reader and are refused for host-bound certificate migration and CA
+re-protection.
 A native OpenSSL 3.5 probe and a server capable of serving ML-DSA certificates
 are required for signed TLS readback; classical-only clients cannot be
 presented as PQC verification. The issuing CA key remains classical

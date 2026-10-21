@@ -183,12 +183,10 @@ func (e *Enqueuer) PreviewCredentialPlan(ctx context.Context, tenantID, keyID st
 		return CredentialPlan{}, ErrCredentialPlanNotReady
 	}
 	var host struct {
-		CertPath         string `json:"cert_path"`
-		KeyPath          string `json:"key_path"`
 		VerifyAddress    string `json:"verify_address"`
 		VerifyServerName string `json:"verify_server_name"`
 	}
-	if json.Unmarshal(target.Config, &host) != nil || host.CertPath == "" || host.KeyPath == "" ||
+	if json.Unmarshal(target.Config, &host) != nil || !relay.HostPredecessorLayoutComplete(target.Type, target.Config) ||
 		host.VerifyAddress == "" || host.VerifyServerName == "" ||
 		certinfo.VerifyHostname(cert.CertificateDER, host.VerifyServerName) != nil {
 		return CredentialPlan{}, ErrCredentialPlanNotReady

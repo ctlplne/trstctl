@@ -140,7 +140,8 @@ func (h HostAgentHooks) RecordCertificateRenewalResult(ctx context.Context, tena
 		return err
 	}
 	if cert.ReplacesID == nil || *cert.ReplacesID != predecessor.ID || cert.KeyOrigin != string(custody.OriginHostAgent) ||
-		info.KeyAlgorithm != TargetMLDSA65 || !sameCertificateFingerprint(info.SHA256Fingerprint, req.CredentialFingerprint) ||
+		!IsMLDSATarget(info.KeyAlgorithm) || (intent.SubjectKeyAlgorithm != "" && info.KeyAlgorithm != intent.SubjectKeyAlgorithm) ||
+		!sameCertificateFingerprint(info.SHA256Fingerprint, req.CredentialFingerprint) ||
 		info.CommonName != intent.SubjectCommonName {
 		return errors.New("pqcmigration: host renewal certificate is not the bound ML-DSA successor")
 	}
@@ -232,7 +233,7 @@ func (p *ProgressProjection) applyCertificateRenewed(ctx context.Context, ev eve
 		renewed.Before.ID != renewed.AssetID || renewed.After.ID != renewed.AssetID ||
 		!sameCertificateFingerprint(renewed.Before.CertificateFingerprint, item.CertificateFingerprint) ||
 		!sameCertificateFingerprint(renewed.After.CertificateFingerprint, renewed.CertificateFingerprint) ||
-		renewed.After.Algorithm != TargetMLDSA65 || renewed.Transcript.Vantage != transport.VantageLocal ||
+		!IsMLDSATarget(renewed.After.Algorithm) || renewed.Transcript.Vantage != transport.VantageLocal ||
 		!renewed.Transcript.Reached || renewed.Transcript.Mismatch != certinfo.MismatchNone ||
 		renewed.Transcript.Digest() != renewed.EvidenceDigest ||
 		!sameCertificateFingerprint(renewed.Transcript.ObservedFingerprint, renewed.CertificateFingerprint) {

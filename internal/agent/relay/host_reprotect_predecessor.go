@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -60,16 +59,12 @@ func adoptReprotectPredecessor(ctx context.Context, profile connector.LocalOpsCo
 		defer wipeReprotectPending(pending)
 	}
 	var target HostTargetConfig
-	if err := json.Unmarshal(intent.TargetConfig, &target); err != nil || strings.TrimSpace(target.CertPath) == "" || strings.TrimSpace(target.KeyPath) == "" {
-		return errors.New("CA re-protection target needs one certificate and one key file")
+	if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
+		return errors.New("CA re-protection target configuration is unreadable")
 	}
-	certPEM, err := connector.ReadLocalFile(profile, target.CertPath)
+	certPEM, rawKey, err := readInstalledHostPredecessor(profile, intent.Connector, target)
 	if err != nil {
-		return fmt.Errorf("read installed predecessor certificate: %w", err)
-	}
-	rawKey, err := connector.ReadLocalFile(profile, target.KeyPath)
-	if err != nil {
-		return fmt.Errorf("read installed predecessor subject key: %w", err)
+		return fmt.Errorf("CA re-protection predecessor: %w", err)
 	}
 	key, err := secret.NewFrom(rawKey)
 	secret.Wipe(rawKey)

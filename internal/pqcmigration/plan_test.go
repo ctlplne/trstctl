@@ -173,3 +173,25 @@ func TestCompletedCapabilitiesLeaveOnlyEvidenceGatedPureCutoverResidual(t *testi
 		t.Fatal("residual denominator must retain the evidence-gated hybrid-to-pure cutover")
 	}
 }
+
+// Every ML-DSA parameter set is a host-bound target (A37); key-establishment
+// and classical labels are not certificate-key targets.
+func TestPQCPlannerAcceptsEveryMLDSAParameterSet(t *testing.T) {
+	asset := Asset{ID: "asset-rsa", Kind: string(cbom.AssetCertKey), Location: "payments.internal:443",
+		CertificateFingerprint: strings.Repeat("a", 64), Algorithm: "RSA", KeyBits: 2048, Strength: "weak", QuantumVulnerable: true}
+	request := func(target string) Request {
+		return Request{AssetIDs: []string{"asset-rsa"}, TargetAlgorithm: target, Protocol: ProtocolHostCSR,
+			CertificateBindings: []CertificateBinding{{AssetID: "asset-rsa", IdentityID: "identity-a", TargetID: "target-a"}}}
+	}
+	for _, target := range []string{"ML-DSA-44", "ML-DSA-65", "ML-DSA-87"} {
+		plan, err := BuildPlan([]Asset{asset}, request(target))
+		if err != nil || len(plan.Reissues) != 1 || plan.Reissues[0].TargetAlgorithm != target || plan.Reissues[0].EffectiveAlgorithm != target {
+			t.Fatalf("%s: plan=%+v err=%v; want the requested parameter set as target and effective algorithm", target, plan.Reissues, err)
+		}
+	}
+	for _, target := range []string{"ML-KEM-768", "ECDSA-P256", "SLH-DSA-SHA2-128s", ""} {
+		if _, err := BuildPlan([]Asset{asset}, request(target)); err == nil || !strings.Contains(err.Error(), "ML-DSA") {
+			t.Fatalf("%q was accepted as a certificate-key target: %v", target, err)
+		}
+	}
+}

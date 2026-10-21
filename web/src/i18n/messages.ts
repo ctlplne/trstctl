@@ -27130,6 +27130,14 @@ export const messages = {
     defaultMessage: "Unable to complete the PQC migration operation",
     description: "Fallback error for the PQC migration workflow.",
   },
+  "posture.pqcMigration.targetAlgorithm": {
+    defaultMessage: "Target subject key (FIPS 204 parameter set)",
+    description: "Label for the ML-DSA parameter set a certificate-key migration requests.",
+  },
+  "posture.pqcMigration.targetAlgorithmHint": {
+    defaultMessage: "Requested identities must carry this subject_key_algorithm and the profile must allow it.",
+    description: "Hint under the PQC target algorithm selector.",
+  },
   "posture.pqcCampaign.heading": { defaultMessage: "PQC migration campaigns", description: "Core PQC campaign heading." },
   "posture.pqcCampaign.description": {
     defaultMessage: "Own a migration, assign a wave and deadline, and prove closure over CBOM findings.",

@@ -102,7 +102,7 @@ func (h HostAgentHooks) RecordCertificateResult(ctx context.Context, tenantID, a
 	if err != nil {
 		return err
 	}
-	if info.KeyAlgorithm != TargetMLDSA65 || info.CommonName != intent.SubjectCommonName ||
+	if !IsMLDSATarget(info.KeyAlgorithm) || info.KeyAlgorithm != intent.SubjectKeyAlgorithm || info.CommonName != intent.SubjectCommonName ||
 		!sameCertificateFingerprint(info.SHA256Fingerprint, req.CredentialFingerprint) ||
 		cert.KeyOrigin != string(custody.OriginHostAgent) { // source must be this host's CSR path
 		return errors.New("pqcmigration: issued certificate differs from the bound ML-DSA host CSR")
@@ -138,10 +138,10 @@ func (h HostAgentHooks) RecordCertificateResult(ctx context.Context, tenantID, a
 		return errors.New("pqcmigration: current CBOM asset no longer names the served predecessor")
 	}
 	after := projections.CBOMAssetObserved{ID: priorAsset.ID, Kind: priorAsset.Kind, Location: priorAsset.Location,
-		CertificateFingerprint: req.CredentialFingerprint, Algorithm: TargetMLDSA65, KeyBits: 0,
+		CertificateFingerprint: req.CredentialFingerprint, Algorithm: info.KeyAlgorithm, KeyBits: 0,
 		Protocol: priorAsset.Protocol, Cipher: priorAsset.Cipher, Library: priorAsset.Library,
 		Strength: "strong", QuantumVulnerable: false, OutOfPolicy: false,
-		Reasons: []string{"ML-DSA-65 leaf served and read back from host target " + intent.TargetID + " in run " + intent.PQCRunID}}
+		Reasons: []string{info.KeyAlgorithm + " leaf served and read back from host target " + intent.TargetID + " in run " + intent.PQCRunID}}
 	before := projections.CBOMAssetObserved{ID: priorAsset.ID, Kind: priorAsset.Kind, Location: priorAsset.Location,
 		CertificateFingerprint: priorAsset.CertificateFingerprint, Algorithm: priorAsset.Algorithm,
 		KeyBits: priorAsset.KeyBits, Protocol: priorAsset.Protocol, Cipher: priorAsset.Cipher,
@@ -185,7 +185,7 @@ func (p *ProgressProjection) applyCertificateApplied(ctx context.Context, ev eve
 	}
 	if completed.RunID == "" || completed.AssetID == "" || completed.TargetID == "" || completed.IdentityID == "" ||
 		completed.AgentID == "" || completed.ReceiptSignature == "" || completed.ReceiptStatement == "" ||
-		completed.After.ID != completed.AssetID || completed.After.Algorithm != TargetMLDSA65 ||
+		completed.After.ID != completed.AssetID || !IsMLDSATarget(completed.After.Algorithm) ||
 		completed.Before.ID != completed.AssetID || !sameCertificateFingerprint(completed.Before.CertificateFingerprint, completed.PredecessorFingerprint) ||
 		completed.After.CertificateFingerprint != completed.CertificateFingerprint ||
 		completed.Transcript.Vantage != transport.VantageLocal || !completed.Transcript.Reached || completed.Transcript.Mismatch != certinfo.MismatchNone ||
@@ -217,7 +217,7 @@ func (p *ProgressProjection) applyCertificateApplied(ctx context.Context, ev eve
 	item := p.items[key]
 	item.RunID, item.AssetID, item.FindingKind = completed.RunID, completed.AssetID, "certificate-key"
 	item.TargetID, item.TargetRevision, item.Connector = completed.TargetID, completed.TargetRevision, completed.Connector
-	item.CertificateFingerprint, item.EffectiveAlgorithm = completed.CertificateFingerprint, TargetMLDSA65
+	item.CertificateFingerprint, item.EffectiveAlgorithm = completed.CertificateFingerprint, completed.After.Algorithm
 	item.CertificateReadback = &CertificateReadback{Transcript: completed.Transcript, AgentID: completed.AgentID,
 		JobID: completed.JobID, Attempt: completed.Attempt, EvidenceDigest: completed.EvidenceDigest,
 		ReceiptStatement: completed.ReceiptStatement, ReceiptSignature: completed.ReceiptSignature,

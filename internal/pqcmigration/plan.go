@@ -13,6 +13,8 @@ import (
 
 const (
 	TargetMLDSA65      = string(eepqc.MLDSA65)
+	TargetMLDSA44      = string(eepqc.MLDSA44)
+	TargetMLDSA87      = string(eepqc.MLDSA87)
 	EffectiveHybridTLS = eepqc.HybridMLDSA44ECDSAP256Algorithm
 	ProtocolACME       = "acme"
 	ProtocolHostCSR    = "host-csr"
@@ -101,13 +103,28 @@ func (e AssetNotFoundError) Error() string {
 	return fmt.Sprintf("pqcmigration: asset %s not found", e.ID)
 }
 
+// IsMLDSATarget reports whether algorithm names a certificate-key migration
+// target: one of the FIPS 204 parameter sets the host CSR path can generate
+// and the signer can certify (A37). Key-establishment and classical labels
+// are not certificate-key targets.
+func IsMLDSATarget(algorithm string) bool {
+	switch algorithm {
+	case TargetMLDSA44, TargetMLDSA65, TargetMLDSA87:
+		return true
+	}
+	return false
+}
+
+// MLDSATargets lists the accepted certificate-key targets for messages and schemas.
+func MLDSATargets() []string { return []string{TargetMLDSA44, TargetMLDSA65, TargetMLDSA87} }
+
 func BuildPlan(assets []Asset, req Request) (Plan, error) {
 	protocol := req.Protocol
 	if protocol == "" {
 		protocol = ProtocolACME
 	}
-	if req.TargetAlgorithm != TargetMLDSA65 {
-		return Plan{}, fmt.Errorf("pqcmigration: certificate-key migration target must be %s", TargetMLDSA65)
+	if !IsMLDSATarget(req.TargetAlgorithm) {
+		return Plan{}, fmt.Errorf("pqcmigration: certificate-key migration target must be one of %s", strings.Join(MLDSATargets(), ", "))
 	}
 	if protocol != ProtocolACME && protocol != ProtocolHostCSR {
 		return Plan{}, fmt.Errorf("pqcmigration: migration protocol must be %s or %s", ProtocolACME, ProtocolHostCSR)
@@ -186,7 +203,7 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 				IdentityID:         binding.IdentityID,
 				TargetID:           binding.TargetID,
 				TargetAlgorithm:    req.TargetAlgorithm,
-				EffectiveAlgorithm: TargetMLDSA65,
+				EffectiveAlgorithm: req.TargetAlgorithm,
 				Protocol:           protocol,
 				RollbackOnFailure:  req.RollbackOnFailure,
 			})

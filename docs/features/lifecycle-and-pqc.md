@@ -300,7 +300,8 @@ an operator starts a migration.
 Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is the
 starting point. PQC migration planning and host execution are served in every
 build (`internal/pqcmigration`). A certificate-key asset must be bound to an
-exact enabled host target and requested ML-DSA-65 identity before start. The
+exact enabled host target and a requested identity whose subject key is the run's
+`target_algorithm` (ML-DSA-44, ML-DSA-65 or ML-DSA-87) before start. The
 outbox routes the work to that target's enrolled agent.
 
 The migration API attaches `POST /api/v1/pqc/migrations` and
@@ -323,7 +324,7 @@ Run progress is tenant-scoped and rebuilt from retained events, including older
 issuance-only runs.
 
 For a new host-bound certificate-key finding, `applied` requires the host's
-signed readback of the deployed ML-DSA-65 leaf. The agent checks and seals the
+signed readback of the deployed ML-DSA leaf in the requested parameter set. The agent checks and seals the
 exact installed predecessor before generating a new subject key. That key stays
 on the host across later renewals. Each renewal updates the finding and CBOM
 from its own signed served-leaf readback. Host rollback restores the sealed
