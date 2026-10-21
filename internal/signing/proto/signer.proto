@@ -105,6 +105,12 @@ service SignerService {
   // secret is byte-native secret material for immediate re-wrap use and callers
   // must wipe it after use.
   rpc Decapsulate(DecapsulateRequest) returns (DecapsulateResponse);
+  // RewrapKEMDataKey moves one KEM-wrapped data key from the predecessor KEM
+  // key to the successor without the data key leaving signer custody.
+  rpc RewrapKEMDataKey(RewrapKEMDataKeyRequest) returns (RewrapKEMDataKeyResponse);
+  // VerifyKEMDataKey opens an envelope under a held KEM key and returns only
+  // the data key's SHA-256: the independent readback after a re-wrap.
+  rpc VerifyKEMDataKey(VerifyKEMDataKeyRequest) returns (VerifyKEMDataKeyResponse);
 
   // ZeroizeKey removes a key from signer custody. It applies to KEM custody first
   // and then falls through to signing-key custody, so retirement can destroy either
@@ -483,6 +489,32 @@ message DecapsulateRequest {
 
 message DecapsulateResponse {
   bytes shared_secret = 1;
+}
+
+message RewrapKEMDataKeyRequest {
+  string predecessor_handle = 1;
+  string successor_handle = 2;
+  bytes kem_ciphertext = 3;
+  bytes wrapped_dek = 4;
+  bytes predecessor_aad = 5;
+  bytes successor_aad = 6;
+}
+
+message RewrapKEMDataKeyResponse {
+  bytes successor_kem_ciphertext = 1;
+  bytes successor_wrapped_dek = 2;
+  bytes dek_sha256 = 3;
+}
+
+message VerifyKEMDataKeyRequest {
+  string handle = 1;
+  bytes kem_ciphertext = 2;
+  bytes wrapped_dek = 3;
+  bytes aad = 4;
+}
+
+message VerifyKEMDataKeyResponse {
+  bytes dek_sha256 = 1;
 }
 
 message ZeroizeKeyRequest {

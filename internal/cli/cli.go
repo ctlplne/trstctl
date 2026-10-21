@@ -102,6 +102,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runSecretScanStagedDiff(ctx, rest[3:], stdout, stderr)
 	}
+	if len(rest) >= 3 && hasPrefix(rest, []string{"pcas", "kem", "envelope"}) {
+		if commandHelpRequested(rest[3:]) {
+			pcasKEMEnvelopeUsage(stdout)
+			return 0
+		}
+		return runPCASKEMEnvelope(rest[3:], stdout, stderr)
+	}
 	if len(rest) >= 4 && hasPrefix(rest, []string{"secrets", "scans", "pre-commit", "install"}) {
 		if commandHelpRequested(rest[4:]) {
 			secretScanPreCommitInstallUsage(stdout)

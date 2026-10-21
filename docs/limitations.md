@@ -1458,19 +1458,36 @@ spine with explicit residual work. The matrix above is the authority for whether
 the running binary serves a capability; this section records the operator-facing
 edges and follow-up integration work.
 
-### PCAS KEM data re-wrap (not built)
+### PCAS KEM data re-wrap
 
-`POST /api/v1/pcas/kem/rewraps` can create a tenant-bound request and a signed
-paired successor signing/KEM key record. The projected stages now read
-`key_ready`, with `rewrap_complete=false`. This is key preparation only. The
-request has no ciphertext or target reference, connector, target write, or bound
-readback receipt, so it cannot migrate encrypted data. The PCAS console also
-has no target registration or data re-wrap workflow. The predecessor-retirement
-gate refuses the current key-ready record. Operators
-must keep the predecessor available and must not treat a delivered outbox row or
-the paired public record as migration proof. A real target contract, execution
-worker, per-target bound receipt, recovery, API/CLI/console workflow and stock
-readback are future build work; local QA run 1 does not qualify data re-wrap.
+`POST /api/v1/pcas/kem/rewraps` creates a tenant-bound request, mints the
+signed paired successor signing/KEM key record (`key_ready`), and then moves
+the epoch's registered data keys through the isolated signer. The ciphertext
+target is a KEM-wrapped data-key envelope: an operator fetches the epoch's
+public encapsulation key (`GET /api/v1/pcas/kem/public-key`, CLI
+`pcas kem public-key`), builds the envelope offline (`pcas kem envelope`
+encapsulates to that key and seals the data key under the derived key; the
+data key never reaches the control plane) and registers it
+(`POST /api/v1/pcas/kem/data-keys`, `pcas kem data-keys register`). A re-wrap
+request snapshots the predecessor epoch's inventory at acceptance and moves
+exactly those envelopes; an envelope registered later is accepted, waits for the
+next request, and keeps the retirement gate closed until it is moved. A stage
+with no envelopes completes only when the request carries
+`empty_inventory_attested`; otherwise it stays `key_ready` instead of reading as
+migrated data. For each envelope the
+signer's `RewrapKEMDataKey` opens it under the predecessor KEM key and seals
+the same data key for the successor; the control plane then asks the signer to
+read the new envelope back under the successor key alone (`VerifyKEMDataKey`)
+and records an immutable per-target receipt bound to the request id and
+digest, both epochs, the predecessor ciphertext digest and the data-key digest.
+Each stage closes with a completion event over its target count; the job row's
+data receipt turns `complete`, `rewrap_complete` becomes true and the
+retirement gate opens. `GET /api/v1/pcas/kem/data-keys` serves the successor
+envelopes for stock readback. Boundaries: the operator owns the inventory (the
+status shows `data_keys` against `data_keys_rewrapped` per stage); the PCAS
+console shows completion but has no registration workflow yet; the first KEM
+epoch of an identity comes from an attested-empty request against its
+predecessor epoch, since no earlier KEM key exists.
 
 ### Workload-held co-sign mode (off by default)
 

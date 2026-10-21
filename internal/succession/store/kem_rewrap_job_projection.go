@@ -49,10 +49,10 @@ func ApplyKEMRewrapRequestedEventTx(ctx context.Context, tx pgx.Tx, ev eventspec
 	for _, stage := range p.Stages {
 		_, err := tx.Exec(ctx, `INSERT INTO pcas_rewrap_job
 			(tenant_id, job_id, identity_id, predecessor_epoch, stage, total_stages,
-			 completed_stages, status, source_sequence, request_digest)
-			VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, 0, 'queued', $6, $7)
+			 completed_stages, status, source_sequence, request_digest, inventory_sequence, empty_inventory_attested)
+			VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, 0, 'queued', $6, $7, $8, $9)
 			ON CONFLICT DO NOTHING`, p.RequestID, p.IdentityID, int64(p.PredecessorEpoch),
-			stage, len(p.Stages), int64(ev.Sequence), p.RequestDigest)
+			stage, len(p.Stages), int64(ev.Sequence), p.RequestDigest, pgInt64(p.InventorySequence), p.EmptyInventoryAttested)
 		if err != nil {
 			return fmt.Errorf("pcas KEM job: project accepted stage: %w", err)
 		}
@@ -125,6 +125,11 @@ func checkKEMStage(ctx context.Context, tx pgx.Tx, requestID, identityID string,
 	}
 	if gotStatus == "key_ready" && gotCompleted == 0 &&
 		((queuedOK && uint64(gotSource) > sourceSequence) || (!queuedOK && uint64(gotSource) == sourceSequence)) {
+		return nil
+	}
+	// A stage whose data receipt already landed (A16) replays its earlier
+	// request/key-ready sources harmlessly: the receipt could only follow them.
+	if gotStatus == "complete" && uint64(gotSource) >= sourceSequence {
 		return nil
 	}
 	return errors.New("pcas KEM job: conflicting stage status or first-writer sequence")

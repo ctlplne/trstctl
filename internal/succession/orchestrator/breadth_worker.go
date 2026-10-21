@@ -105,6 +105,9 @@ type kemRewrapPayload struct {
 	SigningAlgorithm    string   `json:"signing_algorithm"`
 	KEMAlgorithm        string   `json:"kem_algorithm"`
 	Stages              []string `json:"stages,omitempty"`
+	// Inventory snapshot and attestation carried from the accepted request.
+	EmptyInventoryAttested bool   `json:"empty_inventory_attested,omitempty"`
+	InventorySequence      uint64 `json:"inventory_sequence,omitempty"`
 }
 
 type recoveryPayload struct {
@@ -296,7 +299,7 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 			p.PredecessorEpoch+1, env.RequestID, requestDigest, p.Stages); err != nil {
 			return err
 		}
-		return nil
+		return w.rewrapDataKeys(ctx, tenantID, p, env.RequestID, requestDigest)
 	}
 	predRemote, err := w.kem.SignerForHandle(ctx, p.PredecessorHandle)
 	if err != nil {
@@ -335,7 +338,138 @@ func (w *BreadthWorker) handleKEMRewrap(ctx context.Context, tenantID string, pa
 	if err := w.recordKEMRewrap(ctx, tenantID, rec.Base.Fields, encoded, env.RequestID, requestDigest, p.Stages); err != nil {
 		return err
 	}
+	return w.rewrapDataKeys(ctx, tenantID, p, env.RequestID, requestDigest)
+}
+
+// rewrapDataKeys is the data half of a KEM re-wrap (A16). For every stage the
+// request named, each envelope registered at the predecessor epoch is moved to
+// the successor epoch inside the signer (the data key never leaves custody),
+// read back under the successor key, and recorded as a receipt bound to the
+// request, both epochs and both ciphertext digests. A stage closes with a
+// completion event over the fenced inventory; the retirement gate reads that
+// receipt. Every step is first-writer fenced, so an outbox retry after a crash
+// resumes where the previous attempt stopped.
+func (w *BreadthWorker) rewrapDataKeys(ctx context.Context, tenantID string, p kemRewrapPayload, requestID string, requestDigest []byte) error {
+	successorEpoch := p.PredecessorEpoch + 1
+	predecessorKEM := succession.TenantKEMKeyHandle(tenantID, p.IdentityID, p.PredecessorEpoch)
+	for _, stage := range p.Stages {
+		if _, found, err := w.log.EventByID(ctx, succession.KEMRewrapStageCompletedEventID(tenantID, requestID, stage)); err != nil {
+			return err
+		} else if found {
+			continue
+		}
+		targets, err := w.repo.ListKEMDataKeysUpTo(ctx, tenantID, p.IdentityID, p.PredecessorEpoch, stage, p.InventorySequence)
+		if err != nil {
+			return err
+		}
+		if len(targets) == 0 && !p.EmptyInventoryAttested {
+			// Nothing registered and no attestation that nothing exists: the
+			// stage stays key_ready rather than reading as migrated data.
+			continue
+		}
+		done, err := w.repo.ListKEMDataKeys(ctx, tenantID, p.IdentityID, successorEpoch, stage)
+		if err != nil {
+			return err
+		}
+		rewrapped := make(map[string]bool, len(done))
+		for _, k := range done {
+			if k.RewrapRequestID == requestID && k.ReadbackVerified {
+				rewrapped[k.TargetRef] = true
+			}
+		}
+		receipts := make([]byte, 0, 64*len(targets))
+		for _, target := range targets {
+			receiptID := succession.KEMDataKeyEventID(tenantID, p.IdentityID, successorEpoch, target.TargetRef, true)
+			if !rewrapped[target.TargetRef] {
+				if err := w.rewrapOneDataKey(ctx, tenantID, p, requestID, requestDigest, stage, predecessorKEM, target, receiptID); err != nil {
+					return err
+				}
+			}
+			receipts = append(receipts, []byte(receiptID)...)
+		}
+		completion, err := succession.Encode(succession.KEMRewrapStageCompletedV1{
+			TenantID: tenantID, IdentityID: p.IdentityID, PredecessorEpoch: p.PredecessorEpoch, Epoch: successorEpoch,
+			RequestID: requestID, RequestDigest: requestDigest, Stage: stage, TargetCount: len(targets),
+			ReceiptsSHA256: crypto.SHA256Sum(receipts),
+		})
+		if err != nil {
+			return err
+		}
+		completion.ID = succession.KEMRewrapStageCompletedEventID(tenantID, requestID, stage)
+		recorded, err := w.appendOrRecover(ctx, completion)
+		if err != nil {
+			return fmt.Errorf("pcas KEM rewrap: record stage %q completion: %w", stage, err)
+		}
+		if err := w.repo.ApplyKEMRewrapStageCompletedEvent(ctx, recorded); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (w *BreadthWorker) rewrapOneDataKey(ctx context.Context, tenantID string, p kemRewrapPayload, requestID string, requestDigest []byte,
+	stage, predecessorKEM string, target pcasstore.KEMDataKey, receiptID string) error {
+	if prior, found, err := w.log.EventByID(ctx, receiptID); err != nil {
+		return err
+	} else if found {
+		// The receipt committed but its projection was lost: finish it.
+		return w.repo.ApplyKEMDataKeyEvent(ctx, prior)
+	}
+	successorEpoch := p.PredecessorEpoch + 1
+	predAAD := succession.KEMDataKeyAAD(p.IdentityID, p.PredecessorEpoch, target.TargetRef)
+	succAAD := succession.KEMDataKeyAAD(p.IdentityID, successorEpoch, target.TargetRef)
+	ct, wrapped, digest, err := w.kem.RewrapDataKey(ctx, predecessorKEM, p.SuccessorKEMHandle, target.KEMCiphertext, target.WrappedDEK, predAAD, succAAD)
+	if err != nil {
+		return fmt.Errorf("pcas KEM rewrap: signer re-wrap of %q: %w", target.TargetRef, err)
+	}
+	if !bytes.Equal(digest, target.DEKSHA256) {
+		return fmt.Errorf("pcas KEM rewrap: %q opened to a data key other than the one registered", target.TargetRef)
+	}
+	// Independent readback: a second decapsulation under the successor key
+	// alone must reproduce the same data key digest.
+	readback, err := w.kem.VerifyDataKey(ctx, p.SuccessorKEMHandle, ct, wrapped, succAAD)
+	if err != nil {
+		return fmt.Errorf("pcas KEM rewrap: readback of %q under the successor key: %w", target.TargetRef, err)
+	}
+	if !bytes.Equal(readback, digest) {
+		return fmt.Errorf("pcas KEM rewrap: readback of %q disagrees with the re-wrapped data key", target.TargetRef)
+	}
+	receipt, err := succession.Encode(succession.KEMDataKeyRewrappedV1{
+		TenantID: tenantID, IdentityID: p.IdentityID, PredecessorEpoch: p.PredecessorEpoch, Epoch: successorEpoch,
+		TargetRef: target.TargetRef, Stage: stage, RequestID: requestID, RequestDigest: requestDigest,
+		PredecessorCiphertextSHA256: target.CiphertextSHA256, KEMCiphertext: ct, WrappedDEK: wrapped,
+		DEKSHA256: digest, ReadbackDEKSHA256: readback,
+	})
+	if err != nil {
+		return err
+	}
+	receipt.ID = receiptID
+	recorded, err := w.appendOrRecover(ctx, receipt)
+	if err != nil {
+		return fmt.Errorf("pcas KEM rewrap: record receipt for %q: %w", target.TargetRef, err)
+	}
+	return w.repo.ApplyKEMDataKeyEvent(ctx, recorded)
+}
+
+// appendOrRecover appends a deterministic-id event, or returns the retained
+// event when an earlier attempt already committed identical bytes.
+func (w *BreadthWorker) appendOrRecover(ctx context.Context, ev events.Event) (events.Event, error) {
+	if prior, found, err := w.log.EventByID(ctx, ev.ID); err != nil {
+		return events.Event{}, err
+	} else if found {
+		if prior.TenantID != ev.TenantID || prior.Type != ev.Type || !bytes.Equal(prior.Data, ev.Data) {
+			return events.Event{}, errors.New("event id belongs to another immutable event")
+		}
+		return prior, nil
+	}
+	recorded, err := w.log.Append(ctx, ev)
+	if err != nil {
+		return events.Event{}, err
+	}
+	if recorded.TenantID != ev.TenantID || recorded.Type != ev.Type || !bytes.Equal(recorded.Data, ev.Data) {
+		return events.Event{}, errors.New("event id append collided with another immutable event")
+	}
+	return recorded, nil
 }
 
 type signerKEMAdapter struct {

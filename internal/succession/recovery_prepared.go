@@ -16,6 +16,41 @@ const recoveryProofDomain = "trstctl/pcas/recovery-proof/v1\x00"
 const kemRewrapRecordDomain = "trstctl/pcas/kem-rewrap-record/v1\x00"
 const kemRewrapRequestDomain = "trstctl/pcas/kem-rewrap-request/v1\x00"
 const kemRewrapOperationDomain = "trstctl/pcas/kem-rewrap-operation/v1\x00"
+const kemDataKeyRegisteredDomain = "trstctl/pcas/kem-data-key-registered/v1\x00"
+const kemDataKeyRewrappedDomain = "trstctl/pcas/kem-data-key-rewrapped/v1\x00"
+const kemRewrapStageCompletedDomain = "trstctl/pcas/kem-rewrap-stage-completed/v1\x00"
+
+// KEMDataKeyEventID fences one data-key envelope per tenant identity epoch and
+// target: the first registration (or re-wrap receipt) at that tuple wins.
+func KEMDataKeyEventID(tenantID, identityID string, epoch uint64, targetRef string, rewrapped bool) string {
+	bound, _ := json.Marshal(struct {
+		TenantID   string `json:"tenant_id"`
+		IdentityID string `json:"identity_id"`
+		Epoch      uint64 `json:"epoch"`
+		TargetRef  string `json:"target_ref"`
+	}{tenantID, identityID, epoch, targetRef})
+	if rewrapped {
+		return recoveryEventID(kemDataKeyRewrappedDomain, bound)
+	}
+	return recoveryEventID(kemDataKeyRegisteredDomain, bound)
+}
+
+// KEMRewrapStageCompletedEventID fences one stage completion per request.
+func KEMRewrapStageCompletedEventID(tenantID, requestID, stage string) string {
+	bound, _ := json.Marshal(struct {
+		TenantID  string `json:"tenant_id"`
+		RequestID string `json:"request_id"`
+		Stage     string `json:"stage"`
+	}{tenantID, requestID, stage})
+	return recoveryEventID(kemRewrapStageCompletedDomain, bound)
+}
+
+// KEMDataKeyAAD is the envelope binding both the registering client and the
+// signer use: identity, epoch and target reference, so an envelope cannot be
+// replayed for another epoch or target.
+func KEMDataKeyAAD(identityID string, epoch uint64, targetRef string) []byte {
+	return []byte("trstctl/pcas/kem-data-key/v1|" + identityID + "|" + fmt.Sprint(epoch) + "|" + targetRef)
+}
 
 // KEMRewrapOperationRequestID makes an authenticated operation retry recover
 // the same outbox row and event after a response is lost between those writes.

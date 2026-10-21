@@ -80,6 +80,8 @@ func (p *RecoveryRecordProjection) ResetTx(ctx context.Context, tx pgx.Tx) error
 func (p *RecoveryRecordProjection) Apply(ctx context.Context, ev eventspec.Event) error {
 	if ev.Type != succession.TypeRecoveryRecorded && ev.Type != succession.TypeRecoveryProofIssued &&
 		ev.Type != succession.TypeKEMRewrapRecorded && ev.Type != succession.TypeKEMRewrapRequested &&
+		ev.Type != succession.TypeKEMDataKeyRegistered && ev.Type != succession.TypeKEMDataKeyRewrapped &&
+		ev.Type != succession.TypeKEMRewrapStageCompleted &&
 		ev.Type != projections.EventTenantOffboarded {
 		return nil
 	}
@@ -102,7 +104,11 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 			return err
 		}
 		//trstctl:system-query — the system transaction sees cross-tenant rows, but tenant_id = $1 limits offboard deletion to the owning tenant's event-sourced KEM jobs.
-		_, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID)
+		if _, err := tx.Exec(ctx, `DELETE FROM pcas_rewrap_job WHERE tenant_id = $1 AND source_sequence > 0`, ev.TenantID); err != nil {
+			return err
+		}
+		//trstctl:system-query — tenant_id = $1 limits offboard deletion to the owning tenant's event-sourced KEM data-key envelopes.
+		_, err := tx.Exec(ctx, `DELETE FROM pcas_kem_data_key WHERE tenant_id = $1`, ev.TenantID)
 		return err
 	}
 	if ev.Type != succession.TypeRecoveryRecorded {
@@ -117,6 +123,12 @@ func (p *RecoveryRecordProjection) ApplyTx(ctx context.Context, tx pgx.Tx, ev ev
 		}
 		if ev.Type == succession.TypeKEMRewrapRequested {
 			return ApplyKEMRewrapRequestedEventTx(ctx, tx, ev)
+		}
+		if ev.Type == succession.TypeKEMDataKeyRegistered || ev.Type == succession.TypeKEMDataKeyRewrapped {
+			return ApplyKEMDataKeyEventTx(ctx, tx, ev)
+		}
+		if ev.Type == succession.TypeKEMRewrapStageCompleted {
+			return ApplyKEMRewrapStageCompletedEventTx(ctx, tx, ev)
 		}
 		return nil
 	}

@@ -103,6 +103,80 @@ func (s *Store) Decapsulate(_ context.Context, handle string, ciphertext []byte)
 	return key.Decapsulate(ciphertext)
 }
 
+// RewrapDataKey implements signing.KEMCustody: decapsulate under the
+// predecessor, open the data key, encapsulate to the successor's own public key
+// and seal the same data key again. Every secret intermediate is wiped before
+// return; only ciphertext and the data key's SHA-256 leave custody.
+func (s *Store) RewrapDataKey(_ context.Context, predecessorHandle, successorHandle string, kemCiphertext, wrappedDEK, predecessorAAD, successorAAD []byte) ([]byte, []byte, []byte, error) {
+	if predecessorHandle == "" || successorHandle == "" {
+		return nil, nil, nil, errors.New("kem custody: predecessor and successor handles required")
+	}
+	if predecessorHandle == successorHandle {
+		return nil, nil, nil, errors.New("kem custody: re-wrap needs two distinct KEM keys")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	predecessor, err := s.lookupLocked(predecessorHandle)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	successor, err := s.lookupLocked(successorHandle)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	dek, digest, err := openDataKeyLocked(predecessor, kemCiphertext, wrappedDEK, predecessorAAD)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer secret.Wipe(dek)
+	ct, ss, err := pqc.Encapsulate(successor.Public())
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("kem custody: encapsulate to successor: %w", err)
+	}
+	defer secret.Wipe(ss)
+	wrapped, err := crypto.KEMDataKeySeal(ss, dek, successorAAD)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return ct, wrapped, digest, nil
+}
+
+// VerifyDataKey implements signing.KEMCustody: it opens an envelope under the
+// held key and returns only the data key's SHA-256.
+func (s *Store) VerifyDataKey(_ context.Context, handle string, kemCiphertext, wrappedDEK, aad []byte) ([]byte, error) {
+	if handle == "" {
+		return nil, errors.New("kem custody: handle required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key, err := s.lookupLocked(handle)
+	if err != nil {
+		return nil, err
+	}
+	dek, digest, err := openDataKeyLocked(key, kemCiphertext, wrappedDEK, aad)
+	if err != nil {
+		return nil, err
+	}
+	secret.Wipe(dek)
+	return digest, nil
+}
+
+func openDataKeyLocked(key *pqc.KEMPrivateKey, kemCiphertext, wrappedDEK, aad []byte) ([]byte, []byte, error) {
+	if len(kemCiphertext) == 0 || len(wrappedDEK) == 0 {
+		return nil, nil, errors.New("kem custody: data-key envelope required")
+	}
+	ss, err := key.Decapsulate(kemCiphertext)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kem custody: decapsulate: %w", err)
+	}
+	defer secret.Wipe(ss)
+	dek, err := crypto.KEMDataKeyOpen(ss, wrappedDEK, aad)
+	if err != nil {
+		return nil, nil, err
+	}
+	return dek, crypto.SHA256Sum(dek), nil
+}
+
 func (s *Store) ZeroizeKey(_ context.Context, handle string) error {
 	if handle == "" {
 		return errors.New("kem custody: handle required")

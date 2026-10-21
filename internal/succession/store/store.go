@@ -167,6 +167,12 @@ type RewrapJob struct {
 	CompletedStages  int
 	Status           string
 	UpdatedAt        time.Time
+	// DataKeys and DataKeysRewrapped are the stage's data receipt (A16): how
+	// many envelopes the fenced predecessor epoch held in this stage and how
+	// many successor envelopes were written and read back for this request.
+	DataKeys            int
+	DataKeysRewrapped   int
+	DataReceiptSequence uint64
 }
 
 type EpochCheckpoint struct {
@@ -553,13 +559,23 @@ func (r *Repo) ListFederationQuarantine(ctx context.Context, tenantID string) ([
 func (r *Repo) RewrapComplete(ctx context.Context, tenantID, identityID string, predecessorEpoch uint64) (bool, error) {
 	var complete bool
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Every stage must hold a data receipt, and no envelope may have joined
+		// the predecessor epoch after the inventory snapshot the receipts cover
+		// (A16): a late registration re-closes the gate until the next request.
 		e := tx.QueryRow(ctx,
-			`SELECT COALESCE(bool_and(status = 'complete' AND source_sequence > 0 AND
-			    data_receipt_sequence > 0 AND request_digest IS NOT NULL), false)
-			   FROM pcas_rewrap_job
-			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
-			    AND identity_id = $1
-			    AND predecessor_epoch = $2`,
+			`SELECT COALESCE(bool_and(j.status = 'complete' AND j.source_sequence > 0 AND
+			    j.data_receipt_sequence > 0 AND j.request_digest IS NOT NULL), false)
+			    AND NOT EXISTS (
+			        SELECT 1 FROM pcas_kem_data_key k
+			         WHERE k.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			           AND k.identity_id = $1 AND k.epoch = $2
+			           AND k.source_sequence > (SELECT COALESCE(max(c.inventory_sequence), 0) FROM pcas_rewrap_job c
+			                                     WHERE c.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			                                       AND c.identity_id = $1 AND c.predecessor_epoch = $2 AND c.status = 'complete'))
+			   FROM pcas_rewrap_job j
+			  WHERE j.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND j.identity_id = $1
+			    AND j.predecessor_epoch = $2`,
 			identityID, predecessorEpoch).Scan(&complete)
 		if e != nil {
 			return fmt.Errorf("succession store: rewrap complete: %w", e)
@@ -573,12 +589,20 @@ func (r *Repo) ListRewrapJobs(ctx context.Context, tenantID, identityID string, 
 	var out []RewrapJob
 	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT job_id, identity_id, predecessor_epoch, stage, total_stages, completed_stages, status, updated_at
-			   FROM pcas_rewrap_job
-			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
-			    AND identity_id = $1
-			    AND ($2::bigint = 0 OR predecessor_epoch = $2)
-			  ORDER BY updated_at DESC, stage ASC`,
+			`SELECT j.job_id, j.identity_id, j.predecessor_epoch, j.stage, j.total_stages, j.completed_stages, j.status, j.updated_at,
+			        (SELECT count(*) FROM pcas_kem_data_key k
+			          WHERE k.tenant_id = j.tenant_id AND k.identity_id = j.identity_id
+			            AND k.epoch = j.predecessor_epoch AND k.stage = j.stage),
+			        (SELECT count(*) FROM pcas_kem_data_key k
+			          WHERE k.tenant_id = j.tenant_id AND k.identity_id = j.identity_id
+			            AND k.epoch = j.predecessor_epoch + 1 AND k.stage = j.stage
+			            AND k.rewrap_request_id = j.job_id AND k.readback_verified),
+			        j.data_receipt_sequence
+			   FROM pcas_rewrap_job j
+			  WHERE j.tenant_id = current_setting('trstctl.tenant_id')::uuid
+			    AND j.identity_id = $1
+			    AND ($2::bigint = 0 OR j.predecessor_epoch = $2)
+			  ORDER BY j.updated_at DESC, j.stage ASC`,
 			identityID, predecessorEpoch)
 		if err != nil {
 			return fmt.Errorf("succession store: list rewrap jobs: %w", err)
@@ -586,8 +610,13 @@ func (r *Repo) ListRewrapJobs(ctx context.Context, tenantID, identityID string, 
 		defer rows.Close()
 		for rows.Next() {
 			var job RewrapJob
-			if err := rows.Scan(&job.JobID, &job.IdentityID, &job.PredecessorEpoch, &job.Stage, &job.TotalStages, &job.CompletedStages, &job.Status, &job.UpdatedAt); err != nil {
+			var receipt int64
+			if err := rows.Scan(&job.JobID, &job.IdentityID, &job.PredecessorEpoch, &job.Stage, &job.TotalStages, &job.CompletedStages, &job.Status, &job.UpdatedAt,
+				&job.DataKeys, &job.DataKeysRewrapped, &receipt); err != nil {
 				return fmt.Errorf("succession store: scan rewrap job: %w", err)
+			}
+			if receipt > 0 {
+				job.DataReceiptSequence = uint64(receipt)
 			}
 			out = append(out, job)
 		}

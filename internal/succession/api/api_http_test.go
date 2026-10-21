@@ -655,3 +655,15 @@ func TestAck_SignatureRequiredAndCountable(t *testing.T) {
 		t.Fatal("ack recorded via the API is not countable by the PCAS-10 quorum")
 	}
 }
+
+func (f *fakeService) RegisterKEMDataKey(context.Context, string, succapi.KEMDataKeyRequest) (succapi.KEMDataKeyResponse, error) {
+	return succapi.KEMDataKeyResponse{}, nil
+}
+
+func (f *fakeService) ListKEMDataKeys(_ context.Context, _ string, identityID string, epoch uint64, _ string) (succapi.KEMDataKeyListResponse, error) {
+	return succapi.KEMDataKeyListResponse{IdentityID: identityID, Epoch: epoch, Items: []succapi.KEMDataKeyResponse{}}, nil
+}
+
+func (f *fakeService) KEMPublicKey(context.Context, string, string, uint64) (succapi.KEMPublicKeyResponse, bool, error) {
+	return succapi.KEMPublicKeyResponse{}, false, nil
+}

@@ -109,6 +109,8 @@ type KEMCustody interface {
 	GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string) (*signing.RemoteSigner, error)
 	GenerateSuccessorKEM(ctx context.Context, handle string, alg signing.KEMAlgorithm) (signing.KEMPublicKey, error)
 	Decapsulate(ctx context.Context, handle string, ciphertext []byte) ([]byte, error)
+	RewrapDataKey(ctx context.Context, predecessorHandle, successorHandle string, kemCiphertext, wrappedDEK, predecessorAAD, successorAAD []byte) (successorCiphertext, successorWrappedDEK, dekSHA256 []byte, err error)
+	VerifyDataKey(ctx context.Context, handle string, kemCiphertext, wrappedDEK, aad []byte) ([]byte, error)
 	ZeroizeKey(ctx context.Context, handle string) error
 }
 

@@ -217,6 +217,53 @@ type FederationImportRequest struct {
 	ForeignChain         []json.RawMessage `json:"foreign_chain,omitempty"`
 }
 
+// KEMDataKeyRequest registers one KEM-wrapped data key for an identity epoch
+// (A16). The envelope is ciphertext only: the control plane never sees the
+// data key, and the signer alone can open it.
+type KEMDataKeyRequest struct {
+	IdentityID    string `json:"identity_id"`
+	Epoch         uint64 `json:"epoch"`
+	TargetRef     string `json:"target_ref"`
+	Stage         string `json:"stage,omitempty"`
+	KEMCiphertext []byte `json:"kem_ciphertext"`
+	WrappedDEK    []byte `json:"wrapped_dek"`
+	DEKSHA256     []byte `json:"dek_sha256"`
+}
+
+// KEMDataKeyResponse is one projected envelope, readable by the operator after
+// registration and again after a re-wrap moved it to the successor epoch.
+type KEMDataKeyResponse struct {
+	IdentityID         string    `json:"identity_id"`
+	Epoch              uint64    `json:"epoch"`
+	TargetRef          string    `json:"target_ref"`
+	Stage              string    `json:"stage"`
+	KEMCiphertext      []byte    `json:"kem_ciphertext"`
+	WrappedDEK         []byte    `json:"wrapped_dek"`
+	DEKSHA256          []byte    `json:"dek_sha256"`
+	CiphertextSHA256   []byte    `json:"ciphertext_sha256"`
+	RewrappedFromEpoch uint64    `json:"rewrapped_from_epoch,omitempty"`
+	RewrapRequestID    string    `json:"rewrap_request_id,omitempty"`
+	ReadbackVerified   bool      `json:"readback_verified"`
+	SourceSequence     uint64    `json:"source_sequence"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+type KEMDataKeyListResponse struct {
+	IdentityID string               `json:"identity_id"`
+	Epoch      uint64               `json:"epoch"`
+	Items      []KEMDataKeyResponse `json:"items"`
+}
+
+// KEMPublicKeyResponse is the public encapsulation key an operator wraps data
+// keys for, with the binding the envelope must carry.
+type KEMPublicKeyResponse struct {
+	IdentityID   string `json:"identity_id"`
+	Epoch        uint64 `json:"epoch"`
+	KEMAlgorithm string `json:"kem_algorithm"`
+	PublicKeyDER []byte `json:"public_key_der"`
+	AADTemplate  string `json:"aad_template"`
+}
+
 type KEMRewrapRequest struct {
 	IdentityID          string   `json:"identity_id"`
 	PredecessorHandle   string   `json:"predecessor_handle"`
@@ -226,6 +273,13 @@ type KEMRewrapRequest struct {
 	SigningAlgorithm    string   `json:"signing_algorithm"`
 	KEMAlgorithm        string   `json:"kem_algorithm"`
 	Stages              []string `json:"stages,omitempty"`
+	// EmptyInventoryAttested is the operator's statement that the predecessor
+	// epoch holds no KEM-wrapped data keys to move; without it a stage with no
+	// registered envelopes stays key_ready instead of completing.
+	EmptyInventoryAttested bool `json:"empty_inventory_attested,omitempty"`
+	// InventorySequence is set by the control plane at acceptance (the
+	// predecessor epoch's inventory snapshot); a client value is ignored.
+	InventorySequence uint64 `json:"inventory_sequence,omitempty"`
 	// OperationID is the authenticated Idempotency-Key. It is never read from JSON.
 	OperationID string `json:"-"`
 }
@@ -287,6 +341,13 @@ type RewrapJobState struct {
 	CompletedStages int       `json:"completed_stages"`
 	Status          string    `json:"status"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	// DataKeys is how many envelopes the fenced predecessor epoch held in
+	// this stage; DataKeysRewrapped how many successor envelopes were written
+	// and read back for this request; DataReceiptSequence the stage
+	// completion event's sequence (0 until the data receipt lands).
+	DataKeys            int    `json:"data_keys"`
+	DataKeysRewrapped   int    `json:"data_keys_rewrapped"`
+	DataReceiptSequence uint64 `json:"data_receipt_sequence"`
 }
 
 type RetirementPolicyRequest struct {
@@ -397,6 +458,9 @@ type Service interface {
 	PostureReport(ctx context.Context, tenantID, identityID string) (PostureReportResponse, bool, error)
 	ListMisissuance(ctx context.Context, tenantID string) (MisissuanceListResponse, error)
 	ListFederationBridges(ctx context.Context, tenantID string) (FederationBridgeListResponse, error)
+	RegisterKEMDataKey(ctx context.Context, tenantID string, req KEMDataKeyRequest) (KEMDataKeyResponse, error)
+	ListKEMDataKeys(ctx context.Context, tenantID, identityID string, epoch uint64, stage string) (KEMDataKeyListResponse, error)
+	KEMPublicKey(ctx context.Context, tenantID, identityID string, epoch uint64) (KEMPublicKeyResponse, bool, error)
 }
 
 // NewAPIOptionsFactory returns the licensed-route factory that attaches the PCAS API
@@ -530,6 +594,34 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:       func(a *api.API) http.HandlerFunc { return kemRewrapHandler(a, svc) },
 			RequestSchema: "PCASKEMRewrapRequest", ResponseSchema: "PCASAsyncRequest",
 			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
+		},
+		{
+			Method: "POST", Path: "/api/v1/pcas/kem/data-keys", OperationID: "registerPCASKEMDataKey",
+			Summary:       "Register a KEM-wrapped data key for an identity epoch",
+			Handler:       func(a *api.API) http.HandlerFunc { return kemDataKeyRegisterHandler(a, svc) },
+			RequestSchema: "PCASKEMDataKeyRequest", ResponseSchema: "PCASKEMDataKey",
+			SuccessCode: "201", Mutation: true, Permission: authz.CertsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/pcas/kem/data-keys", OperationID: "listPCASKEMDataKeys",
+			Summary: "List an identity epoch's KEM-wrapped data keys and their re-wrap receipts",
+			Handler: func(a *api.API) http.HandlerFunc { return kemDataKeyListHandler(a, svc) },
+			Query: []api.RouteParam{
+				{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true},
+				{Name: "epoch", Type: "integer", Description: "KEM epoch the envelopes belong to", Required: true},
+				{Name: "stage", Type: "string", Description: "optional stage filter"},
+			},
+			ResponseSchema: "PCASKEMDataKeyList", SuccessCode: "200", Permission: authz.CertsRead,
+		},
+		{
+			Method: "GET", Path: "/api/v1/pcas/kem/public-key", OperationID: "getPCASKEMPublicKey",
+			Summary: "Read the public encapsulation key of an identity's KEM epoch",
+			Handler: func(a *api.API) http.HandlerFunc { return kemPublicKeyHandler(a, svc) },
+			Query: []api.RouteParam{
+				{Name: "identity_id", Type: "string", Description: "stable identity identifier", Required: true},
+				{Name: "epoch", Type: "integer", Description: "KEM epoch", Required: true},
+			},
+			ResponseSchema: "PCASKEMPublicKey", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/issuers", OperationID: "registerPCASIssuerAuthority",
@@ -910,6 +1002,72 @@ func kemRewrapHandler(a *api.API, svc Service) http.HandlerFunc {
 	})
 }
 
+func kemDataKeyRegisterHandler(a *api.API, svc Service) http.HandlerFunc {
+	return mutationHandler(a, "pcas_kem", "register_data_key", func(ctx context.Context, tenantID string, r *http.Request) (int, any, error) {
+		var req KEMDataKeyRequest
+		if err := api.DecodeJSON(r, &req); err != nil {
+			return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+		}
+		if req.IdentityID == "" || req.Epoch == 0 || req.TargetRef == "" || len(req.KEMCiphertext) == 0 || len(req.WrappedDEK) == 0 || len(req.DEKSHA256) == 0 {
+			return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id, epoch, target_ref, kem_ciphertext, wrapped_dek and dek_sha256 are required")
+		}
+		resp, err := svc.RegisterKEMDataKey(ctx, tenantID, req)
+		return http.StatusCreated, resp, err
+	})
+}
+
+func kemDataKeyListHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		identityID := r.URL.Query().Get("identity_id")
+		epoch, err := parseOptionalUint(r.URL.Query().Get("epoch"))
+		if identityID == "" || err != nil || epoch == 0 {
+			writeProblem(w, http.StatusBadRequest, "identity_id and a positive epoch query parameter are required")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.ListKEMDataKeys(r.Context(), tenantID, identityID, epoch, r.URL.Query().Get("stage"))
+		a.ObserveFeature("pcas_kem", "list_data_keys", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to list PCAS KEM data keys")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func kemPublicKeyHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		identityID := r.URL.Query().Get("identity_id")
+		epoch, err := parseOptionalUint(r.URL.Query().Get("epoch"))
+		if identityID == "" || err != nil || epoch == 0 {
+			writeProblem(w, http.StatusBadRequest, "identity_id and a positive epoch query parameter are required")
+			return
+		}
+		start := time.Now()
+		resp, found, err := svc.KEMPublicKey(r.Context(), tenantID, identityID, epoch)
+		a.ObserveFeature("pcas_kem", "public_key", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to read the PCAS KEM public key")
+			return
+		}
+		if !found {
+			writeProblem(w, http.StatusNotFound, "no KEM epoch is recorded for this identity and epoch")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
 func issuerAuthorityHandler(a *api.API, svc Service) http.HandlerFunc {
 	return mutationHandler(a, "pcas_issuer", "register", func(ctx context.Context, tenantID string, r *http.Request) (int, any, error) {
 		var req IssuerAuthorityRequest
@@ -1176,6 +1334,42 @@ func schemas() map[string]*api.Schema {
 			"algorithm":        api.StringSchema(),
 			"deployment_scope": api.StringSchema(),
 		}, "identity_id", "algorithm", "deployment_scope"),
+		"PCASKEMDataKeyRequest": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id":    api.StringSchema(),
+			"epoch":          api.IntegerSchema(),
+			"target_ref":     api.StringSchema(),
+			"stage":          api.StringSchema(),
+			"kem_ciphertext": api.StringSchema(),
+			"wrapped_dek":    api.StringSchema(),
+			"dek_sha256":     api.StringSchema(),
+		}, "identity_id", "epoch", "target_ref", "kem_ciphertext", "wrapped_dek", "dek_sha256"),
+		"PCASKEMDataKey": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id":          api.StringSchema(),
+			"epoch":                api.IntegerSchema(),
+			"target_ref":           api.StringSchema(),
+			"stage":                api.StringSchema(),
+			"kem_ciphertext":       api.StringSchema(),
+			"wrapped_dek":          api.StringSchema(),
+			"dek_sha256":           api.StringSchema(),
+			"ciphertext_sha256":    api.StringSchema(),
+			"rewrapped_from_epoch": api.IntegerSchema(),
+			"rewrap_request_id":    api.StringSchema(),
+			"readback_verified":    {Type: "boolean"},
+			"source_sequence":      api.IntegerSchema(),
+			"created_at":           api.TimestampSchema(),
+		}, "identity_id", "epoch", "target_ref", "stage", "kem_ciphertext", "wrapped_dek", "dek_sha256", "ciphertext_sha256", "readback_verified", "source_sequence", "created_at"),
+		"PCASKEMDataKeyList": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id": api.StringSchema(),
+			"epoch":       api.IntegerSchema(),
+			"items":       {Type: "array", Items: &api.Schema{Ref: "#/components/schemas/PCASKEMDataKey"}},
+		}, "identity_id", "epoch", "items"),
+		"PCASKEMPublicKey": api.ObjectSchema(map[string]*api.Schema{
+			"identity_id":    api.StringSchema(),
+			"epoch":          api.IntegerSchema(),
+			"kem_algorithm":  api.StringSchema(),
+			"public_key_der": api.StringSchema(),
+			"aad_template":   api.StringSchema(),
+		}, "identity_id", "epoch", "kem_algorithm", "public_key_der", "aad_template"),
 		"PCASRequestStatus": api.ObjectSchema(map[string]*api.Schema{
 			"request_id":   api.StringSchema(),
 			"kind":         api.StringSchema(),
@@ -1353,14 +1547,15 @@ func schemas() map[string]*api.Schema {
 			"foreign_chain":          api.ArraySchema(api.ObjectSchema(nil)),
 		}, "foreign_deployment_id", "local_deployment_id", "identity_id", "foreign_trust_root_der", "foreign_genesis"),
 		"PCASKEMRewrapRequest": api.ObjectSchema(map[string]*api.Schema{
-			"identity_id":           api.StringSchema(),
-			"predecessor_handle":    api.StringSchema(),
-			"predecessor_epoch":     api.IntegerSchema(),
-			"successor_sign_handle": api.StringSchema(),
-			"successor_kem_handle":  api.StringSchema(),
-			"signing_algorithm":     api.StringSchema(),
-			"kem_algorithm":         api.StringSchema(),
-			"stages":                api.ArraySchema(api.StringSchema()),
+			"empty_inventory_attested": api.BooleanSchema(),
+			"identity_id":              api.StringSchema(),
+			"predecessor_handle":       api.StringSchema(),
+			"predecessor_epoch":        api.IntegerSchema(),
+			"successor_sign_handle":    api.StringSchema(),
+			"successor_kem_handle":     api.StringSchema(),
+			"signing_algorithm":        api.StringSchema(),
+			"kem_algorithm":            api.StringSchema(),
+			"stages":                   api.ArraySchema(api.StringSchema()),
 		}, "identity_id", "signing_algorithm", "kem_algorithm"),
 		"PCASIssuerAuthorityRequest": api.ObjectSchema(map[string]*api.Schema{
 			"issuer_id":     api.StringSchema(),

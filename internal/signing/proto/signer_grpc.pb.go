@@ -45,6 +45,8 @@ const (
 	SignerService_ApplyDelegation_FullMethodName               = "/trstctl.signing.v1.SignerService/ApplyDelegation"
 	SignerService_GenerateSuccessorKEM_FullMethodName          = "/trstctl.signing.v1.SignerService/GenerateSuccessorKEM"
 	SignerService_Decapsulate_FullMethodName                   = "/trstctl.signing.v1.SignerService/Decapsulate"
+	SignerService_RewrapKEMDataKey_FullMethodName              = "/trstctl.signing.v1.SignerService/RewrapKEMDataKey"
+	SignerService_VerifyKEMDataKey_FullMethodName              = "/trstctl.signing.v1.SignerService/VerifyKEMDataKey"
 	SignerService_ZeroizeKey_FullMethodName                    = "/trstctl.signing.v1.SignerService/ZeroizeKey"
 	SignerService_GatedIssue_FullMethodName                    = "/trstctl.signing.v1.SignerService/GatedIssue"
 	SignerService_ProvisionAgentRootAnchor_FullMethodName      = "/trstctl.signing.v1.SignerService/ProvisionAgentRootAnchor"
@@ -134,6 +136,12 @@ type SignerServiceClient interface {
 	// secret is byte-native secret material for immediate re-wrap use and callers
 	// must wipe it after use.
 	Decapsulate(ctx context.Context, in *DecapsulateRequest, opts ...grpc.CallOption) (*DecapsulateResponse, error)
+	// RewrapKEMDataKey moves one KEM-wrapped data key from the predecessor KEM
+	// key to the successor without the data key leaving signer custody.
+	RewrapKEMDataKey(ctx context.Context, in *RewrapKEMDataKeyRequest, opts ...grpc.CallOption) (*RewrapKEMDataKeyResponse, error)
+	// VerifyKEMDataKey opens an envelope under a held KEM key and returns only
+	// the data key's SHA-256: the independent readback after a re-wrap.
+	VerifyKEMDataKey(ctx context.Context, in *VerifyKEMDataKeyRequest, opts ...grpc.CallOption) (*VerifyKEMDataKeyResponse, error)
 	// ZeroizeKey removes a key from signer custody. It applies to KEM custody first
 	// and then falls through to signing-key custody, so retirement can destroy either
 	// class through one PCAS RPC.
@@ -327,6 +335,26 @@ func (c *signerServiceClient) Decapsulate(ctx context.Context, in *DecapsulateRe
 	return out, nil
 }
 
+func (c *signerServiceClient) RewrapKEMDataKey(ctx context.Context, in *RewrapKEMDataKeyRequest, opts ...grpc.CallOption) (*RewrapKEMDataKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RewrapKEMDataKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_RewrapKEMDataKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) VerifyKEMDataKey(ctx context.Context, in *VerifyKEMDataKeyRequest, opts ...grpc.CallOption) (*VerifyKEMDataKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyKEMDataKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_VerifyKEMDataKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *signerServiceClient) ZeroizeKey(ctx context.Context, in *ZeroizeKeyRequest, opts ...grpc.CallOption) (*ZeroizeKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ZeroizeKeyResponse)
@@ -468,6 +496,12 @@ type SignerServiceServer interface {
 	// secret is byte-native secret material for immediate re-wrap use and callers
 	// must wipe it after use.
 	Decapsulate(context.Context, *DecapsulateRequest) (*DecapsulateResponse, error)
+	// RewrapKEMDataKey moves one KEM-wrapped data key from the predecessor KEM
+	// key to the successor without the data key leaving signer custody.
+	RewrapKEMDataKey(context.Context, *RewrapKEMDataKeyRequest) (*RewrapKEMDataKeyResponse, error)
+	// VerifyKEMDataKey opens an envelope under a held KEM key and returns only
+	// the data key's SHA-256: the independent readback after a re-wrap.
+	VerifyKEMDataKey(context.Context, *VerifyKEMDataKeyRequest) (*VerifyKEMDataKeyResponse, error)
 	// ZeroizeKey removes a key from signer custody. It applies to KEM custody first
 	// and then falls through to signing-key custody, so retirement can destroy either
 	// class through one PCAS RPC.
@@ -552,6 +586,12 @@ func (UnimplementedSignerServiceServer) GenerateSuccessorKEM(context.Context, *G
 }
 func (UnimplementedSignerServiceServer) Decapsulate(context.Context, *DecapsulateRequest) (*DecapsulateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Decapsulate not implemented")
+}
+func (UnimplementedSignerServiceServer) RewrapKEMDataKey(context.Context, *RewrapKEMDataKeyRequest) (*RewrapKEMDataKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RewrapKEMDataKey not implemented")
+}
+func (UnimplementedSignerServiceServer) VerifyKEMDataKey(context.Context, *VerifyKEMDataKeyRequest) (*VerifyKEMDataKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyKEMDataKey not implemented")
 }
 func (UnimplementedSignerServiceServer) ZeroizeKey(context.Context, *ZeroizeKeyRequest) (*ZeroizeKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ZeroizeKey not implemented")
@@ -851,6 +891,42 @@ func _SignerService_Decapsulate_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_RewrapKEMDataKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RewrapKEMDataKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).RewrapKEMDataKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_RewrapKEMDataKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).RewrapKEMDataKey(ctx, req.(*RewrapKEMDataKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_VerifyKEMDataKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyKEMDataKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).VerifyKEMDataKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_VerifyKEMDataKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).VerifyKEMDataKey(ctx, req.(*VerifyKEMDataKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SignerService_ZeroizeKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ZeroizeKeyRequest)
 	if err := dec(in); err != nil {
@@ -1021,6 +1097,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Decapsulate",
 			Handler:    _SignerService_Decapsulate_Handler,
+		},
+		{
+			MethodName: "RewrapKEMDataKey",
+			Handler:    _SignerService_RewrapKEMDataKey_Handler,
+		},
+		{
+			MethodName: "VerifyKEMDataKey",
+			Handler:    _SignerService_VerifyKEMDataKey_Handler,
 		},
 		{
 			MethodName: "ZeroizeKey",

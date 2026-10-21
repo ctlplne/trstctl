@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 )
@@ -32,6 +33,16 @@ func ErrStatus(status int, detail string) error { return errStatus(status, detai
 // ErrWithStatus wraps an arbitrary decode/domain error with an HTTP status for
 // the shared problem+json writer.
 func ErrWithStatus(status int, err error) error { return errWithStatus(status, err) }
+
+// ErrorStatus reports the HTTP status an ErrStatus or ErrWithStatus error
+// carries, or 0 for any other error. Licensed packages use it in tests.
+func ErrorStatus(err error) int {
+	var public *apiError
+	if errors.As(err, &public) {
+		return public.status
+	}
+	return 0
+}
 
 // Mutate runs a licensed mutating handler through the same idempotency path as
 // core routes.

@@ -501,9 +501,153 @@
           "ca_cert_der"
         ]
       },
+      "PCASKEMDataKey": {
+        "type": "object",
+        "properties": {
+          "ciphertext_sha256": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dek_sha256": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "kem_ciphertext": {
+            "type": "string"
+          },
+          "readback_verified": {
+            "type": "boolean"
+          },
+          "rewrap_request_id": {
+            "type": "string"
+          },
+          "rewrapped_from_epoch": {
+            "type": "integer"
+          },
+          "source_sequence": {
+            "type": "integer"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "target_ref": {
+            "type": "string"
+          },
+          "wrapped_dek": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "epoch",
+          "target_ref",
+          "stage",
+          "kem_ciphertext",
+          "wrapped_dek",
+          "dek_sha256",
+          "ciphertext_sha256",
+          "readback_verified",
+          "source_sequence",
+          "created_at"
+        ]
+      },
+      "PCASKEMDataKeyList": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PCASKEMDataKey"
+            }
+          }
+        },
+        "required": [
+          "identity_id",
+          "epoch",
+          "items"
+        ]
+      },
+      "PCASKEMDataKeyRequest": {
+        "type": "object",
+        "properties": {
+          "dek_sha256": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "kem_ciphertext": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "target_ref": {
+            "type": "string"
+          },
+          "wrapped_dek": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "epoch",
+          "target_ref",
+          "kem_ciphertext",
+          "wrapped_dek",
+          "dek_sha256"
+        ]
+      },
+      "PCASKEMPublicKey": {
+        "type": "object",
+        "properties": {
+          "aad_template": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "kem_algorithm": {
+            "type": "string"
+          },
+          "public_key_der": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "epoch",
+          "kem_algorithm",
+          "public_key_der",
+          "aad_template"
+        ]
+      },
       "PCASKEMRewrapRequest": {
         "type": "object",
         "properties": {
+          "empty_inventory_attested": {
+            "type": "boolean"
+          },
           "identity_id": {
             "type": "string"
           },
@@ -1644,6 +1788,128 @@
           }
         },
         "summary": "Issue a real X.509 leaf carrying the issuer PCAS epoch tuple"
+      }
+    },
+    "/api/v1/pcas/kem/data-keys": {
+      "get": {
+        "operationId": "listPCASKEMDataKeys",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "KEM epoch the envelopes belong to",
+            "in": "query",
+            "name": "epoch",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "optional stage filter",
+            "in": "query",
+            "name": "stage",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASKEMDataKeyList"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "List an identity epoch's KEM-wrapped data keys and their re-wrap receipts"
+      },
+      "post": {
+        "operationId": "registerPCASKEMDataKey",
+        "parameters": [
+          {
+            "description": "AN-5 idempotency key; replaying it returns the original result",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PCASKEMDataKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASKEMDataKey"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "Register a KEM-wrapped data key for an identity epoch"
+      }
+    },
+    "/api/v1/pcas/kem/public-key": {
+      "get": {
+        "operationId": "getPCASKEMPublicKey",
+        "parameters": [
+          {
+            "description": "stable identity identifier",
+            "in": "query",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "KEM epoch",
+            "in": "query",
+            "name": "epoch",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PCASKEMPublicKey"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "summary": "Read the public encapsulation key of an identity's KEM epoch"
       }
     },
     "/api/v1/pcas/kem/rewraps": {

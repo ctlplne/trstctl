@@ -781,6 +781,13 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 	if s.repo == nil || s.log == nil {
 		return AsyncRequestResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS KEM event log or projection store is unavailable")
 	}
+	// The request moves exactly the envelopes registered so far: snapshot the
+	// predecessor epoch's inventory into the request before it is digested.
+	inventory, err := s.repo.KEMDataKeyInventorySequence(ctx, tenantID, req.IdentityID, req.PredecessorEpoch)
+	if err != nil {
+		return AsyncRequestResponse{}, err
+	}
+	req.InventorySequence = inventory
 	requestID := ""
 	if req.OperationID != "" {
 		requestID = succession.KEMRewrapOperationRequestID(tenantID, req.OperationID)
@@ -796,6 +803,7 @@ func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEM
 	encoded, err := succession.Encode(succession.KEMRewrapRequestedV1{
 		TenantID: tenantID, IdentityID: req.IdentityID, PredecessorEpoch: req.PredecessorEpoch,
 		RequestID: resp.RequestID, RequestDigest: crypto.SHA256Sum(requestJSON), Stages: req.Stages,
+		InventorySequence: req.InventorySequence, EmptyInventoryAttested: req.EmptyInventoryAttested,
 	})
 	if err != nil {
 		return AsyncRequestResponse{}, err
@@ -1025,6 +1033,7 @@ func (s *service) RewrapStatus(ctx context.Context, tenantID, identityID string,
 		resp.Jobs = append(resp.Jobs, RewrapJobState{
 			JobID: job.JobID, Stage: job.Stage, TotalStages: job.TotalStages,
 			CompletedStages: job.CompletedStages, Status: job.Status, UpdatedAt: job.UpdatedAt,
+			DataKeys: job.DataKeys, DataKeysRewrapped: job.DataKeysRewrapped, DataReceiptSequence: job.DataReceiptSequence,
 		})
 	}
 	if predecessorEpoch != 0 {
@@ -1407,4 +1416,103 @@ func (s *service) RecordAck(ctx context.Context, tenantID string, req AckRequest
 		RelyingParty: req.RelyingParty,
 		RecordedAt:   recorded.Time,
 	}, nil
+}
+
+// RegisterKEMDataKey records one envelope for an identity epoch (A16). The
+// epoch must have a paired KEM public key, the envelope must be well formed,
+// and the epoch's inventory must not yet be fenced by an accepted re-wrap
+// request. The registration is an immutable event; identical replay returns
+// the same row, different bytes at the same tuple conflict.
+func (s *service) RegisterKEMDataKey(ctx context.Context, tenantID string, req KEMDataKeyRequest) (KEMDataKeyResponse, error) {
+	if strings.TrimSpace(req.IdentityID) != req.IdentityID || req.IdentityID == "" || req.Epoch == 0 || req.Epoch >= math.MaxInt64 {
+		return KEMDataKeyResponse{}, api.ErrStatus(http.StatusBadRequest, "PCAS KEM identity or epoch is invalid")
+	}
+	stage := req.Stage
+	if stage == "" {
+		stage = "default"
+	}
+	if err := pcasstore.ValidateKEMDataKeyEnvelope(req.TargetRef, stage, req.KEMCiphertext, req.WrappedDEK, req.DEKSHA256); err != nil {
+		return KEMDataKeyResponse{}, api.ErrWithStatus(http.StatusBadRequest, err)
+	}
+	if s.repo == nil || s.log == nil {
+		return KEMDataKeyResponse{}, api.ErrStatus(http.StatusServiceUnavailable, "PCAS KEM event log or projection store is unavailable")
+	}
+	if _, _, found, err := s.repo.KEMPublicKey(ctx, tenantID, req.IdentityID, req.Epoch); err != nil {
+		return KEMDataKeyResponse{}, err
+	} else if !found {
+		return KEMDataKeyResponse{}, api.ErrStatus(http.StatusConflict, "no KEM public key is recorded for this identity epoch; request a KEM re-wrap for the previous epoch first")
+	}
+	encoded, err := succession.Encode(succession.KEMDataKeyRegisteredV1{
+		TenantID: tenantID, IdentityID: req.IdentityID, Epoch: req.Epoch, TargetRef: req.TargetRef, Stage: stage,
+		KEMCiphertext: req.KEMCiphertext, WrappedDEK: req.WrappedDEK, DEKSHA256: req.DEKSHA256,
+	})
+	if err != nil {
+		return KEMDataKeyResponse{}, err
+	}
+	encoded.ID = succession.KEMDataKeyEventID(tenantID, req.IdentityID, req.Epoch, req.TargetRef, false)
+	var recorded events.Event
+	if prior, found, err := s.log.EventByID(ctx, encoded.ID); err != nil {
+		return KEMDataKeyResponse{}, err
+	} else if found {
+		if prior.TenantID != tenantID || prior.Type != encoded.Type || !bytes.Equal(prior.Data, encoded.Data) {
+			return KEMDataKeyResponse{}, api.ErrStatus(http.StatusConflict, "a different envelope is already registered for this identity epoch and target_ref")
+		}
+		recorded = prior
+	} else {
+		recorded, err = s.log.Append(ctx, encoded)
+		if err != nil {
+			return KEMDataKeyResponse{}, err
+		}
+	}
+	if err := s.repo.ApplyKEMDataKeyEvent(ctx, recorded); err != nil {
+		return KEMDataKeyResponse{}, api.ErrWithStatus(http.StatusConflict, err)
+	}
+	rows, err := s.repo.ListKEMDataKeys(ctx, tenantID, req.IdentityID, req.Epoch, "")
+	if err != nil {
+		return KEMDataKeyResponse{}, err
+	}
+	for _, row := range rows {
+		if row.TargetRef == req.TargetRef {
+			return kemDataKeyResponse(row), nil
+		}
+	}
+	return KEMDataKeyResponse{}, errors.New("pcas KEM data key: registered envelope did not project")
+}
+
+func (s *service) ListKEMDataKeys(ctx context.Context, tenantID, identityID string, epoch uint64, stage string) (KEMDataKeyListResponse, error) {
+	resp := KEMDataKeyListResponse{IdentityID: identityID, Epoch: epoch, Items: []KEMDataKeyResponse{}}
+	if s.repo == nil {
+		return resp, nil
+	}
+	rows, err := s.repo.ListKEMDataKeys(ctx, tenantID, identityID, epoch, strings.TrimSpace(stage))
+	if err != nil {
+		return KEMDataKeyListResponse{}, err
+	}
+	for _, row := range rows {
+		resp.Items = append(resp.Items, kemDataKeyResponse(row))
+	}
+	return resp, nil
+}
+
+func (s *service) KEMPublicKey(ctx context.Context, tenantID, identityID string, epoch uint64) (KEMPublicKeyResponse, bool, error) {
+	if s.repo == nil {
+		return KEMPublicKeyResponse{}, false, nil
+	}
+	alg, pub, found, err := s.repo.KEMPublicKey(ctx, tenantID, identityID, epoch)
+	if err != nil || !found {
+		return KEMPublicKeyResponse{}, false, err
+	}
+	return KEMPublicKeyResponse{
+		IdentityID: identityID, Epoch: epoch, KEMAlgorithm: alg, PublicKeyDER: pub,
+		AADTemplate: string(succession.KEMDataKeyAAD(identityID, epoch, "<target_ref>")),
+	}, true, nil
+}
+
+func kemDataKeyResponse(row pcasstore.KEMDataKey) KEMDataKeyResponse {
+	return KEMDataKeyResponse{
+		IdentityID: row.IdentityID, Epoch: row.Epoch, TargetRef: row.TargetRef, Stage: row.Stage,
+		KEMCiphertext: row.KEMCiphertext, WrappedDEK: row.WrappedDEK, DEKSHA256: row.DEKSHA256, CiphertextSHA256: row.CiphertextSHA256,
+		RewrappedFromEpoch: row.RewrappedFromEpoch, RewrapRequestID: row.RewrapRequestID, ReadbackVerified: row.ReadbackVerified,
+		SourceSequence: row.SourceSequence, CreatedAt: row.CreatedAt,
+	}
 }

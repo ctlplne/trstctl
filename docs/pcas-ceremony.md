@@ -69,8 +69,11 @@ form, and is usable by the signer only through the module's `DigestSigner` handl
 The same ceremony, plus: generate the successor in-module, then mint a **succession
 record** advancing the authority's epoch (predecessor attests, successor possesses).
 The predecessor is retired only after the re-wrap-before-retire gate and the evidence
-quorum are satisfied (claims 8/15; INT-12/INT-17). Never delete the predecessor handle
-before retirement is recorded.
+quorum are satisfied (claims 8/15; INT-12/INT-17). The gate opens when every data-key
+envelope registered for the predecessor KEM epoch has a signer-read-back successor
+envelope and a per-target receipt (`pcas rewrap status` shows `data_keys` against
+`data_keys_rewrapped` per stage). Never delete the predecessor handle before
+retirement is recorded.
 
 ### Failure / abort conditions (any one → abort and file an incident)
 

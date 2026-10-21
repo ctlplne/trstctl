@@ -89,3 +89,13 @@ func ApplyKEMRewrapRecordEventTx(ctx context.Context, tx pgx.Tx, ev eventspec.Ev
 		WHERE identity_algorithm_epoch.epoch < EXCLUDED.epoch`, p.IdentityID, int64(p.Epoch))
 	return err
 }
+
+// kemPublicFromRecord reads the KEM algorithm and public key out of a stored
+// paired record; a plain succession record has none.
+func kemPublicFromRecord(recordJSON []byte) (string, []byte, bool) {
+	var rec pcaskem.PairedRecord
+	if err := json.Unmarshal(recordJSON, &rec); err != nil || rec.KEMAlg == "" || len(rec.KEMPub) == 0 {
+		return "", nil, false
+	}
+	return rec.KEMAlg, append([]byte(nil), rec.KEMPub...), true
+}

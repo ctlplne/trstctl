@@ -59,6 +59,14 @@ func (f *fakeKEMCustody) ZeroizeKey(_ context.Context, handle string) error {
 
 func (f *fakeKEMCustody) DestroyAll() { f.destroyed = true }
 
+func (f *fakeKEMCustody) RewrapDataKey(_ context.Context, _, successorHandle string, kemCiphertext, wrappedDEK, _, _ []byte) ([]byte, []byte, []byte, error) {
+	return append([]byte("ct:"+successorHandle+":"), kemCiphertext...), append([]byte("dek:"), wrappedDEK...), make([]byte, 32), nil
+}
+
+func (f *fakeKEMCustody) VerifyDataKey(context.Context, string, []byte, []byte, []byte) ([]byte, error) {
+	return make([]byte, 32), nil
+}
+
 func TestServerKEMCustodyHandlers(t *testing.T) {
 	ctx := context.Background()
 	custody := &fakeKEMCustody{}
