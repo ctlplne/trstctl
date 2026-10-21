@@ -674,6 +674,12 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 			if err := hostRollback.FinalizePQCRestore(intent.Connector, intent.TargetID, intent.PQCRunID, intent.PredecessorFingerprint); err != nil {
 				return false
 			}
+		} else if intent.PQCRunID == "" && accepted && reportErr == nil && outcome != transport.OutcomeVerifyFailed {
+			// The predecessor is back; the rolled-back successor's sealed key
+			// no longer has a job that can resume it.
+			if err := hostRollback.ClearRolledBackHostRenewPending(intent.Connector, intent.TargetID, intent.SuccessorFingerprint); err != nil {
+				return false
+			}
 		}
 		return outcome != transport.OutcomeVerifyFailed
 	}

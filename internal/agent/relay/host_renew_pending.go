@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -218,6 +219,37 @@ func (s *HostRollbackStore) ClearHostRenewPending(connectorName, targetID string
 	defer wipeHostRenewPending(p)
 	if p.JobID != jobID || p.Binding != binding || p.Fingerprint != fingerprint {
 		return ErrHostRollbackStateMismatch
+	}
+	if err := os.Remove(s.hostRenewPath(connectorName, targetID)); err != nil { // #nosec G703 -- derived agent-owned state path
+		return err
+	}
+	return syncHostRenewDirectory(s.root)
+}
+
+// ClearRolledBackHostRenewPending removes the pending slot a rolled-back
+// successor left behind. A successor that failed its live gate keeps its sealed
+// key so the SAME job can resume; once the control plane rolls that successor
+// back the slot is stale, and leaving it would refuse every later host-generated
+// job for the target as "another job's key". Only a slot whose certificate was
+// signed is cleared, and only when it is the successor being undone (or the
+// rollback names no successor): an unsigned key belongs to a job still in flight.
+func (s *HostRollbackStore) ClearRolledBackHostRenewPending(connectorName, targetID, successorFingerprint string) error {
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	p, err := s.loadHostRenew(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer wipeHostRenewPending(p)
+	if p.Fingerprint == "" {
+		return nil
+	}
+	if want := strings.TrimSpace(successorFingerprint); want != "" && !sameHostRollbackFingerprint(p.Fingerprint, want) {
+		return nil
 	}
 	if err := os.Remove(s.hostRenewPath(connectorName, targetID)); err != nil { // #nosec G703 -- derived agent-owned state path
 		return err
