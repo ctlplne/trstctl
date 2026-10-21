@@ -368,6 +368,9 @@ function rogueTypeLabel(type: string, t: (key: MessageKey, values?: Record<strin
     owner_missing: "certificates.rogue.typeOwnerMissing",
     issuer_missing: "certificates.rogue.typeIssuerMissing",
   };
+  if (type.startsWith("customer_policy:")) {
+    return t("certificates.rogue.typeCustomerPolicy", { rule: type.slice("customer_policy:".length) });
+  }
   const key = keys[type];
   return key ? t(key) : type.replaceAll("_", " ");
 }

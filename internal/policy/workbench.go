@@ -48,6 +48,8 @@ type DryRunResult struct {
 	Reason       string        `json:"reason,omitempty"`
 	Error        string        `json:"error,omitempty"`
 	Trace        []DryRunTrace `json:"trace"`
+	// Violations are the certificate_posture rules a posture dry run fired (A42).
+	Violations []PostureViolation `json:"violations,omitempty"`
 }
 
 // DryRunTrace is one bounded, non-secret evaluation trace row.
@@ -98,6 +100,15 @@ func dryRunLifecycle(ctx context.Context, module string, input map[string]any, l
 		return result, nil
 	}
 	result.Valid = true
+	if action, _ := input["action"].(string); Action(strings.TrimSpace(action)) == ActionCertificatePosture {
+		result.Violations = postureFrom(rs)
+		result.Deny = len(result.Violations) > 0
+		result.Allow = !result.Deny
+		if result.Deny {
+			result.Reason = result.Violations[0].Reason
+		}
+		return result, nil
+	}
 	decision := decisionFrom(rs)
 	result.Allow = decision.Allow
 	result.Deny = !decision.Allow
@@ -164,8 +175,12 @@ func validateLifecycleDryRunInput(input map[string]any) error {
 	action, _ := input["action"].(string)
 	switch Action(strings.TrimSpace(action)) {
 	case ActionIssue, ActionDeploy, ActionRevoke, ActionCodeSign:
+	case ActionCertificatePosture:
+		if _, ok := input["certificate"].(map[string]any); !ok {
+			return errors.New("policy: certificate_posture dry-run input.certificate must be an object of certificate facts")
+		}
 	default:
-		return errors.New("policy: lifecycle dry-run input.action must be issue, deploy, or revoke")
+		return errors.New("policy: lifecycle dry-run input.action must be issue, deploy, revoke, code_sign, or certificate_posture")
 	}
 	if tenant, _ := input["tenant_id"].(string); strings.TrimSpace(tenant) == "" {
 		return errors.New("policy: dry-run input.tenant_id is required")

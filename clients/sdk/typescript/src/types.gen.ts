@@ -15169,6 +15169,12 @@ export interface components {
             policy_max_days?: number;
             /** @enum {string} */
             policy_status: "rogue" | "non_compliant";
+            policy_violations?: {
+                reason?: string;
+                rule: string;
+                /** @enum {string} */
+                severity: "critical" | "high" | "medium" | "low";
+            }[];
             recommendation: string;
             risk_score: number;
             /** Format: uuid */
@@ -15189,6 +15195,9 @@ export interface components {
             findings: components["schemas"]["RogueCertificateFinding"][];
             /** Format: date-time */
             generated_at: string;
+            policy_evaluated: number;
+            policy_evaluation_errors: number;
+            policy_module_sha256?: string;
             recommended_actions: string[];
             summary: components["schemas"]["RogueCertificateSummary"];
         };
@@ -15204,6 +15213,7 @@ export interface components {
             medium: number;
             non_compliant: number;
             owner_missing: number;
+            policy_violations?: number;
             recommendations: number;
             rogue: number;
             total_analyzed: number;

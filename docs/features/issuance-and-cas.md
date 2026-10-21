@@ -743,7 +743,9 @@ the external log's responsibility.
 
 Rogue and non-compliant certificate posture is served at
 `GET /api/v1/revocation/rogue-certificates` / `trstctl-cli revocation
-rogue-certificates` and the Certificates console: unexpected CT findings from
+rogue-certificates` and the Certificates console: the tenant's own
+`certificate_posture` rules from its active policy module (see the policy engine
+in [policy and governance](policy-and-governance.md)), unexpected CT findings from
 monitored logs combined with policy violations such as weak keys, expired active
 certificates, over-long public-TLS lifetimes, and missing owners/issuer metadata —
 metadata and projection references only, never certificate PEM or private-key

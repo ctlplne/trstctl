@@ -8196,6 +8196,10 @@ export const messages = {
     defaultMessage: "queue Certificate Transparency submission",
     description: "Action phrase used in CT submission error messages.",
   },
+  "certificates.rogue.typeCustomerPolicy": {
+    defaultMessage: "Tenant policy: {rule}",
+    description: "Finding type label for a certificate_posture rule from the tenant's active policy module.",
+  },
   "certificates.rogue.heading": {
     defaultMessage: "Rogue certificate detection",
     description: "Heading for the rogue and non-compliant certificate posture panel.",

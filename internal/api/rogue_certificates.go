@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -33,6 +34,19 @@ type rogueCertificatePostureResponse struct {
 	Findings           []rogueCertificateFinding `json:"findings"`
 	RecommendedActions []string                  `json:"recommended_actions"`
 	EvidenceRefs       []string                  `json:"evidence_refs"`
+	// Tenant posture rules (A42): the active lifecycle module whose
+	// certificate_posture rules were evaluated, how many certificates were
+	// evaluated, and how many evaluations failed (those certificates carry no
+	// policy verdict rather than a false clean one).
+	PolicyModuleSHA256     string `json:"policy_module_sha256,omitempty"`
+	PolicyEvaluated        int    `json:"policy_evaluated"`
+	PolicyEvaluationErrors int    `json:"policy_evaluation_errors"`
+}
+
+type rogueCertificatePolicyViolation struct {
+	Rule     string `json:"rule"`
+	Severity string `json:"severity"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 type rogueCertificateSummary struct {
@@ -51,37 +65,42 @@ type rogueCertificateSummary struct {
 	Medium             int `json:"medium"`
 	Low                int `json:"low"`
 	Recommendations    int `json:"recommendations"`
+	PolicyViolations   int `json:"policy_violations"`
 }
 
 type rogueCertificateFinding struct {
-	ID             string     `json:"id"`
-	CertificateID  string     `json:"certificate_id,omitempty"`
-	DiscoveryID    string     `json:"discovery_id,omitempty"`
-	SourceID       string     `json:"source_id,omitempty"`
-	RunID          string     `json:"run_id,omitempty"`
-	Kind           string     `json:"kind"`
-	PolicyStatus   string     `json:"policy_status"`
-	Subject        string     `json:"subject"`
-	Issuer         string     `json:"issuer,omitempty"`
-	Serial         string     `json:"serial,omitempty"`
-	Fingerprint    string     `json:"fingerprint,omitempty"`
-	DNSNames       []string   `json:"dns_names,omitempty"`
-	Source         string     `json:"source"`
-	OwnerID        string     `json:"owner_id,omitempty"`
-	Status         string     `json:"status,omitempty"`
-	FindingTypes   []string   `json:"finding_types"`
-	Severity       string     `json:"severity"`
-	RiskScore      int        `json:"risk_score"`
-	LifetimeDays   int        `json:"lifetime_days,omitempty"`
-	PolicyMaxDays  int        `json:"policy_max_days,omitempty"`
-	LogURL         string     `json:"log_url,omitempty"`
-	LogIndex       *int64     `json:"log_index,omitempty"`
-	MatchedDomain  string     `json:"matched_domain,omitempty"`
-	Recommendation string     `json:"recommendation"`
-	EvidenceRefs   []string   `json:"evidence_refs"`
-	DiscoveredAt   *time.Time `json:"discovered_at,omitempty"`
-	NotBefore      *time.Time `json:"not_before,omitempty"`
-	NotAfter       *time.Time `json:"not_after,omitempty"`
+	ID             string   `json:"id"`
+	CertificateID  string   `json:"certificate_id,omitempty"`
+	DiscoveryID    string   `json:"discovery_id,omitempty"`
+	SourceID       string   `json:"source_id,omitempty"`
+	RunID          string   `json:"run_id,omitempty"`
+	Kind           string   `json:"kind"`
+	PolicyStatus   string   `json:"policy_status"`
+	Subject        string   `json:"subject"`
+	Issuer         string   `json:"issuer,omitempty"`
+	Serial         string   `json:"serial,omitempty"`
+	Fingerprint    string   `json:"fingerprint,omitempty"`
+	DNSNames       []string `json:"dns_names,omitempty"`
+	Source         string   `json:"source"`
+	OwnerID        string   `json:"owner_id,omitempty"`
+	Status         string   `json:"status,omitempty"`
+	FindingTypes   []string `json:"finding_types"`
+	Severity       string   `json:"severity"`
+	RiskScore      int      `json:"risk_score"`
+	LifetimeDays   int      `json:"lifetime_days,omitempty"`
+	PolicyMaxDays  int      `json:"policy_max_days,omitempty"`
+	LogURL         string   `json:"log_url,omitempty"`
+	LogIndex       *int64   `json:"log_index,omitempty"`
+	MatchedDomain  string   `json:"matched_domain,omitempty"`
+	Recommendation string   `json:"recommendation"`
+	EvidenceRefs   []string `json:"evidence_refs"`
+	// PolicyViolations are the tenant certificate_posture rules this
+	// certificate violates (A42); each also appears in finding_types as
+	// customer_policy:<rule>.
+	PolicyViolations []rogueCertificatePolicyViolation `json:"policy_violations,omitempty"`
+	DiscoveredAt     *time.Time                        `json:"discovered_at,omitempty"`
+	NotBefore        *time.Time                        `json:"not_before,omitempty"`
+	NotAfter         *time.Time                        `json:"not_after,omitempty"`
 }
 
 func (a *API) listRogueCertificates(w http.ResponseWriter, r *http.Request) {
@@ -117,13 +136,45 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 	if err != nil {
 		return rogueCertificatePostureResponse{}, err
 	}
+	posture, _ := a.gate.Policy.(PosturePolicyEvaluator)
+	moduleSHA := ""
+	if posture != nil {
+		if _, info, err := posture.ActiveModule(ctx, tenantID); err == nil {
+			moduleSHA = info.ModuleSHA256
+			out.Coverage = append(out.Coverage, "customer_policy")
+			out.PolicyModuleSHA256 = moduleSHA
+			out.EvidenceRefs = append(out.EvidenceRefs, "policy:module:"+moduleSHA)
+		} else {
+			posture = nil
+			out.PolicyEvaluationErrors++
+		}
+	}
 	out.Summary.TotalAnalyzed += len(certs)
 	for _, cert := range certs {
 		finding, ok := rogueCertificateFindingForCertificate(cert, now)
-		if !ok {
+		if ok {
+			out.addRogueCertificateFinding(finding)
+		}
+		if posture == nil || cert.Status == "revoked" || cert.Status == "superseded" {
 			continue
 		}
-		out.addRogueCertificateFinding(finding)
+		violations, err := posture.EvaluatePosture(ctx, policy.Input{
+			Action: policy.ActionCertificatePosture, TenantID: tenantID, Subject: cert.ID,
+			Certificate: rogueCertificateFacts(cert, now),
+		})
+		if err != nil {
+			out.PolicyEvaluationErrors++
+			continue
+		}
+		out.PolicyEvaluated++
+		if len(violations) == 0 {
+			continue
+		}
+		var existing *rogueCertificateFinding
+		if ok {
+			existing = &out.Findings[len(out.Findings)-1]
+		}
+		out.applyRoguePolicyViolations(cert, existing, violations, moduleSHA)
 	}
 
 	rows, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, 500)
@@ -190,6 +241,107 @@ func (r *rogueCertificatePostureResponse) addRogueCertificateFinding(finding rog
 	default:
 		r.Summary.Low++
 	}
+}
+
+// rogueCertificateFacts is the public metadata a tenant posture rule may read.
+func rogueCertificateFacts(cert store.Certificate, now time.Time) *policy.CertificateFacts {
+	facts := &policy.CertificateFacts{
+		ID: cert.ID, Subject: cert.Subject, Issuer: cert.Issuer, Serial: cert.Serial, Fingerprint: cert.Fingerprint,
+		DNSNames: append([]string(nil), cert.SANs...), KeyAlgorithm: cert.KeyAlgorithm,
+		NotBefore: cert.NotBefore, NotAfter: cert.NotAfter, Status: firstNonEmpty(cert.Status, "active"),
+		Source: firstNonEmpty(cert.Source, "inventory"), CAID: cert.CAID, DeploymentLocation: cert.DeploymentLocation,
+	}
+	if cert.OwnerID != nil {
+		facts.OwnerID = strings.TrimSpace(*cert.OwnerID)
+	}
+	if cert.NotBefore != nil && cert.NotAfter != nil && cert.NotAfter.After(*cert.NotBefore) {
+		facts.LifetimeDays = int(cert.NotAfter.Sub(*cert.NotBefore).Hours() / 24)
+	}
+	if cert.NotAfter != nil {
+		facts.DaysUntilExpiry = int(cert.NotAfter.Sub(now).Hours() / 24)
+	}
+	return facts
+}
+
+// applyRoguePolicyViolations records the tenant rules a certificate violates
+// (A42): merged into the certificate's existing finding when it already has
+// one, else as a policy-only non-compliant finding. The severity rises to the
+// strongest rule and never falls; an unknown severity reads as medium.
+func (r *rogueCertificatePostureResponse) applyRoguePolicyViolations(cert store.Certificate, existing *rogueCertificateFinding, violations []policy.PostureViolation, moduleSHA string) {
+	if len(violations) == 0 {
+		return
+	}
+	risk := 0
+	var types []string
+	var recorded []rogueCertificatePolicyViolation
+	for _, v := range violations {
+		severity := v.Severity
+		switch severity {
+		case "critical", "high", "medium", "low":
+		default:
+			severity = "medium"
+		}
+		risk = maxInt(risk, rogueCertificatePolicySeverityRisk(severity))
+		types = append(types, "customer_policy:"+v.Rule)
+		recorded = append(recorded, rogueCertificatePolicyViolation{Rule: v.Rule, Severity: severity, Reason: v.Reason})
+	}
+	r.Summary.PolicyViolations += len(recorded)
+	evidence := "policy:module:" + moduleSHA
+	if existing != nil {
+		existing.FindingTypes = append(existing.FindingTypes, types...)
+		existing.PolicyViolations = append(existing.PolicyViolations, recorded...)
+		existing.EvidenceRefs = append(existing.EvidenceRefs, evidence)
+		if risk > existing.RiskScore {
+			r.Summary.adjustSeverity(existing.Severity, rogueCertificateSeverity(risk))
+			existing.RiskScore = risk
+			existing.Severity = rogueCertificateSeverity(risk)
+		}
+		return
+	}
+	ownerID := ""
+	if cert.OwnerID != nil {
+		ownerID = strings.TrimSpace(*cert.OwnerID)
+	}
+	r.addRogueCertificateFinding(rogueCertificateFinding{
+		ID: "certificate:" + cert.ID, CertificateID: cert.ID, Kind: "non_compliant_certificate", PolicyStatus: "non_compliant",
+		Subject: firstNonEmpty(cert.Subject, cert.Fingerprint, cert.ID), Issuer: cert.Issuer, Serial: cert.Serial, Fingerprint: cert.Fingerprint,
+		DNSNames: append([]string(nil), cert.SANs...), Source: firstNonEmpty(cert.Source, "inventory"), OwnerID: ownerID,
+		Status: firstNonEmpty(cert.Status, "active"), FindingTypes: types, Severity: rogueCertificateSeverity(risk), RiskScore: risk,
+		Recommendation:   "Replace or revoke this certificate, or revise the tenant posture rule it violates; the rule names its own reason.",
+		EvidenceRefs:     []string{"projection:certificates:" + cert.ID, "certificate:fingerprint:" + cert.Fingerprint, evidence},
+		PolicyViolations: recorded, NotBefore: cert.NotBefore, NotAfter: cert.NotAfter,
+	})
+}
+
+func rogueCertificatePolicySeverityRisk(severity string) int {
+	switch severity {
+	case "critical":
+		return 95
+	case "high":
+		return 80
+	case "medium":
+		return 60
+	default:
+		return 30
+	}
+}
+
+// adjustSeverity moves one finding between severity buckets after a merge.
+func (s *rogueCertificateSummary) adjustSeverity(from, to string) {
+	bump := func(severity string, delta int) {
+		switch severity {
+		case "critical":
+			s.Critical += delta
+		case "high":
+			s.High += delta
+		case "medium":
+			s.Medium += delta
+		default:
+			s.Low += delta
+		}
+	}
+	bump(from, -1)
+	bump(to, 1)
 }
 
 func rogueCertificateFindingForCertificate(cert store.Certificate, now time.Time) (rogueCertificateFinding, bool) {

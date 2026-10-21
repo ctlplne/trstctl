@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/webhook"
+	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -862,4 +864,103 @@ func discoveryFindingsForRun(t *testing.T, h *servedHarness, tok, runID string) 
 		t.Fatalf("decode discovery findings: %v (%s)", err, body)
 	}
 	return out
+}
+
+// A42: a tenant's active lifecycle policy may declare certificate_posture
+// rules; the rogue listing evaluates them over the inventory and reports each
+// violation as a finding, naming the module that produced it.
+func TestServedRogueCertificatesEvaluateTenantPostureRules(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.EnablePolicyGate = true
+	})
+	reader := seedScopedToken(t, h.store, h.tenant, "certs:read")
+	author := seedScopedTokenSubject(t, h.store, h.tenant, "posture-author@example.test", "policy:read", "policy:write")
+	now := time.Now().UTC()
+	notBefore, notAfter := now.Add(-time.Hour), now.Add(60*24*time.Hour)
+	owner, err := h.store.CreateOwner(t.Context(), store.Owner{TenantID: h.tenant, Kind: store.OwnerWorkload, Name: "posture-vendor"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerID := owner.ID
+	if _, err := h.store.UpsertCertificate(t.Context(), store.Certificate{
+		TenantID: h.tenant, Subject: "CN=vendor.example.test", SANs: []string{"vendor.example.test"},
+		Issuer: "CN=Untrusted Vendor CA", Serial: "2002", Fingerprint: "vendor-leaf-fp", KeyAlgorithm: "ECDSA-P256",
+		NotBefore: &notBefore, NotAfter: &notAfter, OwnerID: &ownerID, Source: "import",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	listPosture := func() (int, []byte) {
+		return secretsReq(t, h, http.MethodGet, "/api/v1/revocation/rogue-certificates", reader, nil)
+	}
+	status, body := listPosture()
+	if status != http.StatusOK || bytes.Contains(body, []byte("customer_policy:")) {
+		t.Fatalf("before any posture rule: %d %s; want no policy findings", status, body)
+	}
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/policy/versions", author, "a42-policy-create", map[string]any{
+		"kind": "lifecycle", "description": "Forbid vendor CA leaves", "change_ref": "github:security/posture#1",
+		"evidence_refs": []string{"pr:posture-1"},
+		"module": policy.BaseModule + `
+certificate_posture contains {"rule": "vendor-ca-forbidden", "severity": "high", "reason": "leaves from the vendor CA are not sanctioned"} if {
+	input.action == "certificate_posture"
+	input.certificate.issuer == "CN=Untrusted Vendor CA"
+}
+`,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create posture policy version = %d %s", status, raw)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &created); err != nil || created.ID == "" {
+		t.Fatal(err)
+	}
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/policy/versions/"+created.ID+"/activate", author, "a42-policy-activate",
+		map[string]any{"reason": "posture rules reviewed", "evidence_refs": []string{"pr:posture-1"}})
+	if status != http.StatusOK {
+		t.Fatalf("activate posture policy = %d %s", status, raw)
+	}
+	status, body = listPosture()
+	if status != http.StatusOK {
+		t.Fatalf("list after posture rule = %d %s", status, body)
+	}
+	var posture struct {
+		Coverage           []string `json:"coverage"`
+		PolicyModuleSHA256 string   `json:"policy_module_sha256"`
+		PolicyEvaluated    int      `json:"policy_evaluated"`
+		Summary            struct {
+			PolicyViolations int `json:"policy_violations"`
+			High             int `json:"high"`
+		} `json:"summary"`
+		Findings []struct {
+			Subject          string   `json:"subject"`
+			FindingTypes     []string `json:"finding_types"`
+			Severity         string   `json:"severity"`
+			PolicyViolations []struct {
+				Rule, Severity, Reason string
+			} `json:"policy_violations"`
+			EvidenceRefs []string `json:"evidence_refs"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &posture); err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(posture.Coverage, "customer_policy") || posture.PolicyModuleSHA256 == "" || posture.PolicyEvaluated < 1 || posture.Summary.PolicyViolations != 1 {
+		t.Fatalf("posture evaluation evidence = coverage %v module %q evaluated %d summary %+v", posture.Coverage, posture.PolicyModuleSHA256, posture.PolicyEvaluated, posture.Summary)
+	}
+	var found bool
+	for _, finding := range posture.Findings {
+		if finding.Subject != "CN=vendor.example.test" {
+			continue
+		}
+		found = true
+		if !containsString(finding.FindingTypes, "customer_policy:vendor-ca-forbidden") || finding.Severity != "high" ||
+			len(finding.PolicyViolations) != 1 || finding.PolicyViolations[0].Reason == "" ||
+			!containsString(finding.EvidenceRefs, "policy:module:"+posture.PolicyModuleSHA256) {
+			t.Fatalf("vendor finding = %+v", finding)
+		}
+	}
+	if !found {
+		t.Fatalf("the vendor leaf was not reported: %s", body)
+	}
 }

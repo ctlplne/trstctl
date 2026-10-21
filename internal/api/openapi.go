@@ -1773,6 +1773,7 @@ func componentSchemas() map[string]*Schema {
 		"medium":              {Type: "integer"},
 		"low":                 {Type: "integer"},
 		"recommendations":     {Type: "integer"},
+		"policy_violations":   {Type: "integer"},
 	}, "total_analyzed", "findings", "rogue", "non_compliant", "ct_unexpected", "weak_key", "lifetime_violations", "expired_active", "owner_missing", "issuer_missing", "critical", "high", "medium", "low", "recommendations")
 	rogueCertificateFinding := object(map[string]*Schema{
 		"id":              str(),
@@ -1800,19 +1801,25 @@ func componentSchemas() map[string]*Schema {
 		"matched_domain":  str(),
 		"recommendation":  str(),
 		"evidence_refs":   {Type: "array", Items: str()},
-		"discovered_at":   timestamp(),
-		"not_before":      timestamp(),
-		"not_after":       timestamp(),
+		"policy_violations": {Type: "array", Items: object(map[string]*Schema{
+			"rule": str(), "severity": {Type: "string", Enum: []string{"critical", "high", "medium", "low"}}, "reason": str(),
+		}, "rule", "severity")},
+		"discovered_at": timestamp(),
+		"not_before":    timestamp(),
+		"not_after":     timestamp(),
 	}, "id", "kind", "policy_status", "subject", "source", "finding_types", "severity", "risk_score", "recommendation", "evidence_refs")
 	rogueCertificatePosture := object(map[string]*Schema{
-		"capability":          str(),
-		"generated_at":        timestamp(),
-		"coverage":            {Type: "array", Items: str()},
-		"summary":             ref("RogueCertificateSummary"),
-		"findings":            {Type: "array", Items: ref("RogueCertificateFinding")},
-		"recommended_actions": {Type: "array", Items: str()},
-		"evidence_refs":       {Type: "array", Items: str()},
-	}, "capability", "generated_at", "coverage", "summary", "findings", "recommended_actions", "evidence_refs")
+		"capability":               str(),
+		"generated_at":             timestamp(),
+		"coverage":                 {Type: "array", Items: str()},
+		"summary":                  ref("RogueCertificateSummary"),
+		"findings":                 {Type: "array", Items: ref("RogueCertificateFinding")},
+		"recommended_actions":      {Type: "array", Items: str()},
+		"evidence_refs":            {Type: "array", Items: str()},
+		"policy_module_sha256":     str(),
+		"policy_evaluated":         {Type: "integer"},
+		"policy_evaluation_errors": {Type: "integer"},
+	}, "capability", "generated_at", "coverage", "summary", "findings", "recommended_actions", "evidence_refs", "policy_evaluated", "policy_evaluation_errors")
 	crlDistributionShard := object(map[string]*Schema{
 		"index":         {Type: "integer"},
 		"url":           str(),

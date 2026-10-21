@@ -41,6 +41,14 @@ type PolicyEvaluator interface {
 	Evaluate(ctx context.Context, in policy.Input) (policy.Decision, error)
 }
 
+// PosturePolicyEvaluator is the optional posture seam of a live policy engine
+// (A42): the rogue-certificate listing evaluates the tenant's active module's
+// certificate_posture rules through it and names that module in its evidence.
+type PosturePolicyEvaluator interface {
+	EvaluatePosture(ctx context.Context, in policy.Input) ([]policy.PostureViolation, error)
+	ActiveModule(ctx context.Context, tenantID string) (string, policy.ModuleInfo, error)
+}
+
 // ABACDenyEvaluator is the deny-only attribute overlay. It can veto a request
 // that RBAC and the primary policy gate otherwise allow, but it never grants a
 // permission by itself.

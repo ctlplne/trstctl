@@ -29544,6 +29544,33 @@
             ],
             "type": "string"
           },
+          "policy_violations": {
+            "items": {
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "rule": {
+                  "type": "string"
+                },
+                "severity": {
+                  "enum": [
+                    "critical",
+                    "high",
+                    "medium",
+                    "low"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rule",
+                "severity"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "recommendation": {
             "type": "string"
           },
@@ -29621,6 +29648,15 @@
             "format": "date-time",
             "type": "string"
           },
+          "policy_evaluated": {
+            "type": "integer"
+          },
+          "policy_evaluation_errors": {
+            "type": "integer"
+          },
+          "policy_module_sha256": {
+            "type": "string"
+          },
           "recommended_actions": {
             "items": {
               "type": "string"
@@ -29638,7 +29674,9 @@
           "summary",
           "findings",
           "recommended_actions",
-          "evidence_refs"
+          "evidence_refs",
+          "policy_evaluated",
+          "policy_evaluation_errors"
         ],
         "type": "object"
       },
@@ -29675,6 +29713,9 @@
             "type": "integer"
           },
           "owner_missing": {
+            "type": "integer"
+          },
+          "policy_violations": {
             "type": "integer"
           },
           "recommendations": {

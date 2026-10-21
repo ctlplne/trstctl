@@ -7216,6 +7216,7 @@ export interface RogueCertificateFinding {
   owner_id?: string;
   policy_max_days?: number;
   policy_status: "rogue" | "non_compliant";
+  policy_violations?: ({ reason?: string; rule: string; severity: "critical" | "high" | "medium" | "low" })[];
   recommendation: string;
   risk_score: number;
   run_id?: string;
@@ -7233,6 +7234,9 @@ export interface RogueCertificatePosture {
   evidence_refs: string[];
   findings: RogueCertificateFinding[];
   generated_at: string;
+  policy_evaluated: number;
+  policy_evaluation_errors: number;
+  policy_module_sha256?: string;
   recommended_actions: string[];
   summary: RogueCertificateSummary;
 }
@@ -7249,6 +7253,7 @@ export interface RogueCertificateSummary {
   medium: number;
   non_compliant: number;
   owner_missing: number;
+  policy_violations?: number;
   recommendations: number;
   rogue: number;
   total_analyzed: number;

@@ -74,6 +74,30 @@ cannot be read or disagrees with the returned active version, the read fails
 instead of reporting protection. Enabled means the rule is evaluated; it does
 not certify that its allow/deny logic is safe.
 
+**Certificate posture rules.** The same module may declare a
+`certificate_posture` set. The rogue-certificate listing
+(`GET /api/v1/revocation/rogue-certificates`) evaluates it once per inventory
+certificate with `input.action == "certificate_posture"` and `input.certificate`
+carrying public metadata (`subject`, `issuer`, `serial`, `fingerprint`,
+`dns_names`, `key_algorithm`, `not_before`, `not_after`, `lifetime_days`,
+`days_until_expiry`, `status`, `source`, `owner_id`, `ca_id`,
+`deployment_location`). Every object the set yields is one violation:
+
+```rego
+certificate_posture contains {"rule": "vendor-ca-forbidden", "severity": "high",
+	"reason": "leaves from the vendor CA are not sanctioned"} if {
+	input.action == "certificate_posture"
+	input.certificate.issuer == "CN=Untrusted Vendor CA"
+}
+```
+
+The lifecycle `allow`/`reason` are not consulted for posture, so a module that
+declares no posture rules reports nothing. Posture evaluation is a read and is
+not written to the `policy.decision` audit stream; the listing names the module
+digest it evaluated. `POST /api/v1/policy/dry-run` with
+`{"action": "certificate_posture", "tenant_id": ..., "certificate": {...}}`
+returns the violations a candidate module would fire.
+
 The console keeps drafts separate from active authority, starts change and
 evidence references blank, and reviews the exact rule before saving. A failed
 save remains visible inside the editor without discarding the draft. Activation

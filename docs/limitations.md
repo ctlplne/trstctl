@@ -1248,10 +1248,21 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/revocation/rogue-certificates` and
   `trstctl-cli revocation rogue-certificates` combine unexpected CT findings with
   active certificate inventory policy checks (weak keys, expired active state,
-  over-long public-TLS lifetimes, missing owners/issuers) — metadata-only,
-  returning projection evidence refs rather than PEM or key material. CT coverage
-  depends on configured monitored domains/logs; provider-native revocation,
-  connector-side takedown, and arbitrary customer policy evaluation remain
+  over-long public-TLS lifetimes, missing owners/issuers) and, when
+  `ca.policy.enabled` is on, the tenant's own `certificate_posture` rules from
+  its active lifecycle policy module — metadata-only, returning projection
+  evidence refs rather than PEM or key material. A posture rule is ordinary Rego
+  in the same module (`certificate_posture contains {"rule": ..., "severity":
+  ..., "reason": ...} if { input.action == "certificate_posture"; ... }`) over
+  `input.certificate` (subject, issuer, serial, fingerprint, DNS names, key
+  algorithm, validity, lifetime and days-until-expiry, status, source, owner, CA,
+  deployment location); each violation appears as `customer_policy:<rule>` with
+  its severity and reason, the response names the module digest, and
+  `POST /api/v1/policy/dry-run` with action `certificate_posture` previews a rule
+  against sample facts. A module without posture rules reports nothing, and a
+  certificate whose evaluation fails is counted in `policy_evaluation_errors`
+  rather than read as clean. CT coverage depends on configured monitored
+  domains/logs; provider-native revocation and connector-side takedown remain
   separate remediation work.
 - Compliance and inventory reporting: `GET /api/v1/compliance/inventory-report`
   and `trstctl-cli compliance inventory-report` return the CAP-OBS-02 reporting

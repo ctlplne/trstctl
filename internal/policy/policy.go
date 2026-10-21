@@ -5,9 +5,12 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 
@@ -30,6 +33,12 @@ const (
 	ActionDeploy   Action = "deploy"
 	ActionRevoke   Action = "revoke"
 	ActionCodeSign Action = "code_sign"
+	// ActionCertificatePosture evaluates a tenant's certificate_posture rules
+	// over one inventory certificate (A42). It is not a lifecycle gate: the
+	// module's allow/reason are ignored and only the opt-in
+	// `certificate_posture` set of violations is read, so a module that
+	// declares no posture rules reports nothing rather than denying everything.
+	ActionCertificatePosture Action = "certificate_posture"
 )
 
 // Input is the decision input. It is marshaled to the Rego document `input`, so policies
@@ -41,6 +50,36 @@ type Input struct {
 	Subject  string         `json:"subject,omitempty"`
 	Actor    string         `json:"actor,omitempty"`
 	Attrs    map[string]any `json:"attrs,omitempty"`
+	// Certificate carries the inventory facts a certificate_posture rule may
+	// inspect; public metadata only, never PEM or key material.
+	Certificate *CertificateFacts `json:"certificate,omitempty"`
+}
+
+// CertificateFacts is the input.certificate object posture rules see.
+type CertificateFacts struct {
+	ID                 string     `json:"id,omitempty"`
+	Subject            string     `json:"subject"`
+	Issuer             string     `json:"issuer,omitempty"`
+	Serial             string     `json:"serial,omitempty"`
+	Fingerprint        string     `json:"fingerprint,omitempty"`
+	DNSNames           []string   `json:"dns_names,omitempty"`
+	KeyAlgorithm       string     `json:"key_algorithm,omitempty"`
+	NotBefore          *time.Time `json:"not_before,omitempty"`
+	NotAfter           *time.Time `json:"not_after,omitempty"`
+	LifetimeDays       int        `json:"lifetime_days"`
+	DaysUntilExpiry    int        `json:"days_until_expiry"`
+	Status             string     `json:"status,omitempty"`
+	Source             string     `json:"source,omitempty"`
+	OwnerID            string     `json:"owner_id,omitempty"`
+	CAID               string     `json:"ca_id,omitempty"`
+	DeploymentLocation string     `json:"deployment_location,omitempty"`
+}
+
+// PostureViolation is one certificate_posture rule a certificate violates.
+type PostureViolation struct {
+	Rule     string `json:"rule"`
+	Severity string `json:"severity,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 // Decision is the policy outcome.
@@ -219,6 +258,18 @@ func (l *LiveEngine) Evaluate(ctx context.Context, in Input) (Decision, error) {
 }
 
 // PrepareModule validates authoring and activation without changing authority.
+// EvaluatePosture evaluates the tenant's active module's certificate_posture
+// rules over in.Certificate (A42). Unlike Evaluate it is not a gate decision
+// and is not audited per call: a listing of hundreds of certificates would
+// otherwise append hundreds of policy.decision events for one read.
+func (l *LiveEngine) EvaluatePosture(ctx context.Context, in Input) ([]PostureViolation, error) {
+	active, err := l.active(ctx, in.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	return active.engine.EvaluatePosture(ctx, in)
+}
+
 func (l *LiveEngine) PrepareModule(module string) (*Engine, ModuleInfo, string, error) {
 	eng, info, err := compileLifecycleEngine(module, l.pool, l.log)
 	if err != nil {
@@ -284,6 +335,83 @@ func (e *Engine) run(ctx context.Context, in Input) (Decision, error) {
 	case <-ctx.Done():
 		return Decision{Allow: false, Reason: "policy evaluation canceled"}, ctx.Err()
 	}
+}
+
+// EvaluatePosture runs the module and reads its certificate_posture set for
+// one certificate (A42). A module that declares no such rule yields no
+// violations; the lifecycle allow/reason are not consulted.
+func (e *Engine) EvaluatePosture(ctx context.Context, in Input) ([]PostureViolation, error) {
+	if in.Action != ActionCertificatePosture || in.Certificate == nil {
+		return nil, errors.New("policy: posture evaluation requires action certificate_posture and certificate facts")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	var input map[string]any
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, err
+	}
+	eval := func() ([]PostureViolation, error) {
+		rs, err := e.query.Eval(ctx, rego.EvalInput(input))
+		if err != nil {
+			return nil, fmt.Errorf("policy: eval: %w", err)
+		}
+		return postureFrom(rs), nil
+	}
+	if e.pool == nil {
+		return eval()
+	}
+	type result struct {
+		v   []PostureViolation
+		err error
+	}
+	done := make(chan result, 1)
+	if err := e.pool.Submit(func() { v, err := eval(); done <- result{v, err} }); err != nil {
+		return nil, bulkhead.ErrRejected
+	}
+	select {
+	case r := <-done:
+		return r.v, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// postureFrom reads the certificate_posture set (or array) of rule objects
+// from the package result. Entries without a rule name are dropped; the rest
+// are sorted by rule so the same facts always read the same way.
+func postureFrom(rs rego.ResultSet) []PostureViolation {
+	if len(rs) == 0 || len(rs[0].Expressions) == 0 {
+		return nil
+	}
+	m, ok := rs[0].Expressions[0].Value.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	items, ok := m["certificate_posture"].([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]PostureViolation, 0, len(items))
+	for _, item := range items {
+		fields, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		rule, _ := fields["rule"].(string)
+		if rule == "" {
+			continue
+		}
+		severity, _ := fields["severity"].(string)
+		reason, _ := fields["reason"].(string)
+		out = append(out, PostureViolation{Rule: rule, Severity: severity, Reason: reason})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Rule < out[j].Rule })
+	return out
 }
 
 func decisionFrom(rs rego.ResultSet) Decision {
