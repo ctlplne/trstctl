@@ -190,9 +190,10 @@ today (see [Current limitations](../limitations.md) and
    history. If dual-control approvals are enabled, this first `PUT` opens the
    approval request and returns `403` until distinct approvers authorize the exact
    secret/action. This native-store `PUT` only records the next sealed value in
-   trstctl; it does not rotate a credential at its backend. Manual static-provider and
-   dynamic-lease provider rotations fail before making any provider effect. See
-   [Secrets](../features/secrets.md).
+   trstctl; it does not rotate a credential at its backend. Provider rotation runs
+   as a durable command for connector targets and for configured static providers
+   (`allow_static_rotation`); dynamic-lease provider rotations fail before making
+   any provider effect. See [Secrets](../features/secrets.md).
 
    ```sh
    ROTATE_KEY="$(uuidgen)" # keep this key until this exact change completes
@@ -232,17 +233,17 @@ today (see [Current limitations](../limitations.md) and
 
    Beyond in-store version rotation, first review the exact effect-free plan with
    `secrets rotations preview`. It reads metadata only, performs no writes, contacts
-   no connector, and needs no `Idempotency-Key`. The provider route currently runs
-   only connector-backed rotation (`secrets rotations run` with
-   `provider":"connector:<target>"`, atomically
-   committing the local version plus sealed outbox command and returning
-   `queued:true` until the worker delivers) — plus event-sourced schedules
-   (`POST /api/v1/secrets/rotation-schedules`, then `/run-due`). Every
-   response is metadata-only; no variant returns the new credential value.
-   Static providers such as `postgresql` and `dynamic-lease:<backend>` appear as
-   explicit blockers in preview and deliberately return a stable `503` from execution
-   before any provider effect until their complete effect and rollback chains share
-   one durable worker command.
+   no connector, and needs no `Idempotency-Key`. The provider route runs
+   connector-backed rotation (`secrets rotations run` with
+   `"provider":"connector:<target>"`, atomically committing the local version plus
+   sealed outbox command and returning `queued:true` until the worker delivers)
+   and static-provider rotation (`"provider":"<dynamic-secret provider id>"` with
+   `allow_static_rotation`, returning `queued:true` with a `command_id` that
+   `secrets rotations get` follows through stage, cutover, verify and retire) —
+   plus event-sourced schedules (`POST /api/v1/secrets/rotation-schedules`, then
+   `/run-due`). Every response is metadata-only; no variant returns the new
+   credential value. `dynamic-lease:<backend>` appears as an explicit blocker in
+   preview and returns a stable `503` from execution before any provider effect.
    Payload shapes and the rotation-mode taxonomy are on the
    [Secrets feature page](../features/secrets.md).
 

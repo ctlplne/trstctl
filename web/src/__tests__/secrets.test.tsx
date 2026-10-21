@@ -1655,9 +1655,9 @@ describe("secrets surface", () => {
     await user.type(scheduleForm.getByLabelText("Schedule name"), "daily-ci");
     await user.type(scheduleForm.getByLabelText("Key"), "app/db/password");
     await user.type(scheduleForm.getByLabelText("Old reference"), "version:3");
-    await user.type(scheduleForm.getByLabelText("Provider"), "postgresql");
+    await user.type(scheduleForm.getByLabelText("Provider"), "dynamic-lease:postgresql");
     await user.click(scheduleForm.getByRole("button", { name: /create schedule/i }));
-    expect(await scheduleForm.findByText(/scheduled rotation currently requires a connector:<target> provider/i)).toBeInTheDocument();
+    expect(await scheduleForm.findByText(/scheduled rotation requires a connector:<target> provider or a configured static provider/i)).toBeInTheDocument();
     expect(apiMock.createSecretRotationSchedule).not.toHaveBeenCalled();
 
     await user.clear(scheduleForm.getByLabelText("Provider"));

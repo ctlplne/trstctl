@@ -28,8 +28,6 @@ const (
 	connectorRotationOldRefStaleDetail       = "connector rotation old_ref does not name the current version"
 	connectorRotationDeliveryFailedDetail    = "connector delivery failed"
 	dynamicLeaseRotationUnavailableDetail    = "dynamic-lease rotation is unavailable until its issue, delivery, and predecessor retirement phases share one durable worker command"
-	manualStaticRotationUnavailableDetail    = "manual static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement"
-	scheduledStaticRotationUnavailableDetail = "scheduled static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement"
 )
 
 var errTerminalConnectorRotationDelivery = errors.New("api: connector rotation delivery is terminal")
@@ -116,12 +114,52 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		},
 		DataHandling: "Preview reads tenant-scoped secret metadata only; it never decrypts, generates, returns, logs, or sends secret material.",
 	}
-	if !isConnectorSecretRotation(req.Provider) {
-		blocker := manualStaticRotationUnavailableDetail
-		if strings.HasPrefix(req.Provider, secretDynamicLeaseRotationPrefix) {
-			blocker = dynamicLeaseRotationUnavailableDetail
+	if isStaticSecretRotation(req.Provider) {
+		// A14: the static plan names the durable phases the worker will run.
+		plan.ExecuteWrites = []string{
+			"append one immutable secret.static_rotation.queued event and its single outbox intent",
+			"project each worker phase (staged, cutover, verified, completed) as an immutable secret.static_rotation.advanced event with the staged credential sealed under the tenant key domain",
+			"append one secret.rotated event for the next secret version at cutover (and one more at rollback)",
 		}
-		plan.Blockers = append(plan.Blockers, blocker)
+		plan.ExecuteExternalEffects = []string{
+			"mint a long-lived credential for role " + req.Key + " at provider " + req.Provider,
+			"verify the staged credential at provider " + req.Provider + " before retiring anything",
+			"retire predecessor " + req.OldRef + " at provider " + req.Provider + " after verification",
+		}
+		plan.RecoverySteps = []string{
+			"retry the same command with the same Idempotency-Key after a transient failure",
+			"follow GET /api/v1/secrets/rotations/{command_id} to the terminal phase",
+			"a failed verification restores the predecessor as a new version and revokes the successor",
+		}
+		if req.TTLSeconds != nil {
+			plan.Blockers = append(plan.Blockers, "ttl_seconds is unsupported for static rotation")
+		}
+		if _, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err != nil {
+			plan.Blockers = append(plan.Blockers, staticRotationProviderUnavailableDetail)
+		}
+		current, getErr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Key)
+		switch {
+		case errors.Is(getErr, store.ErrSecretNotFound):
+			plan.Blockers = append(plan.Blockers, "application secret was not found")
+		case getErr != nil:
+			a.writeError(w, getErr)
+			return
+		default:
+			plan.CurrentVersion = current.Version
+			plan.NextVersion = current.Version + 1
+		}
+		if latest, found, err := a.store.LatestSecretStaticRotationCommandForKey(r.Context(), tenantID, req.Key); err != nil {
+			a.writeError(w, err)
+			return
+		} else if found && !latest.Terminal() {
+			plan.Blockers = append(plan.Blockers, staticRotationInFlightDetail)
+		}
+		plan.Ready = len(plan.Blockers) == 0
+		a.writeJSON(w, http.StatusOK, plan)
+		return
+	}
+	if !isConnectorSecretRotation(req.Provider) {
+		plan.Blockers = append(plan.Blockers, dynamicLeaseRotationUnavailableDetail)
 		a.writeJSON(w, http.StatusOK, plan)
 		return
 	}

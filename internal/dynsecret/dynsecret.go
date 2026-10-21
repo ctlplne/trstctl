@@ -27,6 +27,22 @@ type GenerateRequest struct {
 	Role    string
 	TTL     time.Duration
 	LeaseID string
+	// Static asks for a long-lived credential with no native expiry: the
+	// static-rotation worker retires it explicitly after its successor is live.
+	// Providers refuse Static unless the operator opted the provider in.
+	Static bool
+}
+
+// StaticRotationProvider is the optional contract a provider implements when
+// its operator allowed long-lived (static) credentials to be minted and verified
+// through it. The static-rotation worker checks the role before queueing and
+// verifies a staged credential before retiring its predecessor.
+type StaticRotationProvider interface {
+	AllowsStaticRotation(role string) bool
+	// VerifyStaticCredential proves the staged credential works at the provider
+	// (a connection, a signed call). It returns the closed verification mode it
+	// used ("connected", "not_available") and an error when the proof failed.
+	VerifyStaticCredential(ctx context.Context, backendRef string, credential []byte) (string, error)
 }
 
 // Credential is a generated backend credential. BackendRef is the handle the

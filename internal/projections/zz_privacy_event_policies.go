@@ -1702,6 +1702,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 // version even when the existing schema was designed to carry no personal data.
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	return map[privacyEventPolicyKey]events.PrivacyPayloadShape{
+		{EventSecretStaticRotationQueued, 1}:                                 privacyPayloadShape[SecretStaticRotationQueued](),
+		{EventSecretStaticRotationAdvanced, 1}:                               privacyPayloadShape[SecretStaticRotationAdvanced](),
 		{EventCAIssuedCertificate, CAIssuedCertificateEvidenceSchemaVersion}: privacyPayloadShape[privacyCAIssuedEvidenceV2](),
 		{EventCAIssuedCertificate, CASecretInventorySchemaVersion}:           privacyPayloadShape[CASecretCertificateInventoried](),
 		{EventCAEndEntityIssued, CAIssuedCertificateEvidenceSchemaVersion}: events.PrivacyPayloadShapeOneOf(

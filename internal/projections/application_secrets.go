@@ -307,8 +307,12 @@ func (p *Projector) applyApplicationSecretTx(ctx context.Context, tx pgx.Tx, eve
 	} else if err := decode(event, &payload); err != nil {
 		return true, err
 	}
-	if payload.Action != action || payload.Surface != "native" && payload.Surface != "vault" && payload.Surface != "rotation" ||
-		payload.Surface == "rotation" && payload.Action != "rotate" {
+	// "static-rotation" (A14) is the durable static-provider worker's cutover or
+	// rollback write: a rotate with no connector sync intent, attributed to its
+	// command through the request binding.
+	if payload.Action != action ||
+		payload.Surface != "native" && payload.Surface != "vault" && payload.Surface != "rotation" && payload.Surface != "static-rotation" ||
+		(payload.Surface == "rotation" || payload.Surface == "static-rotation") && payload.Action != "rotate" {
 		return true, fmt.Errorf("projections: %s mutation binding is invalid", event.Type)
 	}
 	from, to, _, err := applicationSecretApprovalBinding(payload, privacySyncAuthorityErased)

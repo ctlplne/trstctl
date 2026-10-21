@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
@@ -262,7 +263,13 @@ func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.
 	if !p.allowedRoles[req.Role] {
 		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q does not allow role %q", p.id, req.Role))
 	}
-	if req.TTL <= 0 || req.TTL > p.maxTTL {
+	switch {
+	case req.Static && !p.AllowsStaticRotation(req.Role):
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q does not allow static rotation", p.id))
+	case req.Static:
+		// A static credential carries no TTL: the static-rotation worker retires
+		// it after its successor is live, so the lease ceiling does not apply.
+	case req.TTL <= 0 || req.TTL > p.maxTTL:
 		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q TTL must be between 1s and %s", p.id, p.maxTTL))
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
@@ -1350,4 +1357,25 @@ func secretIntegrationHTTPClientWithTLSAndBoundary(endpoint string, allowPrivate
 		return nil
 	}
 	return &clone, nil
+}
+
+// AllowsStaticRotation implements dynsecret.StaticRotationProvider: the operator
+// opted this provider in and the role is one it may mint for.
+func (p *configuredDynamicProvider) AllowsStaticRotation(role string) bool {
+	return p != nil && p.cfg.AllowStaticRotation && config.StaticRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] && p.allowedRoles[role]
+}
+
+// VerifyStaticCredential implements dynsecret.StaticRotationProvider. Database
+// providers prove the staged credential by opening a session with it; AWS IAM
+// access keys have no side-effect-free proof the control plane can sign with the
+// new key, so the mode is reported as not available and the worker records it.
+func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, _ string, credential []byte) (string, error) {
+	switch strings.TrimSpace(p.cfg.Type) {
+	case "postgresql":
+		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
+	case "mysql":
+		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
+	default:
+		return "not_available", nil
+	}
 }

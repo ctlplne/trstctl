@@ -160,76 +160,80 @@ const (
 	// Old inventory and approval schemas remain closed and independently replayable.
 	CertificateValidityEventSchemaVersion = 4
 	// CertificateObservationEventSchemaVersion records imports without claiming a mint.
-	CertificateObservationEventSchemaVersion      = 5
-	EventCertificateRevoked                       = "certificate.revoked"
-	EventKeyCompromiseCAEffectCompleted           = "identity.key_compromise_ca_effect_completed"
-	EventKeyCompromiseEffectRetried               = "identity.key_compromise_effect_retried"
-	EventCertificateSuperseded                    = "certificate.superseded"
-	EventCertificateReprotectionCutover           = "certificate.reprotection_cutover"
-	EventCAIssuedCertificate                      = caevent.EventCAIssuedCertificate
-	EventCACertificateRevoked                     = "ca.certificate.revoked"
-	EventCACeremonyStarted                        = "ca.ceremony.started"
-	EventCACeremonyApproved                       = "ca.ceremony.approved"
-	EventCACeremonyCancelled                      = "ca.ceremony.cancelled"
-	EventCARootCreated                            = "ca.root.created"
-	EventCAAuthorityImported                      = caevent.EventCAAuthorityImported
-	EventCAAuthorityRotated                       = "ca.authority.rotated"
-	EventCAAuthorityRekeyed                       = caevent.EventCAAuthorityRekeyed
-	EventCAAuthorityHorizonAlerted                = "ca.authority.horizon_alerted"
-	EventCAIntermediateCreated                    = caevent.EventCAIntermediateCreated
-	EventCAIntermediateCSRSignRequested           = "ca.intermediate_csr.sign_requested"
-	EventCAIntermediateCSRIssued                  = caevent.EventCAIntermediateCSRIssued
-	EventCAEndEntityIssued                        = caevent.EventCAEndEntityIssued
-	EventCACrossSigned                            = caevent.EventCACrossSigned
-	EventBreakglassIssued                         = "breakglass.issued"
-	EventBreakglassCARotated                      = "breakglass.ca.rotated"
-	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
-	EventCRLPublished                             = "ca.crl.published"
-	EventOCSPResponderRotated                     = "ca.ocsp_responder.rotated"
-	EventAgentHeartbeat                           = "agent.heartbeat"
-	EventAgentCertRenewed                         = "agent.cert.renewed"
-	EventAgentCertRevoked                         = "agent.cert.revoked"
-	EventAgentOffboarded                          = "agent.offboarded"
-	EventProfileCreated                           = "profile.created"
-	EventProfileUpdated                           = "profile.updated"
-	EventDiscoverySegmentUpserted                 = "discovery.segment.upserted"
-	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
-	EventDiscoverySchedulePaused                  = "discovery.schedule.paused"
-	EventDiscoveryScheduleResumed                 = "discovery.schedule.resumed"
-	EventDiscoveryScheduleRetired                 = "discovery.schedule.retired"
-	EventDiscoveryRunQueued                       = "discovery.run.queued"
-	EventDiscoveryRunStarted                      = "discovery.run.started"
-	EventDiscoveryFindingRecorded                 = "discovery.finding.recorded"
-	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
-	EventDiscoveryRunCompleted                    = "discovery.run.completed"
-	EventADCSInventoryObserved                    = "adcs.template.inventory.observed"
-	EventADCSTemplateDriftObserved                = "adcs.template.drift"
-	EventADCSTemplateDriftWorsened                = "adcs.template.drift.worsened"
-	EventRevocationProbeQueued                    = "revocation.probe.queued"
-	EventRevocationHealthObserved                 = "revocation.health.observed"
-	EventMigrationRunRecorded                     = "migration.run.recorded"
-	EventACMEDNS01ProviderConfigUpserted          = "acme.dns01.provider_config.upserted"
-	EventACMEDNS01ProviderConfigDeleted           = "acme.dns01.provider_config.deleted"
-	EventACMEDNS01Preflighted                     = "acme.dns01.preflighted"
-	EventACMEDNS01RecordPresented                 = "acme.dns01.record.presented"
-	EventACMEDNS01RecordCleaned                   = "acme.dns01.record.cleaned"
-	EventACMEUpstreamAuthorizationObserved        = "acme.dns01.upstream.authorization.observed"
-	EventEndpointVerified                         = "endpoint.verification.observed"
-	EventMDMSCEPPolicyUpserted                    = "mdm.scep_policy.upserted"
-	EventMDMSCEPPolicyDeleted                     = "mdm.scep_policy.deleted"
-	EventMDMSCEPChallengeRotated                  = "mdm.scep_challenge.rotated"
-	EventWorkloadAttesterTrustSourceUpserted      = "workload.attester_trust_source.upserted"
-	EventWorkloadAttesterTrustSourceRotated       = "workload.attester_trust_source.rotated"
-	EventWorkloadAttesterTrustSourceRevoked       = "workload.attester_trust_source.revoked"
-	EventWorkloadAttesterTrustSourceDeleted       = "workload.attester_trust_source.deleted"
-	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
-	EventComplianceReportRunRecorded              = "compliance.report_run.recorded"
-	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
-	EventSecretRotationSchedulePaused             = "secret.rotation_schedule.paused"
-	EventSecretRotationScheduleResumed            = "secret.rotation_schedule.resumed"
-	EventSecretRotationScheduleRetired            = "secret.rotation_schedule.retired"
-	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
+	CertificateObservationEventSchemaVersion = 5
+	EventCertificateRevoked                  = "certificate.revoked"
+	EventKeyCompromiseCAEffectCompleted      = "identity.key_compromise_ca_effect_completed"
+	EventKeyCompromiseEffectRetried          = "identity.key_compromise_effect_retried"
+	EventCertificateSuperseded               = "certificate.superseded"
+	EventCertificateReprotectionCutover      = "certificate.reprotection_cutover"
+	EventCAIssuedCertificate                 = caevent.EventCAIssuedCertificate
+	EventCACertificateRevoked                = "ca.certificate.revoked"
+	EventCACeremonyStarted                   = "ca.ceremony.started"
+	EventCACeremonyApproved                  = "ca.ceremony.approved"
+	EventCACeremonyCancelled                 = "ca.ceremony.cancelled"
+	EventCARootCreated                       = "ca.root.created"
+	EventCAAuthorityImported                 = caevent.EventCAAuthorityImported
+	EventCAAuthorityRotated                  = "ca.authority.rotated"
+	EventCAAuthorityRekeyed                  = caevent.EventCAAuthorityRekeyed
+	EventCAAuthorityHorizonAlerted           = "ca.authority.horizon_alerted"
+	EventCAIntermediateCreated               = caevent.EventCAIntermediateCreated
+	EventCAIntermediateCSRSignRequested      = "ca.intermediate_csr.sign_requested"
+	EventCAIntermediateCSRIssued             = caevent.EventCAIntermediateCSRIssued
+	EventCAEndEntityIssued                   = caevent.EventCAEndEntityIssued
+	EventCACrossSigned                       = caevent.EventCACrossSigned
+	EventBreakglassIssued                    = "breakglass.issued"
+	EventBreakglassCARotated                 = "breakglass.ca.rotated"
+	EventBreakglassCACrossSigned             = "breakglass.ca.cross_signed"
+	EventCRLPublished                        = "ca.crl.published"
+	EventOCSPResponderRotated                = "ca.ocsp_responder.rotated"
+	EventAgentHeartbeat                      = "agent.heartbeat"
+	EventAgentCertRenewed                    = "agent.cert.renewed"
+	EventAgentCertRevoked                    = "agent.cert.revoked"
+	EventAgentOffboarded                     = "agent.offboarded"
+	EventProfileCreated                      = "profile.created"
+	EventProfileUpdated                      = "profile.updated"
+	EventDiscoverySegmentUpserted            = "discovery.segment.upserted"
+	EventDiscoverySourceUpserted             = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted           = "discovery.schedule.upserted"
+	EventDiscoverySchedulePaused             = "discovery.schedule.paused"
+	EventDiscoveryScheduleResumed            = "discovery.schedule.resumed"
+	EventDiscoveryScheduleRetired            = "discovery.schedule.retired"
+	EventDiscoveryRunQueued                  = "discovery.run.queued"
+	EventDiscoveryRunStarted                 = "discovery.run.started"
+	EventDiscoveryFindingRecorded            = "discovery.finding.recorded"
+	EventDiscoveryFindingTriageChanged       = "discovery.finding.triage_changed"
+	EventDiscoveryRunCompleted               = "discovery.run.completed"
+	EventADCSInventoryObserved               = "adcs.template.inventory.observed"
+	EventADCSTemplateDriftObserved           = "adcs.template.drift"
+	EventADCSTemplateDriftWorsened           = "adcs.template.drift.worsened"
+	EventRevocationProbeQueued               = "revocation.probe.queued"
+	EventRevocationHealthObserved            = "revocation.health.observed"
+	EventMigrationRunRecorded                = "migration.run.recorded"
+	EventACMEDNS01ProviderConfigUpserted     = "acme.dns01.provider_config.upserted"
+	EventACMEDNS01ProviderConfigDeleted      = "acme.dns01.provider_config.deleted"
+	EventACMEDNS01Preflighted                = "acme.dns01.preflighted"
+	EventACMEDNS01RecordPresented            = "acme.dns01.record.presented"
+	EventACMEDNS01RecordCleaned              = "acme.dns01.record.cleaned"
+	EventACMEUpstreamAuthorizationObserved   = "acme.dns01.upstream.authorization.observed"
+	EventEndpointVerified                    = "endpoint.verification.observed"
+	EventMDMSCEPPolicyUpserted               = "mdm.scep_policy.upserted"
+	EventMDMSCEPPolicyDeleted                = "mdm.scep_policy.deleted"
+	EventMDMSCEPChallengeRotated             = "mdm.scep_challenge.rotated"
+	EventWorkloadAttesterTrustSourceUpserted = "workload.attester_trust_source.upserted"
+	EventWorkloadAttesterTrustSourceRotated  = "workload.attester_trust_source.rotated"
+	EventWorkloadAttesterTrustSourceRevoked  = "workload.attester_trust_source.revoked"
+	EventWorkloadAttesterTrustSourceDeleted  = "workload.attester_trust_source.deleted"
+	EventComplianceReportScheduleUpserted    = "compliance.report_schedule.upserted"
+	EventComplianceReportRunRecorded         = "compliance.report_run.recorded"
+	EventSecretRotationScheduleUpserted      = "secret.rotation_schedule.upserted"
+	EventSecretRotationSchedulePaused        = "secret.rotation_schedule.paused"
+	EventSecretRotationScheduleResumed       = "secret.rotation_schedule.resumed"
+	EventSecretRotationScheduleRetired       = "secret.rotation_schedule.retired"
+	EventSecretRotationScheduleRan           = "secret.rotation_schedule.ran"
+	// Static-provider rotation commands (A14/A15): one queued event opens the
+	// durable command and its outbox intent; one advanced event per phase.
+	EventSecretStaticRotationQueued               = "secret.static_rotation.queued"
+	EventSecretStaticRotationAdvanced             = "secret.static_rotation.advanced"
 	EventNotificationRead                         = "notification.read"
 	EventNotificationChannelUpserted              = "notification.channel.upserted"
 	EventNotificationChannelDeleted               = "notification.channel.deleted"
@@ -2454,6 +2458,39 @@ type ComplianceReportRunRecorded struct {
 // SecretRotationScheduleUpserted is the payload of
 // secret.rotation_schedule.upserted. It carries references only; generated
 // credential material remains inside the configured rotator/provider.
+// SecretStaticRotationQueued opens one durable static-provider rotation command
+// (A14/A15). It carries identifiers and the request binding only; the staged
+// credential appears later, sealed, on the staged advance.
+type SecretStaticRotationQueued struct {
+	ID                   string `json:"id"`
+	TenantEpoch          string `json:"tenant_epoch"`
+	Provider             string `json:"provider"`
+	Key                  string `json:"key"`
+	OldRef               string `json:"old_ref"`
+	ExpectedVersion      int    `json:"expected_version"`
+	IdempotencyKeyDigest string `json:"idempotency_key_digest"`
+	RequestBinding       string `json:"request_binding"`
+	ScheduleID           string `json:"schedule_id,omitempty"`
+}
+
+// SecretStaticRotationAdvanced records one phase transition of a static
+// rotation command. SealedNew and SealedOld are tenant-sealed containers (AN-8)
+// so a restarted worker resumes without a second provider call.
+type SecretStaticRotationAdvanced struct {
+	ID              string `json:"id"`
+	TenantEpoch     string `json:"tenant_epoch"`
+	FromPhase       string `json:"from_phase"`
+	Phase           string `json:"phase"`
+	ProviderType    string `json:"provider_type,omitempty"`
+	NewRef          string `json:"new_ref,omitempty"`
+	SealedNew       []byte `json:"sealed_new,omitempty"`
+	SealedOld       []byte `json:"sealed_old,omitempty"`
+	ResultVersion   int    `json:"result_version,omitempty"`
+	RestoredVersion int    `json:"restored_version,omitempty"`
+	VerifyMode      string `json:"verify_mode,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
 type SecretRotationScheduleUpserted struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
@@ -3958,6 +3995,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventSecretRotationScheduleResumed:            {1: true, 2: true},
 	EventSecretRotationScheduleRetired:            {1: true, 2: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
+	EventSecretStaticRotationQueued:               {1: true},
+	EventSecretStaticRotationAdvanced:             {1: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},
 	EventNotificationChannelDeleted:               {1: true},
@@ -6006,6 +6045,33 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ErrorCode: pl.ErrorCode, ArtifactRef: pl.ArtifactRef, ArtifactDigest: pl.ArtifactDigest,
 			CompletedAt: pl.CompletedAt, EventSequence: e.Sequence,
 			CreatedAt: pl.CreatedAt, UpdatedAt: e.Time,
+		})
+	case EventSecretStaticRotationQueued:
+		var pl SecretStaticRotationQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.TenantEpoch == "" || pl.Provider == "" || pl.Key == "" || pl.OldRef == "" {
+			return fmt.Errorf("projections: %s requires id, tenant_epoch, provider, key and old_ref", e.Type)
+		}
+		return p.store.ApplySecretStaticRotationQueuedTx(ctx, tx, store.SecretStaticRotationCommand{
+			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
+			OldRef: pl.OldRef, ExpectedVersion: pl.ExpectedVersion, IdempotencyKeyDigest: pl.IdempotencyKeyDigest,
+			RequestBinding: pl.RequestBinding, ScheduleID: pl.ScheduleID, CreatedAt: e.Time,
+		}, e.Data)
+	case EventSecretStaticRotationAdvanced:
+		var pl SecretStaticRotationAdvanced
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.FromPhase == "" || pl.Phase == "" {
+			return fmt.Errorf("projections: %s requires id, from_phase and phase", e.Type)
+		}
+		return p.store.ApplySecretStaticRotationAdvancedTx(ctx, tx, store.SecretStaticRotationAdvance{
+			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, FromPhase: pl.FromPhase, Phase: pl.Phase,
+			ProviderType: pl.ProviderType, NewRef: pl.NewRef, SealedNew: pl.SealedNew, SealedOld: pl.SealedOld,
+			ResultVersion: pl.ResultVersion, RestoredVersion: pl.RestoredVersion, VerifyMode: pl.VerifyMode,
+			Error: pl.Error, At: e.Time,
 		})
 	case EventSecretRotationScheduleUpserted:
 		var pl SecretRotationScheduleUpserted

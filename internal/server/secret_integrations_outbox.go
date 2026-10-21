@@ -44,6 +44,11 @@ type secretIntegrationOutboxDispatcher struct {
 	store                    *store.Store
 	log                      *events.Log
 	idem                     *orchestrator.Idempotency
+	// staticRotation and staticRotationFailure are the API's durable
+	// static-provider rotation phase executor and its terminal-failure hook
+	// (A14/A15); the server binds them once the API exists.
+	staticRotation        func(ctx context.Context, tenantID, commandID string, attempt int) error
+	staticRotationFailure func(ctx context.Context, tenantID, commandID string) error
 
 	// Test-only crash seam. Runtime proof uses it to interrupt the worker after a
 	// version-creating receiver commits but before the delivered event/outbox ACK.
@@ -186,6 +191,15 @@ func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orche
 		return true, err
 	case m.Destination == dynamicSecretRevokeDestination:
 		return true, d.revokeDynamicSecret(ctx, m)
+	case m.Destination == store.SecretStaticRotationDestination:
+		if d.staticRotation == nil {
+			return true, errors.New("server: static rotation worker is not configured")
+		}
+		var command projections.SecretStaticRotationQueued
+		if err := json.Unmarshal(m.Payload, &command); err != nil || command.ID == "" {
+			return true, errors.New("server: static rotation outbox payload is invalid")
+		}
+		return true, d.staticRotation(ctx, m.TenantID, command.ID, m.Attempts)
 	case m.Destination == store.AWSHoneyScanDestination:
 		return true, d.scanAWSHoneyToken(ctx, m)
 	case strings.HasPrefix(m.Destination, secretSyncDestinationPrefix):
@@ -212,6 +226,15 @@ func (d *secretIntegrationOutboxDispatcher) dynamicProvidersForTenant(tenantID s
 func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) (handled bool, err error) {
 	const terminal = "external delivery exhausted its retry budget"
 	switch {
+	case m.Destination == store.SecretStaticRotationDestination:
+		if d.staticRotationFailure == nil {
+			return true, errors.New("server: static rotation worker is not configured")
+		}
+		var command projections.SecretStaticRotationQueued
+		if err := json.Unmarshal(m.Payload, &command); err != nil || command.ID == "" {
+			return true, errors.New("server: terminal static rotation payload is invalid")
+		}
+		return true, d.staticRotationFailure(ctx, m.TenantID, command.ID)
 	case m.Destination == dynamicSecretIssueDestination:
 		var command projections.DynamicSecretIssueCommand
 		if err := json.Unmarshal(m.Payload, &command); err != nil || command.TenantEpoch == "" || command.ID == "" {

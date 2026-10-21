@@ -5651,9 +5651,9 @@ func componentSchemas() map[string]*Schema {
 		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
 	}, "capability", "operation", "ready", "effect_free", "provider_id", "provider_type", "provider_label", "role", "requested_ttl_seconds", "effective_ttl_seconds", "maximum_ttl_seconds", "configuration_revision", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	rotationProvider := str()
-	rotationProvider.Description = "connector:<target> is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects."
+	rotationProvider.Description = "connector:<target> queues a connector rotation; any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. dynamic-lease:<provider> remains unavailable and fails closed with 503 before effects."
 	rotationTTL := &Schema{Type: "integer"}
-	rotationTTL.Description = "Compatibility input only. Connector requests reject any supplied ttl_seconds with 400. Static and dynamic-lease providers remain unavailable with 503 regardless of this field."
+	rotationTTL.Description = "Compatibility input only. Connector and static requests reject any supplied ttl_seconds with 400. dynamic-lease providers remain unavailable with 503 regardless of this field."
 	secretRotationReq := object(map[string]*Schema{
 		"provider": rotationProvider, "key": str(), "old_ref": str(),
 		"target": str(), "remote_key": str(), "ttl_seconds": rotationTTL,
@@ -5663,7 +5663,16 @@ func componentSchemas() map[string]*Schema {
 		"completed": {Type: "boolean"}, "queued": {Type: "boolean"}, "rolled_back": {Type: "boolean"},
 		"rollback_attempted": {Type: "boolean"}, "rollback_failed": {Type: "boolean"},
 		"rollback_error": str(), "failed_phase": str(), "error": str(),
+		"command_id": uuid(), "phase": str(),
 	}, "key", "old_ref", "new_ref", "completed", "queued", "rolled_back", "rollback_attempted", "rollback_failed")
+	secretStaticRotation := object(map[string]*Schema{
+		"id": uuid(), "provider": str(), "provider_type": str(), "key": str(), "old_ref": str(), "new_ref": str(),
+		"phase":            {Type: "string", Enum: []string{"queued", "staged", "cutover", "verified", "completed", "rolled_back", "rollback_failed", "failed", "retire_pending"}},
+		"terminal":         {Type: "boolean"},
+		"expected_version": {Type: "integer"}, "result_version": {Type: "integer"}, "restored_version": {Type: "integer"},
+		"verify_mode": str(), "error": str(), "schedule_id": uuid(),
+		"created_at": timestamp(), "updated_at": timestamp(), "terminal_at": timestamp(),
+	}, "id", "provider", "key", "old_ref", "new_ref", "phase", "terminal", "expected_version", "result_version", "restored_version", "created_at", "updated_at")
 	secretRotationPreview := object(map[string]*Schema{
 		"capability": {Type: "string", Enum: []string{"F37"}},
 		"ready":      {Type: "boolean"}, "effect_free": {Type: "boolean"},
@@ -5679,7 +5688,7 @@ func componentSchemas() map[string]*Schema {
 		"secret_data_handling":     str(),
 	}, "capability", "ready", "effect_free", "provider", "key", "old_ref", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "secret_data_handling")
 	secretRotationScheduleProvider := str()
-	secretRotationScheduleProvider.Description = "connector:<target> only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command."
+	secretRotationScheduleProvider.Description = "connector:<target>, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence."
 	secretRotationScheduleReq := object(map[string]*Schema{
 		"name": str(), "provider": secretRotationScheduleProvider, "key": str(), "old_ref": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
@@ -7186,6 +7195,8 @@ func componentSchemas() map[string]*Schema {
 		"SecretValue":                        secretValue,
 		"SecretRotationRequest":              secretRotationReq,
 		"SecretRotation":                     secretRotation,
+		"SecretStaticRotation":               secretStaticRotation,
+		"SecretStaticRotationList":           list("SecretStaticRotation"),
 		"SecretRotationPreview":              secretRotationPreview,
 		"SecretRotationScheduleRequest":      secretRotationScheduleReq,
 		"SecretRotationSchedule":             secretRotationSchedule,

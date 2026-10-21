@@ -23,6 +23,8 @@ var tenantKeyDomainCiphertextStages = []string{
 	"vault_cubbyhole.sealed",
 	"dynamic_secret_leases.sealed_preparation",
 	"dynamic_secret_leases.sealed_credential",
+	"secret_static_rotation_commands.sealed_new",
+	"secret_static_rotation_commands.sealed_old",
 	"code_signing_operations.sealed_command",
 	"idempotency_keys.result",
 	"outbox.payload",
@@ -138,6 +140,12 @@ func tenantKeyDomainCiphertextStageSQL(stage string) (selectSQL, updateSQL strin
 	case "dynamic_secret_leases.sealed_credential":
 		return `SELECT ctid::text, sealed_credential FROM dynamic_secret_leases WHERE tenant_id = $1 AND octet_length(sealed_credential) > 0 FOR UPDATE`,
 			`UPDATE dynamic_secret_leases SET sealed_credential = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_credential = $4`, true
+	case "secret_static_rotation_commands.sealed_new":
+		return `SELECT ctid::text, sealed_new FROM secret_static_rotation_commands WHERE tenant_id = $1 AND octet_length(sealed_new) > 0 FOR UPDATE`,
+			`UPDATE secret_static_rotation_commands SET sealed_new = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_new = $4`, true
+	case "secret_static_rotation_commands.sealed_old":
+		return `SELECT ctid::text, sealed_old FROM secret_static_rotation_commands WHERE tenant_id = $1 AND octet_length(sealed_old) > 0 FOR UPDATE`,
+			`UPDATE secret_static_rotation_commands SET sealed_old = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_old = $4`, true
 	case "code_signing_operations.sealed_command":
 		return `SELECT ctid::text, sealed_command FROM code_signing_operations WHERE tenant_id = $1 AND octet_length(sealed_command) > 0 FOR UPDATE`,
 			`UPDATE code_signing_operations SET sealed_command = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_command = $4`, true

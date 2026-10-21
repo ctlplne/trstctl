@@ -1119,7 +1119,10 @@ export function Secrets() {
       if (!key) throw new Error("Key is required");
       if (!oldRef) throw new Error("Old reference is required");
       if (!provider) throw new Error("Provider is required");
-      if (!provider.startsWith("connector:") || provider.slice("connector:".length).trim() === "") {
+      // connector:<target> and configured static providers are scheduled by the
+      // control plane (A15); a bare connector: or a dynamic-lease provider is
+      // refused here, before any request, with the served scope message.
+      if ((provider.startsWith("connector:") && provider.slice("connector:".length).trim() === "") || provider.startsWith("dynamic-lease:")) {
         throw new Error(t("secrets.rotation.scheduleConnectorOnly"));
       }
       const interval = Number(scheduleInterval);

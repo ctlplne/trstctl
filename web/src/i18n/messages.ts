@@ -3162,16 +3162,16 @@ export const messages = {
   "secrets.sessions.failedTitle": { defaultMessage: "Session revoke failed", description: "Session ledger action error title." },
   "secrets.rotation.scopeDescription": {
     defaultMessage:
-      "Manual native-store rotation replaces one stored value at a time. Provider rotation currently accepts only connector:<target> and queues worker delivery. Static and dynamic-lease providers, plus rotation TTL input, remain unavailable until the full effect and rollback chain is durable. Scheduled rotations run below, and downstream sync lives in the sync section.",
+      "Manual native-store rotation replaces one stored value at a time. Provider rotation accepts connector:<target> (worker-queued delivery) and a configured static provider id with allow_static_rotation: the worker mints, publishes, verifies and retires the credential as a durable command you can follow by command id. Dynamic-lease providers and rotation TTL input remain unavailable.",
     description: "Secret rotation panel: truthful served backend scope.",
   },
   "secrets.rotation.scheduleDescription": {
     defaultMessage:
-      "Schedule a connector-backed application-secret rotation. Delivery is worker-queued; only key and reference metadata are stored. Static and dynamic-lease schedules are unavailable until their full phase chains have durable workers.",
+      "Schedule a connector-backed or static-provider application-secret rotation. Delivery is worker-queued; only key and reference metadata are stored. Dynamic-lease schedules are unavailable until lease rotation has a durable worker command.",
     description: "Secret rotation schedule dialog: truthful served scope.",
   },
   "secrets.rotation.scheduleStateMessage": {
-    defaultMessage: "Create a connector:<target> schedule; delivery is worker-queued and crash-resumable.",
+    defaultMessage: "Create a connector:<target> or static-provider schedule; execution is worker-queued and crash-resumable.",
     description: "Secret rotation schedule table empty state.",
   },
   "secrets.rotation.scheduleStatus": { defaultMessage: "Status", description: "Scheduled secret rotation lifecycle status column." },
@@ -3241,7 +3241,8 @@ export const messages = {
   "secrets.rotation.recoveryHeading": { defaultMessage: "How recovery works", description: "F37 preview recovery steps heading." },
   "secrets.rotation.executeReviewed": { defaultMessage: "Run reviewed rotation", description: "F37 explicit execution action after review." },
   "secrets.rotation.scheduleConnectorOnly": {
-    defaultMessage: "Scheduled rotation currently requires a connector:<target> provider. Static and dynamic-lease providers remain unavailable.",
+    defaultMessage:
+      "Scheduled rotation requires a connector:<target> provider or a configured static provider with allow_static_rotation. Dynamic-lease providers remain unavailable.",
     description: "Secret rotation schedule form: connector-only fail-closed validation.",
   },
   "secrets.rotation.scheduleProviderPlaceholder": {

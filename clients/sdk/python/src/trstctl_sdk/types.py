@@ -10670,12 +10670,14 @@ SecretRotateRequest = TypedDict(
 SecretRotation = TypedDict(
     'SecretRotation',
     {
+        'command_id': str,
         'completed': bool,
         'error': str,
         'failed_phase': str,
         'key': str,
         'new_ref': str,
         'old_ref': str,
+        'phase': str,
         'queued': bool,
         'rollback_attempted': bool,
         'rollback_error': str,
@@ -10879,6 +10881,39 @@ SecretScanRequest = TypedDict(
         'mode': str,
         'path': str,
         'preview_fingerprint': str,
+    },
+    total=False,
+)
+
+SecretStaticRotation = TypedDict(
+    'SecretStaticRotation',
+    {
+        'created_at': str,
+        'error': str,
+        'expected_version': int,
+        'id': str,
+        'key': str,
+        'new_ref': str,
+        'old_ref': str,
+        'phase': str,
+        'provider': str,
+        'provider_type': str,
+        'restored_version': int,
+        'result_version': int,
+        'schedule_id': str,
+        'terminal': bool,
+        'terminal_at': str,
+        'updated_at': str,
+        'verify_mode': str,
+    },
+    total=False,
+)
+
+SecretStaticRotationList = TypedDict(
+    'SecretStaticRotationList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
     },
     total=False,
 )

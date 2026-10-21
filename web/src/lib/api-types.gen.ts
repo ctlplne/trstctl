@@ -7762,12 +7762,14 @@ export interface SecretRotateRequest {
 }
 
 export interface SecretRotation {
+  command_id?: string;
   completed: boolean;
   error?: string;
   failed_phase?: string;
   key: string;
   new_ref: string;
   old_ref: string;
+  phase?: string;
   queued: boolean;
   rollback_attempted: boolean;
   rollback_error?: string;
@@ -7923,6 +7925,31 @@ export interface SecretScanRequest {
   mode?: string;
   path: string;
   preview_fingerprint?: string;
+}
+
+export interface SecretStaticRotation {
+  created_at: string;
+  error?: string;
+  expected_version: number;
+  id: string;
+  key: string;
+  new_ref: string;
+  old_ref: string;
+  phase: "queued" | "staged" | "cutover" | "verified" | "completed" | "rolled_back" | "rollback_failed" | "failed" | "retire_pending";
+  provider: string;
+  provider_type?: string;
+  restored_version: number;
+  result_version: number;
+  schedule_id?: string;
+  terminal: boolean;
+  terminal_at?: string;
+  updated_at: string;
+  verify_mode?: string;
+}
+
+export interface SecretStaticRotationList {
+  items: SecretStaticRotation[];
+  next_cursor?: string;
 }
 
 export interface SecretStoreCreatePreview {

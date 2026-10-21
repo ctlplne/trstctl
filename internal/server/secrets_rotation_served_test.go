@@ -127,8 +127,7 @@ func TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree(t *testing.
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotations/preview", tok,
 		map[string]any{"provider": "postgresql", "key": "rotation/preview", "old_ref": "version:1"})
 	if status != http.StatusOK || !bytes.Contains(body, []byte(`"ready":false`)) ||
-		!bytes.Contains(body, []byte("manual static-provider rotation is unavailable")) ||
-		!bytes.Contains(body, []byte(`"execute_external_effects":[]`)) {
+		!bytes.Contains(body, []byte("static rotation is not configured for this provider")) {
 		t.Fatalf("unsupported provider preview: status %d body %s, want effect-free blocker", status, body)
 	}
 	sequenceAfterBlocked, err := h.log.LastSequence(t.Context())
@@ -141,8 +140,10 @@ func TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree(t *testing.
 }
 
 // TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect proves the
-// request path cannot enter an in-memory stage/cutover/rollback chain. A future
-// implementation must move those phases behind one durable worker receiver.
+// request path never enters the legacy in-memory stage/cutover/rollback chain:
+// a static provider that no configured dynamic-secret provider allows static
+// rotation for is refused with 503 before any effect (A14 serves configured
+// providers through the durable command worker instead).
 func TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect(t *testing.T) {
 	rotator := &countingRotationRotator{}
 	h := newOperatingServedHarness(t, config.Protocols{},
@@ -156,7 +157,7 @@ func TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect(t *test
 	const idempotencyKey = "manual-static-fails-closed"
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok, idempotencyKey, command)
 	if status != http.StatusServiceUnavailable ||
-		!strings.Contains(string(body), "manual static-provider rotation is unavailable") {
+		!strings.Contains(string(body), "static rotation is not configured for this provider") {
 		t.Fatalf("manual static refusal: status=%d body=%s, want typed 503", status, body)
 	}
 	first := append([]byte(nil), body...)
@@ -174,7 +175,7 @@ func TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect(t *test
 			"provider": "connector", "target": "ci", "key": "db/reporting", "old_ref": "role:old",
 		})
 	if status != http.StatusServiceUnavailable ||
-		!strings.Contains(string(body), "manual static-provider rotation is unavailable") {
+		!strings.Contains(string(body), "static rotation is not configured for this provider") {
 		t.Fatalf("bare connector response: status=%d body=%s, want zero-effect provider refusal", status, body)
 	}
 	if rotator.calls != 0 {
@@ -224,7 +225,7 @@ func TestServedScheduledStaticSecretRotationFailsClosedBeforeProviderEffect(t *t
 			"old_ref": oldRef, "interval_seconds": 3600, "enabled": true,
 			"next_run_at": dueAt.Format(time.RFC3339Nano),
 		})
-	if status != http.StatusServiceUnavailable || !strings.Contains(string(body), "scheduled static-provider rotation is unavailable") {
+	if status != http.StatusServiceUnavailable || !strings.Contains(string(body), "static rotation is not configured for this provider") {
 		t.Fatalf("static schedule response: status=%d body=%s, want fail-closed 503", status, body)
 	}
 	activeRef, activeSecret, err := publisher.ReadCredential(ctx, "db/reporting")
@@ -475,7 +476,7 @@ func TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008(t *testin
 			fmt.Sprintf("static-rotation-rejects-ignored-ttl-%d", ttl), map[string]any{
 				"provider": "ttl-static", "key": "database/password", "old_ref": "old-ref", "ttl_seconds": ttl,
 			})
-		if status != http.StatusServiceUnavailable || !strings.Contains(string(body), "manual static-provider rotation is unavailable") {
+		if status != http.StatusServiceUnavailable || !strings.Contains(string(body), "static rotation is not configured for this provider") {
 			t.Fatalf("static supplied TTL %d response: status=%d body=%s", ttl, status, body)
 		}
 	}

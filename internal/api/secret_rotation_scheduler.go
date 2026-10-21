@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -522,16 +521,55 @@ func (a *API) runSecretRotationSchedule(
 			// at the bounded next cadence so one broken schedule cannot starve newer work.
 			err = applicationSecretMutationError(err)
 		}
-	} else {
-		// Rows created before the connector-only contract may still name an
-		// in-process static or dynamic provider. They execute no provider phase:
-		// a terminal unsupported event advances and disables the schedule.
+	} else if _, _, providerErr := a.staticRotationProvider(tenantID, sched.Provider, sched.Key); isStaticSecretRotation(sched.Provider) && providerErr != nil {
+		// A schedule row whose provider no longer (or never) allows static
+		// rotation executes no provider phase: a terminal unsupported event
+		// advances and disables the schedule truthfully.
 		status = "unsupported"
-		if strings.HasPrefix(sched.Provider, secretDynamicLeaseRotationPrefix) {
-			errText = dynamicLeaseRotationUnavailableDetail
-		} else {
-			errText = scheduledStaticRotationUnavailableDetail
+		errText = "scheduled rotation is unavailable"
+	} else if isStaticSecretRotation(sched.Provider) {
+		// A15: a static schedule queues one durable command per due edge. The
+		// predecessor chains from the last command that left a live successor;
+		// an in-flight command defers this edge instead of overlapping it.
+		if latest, found, lookupErr := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, sched.Key); lookupErr != nil {
+			return secretRotationScheduleRunResponse{}, commandRelease, lookupErr
+		} else if found && !latest.Terminal() {
+			return secretRotationScheduleRunResponse{}, commandRelease, secretRotationScheduleDeferredError{
+				reason: "command_in_flight", cause: errStatus(http.StatusConflict, staticRotationInFlightDetail),
+			}
+		} else if found && latest.Phase == store.SecretStaticRotationRollbackFailed {
+			// The last command could not restore its predecessor: which credential
+			// is live is not knowable here, so the edge fails until an operator
+			// resolves the command.
+			err = errStatus(http.StatusConflict, staticRotationUnresolvedDetail)
+		} else if live := staticRotationLiveRef(latest); found && live != "" {
+			request.OldRef = live
+			rep.OldRef = live
 		}
+		if err == nil {
+			var cmd store.SecretStaticRotationCommand
+			cmd, err = a.queueStaticSecretRotation(ctx, tenantID, commandKey, requestBinding, sched.ID, request)
+			if err == nil {
+				rep = toStaticRotationReport(cmd)
+			}
+		}
+		if err != nil {
+			if errors.Is(err, errPendingApplicationSecretApproval) {
+				return secretRotationScheduleRunResponse{}, commandRelease, secretRotationScheduleDeferredError{
+					reason: "approval_pending", cause: applicationSecretMutationError(err),
+				}
+			}
+			var public *apiError
+			if !errors.As(err, &public) {
+				return secretRotationScheduleRunResponse{}, commandRelease, applicationSecretMutationError(err)
+			}
+			err = applicationSecretMutationError(err)
+		}
+	} else {
+		// Rows that name a dynamic-lease provider execute no provider phase: a
+		// terminal unsupported event advances and disables the schedule.
+		status = "unsupported"
+		errText = dynamicLeaseRotationUnavailableDetail
 	}
 	if err != nil {
 		errText = secretRotationScheduleTerminalErrorDetail(err)
@@ -665,5 +703,16 @@ func secretRotationScheduleRunResponseFromReceipt(
 	return secretRotationScheduleRunResponse{
 		ScheduleID: sched.ID, RunID: run.RunID, DueAt: run.DueAt, Status: run.Status,
 		Rotation: rotationResp, Error: closedError, RanAt: run.RanAt, Reconciled: reconciled,
+	}
+}
+
+// toStaticRotationReport mirrors a durable static rotation command as the
+// scheduler's rotation report: queued until terminal, completed on completion.
+func toStaticRotationReport(cmd store.SecretStaticRotationCommand) rotation.Report {
+	resp := toStaticSecretRotationResponse(cmd)
+	return rotation.Report{
+		Key: resp.Key, OldRef: resp.OldRef, NewRef: resp.NewRef, Completed: resp.Completed, Queued: resp.Queued,
+		RolledBack: resp.RolledBack, RollbackAttempted: resp.RollbackAttempted, RollbackFailed: resp.RollbackFailed,
+		RollbackError: resp.RollbackError, FailedPhase: resp.FailedPhase,
 	}
 }

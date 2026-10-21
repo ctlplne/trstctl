@@ -753,6 +753,8 @@ public final class OpenApiSchemas {
       "SecretScanFinding",
       "SecretScanPreview",
       "SecretScanRequest",
+      "SecretStaticRotation",
+      "SecretStaticRotationList",
       "SecretStoreCreatePreview",
       "SecretSync",
       "SecretSyncJob",

@@ -6441,9 +6441,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List durable static-provider rotation commands */
+        get: operations["listStaticSecretRotations"];
         put?: never;
-        /** Queue connector secret rotation; refuse non-durable provider modes */
+        /** Queue connector or static-provider secret rotation; refuse dynamic-lease requests */
         post: operations["rotateStaticSecret"];
         delete?: never;
         options?: never;
@@ -6462,6 +6463,23 @@ export interface paths {
         put?: never;
         /** Preview the exact effect-free F37 connector secret-rotation plan */
         post: operations["previewStaticSecretRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/rotations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one durable static-provider rotation command */
+        get: operations["getStaticSecretRotation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -15721,12 +15739,15 @@ export interface components {
             value: string;
         };
         SecretRotation: {
+            /** Format: uuid */
+            command_id?: string;
             completed: boolean;
             error?: string;
             failed_phase?: string;
             key: string;
             new_ref: string;
             old_ref: string;
+            phase?: string;
             queued: boolean;
             rollback_attempted: boolean;
             rollback_error?: string;
@@ -15781,11 +15802,11 @@ export interface components {
         SecretRotationRequest: {
             key: string;
             old_ref: string;
-            /** @description connector:<target> is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects. */
+            /** @description connector:<target> queues a connector rotation; any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. dynamic-lease:<provider> remains unavailable and fails closed with 503 before effects. */
             provider: string;
             remote_key?: string;
             target?: string;
-            /** @description Compatibility input only. Connector requests reject any supplied ttl_seconds with 400. Static and dynamic-lease providers remain unavailable with 503 regardless of this field. */
+            /** @description Compatibility input only. Connector and static requests reject any supplied ttl_seconds with 400. dynamic-lease providers remain unavailable with 503 regardless of this field. */
             ttl_seconds?: number;
         };
         SecretRotationSchedule: {
@@ -15844,7 +15865,7 @@ export interface components {
             /** Format: date-time */
             next_run_at?: string;
             old_ref: string;
-            /** @description connector:<target> only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command. */
+            /** @description connector:<target>, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence. */
             provider: string;
         };
         SecretRotationScheduleRun: {
@@ -15916,6 +15937,35 @@ export interface components {
             path: string;
             /** @description Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed. */
             preview_fingerprint?: string;
+        };
+        SecretStaticRotation: {
+            /** Format: date-time */
+            created_at: string;
+            error?: string;
+            expected_version: number;
+            /** Format: uuid */
+            id: string;
+            key: string;
+            new_ref: string;
+            old_ref: string;
+            /** @enum {string} */
+            phase: "queued" | "staged" | "cutover" | "verified" | "completed" | "rolled_back" | "rollback_failed" | "failed" | "retire_pending";
+            provider: string;
+            provider_type?: string;
+            restored_version: number;
+            result_version: number;
+            /** Format: uuid */
+            schedule_id?: string;
+            terminal: boolean;
+            /** Format: date-time */
+            terminal_at?: string;
+            /** Format: date-time */
+            updated_at: string;
+            verify_mode?: string;
+        };
+        SecretStaticRotationList: {
+            items: components["schemas"]["SecretStaticRotation"][];
+            next_cursor?: string;
         };
         SecretStoreCreatePreview: {
             blockers: string[];
@@ -35106,6 +35156,49 @@ export interface operations {
             };
         };
     };
+    listStaticSecretRotations: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretStaticRotationList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     rotateStaticSecret: {
         parameters: {
             query?: never;
@@ -35180,6 +35273,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretRotationPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getStaticSecretRotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretStaticRotation"];
                 };
             };
             /** @description client error */

@@ -3672,18 +3672,27 @@ when off, requiring a KEK when on):
   coverage. The AWS key is deliberately longer lived bait with explicit deny,
   unlike the short-lived STS credentials in ordinary dynamic-secret leases.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
-  `connector:<target>` secret-sync handoffs. Concrete PostgreSQL, MySQL, and AWS
-  IAM four-phase engines remain library/configuration components only: manual
-  static-provider and `dynamic-lease:<provider>` requests return `503` before
-  any stage, issue, cutover, delivery, verification, rollback, revoke, event, or
-  outbox effect because those phase chains do not yet have one crash-recoverable
-  worker receiver. Dynamic lease issue/renew/revoke remain separate served
-  operations. Rotation `ttl_seconds` is a compatibility field only: a connector
-  request that supplies it returns `400`, while static and dynamic-lease requests
-  still return their cached request-bound `503` regardless of that field. New schedules accept
-  only `connector:<target>`; static and dynamic schedule creation returns `503`.
-  Historical non-connector schedules are marked `unsupported`, disabled, and make
-  zero provider calls. Scheduled ticks bind each exact due edge to one durable,
+  `connector:<target>` secret-sync handoffs and for durable static-provider
+  commands: a configured PostgreSQL, MySQL or AWS IAM dynamic-secret provider with
+  `allow_static_rotation` runs stage, cutover, verify and retire as outbox-driven
+  phases recorded by immutable events, with rollback to the sealed predecessor on
+  a failed verification; `GET /api/v1/secrets/rotations/{id}` follows a command.
+  Boundaries: the secret name must equal the provider role; verification is a
+  connection test for databases and `not_available` for AWS IAM access keys; a
+  `rollback_failed` or `retire_pending` command needs an operator to retire the
+  leftover credential at the provider (no retry route yet); approval-gated
+  tenants must approve the worker's cutover write. `dynamic-lease:<provider>`
+  requests still return `503` before any issue, delivery, revoke, event or outbox
+  effect because lease rotation has no durable command yet. Dynamic lease
+  issue/renew/revoke remain separate served operations. Rotation `ttl_seconds` is
+  a compatibility field only: a connector request, or a static request against a
+  configured provider, that supplies it returns `400`, while dynamic-lease
+  requests and unconfigured static providers still return their cached
+  request-bound `503` regardless of that field. New schedules accept `connector:<target>` and
+  static providers; dynamic-lease schedule creation returns `503`. Historical
+  dynamic-lease schedules, and static schedules whose provider no longer allows
+  static rotation, are marked `unsupported`, disabled, and make zero provider
+  calls. Scheduled ticks bind each exact due edge to one durable,
   deterministic command before effects, execute at most 50 rotations while
   scanning at most 500 due rows, report every `approval_pending`,
   `command_in_flight`, `command_claimed`, or `config_revision_unanchored`

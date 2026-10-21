@@ -238,7 +238,10 @@ Redis ACL users.
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
 maximum TTLs, egress policy, and `file:`/`secret://` credential references
-(`buildRunDeps` wires the registry). Issuance commits a pending lease and sealed
+(`buildRunDeps` wires the registry). A `postgresql`, `mysql` or `aws-iam` provider with
+`allow_static_rotation: true` also serves the static-rotation worker (F37): it mints
+credentials with no native expiry for the roles in `allowed_roles`, and trstctl
+retires them explicitly after their successor is verified. Issuance commits a pending lease and sealed
 outbox command first, so only the outbox worker calls the provider. Providers
 with a native lookup or replay identity recover the same identity after a crash;
 AWS STS instead fences an uncertain AssumeRole call and never blindly retries it.
@@ -380,10 +383,10 @@ than it is.
 
 ### Secret rotation (F37)
 
-The repository contains a four-phase static-provider engine (stage, cutover, verify,
-retire), but that engine keeps staged authority in process memory and cannot recover
-an ACK-loss crash between provider effects. The served API therefore does not invoke
-it. Before execution, `POST /api/v1/secrets/rotations/preview` returns an exact,
+Provider rotation runs through durable commands: the request commits the command
+and returns queued, non-secret evidence; a bounded worker performs every provider
+effect and a restart resumes from the last persisted phase. Before execution,
+`POST /api/v1/secrets/rotations/preview` returns an exact,
 effect-free F37 plan. It reads only tenant-scoped secret metadata and configuration:
 it generates no successor value, decrypts no secret, writes no event or outbox row,
 and contacts no connector. The plan reports current/next versions, the resolved
@@ -393,21 +396,49 @@ execution effects, recovery steps, and explicit blockers. The console and
 changing console inputs invalidates the review. Only a ready, still-current review
 reveals the separate execution action.
 
-`POST /api/v1/secrets/rotations` currently accepts only `connector:<target>` and
+`POST /api/v1/secrets/rotations` accepts two provider modes. `connector:<target>`
 commits one application-secret event plus its sealed outbox intent before returning
-queued, non-secret evidence. Manual static-provider and dynamic-lease requests return
-`503` before stage, issue, cutover, delivery, verification, rollback, revoke, or
-retirement. Native-store value rotation remains a separate event-sourced operation.
+queued, non-secret evidence. Any other `provider` names a configured dynamic-secret
+provider (`secret_integrations.dynamic_providers`, type `postgresql`, `mysql` or
+`aws-iam`) with `allow_static_rotation: true` whose `allowed_roles` lists the secret
+name: the request commits one durable static-rotation command (an immutable
+`secret.static_rotation.queued` event, its projected row and one outbox intent) and
+returns `queued:true` with a `command_id`. The secret-integrations outbox worker then
+runs the phases, each recorded as an immutable `secret.static_rotation.advanced`
+event: **stage** mints a long-lived credential for role `key` at the provider, pinned
+to the command id so a retry after a crash replaces the same principal instead of
+leaking one; **cutover** publishes it as the next secret version through the same
+fenced `secret.rotated` mutation every write uses and keeps the predecessor value
+sealed; **verify** opens a session with the staged credential (PostgreSQL, MySQL;
+AWS IAM has no side-effect-free proof and records `verify_mode: not_available`);
+**retire** revokes `old_ref` at the provider, or skips when `old_ref` is `none`.
+The staged credential and the predecessor value stay sealed under the tenant key
+domain between phases (AN-8). A verification that still fails on its third worker
+attempt rolls back: the predecessor is restored as a new version and the successor
+revoked (`rolled_back`); a restore that fails ends in `rollback_failed`; a retirement
+that exhausts the outbox budget leaves the successor live as `retire_pending`.
+`GET /api/v1/secrets/rotations/{id}` and `GET /api/v1/secrets/rotations?key=<name>`
+(CLI `secrets rotations get` / `list`) follow a command to its terminal phase; no
+response carries the credential. `dynamic-lease:<provider>` requests still return
+`503` before any effect. Native-store value rotation remains a separate
+event-sourced operation.
 
 The scheduled path records connector cadences at
 `POST /api/v1/secrets/rotation-schedules`, lists them with
 `GET /api/v1/secrets/rotation-schedules`, and runs due ones with
-`POST /api/v1/secrets/rotation-schedules/run-due`. New static and dynamic-lease
-schedules fail closed with `503`. A historical static or dynamic schedule is terminalized as
-`unsupported`, disabled, and makes zero provider calls instead of pretending that
-its phase chain is crash-safe. A queued connector run advances `old_ref`; a
-connector whose local version committed before terminal delivery failure also
-advances to that committed version so later cadences cannot stale-loop.
+`POST /api/v1/secrets/rotation-schedules/run-due`. A schedule may name a
+connector target or a static provider that allows static rotation for the secret;
+dynamic-lease schedules fail closed with `503`. A static due edge queues one durable
+command, chains its predecessor from the credential the last terminal command left
+live (the successor after `completed`, the preserved predecessor after
+`rolled_back` or `failed`), defers with `command_in_flight` while a command is
+still running, and fails the edge after an unresolved `rollback_failed` until an
+operator resolves that command. A schedule whose provider no longer allows static
+rotation, or a historical dynamic-lease schedule, is terminalized as
+`unsupported`, disabled, and makes zero provider calls. A queued connector run
+advances `old_ref`; a connector whose local version committed before terminal
+delivery failure also advances to that committed version so later cadences cannot
+stale-loop.
 
 An operator can read one schedule at `GET /api/v1/secrets/rotation-schedules/{id}`
 and use `POST .../{id}/pause`, `.../{id}/resume`, or `.../{id}/retire` with a fresh
@@ -1258,8 +1289,10 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 ## Pitfalls & limits
 
 - **Serving status:** rotation serves worker-queued connector-backed manual and
-  scheduled variants. Static-provider and dynamic-lease rotation fail closed before
-  provider effects pending a durable multi-phase worker command. An unconfigured
+  scheduled variants and durable static-provider commands for PostgreSQL, MySQL and
+  AWS IAM providers that opt in with `allow_static_rotation` (AWS IAM verification
+  is recorded as not available). Dynamic-lease rotation still fails closed before
+  provider effects. An unconfigured
   secret-sync target fails closed with `503` instead of dropping the write; a missing
   Gitleaks binary fails scanning closed with `503` too.
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the

@@ -126,6 +126,7 @@ var TenantScopedTables = []string{
 	"secret_rotation_schedule_ticks",
 	"secret_rotation_schedule_scan_cursors",
 	"secret_rotation_schedule_commands",
+	"secret_static_rotation_commands",
 	"secret_rotation_schedules",
 	"dynamic_secret_operations",
 	"dynamic_secret_leases",

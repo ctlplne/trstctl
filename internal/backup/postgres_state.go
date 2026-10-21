@@ -1291,6 +1291,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// crash receivers. They deliberately have no FK to the rebuildable
 		// schedule projection, so they can restore before that projection exists.
 		"secret_rotation_schedule_commands",
+		"secret_static_rotation_commands",
 		"secret_store",
 		"secret_store_versions",
 		"application_secret_mutation_receipts",

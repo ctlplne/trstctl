@@ -425,6 +425,10 @@ type secretRotationResponse struct {
 	RollbackError     string `json:"rollback_error,omitempty"`
 	FailedPhase       string `json:"failed_phase,omitempty"`
 	Error             string `json:"error,omitempty"`
+	// CommandID and Phase identify a durable static-provider rotation command;
+	// GET /api/v1/secrets/rotations/{id} follows it to its terminal phase.
+	CommandID string `json:"command_id,omitempty"`
+	Phase     string `json:"phase,omitempty"`
 }
 
 type secretRotationScheduleRequest struct {
@@ -1044,6 +1048,55 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if isStaticSecretRotation(req.Provider) {
+		// A14: static providers run through the durable command worker. The
+		// request commits the command and returns queued evidence.
+		if idempotencyKey == "" {
+			a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+			return
+		}
+		principal, err := requestPrincipalSubject(r.Context())
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		bindingTenantID, ok := a.tenant(r)
+		if !ok {
+			a.writeProblem(w, problemUnauthorized())
+			return
+		}
+		_, requestBinding, err := a.applicationSecretRequestBinding(
+			bindingTenantID, idempotencyKey, principal, r.Method, r.URL.EscapedPath(),
+			"static-rotate", staticRotationSurface, req.Key, req)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+			if tenantID != bindingTenantID {
+				return 0, nil, errors.New("api: static rotation binding tenant changed")
+			}
+			if _, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err == nil && req.TTLSeconds != nil {
+				// A configured provider refuses the compatibility TTL field like
+				// a connector does; an unconfigured one keeps its typed 503 below.
+				return 0, nil, errStatus(http.StatusBadRequest, "ttl_seconds is unsupported for static rotation")
+			}
+			cmd, err := a.queueStaticSecretRotation(ctx, tenantID, idempotencyKey, requestBinding, "", req)
+			if err != nil {
+				var public *apiError
+				if errors.As(err, &public) && public.status == http.StatusServiceUnavailable {
+					// An unavailable provider is a typed refusal: record it under the
+					// request binding so a retry replays it and a changed command
+					// under the same key is a conflict, exactly as before A14.
+					return http.StatusServiceUnavailable, problem.New(http.StatusServiceUnavailable, public.detail), nil
+				}
+				return 0, nil, applicationSecretMutationError(err)
+			}
+			a.auditSecret(ctx, "secret.rotation.queued", tenantID, req.Key, 0)
+			return http.StatusOK, toStaticSecretRotationResponse(cmd), nil
+		})
+		return
+	}
 	principal, err := requestPrincipalSubject(r.Context())
 	if err != nil {
 		a.writeError(w, err)
@@ -1054,10 +1107,7 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	detail := manualStaticRotationUnavailableDetail
-	if strings.HasPrefix(req.Provider, secretDynamicLeaseRotationPrefix) {
-		detail = dynamicLeaseRotationUnavailableDetail
-	}
+	detail := dynamicLeaseRotationUnavailableDetail
 	// This branch deliberately owns no independently durable receiver. Cache its
 	// exact RFC 7807 refusal in the transactional recorder: retries cannot change
 	// the command binding, but no durable "bound" recovery row can be stranded.
@@ -1104,11 +1154,10 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			}
 		} else if strings.HasPrefix(provider, secretDynamicLeaseRotationPrefix) {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, dynamicLeaseRotationUnavailableDetail)
-		} else {
-			// Static rotators perform provider effects in the request process. A
-			// schedule cannot safely resume an ACK-lost Stage/Cutover/Retire call,
-			// so fail closed until a durable worker phase machine owns those calls.
-			return 0, nil, errStatus(http.StatusServiceUnavailable, scheduledStaticRotationUnavailableDetail)
+		} else if _, _, err := a.staticRotationProvider(tenantID, provider, key); err != nil {
+			// A15: static providers are scheduled when a configured provider may
+			// mint static credentials for the secret's role; otherwise fail closed.
+			return 0, nil, err
 		}
 		enabled := true
 		if req.Enabled != nil {
@@ -1247,9 +1296,18 @@ func (a *API) controlSecretRotationSchedule(ctx context.Context, tenantID, id, a
 		}
 		return http.StatusOK, toSecretRotationScheduleResponse(controlled), nil
 	}
-	if action == "resume" {
+	if action == "resume" && isStaticSecretRotation(schedule.Provider) {
+		if _, _, err := a.staticRotationProvider(tenantID, schedule.Provider, schedule.Key); err != nil {
+			return 0, nil, err
+		}
+		if latest, found, err := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, schedule.Key); err != nil {
+			return 0, nil, err
+		} else if found && !latest.Terminal() {
+			return 0, nil, errStatus(http.StatusConflict, staticRotationInFlightDetail)
+		}
+	} else if action == "resume" {
 		if !isConnectorSecretRotation(schedule.Provider) {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, scheduledStaticRotationUnavailableDetail)
+			return 0, nil, errStatus(http.StatusServiceUnavailable, dynamicLeaseRotationUnavailableDetail)
 		}
 		targetID, _, err := connectorSecretRotationTarget(secretRotationRequest{
 			Provider: schedule.Provider, Key: schedule.Key, OldRef: schedule.OldRef,

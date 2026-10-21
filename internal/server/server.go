@@ -2017,6 +2017,10 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		log:                      d.Log,
 		idem:                     idem,
 	}
+	if s.api != nil {
+		secretIntegrations.staticRotation = s.api.AdvanceStaticSecretRotation
+		secretIntegrations.staticRotationFailure = s.api.FailStaticSecretRotation
+	}
 	s.secretIntegrations = secretIntegrations
 	var tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 	if d.TenantKeyDomains != nil {

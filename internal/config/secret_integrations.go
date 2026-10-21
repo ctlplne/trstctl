@@ -100,15 +100,25 @@ type DynamicSecretProviderConfig struct {
 	RoleBindings map[string]string `json:"role_bindings,omitempty"`
 	// RedisACLRoles gives each allowed Redis role literal key namespaces and an
 	// explicit command allowlist. Raw ACL rules and categories are forbidden.
-	RedisACLRoles         map[string]redisacl.Role `json:"redis_acl_roles,omitempty"`
-	RedisTLSCARef         string                   `json:"redis_tls_ca_ref,omitempty"`
-	RedisTLSServerName    string                   `json:"redis_tls_server_name,omitempty"`
-	AllowPlaintextRedis   bool                     `json:"allow_plaintext_redis,omitempty"`
-	MaxTTL                string                   `json:"max_ttl,omitempty"`
-	AllowPrivate          bool                     `json:"allow_private_endpoint,omitempty"`
-	AllowInsecureLoopback bool                     `json:"allow_insecure_loopback,omitempty"`
-	PrivateEgressCIDRs    []string                 `json:"private_egress_cidrs,omitempty"`
+	RedisACLRoles       map[string]redisacl.Role `json:"redis_acl_roles,omitempty"`
+	RedisTLSCARef       string                   `json:"redis_tls_ca_ref,omitempty"`
+	RedisTLSServerName  string                   `json:"redis_tls_server_name,omitempty"`
+	AllowPlaintextRedis bool                     `json:"allow_plaintext_redis,omitempty"`
+	MaxTTL              string                   `json:"max_ttl,omitempty"`
+	// AllowStaticRotation lets the static-rotation worker mint long-lived
+	// credentials with no native expiry through this provider (postgresql,
+	// mysql, aws-iam) for roles in allowed_roles. Off by default: a dynamic
+	// provider that only ever issues bounded leases keeps that guarantee.
+	AllowStaticRotation   bool     `json:"allow_static_rotation,omitempty"`
+	AllowPrivate          bool     `json:"allow_private_endpoint,omitempty"`
+	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
+	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
 }
+
+// StaticRotationProviderTypes are the dynamic-provider types whose backends can
+// mint a credential without native expiry and revoke it by reference, which is
+// what scheduled static rotation needs (A14).
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true}
 
 // MaxTTLDuration is the hard validity ceiling for a generated credential. A
 // shorter requested lease can be renewed only up to this bound.
@@ -214,6 +224,9 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 		}
 		if len(normalizedStrings(item.AllowedRoles)) == 0 {
 			errs = append(errs, fmt.Errorf("%s allowed_roles must contain at least one role", where))
+		}
+		if item.AllowStaticRotation && !StaticRotationProviderTypes[strings.TrimSpace(item.Type)] {
+			errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d]: allow_static_rotation is served for postgresql, mysql and aws-iam providers only", i))
 		}
 		if ttl, err := item.MaxTTLDuration(); err != nil || ttl <= 0 {
 			errs = append(errs, fmt.Errorf("%s max_ttl must be a positive duration", where))

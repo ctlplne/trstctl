@@ -87,6 +87,8 @@ const (
 	EventSecretRotationScheduleResumed            = "secret.rotation_schedule.resumed"
 	EventSecretRotationScheduleRetired            = "secret.rotation_schedule.retired"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
+	EventSecretStaticRotationQueued               = "secret.static_rotation.queued"
+	EventSecretStaticRotationAdvanced             = "secret.static_rotation.advanced"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
 	EventCBOMSourceReconciled                     = "cbom.source.reconciled"
 	EventPQCMigrationCampaignStarted              = "pqc.migration_campaign.started"
@@ -390,6 +392,7 @@ var ledger = []FeatureEvent{
 	{"F37", "Secret rotation engine", "resume_secret_rotation_schedule", "resumeSecretRotationSchedule", []string{EventSecretRotationScheduleResumed}},
 	{"F37", "Secret rotation engine", "retire_secret_rotation_schedule", "retireSecretRotationSchedule", []string{EventSecretRotationScheduleRetired}},
 	{"F37", "Secret rotation engine", "run_due_secret_rotations", "runDueSecretRotationSchedules", []string{EventSecretRotationScheduleRan}},
+	{"F37", "Secret rotation engine", "rotate_static_secret", "rotateStaticSecret", []string{EventSecretStaticRotationQueued, EventSecretStaticRotationAdvanced}},
 }
 
 // eventTypeSet is the flattened set of every event type cataloged above, built

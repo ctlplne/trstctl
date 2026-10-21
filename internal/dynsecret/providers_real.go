@@ -155,6 +155,10 @@ func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequ
 		ttl = 24 * time.Hour
 	}
 	validUntil := time.Now().UTC().Add(ttl).Format("2006-01-02 15:04:05Z")
+	if req.Static {
+		// A static credential has no native expiry; trstctl retires it.
+		validUntil = "infinity"
+	}
 	if err := createPostgresRole(ctx, conn, user, password, validUntil); err != nil {
 		_ = b.Revoke(ctx, user)
 		return "", nil, errPostgresRoleCreate

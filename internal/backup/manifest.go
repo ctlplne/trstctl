@@ -164,6 +164,10 @@ var RecoveredFromPostgresBackup = []string{
 	// crash receiver with an operational lease, not a read-model snapshot: losing
 	// it could rerun an already-started command after retained-event reconciliation.
 	"secret_rotation_schedule_commands",
+	// A14/A15: static-provider rotation commands hold the sealed staged
+	// credential between phases; losing them would strand a live successor
+	// with no retirement record.
+	"secret_static_rotation_commands",
 	"secret_store",
 	"secret_store_versions",
 	"ssh_keys",

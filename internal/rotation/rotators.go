@@ -299,3 +299,24 @@ func NewAWSIAMRotator(cfg AWSIAMConfig) (*BackendRotator, error) {
 	}
 	return NewBackendRotator(backend, cfg.Publisher, cfg.Verifier)
 }
+
+// VerifyPostgresCredential proves a staged PostgreSQL credential (a DSN) can
+// connect and run query; the static-rotation worker uses it before retiring the
+// predecessor.
+func VerifyPostgresCredential(ctx context.Context, credential []byte, query string) error {
+	if query == "" {
+		query = "SELECT 1"
+	}
+	return postgresVerifier{query: query}.VerifyCredential(ctx, "", "", credential)
+}
+
+// VerifyMySQLCredential proves a staged MySQL credential (user:password@tcp(host)/db)
+// can open a session.
+func VerifyMySQLCredential(ctx context.Context, credential []byte) error {
+	db, err := dynsecret.OpenMySQLExecutor(ctx, credential)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	return db.PingContext(ctx)
+}

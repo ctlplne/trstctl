@@ -1364,7 +1364,8 @@ the connection value and creating a workload credential.
       "schema": "public",
       "allowed_roles": ["reader"],
       "max_ttl": "1h",
-      "username_prefix": "trstctl_orders"
+      "username_prefix": "trstctl_orders",
+      "allow_static_rotation": false
     }],
     "sync_targets": [{
       "tenant_id": "11111111-1111-4111-8111-111111111111",

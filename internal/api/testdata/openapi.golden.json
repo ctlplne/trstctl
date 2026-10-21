@@ -31802,6 +31802,10 @@
       },
       "SecretRotation": {
         "properties": {
+          "command_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "completed": {
             "type": "boolean"
           },
@@ -31818,6 +31822,9 @@
             "type": "string"
           },
           "old_ref": {
+            "type": "string"
+          },
+          "phase": {
             "type": "string"
           },
           "queued": {
@@ -32017,7 +32024,7 @@
             "type": "string"
           },
           "provider": {
-            "description": "connector:\u003ctarget\u003e is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects.",
+            "description": "connector:\u003ctarget\u003e queues a connector rotation; any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. dynamic-lease:\u003cprovider\u003e remains unavailable and fails closed with 503 before effects.",
             "type": "string"
           },
           "remote_key": {
@@ -32027,7 +32034,7 @@
             "type": "string"
           },
           "ttl_seconds": {
-            "description": "Compatibility input only. Connector requests reject any supplied ttl_seconds with 400. Static and dynamic-lease providers remain unavailable with 503 regardless of this field.",
+            "description": "Compatibility input only. Connector and static requests reject any supplied ttl_seconds with 400. dynamic-lease providers remain unavailable with 503 regardless of this field.",
             "type": "integer"
           }
         },
@@ -32199,7 +32206,7 @@
             "type": "string"
           },
           "provider": {
-            "description": "connector:\u003ctarget\u003e only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command.",
+            "description": "connector:\u003ctarget\u003e, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence.",
             "type": "string"
           }
         },
@@ -32488,6 +32495,109 @@
         },
         "required": [
           "path"
+        ],
+        "type": "object"
+      },
+      "SecretStaticRotation": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "new_ref": {
+            "type": "string"
+          },
+          "old_ref": {
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "staged",
+              "cutover",
+              "verified",
+              "completed",
+              "rolled_back",
+              "rollback_failed",
+              "failed",
+              "retire_pending"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_type": {
+            "type": "string"
+          },
+          "restored_version": {
+            "type": "integer"
+          },
+          "result_version": {
+            "type": "integer"
+          },
+          "schedule_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "terminal_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verify_mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "key",
+          "old_ref",
+          "new_ref",
+          "phase",
+          "terminal",
+          "expected_version",
+          "result_version",
+          "restored_version",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "SecretStaticRotationList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretStaticRotation"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -62335,6 +62445,69 @@
       }
     },
     "/api/v1/secrets/rotations": {
+      "get": {
+        "operationId": "listStaticSecretRotations",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretStaticRotationList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List durable static-provider rotation commands",
+        "x-trstctl-permission": "secrets:read"
+      },
       "post": {
         "operationId": "rotateStaticSecret",
         "parameters": [
@@ -62408,7 +62581,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Queue connector secret rotation; refuse non-durable provider modes",
+        "summary": "Queue connector or static-provider secret rotation; refuse dynamic-lease requests",
         "x-trstctl-permission": "secrets:write"
       }
     },
@@ -62467,6 +62640,64 @@
         ],
         "summary": "Preview the exact effect-free F37 connector secret-rotation plan",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/rotations/{id}": {
+      "get": {
+        "operationId": "getStaticSecretRotation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretStaticRotation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one durable static-provider rotation command",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/scans": {

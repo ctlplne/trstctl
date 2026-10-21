@@ -222,16 +222,19 @@ func TestOpenAPISecretRotationReportsQueuedDeferredAndUnavailableModesTruthfully
 	if !strings.Contains(providerDescription, "unavailable") || !strings.Contains(providerDescription, "503") {
 		t.Fatalf("rotation provider description=%q, want dynamic unavailable 503", providerDescription)
 	}
-	if !strings.Contains(ttlDescription, "Connector requests reject") ||
-		!strings.Contains(ttlDescription, "400") ||
+	if !strings.Contains(ttlDescription, "reject any supplied ttl_seconds with 400") ||
 		!strings.Contains(ttlDescription, "unavailable with 503") {
-		t.Fatalf("rotation ttl description=%q, want connector rejection plus provider refusal", ttlDescription)
+		t.Fatalf("rotation ttl description=%q, want connector/static rejection plus dynamic-lease refusal", ttlDescription)
+	}
+	if !strings.Contains(providerDescription, "allow_static_rotation") || !strings.Contains(providerDescription, "dynamic-lease:<provider>") {
+		t.Fatalf("rotation provider description=%q, want the static-provider mode and the dynamic-lease refusal named", providerDescription)
 	}
 	scheduleRequest := schemas["SecretRotationScheduleRequest"].(map[string]any)
 	scheduleProviderDescription, _ := scheduleRequest["properties"].(map[string]any)["provider"].(map[string]any)["description"].(string)
-	if !strings.Contains(scheduleProviderDescription, "connector:<target> only") ||
+	if !strings.Contains(scheduleProviderDescription, "connector:<target>") ||
+		!strings.Contains(scheduleProviderDescription, "allow_static_rotation") ||
 		!strings.Contains(scheduleProviderDescription, "503") {
-		t.Fatalf("schedule provider description=%q, want connector-only fail-closed contract", scheduleProviderDescription)
+		t.Fatalf("schedule provider description=%q, want connector plus static-provider contract with the dynamic-lease refusal", scheduleProviderDescription)
 	}
 
 	due := schemas["SecretRotationDueRun"].(map[string]any)
