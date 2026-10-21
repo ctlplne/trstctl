@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 
 	"github.com/jackc/pgx/v5"
 
@@ -526,7 +527,7 @@ func (a *API) runSecretRotationSchedule(
 		// rotation executes no provider phase: a terminal unsupported event
 		// advances and disables the schedule truthfully.
 		status = "unsupported"
-		errText = "scheduled rotation is unavailable"
+		errText = schedulerhistory.StaticProviderUnavailableError
 	} else if isStaticSecretRotation(sched.Provider) {
 		// A15: a static schedule queues one durable command per due edge. The
 		// predecessor chains from the last command that left a live successor;

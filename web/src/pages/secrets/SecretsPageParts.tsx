@@ -288,6 +288,7 @@ const secretRotationGenericTerminalErrors = new Set([
 const secretRotationUnsupportedErrors = new Set([
   "dynamic-lease rotation is unavailable until its issue, delivery, and predecessor retirement phases share one durable worker command",
   "scheduled static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement",
+  "scheduled static-provider rotation is unavailable: the provider does not allow static rotation",
   "scheduled rotation is unavailable",
 ]);
 

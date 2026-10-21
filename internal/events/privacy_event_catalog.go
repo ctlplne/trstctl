@@ -75,6 +75,9 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		rejectingEntry("nhi.recovery.proof.issued"),
 		rejectingEntry("nhi.kem.rewrap.recorded"),
 		rejectingEntry("nhi.kem.rewrap.requested"),
+		rejectingEntry("nhi.kem.data_key.registered"),
+		rejectingEntry("nhi.kem.data_key.rewrapped"),
+		rejectingEntry("nhi.kem.rewrap.stage_completed"),
 		rejectingEntry("nhi.issuer.authority.registered"),
 		rejectingEntry("nhi.federation.bridge.imported"),
 		// Rewriting a root key or authentication reference would change signer

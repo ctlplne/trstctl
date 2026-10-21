@@ -158,7 +158,10 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	}
 	switch eventType {
 	case "nhi.algorithm.genesis":
-		return shape(`{"request_id":"","identity_id":"","tenant_id":"","deployment_scope":"","algorithm":"","public_key_der":"","epoch":0,"trust_root_att":"","trust_root_public_der":""}`), true
+		// A17: predecessor_custody names who holds the genesis key ("signer" or
+		// "workload"); it is omitted for the signer-held default.
+		return shape(`{"request_id":"","identity_id":"","tenant_id":"","deployment_scope":"","algorithm":"","public_key_der":"","epoch":0,"trust_root_att":"","trust_root_public_der":"","predecessor_custody":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/predecessor_custody"}}), true
 	case "nhi.delegation.applied":
 		return shape(`{"tenant_id":"","receipt_json":""}`), true
 	case "nhi.recovery.policy.configured":
@@ -172,7 +175,19 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "nhi.kem.rewrap.recorded":
 		return shape(`{"tenant_id":"","identity_id":"","epoch":1,"request_id":"","request_digest":"","record_json":"","stages":[""]}`), true
 	case "nhi.kem.rewrap.requested":
-		return shape(`{"tenant_id":"","identity_id":"","predecessor_epoch":0,"request_id":"","request_digest":"","stages":[""]}`), true
+		// A16: the request snapshots the predecessor epoch's data-key inventory and
+		// may attest that an empty stage is intentionally empty; both are omitted
+		// when zero/false.
+		return shape(`{"tenant_id":"","identity_id":"","predecessor_epoch":0,"request_id":"","request_digest":"","stages":[""],"inventory_sequence":0,"empty_inventory_attested":false}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/inventory_sequence", "/empty_inventory_attested"}}), true
+	case "nhi.kem.data_key.registered":
+		// A16: an operator-registered KEM-wrapped data-key envelope (ciphertext
+		// and digests only; the data key itself never reaches the control plane).
+		return shape(`{"tenant_id":"","identity_id":"","epoch":0,"target_ref":"","stage":"","kem_ciphertext":"","wrapped_dek":"","dek_sha256":""}`), true
+	case "nhi.kem.data_key.rewrapped":
+		return shape(`{"tenant_id":"","identity_id":"","predecessor_epoch":0,"epoch":0,"target_ref":"","stage":"","request_id":"","request_digest":"","predecessor_ciphertext_sha256":"","kem_ciphertext":"","wrapped_dek":"","dek_sha256":"","readback_dek_sha256":""}`), true
+	case "nhi.kem.rewrap.stage_completed":
+		return shape(`{"tenant_id":"","identity_id":"","predecessor_epoch":0,"epoch":0,"request_id":"","request_digest":"","stage":"","target_count":0,"receipts_sha256":""}`), true
 	case "nhi.issuer.authority.registered":
 		return shape(`{"tenant_id":"","issuer_id":"","identity_id":"","current_epoch":0,"ca_key_handle":"","ca_cert_der":""}`), true
 	case "nhi.federation.bridge.imported":

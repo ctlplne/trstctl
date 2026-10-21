@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,7 +88,14 @@ func TestWorkloadHeldSuccessionCoSignsThroughAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sock := filepath.Join(t.TempDir(), "cosign.sock")
+	// A unix socket path is capped at 104 bytes on macOS; t.TempDir() embeds the
+	// long test name, so the socket lives in a short sibling directory.
+	sockDir, err := os.MkdirTemp(os.TempDir(), "cs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
+	sock := filepath.Join(sockDir, "cosign.sock")
 	lis, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)

@@ -37,6 +37,11 @@ const (
 var ErrSanitationRequired = errors.New("legacy secret-rotation scheduler history sanitation is required")
 
 // CanonicalError maps every non-empty historical detail to scheduler-owned text.
+// StaticProviderUnavailableError is the closed-vocabulary detail for a static
+// schedule whose provider no longer (or never) allows static rotation (A14/A15):
+// the due edge ends unsupported without a provider phase.
+const StaticProviderUnavailableError = "scheduled static-provider rotation is unavailable: the provider does not allow static rotation"
+
 // Unknown input is classified from status and is never returned.
 func CanonicalError(status, detail string) string {
 	if detail == "" {
@@ -96,6 +101,7 @@ func isUnsupportedError(detail string) bool {
 	switch detail {
 	case "dynamic-lease rotation is unavailable until its issue, delivery, and predecessor retirement phases share one durable worker command",
 		"scheduled static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement",
+		StaticProviderUnavailableError,
 		"scheduled rotation is unavailable":
 		return true
 	default:

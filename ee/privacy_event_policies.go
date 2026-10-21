@@ -21,7 +21,6 @@ import (
 	"trstctl.com/trstctl/internal/reconcile/quarantine"
 	"trstctl.com/trstctl/internal/reconcile/rounds"
 	"trstctl.com/trstctl/internal/reconcile/witness"
-	"trstctl.com/trstctl/internal/succession"
 )
 
 type licensedPrivacyEventPolicy struct {
@@ -524,24 +523,8 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 				licensedPrivacyRule("/reason", events.PrivacyFieldFreeTextClear),
 			)),
 
-		entry(succession.TypeFinding, succession.FindingSchemaV1,
-			typedLicensedPrivacyPolicy[succession.FindingV1](
-				licensedPrivacyRule("/reason", events.PrivacyFieldFreeTextClear),
-			)),
-		entry(succession.TypeSuccession, succession.SuccessionSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.SuccessionV1]()),
-		entry(succession.TypeRetirement, succession.RetirementSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.RetirementV1]()),
-		entry(succession.TypeRPAck, succession.RPAckSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.RPAckV1]()),
-		entry(succession.TypeRefusal, succession.RefusalSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.RefusalV1]()),
-		entry(succession.TypeRewrapStage, succession.RewrapStageSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.RewrapStageV1]()),
-		entry(succession.TypeRewrapCompleted, succession.RewrapCompletedSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.RewrapCompletedV1]()),
-		entry(succession.TypeMisissuance, succession.MisissuanceSchemaV1,
-			rejectingTypedLicensedPrivacyPolicy[succession.MisissuanceV1]()),
+		// The PCAS succession vocabulary registers its own policies next to its
+		// event definitions (internal/succession/orchestrator/privacy_event_policies.go).
 	}
 	sort.Slice(catalog, func(i, j int) bool {
 		if catalog[i].EventType == catalog[j].EventType {

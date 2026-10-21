@@ -261,6 +261,11 @@ func startINT20Stack(t *testing.T, logOptions ...events.OpenOption) *int20Stack 
 		t.Fatalf("seed tenant: %v", err)
 	}
 
+	// The full-stack journeys append through the production append vocabulary:
+	// every PCAS event type and field must carry a registered privacy policy, as
+	// the served control plane requires (the batch-2 lab replay caught two
+	// payloads that drifted from their shapes while the unit tests stayed green).
+	logOptions = append([]events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, logOptions...)
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, logOptions...)
 	if err != nil {
 		t.Fatalf("open embedded JetStream: %v", err)

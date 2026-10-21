@@ -159,14 +159,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: delegation.TypeIssuanceRecorded, SchemaVersion: delegation.IssuanceRecordedSchemaV1},
 		{EventType: delegation.TypeRefusalRecorded, SchemaVersion: delegation.RefusalRecordedSchemaV1},
 		{EventType: delegation.TypeRevocationDirective, SchemaVersion: delegation.RevocationDirectiveSchemaV1},
-		{EventType: succession.TypeFinding, SchemaVersion: succession.FindingSchemaV1},
-		{EventType: succession.TypeSuccession, SchemaVersion: succession.SuccessionSchemaV1},
-		{EventType: succession.TypeRetirement, SchemaVersion: succession.RetirementSchemaV1},
-		{EventType: succession.TypeRPAck, SchemaVersion: succession.RPAckSchemaV1},
-		{EventType: succession.TypeRefusal, SchemaVersion: succession.RefusalSchemaV1},
-		{EventType: succession.TypeRewrapStage, SchemaVersion: succession.RewrapStageSchemaV1},
-		{EventType: succession.TypeRewrapCompleted, SchemaVersion: succession.RewrapCompletedSchemaV1},
-		{EventType: succession.TypeMisissuance, SchemaVersion: succession.MisissuanceSchemaV1},
+		// PCAS succession events register their policies in internal/succession/orchestrator.
 	}
 }
 
