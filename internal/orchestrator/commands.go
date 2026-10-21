@@ -1547,8 +1547,25 @@ func (o *Orchestrator) AttestCertificateCustody(ctx context.Context, tenantID st
 	if err != nil {
 		return err
 	}
+	eventID := CertificateCustodyAttestationEventID(tenantID, in.Fingerprint, in.JobID, in.Attempt)
+	// An agent that recovers a retained terminal report re-signs the same
+	// facts at a new signing time. The attestation already recorded for this
+	// job attempt stands when every custody fact matches; only changed custody
+	// under the same attempt is a conflict.
+	if retained, found, err := o.log.EventByID(ctx, eventID); err != nil {
+		return err
+	} else if found {
+		var prior projections.CertificateCustodyAttested
+		if retained.Type == projections.EventCertificateCustodyAttested && retained.TenantID == tenantID &&
+			json.Unmarshal(retained.Data, &prior) == nil &&
+			prior.Fingerprint == in.Fingerprint && prior.KeyOrigin == in.KeyOrigin && prior.KeyStorage == in.KeyStorage &&
+			prior.KeyExportable == in.KeyExportable && prior.KeyGeneratedBy == in.KeyGeneratedBy && prior.Agent == in.Agent &&
+			prior.JobID == in.JobID && prior.Attempt == in.Attempt && prior.ReceiptSignerFingerprint == in.ReceiptSignerFingerprint {
+			return nil
+		}
+	}
 	_, err = o.emitPreparedExact(ctx, events.Event{
-		ID:   CertificateCustodyAttestationEventID(tenantID, in.Fingerprint, in.JobID, in.Attempt),
+		ID:   eventID,
 		Type: projections.EventCertificateCustodyAttested, TenantID: tenantID, Data: payload,
 	})
 	return err

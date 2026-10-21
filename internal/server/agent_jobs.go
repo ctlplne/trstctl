@@ -1098,6 +1098,11 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	if claim.Destination == relay.KindConnectorTakedown {
 		terminalReason = "takedown_failed"
 	}
+	// A reclaimed host issuance whose retained key is gone cannot succeed on
+	// any later attempt; requeueing it would claim the same job forever.
+	if claim.Destination == agentJobKindEndpointRenew && detail == transport.HostRenewNoRetainedKeyDetail {
+		permanent, terminalReason = true, "host_key_not_retained"
+	}
 	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
 		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
 		permanent = true
@@ -1241,16 +1246,21 @@ func (a *agentService) recordAdoptedHostPredecessor(ctx context.Context, info mt
 	if len(req.AdoptedPredecessorPEM) == 0 {
 		return "", errors.New("adopted predecessor fingerprint arrived without its public leaf")
 	}
-	leaf, err := certinfo.Inspect(req.AdoptedPredecessorPEM)
-	if err != nil || leaf.IsCA || leaf.SHA256Fingerprint != fingerprint {
-		return "", errors.New("adopted predecessor leaf does not match the signed fingerprint")
-	}
 	der, err := certinfo.LeafDER(req.AdoptedPredecessorPEM)
 	if err != nil {
-		return "", err
+		return "", errors.New("adopted predecessor leaf does not parse")
+	}
+	leaf, err := certinfo.Inspect(der)
+	if err != nil || strings.ToLower(leaf.SHA256Fingerprint) != fingerprint {
+		return "", errors.New("adopted predecessor leaf does not match the signed fingerprint")
 	}
 	if a.orch == nil {
 		return "", errors.New("adopted predecessor recording is not configured")
+	}
+	// A pre-trstctl pair may already be in the inventory (discovered, or
+	// delivered to another target); the receipt names it without re-recording.
+	if _, err := a.store.GetCertificateByFingerprint(ctx, info.TenantID, fingerprint); err == nil {
+		return fingerprint, nil
 	}
 	notBefore, notAfter := leaf.NotBefore, leaf.NotAfter
 	if _, err := a.orch.RecordCertificate(ctx, info.TenantID, store.Certificate{

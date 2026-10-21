@@ -8,6 +8,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// HostRenewNoRetainedKeyDetail is the fixed report a host agent sends when a
+// reclaimed issuance finds no retained subject key for the job: the attempt
+// cannot continue and retrying the same job cannot change that.
+const HostRenewNoRetainedKeyDetail = "a reclaimed host issuance has no retained subject key; it will not generate another key for this job"
+
 // CSRValidityRefusalDetail is a fixed public report, never remote error text.
 const CSRValidityRefusalDetail = "the control plane refused this host request because the certificate profile signed-validity limits were not met"
 

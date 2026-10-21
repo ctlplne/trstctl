@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"strings"
 	"testing"
@@ -282,5 +283,139 @@ func TestServedFirstHostDeployReportsAdoptedPredecessorAndRollsBackToIt(t *testi
 	}
 	if !strings.Contains(queuedPayload, adoptedFP) {
 		t.Fatalf("queued rollback does not name the adopted predecessor: %s", queuedPayload)
+	}
+}
+
+// A45, the two shapes a pre-trstctl pair takes in practice: a self-signed
+// certificate that carries CA:TRUE (what a default openssl req -x509 makes),
+// and a leaf the inventory already knows from another target. Both are
+// accepted as the adopted predecessor; the known leaf is not recorded twice.
+func TestServedAdoptionAcceptsSelfSignedAndAlreadyKnownPredecessors(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.deploy")
+	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "owners:write", "identities:write")
+	agentID := agentRowID(h.tenant, h.agent)
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "test-1.0", Status: "active"}); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/owners", token, map[string]any{"kind": "workload", "name": "a45-shapes-owner"})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner = %d %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(body, &owner)
+	id := h.identity.Identity()
+
+	newTarget := func(name string) string {
+		t.Helper()
+		status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/connectors/targets", token, map[string]any{
+			"name": name, "connector": "nginx", "enabled": true,
+			"config": map[string]any{
+				"executor": "agent", "profile": "default", "cert_path": "/etc/nginx/" + name + ".crt", "key_path": "/etc/nginx/" + name + ".key",
+				"required_agent_id": agentID, "required_agent_role": mtls.AgentRoleHost,
+			},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("create target = %d %s", status, body)
+		}
+		var target struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(body, &target)
+		return target.ID
+	}
+	issuedLeaf := func(name string) (string, []byte) {
+		t.Helper()
+		leafKey, err := crypto.GenerateHostSubjectKey(name, []string{name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer leafKey.Destroy()
+		issued, err := h.srv.issueLeafWithValidity(ctx, leafKey.CSRDER, 24*time.Hour, crypto.LeafProfile{ClampTTLToIssuer: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := certinfo.Inspect(issued.DER)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.srv.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
+			OwnerID: &owner.ID, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber,
+			Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm, Source: "issued", CertificateDER: issued.DER,
+			NotBefore: &info.NotBefore, NotAfter: &info.NotAfter, ValidityAnchor: &issued.ValidityAnchor,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return strings.ToLower(info.SHA256Fingerprint), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issued.DER})
+	}
+	deployAdopting := func(targetID, name, adoptedFP string, adoptedPEM []byte) {
+		t.Helper()
+		status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/identities", token, map[string]any{"kind": "x509_certificate", "name": name, "owner_id": owner.ID})
+		if status != http.StatusCreated {
+			t.Fatalf("create identity = %d %s", status, body)
+		}
+		var ident struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(body, &ident)
+		deployed, _ := issuedLeaf(name)
+		payload := `{"connector":"nginx","target":"` + name + `","target_id":"` + targetID + `","identity_id":"` + ident.ID + `","fingerprint":"` + deployed + `"}`
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx,
+				`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+				 VALUES ($1, 'connector.deploy', $2, $3, $4, 'host', $5::uuid)`,
+				h.tenant, []byte(payload), "a45:shapes:"+name, store.ConnectorTargetLanePrefix+targetID, agentID)
+			return err
+		}); err != nil {
+			t.Fatalf("seed deploy job: %v", err)
+		}
+		claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"connector.deploy"}, Limit: 1, LeaseSeconds: 120})
+		if err != nil || len(claimed.Jobs) != 1 {
+			t.Fatalf("claim = %+v err=%v", claimed, err)
+		}
+		job := claimed.Jobs[0]
+		report, err := transport.SignedReportWithAdoption(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+			transport.JobOutcomeExecuted, "", "", "", custody.Record{}, adoptedFP, adoptedPEM, time.Now().UTC().Unix())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if accepted, err := h.client.ReportJobResult(ctx, report); err != nil || !accepted.Accepted {
+			t.Fatalf("adoption report for %s accepted=%v err=%v", name, accepted != nil && accepted.Accepted, err)
+		}
+		status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/connectors/targets/"+targetID, token, nil)
+		if status != http.StatusOK || !strings.Contains(string(body), `"ready":true`) || !strings.Contains(string(body), adoptedFP) {
+			t.Fatalf("readiness for %s = %d %s; want ready with %s as predecessor", name, status, body, adoptedFP)
+		}
+	}
+
+	// A self-signed CA:TRUE pair, reported with its own chain behind the leaf.
+	selfKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer selfKey.Destroy()
+	selfDER, err := crypto.SelfSignedCACert(selfKey, "selfsigned.a45.test", 48*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selfInfo, err := certinfo.Inspect(selfDER)
+	if err != nil || !selfInfo.IsCA {
+		t.Fatalf("fixture is not a self-signed CA certificate: %+v err=%v", selfInfo, err)
+	}
+	selfFP := strings.ToLower(selfInfo.SHA256Fingerprint)
+	selfPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: selfDER})
+	bundle := append(append([]byte(nil), selfPEM...), selfPEM...)
+	deployAdopting(newTarget("a45-selfsigned"), "selfsigned.a45.test", selfFP, bundle)
+	if recorded, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, selfFP); err != nil || !strings.HasPrefix(recorded.Source, "host-adopted:") {
+		t.Fatalf("self-signed predecessor in inventory = %+v err=%v", recorded, err)
+	}
+
+	// A leaf the inventory already holds as issued: named, not re-recorded.
+	knownFP, knownPEM := issuedLeaf("known.a45.test")
+	deployAdopting(newTarget("a45-known"), "known-target.a45.test", knownFP, knownPEM)
+	if recorded, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, knownFP); err != nil || recorded.Source != "issued" {
+		t.Fatalf("known predecessor after adoption = %+v err=%v; want the original issued record", recorded, err)
 	}
 }

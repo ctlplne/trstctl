@@ -298,6 +298,18 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 	if err != nil || !accepted.Accepted {
 		t.Fatalf("valid custody receipt = %+v, err=%v", accepted, err)
 	}
+	// An agent recovering its retained terminal report re-signs the same facts
+	// at a later time. The custody already attested for this attempt stands;
+	// the re-sent receipt is retained as a late receipt, not refused as a
+	// conflicting command.
+	resent, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, record, time.Now().UTC().Unix()+2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.client.ReportJobResult(ctx, resent); err != nil {
+		t.Fatalf("re-sent custody receipt refused: %v", err)
+	}
 
 	cert, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, issued.Fingerprint)
 	if err != nil {

@@ -421,3 +421,51 @@ func TestServedAgentFailureReturnsTheJob(t *testing.T) {
 		t.Fatalf("retry lost command/generation: %+v", requeued.Jobs[0])
 	}
 }
+
+// A reclaimed host issuance whose retained key is gone reports a fixed detail;
+// that failure is permanent, so the job leaves the queue instead of being
+// re-claimed forever.
+func TestServedKeylessReclaimedHostIssuanceFailsTerminally(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "endpoint.renew")
+	agentID := agentRowID(h.tenant, h.agent)
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "test-1.0", Status: "active"}); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+			 VALUES ($1, 'endpoint.renew', $2, 'renew:keyless', 'endpoint.renew:identity:keyless', 'host', $3::uuid)`,
+			h.tenant, []byte(`{"connector":"nginx","target":"edge-1","target_id":"00000000-0000-4000-8000-000000000001","identity_id":"00000000-0000-4000-8000-000000000002"}`), agentID)
+		return err
+	}); err != nil {
+		t.Fatalf("seed host renew job: %v", err)
+	}
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"endpoint.renew"}, Limit: 1, LeaseSeconds: 60})
+	if err != nil || len(claimed.Jobs) != 1 {
+		t.Fatalf("claim = %d (err %v)", len(claimed.Jobs), err)
+	}
+	reported, err := h.client.ReportJobResult(ctx, h.report(t, claimed.Jobs[0].JobID,
+		claimed.Jobs[0].Attempt, transport.JobOutcomeFailed, transport.HostRenewNoRetainedKeyDetail, ""))
+	if err != nil || !reported.Accepted {
+		t.Fatalf("failure report = %+v (err %v)", reported, err)
+	}
+	var status, lastError string
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT status, COALESCE(last_error, '') FROM outbox WHERE tenant_id = $1 AND id = $2`,
+		h.tenant, claimed.Jobs[0].JobID).Scan(&status, &lastError); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || lastError != "host_key_not_retained" {
+		t.Fatalf("job after keyless reclaim report = %s/%s, want failed/host_key_not_retained", status, lastError)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET agent_next_attempt_at=$3 WHERE tenant_id=$1 AND id=$2`,
+			h.tenant, claimed.Jobs[0].JobID, time.Now().Add(-time.Second))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"endpoint.renew"}, Limit: 1}); err != nil || len(again.Jobs) != 0 {
+		t.Fatalf("terminally failed job was offered again: jobs=%d err=%v", len(again.Jobs), err)
+	}
+}

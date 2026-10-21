@@ -4,6 +4,7 @@ package relay
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -62,6 +63,14 @@ func readAdoptablePredecessor(profile connector.LocalOpsConfig, ledger *HostRoll
 		secret.Wipe(keyPEM)
 		return out
 	}
-	out.ok, out.fingerprint, out.certPEM, out.keyPEM = true, strings.ToLower(info.SHA256Fingerprint), certPEM, keyPEM
+	// Report the leaf alone: an installed bundle may carry its chain, and the
+	// control plane verifies the signed fingerprint against exactly this leaf.
+	leafDER, err := certinfo.LeafDER(certPEM)
+	if err != nil {
+		secret.Wipe(keyPEM)
+		return out
+	}
+	out.ok, out.fingerprint, out.keyPEM = true, strings.ToLower(info.SHA256Fingerprint), keyPEM
+	out.certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
 	return out
 }

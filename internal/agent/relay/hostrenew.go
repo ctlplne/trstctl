@@ -167,8 +167,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		}
 		defer wipeHostRenewPending(ordinaryPending)
 		if ordinaryPending == nil && job.Attempt > 1 {
-			report(ctx, ch, job, OutcomeFailed,
-				"a reclaimed host issuance has no retained subject key; it will not generate another key for this job")
+			report(ctx, ch, job, OutcomeFailed, transport.HostRenewNoRetainedKeyDetail)
 			return false
 		}
 	}
