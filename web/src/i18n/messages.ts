@@ -16543,6 +16543,38 @@ export const messages = {
   },
   "connectors.purge.absent": { defaultMessage: "No files at the target's paths — ledger checked", description: "Purge found the target's files missing." },
   "connectors.purge.failed": { defaultMessage: "Material removal failed — material may remain", description: "Purge could not complete." },
+  "connectors.takedown.queued": { defaultMessage: "Object removal queued for a network relay", description: "Pending appliance takedown receipt status." },
+  "connectors.takedown.takenDown": { defaultMessage: "Relay deleted the installed object", description: "Successful appliance takedown receipt status." },
+  "connectors.takedown.bound": {
+    defaultMessage: "Object still bound to the listener — not removed",
+    description: "Takedown refused because the appliance serves the object.",
+  },
+  "connectors.takedown.absent": { defaultMessage: "No object of that name on the appliance", description: "Takedown found nothing to remove." },
+  "connectors.takedown.failed": { defaultMessage: "Object removal failed on the appliance", description: "Takedown reached the appliance and failed." },
+  "connectors.takedown.refused": {
+    defaultMessage: "Relay declined the removal before contacting the appliance",
+    description: "Takedown refused locally by the relay.",
+  },
+  "certificates.rogue.columnInstalledOn": {
+    defaultMessage: "Installed on",
+    description: "Rogue findings column listing connector targets the leaf was delivered to.",
+  },
+  "certificates.rogue.installedNone": { defaultMessage: "Not delivered through trstctl", description: "A rogue finding with no delivered connector target." },
+  "certificates.rogue.model.host_purge": { defaultMessage: "host purge", description: "Remediation model: the enrolled host agent removes the files." },
+  "certificates.rogue.model.appliance_takedown": {
+    defaultMessage: "appliance takedown",
+    description: "Remediation model: a network relay deletes the object.",
+  },
+  "certificates.rogue.model.none": { defaultMessage: "manual removal", description: "Remediation model: trstctl cannot remove the object." },
+  "certificates.rogue.takedown": { defaultMessage: "Take down", description: "Button that queues removal of a rogue leaf from one target." },
+  "certificates.rogue.takedownReason": {
+    defaultMessage: "Takedown reason",
+    description: "Label for the reason an operator records when taking down a rogue certificate.",
+  },
+  "certificates.rogue.takedownQueued": {
+    defaultMessage: "Removal queued on {target}: receipt {status}",
+    description: "Outcome line after a rogue takedown is queued; shows the receipt status.",
+  },
   "connectors.cancelled": {
     defaultMessage: "Cancelled by operator — nothing verified",
     description: "Receipt status for connector work an operator withdrew or recalled.",

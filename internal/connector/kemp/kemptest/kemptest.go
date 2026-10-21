@@ -70,6 +70,14 @@ func (s *Server) RemoveCert(name string) {
 	s.mu.Unlock()
 }
 
+// HasCert reports whether a certificate object of that name exists.
+func (s *Server) HasCert(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.certs[name]
+	return ok
+}
+
 // BoundCertName reports which certificate a virtual service is bound to.
 func (s *Server) BoundCertName(virtualService string) (string, bool) {
 	s.mu.Lock()
@@ -98,6 +106,24 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
+		s.ok(w)
+	// A43: deleting a certificate object. A LoadMaster refuses while a virtual
+	// service still uses it.
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/access/certificates/"):
+		name := strings.TrimPrefix(r.URL.Path, "/access/certificates/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, b := range s.bindings {
+			if b.CertName == name {
+				http.Error(w, `{"error":"certificate in use"}`, http.StatusConflict)
+				return
+			}
+		}
+		if _, exists := s.certs[name]; !exists {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		delete(s.certs, name)
 		s.ok(w)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/access/virtual-services/") && strings.HasSuffix(r.URL.Path, "/certificate"):
 		vs := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/access/virtual-services/"), "/certificate")

@@ -158,6 +158,7 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 			"connector.deploy":           true,
 			relay.KindConnectorTest:      true,
 			relay.KindConnectorRollback:  true,
+			relay.KindConnectorTakedown:  true,
 			relay.KindEndpointRenew:      true,
 			relay.KindPQCPosture:         true,
 			relay.KindPQCPostureRollback: true,

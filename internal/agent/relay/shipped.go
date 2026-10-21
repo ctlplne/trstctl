@@ -110,6 +110,15 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
+			// A43: a network relay removes the fingerprint-named object a deploy
+			// installed on an appliance; a bound object is refused, never
+			// unbound. Same credential redemption and grant as a deploy.
+			Kind:       KindConnectorTakedown,
+			Connectors: TakedownCapableKinds(),
+			Flags:      []string{"--relay-claim"},
+			Roles:      []string{mtls.AgentRoleNetwork},
+		},
+		{
 			Kind:       KindPQCPosture,
 			Connectors: []string{"envoy"},
 			Flags:      []string{"--relay-claim"},

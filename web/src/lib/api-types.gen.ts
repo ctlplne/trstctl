@@ -2513,7 +2513,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "takedown_queued" | "taken_down" | "takedown_bound" | "takedown_absent" | "takedown_failed" | "takedown_refused" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -7214,6 +7214,7 @@ export interface RogueCertificateFinding {
   finding_types: string[];
   fingerprint?: string;
   id: string;
+  installed_on?: RogueInstalledTarget[];
   issuer?: string;
   kind: "rogue_certificate" | "non_compliant_certificate";
   lifetime_days?: number;
@@ -7267,6 +7268,20 @@ export interface RogueCertificateSummary {
   rogue: number;
   total_analyzed: number;
   weak_key: number;
+}
+
+export interface RogueCertificateTakedownRequest {
+  fingerprint: string;
+  reason: string;
+  target_id: string;
+}
+
+export interface RogueInstalledTarget {
+  connector: string;
+  model: "host_purge" | "appliance_takedown" | "none";
+  note?: string;
+  target_id: string;
+  target_name: string;
 }
 
 export interface Role {

@@ -693,6 +693,8 @@ public final class OpenApiSchemas {
       "RogueCertificateFinding",
       "RogueCertificatePosture",
       "RogueCertificateSummary",
+      "RogueCertificateTakedownRequest",
+      "RogueInstalledTarget",
       "Role",
       "RoleList",
       "RotationRun",

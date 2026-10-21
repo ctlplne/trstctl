@@ -98,9 +98,13 @@ type rogueCertificateFinding struct {
 	// certificate violates (A42); each also appears in finding_types as
 	// customer_policy:<rule>.
 	PolicyViolations []rogueCertificatePolicyViolation `json:"policy_violations,omitempty"`
-	DiscoveredAt     *time.Time                        `json:"discovered_at,omitempty"`
-	NotBefore        *time.Time                        `json:"not_before,omitempty"`
-	NotAfter         *time.Time                        `json:"not_after,omitempty"`
+	// InstalledOn lists the connector targets trstctl delivered this leaf to
+	// and the remediation each can execute (A43): host_purge through the
+	// enrolled agent, appliance_takedown through a network relay, or none.
+	InstalledOn  []rogueInstalledTarget `json:"installed_on,omitempty"`
+	DiscoveredAt *time.Time             `json:"discovered_at,omitempty"`
+	NotBefore    *time.Time             `json:"not_before,omitempty"`
+	NotAfter     *time.Time             `json:"not_after,omitempty"`
 }
 
 func (a *API) listRogueCertificates(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +191,10 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 		}
 		out.Summary.TotalAnalyzed++
 		out.addRogueCertificateFinding(rogueCertificateFindingForCT(row))
+	}
+
+	if err := a.attachRogueInstalledTargets(ctx, tenantID, out.Findings); err != nil {
+		return rogueCertificatePostureResponse{}, err
 	}
 
 	sort.Slice(out.Findings, func(i, j int) bool {

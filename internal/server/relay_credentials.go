@@ -86,6 +86,11 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	case "ticket.sync":
 		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case "connector.takedown":
+		// A43: an appliance object removal redeems the same management
+		// credential a deploy would, resolved from the reviewed target
+		// configuration carried in the job; no certificate or key is sealed.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "connector.test":
 		// D5: a target test has no certificate or private key to seal. It still
 		// has to prove the appliance/keystore credential a deploy would use, so

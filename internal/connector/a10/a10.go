@@ -237,3 +237,39 @@ type statusError struct{ code int }
 func (e *statusError) Error() string {
 	return fmt.Sprintf("status %d (response body redacted)", e.code)
 }
+
+// Takedown deletes the fingerprint-named ssl-cert and ssl-key files a deploy
+// uploaded (A43). The aXAPI refuses to delete a file a client-ssl template
+// still references; that refusal is reported as ErrTakedownObjectBound.
+func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td connector.Takedown) error {
+	if strings.TrimSpace(td.Fingerprint) == "" || strings.TrimSpace(td.Target) == "" {
+		return connector.ErrTakedownNotInstalled
+	}
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return fmt.Errorf("a10: %w", err)
+	}
+	defer secret.Wipe(token)
+
+	base := connector.RollbackObjectName(td.Target, td.Fingerprint)
+	found := false
+	for _, file := range []struct{ kind, name string }{{"ssl-key", base + ".key"}, {"ssl-cert", base + ".crt"}} {
+		data, err := c.call(ctx, sb, http.MethodDelete,
+			"/axapi/v3/file/"+file.kind+"/"+url.PathEscape(file.name), token, nil)
+		secret.Wipe(data)
+		var se *statusError
+		switch {
+		case err == nil:
+			found = true
+		case errors.As(err, &se) && se.code == http.StatusNotFound:
+		case errors.As(err, &se) && se.code == http.StatusConflict:
+			return connector.ErrTakedownObjectBound
+		default:
+			return fmt.Errorf("a10: remove %s %q: %w", file.kind, file.name, err)
+		}
+	}
+	if !found {
+		return connector.ErrTakedownNotInstalled
+	}
+	return nil
+}

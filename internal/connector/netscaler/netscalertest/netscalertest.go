@@ -137,6 +137,25 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.ok(w)
+	// A43: deleting a system file. NITRO refuses while a certkey references it.
+	case r.URL.Path == "/nitro/v1/config/systemfile" && r.Method == http.MethodDelete:
+		s.requireSession(w, r, func() {
+			name := fileNameFromArgs(r.URL.RawQuery)
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			for _, b := range s.bindings {
+				if b.Cert == name || b.Key == name {
+					s.fail(w, http.StatusConflict, 1540, "file is in use by an SSL certkey")
+					return
+				}
+			}
+			if _, exists := s.files[name]; !exists {
+				s.fail(w, http.StatusNotFound, 258, "no such file")
+				return
+			}
+			delete(s.files, name)
+			s.ok(w)
+		})
 	case r.URL.Path == "/nitro/v1/config/sslcertkey" && r.Method == http.MethodPut:
 		s.requireSession(w, r, func() { s.sslcertkey(w, body) })
 	default:

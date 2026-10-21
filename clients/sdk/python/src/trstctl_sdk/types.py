@@ -9922,6 +9922,7 @@ RogueCertificateFinding = TypedDict(
         'finding_types': list[str],
         'fingerprint': str,
         'id': str,
+        'installed_on': list[dict[str, Any]],
         'issuer': str,
         'kind': str,
         'lifetime_days': int,
@@ -9983,6 +9984,28 @@ RogueCertificateSummary = TypedDict(
         'rogue': int,
         'total_analyzed': int,
         'weak_key': int,
+    },
+    total=False,
+)
+
+RogueCertificateTakedownRequest = TypedDict(
+    'RogueCertificateTakedownRequest',
+    {
+        'fingerprint': str,
+        'reason': str,
+        'target_id': str,
+    },
+    total=False,
+)
+
+RogueInstalledTarget = TypedDict(
+    'RogueInstalledTarget',
+    {
+        'connector': str,
+        'model': str,
+        'note': str,
+        'target_id': str,
+        'target_name': str,
     },
     total=False,
 )

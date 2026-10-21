@@ -4854,6 +4854,7 @@
                 "listCRLDistributions",
                 "submitCertificateTransparency",
                 "listRogueCertificates",
+                "takedownRogueCertificate",
                 "listRevocationHealth",
                 "listRevocationCaches"
             ],
@@ -4868,6 +4869,7 @@
                 "revocation health",
                 "revocation ct-submit",
                 "revocation rogue-certificates",
+                "revocation rogue-certificates takedown",
                 "identities compromise-preview",
                 "identities compromise",
                 "identities compromise-status",

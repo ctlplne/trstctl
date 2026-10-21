@@ -1268,3 +1268,41 @@ func (s *Store) DeployDeliveredToTarget(ctx context.Context, tenantID, targetNam
 	})
 	return found, err
 }
+
+// DeliveredTarget is one (connector family, route) a certificate was delivered
+// to through trstctl, read from delivery receipts.
+type DeliveredTarget struct {
+	Connector string
+	Target    string
+}
+
+// DeliveredTargetsForFingerprint lists the connector targets a certificate was
+// delivered to (delivered or verified connector.deploy receipts), so a rogue
+// finding can say where the leaf is installed and what can remove it.
+func (s *Store) DeliveredTargetsForFingerprint(ctx context.Context, tenantID, fingerprint string) ([]DeliveredTarget, error) {
+	fingerprint = strings.TrimSpace(fingerprint)
+	if fingerprint == "" {
+		return nil, nil
+	}
+	var out []DeliveredTarget
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT connector, target
+			  FROM connector_delivery_receipts
+			 WHERE tenant_id = $1 AND destination = 'connector.deploy'
+			   AND lower(fingerprint) = lower($2) AND status IN ('delivered', 'verified')
+			 ORDER BY connector, target`, tenantID, fingerprint)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d DeliveredTarget
+			if err := rows.Scan(&d.Connector, &d.Target); err != nil {
+				return err
+			}
+			out = append(out, d)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

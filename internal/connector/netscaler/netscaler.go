@@ -339,3 +339,41 @@ type statusError struct{ code int }
 func (e *statusError) Error() string {
 	return fmt.Sprintf("status %d (response body redacted)", e.code)
 }
+
+// Takedown deletes the fingerprint-named certificate and key system files a
+// deploy uploaded (A43). NITRO refuses to delete a file a certkey still
+// references; that refusal is reported as ErrTakedownObjectBound.
+func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td connector.Takedown) error {
+	if strings.TrimSpace(td.Fingerprint) == "" || strings.TrimSpace(td.Target) == "" {
+		return connector.ErrTakedownNotInstalled
+	}
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return fmt.Errorf("netscaler: %w", err)
+	}
+	defer secret.Wipe(token)
+	defer func() { _ = c.logout(ctx, sb, token) }()
+
+	base := connector.RollbackObjectName(td.Target, td.Fingerprint)
+	found := false
+	for _, filename := range []string{base + ".key", base + ".crt"} {
+		path := "/nitro/v1/config/systemfile?args=filename:" + url.PathEscape(filename) +
+			",filelocation:" + url.PathEscape(c.fileLocation)
+		data, err := c.call(ctx, sb, http.MethodDelete, path, token, nil)
+		secret.Wipe(data)
+		var se *statusError
+		switch {
+		case err == nil:
+			found = true
+		case errors.As(err, &se) && se.code == http.StatusNotFound:
+		case errors.As(err, &se) && se.code == http.StatusConflict:
+			return connector.ErrTakedownObjectBound
+		default:
+			return fmt.Errorf("netscaler: remove file %q: %w", filename, err)
+		}
+	}
+	if !found {
+		return connector.ErrTakedownNotInstalled
+	}
+	return nil
+}

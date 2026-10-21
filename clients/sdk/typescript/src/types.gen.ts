@@ -5887,6 +5887,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/rogue-certificates/takedown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue removal of a rogue certificate from a connector target where trstctl installed it */
+        post: operations["takedownRogueCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/contextual-priorities": {
         parameters: {
             query?: never;
@@ -10173,7 +10190,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+            status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "takedown_queued" | "taken_down" | "takedown_bound" | "takedown_absent" | "takedown_failed" | "takedown_refused" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;
@@ -15222,6 +15239,7 @@ export interface components {
             finding_types: string[];
             fingerprint?: string;
             id: string;
+            installed_on?: components["schemas"]["RogueInstalledTarget"][];
             issuer?: string;
             /** @enum {string} */
             kind: "rogue_certificate" | "non_compliant_certificate";
@@ -15287,6 +15305,21 @@ export interface components {
             rogue: number;
             total_analyzed: number;
             weak_key: number;
+        };
+        RogueCertificateTakedownRequest: {
+            fingerprint: string;
+            reason: string;
+            /** Format: uuid */
+            target_id: string;
+        };
+        RogueInstalledTarget: {
+            connector: string;
+            /** @enum {string} */
+            model: "host_purge" | "appliance_takedown" | "none";
+            note?: string;
+            /** Format: uuid */
+            target_id: string;
+            target_name: string;
         };
         Role: {
             name: string;
@@ -33794,6 +33827,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RogueCertificatePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    takedownRogueCertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RogueCertificateTakedownRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorDelivery"];
                 };
             };
             /** @description client error */

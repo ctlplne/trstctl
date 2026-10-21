@@ -314,6 +314,9 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 			}), true
 	case "endpoint.containment.requested":
 		return shape(`{"target_id":"","target_revision":"","identity_id":"","expected_fingerprint":"","required_agent_id":"","reason":"","requested_by":"","outbox_id":1}`), true
+	case "connector.takedown.requested":
+		return shape(`{"connector":"","target":"","target_id":"","target_revision":"","identity_id":"","fingerprint":"","target_config":{},"reason":"","requested_by":"","idempotency_key":"","outbox_id":1,"receipt_id":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/identity_id"}, DynamicObject: []string{"/target_config"}}), true
 	case "endpoint.purge.requested":
 		return shape(`{"target_id":"","target_revision":"","identity_id":"","expected_fingerprint":"","required_agent_id":"","connector":"","target":"","target_config":{},"reason":"","requested_by":"","idempotency_key":"","outbox_id":1,"receipt_id":""}`,
 			catalogPrivacyShapeOptions{DynamicObject: []string{"/target_config"}}), true

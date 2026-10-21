@@ -222,6 +222,14 @@ const (
 	ConnectorPurgeDifferentLeaf = "purge_different_leaf"
 	ConnectorPurgeAbsent        = "purge_absent"
 	ConnectorPurgeFailed        = "purge_failed"
+	// Takedown is the relay-side removal of a fingerprint-named appliance
+	// object (A43). Only taken_down describes a deleted object.
+	ConnectorTakedownQueued  = "takedown_queued"
+	ConnectorTakenDown       = "taken_down"
+	ConnectorTakedownBound   = "takedown_bound"
+	ConnectorTakedownAbsent  = "takedown_absent"
+	ConnectorTakedownFailed  = "takedown_failed"
+	ConnectorTakedownRefused = "takedown_refused"
 )
 
 // ConnectorDelivery is the served vocabulary for connector delivery receipts.
@@ -250,6 +258,18 @@ var ConnectorDelivery = Registry{
 			Meaning: "The target's files do not exist on the host; only the rollback ledger was checked and wiped of that fingerprint."},
 		{Value: ConnectorPurgeFailed, ContactedTarget: true,
 			Meaning: "The host agent could not complete the removal: the file layout, a read, a removal or the ledger wipe failed. Material may remain; the receipt names the step."},
+		{Value: ConnectorTakedownQueued,
+			Meaning: "An appliance object removal is queued for a network relay. Nothing has been deleted."},
+		{Value: ConnectorTakenDown, ContactedTarget: true, MutatedTarget: true,
+			Meaning: "The relay deleted the fingerprint-named certificate and key objects the deploy installed; the appliance acknowledged each deletion. The listener binding was not changed."},
+		{Value: ConnectorTakedownBound, ContactedTarget: true,
+			Meaning: "The appliance still serves that object from the target's binding, so the relay deleted nothing. Roll back or deploy a replacement, then take it down."},
+		{Value: ConnectorTakedownAbsent, ContactedTarget: true,
+			Meaning: "The appliance holds no object of that name; there was nothing to remove."},
+		{Value: ConnectorTakedownFailed, ContactedTarget: true,
+			Meaning: "The relay reached the appliance and the deletion did not succeed. The object may remain."},
+		{Value: ConnectorTakedownRefused,
+			Meaning: "The relay declined before contacting the appliance: the connector cannot remove objects, the payload was unusable, or no credential was granted."},
 		{
 			Value:   ConnectorQueued,
 			Meaning: "Intent committed to the outbox in the same transaction as the state change. No connector has run.",

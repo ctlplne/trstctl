@@ -459,6 +459,7 @@ import type {
   ResponseIntegrationDispatch,
   ResponseIntegrationDispatchRequest,
   RogueCertificatePosture,
+  RogueCertificateTakedownRequest,
   RoleList,
   LifecycleAutomationPlan,
   RotationRun,
@@ -1734,6 +1735,7 @@ export interface Api {
   revocationCaches(): Promise<RevocationCachePosture>;
   revocationHealth(): Promise<RevocationHealth>;
   rogueCertificates(): Promise<RogueCertificatePosture>;
+  takedownRogueCertificate(input: RogueCertificateTakedownRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   ctMonitoring(): Promise<CTMonitoring>;
   /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
@@ -2429,6 +2431,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   revocationCaches: () => req<RevocationCachePosture>("/api/v1/revocation/caches"),
   revocationHealth: () => req<RevocationHealth>("/api/v1/revocation/health"),
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
+  takedownRogueCertificate: (input, key) => mutate<ConnectorDelivery>("POST", "/api/v1/revocation/rogue-certificates/takedown", input, key),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   ctMonitoring: () => req<CTMonitoring>("/api/v1/discovery/ct-monitoring"),
   updateCTMonitoring: (input) => mutate<CTMonitoring>("PUT", "/api/v1/discovery/ct-monitoring", input),

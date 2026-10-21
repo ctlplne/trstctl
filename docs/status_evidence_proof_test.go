@@ -299,6 +299,7 @@ var consoleSuccessEvidenceValues = map[string]string{
 	"deliveryStatus.containment_stopped": "the signed host receipt records an exact-fingerprint stop and two fresh local TLS probes that no longer observe a served leaf; independent client readback is separate",
 	"deliveryStatus.dry_run_planned":     "the relay contacted the target and returned a zero-write mutation plan",
 	"deliveryStatus.purged":              "the signed host receipt records an exact-fingerprint match on the installed leaf, the overwritten and removed certificate and key paths, and the wipe of every rollback-ledger snapshot with that fingerprint; listener stop is reported separately in the receipt",
+	"deliveryStatus.taken_down":          "the signed relay receipt records that the appliance acknowledged deletion of the fingerprint-named certificate and key objects; the listener binding was read back as not serving that object before deletion",
 	"deliveryStatus.rolled_back":         "an enrolled agent reported a family-specific predecessor restore; receipt detail states whether the listener was reverified",
 	"discoveryStatus.managed":            "the event-sourced triage projection records an operator claim linked to a managed identity",
 	"expiryBands.healthy":                "a parsed expiry is more than ninety days away",

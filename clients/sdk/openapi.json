@@ -10321,6 +10321,12 @@
               "purge_different_leaf",
               "purge_absent",
               "purge_failed",
+              "takedown_queued",
+              "taken_down",
+              "takedown_bound",
+              "takedown_absent",
+              "takedown_failed",
+              "takedown_refused",
               "queued",
               "delivered",
               "failed",
@@ -29579,6 +29585,12 @@
           "id": {
             "type": "string"
           },
+          "installed_on": {
+            "items": {
+              "$ref": "#/components/schemas/RogueInstalledTarget"
+            },
+            "type": "array"
+          },
           "issuer": {
             "type": "string"
           },
@@ -29826,6 +29838,58 @@
           "medium",
           "low",
           "recommendations"
+        ],
+        "type": "object"
+      },
+      "RogueCertificateTakedownRequest": {
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "target_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "RogueInstalledTarget": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "model": {
+            "enum": [
+              "host_purge",
+              "appliance_takedown",
+              "none"
+            ],
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "target_name",
+          "connector",
+          "model"
         ],
         "type": "object"
       },
@@ -60660,6 +60724,74 @@
         ],
         "summary": "List rogue and non-compliant certificate detection findings",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/revocation/rogue-certificates/takedown": {
+      "post": {
+        "operationId": "takedownRogueCertificate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RogueCertificateTakedownRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorDelivery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue removal of a rogue certificate from a connector target where trstctl installed it",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/risk/contextual-priorities": {

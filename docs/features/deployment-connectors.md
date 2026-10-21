@@ -349,6 +349,17 @@ silently allocate a different host action.
 If the host is unreachable, inspect Jobs and queues and restore the exact
 agent/profile path. After a terminal non-success, review a new attempt; the
 old idempotency key must not be reused for a changed target or reason.
+**Take down a rogue object on an appliance.** For f5, kemp, netscaler and a10,
+`connector.takedown` lets a network relay delete the fingerprint-named
+certificate and key objects a deploy installed, under the same credential
+redemption and grant as a deploy. It never unbinds a listener: an object the
+target still serves is reported `takedown_bound` and left in place, so roll
+back or deploy a replacement first. The rogue certificate listing names each
+delivered target with its remediation model, and
+`POST /api/v1/revocation/rogue-certificates/takedown` dispatches to this
+takedown or, for a host target, to the material purge below. Enable
+`connector.takedown` in `agent_channel.claimable_job_kinds` for the relay.
+
 **Remove compromised material.** Containment stops the listener; the
 compromised private key is still on disk and in the agent's rollback ledger.
 `GET /api/v1/connectors/targets/{id}/purge/preview` and

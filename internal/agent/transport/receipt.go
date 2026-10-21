@@ -212,6 +212,21 @@ const (
 	RollbackFailedAtTarget        = "connector rollback failed against the target"
 )
 
+// Takedown refusals and failures (A43) follow the same contact discipline.
+const (
+	TakedownRefusedBadPayload    = "job payload is not a takedown intent"
+	TakedownRefusedUnsupported   = "this connector cannot remove an installed object by name"
+	TakedownRefusedNoFingerprint = "no fingerprint names the object to remove"
+	TakedownFailedAtTarget       = "connector takedown failed against the target"
+)
+
+// TakedownReasonContactedTarget reports whether a takedown failure reason
+// means the relay actually reached the appliance. Unknown reasons answer
+// false, the fail-closed direction.
+func TakedownReasonContactedTarget(reason string) bool {
+	return reason == TakedownFailedAtTarget
+}
+
 // RollbackReasonContactedTarget reports whether a rollback failure reason means
 // the relay actually reached the appliance.
 //

@@ -1266,8 +1266,17 @@ never live in the API process. What you can do end to end against the running bi
   against sample facts. A module without posture rules reports nothing, and a
   certificate whose evaluation fails is counted in `policy_evaluation_errors`
   rather than read as clean. CT coverage depends on configured monitored
-  domains/logs; provider-native revocation and connector-side takedown remain
-  separate remediation work.
+  domains/logs. Each finding with a fingerprint lists `installed_on`: the connector
+  targets trstctl delivered that leaf to and what can remove it there
+  (`host_purge` through the enrolled agent, `appliance_takedown` through a
+  network relay for f5, kemp, netscaler and a10, or `none`).
+  `POST /api/v1/revocation/rogue-certificates/takedown` (`trstctl-cli revocation
+  rogue-certificates takedown`) queues that removal with a reason; an appliance
+  object the target still serves is reported `takedown_bound` and left in place
+  until it is re-bound, and only `taken_down` or `purged` claims removal.
+  Provider-native revocation remains separate; targets trstctl never delivered
+  to, CT-only findings and cloud or FortiGate/PAN-OS targets have no executable
+  takedown.
 - Compliance and inventory reporting: `GET /api/v1/compliance/inventory-report`
   and `trstctl-cli compliance inventory-report` return the CAP-OBS-02 reporting
   view (frameworks, report types, routes, evidence refs, inventory counts, tenant
@@ -2292,7 +2301,7 @@ named in their own sections. The claimable set remains empty by default and
 rather than unfinished: handing out work nothing can perform fills a queue while the
 control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
-`endpoint.contain`, `endpoint.purge`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
+`endpoint.contain`, `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `cmdb.sync`,
 `mdm.sync`, `ticket.sync`, and `agent.upgrade` —
 all have shipped executors. Enabling a kind exposes that already-built executor; it

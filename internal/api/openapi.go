@@ -1807,6 +1807,7 @@ func componentSchemas() map[string]*Schema {
 		"discovered_at": timestamp(),
 		"not_before":    timestamp(),
 		"not_after":     timestamp(),
+		"installed_on":  {Type: "array", Items: ref("RogueInstalledTarget")},
 	}, "id", "kind", "policy_status", "subject", "source", "finding_types", "severity", "risk_score", "recommendation", "evidence_refs")
 	rogueCertificatePosture := object(map[string]*Schema{
 		"capability":               str(),
@@ -3127,6 +3128,14 @@ func componentSchemas() map[string]*Schema {
 		"target_enabled", "identity_id", "identity_name", "identity_status", "certificate_status",
 		"expected_fingerprint", "required_agent_id", "preview_fingerprint", "required_permission",
 		"execution_effects", "verification_steps", "warnings")
+	rogueInstalledTarget := object(map[string]*Schema{
+		"target_id": uuid(), "target_name": str(), "connector": str(),
+		"model": {Type: "string", Enum: []string{"host_purge", "appliance_takedown", "none"}},
+		"note":  str(),
+	}, "target_id", "target_name", "connector", "model")
+	rogueCertificateTakedownReq := object(map[string]*Schema{
+		"fingerprint": str(), "target_id": uuid(), "reason": str(),
+	}, "fingerprint", "target_id", "reason")
 	connectorWorkCancellation := object(map[string]*Schema{
 		"target_id":         uuid(),
 		"withdrawn_job_ids": {Type: "array", Items: &Schema{Type: "integer"}},
@@ -6763,6 +6772,8 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorDelivery":                        connectorDelivery,
 		"ConnectorDeliveryList":                    list("ConnectorDelivery"),
 		"ConnectorWorkCancellation":                connectorWorkCancellation,
+		"RogueInstalledTarget":                     rogueInstalledTarget,
+		"RogueCertificateTakedownRequest":          rogueCertificateTakedownReq,
 		"KeyCompromisePlanRequest":                 keyCompromisePlanRequest,
 		"KeyCompromiseCertificate":                 keyCompromiseCertificate,
 		"KeyCompromiseExcludedCertificate":         keyCompromiseExcludedCertificate,

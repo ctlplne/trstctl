@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1585 annotated sites across 26 rules. Each row is
+1586 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (326 sites)
+### G101 — CWE-798 Use of hardcoded credentials (327 sites)
 
 | Location | Reason |
 |---|---|
@@ -105,6 +105,7 @@ not this file.
 | `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:342` | reference NAME, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:400` | reference NAME (CWE-798) |
+| `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/transport/agentservice.go:750` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:757` | an RPC method name. This call carries a CSR up and returns |
@@ -509,10 +510,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5500` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5517` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5530` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5558` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5501` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5518` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5531` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5559` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |

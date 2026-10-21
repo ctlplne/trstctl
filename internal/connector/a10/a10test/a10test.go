@@ -60,6 +60,18 @@ func (s *Server) Client() *http.Client { return s.srv.Client() }
 // Close shuts the server down.
 func (s *Server) Close() { s.srv.Close() }
 
+// HasFile reports whether an uploaded ssl-cert or ssl-key file of that name exists.
+func (s *Server) HasFile(kind, name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if kind == "ssl-key" {
+		_, ok := s.keys[name]
+		return ok
+	}
+	_, ok := s.certs[name]
+	return ok
+}
+
 // Binding returns the credential bound to template.
 func (s *Server) Binding(template string) (Binding, bool) {
 	s.mu.Lock()
@@ -97,6 +109,36 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.ok(w, map[string]any{"file": name})
+	// A43: deleting an uploaded file. The aXAPI refuses while a client-ssl
+	// template references it.
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/axapi/v3/file/"):
+		s.requireToken(w, r, func() {
+			rest := strings.TrimPrefix(r.URL.Path, "/axapi/v3/file/")
+			parts := strings.SplitN(rest, "/", 2)
+			if len(parts) != 2 {
+				http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
+				return
+			}
+			name, _ := url.PathUnescape(parts[1])
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			for _, b := range s.bindings {
+				if b.CertFile == name || b.KeyFile == name {
+					http.Error(w, `{"response":{"status":"fail","err":"file in use"}}`, http.StatusConflict)
+					return
+				}
+			}
+			files := s.certs
+			if parts[0] == "ssl-key" {
+				files = s.keys
+			}
+			if _, exists := files[name]; !exists {
+				http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
+				return
+			}
+			delete(files, name)
+			s.ok(w, map[string]any{"file": name})
+		})
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/"):
 		s.requireToken(w, r, func() { s.bind(w, body, strings.TrimPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/")) })
 	default:

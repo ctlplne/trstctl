@@ -495,6 +495,50 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "critical",
     order: 8,
   },
+  // A43: appliance object takedown by a network relay. Only taken_down
+  // claims a deleted object; bound means the listener still serves it.
+  takedown_queued: {
+    get label() {
+      return translateNow("connectors.takedown.queued");
+    },
+    tone: "info",
+    order: 7,
+  },
+  taken_down: {
+    get label() {
+      return translateNow("connectors.takedown.takenDown");
+    },
+    tone: "success",
+    order: 8,
+  },
+  takedown_bound: {
+    get label() {
+      return translateNow("connectors.takedown.bound");
+    },
+    tone: "warning",
+    order: 8,
+  },
+  takedown_absent: {
+    get label() {
+      return translateNow("connectors.takedown.absent");
+    },
+    tone: "warning",
+    order: 8,
+  },
+  takedown_failed: {
+    get label() {
+      return translateNow("connectors.takedown.failed");
+    },
+    tone: "critical",
+    order: 8,
+  },
+  takedown_refused: {
+    get label() {
+      return translateNow("connectors.takedown.refused");
+    },
+    tone: "critical",
+    order: 8,
+  },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

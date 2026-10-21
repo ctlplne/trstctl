@@ -199,6 +199,33 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 
+	// A43: deleting an installed crypto object by name. A BIG-IP refuses to
+	// delete an object a profile still references; the double does the same so
+	// a takedown that would pull the rug from under a virtual server is refused
+	// rather than modeled as success.
+	case r.Method == http.MethodDelete && (strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/cert/") || strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/key/")):
+		isKey := strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/key/")
+		name := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/cert/"), "/mgmt/tm/sys/crypto/key/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, chain := range s.profiles {
+			if (!isKey && chain.Cert == name) || (isKey && chain.Key == name) {
+				http.Error(w, `{"message":"object is in use by a profile"}`, http.StatusConflict)
+				return
+			}
+		}
+		objects := s.certs
+		if isKey {
+			objects = s.keys
+		}
+		if !objects[name] {
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		delete(objects, name)
+		delete(s.uploads, name)
+		s.ok(w, map[string]any{"name": name})
+
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/"):
 		profile := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/")
 		var patch struct {

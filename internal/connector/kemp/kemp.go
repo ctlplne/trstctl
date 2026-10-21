@@ -159,3 +159,33 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
 }
+
+// Takedown deletes the fingerprint-named certificate object a deploy uploaded
+// (A43). The LoadMaster refuses to delete a certificate a virtual service
+// still uses; that refusal is reported as ErrTakedownObjectBound.
+func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td connector.Takedown) error {
+	if strings.TrimSpace(td.Fingerprint) == "" || strings.TrimSpace(td.Target) == "" {
+		return connector.ErrTakedownNotInstalled
+	}
+	certName := connector.RollbackObjectName(td.Target+"-trstctl", td.Fingerprint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/access/certificates/"+url.PathEscape(certName), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return fmt.Errorf("kemp: remove certificate %q: %w", certName, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return connector.ErrTakedownNotInstalled
+	case resp.StatusCode == http.StatusConflict:
+		return connector.ErrTakedownObjectBound
+	case resp.StatusCode/100 != 2:
+		return fmt.Errorf("kemp: remove certificate %q: status %d (response body redacted)", certName, resp.StatusCode)
+	}
+	return nil
+}

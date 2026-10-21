@@ -297,3 +297,61 @@ func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, target s
 		Bound:       true,
 	}, nil
 }
+
+// Takedown removes the fingerprint-named crypto cert and key objects a deploy
+// installed (A43). The profile is read back first: an object the profile is
+// bound to is refused rather than deleted from under the virtual server.
+func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td connector.Takedown) error {
+	if strings.TrimSpace(td.Fingerprint) == "" {
+		return connector.ErrTakedownNotInstalled
+	}
+	base := connector.RollbackObjectName(c.name, td.Fingerprint)
+	certName := base + ".crt"
+	keyName := base + ".key"
+	installed, err := c.Readback(ctx, sb, td.Target)
+	if err != nil {
+		return fmt.Errorf("f5: read back profile before takedown: %w", err)
+	}
+	if installed.Bound && installed.ObjectName == certName {
+		return connector.ErrTakedownObjectBound
+	}
+	certFound, err := c.deleteObject(ctx, sb, "/mgmt/tm/sys/crypto/cert/"+url.PathEscape(certName))
+	if err != nil {
+		return fmt.Errorf("f5: remove certificate object %q: %w", certName, err)
+	}
+	keyFound, err := c.deleteObject(ctx, sb, "/mgmt/tm/sys/crypto/key/"+url.PathEscape(keyName))
+	if err != nil {
+		return fmt.Errorf("f5: remove key object %q: %w", keyName, err)
+	}
+	if !certFound && !keyFound {
+		return connector.ErrTakedownNotInstalled
+	}
+	return nil
+}
+
+// deleteObject issues one DELETE. It reports whether the object existed and
+// maps the appliance's in-use refusal to ErrTakedownObjectBound.
+func (c *Connector) deleteObject(ctx context.Context, sb connector.Sandbox, path string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+path, nil)
+	if err != nil {
+		return false, err
+	}
+	if c.user != "" || len(c.pass) > 0 {
+		req.Header.Set("Authorization", c.basicAuth())
+	}
+	resp, err := sb.Request(req)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return false, nil
+	case resp.StatusCode == http.StatusConflict:
+		return true, connector.ErrTakedownObjectBound
+	case resp.StatusCode/100 != 2:
+		return false, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
+	return true, nil
+}
