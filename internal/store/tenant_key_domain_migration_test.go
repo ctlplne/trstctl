@@ -22,6 +22,7 @@ func TestTenantKeyDomainCiphertextMigrationStagesAreFixed(t *testing.T) {
 		"secret_store.sealed",
 		"secret_store_versions.sealed",
 		"secret_shares.sealed",
+		"vault_cubbyhole.sealed",
 		"dynamic_secret_leases.sealed_preparation",
 		"dynamic_secret_leases.sealed_credential",
 		"code_signing_operations.sealed_command",

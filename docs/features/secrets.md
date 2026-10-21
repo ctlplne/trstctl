@@ -135,11 +135,13 @@ Supported paths are intentionally small:
 | `DELETE /v1/secret/data/{path}`, `DELETE /v1/secret/metadata/{path}` | The native delete: the object leaves reads and listings; history stays under native retention (no soft-delete state). |
 | `POST /v1/sys/capabilities-self`           | Capabilities per path from the token's trstctl permissions and the tenant's Vault ACL policies; `deny` when none. |
 | `POST /v1/auth/token/renew-self`           | `400`: trstctl API tokens are not renewable leases; mint a new token instead.           |
+| `POST /v1/sys/wrapping/wrap`, `unwrap`, `lookup` | Response wrapping over the native one-time share rows: a single-use `trstw_` wrapping token (`X-Vault-Wrap-TTL`, default 5m, max 24h), lookup without consuming, unwrap exactly once. |
+| `GET`/`POST`/`PUT`/`DELETE`/`LIST /v1/cubbyhole/{path}` | A per-token scratch space keyed by the presented token; another token sees nothing; entries expire with the token when it has an expiry. |
 
 The served compatibility contract also includes tenant-authored KV v2, PKI, and
-transit mounts, Vault ACL policy management, and common transit operations. It
-still omits cubbyhole, response wrapping, and the native dynamic secret engines;
-the native trstctl API remains the full surface. The machine-readable contract is
+transit mounts, Vault ACL policy management, common transit operations, the
+cubbyhole and response wrapping. It still omits the native dynamic secret
+engines; the native trstctl API remains the full surface. The machine-readable contract is
 pinned separately as
 [`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json),
 since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept

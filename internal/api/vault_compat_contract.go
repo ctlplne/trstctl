@@ -237,6 +237,7 @@ func vaultCompatSchemas() map[string]*Schema {
 		"VaultPKISignResponse":         vaultCompatEnvelope("VaultPKISignData", anySchema),
 	}
 	vaultCompatKVExtraSchemas(schemas)
+	vaultCompatWrappingSchemas(schemas)
 	return schemas
 }
 

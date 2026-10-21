@@ -20,6 +20,7 @@ var tenantKeyDomainCiphertextStages = []string{
 	"secret_store.sealed",
 	"secret_store_versions.sealed",
 	"secret_shares.sealed",
+	"vault_cubbyhole.sealed",
 	"dynamic_secret_leases.sealed_preparation",
 	"dynamic_secret_leases.sealed_credential",
 	"code_signing_operations.sealed_command",
@@ -128,6 +129,9 @@ func tenantKeyDomainCiphertextStageSQL(stage string) (selectSQL, updateSQL strin
 	case "secret_shares.sealed":
 		return `SELECT ctid::text, sealed FROM secret_shares WHERE tenant_id = $1 AND octet_length(sealed) > 0 FOR UPDATE`,
 			`UPDATE secret_shares SET sealed = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed = $4`, true
+	case "vault_cubbyhole.sealed":
+		return `SELECT ctid::text, sealed FROM vault_cubbyhole WHERE tenant_id = $1 AND octet_length(sealed) > 0 FOR UPDATE`,
+			`UPDATE vault_cubbyhole SET sealed = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed = $4`, true
 	case "dynamic_secret_leases.sealed_preparation":
 		return `SELECT ctid::text, sealed_preparation FROM dynamic_secret_leases WHERE tenant_id = $1 AND octet_length(sealed_preparation) > 0 FOR UPDATE`,
 			`UPDATE dynamic_secret_leases SET sealed_preparation = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed_preparation = $4`, true

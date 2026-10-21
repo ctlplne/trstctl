@@ -187,7 +187,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,
 		          privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          privacy_subject_erasures, privacy_retention_runs, privacy_archive_erasure_attestations,
-		          secret_shares, secret_store, secret_rotation_schedule_ticks, secret_rotation_schedule_scan_cursors, secret_rotation_schedule_commands, secret_rotation_schedules, approved_target_event_fences, application_secret_mutation_fences, application_secret_tenant_epochs, application_secret_mutation_receipts,
+		          secret_shares, vault_cubbyhole, secret_store, secret_rotation_schedule_ticks, secret_rotation_schedule_scan_cursors, secret_rotation_schedule_commands, secret_rotation_schedules, approved_target_event_fences, application_secret_mutation_fences, application_secret_tenant_epochs, application_secret_mutation_receipts,
 		          dynamic_secret_operations, dynamic_secret_leases, secret_sync_jobs, read_model_snapshots,
 		          managed_key_operations, managed_keys, code_signing_operations,
 		          operation_approval_decisions, operation_approval_requests,

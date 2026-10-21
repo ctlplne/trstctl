@@ -640,6 +640,116 @@
           "warnings"
         ],
         "type": "object"
+      },
+      "VaultWrapInfo": {
+        "properties": {
+          "creation_path": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "token",
+          "ttl",
+          "creation_time",
+          "creation_path"
+        ],
+        "type": "object"
+      },
+      "VaultWrapLookupData": {
+        "properties": {
+          "creation_path": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "creation_ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "creation_time",
+          "creation_ttl",
+          "creation_path"
+        ],
+        "type": "object"
+      },
+      "VaultWrapLookupResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultWrapLookupData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "VaultWrapResponse": {
+        "properties": {
+          "data": {},
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {},
+          "wrap_info": {
+            "$ref": "#/components/schemas/VaultWrapInfo"
+          }
+        },
+        "required": [
+          "request_id",
+          "wrap_info"
+        ],
+        "type": "object"
+      },
+      "VaultWrappingTokenRequest": {
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -823,6 +933,361 @@
           }
         ],
         "summary": "Refused with Vault's own wording: trstctl API tokens are not renewable leases"
+      }
+    },
+    "/v1/cubbyhole/{path}": {
+      "delete": {
+        "operationId": "vaultCompatCubbyholeDelete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Delete an entry of the presented token's cubbyhole"
+      },
+      "get": {
+        "operationId": "vaultCompatCubbyholeRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Read an entry of the presented token's cubbyhole (or LIST a folder with ?list=true)",
+        "x-trstctl-sensitive-response": true
+      },
+      "list": {
+        "operationId": "vaultCompatCubbyholeList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVListResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "List the direct children of a folder in the presented token's cubbyhole"
+      },
+      "post": {
+        "operationId": "vaultCompatCubbyholeWrite",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Write an entry of the presented token's cubbyhole, sealed in the tenant key domain"
+      },
+      "put": {
+        "operationId": "vaultCompatCubbyholeWritePut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Write an entry of the presented token's cubbyhole, sealed in the tenant key domain"
       }
     },
     "/v1/pki/issue/{role}": {
@@ -2700,6 +3165,218 @@
         ],
         "summary": "Author a tenant Vault-compatible ACL policy",
         "x-trstctl-permission": "policy:write"
+      }
+    },
+    "/v1/sys/wrapping/lookup": {
+      "post": {
+        "operationId": "vaultCompatWrappingLookup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultWrappingTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultWrapLookupResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Report a wrapping token's creation time and TTL without consuming it"
+      }
+    },
+    "/v1/sys/wrapping/unwrap": {
+      "post": {
+        "operationId": "vaultCompatWrappingUnwrap",
+        "parameters": [
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultWrappingTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Return a wrapped payload exactly once and consume the wrapping token",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/v1/sys/wrapping/wrap": {
+      "post": {
+        "operationId": "vaultCompatWrappingWrap",
+        "parameters": [
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultGenericRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultWrapResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Wrap a JSON payload under a single-use wrapping token (X-Vault-Wrap-TTL, default 5m) sealed in the tenant key domain"
       }
     },
     "/v1/{mount}/data/{name}": {

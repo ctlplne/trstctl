@@ -3589,8 +3589,12 @@ when off, requiring a KEK when on):
   `POST/PUT /v1/pki/issue/{role}` server-keygen path for stock `vault` CLI token lookup, KV v2
   put/get, mount and ACL policy lifecycle, and PKI issue — deliberately a subset over the native secret store
   and dynamic PKI secret. Tenant-authored mount management, ACL policies,
-  and common transit paths are also served. Cubbyhole, response wrapping, and
-  the native dynamic secret engines are outside this shim. The stock Vault CLI's KV put and
+  and common transit paths are also served, as are response wrapping
+  (`/v1/sys/wrapping/wrap|unwrap|lookup` over the native one-time share rows,
+  single-use `trstw_` tokens with a bounded TTL) and the per-token cubbyhole
+  (`/v1/cubbyhole/{path}`, sealed in the tenant key domain, keyed by the
+  presented token, expiring with it). The native dynamic secret engines remain
+  outside this shim. The stock Vault CLI's KV put and
   PKI issue/sign commands derive a token-keyed idempotency key when no header is
   sent. Mount and ACL mutations also derive a token-keyed key with the exact
   mount or policy event generation, allowing stock CLI retries and later

@@ -132,6 +132,7 @@ var RecoveredFromPostgresBackup = []string{
 	// externally produced/older artifacts from silently dropping that authority.
 	"privacy_subject_erasure_preparations",
 	"secret_shares",
+	"vault_cubbyhole",
 	// Approved target fences are the durable bridge across a broker ACK / SQL
 	// rollback. They are independent command state, not event-derived read models;
 	// restore must preserve the exact event bytes and already-claimed capability.

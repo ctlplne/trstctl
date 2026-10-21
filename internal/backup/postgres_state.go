@@ -1269,6 +1269,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"privacy_subject_erasure_preparations",
 		"privacy_subject_erasure_operations",
 		"secret_shares",
+		"vault_cubbyhole",
 		"approved_target_event_fences",
 		"application_secret_mutation_fences",
 		"application_secret_import_batches",

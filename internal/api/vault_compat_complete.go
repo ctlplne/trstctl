@@ -56,6 +56,7 @@ func allVaultCompatRoutes() []vaultCompatRoute {
 	out = append(out, vaultCompatRoutes...)
 	out = append(out, vaultCompatCompleteRoutes...)
 	out = append(out, vaultCompatKVExtraRoutes...)
+	out = append(out, vaultCompatWrappingRoutes...)
 	return out
 }
 

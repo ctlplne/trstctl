@@ -864,6 +864,7 @@ func seedRecoveredFromPostgresTables(
 					"actor:full-dr", "prior erasure", `{}`, `{}`, now,
 				}},
 			{`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-token-hash", "full-dr-share", []byte{0xee, 0xff}, now.Add(time.Hour)}},
+			{`INSERT INTO vault_cubbyhole (tenant_id, token_sha256, path, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-cubby-token", "scratch/note", []byte{0xcc, 0xbb}, now.Add(time.Hour)}},
 			// AUD-77: a crash fence and a completed mutation receipt are independent
 			// PostgreSQL recovery state. They intentionally use different event IDs:
 			// a completed command deletes its fence atomically, while an interrupted

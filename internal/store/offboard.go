@@ -297,6 +297,7 @@ var TenantScopedTables = []string{
 	"notification_channels",
 	"notification_routing_policies",
 	"secret_shares",
+	"vault_cubbyhole",
 	"approved_target_event_fences",
 	"application_secret_mutation_fences",
 	"application_secret_import_name_fences",
