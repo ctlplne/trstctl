@@ -207,32 +207,7 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 			}
 			implementation = gcpcas.New(gcpcas.Config{Name: item.Name, CaPool: item.CAPool}, api)
 		case "letsencrypt":
-			if acmeAccountSigner == nil {
-				return fail(errors.New("isolated ACME account signer is required for Let's Encrypt"))
-			}
-			var acmeOpts []letsencrypt.Option
-			if item.UpstreamDNS01 && upstreamDV != nil {
-				// Bound to THIS authority's CAA identifier, not a
-				// process-wide one — see upstreamDVHolder.
-				binding := upstreamDV.bind(item.CAAIssuerDomain, item.ID)
-				acmeOpts = append(acmeOpts,
-					letsencrypt.WithChallengeSolver(binding),
-					letsencrypt.WithDVObserver(binding))
-			}
-			if strings.TrimSpace(item.ACMEProfile) != "" {
-				acmeOpts = append(acmeOpts, letsencrypt.WithProfile(item.ACMEProfile))
-			}
-			if strings.TrimSpace(item.EABKeyID) != "" {
-				// A177: the MAC key is a credential reference resolved here and
-				// copied into the driver; the resolved buffer is wiped with the
-				// rest of this attempt's secrets.
-				hmacKey, loadErr := secrets.Load(item.EABHMACKeyRef)
-				if loadErr != nil {
-					return fail(loadErr)
-				}
-				acmeOpts = append(acmeOpts, letsencrypt.WithExternalAccountBinding(item.EABKeyID, hmacKey))
-			}
-			implementation, err = letsencrypt.NewPluginWithRemoteAccountSigner(item.Name, externalCAConfigEndpoint(item), client, acmeAccountSigner, acmeOpts...)
+			implementation, err = buildACMEExternalCA(item, client, acmeAccountSigner, upstreamDV, secrets)
 			if err != nil {
 				return fail(err)
 			}
@@ -246,6 +221,35 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 		}
 		return implementation, finish, nil
 	}, nil
+}
+
+// buildACMEExternalCA constructs the upstream ACME client for a letsencrypt-type
+// authority: the isolated account signer, unattended DNS-01 when the authority
+// opted in, the requested profile (A56) and the external account binding
+// (A177), whose MAC key is a credential reference resolved into the caller's
+// secret set and wiped with it.
+func buildACMEExternalCA(item config.ExternalCAConfig, client *http.Client, acmeAccountSigner crypto.DigestSigner, upstreamDV *upstreamDVHolder, secrets *externalCASecretSet) (ca.CA, error) {
+	if acmeAccountSigner == nil {
+		return nil, errors.New("isolated ACME account signer is required for Let's Encrypt")
+	}
+	var acmeOpts []letsencrypt.Option
+	if item.UpstreamDNS01 && upstreamDV != nil {
+		// Bound to THIS authority's CAA identifier, not a process-wide one;
+		// see upstreamDVHolder.
+		binding := upstreamDV.bind(item.CAAIssuerDomain, item.ID)
+		acmeOpts = append(acmeOpts, letsencrypt.WithChallengeSolver(binding), letsencrypt.WithDVObserver(binding))
+	}
+	if strings.TrimSpace(item.ACMEProfile) != "" {
+		acmeOpts = append(acmeOpts, letsencrypt.WithProfile(item.ACMEProfile))
+	}
+	if strings.TrimSpace(item.EABKeyID) != "" {
+		hmacKey, err := secrets.Load(item.EABHMACKeyRef)
+		if err != nil {
+			return nil, err
+		}
+		acmeOpts = append(acmeOpts, letsencrypt.WithExternalAccountBinding(item.EABKeyID, hmacKey))
+	}
+	return letsencrypt.NewPluginWithRemoteAccountSigner(item.Name, externalCAConfigEndpoint(item), client, acmeAccountSigner, acmeOpts...)
 }
 
 // buildCommercialExternalCA keeps credential-bearing vendor construction in a

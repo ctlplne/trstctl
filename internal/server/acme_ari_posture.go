@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/ari"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // ACMEARIPosture builds the authenticated operator view from two independent
@@ -90,43 +91,8 @@ func (s *Server) ACMEARIPosture(
 						}
 					}
 				}
-				observed, err := s.store.GetACMEUpstreamARI(ctx, tenantID, row.CertificateID)
-				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				if err := s.applyUpstreamARIObservation(ctx, tenantID, row, certID, &item); err != nil {
 					return api.ACMEARIPosture{}, "", err
-				}
-				if err == nil {
-					// A51: a discovered leaf's observation is bound by a
-					// declared issuer key id instead of an authenticated issuer.
-					provenance, _ := projections.NormalizeACMEUpstreamARIProvenance(observed.Provenance)
-					if row.IssuingExternalCAID != "" {
-						if observed.AuthorityID != row.IssuingExternalCAID || provenance != projections.ACMEUpstreamARIProvenanceAuthenticatedIssuer {
-							return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
-						}
-					} else {
-						if provenance != projections.ACMEUpstreamARIProvenanceIssuerKeyID {
-							return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
-						}
-						item.UpstreamAuthorityID = observed.AuthorityID
-					}
-					if observed.Fingerprint != row.Fingerprint || observed.ARICertificateID != certID {
-						return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
-					}
-					item.UpstreamProvenance = provenance
-					{
-						item.UpstreamStatus = observed.Status
-						item.UpstreamErrorClass = observed.ErrorClass
-						item.UpstreamFetchedAt = observed.FetchedAt
-						if row.CertificateStatus == "active" && row.NotAfter.After(observed.NextPollAt) {
-							next := observed.NextPollAt.UTC()
-							item.UpstreamNextPollAt = &next
-						}
-						if observed.CanSchedule() {
-							item.SuggestedWindow = &api.ACMEARIWindow{
-								Start: observed.WindowStart.UTC(), End: observed.WindowEnd.UTC(),
-							}
-							item.WindowSource = api.ACMEARIWindowUpstreamCA
-						}
-					}
 				}
 			}
 		}
@@ -199,4 +165,46 @@ func classifyACMEARISchedulerSource(trigger, reason string) string {
 	default:
 		return api.ACMEARISourceNone
 	}
+}
+
+// applyUpstreamARIObservation folds the retained upstream renewalInfo
+// observation into one posture row. An authenticated-issuer observation must
+// match the certificate's recorded external issuer; a discovered leaf's
+// observation (A51) is bound by a declared issuer key id instead and names
+// the authority it was matched to.
+func (s *Server) applyUpstreamARIObservation(ctx context.Context, tenantID string, row store.ACMEARIPostureRow, certID string, item *api.ACMEARICertificatePosture) error {
+	observed, err := s.store.GetACMEUpstreamARI(ctx, tenantID, row.CertificateID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	provenance, _ := projections.NormalizeACMEUpstreamARIProvenance(observed.Provenance)
+	if row.IssuingExternalCAID != "" {
+		if observed.AuthorityID != row.IssuingExternalCAID || provenance != projections.ACMEUpstreamARIProvenanceAuthenticatedIssuer {
+			return fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
+		}
+	} else {
+		if provenance != projections.ACMEUpstreamARIProvenanceIssuerKeyID {
+			return fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
+		}
+		item.UpstreamAuthorityID = observed.AuthorityID
+	}
+	if observed.Fingerprint != row.Fingerprint || observed.ARICertificateID != certID {
+		return fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
+	}
+	item.UpstreamProvenance = provenance
+	item.UpstreamStatus = observed.Status
+	item.UpstreamErrorClass = observed.ErrorClass
+	item.UpstreamFetchedAt = observed.FetchedAt
+	if row.CertificateStatus == "active" && row.NotAfter.After(observed.NextPollAt) {
+		next := observed.NextPollAt.UTC()
+		item.UpstreamNextPollAt = &next
+	}
+	if observed.CanSchedule() {
+		item.SuggestedWindow = &api.ACMEARIWindow{Start: observed.WindowStart.UTC(), End: observed.WindowEnd.UTC()}
+		item.WindowSource = api.ACMEARIWindowUpstreamCA
+	}
+	return nil
 }

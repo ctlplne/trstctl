@@ -928,113 +928,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	if !held {
 		return a.acceptLateTerminalReceipt(ctx, info, agentID, req, now)
 	}
-	migrationHandled := false
-	if a.recordMigrationResult == nil {
-		if _, handled, decodeErr := decodeMigrationReceiptClaim(claim.Destination, claim.Payload); decodeErr != nil {
-			return nil, status.Errorf(codes.Internal, "decode failed migration result: %v", decodeErr)
-		} else if handled {
-			return nil, status.Error(codes.Internal, "migration result receiver is not configured")
-		}
-	} else {
-		migrationHandled, err = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
-			claim.IdempotencyKey, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "ingest signed failed migration result: %v", err)
-		}
-	}
-
-	detail := strings.TrimSpace(req.Detail)
-	if claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback {
-		if a.recordPQCPostureResult == nil {
-			return nil, status.Error(codes.Internal, "PQC host posture result receiver is not configured")
-		}
-		if err := a.recordPQCPostureResult(ctx, info.TenantID, agentID, claim, req,
-			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
-			return nil, status.Errorf(codes.Internal, "ingest signed failed PQC host posture: %v", err)
-		}
-	}
-	if err := a.recordFailedPQCCertificateResult(ctx, info, agentID, claim, req); err != nil {
+	migrationHandled, detail, err := a.recordFailedJobOutcome(ctx, info, agentID, claim, req)
+	if err != nil {
 		return nil, err
 	}
-	if claim.Destination == relay.KindEndpointContain {
-		if err := a.recordEndpointContainmentFailure(ctx, info, claim, req); err != nil {
-			return nil, status.Errorf(codes.Internal, "record failed endpoint containment: %v", err)
-		}
-	}
-	if claim.Destination == relay.KindEndpointPurge {
-		if err := a.recordEndpointPurgeFailure(ctx, info, claim, req); err != nil {
-			return nil, status.Errorf(codes.Internal, "record failed endpoint purge: %v", err)
-		}
-	}
-	if claim.Destination == relay.KindConnectorTakedown {
-		if err := a.recordConnectorTakedownFailure(ctx, info, claim, req); err != nil {
-			return nil, status.Errorf(codes.Internal, "record failed connector takedown: %v", err)
-		}
-	}
-	// Keep the exact failed attempt in the identity timeline before releasing
-	// its lease. A projection failure leaves the signed result retryable;
-	// response loss reuses the same event ID instead of duplicating history.
-	if err := a.recordAgentConnectorDelivery(ctx, info, claim, req); err != nil {
-		return nil, status.Errorf(codes.Internal, "record failed agent connector delivery: %v", err)
-	}
-	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
-		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome, &store.RenewalAttempt{JobID: req.JobID, Attempt: req.Attempt}); err != nil {
-			return nil, status.Errorf(codes.Internal, "record failed host-managed lifecycle: %v", err)
-		}
-	}
-	if claim.Destination == agentJobKindCMDBSync {
-		if a.recordCMDBSyncFailure == nil {
-			return nil, status.Error(codes.Internal, "CMDB failure receiver is not configured")
-		}
-		cmdbDetail := redactAgentDetail(detail)
-		if cmdbDetail == "" {
-			cmdbDetail = "cmdb relay attempt failed without a safe detail"
-		}
-		if err := a.recordCMDBSyncFailure(ctx, info.TenantID, claim.IdempotencyKey,
-			claim.Payload, req.Attempt, time.Unix(req.IssuedAtUnix, 0).UTC(), cmdbDetail); err != nil {
-			return nil, status.Errorf(codes.Internal, "record CMDB page failure: %v", err)
-		}
-	}
-	if claim.Destination == agentJobKindTicketSync {
-		if a.recordTicketSyncFailure == nil {
-			return nil, status.Error(codes.Internal, "ticket failure receiver is not configured")
-		}
-		ticketDetail := redactAgentDetail(detail)
-		if ticketDetail == "" {
-			ticketDetail = "ticket relay attempt failed without a safe detail"
-		}
-		if err := a.recordTicketSyncFailure(ctx, info.TenantID, claim.IdempotencyKey,
-			claim.Payload, req.Attempt, time.Unix(req.IssuedAtUnix, 0).UTC(), ticketDetail); err != nil {
-			return nil, status.Errorf(codes.Internal, "record ticket page failure: %v", err)
-		}
-	}
-	// A rollback that can never succeed leaves the queue instead of being
-	// retried forever. The claim path has no attempts predicate, so a
-	// requeued job is re-claimed every poll — and each rollback attempt
-	// redeems an appliance credential out of the seal. Retrying an
-	// impossible operation would hold material outside the seal
-	// indefinitely, which is exactly what single-use redemption exists to
-	// prevent.
-	// A failed containment report may follow an attempted stop whose after
-	// probes could not complete. Re-executing it without an operator review
-	// would repeat an ambiguous emergency action indefinitely.
-	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain ||
-		claim.Destination == relay.KindEndpointPurge || claim.Destination == relay.KindConnectorTakedown ||
-		claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback
-	terminalReason := detail
-	if claim.Destination == relay.KindEndpointContain {
-		terminalReason = "containment_failed"
-	}
-	if claim.Destination == relay.KindEndpointPurge {
-		terminalReason = "purge_failed"
-	}
-	if claim.Destination == relay.KindConnectorTakedown {
-		terminalReason = "takedown_failed"
-	}
-	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
-		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
-		permanent = true
-	}
+	permanent, terminalReason := a.failedJobDisposition(ctx, info, claim, req, migrationHandled, detail)
 	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
 		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
 	}
@@ -1070,6 +968,132 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
+}
+
+// recordFailedJobOutcome runs every per-kind receiver for a failed report
+// before the claim is released: migration, PQC posture and certificate
+// results, containment/purge/takedown, the identity timeline, host-managed
+// renewal, CMDB and ticket pages. It returns whether a migration receiver
+// handled the report and the trimmed detail the disposition stage keys on.
+func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.PeerCertInfo, agentID string,
+	claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) (bool, string, error) {
+	var err error
+	migrationHandled := false
+	if a.recordMigrationResult == nil {
+		if _, handled, decodeErr := decodeMigrationReceiptClaim(claim.Destination, claim.Payload); decodeErr != nil {
+			return false, "", status.Errorf(codes.Internal, "decode failed migration result: %v", decodeErr)
+		} else if handled {
+			return false, "", status.Error(codes.Internal, "migration result receiver is not configured")
+		}
+	} else {
+		migrationHandled, err = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
+			claim.IdempotencyKey, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
+		if err != nil {
+			return false, "", status.Errorf(codes.Internal, "ingest signed failed migration result: %v", err)
+		}
+	}
+
+	detail := strings.TrimSpace(req.Detail)
+	if claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback {
+		if a.recordPQCPostureResult == nil {
+			return false, "", status.Error(codes.Internal, "PQC host posture result receiver is not configured")
+		}
+		if err := a.recordPQCPostureResult(ctx, info.TenantID, agentID, claim, req,
+			string(jobReceiptStatement(info, req).Canonical()), info.FingerprintSHA256); err != nil {
+			return false, "", status.Errorf(codes.Internal, "ingest signed failed PQC host posture: %v", err)
+		}
+	}
+	if err := a.recordFailedPQCCertificateResult(ctx, info, agentID, claim, req); err != nil {
+		return false, "", err
+	}
+	if claim.Destination == relay.KindEndpointContain {
+		if err := a.recordEndpointContainmentFailure(ctx, info, claim, req); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record failed endpoint containment: %v", err)
+		}
+	}
+	if claim.Destination == relay.KindEndpointPurge {
+		if err := a.recordEndpointPurgeFailure(ctx, info, claim, req); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record failed endpoint purge: %v", err)
+		}
+	}
+	if claim.Destination == relay.KindConnectorTakedown {
+		if err := a.recordConnectorTakedownFailure(ctx, info, claim, req); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record failed connector takedown: %v", err)
+		}
+	}
+	// Keep the exact failed attempt in the identity timeline before releasing
+	// its lease. A projection failure leaves the signed result retryable;
+	// response loss reuses the same event ID instead of duplicating history.
+	if err := a.recordAgentConnectorDelivery(ctx, info, claim, req); err != nil {
+		return false, "", status.Errorf(codes.Internal, "record failed agent connector delivery: %v", err)
+	}
+	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
+		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome, &store.RenewalAttempt{JobID: req.JobID, Attempt: req.Attempt}); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record failed host-managed lifecycle: %v", err)
+		}
+	}
+	if claim.Destination == agentJobKindCMDBSync {
+		if a.recordCMDBSyncFailure == nil {
+			return false, "", status.Error(codes.Internal, "CMDB failure receiver is not configured")
+		}
+		cmdbDetail := redactAgentDetail(detail)
+		if cmdbDetail == "" {
+			cmdbDetail = "cmdb relay attempt failed without a safe detail"
+		}
+		if err := a.recordCMDBSyncFailure(ctx, info.TenantID, claim.IdempotencyKey,
+			claim.Payload, req.Attempt, time.Unix(req.IssuedAtUnix, 0).UTC(), cmdbDetail); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record CMDB page failure: %v", err)
+		}
+	}
+	if claim.Destination == agentJobKindTicketSync {
+		if a.recordTicketSyncFailure == nil {
+			return false, "", status.Error(codes.Internal, "ticket failure receiver is not configured")
+		}
+		ticketDetail := redactAgentDetail(detail)
+		if ticketDetail == "" {
+			ticketDetail = "ticket relay attempt failed without a safe detail"
+		}
+		if err := a.recordTicketSyncFailure(ctx, info.TenantID, claim.IdempotencyKey,
+			claim.Payload, req.Attempt, time.Unix(req.IssuedAtUnix, 0).UTC(), ticketDetail); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record ticket page failure: %v", err)
+		}
+	}
+	return migrationHandled, detail, nil
+}
+
+// failedJobDisposition decides whether a failed report retires the job or
+// releases it for another attempt, and the terminal reason recorded when it
+// retires.
+func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerCertInfo, claim store.AgentJobResultClaim,
+	req *transport.ReportJobResultRequest, migrationHandled bool, detail string) (bool, string) {
+	// A rollback that can never succeed leaves the queue instead of being
+	// retried forever. The claim path has no attempts predicate, so a
+	// requeued job is re-claimed every poll — and each rollback attempt
+	// redeems an appliance credential out of the seal. Retrying an
+	// impossible operation would hold material outside the seal
+	// indefinitely, which is exactly what single-use redemption exists to
+	// prevent.
+	// A failed containment report may follow an attempted stop whose after
+	// probes could not complete. Re-executing it without an operator review
+	// would repeat an ambiguous emergency action indefinitely.
+	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain ||
+		claim.Destination == relay.KindEndpointPurge || claim.Destination == relay.KindConnectorTakedown ||
+		claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback
+	terminalReason := detail
+	if claim.Destination == relay.KindEndpointContain {
+		terminalReason = "containment_failed"
+	}
+	if claim.Destination == relay.KindEndpointPurge {
+		terminalReason = "purge_failed"
+	}
+	if claim.Destination == relay.KindConnectorTakedown {
+		terminalReason = "takedown_failed"
+	}
+	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
+		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
+		permanent = true
+	}
+	return permanent, terminalReason
 }
 
 // recordFailedPQCCertificateResult keeps the signed certificate outcome and
