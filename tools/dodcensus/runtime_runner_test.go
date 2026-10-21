@@ -406,7 +406,7 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		`os.open(map_file, os.O_RDONLY)`,
 		`os.read(descriptor, 4) != b"\x7fELF"`,
 		`["/usr/local/go/bin/go", "version"]`,
-		`go version go1.26.9 linux/amd64`,
+		`go version go1.26.10 linux/amd64`,
 		`kind_digest != "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa"`,
 		`"kind v0.31.0" not in kind_version`,
 		`openssl_version.startswith("OpenSSL 3.5.7 ")`,
