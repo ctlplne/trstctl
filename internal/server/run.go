@@ -81,6 +81,10 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
+	// Library code that reports through slog.Default (the outbox's delivery
+	// failure log, for one) lands in the same structured stream at the configured
+	// level instead of the text handler at INFO.
+	slog.SetDefault(logger)
 	lic, err := loadConfiguredLicense(cfg, license.TrustedKeys())
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
