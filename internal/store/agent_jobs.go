@@ -170,6 +170,20 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 			}
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
+			// A45: no earlier trstctl delivery. The first deploy's own signed
+			// receipt may name the pair the agent found installed and adopted;
+			// it is the predecessor when the adopted leaf is in the inventory.
+			err = tx.QueryRow(ctx, `
+			SELECT receipt.adopted_predecessor_fingerprint
+			  FROM connector_delivery_receipts receipt
+			  JOIN certificates cert ON cert.tenant_id = $1 AND cert.fingerprint = receipt.adopted_predecessor_fingerprint
+			 WHERE receipt.tenant_id = $1 AND receipt.outbox_id = $2
+			   AND receipt.destination = 'connector.deploy' AND receipt.status = 'delivered'
+			   AND receipt.adopted_predecessor_fingerprint <> ''
+			   AND cert.status IN ('active', 'superseded')
+			 LIMIT 1`, tenantID, currentJobID).Scan(&out.PredecessorFingerprint)
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
 			err = nil
 		}
 		if err != nil {

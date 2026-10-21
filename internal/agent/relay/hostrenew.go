@@ -5,6 +5,7 @@ package relay
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -264,6 +265,12 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		installIntent.Fingerprint = fingerprint
 	}
 
+	// A45: before this agent's first deploy to the target, keep what the host
+	// already serves so a rollback can restore it. Adopted after the deploy and
+	// its ledger record succeed; reported with the receipt so the control
+	// plane can name it.
+	adopted := readAdoptablePredecessor(profile, hostRollback, true, intent)
+	defer adopted.wipe()
 	if _, err := ExecuteOnHost(ctx, profile, installIntent, material, client); err != nil {
 		// Reached only after a certificate was successfully issued. Naming that
 		// matters: the identity now has a live certificate the estate is not
@@ -292,6 +299,12 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
 			return false
 		}
+		if adopted.ok {
+			if err := hostRollback.AdoptPredecessor(intent.Connector, intent.TargetID, adopted.fingerprint, adopted.certPEM, adopted.keyPEM); err != nil {
+				log.Printf("trstctl-agent: job %d: installed predecessor could not be adopted into the rollback ledger: %v", job.JobID, err)
+				adopted.ok = false
+			}
+		}
 	}
 
 	// D2's post-deploy handshake, unchanged. A renewal that installed and does
@@ -305,7 +318,10 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	}
 	var accepted bool
 	var reportErr error
-	if hostRenewReporter != nil {
+	if adoptive, ok := hostRenewReporter.(HostRenewAdoptionReceiptChannel); ok && adopted.ok {
+		accepted, reportErr = adoptive.ReportHostRenewResultWithAdoption(ctx, job.JobID, job.Attempt,
+			outcome, detail, evidence, fingerprint, record, intent.Connector, intent.TargetID, ordinaryBinding, adopted.fingerprint, adopted.certPEM)
+	} else if hostRenewReporter != nil {
 		accepted, reportErr = hostRenewReporter.ReportHostRenewResultWithCustody(ctx, job.JobID, job.Attempt,
 			outcome, detail, evidence, fingerprint, record, intent.Connector, intent.TargetID, ordinaryBinding)
 	} else {

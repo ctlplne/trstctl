@@ -2166,11 +2166,15 @@ first and, when none exists, re-binds to that legacy object (f5, kemp,
 netscaler, a10); the receipt then reads `rolled_back_to_legacy_object` and says
 the object's contents were not re-read, so verify the listener independently.
 A host agent adopts the certificate and key it finds installed before its first
-deploy to a target as its retained predecessor, and the control plane names as
-predecessor the latest delivery to that target by any host agent, so a
-re-enrolled agent can restore what the host served; an agent that did not
-retain the pair still refuses the restore. A target with no earlier trstctl
-delivery at all becomes rollable after its second deployment. The single-target read
+deploy to a target as its retained predecessor, reports the adopted leaf's
+fingerprint inside its signed receipt together with the public leaf, and the
+control plane records that leaf as an observed certificate and names it as the
+target's predecessor, so the first trstctl deploy over a pre-trstctl install is
+rollable through the served route; an agent that did not retain the pair still
+refuses the restore. The control plane also names as predecessor the latest
+delivery to a target by any host agent, so a re-enrolled agent can restore what
+the host served. A target with no earlier trstctl delivery and no reported
+adoption becomes rollable after its second deployment. The single-target read
 (`GET /api/v1/connectors/targets/{id}`, the Connectors console's destination
 detail) now says so up front: `rollback_readiness` applies the same refusals
 the rollback route applies — no executable route for the family, a fortigate or

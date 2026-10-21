@@ -35,6 +35,11 @@ type Observation struct {
 	CredentialFingerprint string            `json:"credential_fingerprint"`
 	Custody               *custody.Record   `json:"custody,omitempty"`
 	HostRenew             *HostRenewCleanup `json:"host_renew,omitempty"`
+	// AdoptedPredecessorFingerprint and AdoptedPredecessorPEM carry the pair a
+	// first host deploy found installed and retained for rollback (A45). The
+	// PEM is the public leaf only.
+	AdoptedPredecessorFingerprint string `json:"adopted_predecessor_fingerprint,omitempty"`
+	AdoptedPredecessorPEM         []byte `json:"adopted_predecessor_pem,omitempty"`
 }
 
 // HostRenewCleanup is local-only recovery metadata. It is sealed with the

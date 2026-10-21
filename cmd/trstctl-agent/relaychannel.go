@@ -158,7 +158,55 @@ func (r relayChannel) ReportHostRenewResultWithCustody(ctx context.Context, jobI
 	return r.retainAndSendReport(ctx, value)
 }
 
+// ReportHostRenewResultWithAdoption is ReportHostRenewResultWithCustody plus
+// the pre-trstctl predecessor the first deploy adopted (A45). The adopted
+// fingerprint is signed with the rest of the receipt and the observation is
+// retained so recovery re-sends the same facts.
+func (r relayChannel) ReportHostRenewResultWithAdoption(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record,
+	connectorName, targetID, payloadBinding, adoptedFingerprint string, adoptedPEM []byte) (bool, error) {
+	if adoptedFingerprint == "" || (outcome != transport.JobOutcomeVerified && outcome != transport.JobOutcomeExecuted) {
+		return r.ReportHostRenewResultWithCustody(ctx, jobID, attempt, outcome, detail, evidenceDigest, credentialFingerprint, record, connectorName, targetID, payloadBinding)
+	}
+	id := r.id()
+	if id == nil || r.pending == nil || r.hostRollback == nil {
+		return false, errors.New("trstctl-agent: host renewal requires durable report and rollback stores")
+	}
+	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+		record.GeneratedBy = id.CommonName()
+	}
+	value := reportstate.Observation{
+		JobID: jobID, Attempt: attempt, Outcome: outcome, Detail: []byte(detail),
+		EvidenceDigest: evidenceDigest, CredentialFingerprint: credentialFingerprint, Custody: &record,
+		HostRenew:                     &reportstate.HostRenewCleanup{Connector: connectorName, TargetID: targetID, Binding: payloadBinding},
+		AdoptedPredecessorFingerprint: adoptedFingerprint, AdoptedPredecessorPEM: append([]byte(nil), adoptedPEM...),
+	}
+	defer value.Destroy()
+	return r.retainAndSendReport(ctx, value)
+}
+
+// ReportJobResultWithAdoption is the v1 terminal report for a control-plane
+// issued host deploy plus the adopted predecessor (A45).
+func (r relayChannel) ReportJobResultWithAdoption(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, adoptedFingerprint string, adoptedPEM []byte) (bool, error) {
+	if adoptedFingerprint == "" || !terminalReport(outcome) {
+		return r.ReportJobResult(ctx, jobID, attempt, outcome, detail, evidenceDigest)
+	}
+	id := r.id()
+	if id == nil {
+		return false, errors.New("trstctl-agent: cannot sign a job receipt before enrollment")
+	}
+	value := reportstate.Observation{JobID: jobID, Attempt: attempt, Outcome: outcome, Detail: []byte(detail), EvidenceDigest: evidenceDigest,
+		AdoptedPredecessorFingerprint: adoptedFingerprint, AdoptedPredecessorPEM: append([]byte(nil), adoptedPEM...)}
+	defer value.Destroy()
+	return r.retainAndSendReport(ctx, value)
+}
+
 var _ relay.HostRenewReceiptChannel = relayChannel{}
+
+var _ relay.HostRenewAdoptionReceiptChannel = relayChannel{}
+
+var _ relay.AdoptionReceiptChannel = relayChannel{}
 
 var _ relay.CustodyReceiptChannel = relayChannel{}
 

@@ -65,6 +65,18 @@ func TestServedOperatorCancelsQueuedAndLeasedTargetWork(t *testing.T) {
 	}
 	leased := seed("a48:deploy:1", "aa11")
 	queued := seed("a48:deploy:2", "bb22")
+	// A host issuance rides the endpoint.renew identity lane, not the target
+	// lane; the operator's cancel for the target must still withdraw it.
+	var renew int64
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+			 VALUES ($1, 'endpoint.renew', $2, 'a48:renew:1', $3, 'host', $4::uuid) RETURNING id`,
+			h.tenant, []byte(`{"connector":"nginx","target":"a48-nginx","target_id":"`+target.ID+`","identity_id":"11111111-2222-4333-8444-555555555555"}`),
+			"endpoint.renew:identity:11111111-2222-4333-8444-555555555555", agentID).Scan(&renew)
+	}); err != nil {
+		t.Fatalf("seed host renew job: %v", err)
+	}
 	var executing int64
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
@@ -100,12 +112,16 @@ func TestServedOperatorCancelsQueuedAndLeasedTargetWork(t *testing.T) {
 	if err := json.Unmarshal(body, &cancelled); err != nil {
 		t.Fatalf("decode cancel: %v %s", err, body)
 	}
-	if len(cancelled.Recalled) != 1 || cancelled.Recalled[0] != leased ||
-		len(cancelled.Withdrawn) != 1 || cancelled.Withdrawn[0] != queued ||
-		len(cancelled.Executing) != 1 || cancelled.Executing[0] != executing {
-		t.Fatalf("dispositions = %s; want recalled %d, withdrawn %d, executing %d", body, leased, queued, executing)
+	withdrawn := map[int64]bool{}
+	for _, id := range cancelled.Withdrawn {
+		withdrawn[id] = true
 	}
-	if len(cancelled.Receipts) != 2 {
+	if len(cancelled.Recalled) != 1 || cancelled.Recalled[0] != leased ||
+		len(cancelled.Withdrawn) != 2 || !withdrawn[queued] || !withdrawn[renew] ||
+		len(cancelled.Executing) != 1 || cancelled.Executing[0] != executing {
+		t.Fatalf("dispositions = %s; want recalled %d, withdrawn %d and %d, executing %d", body, leased, queued, renew, executing)
+	}
+	if len(cancelled.Receipts) != 3 {
 		t.Fatalf("receipts = %d, want one per withdrawn/recalled row: %s", len(cancelled.Receipts), body)
 	}
 	for _, receipt := range cancelled.Receipts {
@@ -133,7 +149,7 @@ func TestServedOperatorCancelsQueuedAndLeasedTargetWork(t *testing.T) {
 		id         int64
 		wantStatus string
 		wantError  string
-	}{{leased, "cancelled", "operator_cancelled"}, {queued, "cancelled", "operator_cancelled"}, {executing, "processing", ""}} {
+	}{{leased, "cancelled", "operator_cancelled"}, {queued, "cancelled", "operator_cancelled"}, {renew, "cancelled", "operator_cancelled"}, {executing, "processing", ""}} {
 		var gotStatus, gotError string
 		var recalled bool
 		if err := h.store.SystemPool().QueryRow(ctx,

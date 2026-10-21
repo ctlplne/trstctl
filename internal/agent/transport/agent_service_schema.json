@@ -563,6 +563,16 @@
           "presence": "optional"
         },
         {
+          "go_type": "string",
+          "name": "adopted_predecessor_fingerprint",
+          "presence": "optional"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "adopted_predecessor_pem",
+          "presence": "optional"
+        },
+        {
           "go_type": "int",
           "name": "lease_seconds",
           "presence": "optional"

@@ -65,7 +65,7 @@ func rollbackReadinessFrom(in rollbackReadinessInputs) rollbackReadiness {
 		}
 		out.IdentityID = in.HostIdentityID
 		if in.HostPredecessorFingerprint == "" {
-			out.Reason = "the host has one successful deploy and no earlier trstctl delivery for the same identity and target; the agent adopts a pair it found installed before its first deploy, but the control plane can only name a predecessor it delivered, so a second successful deploy makes it rollable"
+			out.Reason = "the host has one successful deploy, no earlier trstctl delivery for the same identity and target, and its agent reported no adopted pre-trstctl pair; a second successful deploy makes it rollable"
 			return out
 		}
 		out.PredecessorFingerprint = in.HostPredecessorFingerprint

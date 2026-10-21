@@ -2921,6 +2921,9 @@ type ConnectorDeliveryRecorded struct {
 	Detail            string  `json:"detail,omitempty"`
 	RollbackRef       string  `json:"rollback_ref,omitempty"`
 	IdempotencyKey    string  `json:"idempotency_key,omitempty"`
+	// AdoptedPredecessorFingerprint is the pair a host agent found installed
+	// before its first deploy and retained as the rollback predecessor (A45).
+	AdoptedPredecessorFingerprint string `json:"adopted_predecessor_fingerprint,omitempty"`
 }
 
 // DeploymentTargetUpserted is the payload of deployment_target.upserted.
@@ -6428,6 +6431,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Fingerprint: pl.Fingerprint, Status: pl.Status, Attempts: pl.Attempts,
 			Reason: pl.Reason, Detail: pl.Detail, RollbackRef: pl.RollbackRef,
 			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
+			AdoptedPredecessorFingerprint: pl.AdoptedPredecessorFingerprint,
 		}
 		if err := p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, receipt); err != nil {
 			return err

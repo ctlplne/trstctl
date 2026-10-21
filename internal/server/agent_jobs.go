@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
@@ -696,6 +697,13 @@ func (a *agentService) recordAgentConnectorDelivery(
 			detail += ": " + safe
 		}
 	}
+	adopted := ""
+	if !failed {
+		var err error
+		if adopted, err = a.recordAdoptedHostPredecessor(ctx, info, intent, req); err != nil {
+			return err
+		}
+	}
 	receiptID := evidenceID("connector-delivery", info.TenantID, claim.IdempotencyKey, req.JobID)
 	eventKey := fmt.Sprintf("%s:attempt:%d", claim.IdempotencyKey, req.Attempt)
 	eventID := evidenceID("connector-delivery-agent-event", info.TenantID, eventKey, req.JobID)
@@ -708,9 +716,10 @@ func (a *agentService) recordAgentConnectorDelivery(
 		Destination: "connector.deploy", Connector: intent.Connector, Target: intent.Target,
 		Fingerprint: fingerprint, Status: receiptStatus,
 		Attempts: req.Attempt, Reason: reason,
-		Detail:         detail,
-		RollbackRef:    rollbackRef,
-		IdempotencyKey: claim.IdempotencyKey,
+		Detail:                        detail,
+		RollbackRef:                   rollbackRef,
+		IdempotencyKey:                claim.IdempotencyKey,
+		AdoptedPredecessorFingerprint: adopted,
 	})
 	if err != nil {
 		return err
@@ -1212,8 +1221,49 @@ func jobReceiptStatement(info mtls.PeerCertInfo, req *transport.ReportJobResultR
 		TenantID: info.TenantID, AgentCommonName: info.CommonName, JobID: req.JobID,
 		Attempt: req.Attempt, Outcome: strings.TrimSpace(req.Outcome), EvidenceDigest: req.EvidenceDigest,
 		DetailDigest: transport.DetailDigest(req.Detail), CredentialFingerprint: req.CredentialFingerprint,
-		Custody: record, IssuedAtUnix: req.IssuedAtUnix,
+		Custody: record, AdoptedPredecessorFingerprint: strings.TrimSpace(req.AdoptedPredecessorFingerprint),
+		IssuedAtUnix: req.IssuedAtUnix,
 	}
+}
+
+// recordAdoptedHostPredecessor records the pair a host agent found installed
+// before its first deploy to the target and retained for rollback (A45). The
+// signed fingerprint must match the public leaf that travels beside it; the
+// leaf is recorded as an observation so the predecessor is named in the
+// inventory and the rollback path can accept it. It returns the fingerprint
+// the receipt records, or "" when the report carried no adoption.
+func (a *agentService) recordAdoptedHostPredecessor(ctx context.Context, info mtls.PeerCertInfo,
+	intent relay.DeployIntent, req *transport.ReportJobResultRequest) (string, error) {
+	fingerprint := strings.ToLower(strings.TrimSpace(req.AdoptedPredecessorFingerprint))
+	if fingerprint == "" {
+		return "", nil
+	}
+	if len(req.AdoptedPredecessorPEM) == 0 {
+		return "", errors.New("adopted predecessor fingerprint arrived without its public leaf")
+	}
+	leaf, err := certinfo.Inspect(req.AdoptedPredecessorPEM)
+	if err != nil || leaf.IsCA || leaf.SHA256Fingerprint != fingerprint {
+		return "", errors.New("adopted predecessor leaf does not match the signed fingerprint")
+	}
+	der, err := certinfo.LeafDER(req.AdoptedPredecessorPEM)
+	if err != nil {
+		return "", err
+	}
+	if a.orch == nil {
+		return "", errors.New("adopted predecessor recording is not configured")
+	}
+	notBefore, notAfter := leaf.NotBefore, leaf.NotAfter
+	if _, err := a.orch.RecordCertificate(ctx, info.TenantID, store.Certificate{
+		Subject: leaf.Subject, SANs: append([]string(nil), leaf.DNSNames...), Issuer: leaf.Issuer,
+		Serial: leaf.SerialNumber, Fingerprint: fingerprint, KeyAlgorithm: leaf.KeyAlgorithm,
+		NotBefore: &notBefore, NotAfter: &notAfter,
+		DeploymentLocation: intent.Target, Source: "host-adopted:" + intent.Connector,
+		ObservationOnly: true, CertificateDER: der, CertificatePEM: append([]byte(nil), req.AdoptedPredecessorPEM...),
+		IssuanceIdempotencyKey: "host-adopted:" + intent.TargetID + ":" + fingerprint,
+	}); err != nil {
+		return "", fmt.Errorf("record adopted predecessor: %w", err)
+	}
+	return fingerprint, nil
 }
 
 func (a *agentService) validateCertificateCustodyReceipt(ctx context.Context, info mtls.PeerCertInfo,

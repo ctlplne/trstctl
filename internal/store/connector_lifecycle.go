@@ -33,8 +33,12 @@ type ConnectorDeliveryReceipt struct {
 	Detail         string
 	RollbackRef    string
 	IdempotencyKey string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// AdoptedPredecessorFingerprint is the pair a host agent found installed
+	// before its first deploy to the target and retained as the rollback
+	// predecessor (A45); empty for every other receipt.
+	AdoptedPredecessorFingerprint string
+	CreatedAt                     time.Time
+	UpdatedAt                     time.Time
 }
 
 // RotationRun is the projected evidence for one lifecycle renewal/rotation
@@ -69,12 +73,12 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		`INSERT INTO connector_delivery_receipts
 		        (id, tenant_id, outbox_id, identity_id, destination, connector, target,
 		         fingerprint, status, attempts, reason, detail, rollback_ref,
-		         idempotency_key, created_at, updated_at, latest_event_sequence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		         idempotency_key, created_at, updated_at, latest_event_sequence, adopted_predecessor_fingerprint)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		 ON CONFLICT DO NOTHING`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.EventSequence)
+		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessorFingerprint)
 	if err != nil {
 		return err
 	}
@@ -96,14 +100,15 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		        rollback_ref = $13,
 		        idempotency_key = $14,
 		        updated_at = $15,
-          latest_event_sequence = $16
+          latest_event_sequence = $16,
+		        adopted_predecessor_fingerprint = CASE WHEN $17 <> '' THEN $17 ELSE adopted_predecessor_fingerprint END
 		  WHERE tenant_id = $2
 		    AND (($3::bigint IS NOT NULL AND outbox_id = $3)
 		      OR ($3::bigint IS NULL AND id = $1))
         AND coalesce(latest_event_sequence, 0) <= $16`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.UpdatedAt, r.EventSequence)
+		r.IdempotencyKey, r.UpdatedAt, r.EventSequence, r.AdoptedPredecessorFingerprint)
 	if err != nil {
 		return err
 	}
@@ -484,7 +489,7 @@ func scanConnectorDeliveryReceipt(row pgx.Row, r *ConnectorDeliveryReceipt) erro
 	)
 	err := row.Scan(&r.ID, &r.TenantID, &outboxID, &identityID, &r.Destination, &r.Connector,
 		&r.Target, &r.Fingerprint, &r.Status, &r.Attempts, &r.Reason, &r.Detail,
-		&r.RollbackRef, &r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt)
+		&r.RollbackRef, &r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt, &r.AdoptedPredecessorFingerprint)
 	if err != nil {
 		return err
 	}
@@ -535,7 +540,7 @@ func (s *Store) ListConnectorDeliveryReceiptsMatchingPage(ctx context.Context, t
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
 			        connector, target, fingerprint, status, attempts, reason, detail,
-			        rollback_ref, idempotency_key, created_at, updated_at
+			        rollback_ref, idempotency_key, created_at, updated_at, adopted_predecessor_fingerprint
 			   FROM connector_delivery_receipts
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR identity_id::text = $3)
@@ -567,7 +572,7 @@ func (s *Store) ListConnectorDeliveryReceiptsNewestPage(ctx context.Context, ten
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
 			        connector, target, fingerprint, status, attempts, reason, detail,
-			        rollback_ref, idempotency_key, created_at, updated_at
+			        rollback_ref, idempotency_key, created_at, updated_at, adopted_predecessor_fingerprint
 			   FROM connector_delivery_receipts
 			  WHERE tenant_id = $1
 			    AND ($6::timestamptz IS NULL OR (updated_at, id) < ($6, $2::uuid))
@@ -686,7 +691,7 @@ func (s *Store) GetConnectorDeliveryReceiptForOutboxTx(ctx context.Context, tx p
 	err := scanConnectorDeliveryReceipt(tx.QueryRow(ctx,
 		`SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
 		        connector, target, fingerprint, status, attempts, reason, detail,
-		        rollback_ref, idempotency_key, created_at, updated_at
+		        rollback_ref, idempotency_key, created_at, updated_at, adopted_predecessor_fingerprint
 		   FROM connector_delivery_receipts
 		  WHERE tenant_id = $1 AND outbox_id = $2`, tenantID, outboxID), &r)
 	return r, err
@@ -712,7 +717,7 @@ func (s *Store) GetConnectorDeliveryReceipt(ctx context.Context, tenantID, id st
 		return scanConnectorDeliveryReceipt(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
 			        connector, target, fingerprint, status, attempts, reason, detail,
-			        rollback_ref, idempotency_key, created_at, updated_at
+			        rollback_ref, idempotency_key, created_at, updated_at, adopted_predecessor_fingerprint
 			   FROM connector_delivery_receipts
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &r)
 	})

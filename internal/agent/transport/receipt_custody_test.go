@@ -65,3 +65,27 @@ func TestOrdinaryReceiptRetainsVersionOneCompatibilityAUD25(t *testing.T) {
 		t.Fatalf("non-custody receipt wire version changed:\n%s", got)
 	}
 }
+
+// A45: an adopted pre-trstctl predecessor is part of the signed statement.
+// Its line is present only when set, so v1 and v2 receipts keep their bytes,
+// and the value must be a SHA-256 fingerprint.
+func TestAdoptedPredecessorIsSignedAndKeepsOlderReceiptsUnchanged(t *testing.T) {
+	base := transport.JobReceiptStatement{TenantID: "t", AgentCommonName: "agent-1", JobID: 7, Attempt: 1, Outcome: transport.JobOutcomeVerified, IssuedAtUnix: 1}
+	if strings.Contains(string(base.Canonical()), "adopted_predecessor") || !strings.HasPrefix(string(base.Canonical()), "trstctl-agent-job-receipt/v1\n") {
+		t.Fatalf("a receipt without adoption must keep the v1 form:\n%s", base.Canonical())
+	}
+	adopted := base
+	adopted.AdoptedPredecessorFingerprint = strings.Repeat("ab", 32)
+	canonical := string(adopted.Canonical())
+	if !strings.HasPrefix(canonical, "trstctl-agent-job-receipt/v3\n") || !strings.Contains(canonical, "adopted_predecessor="+strings.Repeat("ab", 32)+"\n") {
+		t.Fatalf("adopted predecessor is not in the signed v3 form:\n%s", canonical)
+	}
+	if err := adopted.Validate(); err != nil {
+		t.Fatalf("valid adoption statement refused: %v", err)
+	}
+	bad := base
+	bad.AdoptedPredecessorFingerprint = "sha256:not-a-fingerprint"
+	if err := bad.Validate(); err == nil {
+		t.Fatal("a non-fingerprint adopted predecessor must be refused")
+	}
+}

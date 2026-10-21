@@ -20,7 +20,7 @@ func (s *Store) LatestIdentityDeploymentReceipt(ctx context.Context, tenantID, i
 		return scanConnectorDeliveryReceipt(tx.QueryRow(ctx, `
 			SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
 			       connector, target, fingerprint, status, attempts, reason, detail,
-			       rollback_ref, idempotency_key, created_at, updated_at
+			       rollback_ref, idempotency_key, created_at, updated_at, adopted_predecessor_fingerprint
 			FROM connector_delivery_receipts
 			WHERE tenant_id=$1 AND identity_id=$2 AND fingerprint<>''
 			  AND ((destination='connector.deploy' AND status IN ('delivered','verified'))

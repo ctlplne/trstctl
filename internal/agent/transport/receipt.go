@@ -37,6 +37,9 @@ import (
 const (
 	receiptStatementVersionV1 = "trstctl-agent-job-receipt/v1"
 	receiptStatementVersionV2 = "trstctl-agent-job-receipt/v2"
+	// v3 adds the adopted pre-trstctl predecessor a host agent retained on its
+	// first deploy to a target (A45). Absent, the v1/v2 bytes are unchanged.
+	receiptStatementVersionV3 = "trstctl-agent-job-receipt/v3"
 )
 
 // JobReceiptStatement is everything a receipt commits to.
@@ -61,6 +64,11 @@ type JobReceiptStatement struct {
 	// on every non-issuance job, preserving the v1 statement byte-for-byte.
 	CredentialFingerprint string
 	Custody               custody.Record
+	// AdoptedPredecessorFingerprint names the pair the agent found installed
+	// before its first deploy to the target and retained as the rollback
+	// predecessor (A45). Signed, so the control plane's rollback evidence
+	// rests on the agent's attestation rather than on an unsigned body field.
+	AdoptedPredecessorFingerprint string
 	// IssuedAtUnix is when the agent signed. The server bounds it against its
 	// own clock so an old signed receipt cannot be held and replayed later.
 	IssuedAtUnix int64
@@ -100,6 +108,9 @@ func (s JobReceiptStatement) Canonical() []byte {
 		write("key_exportable", string(s.Custody.Exportable))
 		write("key_generated_by", s.Custody.GeneratedBy)
 	}
+	if s.AdoptedPredecessorFingerprint != "" {
+		write("adopted_predecessor", s.AdoptedPredecessorFingerprint)
+	}
 	write("issued_at", strconv.FormatInt(s.IssuedAtUnix, 10))
 	return []byte(b.String())
 }
@@ -135,10 +146,13 @@ func (s JobReceiptStatement) Validate() error {
 			return errors.New("transport: receipt statement has incomplete credential custody")
 		}
 	}
+	if s.AdoptedPredecessorFingerprint != "" && !validLowerHexFingerprint(s.AdoptedPredecessorFingerprint) {
+		return errors.New("transport: receipt statement's adopted predecessor is not a SHA-256 fingerprint")
+	}
 	for _, v := range []string{
 		s.TenantID, s.AgentCommonName, s.Outcome, s.EvidenceDigest, s.DetailDigest,
 		s.CredentialFingerprint, string(s.Custody.Origin), string(s.Custody.Storage),
-		string(s.Custody.Exportable), s.Custody.GeneratedBy,
+		string(s.Custody.Exportable), s.Custody.GeneratedBy, s.AdoptedPredecessorFingerprint,
 	} {
 		if strings.ContainsAny(v, "\n\r") {
 			return ErrReceiptStatementInvalid
@@ -152,10 +166,25 @@ func (s JobReceiptStatement) hasCustody() bool {
 }
 
 func (s JobReceiptStatement) version() string {
+	if s.AdoptedPredecessorFingerprint != "" {
+		return receiptStatementVersionV3
+	}
 	if s.hasCustody() {
 		return receiptStatementVersionV2
 	}
 	return receiptStatementVersionV1
+}
+
+func validLowerHexFingerprint(v string) bool {
+	if len(v) != 64 {
+		return false
+	}
+	for _, r := range v {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // DetailDigest is the commitment to a report's operator-facing text.

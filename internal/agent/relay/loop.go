@@ -54,6 +54,21 @@ type HostRenewReceiptChannel interface {
 		connectorName, targetID, payloadBinding string) (bool, error)
 }
 
+// AdoptionReceiptChannel reports a control-plane issued host deploy together
+// with the pre-trstctl predecessor the first deploy adopted (A45).
+type AdoptionReceiptChannel interface {
+	ReportJobResultWithAdoption(ctx context.Context, jobID int64, attempt int, outcome, detail,
+		evidenceDigest, adoptedFingerprint string, adoptedPEM []byte) (bool, error)
+}
+
+// HostRenewAdoptionReceiptChannel is HostRenewReceiptChannel plus the adopted
+// predecessor (A45).
+type HostRenewAdoptionReceiptChannel interface {
+	ReportHostRenewResultWithAdoption(ctx context.Context, jobID int64, attempt int, outcome, detail,
+		evidenceDigest, credentialFingerprint string, record custody.Record,
+		connectorName, targetID, payloadBinding, adoptedFingerprint string, adoptedPEM []byte) (bool, error)
+}
+
 // Job is one claimed unit of work as the relay sees it.
 type Job struct {
 	JobID   int64
@@ -484,6 +499,14 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		}
 	}
 
+	if adopted.ok {
+		if adoptive, ok := ch.(AdoptionReceiptChannel); ok {
+			accepted, err := adoptive.ReportJobResultWithAdoption(ctx, job.JobID, job.Attempt, outcome, detail, evidence, adopted.fingerprint, adopted.certPEM)
+			logReportOutcome(job, outcome, accepted, err)
+			return outcome != transport.OutcomeVerifyFailed
+		}
+		log.Printf("trstctl-agent: job %d: this channel cannot report the adopted predecessor; the control plane will not name it as rollback evidence", job.JobID)
+	}
 	reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
 	return outcome != transport.OutcomeVerifyFailed
 }

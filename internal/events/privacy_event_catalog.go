@@ -136,6 +136,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/order/domains/*", token), catalogPrivacyRule("/order/authz_ids/*", opaque),
 			catalogPrivacyRule("/order/status", opaque), catalogPrivacyRule("/order/auth_mode", opaque),
 			catalogPrivacyRule("/order/cert_id", opaque), catalogPrivacyRule("/order/replaces", opaque),
+			catalogPrivacyRule("/order/profile", opaque),
 			catalogPrivacyRule("/order/attested_key_sha256", opaque), catalogPrivacyRule("/order/created_at", opaque),
 			catalogPrivacyRule("/authorizations/*/id", opaque), catalogPrivacyRule("/authorizations/*/order_id", opaque),
 			catalogPrivacyRule("/authorizations/*/domain", token), catalogPrivacyRule("/authorizations/*/status", opaque),

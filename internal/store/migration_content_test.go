@@ -524,6 +524,51 @@ func testMigration0254PAMRevocationFailureStartsUnknown(t *testing.T) {
 		})
 }
 
+// Migration 0294 adds the adopted-predecessor column to delivery receipts. A
+// receipt written before it was never accompanied by an adoption report, so
+// the default must be empty and nothing else about the row may change.
+func TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 294)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	const tenant = "11111111-1111-4111-8111-111111111111"
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id',$1,true)`, tenant); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO connector_delivery_receipts
+		(id, tenant_id, outbox_id, destination, connector, target, fingerprint, status, attempts, reason, detail, rollback_ref, idempotency_key, created_at, updated_at)
+		VALUES ('29400000-0000-4000-8000-000000000001', $1, 294, 'connector.deploy', 'nginx', 'edge', 'pre-294', 'delivered', 1, 'agent_delivered', 'delivered by enrolled agent', 'restore previous certificate for edge', 'pre-294', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`,
+		tenant); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("seed pre-0294 receipt: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const stable = `SELECT id::text,tenant_id::text,outbox_id,destination,connector,target,fingerprint,status,attempts,reason,detail,rollback_ref,idempotency_key,created_at::text,updated_at::text
+		FROM connector_delivery_receipts ORDER BY id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 1 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0294 changed an existing receipt: %d/%s before, %d/%s after", beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var adopted string
+	if err := pool.QueryRow(ctx, `SELECT adopted_predecessor_fingerprint FROM connector_delivery_receipts WHERE id='29400000-0000-4000-8000-000000000001'`).Scan(&adopted); err != nil || adopted != "" {
+		t.Fatalf("0294 adopted predecessor for a pre-existing receipt = %q err=%v, want empty", adopted, err)
+	}
+}
+
 // Migration 0293 adds the provenance column to the upstream ARI projection.
 // Every row that exists before it was bound by an authenticated issuer, the
 // only binding that existed, so the default must say exactly that and nothing
@@ -1044,6 +1089,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
+	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
 	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor

@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 func terminalReport(outcome string) bool {
@@ -63,7 +64,13 @@ func (r relayChannel) sendObservation(ctx context.Context, value reportstate.Obs
 	var err error
 	// IssuedAt is this attestation's signing time, not a new execution time.
 	// The original job, attempt and facts never change during recovery.
-	if value.Custody != nil {
+	if value.AdoptedPredecessorFingerprint != "" {
+		record := custody.Record{}
+		if value.Custody != nil {
+			record = *value.Custody
+		}
+		req, err = transport.SignedReportWithAdoption(id, id.TenantID(), id.CommonName(), value.JobID, value.Attempt, value.Outcome, string(value.Detail), value.EvidenceDigest, value.CredentialFingerprint, record, value.AdoptedPredecessorFingerprint, value.AdoptedPredecessorPEM, r.clock().Unix())
+	} else if value.Custody != nil {
 		req, err = transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), value.JobID, value.Attempt, value.Outcome, string(value.Detail), value.EvidenceDigest, value.CredentialFingerprint, *value.Custody, r.clock().Unix())
 	} else {
 		req, err = transport.SignedReport(id, id.TenantID(), id.CommonName(), value.JobID, value.Attempt, value.Outcome, string(value.Detail), value.EvidenceDigest, r.clock().Unix())

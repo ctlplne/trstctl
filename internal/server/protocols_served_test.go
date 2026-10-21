@@ -104,7 +104,10 @@ const servedTestTenant = "11111111-1111-1111-1111-111111111111"
 // per-test; this verifies transport assembly, not separate address spaces.
 func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*Deps)) *servedHarness {
 	t.Helper()
-	return newServedHarnessWithEventOptions(t, protocols, nil, opts...)
+	// The served log refuses any event whose payload has no registered privacy
+	// policy, exactly as the binary does: a payload field added without its
+	// shape must fail here, not on the first order a customer places.
+	return newServedHarnessWithEventOptions(t, protocols, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, opts...)
 }
 
 // Only test callers may shorten the broker's duplicate window. Production and

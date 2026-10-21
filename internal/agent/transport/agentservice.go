@@ -508,6 +508,14 @@ type ReportJobResultRequest struct {
 	// unusable as B5 custody evidence.
 	CredentialFingerprint string          `json:"credential_fingerprint,omitempty"`
 	Custody               *custody.Record `json:"custody,omitempty"`
+	// AdoptedPredecessorFingerprint and AdoptedPredecessorPEM are present only
+	// when a host agent's first deploy to a target found a pair already
+	// installed there and retained it as the rollback predecessor (A45). The
+	// fingerprint is inside the detached signature; the PEM is the public leaf
+	// the control plane records so the adopted predecessor is named in the
+	// inventory and can be restored through the served rollback path.
+	AdoptedPredecessorFingerprint string `json:"adopted_predecessor_fingerprint,omitempty"`
+	AdoptedPredecessorPEM         []byte `json:"adopted_predecessor_pem,omitempty"`
 	// LeaseSeconds is the lease requested by "extend" or "rollback_authorize".
 	LeaseSeconds int `json:"lease_seconds,omitempty"`
 	// Attempt echoes the claim generation this report belongs to. It is part of
@@ -553,11 +561,21 @@ func SignedReport(id StatementSigner, tenantID, commonName string, jobID int64, 
 func SignedReportWithCustody(id StatementSigner, tenantID, commonName string, jobID int64, attempt int,
 	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record,
 	issuedAtUnix int64) (*ReportJobResultRequest, error) {
+	return SignedReportWithAdoption(id, tenantID, commonName, jobID, attempt, outcome, detail,
+		evidenceDigest, credentialFingerprint, record, "", nil, issuedAtUnix)
+}
+
+// SignedReportWithAdoption is SignedReportWithCustody plus the pre-trstctl
+// predecessor a host agent adopted on its first deploy to the target (A45).
+// The adopted fingerprint is signed; the public leaf travels beside it.
+func SignedReportWithAdoption(id StatementSigner, tenantID, commonName string, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record,
+	adoptedFingerprint string, adoptedPEM []byte, issuedAtUnix int64) (*ReportJobResultRequest, error) {
 	statement := JobReceiptStatement{
 		TenantID: tenantID, AgentCommonName: commonName, JobID: jobID, Attempt: attempt,
 		Outcome: outcome, EvidenceDigest: evidenceDigest,
 		DetailDigest: DetailDigest(detail), CredentialFingerprint: credentialFingerprint,
-		Custody: record, IssuedAtUnix: issuedAtUnix,
+		Custody: record, AdoptedPredecessorFingerprint: adoptedFingerprint, IssuedAtUnix: issuedAtUnix,
 	}
 	if err := statement.Validate(); err != nil {
 		return nil, err
@@ -574,6 +592,7 @@ func SignedReportWithCustody(id StatementSigner, tenantID, commonName string, jo
 	return &ReportJobResultRequest{
 		JobID: jobID, Outcome: outcome, Detail: detail, EvidenceDigest: evidenceDigest,
 		CredentialFingerprint: credentialFingerprint, Custody: wireCustody,
+		AdoptedPredecessorFingerprint: adoptedFingerprint, AdoptedPredecessorPEM: append([]byte(nil), adoptedPEM...),
 		Attempt: attempt, IssuedAtUnix: issuedAtUnix, Signature: sig,
 	}, nil
 }
