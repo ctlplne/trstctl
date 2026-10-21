@@ -47,6 +47,10 @@ type rogueCertificatePolicyViolation struct {
 	Rule     string `json:"rule"`
 	Severity string `json:"severity"`
 	Reason   string `json:"reason,omitempty"`
+	// Remediation is the automatic action the rule asked for (A47): "renew"
+	// means the lifecycle scheduler queues a renewal for a managed identity
+	// whose served certificate fires the rule.
+	Remediation string `json:"remediation,omitempty"`
 }
 
 type rogueCertificateSummary struct {
@@ -251,6 +255,13 @@ func (r *rogueCertificatePostureResponse) addRogueCertificateFinding(finding rog
 	}
 }
 
+// CertificatePostureFacts is the public metadata a tenant posture rule may
+// read, shared with the lifecycle scheduler's posture remediation (A47) so the
+// listing and the scheduler evaluate the same facts.
+func CertificatePostureFacts(cert store.Certificate, now time.Time) *policy.CertificateFacts {
+	return rogueCertificateFacts(cert, now)
+}
+
 // rogueCertificateFacts is the public metadata a tenant posture rule may read.
 func rogueCertificateFacts(cert store.Certificate, now time.Time) *policy.CertificateFacts {
 	facts := &policy.CertificateFacts{
@@ -291,7 +302,7 @@ func (r *rogueCertificatePostureResponse) applyRoguePolicyViolations(cert store.
 		}
 		risk = maxInt(risk, rogueCertificatePolicySeverityRisk(severity))
 		types = append(types, "customer_policy:"+v.Rule)
-		recorded = append(recorded, rogueCertificatePolicyViolation{Rule: v.Rule, Severity: severity, Reason: v.Reason})
+		recorded = append(recorded, rogueCertificatePolicyViolation{Rule: v.Rule, Severity: severity, Reason: v.Reason, Remediation: v.Remediation})
 	}
 	r.Summary.PolicyViolations += len(recorded)
 	evidence := "policy:module:" + moduleSHA

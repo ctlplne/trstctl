@@ -80,7 +80,16 @@ type PostureViolation struct {
 	Rule     string `json:"rule"`
 	Severity string `json:"severity,omitempty"`
 	Reason   string `json:"reason,omitempty"`
+	// Remediation is what the tenant rule asks the lifecycle scheduler to do
+	// for a managed identity whose served certificate fires it (A47). The
+	// only recognized value is "renew": queue a renewal so the certificate is
+	// replaced. Any other value is dropped, so a typo never queues work.
+	Remediation string `json:"remediation,omitempty"`
 }
+
+// PostureRemediationRenew asks the scheduler to renew the identity whose
+// served certificate violates the rule.
+const PostureRemediationRenew = "renew"
 
 // Decision is the policy outcome.
 type Decision struct {
@@ -408,7 +417,11 @@ func postureFrom(rs rego.ResultSet) []PostureViolation {
 		}
 		severity, _ := fields["severity"].(string)
 		reason, _ := fields["reason"].(string)
-		out = append(out, PostureViolation{Rule: rule, Severity: severity, Reason: reason})
+		remediation, _ := fields["remediation"].(string)
+		if remediation != PostureRemediationRenew {
+			remediation = ""
+		}
+		out = append(out, PostureViolation{Rule: rule, Severity: severity, Reason: reason, Remediation: remediation})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Rule < out[j].Rule })
 	return out

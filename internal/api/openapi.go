@@ -1803,6 +1803,7 @@ func componentSchemas() map[string]*Schema {
 		"evidence_refs":   {Type: "array", Items: str()},
 		"policy_violations": {Type: "array", Items: object(map[string]*Schema{
 			"rule": str(), "severity": {Type: "string", Enum: []string{"critical", "high", "medium", "low"}}, "reason": str(),
+			"remediation": {Type: "string", Enum: []string{"renew"}},
 		}, "rule", "severity")},
 		"discovered_at": timestamp(),
 		"not_before":    timestamp(),

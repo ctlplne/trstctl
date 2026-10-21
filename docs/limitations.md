@@ -1263,7 +1263,12 @@ never live in the API process. What you can do end to end against the running bi
   deployment location); each violation appears as `customer_policy:<rule>` with
   its severity and reason, the response names the module digest, and
   `POST /api/v1/policy/dry-run` with action `certificate_posture` previews a rule
-  against sample facts. A module without posture rules reports nothing, and a
+  against sample facts. A rule that yields `"remediation": "renew"` makes the
+  lifecycle scheduler queue a renewal (reason `posture:<rule>`) for a deployed
+  identity whose served certificate fires it, under the automation switch,
+  maintenance deferral and a 100-per-tenant sweep bound; certificates without a
+  managed, deployed identity are reported, never remediated. A module without
+  posture rules reports nothing, and a
   certificate whose evaluation fails is counted in `policy_evaluation_errors`
   rather than read as clean. CT coverage depends on configured monitored
   domains/logs. Each finding with a fingerprint lists `installed_on`: the connector
@@ -2603,7 +2608,10 @@ than sending an operator looking for a credential that was never there.
   drift detection now run through the served discovery worker when operators
   create `ct_log` or `drift` sources; findings are tenant-scoped and alert
   intents are outbox-backed. Dedicated Posture dashboards, resolution
-  workflows, and automatic remediation remain future UI/workflow work. Generic
+  workflows remain future UI/workflow work; automatic remediation exists for
+  certificate posture findings whose tenant rule asks for `"remediation":
+  "renew"` (the lifecycle scheduler renews the deployed identity), not for
+  SSH-trust or drift findings. Generic
   agent/endpoint discovery is served through the mTLS `ReportInventory` channel
   and visible through `/api/v1/agents`, `/api/v1/discovery/findings`,
   `/api/v1/graph`, and the Agents console. The SSH-specific host/trust

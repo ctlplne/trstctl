@@ -902,6 +902,7 @@ type Server struct {
 	// Lifecycle automation telemetry (JOURNEY-002): identities queued for served
 	// renewal, expiry notifications enqueued, and scheduler failures.
 	lifecycleRenewBefore        time.Duration
+	postureEvaluator            api.PosturePolicyEvaluator
 	lifecycleAlertBefore        time.Duration
 	lifecycleLeafValidity       time.Duration
 	ownershipAttestationCadence time.Duration
@@ -1873,6 +1874,11 @@ func (s *Server) configurePolicyGate(d Deps, orch *orchestrator.Orchestrator, de
 	}
 	*defaults = append(*defaults, api.WithMutationGate(gate))
 	s.codeSignGate = codeSigningGateFromMutationGate(gate)
+	if posture, ok := gate.Policy.(api.PosturePolicyEvaluator); ok && gate.Policy != nil {
+		// A47: the scheduler remediates posture findings with the same tenant
+		// module the rogue listing evaluates.
+		s.postureEvaluator = posture
+	}
 	if gate.ABAC != nil {
 		*defaults = append(*defaults, api.WithABACDenyOverlay(gate.ABAC, gate.ABACEnvironment, gate.ABACNow))
 	}
@@ -3764,6 +3770,16 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 					queued++
 				}
 			}
+			// A47: tenant posture rules that ask for remediation queue a
+			// renewal for the managed identities whose served certificate
+			// fires them, under the same automation switch and maintenance
+			// deferral as expiry-driven renewals.
+			remediated, err := s.runPostureRemediationOnce(ctx, now)
+			if err != nil {
+				s.observeLifecycleSweep(queued, 0, err)
+				return queued, err
+			}
+			queued += remediated
 		}
 	}
 	alerted, err := s.runLifecycleAlertsOnce(ctx)

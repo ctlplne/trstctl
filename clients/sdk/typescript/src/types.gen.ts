@@ -15258,6 +15258,8 @@ export interface components {
             policy_status: "rogue" | "non_compliant";
             policy_violations?: {
                 reason?: string;
+                /** @enum {string} */
+                remediation?: "renew";
                 rule: string;
                 /** @enum {string} */
                 severity: "critical" | "high" | "medium" | "low";

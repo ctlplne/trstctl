@@ -91,6 +91,17 @@ certificate_posture contains {"rule": "vendor-ca-forbidden", "severity": "high",
 }
 ```
 
+A posture rule may also ask for a remediation: `"remediation": "renew"` in the
+yielded object tells the lifecycle scheduler to queue a renewal for a deployed
+X.509 identity whose served certificate fires the rule, so the non-compliant
+certificate is replaced the way an expiring one is. The scheduler runs it under
+the same automation switch (`lifecycle.renew_before`) and maintenance-window
+deferral as expiry renewals, bounds it to 100 identities per tenant per sweep,
+skips identities with renewal work in flight or an unverified delivery, and
+records the rule in the transition reason (`posture:<rule>`). Only `renew` is
+recognized; any other value queues nothing. The listing shows each violation's
+`remediation`.
+
 The lifecycle `allow`/`reason` are not consulted for posture, so a module that
 declares no posture rules reports nothing. Posture evaluation is a read and is
 not written to the `policy.decision` audit stream; the listing names the module

@@ -89,3 +89,38 @@ func TestCertificatePostureRulesAreOptInAndReportEachViolation(t *testing.T) {
 		t.Fatalf("dry run = %+v err=%v; want the vendor violation", result, err)
 	}
 }
+
+// A47: a rule may ask for a remediation; only "renew" is recognized, so a
+// typo or an invented action never queues work.
+func TestCertificatePostureRemediationIsReadOnlyForRenew(t *testing.T) {
+	ctx := context.Background()
+	engine, err := policy.New(policy.Config{Module: policy.BaseModule + `
+certificate_posture contains {"rule": "renew-me", "severity": "high", "reason": "replace", "remediation": "renew"} if {
+	input.action == "certificate_posture"
+	input.certificate.source == "import"
+}
+certificate_posture contains {"rule": "typo", "severity": "low", "reason": "typo", "remediation": "renw"} if {
+	input.action == "certificate_posture"
+	input.certificate.source == "import"
+}
+certificate_posture contains {"rule": "silent", "severity": "low", "reason": "no action"} if {
+	input.action == "certificate_posture"
+	input.certificate.source == "import"
+}
+`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	violations, err := engine.EvaluatePosture(ctx, policy.Input{Action: policy.ActionCertificatePosture, TenantID: "t1",
+		Certificate: &policy.CertificateFacts{Subject: "CN=x", Source: "import", Status: "active"}})
+	if err != nil || len(violations) != 3 {
+		t.Fatalf("violations = %+v err=%v", violations, err)
+	}
+	got := map[string]string{}
+	for _, v := range violations {
+		got[v.Rule] = v.Remediation
+	}
+	if got["renew-me"] != policy.PostureRemediationRenew || got["typo"] != "" || got["silent"] != "" {
+		t.Fatalf("remediations = %v; want only renew-me to carry renew", got)
+	}
+}

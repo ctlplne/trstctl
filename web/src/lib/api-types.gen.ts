@@ -7226,7 +7226,7 @@ export interface RogueCertificateFinding {
   owner_id?: string;
   policy_max_days?: number;
   policy_status: "rogue" | "non_compliant";
-  policy_violations?: ({ reason?: string; rule: string; severity: "critical" | "high" | "medium" | "low" })[];
+  policy_violations?: ({ reason?: string; remediation?: "renew"; rule: string; severity: "critical" | "high" | "medium" | "low" })[];
   recommendation: string;
   risk_score: number;
   run_id?: string;

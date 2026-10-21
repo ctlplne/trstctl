@@ -29641,6 +29641,12 @@
                 "reason": {
                   "type": "string"
                 },
+                "remediation": {
+                  "enum": [
+                    "renew"
+                  ],
+                  "type": "string"
+                },
                 "rule": {
                   "type": "string"
                 },
