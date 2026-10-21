@@ -314,6 +314,10 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 		return nil, err
 	}
 	if cfg.ACMEEAB.Required || len(eabKeys) > 0 {
+		// A54: a rotated credential's MAC key is read from the tenant secret
+		// store by reference, both on the rotate verb and on replay; the
+		// resolver is wired before the state log so replay can resolve.
+		acmeSrv = acmeSrv.WithEABSecretResolver(s.acmeEABSecretResolver(acmeTenant))
 		acmeSrv, err = acmeSrv.WithExternalAccountBindings(cfg.ACMEEAB.Required, eabKeys)
 		destroyACMEEABKeyCopies(eabKeys)
 		if err != nil {
@@ -1091,7 +1095,7 @@ func (s *Server) spiffeJWTSigner(ctx context.Context, c *signing.Client) (crypto
 // The tenant check is the AN-1 boundary for this surface: one ACME mount binds
 // one tenant, so a caller authenticated for a different tenant sees an unserved
 // posture rather than another tenant's credentials.
-func (s *Server) acmeEABPosture(_ context.Context, tenantID string) (api.ACMEEABPosture, error) {
+func (s *Server) acmeEABPosture(ctx context.Context, tenantID string) (api.ACMEEABPosture, error) {
 	out := api.ACMEEABPosture{GeneratedAt: time.Now().UTC(), Items: []api.ACMEEABCredential{}}
 	sp := s.protocols
 	if sp == nil || sp.acme == nil || sp.acmeTenant == "" || sp.acmeTenant != tenantID {
@@ -1099,7 +1103,11 @@ func (s *Server) acmeEABPosture(_ context.Context, tenantID string) (api.ACMEEAB
 	}
 	out.Served = true
 	out.Required = sp.acme.ExternalAccountRequired()
-	for _, cred := range sp.acme.EABCredentials() {
+	creds, err := sp.acme.EABCredentialsContext(ctx)
+	if err != nil {
+		return out, err
+	}
+	for _, cred := range creds {
 		out.Items = append(out.Items, toAPIACMEEABCredential(cred))
 	}
 	return out, nil
@@ -1126,7 +1134,60 @@ func toAPIACMEEABCredential(in acme.EABCredentialStatus) api.ACMEEABCredential {
 		MaxOrders:          in.MaxOrders, NotAfter: in.NotAfter,
 		AccountsBound: in.AccountsBound, OrdersCreated: in.OrdersCreated, OrdersDenied: in.OrdersDenied,
 		DisabledInConfig: in.DisabledInConfig, DisabledByOperator: in.DisabledByOperator,
-		LastUsedAt: in.LastUsedAt,
+		LastUsedAt: in.LastUsedAt, Profile: in.Profile, HMACKeyRef: in.HMACKeyRef,
+	}
+}
+
+// updateACMEEABPolicy replaces one credential's served policy on this tenant's
+// ACME mount (A53). The change is recorded in the ACME state log.
+func (s *Server) updateACMEEABPolicy(ctx context.Context, tenantID, keyID string, update api.ACMEEABPolicyUpdate) (api.ACMEEABCredential, bool, error) {
+	sp := s.protocols
+	if sp == nil || sp.acme == nil || sp.acmeTenant == "" || sp.acmeTenant != tenantID {
+		return api.ACMEEABCredential{}, false, nil
+	}
+	in := acme.EABPolicyUpdate{AllowedIdentifiers: update.AllowedIdentifiers, MaxOrders: update.MaxOrders, Profile: update.Profile}
+	if update.NotAfter != nil {
+		in.NotAfter = *update.NotAfter
+	}
+	status, ok, err := sp.acme.UpdateEABPolicy(ctx, keyID, in)
+	if err != nil || !ok {
+		return api.ACMEEABCredential{}, ok, err
+	}
+	return toAPIACMEEABCredential(status), true, nil
+}
+
+// rotateACMEEABCredential registers a successor credential whose MAC key is a
+// reference into the tenant secret store (A50/A54). The key is resolved here,
+// held in locked memory on the mount, and never serialized.
+func (s *Server) rotateACMEEABCredential(ctx context.Context, tenantID, keyID string, req api.ACMEEABRotationRequest) (api.ACMEEABCredential, bool, error) {
+	sp := s.protocols
+	if sp == nil || sp.acme == nil || sp.acmeTenant == "" || sp.acmeTenant != tenantID {
+		return api.ACMEEABCredential{}, false, nil
+	}
+	status, ok, err := sp.acme.RotateEABCredential(ctx, keyID, req.SuccessorKeyID, req.HMACKeyRef)
+	if err != nil || !ok {
+		return api.ACMEEABCredential{}, ok, err
+	}
+	return toAPIACMEEABCredential(status), true, nil
+}
+
+// acmeEABSecretResolver reads a secret:// reference from the tenant's secret
+// store for the ACME mount. The caller gets its own copy and is responsible
+// for wiping it; the lease's locked buffer is destroyed here. The cause of a
+// failed resolution is logged, never returned, so a client-facing error cannot
+// echo store internals.
+func (s *Server) acmeEABSecretResolver(tenantID string) func(context.Context, string) ([]byte, error) {
+	return func(ctx context.Context, ref string) ([]byte, error) {
+		lease := &connectorCredentialLease{store: s.store, kek: s.kek, crypto: s.tenantCrypto, tenantID: tenantID}
+		defer lease.Close()
+		value, err := lease.require(ctx, ref)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Warn("acme eab: MAC key reference did not resolve", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+			}
+			return nil, fmt.Errorf("the MAC key reference does not resolve in this tenant's secret store")
+		}
+		return append([]byte(nil), value...), nil
 	}
 }
 

@@ -695,6 +695,9 @@ type Server struct {
 	kmipListening    bool
 	cloudTokenMinter *cloudauth.Minter
 	tenantCrypto     tenantseal.Access
+	// kek is the deployment key wrapper the tenant secret store seals under; the
+	// ACME mount reads rotated EAB MAC keys through it (A54).
+	kek sealKeyWrapper
 
 	signer SignerProvider
 	// signerTopology is explicit because both child and external runtimes expose
@@ -1043,6 +1046,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		telemetry:                 d.TelemetryReporter,
 		cloudTokenMinter:          d.CloudTokenMinter,
 		tenantCrypto:              d.TenantCrypto,
+		kek:                       d.KEK,
 		restoreDrillSigner:        d.AuditSigningKey,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
@@ -1691,7 +1695,7 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// B4: the ACME external-account-binding operator surface. Read at request
 	// time because protocol construction follows API construction, and because
 	// the usage counters it exposes are live.
-	*defaults = append(*defaults, api.WithACMEEAB(s.acmeEABPosture, s.setACMEEABDisabled))
+	*defaults = append(*defaults, api.WithACMEEAB(s.acmeEABPosture, s.setACMEEABDisabled, s.updateACMEEABPolicy, s.rotateACMEEABCredential))
 	// F5: one effect-free, tenant-bound readiness/execute/recovery plan over the
 	// late-bound ACME mount. This prevents the browser from inventing readiness
 	// from a same-origin fetch that cannot see profile or EAB authority.

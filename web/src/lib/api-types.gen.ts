@@ -245,14 +245,23 @@ export interface ACMEEABCredential {
   allowed_identifiers?: string[];
   disabled_by_operator: boolean;
   disabled_in_config: boolean;
+  hmac_key_ref?: string;
   key_id: string;
   last_used_at?: string;
   max_orders?: number;
   not_after?: string;
   orders_created: number;
   orders_denied: number;
+  profile?: string;
   reason?: string;
-  state: "active" | "disabled" | "expired" | "exhausted";
+  state: "active" | "disabled" | "expired" | "exhausted" | "unavailable";
+}
+
+export interface ACMEEABPolicyUpdate {
+  allowed_identifiers?: string[];
+  max_orders?: number;
+  not_after?: string;
+  profile?: string;
 }
 
 export interface ACMEEABPosture {
@@ -260,6 +269,11 @@ export interface ACMEEABPosture {
   items: ACMEEABCredential[];
   required: boolean;
   served: boolean;
+}
+
+export interface ACMEEABRotationRequest {
+  hmac_key_ref: string;
+  successor_key_id: string;
 }
 
 export interface ACMEOperatorAction {

@@ -60,7 +60,9 @@ import type {
   AccessChangeRequestList,
   ACMEARIPosture,
   ACMEEABCredential,
+  ACMEEABPolicyUpdate,
   ACMEEABPosture,
+  ACMEEABRotationRequest,
   ACMEOperatorPlan,
   AgentJobPosture,
   BulkheadStats,
@@ -905,7 +907,9 @@ export type {
   AccessChangeRequestList,
   ACMEARIPosture,
   ACMEEABCredential,
+  ACMEEABPolicyUpdate,
   ACMEEABPosture,
+  ACMEEABRotationRequest,
   ACMEOperatorPlan,
   AgentJobPosture,
   BulkheadStats,
@@ -1791,6 +1795,10 @@ export interface Api {
   acmeOperatorPlan(): Promise<ACMEOperatorPlan>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
   setACMEEABCredentialDisabled(kid: string, disabled: boolean): Promise<ACMEEABCredential>;
+  /** A53: replace one credential's scope, quota, window and pinned profile at runtime. */
+  updateACMEEABPolicy(kid: string, update: ACMEEABPolicyUpdate): Promise<ACMEEABCredential>;
+  /** A50/A54: register a successor credential from a secret-store reference; the key never travels. */
+  rotateACMEEABCredential(kid: string, input: ACMEEABRotationRequest): Promise<ACMEEABCredential>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
   acmeUpstreamAuthorizations(): Promise<ACMEUpstreamAuthorizationList>;
@@ -2446,6 +2454,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   acmeEABCredentials: () => req<ACMEEABPosture>("/api/v1/acme/eab-credentials"),
   setACMEEABCredentialDisabled: (kid, disabled) =>
     mutate<ACMEEABCredential>("POST", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/${disabled ? "disable" : "enable"}`, {}),
+  updateACMEEABPolicy: (kid, update) => mutate<ACMEEABCredential>("PUT", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/policy`, update),
+  rotateACMEEABCredential: (kid, input) => mutate<ACMEEABCredential>("POST", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/rotate`, input),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
   acmeUpstreamAuthorizations: () => req<ACMEUpstreamAuthorizationList>("/api/v1/acme/dns-01/upstream-authorizations"),

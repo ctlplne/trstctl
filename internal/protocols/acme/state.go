@@ -36,6 +36,7 @@ func StateEventTypes() []string {
 		acmeEventAccountUpserted, acmeEventOrderCreated,
 		acmeEventChallengeValidated, acmeEventCertificateIssued,
 		acmeEventCertificateRevoked, acmeEventEarlyRenewalMarked,
+		acmeEventEABPolicyUpdated, acmeEventEABCredentialRotated,
 	}
 }
 
@@ -200,6 +201,20 @@ func (s *Server) applyStateEventLocked(ev events.Event) error {
 			return fmt.Errorf("acme: decode order event: %w", err)
 		}
 		return s.applyOrderCreatedEventLocked(payload)
+	case acmeEventEABPolicyUpdated:
+		var payload acmeEABPolicyUpdatedEvent
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			return fmt.Errorf("acme: decode EAB policy event: %w", err)
+		}
+		s.applyEABPolicyUpdatedLocked(payload)
+		return nil
+	case acmeEventEABCredentialRotated:
+		var payload acmeEABCredentialRotatedEvent
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			return fmt.Errorf("acme: decode EAB rotation event: %w", err)
+		}
+		s.applyEABCredentialRotatedLocked(context.Background(), payload)
+		return nil
 	case acmeEventChallengeValidated:
 		var payload acmeChallengeValidatedEvent
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {

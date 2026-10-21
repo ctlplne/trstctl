@@ -574,6 +574,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/eab-credentials/{kid}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace an ACME external account binding credential's identifier scope, order quota, validity window and pinned profile at runtime */
+        put: operations["updateACMEEABPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/eab-credentials/{kid}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a successor ACME external account binding credential from a tenant secret-store reference, inheriting the predecessor's policy */
+        post: operations["rotateACMEEABCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/operator-plan": {
         parameters: {
             query?: never;
@@ -7767,6 +7801,7 @@ export interface components {
             allowed_identifiers?: string[];
             disabled_by_operator: boolean;
             disabled_in_config: boolean;
+            hmac_key_ref?: string;
             key_id: string;
             /** Format: date-time */
             last_used_at?: string;
@@ -7775,9 +7810,17 @@ export interface components {
             not_after?: string;
             orders_created: number;
             orders_denied: number;
+            profile?: string;
             reason?: string;
             /** @enum {string} */
-            state: "active" | "disabled" | "expired" | "exhausted";
+            state: "active" | "disabled" | "expired" | "exhausted" | "unavailable";
+        };
+        ACMEEABPolicyUpdate: {
+            allowed_identifiers?: string[];
+            max_orders?: number;
+            /** Format: date-time */
+            not_after?: string;
+            profile?: string;
         };
         ACMEEABPosture: {
             /** Format: date-time */
@@ -7785,6 +7828,10 @@ export interface components {
             items: components["schemas"]["ACMEEABCredential"][];
             required: boolean;
             served: boolean;
+        };
+        ACMEEABRotationRequest: {
+            hmac_key_ref: string;
+            successor_key_id: string;
         };
         ACMEOperatorAction: {
             detail: string;
@@ -18662,6 +18709,102 @@ export interface operations {
         responses: {
             /** @description success */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEEABCredential"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateACMEEABPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description ACME external account binding key id */
+                kid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEEABPolicyUpdate"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEEABCredential"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateACMEEABCredential: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description ACME external account binding key id */
+                kid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEEABRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

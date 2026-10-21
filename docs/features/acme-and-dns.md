@@ -140,12 +140,22 @@ also stops pending finalization. Use it when a credential leaks; certificates al
 issued under it remain valid until revoked or expired. The Protocols console shows
 the same list with the same action.
 
-The exact contract: the served response carries no HMAC key in any encoding, and there
-is no API that mints one — **rotation is a configuration operation**: add the new key
-id to `protocols.acme_eab.keys`, then disable the old one while clients migrate. The
-served disable verb cannot re-enable a credential that configuration disables; config
-is the floor. EAB credentials cannot select different certificate profiles: the
-deployment's `ca.default_profile` applies to every ACME account in that tenant.
+The policy is served too: `PUT /api/v1/acme/eab-credentials/{kid}/policy` (CLI
+`acme eab policy`) replaces a credential's allowed identifiers, order quota, validity
+window and pinned profile at runtime, recorded in the ACME state log and replayed
+after a restart. Rotation is served by reference: write the successor MAC key to the
+tenant secret store, then `POST /api/v1/acme/eab-credentials/{kid}/rotate` (CLI
+`acme eab rotate`) with `successor_key_id` and a `secret://` `hmac_key_ref`
+registers the successor under the predecessor's policy; disable the predecessor once
+clients have migrated. The Protocols console carries both forms.
+
+The exact contract: no served request or response carries an HMAC key in any
+encoding, and there is no API that mints one; a rotation request names where the
+key lives, never the key. A successor whose reference stops resolving is listed as
+`unavailable` and admits nothing. The served disable verb cannot re-enable a
+credential that configuration disables; config is the floor. A credential may pin
+the certificate profile its orders are issued with (`keys[].profile`, or the served
+policy); without a pin the deployment's `ca.default_profile` applies.
 
 The default ACME profile mode is full public-trust domain validation. For internal PKI,
 an active certificate profile can explicitly set `"acme_auth_mode":"trust_authenticated"`.

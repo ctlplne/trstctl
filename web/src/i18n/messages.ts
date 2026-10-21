@@ -18975,8 +18975,76 @@ export const messages = {
   },
   "protocols.eab.rotation": {
     defaultMessage:
-      "Rotation is a configuration operation: add the new key id to protocols.acme_eab, then disable the old one here while clients migrate. trstctl does not mint external account credentials over the API, because that would mean returning a shared MAC secret in a response.",
-    description: "B4: states plainly that credential rotation stays in configuration, rather than implying an API that mints shared secrets.",
+      "Rotation never moves a key through this console: write the successor MAC key to the tenant secret store first, then rotate here by reference. The successor inherits this credential's policy; disable this credential once clients have migrated. trstctl does not mint external account credentials over the API.",
+    description: "A50/A54: states how served rotation works (by secret-store reference) and that no API mints or returns a shared MAC secret.",
+  },
+  "protocols.eab.rotate": {
+    defaultMessage: "Rotate",
+    description: "A50: action that opens the rotate-by-reference form for one credential.",
+  },
+  "protocols.eab.rotateHeading": {
+    defaultMessage: "Rotate {kid}",
+    description: "A50: heading of the rotate form, naming the predecessor key id.",
+  },
+  "protocols.eab.rotateSuccessor": {
+    defaultMessage: "Successor key id",
+    description: "A50: label for the new credential's key id.",
+  },
+  "protocols.eab.rotateRef": {
+    defaultMessage: "MAC key reference",
+    description: "A54: label for the secret:// reference the successor's MAC key is read from.",
+  },
+  "protocols.eab.rotateRefHelp": {
+    defaultMessage: "A secret:// reference into this tenant's secret store, for example secret://acme/eab/payments-2. Never the key itself.",
+    description: "A54: help text under the reference field.",
+  },
+  "protocols.eab.rotateSubmit": {
+    defaultMessage: "Register successor",
+    description: "A50: submit label for the rotate form.",
+  },
+  "protocols.eab.policy": {
+    defaultMessage: "Policy",
+    description: "A53: action that opens the policy form for one credential.",
+  },
+  "protocols.eab.policyHeading": {
+    defaultMessage: "Policy for {kid}",
+    description: "A53: heading of the policy form, naming the key id.",
+  },
+  "protocols.eab.policyIdentifiers": {
+    defaultMessage: "Allowed identifiers",
+    description: "A53: label for the comma-separated identifier scope.",
+  },
+  "protocols.eab.policyIdentifiersHelp": {
+    defaultMessage: "Comma-separated exact names or *.suffix entries; empty means unscoped.",
+    description: "A53: help text under the identifier scope field.",
+  },
+  "protocols.eab.policyMaxOrders": {
+    defaultMessage: "Order quota",
+    description: "A53: label for the order quota; zero means none.",
+  },
+  "protocols.eab.policyNotAfter": {
+    defaultMessage: "Valid until",
+    description: "A53: label for the validity window end.",
+  },
+  "protocols.eab.policyProfile": {
+    defaultMessage: "Pinned profile",
+    description: "A53/A55: label for the certificate profile every order under the credential is issued with.",
+  },
+  "protocols.eab.policySubmit": {
+    defaultMessage: "Save policy",
+    description: "A53: submit label for the policy form.",
+  },
+  "protocols.eab.cancel": {
+    defaultMessage: "Cancel",
+    description: "A50/A53: closes the open EAB form without a change.",
+  },
+  "protocols.eab.keyRef": {
+    defaultMessage: "Key from {ref}",
+    description: "A54: shows the secret-store reference a rotated credential's MAC key is read from.",
+  },
+  "protocols.eab.profilePinned": {
+    defaultMessage: "Profile {profile}",
+    description: "A55: shows the certificate profile a credential pins.",
   },
   "protocols.eab.scope": {
     defaultMessage: "Scope",

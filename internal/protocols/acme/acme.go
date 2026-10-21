@@ -325,6 +325,9 @@ type Server struct {
 	stateLog                eventLog
 	stateTenantID           string
 	eabCredentials          map[string]*eabCredential
+	// eabSecretResolver reads a rotated credential's MAC key from its secret
+	// reference (A54).
+	eabSecretResolver func(context.Context, string) ([]byte, error)
 
 	mux *http.ServeMux
 }
@@ -1017,7 +1020,10 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 				s.problem(w, r, http.StatusUnauthorized, "unauthorized", reason)
 				return
 			}
-			macKey := cred.key.Bytes()
+			var macKey []byte
+			if cred.key != nil {
+				macKey = cred.key.Bytes()
+			}
 			if macKey == nil {
 				s.mu.Unlock()
 				s.problem(w, r, http.StatusInternalServerError, "serverInternal", "external account binding key is unavailable")

@@ -325,14 +325,27 @@ ACMEEABCredential = TypedDict(
         'allowed_identifiers': list[str],
         'disabled_by_operator': bool,
         'disabled_in_config': bool,
+        'hmac_key_ref': str,
         'key_id': str,
         'last_used_at': str,
         'max_orders': int,
         'not_after': str,
         'orders_created': int,
         'orders_denied': int,
+        'profile': str,
         'reason': str,
         'state': str,
+    },
+    total=False,
+)
+
+ACMEEABPolicyUpdate = TypedDict(
+    'ACMEEABPolicyUpdate',
+    {
+        'allowed_identifiers': list[str],
+        'max_orders': int,
+        'not_after': str,
+        'profile': str,
     },
     total=False,
 )
@@ -344,6 +357,15 @@ ACMEEABPosture = TypedDict(
         'items': list[dict[str, Any]],
         'required': bool,
         'served': bool,
+    },
+    total=False,
+)
+
+ACMEEABRotationRequest = TypedDict(
+    'ACMEEABRotationRequest',
+    {
+        'hmac_key_ref': str,
+        'successor_key_id': str,
     },
     total=False,
 )

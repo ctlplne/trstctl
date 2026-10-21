@@ -530,6 +530,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"acme", "eab", "list"}, Method: "GET", Path: "/api/v1/acme/eab-credentials", Summary: "List ACME external account binding credentials and their authorization scope"},
 	{Name: []string{"acme", "eab", "disable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/disable", Body: bodyNone, Summary: "Disable an ACME external account binding credential"},
 	{Name: []string{"acme", "eab", "enable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/enable", Body: bodyNone, Summary: "Re-enable a disabled ACME external account binding credential"},
+	{Name: []string{"acme", "eab", "policy"}, Method: "PUT", Path: "/api/v1/acme/eab-credentials/{kid}/policy", Body: bodyFile, Summary: "Replace an ACME external account binding credential's scope, quota, window and pinned profile"},
+	{Name: []string{"acme", "eab", "rotate"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/rotate", Body: bodyFile, Summary: "Register a successor ACME external account binding credential from a secret-store reference"},
 
 	{Name: []string{"cbom", "preview"}, Method: "POST", Path: "/api/v1/cbom/scans/preview", Body: bodyFile, ReadOnly: true, Summary: "Normalize and review a CBOM scan without connecting, reading files, or writing state"},
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Run the reviewed bounded CBOM scan"},

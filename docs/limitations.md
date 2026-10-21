@@ -240,7 +240,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Conditional/partial residuals | Real served spine; specific operator-facing edges remain | [Conditional, partial, and residual boundaries](#conditional-partial-and-residual-boundaries) |
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
 | CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
-| ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
+| ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window / profile enforced fail-closed, runtime disable, served policy replacement and rotation by secret-store reference (both replayed from the ACME state log) | [Protocols](#protocols) |
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
@@ -4204,13 +4204,26 @@ This is a deliberate, documented trust boundary, not an accident.
   a closed tap, not a revocation: certificates already issued under the
   credential stay valid. The Protocols console shows the same list and carries
   the disable action.
-  What is **not** served: the policy lives in `protocols.acme_eab.keys[]`
-  configuration, and **rotation is a configuration operation** — add the new key
-  id, then disable the old one here while clients migrate. trstctl does not mint
-  external account credentials over the API, because that would mean returning a
-  shared MAC secret in a response body; the HMAC key stays byte-backed in locked
-  memory where configuration put it and appears in no served response, in any
-  encoding. Per-credential profile selection is served: `keys[].profile` pins
+  The policy is served as well as configured (A53): `PUT
+  /api/v1/acme/eab-credentials/{kid}/policy` (CLI `acme eab policy`) replaces a
+  credential's allowed identifiers, order quota, validity window and pinned
+  profile at runtime; the change is recorded as an `acme.eab.policy_updated`
+  state event and replayed after a restart, so a `protocols.acme_eab.keys[]`
+  entry is the starting policy, not the only one. Rotation is served without
+  minting a secret (A50/A54): the operator writes the successor MAC key to the
+  tenant secret store first, then `POST
+  /api/v1/acme/eab-credentials/{kid}/rotate` (CLI `acme eab rotate`) with
+  `successor_key_id` and a `secret://` `hmac_key_ref` registers the successor
+  under the predecessor's policy. The key is read through the secret store into
+  locked memory, the `acme.eab.credential_rotated` event carries only the
+  reference, and replay resolves the reference again; a reference that no
+  longer resolves leaves the successor listed as `unavailable`, which admits
+  nothing, rather than dropping it or starting the mount without it. The
+  predecessor keeps working until the operator disables it. trstctl does not
+  mint external account credentials over the API and accepts no key in a
+  request body, because that would mean a shared MAC secret in an HTTP body;
+  the HMAC key stays byte-backed in locked memory and appears in no served
+  response, in any encoding. Per-credential profile selection is served: `keys[].profile` pins
   the tenant profile every order under that credential is issued with (the
   server reads that profile's authentication mode and signs under it), and
   without a pin the tenant's `ca.default_profile` applies. The served disable

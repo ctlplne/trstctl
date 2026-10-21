@@ -5586,7 +5586,9 @@
                 "activateProtocolProfile",
                 "listACMEEABCredentials",
                 "disableACMEEABCredential",
-                "enableACMEEABCredential"
+                "enableACMEEABCredential",
+                "updateACMEEABPolicy",
+                "rotateACMEEABCredential"
             ],
             "api_na": "",
             "cli_surface": [
@@ -20419,6 +20421,8 @@
                 "acme eab disable",
                 "acme eab enable",
                 "acme eab list",
+                "acme eab policy",
+                "acme eab rotate",
                 "agents enroll-token",
                 "agents list",
                 "ai query",

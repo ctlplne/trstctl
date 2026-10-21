@@ -718,7 +718,7 @@ func componentSchemas() map[string]*Schema {
 	// in locked memory where configuration put it (AN-8).
 	acmeEABCredential := object(map[string]*Schema{
 		"key_id":               str(),
-		"state":                {Type: "string", Enum: []string{"active", "disabled", "expired", "exhausted"}},
+		"state":                {Type: "string", Enum: []string{"active", "disabled", "expired", "exhausted", "unavailable"}},
 		"reason":               str(),
 		"allowed_identifiers":  {Type: "array", Items: str()},
 		"max_orders":           {Type: "integer"},
@@ -729,7 +729,22 @@ func componentSchemas() map[string]*Schema {
 		"disabled_in_config":   {Type: "boolean"},
 		"disabled_by_operator": {Type: "boolean"},
 		"last_used_at":         timestamp(),
+		"profile":              str(),
+		"hmac_key_ref":         str(),
 	}, "key_id", "state", "accounts_bound", "orders_created", "orders_denied", "disabled_in_config", "disabled_by_operator")
+	// A53: the served policy replaces scope, quota, window and profile. A50/A54:
+	// rotation takes a secret-store reference; the key is never in a request or
+	// a response.
+	acmeEABPolicyUpdate := object(map[string]*Schema{
+		"allowed_identifiers": {Type: "array", Items: str()},
+		"max_orders":          {Type: "integer"},
+		"not_after":           timestamp(),
+		"profile":             str(),
+	})
+	acmeEABRotationRequest := object(map[string]*Schema{
+		"successor_key_id": str(),
+		"hmac_key_ref":     str(),
+	}, "successor_key_id", "hmac_key_ref")
 	acmeEABPosture := object(map[string]*Schema{
 		"served": {Type: "boolean"}, "required": {Type: "boolean"},
 		"generated_at": timestamp(),
@@ -7126,6 +7141,8 @@ func componentSchemas() map[string]*Schema {
 		"CAAuthority":                              caAuthority,
 		"CAAuthorityHorizon":                       caAuthorityHorizon,
 		"ACMEEABCredential":                        acmeEABCredential,
+		"ACMEEABPolicyUpdate":                      acmeEABPolicyUpdate,
+		"ACMEEABRotationRequest":                   acmeEABRotationRequest,
 		"ACMEEABPosture":                           acmeEABPosture,
 		"ACMEOperatorAction":                       acmeOperatorAction,
 		"ACMEDomainValidationActivity":             acmeDomainValidationActivity,

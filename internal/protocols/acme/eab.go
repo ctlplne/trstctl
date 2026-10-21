@@ -5,6 +5,8 @@ package acme
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -111,6 +113,12 @@ type eabCredential struct {
 	keyID  string
 	key    *secret.Buffer
 	policy EABPolicy
+	// hmacKeyRef is the secret reference a rotated credential's MAC key was
+	// resolved from (A50/A54); empty for a configuration key.
+	hmacKeyRef string
+	// keyUnavailable marks a rotated credential whose reference could not be
+	// resolved at startup: it admits nothing until the reference resolves.
+	keyUnavailable bool
 
 	mu sync.Mutex
 	// disabledByOperator is the served disable verb's state. It is separate from
@@ -133,6 +141,8 @@ func (c *eabCredential) active(now time.Time) (bool, string) {
 	c.mu.Unlock()
 
 	switch {
+	case c.keyUnavailable:
+		return false, "external account credential's MAC key reference could not be resolved"
 	case c.policy.Disabled:
 		return false, "external account credential is disabled in configuration"
 	case operatorDisabled:
@@ -198,7 +208,11 @@ func (c *eabCredential) status(now time.Time) EABCredentialStatus {
 		lastUsed := c.lastUsed.UTC()
 		out.LastUsedAt = &lastUsed
 	}
+	out.Profile = c.policy.Profile
+	out.HMACKeyRef = c.hmacKeyRef
 	switch {
+	case c.keyUnavailable:
+		out.State, out.Reason = "unavailable", "MAC key reference could not be resolved"
 	case c.policy.Disabled:
 		out.State, out.Reason = "disabled", "disabled in configuration"
 	case c.disabledByOperator:
@@ -229,6 +243,230 @@ type EABCredentialStatus struct {
 	DisabledInConfig   bool       `json:"disabled_in_config"`
 	DisabledByOperator bool       `json:"disabled_by_operator"`
 	LastUsedAt         *time.Time `json:"last_used_at,omitempty"`
+	// Profile is the certificate profile the credential pins (A55).
+	Profile string `json:"profile,omitempty"`
+	// HMACKeyRef is the secret reference a rotated credential's key came from
+	// (A54); it names where the key lives, never the key.
+	HMACKeyRef string `json:"hmac_key_ref,omitempty"`
+}
+
+// EABPolicyUpdate is the served policy an operator sets on one credential
+// (A53). Disabling stays with the disable verb; the configuration floor for a
+// config-disabled credential is untouched.
+type EABPolicyUpdate struct {
+	AllowedIdentifiers []string
+	MaxOrders          int
+	NotAfter           time.Time
+	Profile            string
+}
+
+const (
+	acmeEventEABPolicyUpdated      = "acme.eab.policy_updated"
+	acmeEventEABCredentialRotated  = "acme.eab.credential_rotated" // #nosec G101 -- an event type name, not credential material (CWE-798)
+	eabResolvedKeyMinimumLength    = 16
+	eabCredentialKeyIDMaximumBytes = 128
+)
+
+type acmeEABPolicyUpdatedEvent struct {
+	KeyID              string   `json:"key_id"`
+	AllowedIdentifiers []string `json:"allowed_identifiers,omitempty"`
+	MaxOrders          int      `json:"max_orders,omitempty"`
+	NotAfter           string   `json:"not_after,omitempty"`
+	Profile            string   `json:"profile,omitempty"`
+}
+
+type acmeEABCredentialRotatedEvent struct {
+	KeyID              string   `json:"key_id"`
+	PredecessorKeyID   string   `json:"predecessor_key_id"`
+	HMACKeyRef         string   `json:"hmac_key_ref"`
+	AllowedIdentifiers []string `json:"allowed_identifiers,omitempty"`
+	MaxOrders          int      `json:"max_orders,omitempty"`
+	NotAfter           string   `json:"not_after,omitempty"`
+	Profile            string   `json:"profile,omitempty"`
+	RotatedAt          string   `json:"rotated_at"`
+}
+
+// EABCredentialsContext refreshes the registration-bound view before an
+// operator reads it, so a listing after a tenant re-registration reflects the
+// replayed policy and rotation events.
+func (s *Server) EABCredentialsContext(ctx context.Context) ([]EABCredentialStatus, error) {
+	_, release, err := s.beginStateScope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return s.EABCredentials(), nil
+}
+
+// WithEABSecretResolver supplies the tenant secret-reference resolver a
+// rotated credential's MAC key is read through (A54), both when an operator
+// rotates and when the state log replays. The returned bytes are copied into
+// locked memory and the resolver's copy is wiped.
+func (s *Server) WithEABSecretResolver(resolve func(context.Context, string) ([]byte, error)) *Server {
+	s.eabSecretResolver = resolve
+	return s
+}
+
+func validEABKeyID(keyID string) bool {
+	return keyID != "" && len(keyID) <= eabCredentialKeyIDMaximumBytes && !strings.ContainsAny(keyID, " \t\r\n/")
+}
+
+// UpdateEABPolicy replaces a credential's scope, quota, window and profile at
+// runtime and records the change in the state log so it survives a restart
+// (A53). ok is false for an unknown credential.
+func (s *Server) UpdateEABPolicy(ctx context.Context, keyID string, update EABPolicyUpdate) (EABCredentialStatus, bool, error) {
+	if s == nil {
+		return EABCredentialStatus{}, false, nil
+	}
+	keyID = strings.TrimSpace(keyID)
+	ctx, release, err := s.beginStateScope(ctx)
+	if err != nil {
+		return EABCredentialStatus{}, true, err
+	}
+	defer release()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cred := s.eabCredentials[keyID]
+	if cred == nil {
+		return EABCredentialStatus{}, false, nil
+	}
+	payload := acmeEABPolicyUpdatedEvent{KeyID: keyID, AllowedIdentifiers: normalizedEABIdentifiers(update.AllowedIdentifiers),
+		MaxOrders: update.MaxOrders, Profile: strings.TrimSpace(update.Profile)}
+	if !update.NotAfter.IsZero() {
+		payload.NotAfter = update.NotAfter.UTC().Format(time.RFC3339)
+	}
+	if err := s.appendStateEventLocked(ctx, acmeEventEABPolicyUpdated, payload); err != nil {
+		return EABCredentialStatus{}, true, err
+	}
+	s.applyEABPolicyUpdatedLocked(payload)
+	return cred.status(time.Now()), true, nil
+}
+
+func normalizedEABIdentifiers(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func (s *Server) applyEABPolicyUpdatedLocked(payload acmeEABPolicyUpdatedEvent) {
+	cred := s.eabCredentials[payload.KeyID]
+	if cred == nil {
+		return
+	}
+	cred.mu.Lock()
+	defer cred.mu.Unlock()
+	cred.policy.AllowedIdentifiers = append([]string(nil), payload.AllowedIdentifiers...)
+	cred.policy.MaxOrders = payload.MaxOrders
+	cred.policy.NotAfter = time.Time{}
+	if payload.NotAfter != "" {
+		if notAfter, err := time.Parse(time.RFC3339, payload.NotAfter); err == nil {
+			cred.policy.NotAfter = notAfter
+		}
+	}
+	cred.policy.Profile = payload.Profile
+}
+
+// RotateEABCredential registers a successor credential whose MAC key is read
+// from hmacKeyRef through the secret resolver, inheriting the predecessor's
+// scope, quota, window and profile, and records it in the state log (A50/A54).
+// The predecessor stays as it is: the operator disables it once clients
+// have migrated. The key never appears in the event or any response.
+func (s *Server) RotateEABCredential(ctx context.Context, keyID, successorKeyID, hmacKeyRef string) (EABCredentialStatus, bool, error) {
+	if s == nil {
+		return EABCredentialStatus{}, false, nil
+	}
+	keyID, successorKeyID, hmacKeyRef = strings.TrimSpace(keyID), strings.TrimSpace(successorKeyID), strings.TrimSpace(hmacKeyRef)
+	if !validEABKeyID(successorKeyID) {
+		return EABCredentialStatus{}, true, errors.New("acme: successor key id must be a single non-empty token")
+	}
+	if s.eabSecretResolver == nil {
+		return EABCredentialStatus{}, true, errors.New("acme: this mount has no secret resolver; rotation needs the tenant secret store")
+	}
+	ctx, release, err := s.beginStateScope(ctx)
+	if err != nil {
+		return EABCredentialStatus{}, true, err
+	}
+	defer release()
+	s.mu.Lock()
+	predecessor := s.eabCredentials[keyID]
+	_, taken := s.eabCredentials[successorKeyID]
+	s.mu.Unlock()
+	if predecessor == nil {
+		return EABCredentialStatus{}, false, nil
+	}
+	if taken {
+		return EABCredentialStatus{}, true, fmt.Errorf("acme: external account credential %q already exists", successorKeyID)
+	}
+	raw, err := s.eabSecretResolver(ctx, hmacKeyRef)
+	if err != nil {
+		return EABCredentialStatus{}, true, fmt.Errorf("acme: resolve successor MAC key reference: %w", err)
+	}
+	defer secret.Wipe(raw)
+	if len(raw) < eabResolvedKeyMinimumLength {
+		return EABCredentialStatus{}, true, fmt.Errorf("acme: the successor MAC key must be at least %d bytes", eabResolvedKeyMinimumLength)
+	}
+	buf, err := secret.NewFrom(raw)
+	if err != nil {
+		return EABCredentialStatus{}, true, err
+	}
+	predecessor.mu.Lock()
+	policy := predecessor.policy
+	policy.AllowedIdentifiers = append([]string(nil), predecessor.policy.AllowedIdentifiers...)
+	predecessor.mu.Unlock()
+	policy.Disabled = false
+	payload := acmeEABCredentialRotatedEvent{KeyID: successorKeyID, PredecessorKeyID: keyID, HMACKeyRef: hmacKeyRef,
+		AllowedIdentifiers: policy.AllowedIdentifiers, MaxOrders: policy.MaxOrders, Profile: policy.Profile,
+		RotatedAt: time.Now().UTC().Format(time.RFC3339)}
+	if !policy.NotAfter.IsZero() {
+		payload.NotAfter = policy.NotAfter.UTC().Format(time.RFC3339)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, raced := s.eabCredentials[successorKeyID]; raced {
+		buf.Destroy()
+		return EABCredentialStatus{}, true, fmt.Errorf("acme: external account credential %q already exists", successorKeyID)
+	}
+	if err := s.appendStateEventLocked(ctx, acmeEventEABCredentialRotated, payload); err != nil {
+		buf.Destroy()
+		return EABCredentialStatus{}, true, err
+	}
+	cred := &eabCredential{keyID: successorKeyID, key: buf, policy: policy, hmacKeyRef: hmacKeyRef}
+	s.eabCredentials[successorKeyID] = cred
+	return cred.status(time.Now()), true, nil
+}
+
+// applyEABCredentialRotatedLocked restores a rotated credential on replay,
+// resolving its MAC key through the resolver. A reference that cannot be
+// resolved registers the credential as unavailable, which admits nothing
+// until the reference resolves again; the mount still starts.
+func (s *Server) applyEABCredentialRotatedLocked(ctx context.Context, payload acmeEABCredentialRotatedEvent) {
+	if s.eabCredentials == nil {
+		s.eabCredentials = map[string]*eabCredential{}
+	}
+	if _, exists := s.eabCredentials[payload.KeyID]; exists {
+		return
+	}
+	policy := EABPolicy{AllowedIdentifiers: append([]string(nil), payload.AllowedIdentifiers...),
+		MaxOrders: payload.MaxOrders, Profile: payload.Profile}
+	if payload.NotAfter != "" {
+		if notAfter, err := time.Parse(time.RFC3339, payload.NotAfter); err == nil {
+			policy.NotAfter = notAfter
+		}
+	}
+	cred := &eabCredential{keyID: payload.KeyID, policy: policy, hmacKeyRef: payload.HMACKeyRef, keyUnavailable: true}
+	if s.eabSecretResolver != nil {
+		if raw, err := s.eabSecretResolver(ctx, payload.HMACKeyRef); err == nil && len(raw) >= eabResolvedKeyMinimumLength {
+			if buf, err := secret.NewFrom(raw); err == nil {
+				cred.key, cred.keyUnavailable = buf, false
+			}
+			secret.Wipe(raw)
+		}
+	}
+	s.eabCredentials[payload.KeyID] = cred
 }
 
 // EABCredentials returns the served status of every configured external account

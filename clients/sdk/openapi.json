@@ -1061,6 +1061,9 @@
           "disabled_in_config": {
             "type": "boolean"
           },
+          "hmac_key_ref": {
+            "type": "string"
+          },
           "key_id": {
             "type": "string"
           },
@@ -1081,6 +1084,9 @@
           "orders_denied": {
             "type": "integer"
           },
+          "profile": {
+            "type": "string"
+          },
           "reason": {
             "type": "string"
           },
@@ -1089,7 +1095,8 @@
               "active",
               "disabled",
               "expired",
-              "exhausted"
+              "exhausted",
+              "unavailable"
             ],
             "type": "string"
           }
@@ -1103,6 +1110,27 @@
           "disabled_in_config",
           "disabled_by_operator"
         ],
+        "type": "object"
+      },
+      "ACMEEABPolicyUpdate": {
+        "properties": {
+          "allowed_identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_orders": {
+            "type": "integer"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ACMEEABPosture": {
@@ -1129,6 +1157,21 @@
           "required",
           "generated_at",
           "items"
+        ],
+        "type": "object"
+      },
+      "ACMEEABRotationRequest": {
+        "properties": {
+          "hmac_key_ref": {
+            "type": "string"
+          },
+          "successor_key_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "successor_key_id",
+          "hmac_key_ref"
         ],
         "type": "object"
       },
@@ -38527,6 +38570,160 @@
           }
         ],
         "summary": "Re-enable an operator-disabled ACME external account binding credential",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/eab-credentials/{kid}/policy": {
+      "put": {
+        "operationId": "updateACMEEABPolicy",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ACME external account binding key id",
+            "in": "path",
+            "name": "kid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEEABPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEEABCredential"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace an ACME external account binding credential's identifier scope, order quota, validity window and pinned profile at runtime",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/eab-credentials/{kid}/rotate": {
+      "post": {
+        "operationId": "rotateACMEEABCredential",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ACME external account binding key id",
+            "in": "path",
+            "name": "kid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEEABRotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEEABCredential"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Register a successor ACME external account binding credential from a tenant secret-store reference, inheriting the predecessor's policy",
         "x-trstctl-permission": "issuers:write"
       }
     },

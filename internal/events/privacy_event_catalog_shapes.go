@@ -221,6 +221,12 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		"acme.dns01.plugin.denied", "acme.dns01.plugin.failed":
 		return shape(`{"provider":"","record_name":"","detail":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/detail"}}), true
+	case "acme.eab.credential_rotated":
+		return shape(`{"key_id":"","predecessor_key_id":"","hmac_key_ref":"","allowed_identifiers":[""],"max_orders":1,"not_after":"","profile":"","rotated_at":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/allowed_identifiers", "/max_orders", "/not_after", "/profile"}}), true
+	case "acme.eab.policy_updated":
+		return shape(`{"key_id":"","allowed_identifiers":[""],"max_orders":1,"not_after":"","profile":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/allowed_identifiers", "/max_orders", "/not_after", "/profile"}}), true
 	case "acme.eab.order_denied":
 		return shape(`{"account_url":"","eab_key_id":"","identifiers":[""],"reason":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/identifiers"}}), true

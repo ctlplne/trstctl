@@ -39,6 +39,19 @@ func acmeEABScopedHarness(t *testing.T, keys []config.ACMEExternalAccountBinding
 	})
 }
 
+// registerWithEABResult registers under a credential and returns the
+// registration error instead of failing, for refusals a test expects.
+func registerWithEABResult(h *servedHarness, kid string, hmacKey []byte) (*xacme.Client, error) {
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		return nil, err
+	}
+	_, err = client.Register(context.Background(), &xacme.Account{
+		ExternalAccountBinding: &xacme.ExternalAccountBinding{KID: kid, Key: hmacKey},
+	}, xacme.AcceptTOS)
+	return client, err
+}
+
 func registerWithEAB(t *testing.T, h *servedHarness, kid string, hmacKey []byte) *xacme.Client {
 	t.Helper()
 	client, err := acmekey.NewClient(h.ts.URL + "/directory")
