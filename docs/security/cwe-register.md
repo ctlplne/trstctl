@@ -412,7 +412,7 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:530` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_run_served_test.go:96` | loopback fixture is closed below (CWE-400) |
-| `internal/server/migration_run_served_test.go:436` | loopback fixture is closed below (CWE-400) |
+| `internal/server/migration_run_served_test.go:465` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
 ### G115 — CWE-190 Integer overflow or wraparound (258 sites)
@@ -604,9 +604,9 @@ not this file.
 | `internal/store/federation.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/key_compromise_retry.go:25` | bounded above by the MaxInt64 check; the column is a Postgres bigint (CWE-190) |
 | `internal/store/migration_run.go:52` | JetStream/PostgreSQL event sequence is bounded by bigint (CWE-190) |
-| `internal/store/migration_run.go:168` | positive bigint constrained by migration (CWE-190) |
-| `internal/store/migration_run.go:192` | positive bigint constrained by migration (CWE-190) |
-| `internal/store/migration_run.go:225` | positive bigint constrained by migration (CWE-190) |
+| `internal/store/migration_run.go:221` | positive bigint constrained by migration (CWE-190) |
+| `internal/store/migration_run.go:245` | positive bigint constrained by migration (CWE-190) |
+| `internal/store/migration_run.go:278` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/offboard_test.go:44` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/operation_approvals.go:254` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/outbox_reconciliation_checkpoint.go:34` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

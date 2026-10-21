@@ -53,6 +53,19 @@ func (s *Store) ApplyMigrationRunRecordedTx(
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
+	// A32: a pause recalls the agent work this run has published; a resume
+	// releases it. Done here, in the projection transaction, so the recall is
+	// exactly as durable and replayable as the paused status itself.
+	switch run.Status {
+	case migration.RunPaused:
+		if err := s.recallMigrationAgentJobsTx(ctx, tx, tenantID, run.ID, at); err != nil {
+			return err
+		}
+	case migration.RunRunning:
+		if err := s.releaseRecalledMigrationAgentJobsTx(ctx, tx, tenantID, run.ID); err != nil {
+			return err
+		}
+	}
 	for _, wave := range run.Waves {
 		for _, member := range wave.Members {
 			if member.RollbackSuccessorVerdict != migration.VerdictVerified {
@@ -64,6 +77,46 @@ func (s *Store) ApplyMigrationRunRecordedTx(
 		}
 	}
 	return nil
+}
+
+// recallMigrationAgentJobsTx marks every unfinished agent job of the run as
+// recalled (trust intents name the run as run_id, renewal and rollback intents
+// as migration_run_id; the migration: idempotency prefix scopes both): an unclaimed job stops being claimable, a leased job's next lease
+// extension and its result are refused so the agent stops, and a late signed
+// result is retained as a receipt rather than applied. Idempotent on replay.
+func (s *Store) recallMigrationAgentJobsTx(ctx context.Context, tx pgx.Tx, tenantID, runID string, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE outbox
+		    SET agent_recalled_at = COALESCE(agent_recalled_at, $3),
+		        last_error = 'migration_paused'
+		  WHERE tenant_id = $1
+		    AND status = 'pending'
+		    AND delivered_at IS NULL
+		    AND claim_completed_at IS NULL
+		    AND idempotency_key LIKE 'migration:%'
+		    AND $2 IN (convert_from(payload, 'UTF8')::jsonb ->> 'migration_run_id',
+		               convert_from(payload, 'UTF8')::jsonb ->> 'run_id')`,
+		tenantID, runID, at.UTC())
+	return err
+}
+
+// releaseRecalledMigrationAgentJobsTx lifts the recall on resume. A lease the
+// recall cut is dropped with it, so the exact required agent claims the job
+// afresh; the idempotent intent makes a re-execution converge.
+func (s *Store) releaseRecalledMigrationAgentJobsTx(ctx context.Context, tx pgx.Tx, tenantID, runID string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE outbox
+		    SET agent_recalled_at = NULL,
+		        claimed_by_agent_id = NULL,
+		        claim_expires_at = NULL,
+		        last_error = ''
+		  WHERE tenant_id = $1
+		    AND agent_recalled_at IS NOT NULL
+		    AND idempotency_key LIKE 'migration:%'
+		    AND $2 IN (convert_from(payload, 'UTF8')::jsonb ->> 'migration_run_id',
+		               convert_from(payload, 'UTF8')::jsonb ->> 'run_id')`,
+		tenantID, runID)
+	return err
 }
 
 // restoreMigrationCertificateTx makes the signed, live-verified rollback fact

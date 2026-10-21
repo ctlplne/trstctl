@@ -280,11 +280,34 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 0)
 
 	// Pause/resume is durable and cannot duplicate the already-published trust
-	// effect. Work already leased could still finish; nothing is leased here.
+	// effect. A32: the host agent has already leased the trust job when the
+	// operator pauses; the pause recalls it — the lease cannot be extended, a
+	// fresh claim finds nothing, and the row says why — and resume lifts the
+	// recall so the same required agent claims it afresh below.
+	leased, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{agentrelay.KindTrustDistribute}, Limit: 1})
+	if err != nil || len(leased.Jobs) != 1 {
+		t.Fatalf("lease the published trust job before the pause: jobs=%d err=%v", len(leased.Jobs), err)
+	}
+	trustJob := leased.Jobs[0]
 	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
 		"/api/v1/migrations/runs/"+started.ID+"/pause", trustOnlyToken, "aud40-pause", map[string]string{"reason": "operator gate"})
 	if statusCode != http.StatusOK || !bytes.Contains(body, []byte(`"status":"paused"`)) {
 		t.Fatalf("pause migration = %d %s", statusCode, body)
+	}
+	if extended, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
+		JobID: trustJob.JobID, Attempt: trustJob.Attempt, Outcome: transport.JobOutcomeExtend,
+	}); err != nil || extended.Accepted {
+		t.Fatalf("a paused run must refuse the leased job's lease extension: accepted=%v err=%v", extended != nil && extended.Accepted, err)
+	}
+	if again, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{agentrelay.KindTrustDistribute}, Limit: 1}); err != nil || len(again.Jobs) != 0 {
+		t.Fatalf("a recalled job must not be claimable while the run is paused: jobs=%d err=%v", len(again.Jobs), err)
+	}
+	var recalled bool
+	var lastError string
+	if err := h.store.SystemPool().QueryRow(ctx,
+		`SELECT agent_recalled_at IS NOT NULL, last_error FROM outbox WHERE tenant_id = $1 AND id = $2`,
+		h.tenant, trustJob.JobID).Scan(&recalled, &lastError); err != nil || !recalled || lastError != "migration_paused" {
+		t.Fatalf("recalled row: recalled=%t last_error=%q err=%v", recalled, lastError, err)
 	}
 	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
 		"/api/v1/migrations/runs/"+started.ID+"/resume", trustOnlyToken, "aud40-resume-forbidden", nil)
@@ -297,6 +320,12 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		t.Fatalf("resume migration = %d %s", statusCode, body)
 	}
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
+	var claimable bool
+	if err := h.store.SystemPool().QueryRow(ctx,
+		`SELECT agent_recalled_at IS NULL AND claimed_by_agent_id IS NULL AND last_error = '' FROM outbox WHERE tenant_id = $1 AND id = $2`,
+		h.tenant, trustJob.JobID).Scan(&claimable); err != nil || !claimable {
+		t.Fatalf("resume must lift the recall and drop the cut lease: claimable=%t err=%v", claimable, err)
+	}
 
 	// Confirm the migration projection is missing, then use the supported
 	// complete rebuild. Incremental Apply must not ignore retained completion

@@ -186,6 +186,7 @@ func (s *Store) AgentJobClaimForResult(ctx context.Context, tenantID, agentID st
 			    AND claimed_by_agent_id = $2::uuid
 			    AND claim_attempts = $4
 			    AND claim_completed_at IS NULL
+			    AND agent_recalled_at IS NULL
 			    AND claim_expires_at >= $5`,
 			tenantID, agentID, jobID, attempt, now.UTC()).Scan(&out.Destination, &out.IdempotencyKey, &out.Payload)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -254,6 +255,7 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND c.agent_next_attempt_at <= $5
 			           AND c.delivered_at IS NULL
 			           AND c.claim_completed_at IS NULL
+			           AND c.agent_recalled_at IS NULL
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
@@ -371,6 +373,7 @@ func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID strin
 		err := tx.QueryRow(ctx, `SELECT destination, payload FROM outbox
 		 WHERE tenant_id=$1 AND id=$2 AND claimed_by_agent_id=$3::uuid
 		 AND claim_attempts=$4 AND claim_completed_at IS NULL
+		 AND agent_recalled_at IS NULL
 		 AND status='pending' AND claim_expires_at>$5`, tenantID, jobID, agentID, attempt, now.UTC()).Scan(&destination, &payload)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -392,6 +395,7 @@ func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID strin
 			    AND id = $3
 			    AND claimed_by_agent_id = $2::uuid
 			    AND claim_completed_at IS NULL
+			    AND agent_recalled_at IS NULL
 			    AND status = 'pending'
 			    AND claim_attempts = $5
 			    AND claim_expires_at > $6`,

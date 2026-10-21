@@ -3342,8 +3342,13 @@ than sending an operator looking for a credential that was never there.
   failure automatically begins the newest-first inverse, including every member effect
   already published for the failed gate; signed receipts that arrive late are retained
   without restarting forward motion and their serialized inverse still runs. Pause
-  stops new work from being published but cannot recall work an agent already leased;
-  its signed result is retained and resume continues the same gate. Rollback restores
+  stops new work from being published and recalls the work this run has already
+  published: a job not yet claimed stops being claimable, a job an agent holds
+  refuses its next lease extension and its result (the agent stops before it
+  installs), and a signed result that still arrives is retained as a late receipt
+  rather than applied. Resume lifts the recall and drops the cut lease, so the
+  exact required agent claims the job afresh and the idempotent intent converges;
+  resume continues the same gate. Rollback restores
   and reverifies predecessor leaves newest wave first, projects the predecessor active
   and successor superseded in the same event transaction, then removes successor
   trust. A rollback failure halts on a durable attempt cursor and a manual retry gets
