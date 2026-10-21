@@ -472,6 +472,60 @@ jobs:
             BUILD_IMAGE=${{ steps.hsm_basedigest.outputs.build_ref }}
             BASE_IMAGE=${{ steps.hsm_basedigest.outputs.runtime_ref }}
 
+  agent-pkcs11-image:
+    name: build / publish cgo PKCS#11 inventory agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [test, required-checks, release-evidence]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Resolve cgo agent base images by digest
+        id: agent_basedigest
+        run: |
+          set -euo pipefail
+          go_version="$(awk '/^toolchain / {sub(/^go/, "", $2); print $2}' go.mod)"
+          test -n "${go_version}"
+          go_key="GOLANG_$(echo "${go_version}" | tr '.' '_')_BOOKWORM"
+          build_ref="$(scripts/ci/resolve-pinned-base.sh "golang:${go_version}-bookworm" "${go_key}" golang)"
+          runtime_ref="$(scripts/ci/resolve-pinned-base.sh debian:bookworm-slim DEBIAN_BOOKWORM_SLIM debian)"
+          echo "build_ref=${build_ref}" >> "$GITHUB_OUTPUT"
+          echo "runtime_ref=${runtime_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute cgo agent tags
+        id: agent_tags
+        run: |
+          version="${GITHUB_REF_NAME:-edge}"
+          echo "tags=${GHCR_IMAGE}-agent-pkcs11:${version},${GHCR_IMAGE}-agent-pkcs11:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push cgo PKCS#11 inventory agent
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.agent-pkcs11
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          outputs: type=image,rewrite-timestamp=true
+          tags: ${{ steps.agent_tags.outputs.tags }}
+          build-args: |
+            BUILD_IMAGE=${{ steps.agent_basedigest.outputs.build_ref }}
+            BASE_IMAGE=${{ steps.agent_basedigest.outputs.runtime_ref }}
+
   image:
     name: build / sign / publish
     runs-on: ubuntu-latest

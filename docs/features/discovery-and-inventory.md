@@ -317,6 +317,28 @@ service account cannot list is reported as an error naming that namespace, never
 an empty inventory, and the readable namespaces are reported first, so a missing
 binding shows up as a gap in the run rather than as a clean cluster.
 
+**PKCS#11 tokens.** HSMs and smart cards hold the certificates an organization cares
+most about and inventories least. The default agent image is statically linked and
+cannot load a PKCS#11 module, and it says so: `--inventory-pkcs11-module` there fails
+with "built without cgo" instead of reporting an empty token, and the shipped census
+the agent sends on heartbeat does not list `pkcs11`. The release publishes a second
+agent image, `ghcr.io/ctlplne/trstctl-agent-pkcs11` (built from
+`deploy/docker/Dockerfile.agent-pkcs11`, `make agent-pkcs11-image` locally), with cgo,
+glibc, SoftHSM and OpenSC's `opensc-pkcs11.so` on board; vendor modules such as
+`libykcs11.so` or an nShield/Luna Cryptoki are mounted in. Run that image with
+`--inventory-pkcs11-module /usr/lib/softhsm/libsofthsm2.so` (or the vendor path),
+optionally `--inventory-pkcs11-token <label>` to pick one token and
+`--inventory-pkcs11-pin-file` for tokens whose certificate objects are not public.
+
+The contract matches the other collectors: a read-only session, objects of class
+`CKO_CERTIFICATE` only, `CKA_VALUE` and `CKA_LABEL` read, never a private-key search and
+never `C_Sign` or an export; a token or PIN that cannot be opened is an error, never an
+empty inventory. Findings carry the token and object label as their location (not the
+module path, which differs per host for the same physical token). The repository's
+SoftHSM container test loads the real module, writes a certificate and a key pair onto
+a token with `pkcs11-tool`, and checks that the agent reports the certificate and
+nothing about the key.
+
 ### CA, trust-store & private-key discovery
 
 `GET /api/v1/ca/discovery` rolls up CA estates: configured public upstream CAs,

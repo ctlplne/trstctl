@@ -737,6 +737,18 @@ fips-image: docker-context-check ## Build a FIPS-capable control-plane/signer im
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		-t trstctl:$(VERSION)-fips .
 
+# Pinned base references for the cgo agent image. Release resolves both to
+# repository@sha256 digests; a local build defaults to the toolchain's tags.
+AGENT_PKCS11_BUILD_IMAGE ?= golang:$(shell awk '/^toolchain / {sub(/^go/, "", $$2); print $$2}' go.mod)-bookworm
+AGENT_PKCS11_BASE_IMAGE ?= debian:bookworm-slim
+
+.PHONY: agent-pkcs11-image
+agent-pkcs11-image: ## Build the cgo agent image that inventories PKCS#11 tokens (deploy/docker/Dockerfile.agent-pkcs11; set BUILD_IMAGE/BASE_IMAGE to pinned refs)
+	docker build -f deploy/docker/Dockerfile.agent-pkcs11 \
+		--build-arg BUILD_IMAGE=$(AGENT_PKCS11_BUILD_IMAGE) --build-arg BASE_IMAGE=$(AGENT_PKCS11_BASE_IMAGE) \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
+		-t trstctl-agent-pkcs11:$(VERSION) .
+
 .PHONY: compose-up
 compose-up: docker-context-check ## Bring up the evaluation stack (Postgres + NATS + trstctl)
 	docker compose -f deploy/docker/docker-compose.yml up --build

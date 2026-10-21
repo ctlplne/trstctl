@@ -170,12 +170,21 @@ or outbox waves.
   `-buildvcs=false`; version metadata is injected via `--build-arg`, and the
   release pipeline rewrites layer timestamps to `SOURCE_DATE_EPOCH`. Rebuilding
   the same commit yields identical binaries (`make reproducible-check`).
+- **cgo variants:** two capabilities need `dlopen`, so they ship as separate
+  glibc images rather than widening this one. `Dockerfile.signer-hsm` builds
+  `trstctl-signer-hsm` for PKCS#11/YubiHSM key custody.
+  `Dockerfile.agent-pkcs11` builds the agent with cgo plus SoftHSM and OpenSC
+  modules (`ghcr.io/ctlplne/trstctl-agent-pkcs11`, `make agent-pkcs11-image`)
+  so one DaemonSet image swap turns on `--inventory-pkcs11-module` token
+  inventory; the binary path, flags, uid 65532 and identity directory are the
+  same as the default image, and vendor modules are mounted in.
 
 ## Release pipeline
 
 `.github/workflows/release.yml` runs on a `v*` tag:
 
-1. builds the multi-arch image reproducibly,
+1. builds the multi-arch image reproducibly (and the two cgo variants,
+   `-signer-hsm` and `-agent-pkcs11`, from pinned base digests),
 2. enforces the 180 MB exported-runtime-filesystem budget,
 3. pushes to GHCR (primary) and Docker Hub (mirror),
 4. generates a CycloneDX SBOM, and

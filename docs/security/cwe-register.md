@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1581 annotated sites across 26 rules. Each row is
+1584 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -784,7 +784,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (179 sites)
+### G204 — CWE-78 OS command injection (181 sites)
 
 | Location | Reason |
 |---|---|
@@ -842,6 +842,8 @@ not this file.
 | `ee/enterpriseauth/auth_ldap_served_test.go:157` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:174` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/agent/discovery/pkcs11_softhsm_container_test.go:178` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1067,7 +1069,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (446 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (447 sites)
 
 | Location | Reason |
 |---|---|
@@ -1185,6 +1187,7 @@ not this file.
 | `internal/agent/destination/destination_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:88` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/pkcs11_softhsm_container_test.go:90` | the repository's own go.mod under the test's computed repo root (CWE-22) |
 | `internal/agent/discovery/privatekey.go:67` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:185` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
@@ -1698,11 +1701,12 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:709` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (9 sites)
+### G702 — CWE-78 OS command injection (taint) (10 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
+| `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |

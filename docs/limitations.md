@@ -2430,10 +2430,14 @@ than sending an operator looking for a credential that was never there.
   certificate/trust stores (`--inventory-windows-stores`) and in-cluster
   Kubernetes TLS Secrets (`--inventory-k8s-secrets`, widened across
   namespaces with `--inventory-k8s-namespaces`). PKCS#11 token
-  collection is **not offered** in the default agent image: the collector
-  boundary exists in `internal/agent/discovery` and the enumerator is
-  behind the `cgo` build tag, so shipping it is a cgo agent build rather than a
-  new discovery path.
+  collection needs the cgo agent image: the default statically linked
+  agent cannot `dlopen` a module and fails `--inventory-pkcs11-module`
+  with "built without cgo" rather than reporting an empty token, while the
+  released `trstctl-agent-pkcs11` image (`deploy/docker/Dockerfile.agent-pkcs11`,
+  glibc plus SoftHSM and OpenSC modules, vendor modules mounted in) reads
+  `CKO_CERTIFICATE` objects over a read-only session and is exercised
+  against a real SoftHSM token in the repository's container test. Its
+  live proof is a lab SoftHSM token, not a vendor HSM.
   Discovery schedules tick server-side: a leader-only scheduler sweeps every
   minute and queues a run for each enabled schedule whose source has no
   in-flight run and no run newer than the schedule's `interval_seconds`,
