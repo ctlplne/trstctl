@@ -511,14 +511,16 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		caOperator: caOperator, caApprover: caApprover, token: token, identityID: identityID,
 		trustPath: trustPath, dnsName: dnsName, fixture: fixture, channel: channel, profile: profile, state: state,
 	})
-	runApprovalGatedMigrationAUD40(t, h, token, successorAuthority.ID, identityID, trustPath)
+	runApprovalGatedMigrationAUD40(t, h, token, successorAuthority.ID, identityID, trustPath, offlineRootMigrationFixture{
+		channel: channel, profile: profile, state: state,
+	})
 }
 
 // A40: members under an approval-required profile no longer refuse the run.
 // The start becomes the approved operation: the first post records the exact
 // request and answers 202, reviewers approve it by intent digest, the same
 // start posted again consumes that single-use authority with the run record.
-func runApprovalGatedMigrationAUD40(t *testing.T, h *roleHarness, token, authorityID, identityID, trustPath string) {
+func runApprovalGatedMigrationAUD40(t *testing.T, h *roleHarness, token, authorityID, identityID, trustPath string, f offlineRootMigrationFixture) {
 	t.Helper()
 	ctx := context.Background()
 	profileWriter := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-profile-writer", "profiles:write")
@@ -606,6 +608,14 @@ func runApprovalGatedMigrationAUD40(t *testing.T, h *roleHarness, token, authori
 	if statusCode != http.StatusConflict || !bytes.Contains(body, []byte("consumed")) {
 		t.Fatalf("a consumed approval started another run: %d %s", statusCode, body)
 	}
+	// The approved run must keep advancing: every later run record carries the
+	// consumed approval as evidence, and the projector must not spend it again
+	// (the lab replay found the trust report rejected and the projection tail
+	// wedged on exactly that). Trust lands, then the successor is issued and
+	// verified against the static listener's failure path as before.
+	runAgentPassAUD40(t, f.channel, f.profile, f.state, transport.JobOutcomeExecuted)
+	assertMigrationStatusAUD40(t, h, run.ID, migration.RunRunning, migration.PhaseVerifyingLive)
+	assertMigrationOutboxCountAUD40(t, h, run.ID, "issue_successor", 1)
 }
 
 type offlineRootMigrationFixture struct {

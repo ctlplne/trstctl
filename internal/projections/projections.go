@@ -2726,6 +2726,16 @@ type LicensedCryptoMigrationStarted struct {
 	Approval *store.OperationApprovalUse `json:"approval,omitempty"`
 }
 
+// migrationEventNamespace and MigrationEventID are the deterministic ids of
+// migration run events; the orchestrator mints them and the projector
+// recognizes the run's start event by the same rule.
+var migrationEventNamespace = uuid.MustParse("c6bf2f04-3314-5ed8-926d-64fc97f0aa40")
+
+// MigrationEventID is the stable id of one migration run event for a purpose.
+func MigrationEventID(tenantID, runID, purpose string) string {
+	return uuid.NewSHA1(migrationEventNamespace, []byte(tenantID+"\x00"+runID+"\x00"+purpose)).String()
+}
+
 // migrationApprovalUse maps the aggregate's storage-independent approval use
 // onto the store's single-use authority.
 func migrationApprovalUse(a migration.ApprovalUse) store.OperationApprovalUse {
@@ -5832,9 +5842,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := migration.ValidateActions(pl.Run, pl.Actions); err != nil {
 			return fmt.Errorf("projections: validate migration actions: %w", err)
 		}
-		if pl.Run.Approval != nil {
-			// A40: the exact start approval is consumed with the run record,
-			// so it can never authorize a second start.
+		if pl.Run.Approval != nil && e.ID == MigrationEventID(e.TenantID, pl.Run.ID, "start") {
+			// A40: the exact start approval is consumed with the run's START
+			// record, so it can never authorize a second start. Every later
+			// record of the same run carries the approval as evidence and must
+			// not consume it again: the authority is already spent by the start
+			// event, and a second consumption would wedge the projector on the
+			// first pause, trust verdict or successor update.
 			use := migrationApprovalUse(*pl.Run.Approval)
 			if _, err := p.store.ValidateOperationApprovalUseTx(ctx, tx, e.TenantID, use, e.Time); err != nil {
 				return fmt.Errorf("projections: migration start approval: %w", err)

@@ -31,8 +31,7 @@ const DestinationIncidentMigrationRevoke = "incident.fleet_reissuance.revoke"
 // MigrationEventID gives API commands and signed receipts a retry-stable event
 // identity without retaining a raw Idempotency-Key in the event stream.
 func MigrationEventID(tenantID, runID, purpose string) string {
-	return uuid.NewSHA1(migrationEventNamespace,
-		[]byte(tenantID+"\x00"+runID+"\x00"+purpose)).String()
+	return projections.MigrationEventID(tenantID, runID, purpose)
 }
 
 // MigrationRunID derives the same run UUID after an API crash and retry.
