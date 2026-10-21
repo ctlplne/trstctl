@@ -48,6 +48,10 @@ type RuntimeConfig struct {
 	// RoundInterval is how often the rounds worker checks for due schedules.
 	// Zero means the worker default (one minute); tests shorten it.
 	RoundInterval time.Duration
+	// VaultSources are the external Vault/OpenBao authorities operator config
+	// names (A10). Each registers a vault reducer with a real HTTP source under
+	// its authority id; an id with no entry keeps a nil source and fails closed.
+	VaultSources []VaultSourceConfig
 }
 
 // Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. The
@@ -144,6 +148,18 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	_ = kmipClient
 	if err := reducerRegistry.Register(defaultKMIPAuthority, kmip.NewReducer(reducerConfig(defaultKMIPAuthority, reducers.ModePoll), nil)); err != nil {
 		return nil, err
+	}
+	// A10: operator-configured Vault authorities. Registered last so a
+	// configured "vault" replaces the fail-closed placeholder above, and any
+	// other id (vault-prod, vault-dr) becomes its own authority.
+	for _, vs := range cfg.VaultSources {
+		src, err := newVaultSource(vs)
+		if err != nil {
+			return nil, err
+		}
+		if err := reducerRegistry.Register(src.cfg.AuthorityID, reducers.NewVaultReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
+			return nil, err
+		}
 	}
 
 	quarantineState := quarantine.NewMemoryState()

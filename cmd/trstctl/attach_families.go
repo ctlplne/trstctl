@@ -6,6 +6,7 @@ import (
 	"context"
 	"io/fs"
 	"log/slog"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -193,6 +194,9 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 		// populate schedules; now there is, and an empty one still reports
 		// collecting=false rather than letting silence read as agreement.
 		Schedules: reconcileSchedulesFromConfig(reconcileConfigOf(cfg)),
+		// A10: external Vault authorities named with a source block observe a
+		// real server; the rest keep failing closed.
+		VaultSources: reconcileVaultSourcesFromConfig(reconcileConfigOf(cfg)),
 	})
 	if err != nil {
 		return err
@@ -221,6 +225,40 @@ func reconcileConfigOf(cfg *config.Config) config.Reconcile {
 		return config.Reconcile{}
 	}
 	return cfg.Reconcile
+}
+
+// reconcileVaultSourcesFromConfig collects the vault source blocks across all
+// schedules, one per authority id (config validation already rejects two
+// different sources for one id).
+func reconcileVaultSourcesFromConfig(c config.Reconcile) []reconcile.VaultSourceConfig {
+	seen := map[string]bool{}
+	var out []reconcile.VaultSourceConfig
+	for _, s := range c.Schedules {
+		for _, a := range s.Authorities {
+			id := strings.TrimSpace(a.AuthorityID)
+			if a.Source == nil || id == "" || seen[id] || strings.TrimSpace(a.Source.Kind) != config.ReconcileSourceKindVault {
+				continue
+			}
+			seen[id] = true
+			vs := reconcile.VaultSourceConfig{
+				AuthorityID:           id,
+				Address:               strings.TrimSpace(a.Source.Address),
+				Namespace:             strings.TrimSpace(a.Source.Namespace),
+				TokenFile:             strings.TrimSpace(a.Source.TokenFile),
+				KVMounts:              append([]string(nil), a.Source.KVMounts...),
+				PKIMounts:             append([]string(nil), a.Source.PKIMounts...),
+				TransitMounts:         append([]string(nil), a.Source.TransitMounts...),
+				AllowInsecureLoopback: a.Source.AllowInsecureLoopback,
+			}
+			for _, cidr := range a.Source.PrivateEndpointCIDRs {
+				if p, err := netip.ParsePrefix(strings.TrimSpace(cidr)); err == nil {
+					vs.PrivateEndpointCIDRs = append(vs.PrivateEndpointCIDRs, p)
+				}
+			}
+			out = append(out, vs)
+		}
+	}
+	return out
 }
 
 // reconcileSchedulesFromConfig maps operator config onto reconciliation rounds.

@@ -1514,10 +1514,70 @@ type ReconcileSchedule struct {
 	Authorities []ReconcileAuthority `json:"authorities,omitempty"`
 }
 
-// ReconcileAuthority names one authority in a round.
+// ReconcileAuthority names one authority in a round. The store-backed
+// authorities ("trstctl-self", "trstctl-ca") need no source; an external
+// authority is observed only when Source says where and how (A10). Without a
+// source an external authority keeps its nil source and observation fails
+// closed.
 type ReconcileAuthority struct {
-	AuthorityID string `json:"authority_id"`
-	Liveness    string `json:"liveness,omitempty"`
+	AuthorityID string                    `json:"authority_id"`
+	Liveness    string                    `json:"liveness,omitempty"`
+	Source      *ReconcileAuthoritySource `json:"source,omitempty"`
+}
+
+// ReconcileAuthoritySource says how to observe one external authority. Kind
+// "vault" reads a HashiCorp Vault or OpenBao server over its HTTP API with a
+// token read from TokenFile at each observation: KV v2 secret METADATA (never
+// secret data), PKI-issued certificates and Transit key metadata from the
+// listed mounts. Plain http is accepted only with AllowInsecureLoopback.
+type ReconcileAuthoritySource struct {
+	Kind      string `json:"kind"`
+	Address   string `json:"address"`
+	Namespace string `json:"namespace,omitempty"`
+	TokenFile string `json:"token_file"`
+	// KVMounts, PKIMounts and TransitMounts choose what the authority asserts.
+	// Pair a vault authority with another authority that observes the same
+	// universe: list only pki_mounts to compare certificates, for example.
+	KVMounts      []string `json:"kv_mounts,omitempty"`
+	PKIMounts     []string `json:"pki_mounts,omitempty"`
+	TransitMounts []string `json:"transit_mounts,omitempty"`
+	// AllowInsecureLoopback permits http:// and loopback addresses for a lab or
+	// sidecar Vault; PrivateEndpointCIDRs lets the SSRF-safe client dial a
+	// Vault on an operator-owned private range.
+	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
+	PrivateEndpointCIDRs  []string `json:"private_endpoint_cidrs,omitempty"`
+}
+
+// ReconcileSourceKindVault is the only external authority source kind served
+// today; cloud-kms and kmip authorities still fail observation closed.
+const ReconcileSourceKindVault = "vault"
+
+func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySource) []error {
+	if src == nil {
+		return nil
+	}
+	var errs []error
+	if strings.TrimSpace(src.Kind) != ReconcileSourceKindVault {
+		errs = append(errs, fmt.Errorf("%s.kind %q is not served; only %q is", label, src.Kind, ReconcileSourceKindVault))
+	}
+	address := strings.TrimSpace(src.Address)
+	u, err := url.Parse(address)
+	switch {
+	case address == "" || err != nil || u.Host == "":
+		errs = append(errs, fmt.Errorf("%s.address must be an http(s) URL with a host", label))
+	case u.Scheme == "https":
+	case u.Scheme == "http" && src.AllowInsecureLoopback:
+	default:
+		errs = append(errs, fmt.Errorf("%s.address must use https (http needs allow_insecure_loopback)", label))
+	}
+	if strings.TrimSpace(src.TokenFile) == "" {
+		errs = append(errs, fmt.Errorf("%s.token_file is required", label))
+	}
+	if len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts) == 0 {
+		errs = append(errs, fmt.Errorf("%s needs at least one of kv_mounts, pki_mounts or transit_mounts", label))
+	}
+	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
+	return errs
 }
 
 // Telemetry configures opt-in, off-by-default usage reporting (F-telemetry).
@@ -3598,6 +3658,25 @@ func validateOptionalServices(c *Config) []error {
 		errs = append(errs, fmt.Errorf("privacy.retention.interval %q is invalid: %w", c.Privacy.Retention.Interval, err))
 	} else if c.Privacy.Retention.Enabled && d < 0 {
 		errs = append(errs, errors.New("privacy.retention.interval must not be negative"))
+	}
+	// Reconcile authority sources: an external authority with a source block is
+	// observed over the network, so the block is checked before anything dials.
+	// One authority id keeps one source across schedules.
+	reconcileSources := map[string]string{}
+	for i, s := range c.Reconcile.Schedules {
+		for j, a := range s.Authorities {
+			if a.Source == nil {
+				continue
+			}
+			label := fmt.Sprintf("reconcile.schedules[%d].authorities[%d].source", i, j)
+			errs = append(errs, validateReconcileAuthoritySource(label, a.Source)...)
+			id := strings.TrimSpace(a.AuthorityID)
+			fingerprint, _ := json.Marshal(a.Source)
+			if prev, ok := reconcileSources[id]; ok && prev != string(fingerprint) {
+				errs = append(errs, fmt.Errorf("%s differs from an earlier source for authority %q", label, id))
+			}
+			reconcileSources[id] = string(fingerprint)
+		}
 	}
 	for _, f := range []struct {
 		name  string

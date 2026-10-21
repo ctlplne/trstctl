@@ -3121,9 +3121,14 @@ than sending an operator looking for a credential that was never there.
   `internal/reconcile/conformance/storebacked_e2e_test.go`: seeded divergence, a real
   scheduled round, a witness naming exactly the differing subset, offline
   verification from the recorded event alone, and remediation authorized only
-  after in-signer plan verification. Boundaries, stated exactly: the vault,
-  cloud-kms and kmip reducers still have nil sources — scheduling them fails
-  observation closed and logs, it does not fabricate an authority — and
+  after in-signer plan verification. Boundaries, stated exactly: a Vault or
+  OpenBao authority is observed only when its schedule entry carries a
+  `source` block (address, token file, KV/PKI/Transit mounts); it asserts KV
+  metadata, PKI-issued certificates and Transit key metadata, never secret
+  data, and pairs meaningfully only with an authority observing the same
+  universe. The cloud-kms and kmip reducers still have nil sources —
+  scheduling them fails observation closed and logs, it does not fabricate an
+  authority — and
   inventory rows with no captured DER cannot participate in the comparison
   (no issuer bytes to derive the shared identity from), so a metadata-only
   scanner import is invisible to this pair of authorities.

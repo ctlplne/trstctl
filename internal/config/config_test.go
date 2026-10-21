@@ -342,7 +342,39 @@ func TestValidateRejectsBadValues(t *testing.T) {
 			c.AI.Model.Name = "model"
 			c.AI.Model.AllowEgress = true
 		},
-		"airgap bad cidr":    func(c *Config) { c.AirGap.AllowCIDRs = []string{"not-a-cidr"} },
+		"airgap bad cidr": func(c *Config) { c.AirGap.AllowCIDRs = []string{"not-a-cidr"} },
+		"reconcile source unknown kind": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "kms", Source: &ReconcileAuthoritySource{Kind: "aws-kms", Address: "https://kms.example", TokenFile: "/run/t", KVMounts: []string{"x"}}},
+			}}}
+		},
+		"reconcile source plain http": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "vault", Source: &ReconcileAuthoritySource{Kind: "vault", Address: "http://vault.internal:8200", TokenFile: "/run/t", KVMounts: []string{"secret"}}},
+			}}}
+		},
+		"reconcile source without token file": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "vault", Source: &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault.internal:8200", KVMounts: []string{"secret"}}},
+			}}}
+		},
+		"reconcile source without mounts": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "vault", Source: &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault.internal:8200", TokenFile: "/run/t"}},
+			}}}
+		},
+		"reconcile source conflicts across schedules": func(c *Config) {
+			a := &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault-a.internal:8200", TokenFile: "/run/t", KVMounts: []string{"secret"}}
+			b := &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault-b.internal:8200", TokenFile: "/run/t", KVMounts: []string{"secret"}}
+			c.Reconcile.Schedules = []ReconcileSchedule{
+				{TenantID: "t1", Authorities: []ReconcileAuthority{{AuthorityID: "trstctl-self"}, {AuthorityID: "vault", Source: a}}},
+				{TenantID: "t2", Authorities: []ReconcileAuthority{{AuthorityID: "trstctl-self"}, {AuthorityID: "vault", Source: b}}},
+			}
+		},
 		"airgap host is url": func(c *Config) { c.AirGap.AllowHosts = []string{"https://collector.example.com"} },
 		"outbound env credential ref missing env prefix": func(c *Config) {
 			c.OutboundEnvCredentialRefs = []string{"AWS_SECRET_ACCESS_KEY"}

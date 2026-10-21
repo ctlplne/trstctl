@@ -437,6 +437,36 @@ CA jurisdiction. External-CA certificates and inventory entries without captured
 certificate bytes do not participate in this comparison. This schedule does not
 configure a connection to an external CA.
 
+An external HashiCorp Vault or OpenBao server joins a round as its own authority
+when the authority entry carries a `source` block:
+
+```json
+{"authority_id": "vault-prod", "source": {
+  "kind": "vault",
+  "address": "https://vault.internal:8200",
+  "token_file": "/run/secrets/vault-observe-token",
+  "namespace": "",
+  "kv_mounts": ["secret"],
+  "pki_mounts": ["pki"],
+  "transit_mounts": ["transit"],
+  "private_endpoint_cidrs": ["10.40.0.0/16"]
+}}
+```
+
+The token is read from `token_file` at each observation and needs only list and
+read rights on the metadata paths. The source observes KV v2 secret metadata
+(path, current version, created and deleted times; the data path is never
+requested), the certificates a PKI mount issued (issuer and serial, key
+algorithm, validity, subject, revocation standing) and Transit key metadata.
+List only the mounts whose universe the paired authority also observes: a
+round compares whatever each authority asserts, so a KV-only Vault authority
+paired with the certificate inventory witnesses presence divergence by
+construction. Plain `http://` addresses and loopback dialing need
+`"allow_insecure_loopback": true`; `private_endpoint_cidrs` widens the
+SSRF-safe dialer to operator-owned ranges. Any authority id may carry a vault
+source (`vault-prod`, `vault-dr` are separate authorities); the ids
+`cloud-kms` and `kmip` still have no source and fail observation closed.
+
 An empty schedule list compares nothing. Each schedule needs a tenant ID and at
 least two authority entries with nonempty IDs; use the two distinct authorities
 above. Missing, invalid or nonpositive duration values use defaults: one hour for
