@@ -19,6 +19,9 @@ const (
 	defaultProfileActorAfter        = 397 * 24 * time.Hour
 	defaultAttestationEvidenceAfter = 397 * 24 * time.Hour
 	defaultAgentStaleAfter          = 180 * 24 * time.Hour
+	// Third-party scan findings name a leaked-secret location inside an
+	// operator export; 90 days covers triage and the incident that follows.
+	defaultThirdPartyScanFindingsAfter = 90 * 24 * time.Hour
 )
 
 // RetentionPolicy defines when non-audit personal data may be pseudonymized after
@@ -34,6 +37,9 @@ type RetentionPolicy struct {
 	ProfileActorAfter        time.Duration
 	AttestationEvidenceAfter time.Duration
 	AgentStaleAfter          time.Duration
+	// ThirdPartyScanFindingsAfter deletes redacted leaked-secret findings that a
+	// third-party artifact scan produced once they are older than this.
+	ThirdPartyScanFindingsAfter time.Duration
 }
 
 // RetentionPolicySource lets licensed governance policy refine the default
@@ -48,15 +54,16 @@ type RetentionPolicySource interface {
 // operational state.
 func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
-		OwnerInactiveAfter:       defaultOwnerInactiveAfter,
-		IdentityTerminalAfter:    defaultIdentityTerminalAfter,
-		CertificateTerminalAfter: defaultCertificateTerminalAfter,
-		SSHStaleAfter:            defaultSSHStaleAfter,
-		AccessTerminalAfter:      defaultAccessTerminalAfter,
-		ApprovalActorAfter:       defaultApprovalActorAfter,
-		ProfileActorAfter:        defaultProfileActorAfter,
-		AttestationEvidenceAfter: defaultAttestationEvidenceAfter,
-		AgentStaleAfter:          defaultAgentStaleAfter,
+		OwnerInactiveAfter:          defaultOwnerInactiveAfter,
+		IdentityTerminalAfter:       defaultIdentityTerminalAfter,
+		CertificateTerminalAfter:    defaultCertificateTerminalAfter,
+		SSHStaleAfter:               defaultSSHStaleAfter,
+		AccessTerminalAfter:         defaultAccessTerminalAfter,
+		ApprovalActorAfter:          defaultApprovalActorAfter,
+		ProfileActorAfter:           defaultProfileActorAfter,
+		AttestationEvidenceAfter:    defaultAttestationEvidenceAfter,
+		AgentStaleAfter:             defaultAgentStaleAfter,
+		ThirdPartyScanFindingsAfter: defaultThirdPartyScanFindingsAfter,
 	}
 }
 
@@ -89,6 +96,9 @@ func (p RetentionPolicy) WithDefaults() RetentionPolicy {
 	}
 	if p.AgentStaleAfter <= 0 {
 		p.AgentStaleAfter = d.AgentStaleAfter
+	}
+	if p.ThirdPartyScanFindingsAfter <= 0 {
+		p.ThirdPartyScanFindingsAfter = d.ThirdPartyScanFindingsAfter
 	}
 	return p
 }

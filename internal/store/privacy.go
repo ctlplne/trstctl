@@ -590,15 +590,16 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 // replayable. The event carries time boundaries, not the raw subjects/approvers
 // being anonymized.
 type PrivacyRetentionCutoffs struct {
-	OwnerInactiveBefore       time.Time `json:"owner_inactive_before"`
-	IdentityTerminalBefore    time.Time `json:"identity_terminal_before"`
-	CertificateTerminalBefore time.Time `json:"certificate_terminal_before"`
-	SSHStaleBefore            time.Time `json:"ssh_stale_before"`
-	AccessTerminalBefore      time.Time `json:"access_terminal_before"`
-	ApprovalActorBefore       time.Time `json:"approval_actor_before"`
-	ProfileActorBefore        time.Time `json:"profile_actor_before"`
-	AttestationEvidenceBefore time.Time `json:"attestation_evidence_before"`
-	AgentStaleBefore          time.Time `json:"agent_stale_before"`
+	OwnerInactiveBefore          time.Time `json:"owner_inactive_before"`
+	IdentityTerminalBefore       time.Time `json:"identity_terminal_before"`
+	CertificateTerminalBefore    time.Time `json:"certificate_terminal_before"`
+	SSHStaleBefore               time.Time `json:"ssh_stale_before"`
+	AccessTerminalBefore         time.Time `json:"access_terminal_before"`
+	ApprovalActorBefore          time.Time `json:"approval_actor_before"`
+	ProfileActorBefore           time.Time `json:"profile_actor_before"`
+	AttestationEvidenceBefore    time.Time `json:"attestation_evidence_before"`
+	AgentStaleBefore             time.Time `json:"agent_stale_before"`
+	ThirdPartyScanFindingsBefore time.Time `json:"third_party_scan_findings_before"`
 }
 
 // PrivacyRetentionRun is projected evidence for one non-audit PII retention pass.
@@ -946,15 +947,16 @@ func (s *Store) SelectPrivacyRetention(ctx context.Context, tenantID, runID stri
 		TenantID: tenantID,
 		RunID:    runID,
 		Cutoffs: PrivacyRetentionCutoffs{
-			OwnerInactiveBefore:       now.Add(-policy.OwnerInactiveAfter),
-			IdentityTerminalBefore:    now.Add(-policy.IdentityTerminalAfter),
-			CertificateTerminalBefore: now.Add(-policy.CertificateTerminalAfter),
-			SSHStaleBefore:            now.Add(-policy.SSHStaleAfter),
-			AccessTerminalBefore:      now.Add(-policy.AccessTerminalAfter),
-			ApprovalActorBefore:       now.Add(-policy.ApprovalActorAfter),
-			ProfileActorBefore:        now.Add(-policy.ProfileActorAfter),
-			AttestationEvidenceBefore: now.Add(-policy.AttestationEvidenceAfter),
-			AgentStaleBefore:          now.Add(-policy.AgentStaleAfter),
+			OwnerInactiveBefore:          now.Add(-policy.OwnerInactiveAfter),
+			IdentityTerminalBefore:       now.Add(-policy.IdentityTerminalAfter),
+			CertificateTerminalBefore:    now.Add(-policy.CertificateTerminalAfter),
+			SSHStaleBefore:               now.Add(-policy.SSHStaleAfter),
+			AccessTerminalBefore:         now.Add(-policy.AccessTerminalAfter),
+			ApprovalActorBefore:          now.Add(-policy.ApprovalActorAfter),
+			ProfileActorBefore:           now.Add(-policy.ProfileActorAfter),
+			AttestationEvidenceBefore:    now.Add(-policy.AttestationEvidenceAfter),
+			AgentStaleBefore:             now.Add(-policy.AgentStaleAfter),
+			ThirdPartyScanFindingsBefore: now.Add(-policy.ThirdPartyScanFindingsAfter),
 		},
 		Counts: map[string]int{},
 	}
@@ -1535,6 +1537,23 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		    )`,
 		r.TenantID, r.Cutoffs.AgentStaleBefore); err != nil {
 		return err
+	}
+	// Third-party artifact scan findings are deleted outright rather than
+	// pseudonymized: the finding is the leaked-secret location, and nothing in
+	// the row stays useful once the window has passed. The zero cutoff of an
+	// event recorded before this window existed deletes nothing on replay.
+	if !r.Cutoffs.ThirdPartyScanFindingsBefore.IsZero() {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM discovery_findings f
+			  WHERE f.tenant_id = $1
+			    AND f.discovered_at < $2
+			    AND EXISTS (
+			          SELECT 1 FROM discovery_sources s
+			           WHERE s.tenant_id = $1 AND s.id = f.source_id AND s.kind = 'secret_third_party'
+			        )`,
+			r.TenantID, r.Cutoffs.ThirdPartyScanFindingsBefore); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE ownership_readiness_exceptions
@@ -3843,6 +3862,16 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			           OR (granted_by NOT LIKE 'retained:%' AND granted_by NOT LIKE 'erased:%')
 			           OR (coalesce(revoked_by, '') <> '' AND revoked_by NOT LIKE 'retained:%' AND revoked_by NOT LIKE 'erased:%'))`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
+		},
+		"third_party_scan_findings": {
+			sql: `SELECT count(*) FROM discovery_findings f
+			       WHERE f.tenant_id = $1
+			         AND f.discovered_at < $2
+			         AND EXISTS (
+			               SELECT 1 FROM discovery_sources s
+			                WHERE s.tenant_id = $1 AND s.id = f.source_id AND s.kind = 'secret_third_party'
+			             )`,
+			args: []any{tenantID, c.ThirdPartyScanFindingsBefore},
 		},
 	}
 	out := make(map[string]int, len(queries))

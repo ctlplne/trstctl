@@ -6685,6 +6685,7 @@ export interface PrivacyRetentionCutoffs {
   owner_inactive_before: string;
   profile_actor_before: string;
   ssh_stale_before: string;
+  third_party_scan_findings_before?: string;
 }
 
 export interface PrivacyRetentionPreview {
@@ -8274,6 +8275,7 @@ export interface ThirdPartySecretScanIngestRequest {
   artifact_kind?: string;
   artifact_path: string;
   credential_ref?: string;
+  delete_artifact_after_scan?: boolean;
   event?: string;
   require_signature?: boolean;
   signature_path?: string;

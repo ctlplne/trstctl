@@ -27411,6 +27411,10 @@
           "ssh_stale_before": {
             "format": "date-time",
             "type": "string"
+          },
+          "third_party_scan_findings_before": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
@@ -33908,6 +33912,9 @@
           },
           "credential_ref": {
             "type": "string"
+          },
+          "delete_artifact_after_scan": {
+            "type": "boolean"
           },
           "event": {
             "type": "string"

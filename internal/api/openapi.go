@@ -4075,15 +4075,16 @@ func componentSchemas() map[string]*Schema {
 		"erased_at":        timestamp(),
 	}, "subject_ref", "selectors", "counts", "erased_at")
 	privacyRetentionCutoffs := object(map[string]*Schema{
-		"owner_inactive_before":       timestamp(),
-		"identity_terminal_before":    timestamp(),
-		"certificate_terminal_before": timestamp(),
-		"ssh_stale_before":            timestamp(),
-		"access_terminal_before":      timestamp(),
-		"approval_actor_before":       timestamp(),
-		"profile_actor_before":        timestamp(),
-		"attestation_evidence_before": timestamp(),
-		"agent_stale_before":          timestamp(),
+		"owner_inactive_before":            timestamp(),
+		"identity_terminal_before":         timestamp(),
+		"certificate_terminal_before":      timestamp(),
+		"ssh_stale_before":                 timestamp(),
+		"access_terminal_before":           timestamp(),
+		"approval_actor_before":            timestamp(),
+		"profile_actor_before":             timestamp(),
+		"attestation_evidence_before":      timestamp(),
+		"agent_stale_before":               timestamp(),
+		"third_party_scan_findings_before": timestamp(),
 	}, "owner_inactive_before", "identity_terminal_before", "certificate_terminal_before", "ssh_stale_before", "access_terminal_before", "approval_actor_before", "profile_actor_before", "attestation_evidence_before", "agent_stale_before")
 	privacyRetentionRun := object(map[string]*Schema{
 		"run_id":           uuid(),
@@ -6106,6 +6107,7 @@ func componentSchemas() map[string]*Schema {
 	thirdPartySecretScanIngestReq := object(map[string]*Schema{
 		"source": str(), "artifact_path": str(), "artifact_kind": str(), "event": str(), "credential_ref": str(),
 		"signature_path": str(), "signer_public_key_pem": str(), "require_signature": {Type: "boolean"},
+		"delete_artifact_after_scan": {Type: "boolean"},
 	}, "source", "artifact_path")
 	thirdPartySecretScanReceipt := object(map[string]*Schema{
 		"capability": str(), "provider": str(), "source": str(), "source_id": uuid(),

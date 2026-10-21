@@ -1139,7 +1139,12 @@ base64) and `signer_public_key_pem`: trstctl verifies the signature before the s
 opens the artifact, fails the run without scanning when it does not verify, and stamps
 every finding with `signature_verified` and the signer key's SHA-256. Set
 `require_signature` on sources that must never scan an unsigned export; the ingest is
-refused with 400 when the signature inputs are missing. Native
+refused with 400 when the signature inputs are missing. Add
+`delete_artifact_after_scan` when the export must not outlive its scan: trstctl removes
+that one file once the run is terminal and the run message records the removal. The
+redacted findings themselves age out through the privacy retention worker after
+`TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS` (default 90 days); the discovery run
+record stays as evidence that the scan happened. Native
 Slack/Jira/container-registry API polling and provider-native annotations remain
 shortfalls, not served.
 

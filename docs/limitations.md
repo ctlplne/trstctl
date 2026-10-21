@@ -3334,8 +3334,13 @@ than sending an operator looking for a credential that was never there.
   checked before the scanner opens the artifact, a failing signature fails the
   run without scanning, `require_signature` refuses unsigned artifacts at
   ingest, and every finding records `signature_verified` and
-  `signer_key_sha256`. Native provider API polling, artifact retention
-  automation, and provider-native annotations remain architecture shortfalls.
+  `signer_key_sha256`. Artifact retention is automated at both ends:
+  `delete_artifact_after_scan` removes the operator's export file once the
+  scan is terminal (one regular file; directory exports stay), and the privacy
+  retention worker deletes redacted third-party findings older than
+  `TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS` (default 90 days) while the run
+  record stays. Native provider API polling and provider-native annotations
+  remain architecture shortfalls.
 - React console scale work: cursor-aware inventory pages consume `next_cursor`
   and accumulate additional pages on explicit operator action. Every
   DataGrid-backed large table switches to a bounded, overscanned DOM window

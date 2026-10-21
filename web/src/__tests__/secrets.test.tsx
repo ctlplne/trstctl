@@ -2029,6 +2029,7 @@ describe("secrets surface", () => {
     await user.type(thirdPartyForm.getByLabelText("Provider signature path"), "/var/lib/trstctl/exports/slack.jsonl.sig");
     await user.type(thirdPartyForm.getByLabelText("Signer public key (PEM)"), "-----BEGIN PUBLIC KEY-----{enter}MFkw{enter}-----END PUBLIC KEY-----");
     await user.click(thirdPartyForm.getByLabelText("Refuse unsigned artifacts"));
+    await user.click(thirdPartyForm.getByLabelText("Remove the artifact after the scan"));
     await user.click(thirdPartyForm.getByRole("button", { name: /queue scan/i }));
     await waitFor(() =>
       expect(apiMock.ingestThirdPartySecretScan).toHaveBeenCalledWith("slack", {
@@ -2038,6 +2039,7 @@ describe("secrets surface", () => {
         signature_path: "/var/lib/trstctl/exports/slack.jsonl.sig",
         signer_public_key_pem: "-----BEGIN PUBLIC KEY-----\nMFkw\n-----END PUBLIC KEY-----",
         require_signature: true,
+        delete_artifact_after_scan: true,
       }),
     );
     expect(await screen.findByText(/slack scan queued as run 66666666-6666-6666-6666-666666666666/i)).toBeInTheDocument();

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1576 annotated sites across 26 rules. Each row is
+1577 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (324 sites)
+### G101 — CWE-798 Use of hardcoded credentials (325 sites)
 
 | Location | Reason |
 |---|---|
@@ -141,11 +141,11 @@ not this file.
 | `internal/api/secrets_posture.go:1053` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1201` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
-| `internal/api/secrets_scanning.go:626` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:650` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:707` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:717` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_scanning.go:727` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:629` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:653` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:710` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:720` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_scanning.go:730` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/audit/audit_test.go:173` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/audit/audit_test.go:205` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -167,8 +167,8 @@ not this file.
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:2359` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:3089` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2362` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3093` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:357` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -354,6 +354,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_integrations.go:1036` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_third_party_scan_retention_served_test.go:25` | fabricated fixture (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:29` | fabricated fixture (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1260,7 +1261,7 @@ not this file.
 | `internal/cli/cli_test.go:2131` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:2453` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:2456` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:46` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:353` | clean is confined to operator-approved local roots above (CWE-22) |
@@ -1328,8 +1329,8 @@ not this file.
 | `internal/secretscan/gitleaks.go:527` | the operator's own scanner config, already validated as a path this process was told to use (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:186` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/secretscan_test.go:124` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/secretscan/thirdparty.go:96` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
-| `internal/secretscan/thirdparty.go:100` | operator-owned signature path from the reviewed source config (CWE-22) |
+| `internal/secretscan/thirdparty.go:100` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
+| `internal/secretscan/thirdparty.go:104` | operator-owned signature path from the reviewed source config (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
 | `internal/server/agent_roles_served_test.go:487` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:491` | path is a t.TempDir fixture (CWE-22). |
@@ -1390,7 +1391,7 @@ not this file.
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:542` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1170` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1569` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1570` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |

@@ -9193,6 +9193,7 @@ PrivacyRetentionCutoffs = TypedDict(
         'owner_inactive_before': str,
         'profile_actor_before': str,
         'ssh_stale_before': str,
+        'third_party_scan_findings_before': str,
     },
     total=False,
 )
@@ -11358,6 +11359,7 @@ ThirdPartySecretScanIngestRequest = TypedDict(
         'artifact_kind': str,
         'artifact_path': str,
         'credential_ref': str,
+        'delete_artifact_after_scan': bool,
         'event': str,
         'require_signature': bool,
         'signature_path': str,

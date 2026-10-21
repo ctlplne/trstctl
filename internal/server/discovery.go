@@ -1446,6 +1446,12 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 	if rep.Discovered == 0 && rep.Failed == 0 {
 		msg = "third-party secret scan completed with no findings"
 	}
+	if note := secretscan.RemoveThirdPartyArtifactAfterScan(cfg); note != "" {
+		if msg != "" {
+			msg += "; "
+		}
+		msg += note
+	}
 	return rep, status, msg, nil
 }
 

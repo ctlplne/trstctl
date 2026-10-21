@@ -19805,6 +19805,10 @@ export const messages = {
     defaultMessage: "Refuse unsigned artifacts",
     description: "Checkbox label that sets require_signature on a CAP-SCAN-04 ingest.",
   },
+  "secrets.thirdPartyScan.deleteArtifact": {
+    defaultMessage: "Remove the artifact after the scan",
+    description: "Checkbox label that sets delete_artifact_after_scan on a CAP-SCAN-04 ingest.",
+  },
   "secrets.thirdPartyScan.queueing": {
     defaultMessage: "Queueing",
     description: "Button label while CAP-SCAN-04 ingest is in flight.",

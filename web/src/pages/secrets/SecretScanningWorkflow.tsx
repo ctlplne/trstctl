@@ -61,6 +61,7 @@ export function SecretScanningWorkflow({
   const [thirdPartySignaturePath, setThirdPartySignaturePath] = useState("");
   const [thirdPartySignerKey, setThirdPartySignerKey] = useState("");
   const [thirdPartyRequireSignature, setThirdPartyRequireSignature] = useState(false);
+  const [thirdPartyDeleteArtifact, setThirdPartyDeleteArtifact] = useState(false);
   const [thirdPartyBusy, setThirdPartyBusy] = useState(false);
   const [thirdPartyError, setThirdPartyError] = useState<string | null>(null);
   const [thirdPartyReceipt, setThirdPartyReceipt] = useState<ThirdPartySecretScanReceipt | null>(null);
@@ -169,6 +170,7 @@ export function SecretScanningWorkflow({
         ...(thirdPartySignaturePath.trim() ? { signature_path: thirdPartySignaturePath.trim() } : {}),
         ...(thirdPartySignerKey.trim() ? { signer_public_key_pem: thirdPartySignerKey.trim() } : {}),
         ...(thirdPartyRequireSignature ? { require_signature: true } : {}),
+        ...(thirdPartyDeleteArtifact ? { delete_artifact_after_scan: true } : {}),
       });
       setThirdPartyReceipt(receipt);
       setSearchParams((current) => {
@@ -478,6 +480,10 @@ export function SecretScanningWorkflow({
                 <label className="flex items-center gap-2 self-end text-sm">
                   <input type="checkbox" checked={thirdPartyRequireSignature} onChange={(event) => setThirdPartyRequireSignature(event.target.checked)} />
                   <span>{t("secrets.thirdPartyScan.requireSignature")}</span>
+                </label>
+                <label className="flex items-center gap-2 self-end text-sm">
+                  <input type="checkbox" checked={thirdPartyDeleteArtifact} onChange={(event) => setThirdPartyDeleteArtifact(event.target.checked)} />
+                  <span>{t("secrets.thirdPartyScan.deleteArtifact")}</span>
                 </label>
                 <Button type="submit" className="self-end" disabled={thirdPartyBusy || loadingBlocked}>
                   {thirdPartyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}

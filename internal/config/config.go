@@ -1600,6 +1600,9 @@ type PrivacyRetention struct {
 	Profiles     string `json:"profiles,omitempty"`
 	Attestations string `json:"attestations,omitempty"`
 	Agents       string `json:"agents,omitempty"`
+	// ThirdPartyScans bounds how long redacted third-party artifact scan
+	// findings stay in discovery before the worker deletes them.
+	ThirdPartyScans string `json:"third_party_scans,omitempty"`
 }
 
 // IntervalDuration parses the worker cadence. Empty means the server should use
@@ -2977,6 +2980,7 @@ func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_PROFILES", &privacy.Retention.Profiles)
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_ATTESTATIONS", &privacy.Retention.Attestations)
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_AGENTS", &privacy.Retention.Agents)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS", &privacy.Retention.ThirdPartyScans)
 }
 
 func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
@@ -3608,6 +3612,7 @@ func validateOptionalServices(c *Config) []error {
 		{"profiles", c.Privacy.Retention.Profiles},
 		{"attestations", c.Privacy.Retention.Attestations},
 		{"agents", c.Privacy.Retention.Agents},
+		{"third_party_scans", c.Privacy.Retention.ThirdPartyScans},
 	} {
 		if f.value == "" {
 			continue

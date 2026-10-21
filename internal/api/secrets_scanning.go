@@ -119,6 +119,9 @@ type thirdPartySecretScanIngestRequest struct {
 	SignaturePath      string `json:"signature_path,omitempty"`
 	SignerPublicKeyPEM string `json:"signer_public_key_pem,omitempty"`
 	RequireSignature   bool   `json:"require_signature,omitempty"`
+	// DeleteArtifactAfterScan (A12) removes the artifact file once the scan is
+	// terminal; the run records the removal.
+	DeleteArtifactAfterScan bool `json:"delete_artifact_after_scan,omitempty"`
 }
 
 type thirdPartySecretScanReceipt struct {
@@ -687,7 +690,7 @@ func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPo
 		Residuals: []string{
 			"native Slack/Jira/registry API polling is not yet implemented; operators provide exported artifacts or callbacks",
 			"a provider signature is verified only when the operator supplies signature_path and signer_public_key_pem (require_signature refuses unsigned artifacts); export-chain integrity beyond that one detached signature remains an architecture follow-up",
-			"artifact retention, deletion, and access controls are operator-owned outside the trstctl database",
+			"artifact access controls are operator-owned outside the trstctl database; delete_artifact_after_scan removes the export once the scan is terminal, and TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS ages the redacted findings out of discovery",
 		},
 		EvidenceRefs: []string{
 			"internal/api/secrets.go",
@@ -852,15 +855,16 @@ func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestR
 		}
 	}
 	return secretscan.ThirdPartyScanConfig{
-		Provider:           provider,
-		Source:             source,
-		ArtifactPath:       artifactPath,
-		ArtifactKind:       artifactKind,
-		Event:              strings.TrimSpace(req.Event),
-		CredentialRef:      strings.TrimSpace(req.CredentialRef),
-		SignaturePath:      signaturePath,
-		SignerPublicKeyPEM: signerKey,
-		RequireSignature:   req.RequireSignature,
+		Provider:                provider,
+		Source:                  source,
+		ArtifactPath:            artifactPath,
+		ArtifactKind:            artifactKind,
+		Event:                   strings.TrimSpace(req.Event),
+		CredentialRef:           strings.TrimSpace(req.CredentialRef),
+		SignaturePath:           signaturePath,
+		SignerPublicKeyPEM:      signerKey,
+		RequireSignature:        req.RequireSignature,
+		DeleteArtifactAfterScan: req.DeleteArtifactAfterScan,
 	}, nil
 }
 

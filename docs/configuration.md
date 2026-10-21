@@ -792,6 +792,7 @@ ledger with `GET /api/v1/privacy/archive-erasure-attestations` or
 | `TRSTCTL_PRIVACY_RETENTION_PROFILES` | `9528h` (397 days) | Pseudonymize old certificate-profile author values. |
 | `TRSTCTL_PRIVACY_RETENTION_ATTESTATIONS` | `9528h` (397 days) | Clear stale free-form attestation evidence JSON. |
 | `TRSTCTL_PRIVACY_RETENTION_AGENTS` | `4320h` (180 days) | Pseudonymize stale agent names while preserving agent id, status, version, and heartbeat timestamps. |
+| `TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS` | `2160h` (90 days) | Delete redacted third-party artifact scan findings (leaked-secret rule/file/line locations) older than this; the discovery run record stays. |
 
 Operators can trigger and inspect the same served path with
 `POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`, or

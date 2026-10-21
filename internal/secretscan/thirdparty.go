@@ -48,6 +48,10 @@ type ThirdPartyScanConfig struct {
 	SignaturePath      string `json:"signature_path,omitempty"`
 	SignerPublicKeyPEM string `json:"signer_public_key_pem,omitempty"`
 	RequireSignature   bool   `json:"require_signature,omitempty"`
+	// DeleteArtifactAfterScan removes the operator's artifact file once the scan
+	// is terminal, so an export containing live secrets does not outlive the
+	// scan that redacted it. Only a single regular file is removed.
+	DeleteArtifactAfterScan bool `json:"delete_artifact_after_scan,omitempty"`
 }
 
 // ArtifactSignatureEvidence is what a verified provider signature contributes
@@ -157,4 +161,27 @@ func PrepareThirdPartyTarget(cfg ThirdPartyScanConfig) (ThirdPartyTarget, error)
 		return ThirdPartyTarget{}, ErrThirdPartyTargetRequired
 	}
 	return ThirdPartyTarget{Path: filepath.Clean(path), Cleanup: func() {}, Mode: "artifact_path"}, nil
+}
+
+// RemoveThirdPartyArtifactAfterScan deletes the operator's artifact once a scan
+// is terminal when the source asked for it. It removes exactly one regular
+// file (the artifact itself; a directory export or archive tree is left in
+// place) and reports what happened as a note for the run record. Removal
+// failures are reported, never fatal: the scan result stands on its own.
+func RemoveThirdPartyArtifactAfterScan(cfg ThirdPartyScanConfig) string {
+	if !cfg.DeleteArtifactAfterScan {
+		return ""
+	}
+	path := filepath.Clean(strings.TrimSpace(cfg.ArtifactPath))
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "artifact not removed after scan: " + err.Error()
+	}
+	if !info.Mode().IsRegular() {
+		return "artifact not removed after scan: only a single regular file is removed"
+	}
+	if err := os.Remove(path); err != nil {
+		return "artifact not removed after scan: " + err.Error()
+	}
+	return "artifact removed after scan"
 }

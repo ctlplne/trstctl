@@ -107,15 +107,16 @@ type privacyCatalogResponse struct {
 }
 
 type privacyRetentionCutoffsResponse struct {
-	OwnerInactiveBefore       time.Time `json:"owner_inactive_before"`
-	IdentityTerminalBefore    time.Time `json:"identity_terminal_before"`
-	CertificateTerminalBefore time.Time `json:"certificate_terminal_before"`
-	SSHStaleBefore            time.Time `json:"ssh_stale_before"`
-	AccessTerminalBefore      time.Time `json:"access_terminal_before"`
-	ApprovalActorBefore       time.Time `json:"approval_actor_before"`
-	ProfileActorBefore        time.Time `json:"profile_actor_before"`
-	AttestationEvidenceBefore time.Time `json:"attestation_evidence_before"`
-	AgentStaleBefore          time.Time `json:"agent_stale_before"`
+	OwnerInactiveBefore          time.Time `json:"owner_inactive_before"`
+	IdentityTerminalBefore       time.Time `json:"identity_terminal_before"`
+	CertificateTerminalBefore    time.Time `json:"certificate_terminal_before"`
+	SSHStaleBefore               time.Time `json:"ssh_stale_before"`
+	AccessTerminalBefore         time.Time `json:"access_terminal_before"`
+	ApprovalActorBefore          time.Time `json:"approval_actor_before"`
+	ProfileActorBefore           time.Time `json:"profile_actor_before"`
+	AttestationEvidenceBefore    time.Time `json:"attestation_evidence_before"`
+	AgentStaleBefore             time.Time `json:"agent_stale_before"`
+	ThirdPartyScanFindingsBefore time.Time `json:"third_party_scan_findings_before"`
 }
 
 type privacyRetentionRunResponse struct {
@@ -173,15 +174,16 @@ func toPrivacyRetentionRunResponse(r store.PrivacyRetentionRun) privacyRetention
 		RunID:          r.RunID,
 		RequestedByRef: r.RequestedByRef,
 		Cutoffs: privacyRetentionCutoffsResponse{
-			OwnerInactiveBefore:       r.Cutoffs.OwnerInactiveBefore,
-			IdentityTerminalBefore:    r.Cutoffs.IdentityTerminalBefore,
-			CertificateTerminalBefore: r.Cutoffs.CertificateTerminalBefore,
-			SSHStaleBefore:            r.Cutoffs.SSHStaleBefore,
-			AccessTerminalBefore:      r.Cutoffs.AccessTerminalBefore,
-			ApprovalActorBefore:       r.Cutoffs.ApprovalActorBefore,
-			ProfileActorBefore:        r.Cutoffs.ProfileActorBefore,
-			AttestationEvidenceBefore: r.Cutoffs.AttestationEvidenceBefore,
-			AgentStaleBefore:          r.Cutoffs.AgentStaleBefore,
+			OwnerInactiveBefore:          r.Cutoffs.OwnerInactiveBefore,
+			IdentityTerminalBefore:       r.Cutoffs.IdentityTerminalBefore,
+			CertificateTerminalBefore:    r.Cutoffs.CertificateTerminalBefore,
+			SSHStaleBefore:               r.Cutoffs.SSHStaleBefore,
+			AccessTerminalBefore:         r.Cutoffs.AccessTerminalBefore,
+			ApprovalActorBefore:          r.Cutoffs.ApprovalActorBefore,
+			ProfileActorBefore:           r.Cutoffs.ProfileActorBefore,
+			AttestationEvidenceBefore:    r.Cutoffs.AttestationEvidenceBefore,
+			AgentStaleBefore:             r.Cutoffs.AgentStaleBefore,
+			ThirdPartyScanFindingsBefore: r.Cutoffs.ThirdPartyScanFindingsBefore,
 		},
 		Counts:     counts,
 		EnforcedAt: r.EnforcedAt,

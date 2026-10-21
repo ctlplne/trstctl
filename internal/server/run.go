@@ -1234,6 +1234,7 @@ func privacyRetentionFromConfig(cfg config.PrivacyRetention) (bool, time.Duratio
 		{"profiles", cfg.Profiles, func(d time.Duration) { policy.ProfileActorAfter = d }},
 		{"attestations", cfg.Attestations, func(d time.Duration) { policy.AttestationEvidenceAfter = d }},
 		{"agents", cfg.Agents, func(d time.Duration) { policy.AgentStaleAfter = d }},
+		{"third_party_scans", cfg.ThirdPartyScans, func(d time.Duration) { policy.ThirdPartyScanFindingsAfter = d }},
 	} {
 		if f.value == "" {
 			continue

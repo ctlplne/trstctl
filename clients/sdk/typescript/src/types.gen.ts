@@ -14592,6 +14592,8 @@ export interface components {
             profile_actor_before: string;
             /** Format: date-time */
             ssh_stale_before: string;
+            /** Format: date-time */
+            third_party_scan_findings_before?: string;
         };
         PrivacyRetentionPreview: {
             blockers: string[];
@@ -16284,6 +16286,7 @@ export interface components {
             artifact_kind?: string;
             artifact_path: string;
             credential_ref?: string;
+            delete_artifact_after_scan?: boolean;
             event?: string;
             require_signature?: boolean;
             signature_path?: string;
