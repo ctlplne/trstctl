@@ -179,6 +179,9 @@ type API struct {
 	acmeEABDisable                     ACMEEABDisabler
 	acmeEABPolicy                      ACMEEABPolicyUpdater
 	acmeEABRotate                      ACMEEABRotator
+	acmeAccounts                       ACMEAccountsProvider
+	acmeOrders                         ACMEOrdersProvider
+	acmeDeactivateAccount              ACMEAccountDeactivator
 	privacyRetentionPolicy             privacy.RetentionPolicy
 	privacyRetentionSource             privacy.RetentionPolicySource
 	kubernetesCSRPosture               KubernetesPostureReader
@@ -304,6 +307,9 @@ type config struct {
 	acmeEABDisable              ACMEEABDisabler
 	acmeEABPolicy               ACMEEABPolicyUpdater
 	acmeEABRotate               ACMEEABRotator
+	acmeAccounts                ACMEAccountsProvider
+	acmeOrders                  ACMEOrdersProvider
+	acmeDeactivateAccount       ACMEAccountDeactivator
 	privacyRetentionPolicy      privacy.RetentionPolicy
 	privacyRetentionSource      privacy.RetentionPolicySource
 	kubernetesCSRPosture        KubernetesPostureReader
@@ -619,6 +625,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeEABDisable:              cfg.acmeEABDisable,
 		acmeEABPolicy:               cfg.acmeEABPolicy,
 		acmeEABRotate:               cfg.acmeEABRotate,
+		acmeAccounts:                cfg.acmeAccounts,
+		acmeOrders:                  cfg.acmeOrders,
+		acmeDeactivateAccount:       cfg.acmeDeactivateAccount,
 		featureObserver:             cfg.featureObserver,
 		ownershipAttestationCadence: cfg.ownershipAttestationCadence,
 		privacyRetentionPolicy:      policy.WithDefaults(),
@@ -1014,6 +1023,7 @@ func (a *API) routes() []route {
 	caAuthorityPath := []param{pathUUID("id")}
 	dns01ProviderConfigPath := []param{pathUUID("id")}
 	acmeEABKeyPath := []param{pathString("kid", "ACME external account binding key id")}
+	acmeAccountPath := []param{pathString("id", "ACME account id (the account key's RFC 7638 thumbprint)")}
 	externalCAPath := []param{pathString("id", "configured external CA registry id")}
 	notificationChannelPath := []param{pathString("id", "notification channel id")}
 	notificationRoutingPolicyPath := []param{pathUUID("id")}
@@ -1347,6 +1357,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/acme/eab-credentials", opID: "listACMEEABCredentials", summary: "List served ACME external account binding credentials with their scope and usage", handler: a.listACMEEABCredentials, resSchema: "ACMEEABPosture", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/acme/accounts", opID: "listACMEAccounts", summary: "List the served ACME server's accounts with their status, binding credential and order counts", handler: a.listACMEAccounts, resSchema: "ACMEAccountList", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/acme/accounts/{id}/orders", opID: "listACMEAccountOrders", summary: "List one ACME account's orders with their authorizations, challenges and issued certificate record", handler: a.listACMEAccountOrders, pathParams: acmeAccountPath, resSchema: "ACMEOrderList", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/acme/accounts/{id}/deactivate", opID: "deactivateACMEAccount", summary: "Deactivate an ACME account: refuse new requests under its key and cancel its pending orders, leaving issued certificates untouched", handler: a.deactivateACMEAccount, pathParams: acmeAccountPath, resSchema: "ACMEAccount", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/acme/operator-plan", opID: "getACMEOperatorPlan", summary: "Preview tenant-bound ACME readiness, the exact next action, and recovery steps without effects", handler: a.getACMEOperatorPlan, resSchema: "ACMEOperatorPlan", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/acme/eab-credentials/{kid}/disable", opID: "disableACMEEABCredential", summary: "Stop new ACME accounts and orders under an external account binding credential", handler: a.setACMEEABCredentialDisabled, pathParams: acmeEABKeyPath, resSchema: "ACMEEABCredential", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/acme/eab-credentials/{kid}/enable", opID: "enableACMEEABCredential", summary: "Re-enable an operator-disabled ACME external account binding credential", handler: a.setACMEEABCredentialDisabled, pathParams: acmeEABKeyPath, resSchema: "ACMEEABCredential", successCode: "200", mutation: true, perm: authz.IssuersWrite},

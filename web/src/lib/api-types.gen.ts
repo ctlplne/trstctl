@@ -55,6 +55,35 @@ export interface ACMEARIWindow {
   start: string;
 }
 
+export interface ACMEAccount {
+  certificates: number;
+  contact?: string[];
+  eab_key_id?: string;
+  id: string;
+  orders: number;
+  status: "valid" | "deactivated";
+}
+
+export interface ACMEAccountList {
+  generated_at: string;
+  items: ACMEAccount[];
+  served: boolean;
+}
+
+export interface ACMEAuthorization {
+  challenges: ACMEChallenge[];
+  created_at: string;
+  domain: string;
+  id: string;
+  status: string;
+}
+
+export interface ACMEChallenge {
+  id: string;
+  status: string;
+  type: string;
+}
+
 export interface ACMEDNS01CAAPolicyEvidence {
   allowed_issuers: string[];
   configured_issuer?: string;
@@ -309,6 +338,30 @@ export interface ACMEOperatorPlan {
   tenant_bound: boolean;
   validation_activity: ACMEDomainValidationActivity[];
   warnings: string[];
+}
+
+export interface ACMEOrder {
+  account_id: string;
+  auth_mode?: string;
+  authorizations: ACMEAuthorization[];
+  certificate_fingerprint?: string;
+  certificate_id?: string;
+  certificate_record_id?: string;
+  certificate_serial?: string;
+  created_at: string;
+  id: string;
+  identifiers: string[];
+  profile?: string;
+  replaces?: string;
+  revoked: boolean;
+  status: string;
+}
+
+export interface ACMEOrderList {
+  account_id?: string;
+  generated_at: string;
+  items: ACMEOrder[];
+  served: boolean;
 }
 
 export interface ACMEUpstreamAuthorization {

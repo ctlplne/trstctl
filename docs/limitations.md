@@ -4188,9 +4188,21 @@ This is a deliberate, documented trust boundary, not an accident.
   (registration without a binding or with the wrong key is refused, with it
   issuance and revocation run); a live proof against CertiNext or HARICA needs
   a design partner's credentials.
-  Roadmap residual: a dedicated ACME admin console for account/order/challenge
-  drilldown, revocation operations, and richer client setup controls remains
-  outside the F5 GA-served protocol denominator.
+  The ACME admin console is served (A52): `GET /api/v1/acme/accounts` lists the
+  mount's accounts (status, admitting EAB credential, order and certificate
+  counts), `GET /api/v1/acme/accounts/{id}/orders` drills one account down to
+  each order's authorizations and challenges and names the issued leaf's
+  serial, fingerprint and inventory record id, and `POST
+  /api/v1/acme/accounts/{id}/deactivate` retires an account on the operator's
+  authority (the same `acme.account.upserted` event a client's own
+  deactivation writes: new requests under the key are refused, pending orders
+  are cancelled, issued certificates stay). Revocation from that console runs
+  through `POST /api/v1/certificates/bulk-revoke` with the named record id, so
+  it carries the certificate path's approvals and OCSP/CRL effects rather than
+  a second revocation path. CLI `acme accounts list|orders|deactivate`. An
+  account is named by the public RFC 7638 thumbprint of its key; no served
+  field carries key material, and a token for another tenant sees an unserved
+  list. Client setup stays the readiness panel's credential-free command.
 - **External account bindings are authorizations, not door keys.** RFC 8555
   §7.3.4 EAB proves an ACME account key was pre-authorized out of band. The
   server used to verify that proof and discard the key id, which made every

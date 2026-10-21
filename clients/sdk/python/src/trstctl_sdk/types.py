@@ -65,6 +65,51 @@ ACMEARIWindow = TypedDict(
     total=False,
 )
 
+ACMEAccount = TypedDict(
+    'ACMEAccount',
+    {
+        'certificates': int,
+        'contact': list[str],
+        'eab_key_id': str,
+        'id': str,
+        'orders': int,
+        'status': str,
+    },
+    total=False,
+)
+
+ACMEAccountList = TypedDict(
+    'ACMEAccountList',
+    {
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'served': bool,
+    },
+    total=False,
+)
+
+ACMEAuthorization = TypedDict(
+    'ACMEAuthorization',
+    {
+        'challenges': list[dict[str, Any]],
+        'created_at': str,
+        'domain': str,
+        'id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ACMEChallenge = TypedDict(
+    'ACMEChallenge',
+    {
+        'id': str,
+        'status': str,
+        'type': str,
+    },
+    total=False,
+)
+
 ACMEDNS01CAAPolicyEvidence = TypedDict(
     'ACMEDNS01CAAPolicyEvidence',
     {
@@ -409,6 +454,38 @@ ACMEOperatorPlan = TypedDict(
         'tenant_bound': bool,
         'validation_activity': list[dict[str, Any]],
         'warnings': list[str],
+    },
+    total=False,
+)
+
+ACMEOrder = TypedDict(
+    'ACMEOrder',
+    {
+        'account_id': str,
+        'auth_mode': str,
+        'authorizations': list[dict[str, Any]],
+        'certificate_fingerprint': str,
+        'certificate_id': str,
+        'certificate_record_id': str,
+        'certificate_serial': str,
+        'created_at': str,
+        'id': str,
+        'identifiers': list[str],
+        'profile': str,
+        'replaces': str,
+        'revoked': bool,
+        'status': str,
+    },
+    total=False,
+)
+
+ACMEOrderList = TypedDict(
+    'ACMEOrderList',
+    {
+        'account_id': str,
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'served': bool,
     },
     total=False,
 )

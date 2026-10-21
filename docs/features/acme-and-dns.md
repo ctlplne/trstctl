@@ -93,6 +93,18 @@ no writes and contacts no external system.
 Headless operators get the identical JSON plan with `trstctl acme readiness`. It is
 an authenticated `GET`; it sends no body or idempotency key and performs no mutation.
 
+Below the readiness plan, the **ACME accounts and orders** panel is the admin
+console for the served protocol: every account with its status and the external
+account binding credential that admitted it, one account's orders with their
+authorizations and challenges (so a stuck client can be read from the server's side),
+the issued certificate's serial and inventory record, a **Revoke** action that runs
+through the governed certificate revocation path, and **Deactivate**, which refuses
+further requests under the account key and cancels its pending orders while leaving
+issued certificates alone. The same views are `GET /api/v1/acme/accounts`,
+`GET /api/v1/acme/accounts/{id}/orders` and `POST /api/v1/acme/accounts/{id}/deactivate`
+(`trstctl acme accounts list|orders|deactivate`). Accounts are named by the public
+thumbprint of their key; nothing served carries key material.
+
 In the evaluation profile, an operator with `issuers:write` can activate the already
 assembled protocol gate from that panel. The mutation is event-sourced and
 idempotent. Production activation remains startup-configuration managed: the console

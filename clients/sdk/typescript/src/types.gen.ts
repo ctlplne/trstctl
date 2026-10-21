@@ -366,6 +366,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the served ACME server's accounts with their status, binding credential and order counts */
+        get: operations["listACMEAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/accounts/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate an ACME account: refuse new requests under its key and cancel its pending orders, leaving issued certificates untouched */
+        post: operations["deactivateACMEAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/accounts/{id}/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List one ACME account's orders with their authorizations, challenges and issued certificate record */
+        get: operations["listACMEAccountOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/ari/posture": {
         parameters: {
             query?: never;
@@ -7598,6 +7649,34 @@ export interface components {
             /** Format: date-time */
             start: string;
         };
+        ACMEAccount: {
+            certificates: number;
+            contact?: string[];
+            eab_key_id?: string;
+            id: string;
+            orders: number;
+            /** @enum {string} */
+            status: "valid" | "deactivated";
+        };
+        ACMEAccountList: {
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["ACMEAccount"][];
+            served: boolean;
+        };
+        ACMEAuthorization: {
+            challenges: components["schemas"]["ACMEChallenge"][];
+            /** Format: date-time */
+            created_at: string;
+            domain: string;
+            id: string;
+            status: string;
+        };
+        ACMEChallenge: {
+            id: string;
+            status: string;
+            type: string;
+        };
         ACMEDNS01CAAPolicyEvidence: {
             allowed_issuers: string[];
             configured_issuer?: string;
@@ -7871,6 +7950,30 @@ export interface components {
             tenant_bound: boolean;
             validation_activity: components["schemas"]["ACMEDomainValidationActivity"][];
             warnings: string[];
+        };
+        ACMEOrder: {
+            account_id: string;
+            auth_mode?: string;
+            authorizations: components["schemas"]["ACMEAuthorization"][];
+            certificate_fingerprint?: string;
+            certificate_id?: string;
+            certificate_record_id?: string;
+            certificate_serial?: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            identifiers: string[];
+            profile?: string;
+            replaces?: string;
+            revoked: boolean;
+            status: string;
+        };
+        ACMEOrderList: {
+            account_id?: string;
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["ACMEOrder"][];
+            served: boolean;
         };
         ACMEUpstreamAuthorization: {
             challenge_type?: string;
@@ -18041,6 +18144,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listACMEAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEAccountList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deactivateACMEAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description ACME account id (the account key's RFC 7638 thumbprint) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEAccount"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listACMEAccountOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ACME account id (the account key's RFC 7638 thumbprint) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEOrderList"];
                 };
             };
             /** @description client error */

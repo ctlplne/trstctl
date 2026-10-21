@@ -17,6 +17,9 @@ const { apiMock } = vi.hoisted(() => ({
     tsaQualification: vi.fn(),
     spiffeQualification: vi.fn(),
     acmeOperatorPlan: vi.fn(),
+    acmeAccounts: vi.fn(),
+    acmeAccountOrders: vi.fn(),
+    deactivateACMEAccount: vi.fn(),
     activateProtocolProfile: vi.fn(),
     acmeARIPosture: vi.fn(),
     acmeDNS01Providers: vi.fn(),
@@ -150,6 +153,10 @@ describe("protocol surface", () => {
     apiMock.tsaQualification.mockReset();
     apiMock.spiffeQualification.mockReset();
     apiMock.acmeOperatorPlan.mockReset();
+    apiMock.acmeAccounts.mockReset();
+    apiMock.acmeAccountOrders.mockReset();
+    apiMock.deactivateACMEAccount.mockReset();
+    apiMock.acmeAccounts.mockResolvedValue({ served: true, generated_at: "2026-10-21T00:00:00Z", items: [] });
     apiMock.activateProtocolProfile.mockReset();
     apiMock.acmeARIPosture.mockReset();
     apiMock.acmeDNS01Providers.mockReset();

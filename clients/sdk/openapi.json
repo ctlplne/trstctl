@@ -218,6 +218,115 @@
         ],
         "type": "object"
       },
+      "ACMEAccount": {
+        "properties": {
+          "certificates": {
+            "type": "integer"
+          },
+          "contact": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "eab_key_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "orders": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "valid",
+              "deactivated"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "orders",
+          "certificates"
+        ],
+        "type": "object"
+      },
+      "ACMEAccountList": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEAccount"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "served",
+          "generated_at",
+          "items"
+        ],
+        "type": "object"
+      },
+      "ACMEAuthorization": {
+        "properties": {
+          "challenges": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEChallenge"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "status",
+          "challenges",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ACMEChallenge": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status"
+        ],
+        "type": "object"
+      },
       "ACMEDNS01CAAPolicyEvidence": {
         "properties": {
           "allowed_issuers": {
@@ -1347,6 +1456,95 @@
           "preview_external_effects",
           "validation_activity",
           "generated_at"
+        ],
+        "type": "object"
+      },
+      "ACMEOrder": {
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "auth_mode": {
+            "type": "string"
+          },
+          "authorizations": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEAuthorization"
+            },
+            "type": "array"
+          },
+          "certificate_fingerprint": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "type": "string"
+          },
+          "certificate_record_id": {
+            "type": "string"
+          },
+          "certificate_serial": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "replaces": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "status",
+          "identifiers",
+          "revoked",
+          "authorizations",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ACMEOrderList": {
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEOrder"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "served",
+          "generated_at",
+          "items"
         ],
         "type": "object"
       },
@@ -37598,6 +37796,178 @@
         ],
         "summary": "Disable a tenant privileged access target for new sessions",
         "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/acme/accounts": {
+      "get": {
+        "operationId": "listACMEAccounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEAccountList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the served ACME server's accounts with their status, binding credential and order counts",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/acme/accounts/{id}/deactivate": {
+      "post": {
+        "operationId": "deactivateACMEAccount",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ACME account id (the account key's RFC 7638 thumbprint)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEAccount"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Deactivate an ACME account: refuse new requests under its key and cancel its pending orders, leaving issued certificates untouched",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/accounts/{id}/orders": {
+      "get": {
+        "operationId": "listACMEAccountOrders",
+        "parameters": [
+          {
+            "description": "ACME account id (the account key's RFC 7638 thumbprint)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEOrderList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List one ACME account's orders with their authorizations, challenges and issued certificate record",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/acme/ari/posture": {

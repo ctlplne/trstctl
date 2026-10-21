@@ -137,6 +137,13 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("RevocationEndpointHealth", "status", predicate(evidenceObservation, "fresh requires a lease-bound agent signature plus successful CRL or OCSP signature, status, and freshness verification; stale, invalid, and unreachable preserve the exact failed check, while a missing observation is not projected as healthy"), "internal/projections/projections.go:Projector.Apply"),
 	evidence("ResponseIntegrationDispatch", "status", observationPredicate, "internal/api/response_integrations.go:toResponseIntegrationDispatchResponse"),
 	evidence("ResponseIntegrationQueuedDestination", "status", workflowPredicate, "internal/api/response_integrations.go:API.responseIntegrationDestinationCommand"),
+	// A52: the ACME admin views serve the protocol server's registration-bound
+	// state, which is rebuilt from the tenant's acme.* state events; the live
+	// handlers append the same events before mutating the view.
+	evidence("ACMEAccount", "status", eventProjectionPredicate, "internal/protocols/acme/state.go:Server.applyStateEventLocked"),
+	evidence("ACMEAuthorization", "status", eventProjectionPredicate, "internal/protocols/acme/state.go:Server.applyStateEventLocked"),
+	evidence("ACMEChallenge", "status", eventProjectionPredicate, "internal/protocols/acme/state.go:Server.applyStateEventLocked"),
+	evidence("ACMEOrder", "status", eventProjectionPredicate, "internal/protocols/acme/state.go:Server.applyStateEventLocked"),
 	evidence("RogueCertificateFinding", "status", observationPredicate, "internal/api/rogue_certificates.go:rogueCertificateFindingForCertificate"),
 	evidence("RotationRun", "status", eventProjectionPredicate, "internal/store/connector_lifecycle.go:Store.ApplyRotationRunRecordedTx"),
 	evidence("SSHHostRetirement", "status", eventProjectionPredicate, "internal/api/ssh_workflow.go:API.retireSSHHost"),

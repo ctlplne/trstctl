@@ -92,9 +92,10 @@ func TestFeatureServedGACoverageCOVER001(t *testing.T) {
 }
 
 // TestTRACE019ACMERowRemainsConditionalUntilEnabled locks the remediation for
-// TRACE-019. The served ACME protocol workflow belongs in the GA denominator; the
-// richer ACME admin console remains visible as a roadmap residual and must not be
-// hidden inside a conditional F5 row.
+// TRACE-019. The served ACME protocol workflow belongs in the GA denominator. The
+// row stays conditional because the mount depends on startup configuration and
+// an issuing signer; since A52 the ACME admin console it once parked as a
+// roadmap residual is served and must be cited as such, with its proof.
 func TestTRACE019ACMERowRemainsConditionalUntilEnabled(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
@@ -139,11 +140,14 @@ func TestTRACE019ACMERowRemainsConditionalUntilEnabled(t *testing.T) {
 		}
 	}
 
-	residual := strings.ToLower(strings.Join([]string{f5.TargetMapping, f5.AcceptanceTest}, "\n"))
-	for _, want := range []string{"roadmap residual", "admin console"} {
-		if !strings.Contains(residual, want) {
-			t.Errorf("TRACE-019: F5 must explicitly park the unsatisfied admin surface as a roadmap residual; missing %q in %q", want, residual)
+	adminConsole := strings.ToLower(strings.Join([]string{f5.TargetMapping, f5.AcceptanceTest}, "\n"))
+	for _, want := range []string{"admin console", "acmeadminpanel", "deactivation", "testservedacmeadminlistsaccountsordersanddeactivates"} {
+		if !strings.Contains(adminConsole, want) {
+			t.Errorf("TRACE-019: F5 must cite the served ACME admin console and its proof; missing %q in %q", want, adminConsole)
 		}
+	}
+	if strings.Contains(adminConsole, "roadmap residual") {
+		t.Errorf("TRACE-019: the ACME admin console is served (A52); F5 must not still park it as a roadmap residual: %q", adminConsole)
 	}
 }
 

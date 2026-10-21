@@ -10720,6 +10720,108 @@ export const messages = {
     defaultMessage: "Every shipped public responder answered its probe. Run each method's readiness check and a stock client before enrolling machines.",
     description: "Public-probe result when all responders answer; it does not assert full enrollment readiness.",
   },
+  "protocols.acmeAdmin.heading": {
+    defaultMessage: "ACME accounts and orders",
+    description: "A52: heading of the ACME admin console.",
+  },
+  "protocols.acmeAdmin.description": {
+    defaultMessage:
+      "Every account the served ACME server holds, the credential that admitted it, and what it has ordered. Open an account to see where an order is waiting, revoke an issued certificate through the governed revocation path, or retire the account.",
+    description: "A52: description under the ACME admin heading.",
+  },
+  "protocols.acmeAdmin.account": {
+    defaultMessage: "Account",
+    description: "A52: column header for the account id and status.",
+  },
+  "protocols.acmeAdmin.boundBy": {
+    defaultMessage: "Admitted by {kid}",
+    description: "A52: the external account binding credential that admitted the account.",
+  },
+  "protocols.acmeAdmin.usage": {
+    defaultMessage: "Usage",
+    description: "A52: column header for order and certificate counts.",
+  },
+  "protocols.acmeAdmin.orders": {
+    defaultMessage: "{count, plural, one {# order} other {# orders}}",
+    description: "A52: orders placed under an account.",
+  },
+  "protocols.acmeAdmin.certificates": {
+    defaultMessage: "{count, plural, one {# certificate} other {# certificates}}",
+    description: "A52: certificates issued under an account.",
+  },
+  "protocols.acmeAdmin.showOrders": {
+    defaultMessage: "Orders",
+    description: "A52: action that opens one account's orders.",
+  },
+  "protocols.acmeAdmin.deactivate": {
+    defaultMessage: "Deactivate",
+    description: "A52: action that retires an account; pending orders are cancelled, issued certificates stay.",
+  },
+  "protocols.acmeAdmin.order": {
+    defaultMessage: "Order",
+    description: "A52: column header for the order's identifiers and status.",
+  },
+  "protocols.acmeAdmin.profile": {
+    defaultMessage: "Profile {profile}",
+    description: "A52: the certificate profile an order was issued under.",
+  },
+  "protocols.acmeAdmin.validation": {
+    defaultMessage: "Validation",
+    description: "A52: column header for authorizations and challenges.",
+  },
+  "protocols.acmeAdmin.noAuthorizations": {
+    defaultMessage: "No authorizations (trust-authenticated issuance)",
+    description: "A52: an order that needed no challenge.",
+  },
+  "protocols.acmeAdmin.certificate": {
+    defaultMessage: "Certificate",
+    description: "A52: column header for the issued certificate.",
+  },
+  "protocols.acmeAdmin.notIssued": {
+    defaultMessage: "Not issued",
+    description: "A52: an order with no certificate yet.",
+  },
+  "protocols.acmeAdmin.revoked": {
+    defaultMessage: "Revoked",
+    description: "A52: badge on a revoked certificate.",
+  },
+  "protocols.acmeAdmin.revoke": {
+    defaultMessage: "Revoke",
+    description: "A52: action that revokes the issued certificate through the governed certificate path.",
+  },
+  "protocols.acmeAdmin.revokeReason": {
+    defaultMessage: "Revocation reason",
+    description: "A52: label of the RFC 5280 reason selector.",
+  },
+  "protocols.acmeAdmin.unavailable": {
+    defaultMessage: "ACME is not served for this tenant, so there are no accounts to show.",
+    description: "A52: shown when the ACME mount is absent.",
+  },
+  "protocols.acmeAdmin.noAccounts": {
+    defaultMessage: "No ACME accounts yet.",
+    description: "A52: shown when the served mount holds no accounts.",
+  },
+  "protocols.acmeAdmin.accountsLabel": {
+    defaultMessage: "ACME accounts",
+    description: "A52: accessible label of the accounts grid.",
+  },
+  "protocols.acmeAdmin.ordersHeading": {
+    defaultMessage: "Orders under {account}",
+    description: "A52: heading of the selected account's orders.",
+  },
+  "protocols.acmeAdmin.noOrders": {
+    defaultMessage: "This account has placed no orders.",
+    description: "A52: shown when the selected account has no orders.",
+  },
+  "protocols.acmeAdmin.ordersLabel": {
+    defaultMessage: "ACME orders",
+    description: "A52: accessible label of the orders grid.",
+  },
+  "protocols.acmeAdmin.contract": {
+    defaultMessage:
+      "Nothing here shows key material: an account is named by the public thumbprint of its key. Deactivation is the same state event a client's own deactivation writes, and revocation runs through the certificate revocation path with its usual approvals.",
+    description: "A52: contract footer of the ACME admin console.",
+  },
   "protocols.acmePlan.heading": {
     defaultMessage: "ACME readiness and next step",
     description: "Heading for the server-owned ACME operator workflow.",

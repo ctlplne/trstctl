@@ -745,6 +745,35 @@ func componentSchemas() map[string]*Schema {
 		"successor_key_id": str(),
 		"hmac_key_ref":     str(),
 	}, "successor_key_id", "hmac_key_ref")
+	// The ACME admin surface (A52). No key material in any field; an account
+	// is named by its public account-key thumbprint.
+	acmeAccount := object(map[string]*Schema{
+		"id": str(), "status": {Type: "string", Enum: []string{"valid", "deactivated"}},
+		"contact": {Type: "array", Items: str()}, "eab_key_id": str(),
+		"orders": {Type: "integer"}, "certificates": {Type: "integer"},
+	}, "id", "status", "orders", "certificates")
+	acmeAccountList := object(map[string]*Schema{
+		"served": {Type: "boolean"}, "generated_at": timestamp(),
+		"items": {Type: "array", Items: ref("ACMEAccount")},
+	}, "served", "generated_at", "items")
+	acmeChallenge := object(map[string]*Schema{
+		"id": str(), "type": str(), "status": str(),
+	}, "id", "type", "status")
+	acmeAuthorization := object(map[string]*Schema{
+		"id": str(), "domain": str(), "status": str(),
+		"challenges": {Type: "array", Items: ref("ACMEChallenge")}, "created_at": timestamp(),
+	}, "id", "domain", "status", "challenges", "created_at")
+	acmeOrder := object(map[string]*Schema{
+		"id": str(), "account_id": str(), "status": str(),
+		"identifiers": {Type: "array", Items: str()}, "profile": str(), "auth_mode": str(), "replaces": str(),
+		"certificate_id": str(), "certificate_serial": str(), "certificate_fingerprint": str(),
+		"certificate_record_id": str(), "revoked": {Type: "boolean"},
+		"authorizations": {Type: "array", Items: ref("ACMEAuthorization")}, "created_at": timestamp(),
+	}, "id", "account_id", "status", "identifiers", "revoked", "authorizations", "created_at")
+	acmeOrderList := object(map[string]*Schema{
+		"served": {Type: "boolean"}, "account_id": str(), "generated_at": timestamp(),
+		"items": {Type: "array", Items: ref("ACMEOrder")},
+	}, "served", "generated_at", "items")
 	acmeEABPosture := object(map[string]*Schema{
 		"served": {Type: "boolean"}, "required": {Type: "boolean"},
 		"generated_at": timestamp(),
@@ -7143,6 +7172,12 @@ func componentSchemas() map[string]*Schema {
 		"CAAuthorityHorizon":                       caAuthorityHorizon,
 		"ACMEEABCredential":                        acmeEABCredential,
 		"ACMEEABPolicyUpdate":                      acmeEABPolicyUpdate,
+		"ACMEAccount":                              acmeAccount,
+		"ACMEAccountList":                          acmeAccountList,
+		"ACMEChallenge":                            acmeChallenge,
+		"ACMEAuthorization":                        acmeAuthorization,
+		"ACMEOrder":                                acmeOrder,
+		"ACMEOrderList":                            acmeOrderList,
 		"ACMEEABRotationRequest":                   acmeEABRotationRequest,
 		"ACMEEABPosture":                           acmeEABPosture,
 		"ACMEOperatorAction":                       acmeOperatorAction,

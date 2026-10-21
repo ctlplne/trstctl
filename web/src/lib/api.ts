@@ -59,11 +59,15 @@ import type {
   AccessChangeRequestCreateRequest,
   AccessChangeRequestList,
   ACMEARIPosture,
+  ACMEAccount,
+  ACMEAccountList,
   ACMEEABCredential,
   ACMEEABPolicyUpdate,
   ACMEEABPosture,
   ACMEEABRotationRequest,
   ACMEOperatorPlan,
+  ACMEOrder,
+  ACMEOrderList,
   AgentJobPosture,
   BulkheadStats,
   RenewalSLO,
@@ -906,11 +910,15 @@ export type {
   AccessChangeRequestCreateRequest,
   AccessChangeRequestList,
   ACMEARIPosture,
+  ACMEAccount,
+  ACMEAccountList,
   ACMEEABCredential,
   ACMEEABPolicyUpdate,
   ACMEEABPosture,
   ACMEEABRotationRequest,
   ACMEOperatorPlan,
+  ACMEOrder,
+  ACMEOrderList,
   AgentJobPosture,
   BulkheadStats,
   RenewalSLO,
@@ -1793,6 +1801,12 @@ export interface Api {
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   /** F5: server-owned, effect-free ACME readiness, next action, and recovery plan. */
   acmeOperatorPlan(): Promise<ACMEOperatorPlan>;
+  /** A52: the served ACME server's accounts, secret-free. */
+  acmeAccounts(): Promise<ACMEAccountList>;
+  /** A52: one account's orders with authorizations, challenges and the issued certificate record. */
+  acmeAccountOrders(accountID: string): Promise<ACMEOrderList>;
+  /** A52: retire an account; its pending orders are cancelled, issued certificates stay. */
+  deactivateACMEAccount(accountID: string): Promise<ACMEAccount>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
   setACMEEABCredentialDisabled(kid: string, disabled: boolean): Promise<ACMEEABCredential>;
   /** A53: replace one credential's scope, quota, window and pinned profile at runtime. */
@@ -2451,6 +2465,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     return req<ACMEARIPosture>(`/api/v1/acme/ari/posture${suffix ? `?${suffix}` : ""}`);
   },
   acmeOperatorPlan: () => req<ACMEOperatorPlan>("/api/v1/acme/operator-plan"),
+  acmeAccounts: () => req<ACMEAccountList>("/api/v1/acme/accounts"),
+  acmeAccountOrders: (accountID) => req<ACMEOrderList>(`/api/v1/acme/accounts/${encodeURIComponent(accountID)}/orders`),
+  deactivateACMEAccount: (accountID) => mutate<ACMEAccount>("POST", `/api/v1/acme/accounts/${encodeURIComponent(accountID)}/deactivate`, {}),
   acmeEABCredentials: () => req<ACMEEABPosture>("/api/v1/acme/eab-credentials"),
   setACMEEABCredentialDisabled: (kid, disabled) =>
     mutate<ACMEEABCredential>("POST", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/${disabled ? "disable" : "enable"}`, {}),

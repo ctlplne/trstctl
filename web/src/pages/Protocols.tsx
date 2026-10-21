@@ -16,6 +16,7 @@ import type { MessageKey } from "@/i18n/messages";
 import { ARIPosturePanel } from "@/pages/protocols/ARIPosturePanel";
 import { EABCredentialsPanel } from "@/pages/protocols/EABCredentialsPanel";
 import { ACMEOperatorPanel } from "@/pages/protocols/ACMEOperatorPanel";
+import { ACMEAdminPanel } from "@/pages/protocols/ACMEAdminPanel";
 import { ESTOperatorPanel } from "@/pages/protocols/ESTOperatorPanel";
 import { SCEPOperatorPanel } from "@/pages/protocols/SCEPOperatorPanel";
 import { CMPOperatorPanel } from "@/pages/protocols/CMPOperatorPanel";
@@ -830,6 +831,7 @@ export function Protocols() {
           </details>
 
           <ACMEOperatorPanel />
+          <ACMEAdminPanel />
           <ESTOperatorPanel />
           <SCEPOperatorPanel />
           <CMPOperatorPanel diagnostics={diagnostics?.items ?? []} />
