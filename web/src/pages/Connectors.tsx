@@ -76,6 +76,9 @@ export function Connectors() {
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
   const [recoveryReceipt, setRecoveryReceipt] = useState<{ receipt: ConnectorDelivery; targetId: string; identityId: string } | null>(null);
   const [rollbackReviewOpen, setRollbackReviewOpen] = useState(false);
+  // A46: the single-target read says whether a rollback would find a
+  // predecessor to restore, and why not, before the operator asks for one.
+  const [targetReadiness, setTargetReadiness] = useState<DeploymentTarget["rollback_readiness"] | null>(null);
   const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
   const [connectorName, setConnectorName] = useState("nginx");
@@ -233,6 +236,22 @@ export function Connectors() {
 
   const connectorOptions = useMemo(() => (catalog ?? []).map((item) => item.name), [catalog]);
   const selectedTargetRecord = useMemo(() => (targets ?? []).find((target) => target.id === selectedTarget), [selectedTarget, targets]);
+  useEffect(() => {
+    let cancelled = false;
+    setTargetReadiness(null);
+    if (!selectedTarget) return;
+    api
+      .connectorTarget(selectedTarget)
+      .then((detail) => {
+        if (!cancelled) setTargetReadiness(detail.rollback_readiness ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setTargetReadiness(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTarget]);
   const selectedConnectorRecord = useMemo(
     () => (catalog ?? []).find((connector) => connector.name === selectedTargetRecord?.connector),
     [catalog, selectedTargetRecord],
@@ -1598,6 +1617,16 @@ export function Connectors() {
           <p className="mx-5 rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
             {t("connectors.recovery.dialogBoundary")}
           </p>
+          {targetReadiness ? (
+            <p
+              role="status"
+              className={`mx-5 mt-2 rounded-control border px-3 py-2 text-sm ${targetReadiness.ready ? "border-status-success/40 bg-status-success/10" : "border-destructive/40 bg-destructive/10 text-destructive"}`}
+            >
+              {targetReadiness.ready
+                ? t("connectors.rollbackReadiness.ready", { fingerprint: targetReadiness.predecessor_fingerprint ?? "" })
+                : t("connectors.rollbackReadiness.blocked", { reason: targetReadiness.reason ?? "" })}
+            </p>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
             <Button type="button" variant="ghost" onClick={() => setRollbackReviewOpen(false)}>
               {translateNow("source.cancel.19766ed6cc")}
@@ -1605,7 +1634,7 @@ export function Connectors() {
             <Button
               type="button"
               onClick={() => void runTargetAction("rollback")}
-              disabled={Boolean(targetActionBusy)}
+              disabled={Boolean(targetActionBusy) || (targetReadiness ? !targetReadiness.ready : false)}
               loading={targetActionBusy === "rollback"}
             >
               {t("connectors.recovery.confirm")}

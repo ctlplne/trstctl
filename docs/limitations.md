@@ -2149,9 +2149,16 @@ job is refused; the control plane cannot reconstruct it.
 rollable target on day one: every certificate deployed before this change was
 installed under the old target-derived name, which no rollback looks for. A
 target becomes rollable once two deployments have landed under the new naming —
-one to be the predecessor, one to be the current. Nothing warns about this; the
-rollback reports that the predecessor object is not installed, which is
-the truthful answer.
+one to be the predecessor, one to be the current. The single-target read
+(`GET /api/v1/connectors/targets/{id}`, the Connectors console's destination
+detail) now says so up front: `rollback_readiness` applies the same refusals
+the rollback route applies — no executable route for the family, a fortigate or
+paloalto target without its binding, no bound identity, no predecessor
+certificate, a revoked predecessor, a predecessor never delivered to this
+target through trstctl under its fingerprint-carrying name, or a host target
+without a second successful agent deploy — and names what would make the target
+rollable. A refused rollback still reports that the predecessor object is not
+installed, which remains the truthful answer at execution time.
 
 Second, objects now accumulate. Each deployment leaves its predecessor on the
 appliance rather than overwriting it, which is the entire point, and nothing

@@ -1219,3 +1219,52 @@ func (s *Store) ConnectorRollbackProjectionNeedsRebuild(ctx context.Context) (bo
 		`SELECT EXISTS(SELECT 1 FROM connector_delivery_receipts WHERE destination='connector.rollback' AND coalesce(latest_event_sequence,0)=0)`).Scan(&missing)
 	return missing, err
 }
+
+// IdentityIDsBoundToDeploymentTarget lists the active X.509 identities whose
+// endpoint binding names this deployment target (A46). Requested identities
+// are not bound yet; retired and revoked ones no longer are.
+func (s *Store) IdentityIDsBoundToDeploymentTarget(ctx context.Context, tenantID, targetID string) ([]string, error) {
+	if strings.TrimSpace(targetID) == "" {
+		return nil, nil
+	}
+	var out []string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id::text FROM identities
+			WHERE tenant_id = $1 AND kind IN ('x509_certificate', 'x509')
+			  AND attributes->>'deployment_target_id' = $2
+			  AND status IN ('issued', 'deployed', 'renewing', 'renewal_failed')
+			ORDER BY created_at, id LIMIT 50`, tenantID, targetID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			out = append(out, id)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// DeployDeliveredToTarget reports whether a connector.deploy of this exact
+// certificate to this target was recorded as delivered or verified (A46): the
+// evidence that the object a re-bind rollback would name was installed
+// through trstctl, under the fingerprint-carrying name a rollback looks for.
+func (s *Store) DeployDeliveredToTarget(ctx context.Context, tenantID, targetName, fingerprint string) (bool, error) {
+	if strings.TrimSpace(targetName) == "" || strings.TrimSpace(fingerprint) == "" {
+		return false, nil
+	}
+	var found bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM connector_delivery_receipts
+			 WHERE tenant_id = $1 AND destination = 'connector.deploy' AND target = $2
+			   AND lower(fingerprint) = lower($3) AND status IN ('delivered', 'verified'))`,
+			tenantID, targetName, fingerprint).Scan(&found)
+	})
+	return found, err
+}

@@ -3029,8 +3029,13 @@ func componentSchemas() map[string]*Schema {
 	deploymentTargetReq := object(map[string]*Schema{
 		"name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"},
 	}, "name", "connector")
+	rollbackReadiness := object(map[string]*Schema{
+		"model": {Type: "string", Enum: []string{"re-bind", "host", "none"}}, "ready": {Type: "boolean"}, "reason": str(),
+		"identity_id": uuid(), "predecessor_fingerprint": str(), "predecessor_serial": str(),
+	}, "model", "ready")
 	deploymentTarget := object(map[string]*Schema{
-		"id": uuid(), "revision_id": str(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
+		"rollback_readiness": rollbackReadiness,
+		"id":                 uuid(), "revision_id": str(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
 	}, "id", "revision_id", "tenant_id", "name", "connector", "config", "enabled", "created_at")
 	identityConnectorTargetReq := object(map[string]*Schema{
 		"target_id": uuid(),

@@ -10367,6 +10367,16 @@ export interface components {
             id: string;
             name: string;
             revision_id: string;
+            rollback_readiness?: {
+                /** Format: uuid */
+                identity_id?: string;
+                /** @enum {string} */
+                model: "re-bind" | "host" | "none";
+                predecessor_fingerprint?: string;
+                predecessor_serial?: string;
+                ready: boolean;
+                reason?: string;
+            };
             /** Format: uuid */
             tenant_id: string;
         };

@@ -125,7 +125,10 @@ operator's first question is not “which plugins exist?” It is “which syste
 trstctl update, and what proof says those systems are healthy?” The opening view
 therefore shows the configured-destination count, the count with listener
 verification evidence, and how many connector types can execute rollback. A target
-without verification evidence is never described as healthy.
+without verification evidence is never described as healthy. Opening one
+destination reads its `rollback_readiness`: whether a rollback would find a
+predecessor to restore (re-bind on the appliance or the host agent's retained
+bundle) and, when it would not, the exact reason and what makes it rollable.
 
 The first view has one action, **Add destination**. Its dialog explains that saving a
 destination does not deploy a credential. It accepts a non-secret name, one connector

@@ -11256,6 +11256,39 @@
           "revision_id": {
             "type": "string"
           },
+          "rollback_readiness": {
+            "properties": {
+              "identity_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "model": {
+                "enum": [
+                  "re-bind",
+                  "host",
+                  "none"
+                ],
+                "type": "string"
+              },
+              "predecessor_fingerprint": {
+                "type": "string"
+              },
+              "predecessor_serial": {
+                "type": "string"
+              },
+              "ready": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "model",
+              "ready"
+            ],
+            "type": "object"
+          },
           "tenant_id": {
             "format": "uuid",
             "type": "string"

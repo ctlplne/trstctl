@@ -183,6 +183,9 @@ type deploymentTargetResponse struct {
 	Config     json.RawMessage `json:"config"`
 	Enabled    bool            `json:"enabled"`
 	CreatedAt  time.Time       `json:"created_at"`
+	// RollbackReadiness is present on the single-target read (A46): whether a
+	// rollback would find a predecessor to restore, and if not, why.
+	RollbackReadiness *rollbackReadiness `json:"rollback_readiness,omitempty"`
 }
 
 type identityConnectorTargetRequest struct {
@@ -561,7 +564,10 @@ func (a *API) getConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toDeploymentTargetResponse(target))
+	response := toDeploymentTargetResponse(target)
+	readiness := a.rollbackReadiness(r.Context(), tenantID, target)
+	response.RollbackReadiness = &readiness
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 //trstctl:mutation

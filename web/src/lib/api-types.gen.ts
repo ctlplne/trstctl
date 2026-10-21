@@ -2751,6 +2751,7 @@ export interface DeploymentTarget {
   id: string;
   name: string;
   revision_id: string;
+  rollback_readiness?: { identity_id?: string; model: "re-bind" | "host" | "none"; predecessor_fingerprint?: string; predecessor_serial?: string; ready: boolean; reason?: string };
   tenant_id: string;
 }
 

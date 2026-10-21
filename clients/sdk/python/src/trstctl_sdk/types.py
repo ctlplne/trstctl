@@ -3799,6 +3799,7 @@ DeploymentTarget = TypedDict(
         'id': str,
         'name': str,
         'revision_id': str,
+        'rollback_readiness': dict[str, Any],
         'tenant_id': str,
     },
     total=False,

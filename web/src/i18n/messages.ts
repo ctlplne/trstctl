@@ -16599,6 +16599,14 @@ export const messages = {
     defaultMessage: "Store credential references, never secret values. The server validates the selected connector's schema before saving.",
     description: "Security guidance for connector configuration JSON.",
   },
+  "connectors.rollbackReadiness.ready": {
+    defaultMessage: "A rollback would restore the predecessor certificate (fingerprint {fingerprint}).",
+    description: "Shown in the rollback review when the target reports a restorable predecessor.",
+  },
+  "connectors.rollbackReadiness.blocked": {
+    defaultMessage: "A rollback would be refused: {reason}",
+    description: "Shown in the rollback review when the target reports that no predecessor can be restored; the reason comes from the server.",
+  },
   "connectors.targetReadiness.state": {
     defaultMessage: "Execution state",
     description: "Column heading for whether a deployment destination may run lifecycle actions.",
