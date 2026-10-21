@@ -247,8 +247,9 @@ Enable `endpoint.renew` in `agent_channel.claimable_job_kinds` for host-generate
 keys (`executor: agent`): this kind performs both the first issuance and later
 renewals. `connector.deploy` handles delivery of centrally prepared material and
 does not replace `endpoint.renew`. Enable `connector.test` for target tests and
-`connector.rollback` for supported restores and `endpoint.contain` for emergency
-removal of a compromised leaf from a host listener. Start the agent with `--relay-claim`, and place
+`connector.rollback` for supported restores, `endpoint.contain` for emergency
+stop of a compromised leaf on a host listener, and `endpoint.purge` to remove
+that leaf's certificate and key files and ledger snapshots from the host. Start the agent with `--relay-claim`, and place
 the exact roots and executables in the file named by `--host-exec-profile`. The profile
 lives on the target host because an allowlist for `/usr/sbin/nginx` on the control
 plane says nothing about the binary the target host will actually run. Tenant target
@@ -348,6 +349,24 @@ silently allocate a different host action.
 If the host is unreachable, inspect Jobs and queues and restore the exact
 agent/profile path. After a terminal non-success, review a new attempt; the
 old idempotency key must not be reused for a changed target or reason.
+**Remove compromised material.** Containment stops the listener; the
+compromised private key is still on disk and in the agent's rollback ledger.
+`GET /api/v1/connectors/targets/{id}/purge/preview` and
+`POST /api/v1/connectors/targets/{id}/purge` (`trstctl-cli connector target
+purge-preview` / `purge`, the same reviewed request body as containment) queue
+`endpoint.purge` for the exact enrolled host agent. The agent reads the
+installed certificate at the target's configured paths (`cert_path`/`key_path`,
+HAProxy `crt_path`, the Postfix/Dovecot pair) and removes nothing unless its
+fingerprint is exactly the reviewed leaf; it then overwrites each file with
+zeros, removes it, wipes every rollback-ledger snapshot carrying that
+fingerprint so no rollback can reinstall it, and runs this target's bound stop
+action from `--host-exec-profile` when one exists. The receipt reports
+`purge_queued`, `purged`, `purge_different_leaf`, `purge_absent` or
+`purge_failed`; only `purged` means files were removed and the ledger wiped,
+and its signed report names the removed paths and whether the listener was
+stopped. Families whose material is not an addressable file (java-keystore,
+iis, envoy) are refused at the preview. After a purge the target has no
+certificate until a fresh issuance is deployed. CA revocation is separate.
 When the host refuses the action, the exact receipt moves to
 `containment_failed` and the job dead-letters instead of repeating an
 ambiguous stop. A signed execution can also report `containment_failed`,

@@ -1902,6 +1902,8 @@ export interface Api {
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
   cancelConnectorTargetWork(id: string, input: ConnectorTargetActionRequest, idempotencyKey?: string): Promise<ConnectorWorkCancellation>;
   previewEndpointContainment(id: string): Promise<EndpointContainmentPreview>;
+  previewEndpointPurge(id: string): Promise<EndpointContainmentPreview>;
+  purgeEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   containEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
@@ -2624,6 +2626,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<ConnectorWorkCancellation>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/cancel`, input, key),
   previewEndpointContainment: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/contain/preview`),
   containEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/contain`, input, key),
+  previewEndpointPurge: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/purge/preview`),
+  purgeEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/purge`, input, key),
   connectorDeliveries: (options) => {
     const query = new URLSearchParams(pageQueryString(options, options?.identityId));
     if (options?.idempotencyKey) query.set("idempotency_key", options.idempotencyKey);

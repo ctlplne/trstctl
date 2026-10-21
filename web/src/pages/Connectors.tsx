@@ -28,6 +28,7 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkflow";
 import { RecoveryResult } from "@/pages/connectors/RecoveryResult";
 import { EndpointContainment } from "@/pages/connectors/EndpointContainment";
+import { EndpointPurge } from "@/pages/connectors/EndpointPurge";
 import { DestinationHostField } from "@/pages/connectors/DestinationHostField";
 import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
 
@@ -763,6 +764,9 @@ export function Connectors() {
                 </div>
                 {selectedTargetRecord && selectedConnectorRecord?.target_vantage === "host_agent" && (
                   <EndpointContainment key={selectedTargetRecord.id} target={selectedTargetRecord} reason={reason} />
+                )}
+                {selectedTargetRecord && selectedConnectorRecord?.target_vantage === "host_agent" && (
+                  <EndpointPurge key={`purge-${selectedTargetRecord.id}`} target={selectedTargetRecord} reason={reason} />
                 )}
                 {actionResult && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{actionResult}</output>}
                 {selectedTargetRecord && selectedConnectorRecord && !selectedConnectorRecord.executes_rollback ? (

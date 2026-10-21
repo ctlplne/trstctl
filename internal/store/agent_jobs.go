@@ -286,7 +286,7 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 		                   FROM deployment_targets AS dt
 		                  WHERE dt.tenant_id = c.tenant_id
 		                    AND NOT dt.enabled
-		                    AND c.destination <> 'endpoint.contain'
+		                    AND c.destination NOT IN ('endpoint.contain', 'endpoint.purge')
 		                    AND (c.effect_lane = '`+ConnectorTargetLanePrefix+`' || dt.id::text
 			                         OR (c.destination = 'endpoint.renew' AND dt.id::text =
 			                             CASE WHEN c.destination = 'endpoint.renew'

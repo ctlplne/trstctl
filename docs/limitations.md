@@ -2292,7 +2292,7 @@ named in their own sections. The claimable set remains empty by default and
 rather than unfinished: handing out work nothing can perform fills a queue while the
 control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
-`endpoint.contain`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
+`endpoint.contain`, `endpoint.purge`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `cmdb.sync`,
 `mdm.sync`, `ticket.sync`, and `agent.upgrade` —
 all have shipped executors. Enabling a kind exposes that already-built executor; it
@@ -5305,8 +5305,13 @@ are withdrawn, agent-leased commands are recalled so the agent is refused at its
 next check-in and its late result is retained rather than applied, and a command
 the control-plane worker is executing inside a connector call is reported and
 left alone rather than interrupted mid-write. Cancellation cannot undo an effect
-that already landed and cannot remove compromised material already installed on
-a target.
+that already landed. Compromised material already installed on a host target is
+removed by `POST /api/v1/connectors/targets/{id}/purge` (`endpoint.purge`): the
+exact enrolled agent proves the installed leaf, overwrites and removes the
+certificate and key files the target names, wipes the rollback ledger of that
+fingerprint and runs the bound stop action; only a `purged` receipt claims
+that. Appliance and cloud targets, java-keystore, IIS and Envoy are not covered:
+their material is not an addressable file on an enrolled host.
 
 **Configuring it.** Local post-deploy verification runs when a deployment target
 carries `verify_address` (and optionally `verify_server_name`) in its config —

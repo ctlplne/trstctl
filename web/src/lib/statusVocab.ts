@@ -458,6 +458,43 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "neutral",
     order: 9,
   },
+  // A49: host material removal. Only purged claims files removed and the
+  // ledger wiped; the receipt detail says whether the listener was stopped.
+  purge_queued: {
+    get label() {
+      return translateNow("connectors.purge.queued");
+    },
+    tone: "info",
+    order: 7,
+  },
+  purged: {
+    get label() {
+      return translateNow("connectors.purge.purged");
+    },
+    tone: "success",
+    order: 8,
+  },
+  purge_different_leaf: {
+    get label() {
+      return translateNow("connectors.purge.differentLeaf");
+    },
+    tone: "warning",
+    order: 8,
+  },
+  purge_absent: {
+    get label() {
+      return translateNow("connectors.purge.absent");
+    },
+    tone: "warning",
+    order: 8,
+  },
+  purge_failed: {
+    get label() {
+      return translateNow("connectors.purge.failed");
+    },
+    tone: "critical",
+    order: 8,
+  },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

@@ -92,6 +92,15 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleHost},
 		},
 		{
+			// A49: after containment, the same enrolled host removes the
+			// compromised certificate and key files its target names, wipes
+			// every ledger snapshot with that fingerprint, and runs the pinned
+			// stop action when one is bound. Reference-only like containment.
+			Kind:  KindEndpointPurge,
+			Flags: []string{"--relay-claim", "--host-exec-profile", "--host-rollback-dir"},
+			Roles: []string{mtls.AgentRoleHost},
+		},
+		{
 			// D4/G1: appliances re-bind an installed object; host agents restore
 			// their one encrypted predecessor bundle, reload, and reverify.
 			// Every other family is refused at the API rather than advertised.

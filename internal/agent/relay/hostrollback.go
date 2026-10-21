@@ -727,6 +727,57 @@ func (s *HostRollbackStore) Restore(connectorName, targetID, fingerprint string,
 	return s.save(state)
 }
 
+// PurgeFingerprint wipes every ledger snapshot that carries fingerprint (A49):
+// the active slot, the retained predecessor and any PQC or re-protection pin.
+// A rollback can then never reinstall the purged material. When the active
+// slot is purged and a predecessor remains, the predecessor becomes the only
+// restorable snapshot; when nothing remains the state file is removed. It
+// reports whether any snapshot was wiped.
+func (s *HostRollbackStore) PurgeFingerprint(connectorName, targetID, fingerprint string) (bool, error) {
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return false, err
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	state, err := s.load(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer wipeHostRollbackState(state)
+	wiped := false
+	purge := func(slot **hostRollbackSnapshot) {
+		if *slot == nil || (*slot).Fingerprint != fingerprint {
+			return
+		}
+		wipeHostRollbackSnapshot(*slot)
+		*slot = nil
+		wiped = true
+	}
+	purge(&state.ReprotectPinned)
+	purge(&state.PQCPinned)
+	purge(&state.Previous)
+	purge(&state.Active)
+	if !wiped {
+		return false, nil
+	}
+	if state.Active == nil {
+		state.Active, state.Previous = state.Previous, nil
+	}
+	if state.Active == nil {
+		if err := os.Remove(s.statePath(connectorName, targetID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return true, err
+		}
+		return true, nil
+	}
+	return true, s.save(state)
+}
+
 func normalizeHostRollbackIdentity(connectorName, targetID, fingerprint string) (string, string, string, error) {
 	connectorName = strings.TrimSpace(connectorName)
 	targetID = strings.TrimSpace(targetID)

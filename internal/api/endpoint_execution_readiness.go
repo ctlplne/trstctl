@@ -46,3 +46,12 @@ func (a *API) validateContainmentExecutionReady() error {
 	}
 	return nil
 }
+
+// A purge preview promises that an enrolled host can claim the removal job.
+func (a *API) validatePurgeExecutionReady() error {
+	if a.agentJobClaimable == nil || !a.agentJobClaimable("endpoint.purge") {
+		return errStatus(http.StatusServiceUnavailable,
+			"host material removal requires an assembled agent channel with endpoint.purge enabled in agent_channel.claimable_job_kinds; ask the control-plane operator to enable that exact job kind, then preview again")
+	}
+	return nil
+}

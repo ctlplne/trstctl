@@ -305,6 +305,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"connector", "target", "contain-preview"}, Method: "GET", Path: "/api/v1/connectors/targets/{id}/contain/preview", Summary: "Review exact host, agent and compromised leaf before containment"},
 	{Name: []string{"connector", "target", "contain"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/contain", Body: bodyFile, Summary: "Queue the reviewed exact-fingerprint host stop"},
 	{Name: []string{"connector", "target", "cancel"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/cancel", Body: bodyFile, Summary: "Withdraw queued and recall leased connector work on a target"},
+	{Name: []string{"connector", "target", "purge-preview"}, Method: "GET", Path: "/api/v1/connectors/targets/{id}/purge/preview", Summary: "Review exact host, agent and compromised leaf before removing installed material"},
+	{Name: []string{"connector", "target", "purge"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/purge", Body: bodyFile, Summary: "Queue the reviewed exact-fingerprint removal of installed certificate and key material"},
 	{Name: []string{"notifications", "channels"}, Method: "GET", Path: "/api/v1/notification-channels", Summary: "List supported and configured notification channel families"},
 	{Name: []string{"notifications", "channels", "create"}, Method: "POST", Path: "/api/v1/notification-channels", Body: bodyFile, Summary: "Create a tenant-authored notification channel using secret references"},
 	{Name: []string{"notifications", "channels", "get"}, Method: "GET", Path: "/api/v1/notification-channels/{id}", Summary: "Get a tenant-authored notification channel"},

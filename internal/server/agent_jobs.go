@@ -66,6 +66,7 @@ var agentJobKindAllowlist = map[string]bool{
 	"connector.deploy":        true,
 	"connector.rollback":      true,
 	relay.KindEndpointContain: true,
+	relay.KindEndpointPurge:   true,
 	// D5: the dry-run. It is a first-class job kind rather than a flag on
 	// connector.deploy so an operator can enable testing without enabling
 	// deploying — the whole point of a test is that you run it before you trust
@@ -780,6 +781,22 @@ func (a *agentService) ingestExecutedReport(
 			return err
 		}
 		return a.recordEndpointContainmentResult(ctx, info, claim, req, result)
+	case relay.KindEndpointPurge:
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("purge result needs a terminal executed report")
+		}
+		var intent relay.PurgeIntent
+		var result relay.PurgeReport
+		if err := decodeStrictJSON(claim.Payload, &intent); err != nil {
+			return err
+		}
+		if err := decodeStrictJSON([]byte(req.Detail), &result); err != nil {
+			return err
+		}
+		if err := relay.ValidatePurgeReport(intent, result, req.EvidenceDigest); err != nil {
+			return err
+		}
+		return a.recordEndpointPurgeResult(ctx, info, claim, req, result)
 	case "connector.deploy", "connector.rollback", agentJobKindEndpointRenew:
 		if req.Outcome != transport.JobOutcomeVerified && req.Outcome != transport.JobOutcomeVerifyFailed {
 			return nil
@@ -925,6 +942,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 			return nil, status.Errorf(codes.Internal, "record failed endpoint containment: %v", err)
 		}
 	}
+	if claim.Destination == relay.KindEndpointPurge {
+		if err := a.recordEndpointPurgeFailure(ctx, info, claim, req); err != nil {
+			return nil, status.Errorf(codes.Internal, "record failed endpoint purge: %v", err)
+		}
+	}
 	// Keep the exact failed attempt in the identity timeline before releasing
 	// its lease. A projection failure leaves the signed result retryable;
 	// response loss reuses the same event ID instead of duplicating history.
@@ -973,10 +995,14 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	// probes could not complete. Re-executing it without an operator review
 	// would repeat an ambiguous emergency action indefinitely.
 	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain ||
+		claim.Destination == relay.KindEndpointPurge ||
 		claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback
 	terminalReason := detail
 	if claim.Destination == relay.KindEndpointContain {
 		terminalReason = "containment_failed"
+	}
+	if claim.Destination == relay.KindEndpointPurge {
+		terminalReason = "purge_failed"
 	}
 	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
 		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {

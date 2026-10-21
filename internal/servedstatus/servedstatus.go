@@ -215,6 +215,13 @@ const (
 	// claimed: a withdrawn command never ran, and a recalled agent may already
 	// have acted, which the receipt detail says.
 	ConnectorCancelled = "cancelled"
+	// Purge is the host-only removal of compromised material after containment
+	// (A49). Only purged describes files removed and ledger snapshots wiped.
+	ConnectorPurgeQueued        = "purge_queued"
+	ConnectorPurged             = "purged"
+	ConnectorPurgeDifferentLeaf = "purge_different_leaf"
+	ConnectorPurgeAbsent        = "purge_absent"
+	ConnectorPurgeFailed        = "purge_failed"
 )
 
 // ConnectorDelivery is the served vocabulary for connector delivery receipts.
@@ -233,6 +240,16 @@ var ConnectorDelivery = Registry{
 			Meaning: "The host agent observed the compromised leaf, but the stop action failed or subsequent probes still saw a TLS listener. Containment is not proven."},
 		{Value: ConnectorCancelled,
 			Meaning: "An operator withdrew the command before any agent or worker claimed it, or recalled it from the agent holding its lease. Nothing was verified; a recalled agent may already have changed the target."},
+		{Value: ConnectorPurgeQueued,
+			Meaning: "An exact host material-removal command is queued. No file has been removed and no ledger snapshot wiped."},
+		{Value: ConnectorPurged, ContactedTarget: true, MutatedTarget: true, Verified: true,
+			Meaning: "The exact enrolled host agent read the installed leaf, matched the compromised fingerprint, overwrote and removed the certificate and key files the target names, and wiped every rollback-ledger snapshot with that fingerprint. The receipt says whether a bound stop action also ran."},
+		{Value: ConnectorPurgeDifferentLeaf, ContactedTarget: true, Verified: true,
+			Meaning: "The host agent found a different certificate at the target's paths and removed nothing. The compromised material is not installed there."},
+		{Value: ConnectorPurgeAbsent, ContactedTarget: true, Verified: true,
+			Meaning: "The target's files do not exist on the host; only the rollback ledger was checked and wiped of that fingerprint."},
+		{Value: ConnectorPurgeFailed, ContactedTarget: true,
+			Meaning: "The host agent could not complete the removal: the file layout, a read, a removal or the ledger wipe failed. Material may remain; the receipt names the step."},
 		{
 			Value:   ConnectorQueued,
 			Meaning: "Intent committed to the outbox in the same transaction as the state change. No connector has run.",

@@ -16514,6 +16514,35 @@ export const messages = {
     description: "Containment reason form validation.",
   },
   "connectors.containment.submit": { defaultMessage: "Queue exact host stop", description: "Submit the reviewed host action." },
+  "connectors.purge.heading": {
+    defaultMessage: "Remove compromised material",
+    description: "Section heading for removing a compromised certificate and key from an enrolled host.",
+  },
+  "connectors.purge.help": {
+    defaultMessage:
+      "After containment, the exact enrolled host removes the compromised certificate and key files this destination names, wipes its rollback ledger of that fingerprint and runs the bound stop action. Nothing is removed unless the installed leaf is exactly the reviewed fingerprint.",
+    description: "Explains what a host material removal does and its boundary.",
+  },
+  "connectors.purge.review": { defaultMessage: "Review material removal", description: "Button that loads the effect-free purge preview." },
+  "connectors.purge.previewTitle": { defaultMessage: "Material removal review", description: "Title of the purge preview panel." },
+  "connectors.purge.effectBoundary": {
+    defaultMessage:
+      "Queues one endpoint.purge job for the exact enrolled host. The agent reads the installed leaf first; a different leaf removes nothing. A removed certificate cannot be restored by rollback; deploy a fresh issuance afterwards.",
+    description: "States the exact effect boundary of a queued purge.",
+  },
+  "connectors.purge.submit": { defaultMessage: "Queue exact material removal", description: "Button that submits the reviewed purge." },
+  "connectors.purge.readFailed": {
+    defaultMessage: "The queued purge receipt did not match the reviewed leaf.",
+    description: "Error when the purge receipt disagrees with the preview.",
+  },
+  "connectors.purge.queued": { defaultMessage: "Material removal queued — nothing removed yet", description: "Pending purge receipt status." },
+  "connectors.purge.purged": { defaultMessage: "Host removed the compromised files and wiped its ledger", description: "Successful purge receipt status." },
+  "connectors.purge.differentLeaf": {
+    defaultMessage: "Different leaf installed — nothing removed",
+    description: "Purge found another certificate at the target's paths.",
+  },
+  "connectors.purge.absent": { defaultMessage: "No files at the target's paths — ledger checked", description: "Purge found the target's files missing." },
+  "connectors.purge.failed": { defaultMessage: "Material removal failed — material may remain", description: "Purge could not complete." },
   "connectors.cancelled": {
     defaultMessage: "Cancelled by operator — nothing verified",
     description: "Receipt status for connector work an operator withdrew or recalled.",
