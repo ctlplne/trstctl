@@ -62,7 +62,8 @@ import {
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCertificateInventory } from "@/pages/certificates/useCertificateInventory";
-import { HealthStat, RogueCertificatePanel, formatCount } from "@/pages/certificates/RogueCertificatePanel";
+import { HealthStat, RogueCertificatePanel } from "@/pages/certificates/RogueCertificatePanel";
+import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -270,9 +271,9 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
       <p className="mt-1 text-sm text-muted-foreground">
         {distributions.length > 0
           ? t("certificates.crl.summary", {
-              caCount: formatCount(distributions.length),
-              shardCount: formatCount(totalShards),
-              revokedCount: formatCount(totalRevoked),
+              caCount: formatNumberPolicy(distributions.length),
+              shardCount: formatNumberPolicy(totalShards),
+              revokedCount: formatNumberPolicy(totalRevoked),
             })
           : t("certificates.crl.empty")}
       </p>
@@ -286,7 +287,7 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
                   #{item.full_number}
                 </a>
                 <span>
-                  {formatCount(item.shards?.length ?? 0)} · {t("certificates.crl.shardPlan", { shardCount: formatCount(item.shard_count) })}
+                  {formatNumberPolicy(item.shards?.length ?? 0)} · {t("certificates.crl.shardPlan", { shardCount: formatNumberPolicy(item.shard_count) })}
                 </span>
                 {item.delta_url && (
                   <a className="font-mono text-primary underline" href={item.delta_url}>
@@ -392,7 +393,7 @@ function CTSubmissionPanel({
         </div>
         {result && (
           <span className="inline-flex min-h-8 items-center gap-2 rounded-md border border-status-success/40 bg-status-success/10 px-2.5 text-sm font-medium text-status-success">
-            {t("certificates.ct.queuedBadge", { capability: result.capability, queued: formatCount(result.queued) })}
+            {t("certificates.ct.queuedBadge", { capability: result.capability, queued: formatNumberPolicy(result.queued) })}
           </span>
         )}
       </div>
@@ -470,7 +471,7 @@ function CTSubmissionPanel({
       {error?.kind === "error" && <ErrorState title={t("certificates.ct.errorTitle")}>{error.message}</ErrorState>}
       {result && (
         <p role="status" className="mt-3 text-sm text-status-success">
-          {t(result.logs.length === 1 ? "certificates.ct.acceptedOne" : "certificates.ct.acceptedMany", { count: formatCount(result.logs.length) })}
+          {t(result.logs.length === 1 ? "certificates.ct.acceptedOne" : "certificates.ct.acceptedMany", { count: formatNumberPolicy(result.logs.length) })}
         </p>
       )}
     </section>
@@ -1084,7 +1085,7 @@ function CertificateWorkspace() {
                     {ctResult ? (
                       <p role="status" className="mt-1 text-sm text-status-success">
                         {t(ctResult.logs.length === 1 ? "certificates.ct.acceptedOne" : "certificates.ct.acceptedMany", {
-                          count: formatCount(ctResult.logs.length),
+                          count: formatNumberPolicy(ctResult.logs.length),
                         })}
                       </p>
                     ) : (
@@ -1177,7 +1178,7 @@ function CertificateWorkspace() {
                     resultSummary={
                       filtered.length === 1
                         ? t("certificates.inventory.loadedOne")
-                        : t("certificates.inventory.loadedMany", { count: formatCount(filtered.length) })
+                        : t("certificates.inventory.loadedMany", { count: formatNumberPolicy(filtered.length) })
                     }
                     filters={
                       <>
@@ -1813,7 +1814,9 @@ function certificateFilterSummary(
 ): string | undefined {
   const active = [issuer, profile, team, environment, expiry].filter((value) => value !== "all").length;
   if (active === 0) return undefined;
-  return active === 1 ? translateNow("certificates.inventory.filterOne") : translateNow("certificates.inventory.filterMany", { count: formatCount(active) });
+  return active === 1
+    ? translateNow("certificates.inventory.filterOne")
+    : translateNow("certificates.inventory.filterMany", { count: formatNumberPolicy(active) });
 }
 
 function uniqueOptions(values: Array<string | undefined>, selected: FacetFilter): string[] {

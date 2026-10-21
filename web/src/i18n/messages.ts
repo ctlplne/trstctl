@@ -10726,7 +10726,7 @@ export const messages = {
   },
   "protocols.acmeAdmin.description": {
     defaultMessage:
-      "Every account the served ACME server holds, the credential that admitted it, and what it has ordered. Open an account to see where an order is waiting, revoke an issued certificate through the governed revocation path, or retire the account.",
+      "Every account this tenant's ACME server holds, the credential that admitted it, and what it has ordered. Open an account to see where an order is waiting, revoke an issued certificate through the governed revocation path, or retire the account.",
     description: "A52: description under the ACME admin heading.",
   },
   "protocols.acmeAdmin.account": {
@@ -10794,7 +10794,7 @@ export const messages = {
     description: "A52: label of the RFC 5280 reason selector.",
   },
   "protocols.acmeAdmin.unavailable": {
-    defaultMessage: "ACME is not served for this tenant, so there are no accounts to show.",
+    defaultMessage: "ACME is not mounted for this tenant, so there are no accounts to show.",
     description: "A52: shown when the ACME mount is absent.",
   },
   "protocols.acmeAdmin.noAccounts": {
