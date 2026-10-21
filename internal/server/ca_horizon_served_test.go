@@ -326,6 +326,77 @@ func TestServedCAHorizonFlagsLeafValidityCompression(t *testing.T) {
 	}
 }
 
+// A24: the compression check looks back. A leaf already clamped to its
+// intermediate's expiry is counted in the alert and listed on the served
+// authority; a leaf that received its full validity is not.
+func TestServedCAHorizonReportsLeavesAlreadyTruncated(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.LifecycleLeafValidity = 90 * 24 * time.Hour
+	})
+	ctx := t.Context()
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read")
+
+	caNotAfter := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	ca := seedCAAuthority(t, ctx, h.store, h.tenant, "acme issuing I2", "intermediate", "ca-int-02", caNotAfter)
+	seedLeaf := func(serial string, notBefore, notAfter time.Time) string {
+		t.Helper()
+		cert, err := h.store.UpsertCertificate(ctx, store.Certificate{
+			TenantID: h.tenant, CAID: ca.ID, Subject: "CN=" + serial + ".leaf.test", SANs: []string{serial + ".leaf.test"},
+			Issuer: "CN=acme issuing I2", Serial: serial, Fingerprint: crypto.SHA256Hex([]byte("leaf-" + serial)),
+			KeyAlgorithm: "ecdsa-p256", NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued", Status: "active",
+			CertificateDER: []byte("leaf-" + serial),
+		})
+		if err != nil {
+			t.Fatalf("seed leaf %s: %v", serial, err)
+		}
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			return h.store.RecordIssuedCertTx(ctx, tx, h.tenant, ca.ID, serial, notBefore)
+		}); err != nil {
+			t.Fatalf("record issued serial %s: %v", serial, err)
+		}
+		return cert.ID
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	truncatedID := seedLeaf("leaf-short", now.Add(-time.Hour), caNotAfter)
+	seedLeaf("leaf-full", now.Add(-60*24*time.Hour), now.Add(30*24*time.Hour-time.Hour)) // full 90 days, expires before the CA
+
+	alerted, err := h.srv.runCAHorizonAlertsOnce(ctx)
+	if err != nil || alerted != 1 {
+		t.Fatalf("compression sweep alerted %d (err %v), want 1", alerted, err)
+	}
+	alert := singleCAHorizonAlert(t, ctx, h.store, h.tenant)
+	if alert.Kind != notify.KindCAValidityCompression || !strings.Contains(alert.Detail, "1 already carry the parent's expiry") {
+		t.Fatalf("compression alert must count the leaf already truncated: kind=%q detail=%q", alert.Kind, alert.Detail)
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/ca/authorities", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list authorities = %d %s", status, body)
+	}
+	var listed struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Horizon struct {
+				TruncatedLeaves  int      `json:"truncated_leaves"`
+				TruncatedLeafIDs []string `json:"truncated_leaf_ids"`
+			} `json:"horizon"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range listed.Items {
+		if item.ID != ca.ID {
+			continue
+		}
+		if item.Horizon.TruncatedLeaves != 1 || len(item.Horizon.TruncatedLeafIDs) != 1 || item.Horizon.TruncatedLeafIDs[0] != truncatedID {
+			t.Fatalf("served horizon must name the one truncated leaf: %+v (want %s)", item.Horizon, truncatedID)
+		}
+		return
+	}
+	t.Fatalf("authority %s missing from the served list", ca.ID)
+}
+
 // TestServedCAHorizonStaysQuietBeyondTheWidestBand keeps the calendar from
 // becoming noise: a healthy root a decade out is known, fine, and not news.
 // A23: a root beyond the widest band announces itself once as a planning

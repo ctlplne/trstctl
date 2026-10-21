@@ -2128,6 +2128,8 @@ CAAuthorityHorizon = TypedDict(
         'months_remaining': int,
         'renew_by': str,
         'severity': str,
+        'truncated_leaf_ids': list[str],
+        'truncated_leaves': int,
         'validity_compressed': bool,
     },
     total=False,

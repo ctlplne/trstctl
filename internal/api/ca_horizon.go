@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"time"
 
 	"trstctl.com/trstctl/internal/lifecycle"
@@ -47,6 +48,12 @@ type caAuthorityHorizon struct {
 	// ExpiryUnknown reports an authority with no recorded expiry (A22): a real
 	// state at warning severity, never shown as healthy.
 	ExpiryUnknown bool `json:"expiry_unknown"`
+	// TruncatedLeaves counts active leaves already issued under this authority
+	// whose validity was clamped to its expiry (A24); TruncatedLeafIDs names the
+	// first of them by validity start so an operator can walk to the shortened
+	// certificates rather than infer them.
+	TruncatedLeaves  int      `json:"truncated_leaves"`
+	TruncatedLeafIDs []string `json:"truncated_leaf_ids"`
 }
 
 // caAuthorityResponse is a CA authority plus its computed horizon.
@@ -100,6 +107,25 @@ func (a *API) toCAAuthorityResponse(ca CAAuthority, now time.Time) caAuthorityRe
 		horizon.RenewBy = &renewBy
 	}
 	horizon.ValidityCompressed, _ = lifecycle.CompressedValidity(now, notAfter, leaf)
+	horizon.TruncatedLeafIDs = []string{}
 	out.Horizon = horizon
 	return out
+}
+
+// attachTruncatedLeaves fills the retrospective compression facts (A24) from
+// the store: leaves issued under the authority that already carry its expiry.
+func (a *API) attachTruncatedLeaves(ctx context.Context, tenantID string, resp *caAuthorityResponse) {
+	if a.store == nil || resp == nil || resp.Horizon == nil || resp.Horizon.ExpiryUnknown || resp.NotAfter == nil {
+		return
+	}
+	leaves, total, err := a.store.ListTruncatedLeavesForAuthority(ctx, tenantID, resp.ID, resp.NotAfter.UTC(), a.leafValidityReference(), 50)
+	if err != nil {
+		return
+	}
+	resp.Horizon.TruncatedLeaves = total
+	ids := make([]string, 0, len(leaves))
+	for _, l := range leaves {
+		ids = append(ids, l.CertificateID)
+	}
+	resp.Horizon.TruncatedLeafIDs = ids
 }

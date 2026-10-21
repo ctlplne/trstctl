@@ -1796,6 +1796,9 @@ type CAAuthorityHorizonAlerted struct {
 	// ExpiryUnknown marks the one-time alert for an authority with no recorded
 	// or derivable expiry (A22): not_after and renew_by are then zero.
 	ExpiryUnknown bool `json:"expiry_unknown,omitempty"`
+	// TruncatedLeaves counts active leaves already clamped to the authority's
+	// expiry when a compression alert was decided (A24).
+	TruncatedLeaves int `json:"truncated_leaves,omitempty"`
 }
 
 func ValidateCAAuthorityHorizonAlerted(p CAAuthorityHorizonAlerted) error {
@@ -1803,7 +1806,7 @@ func ValidateCAAuthorityHorizonAlerted(p CAAuthorityHorizonAlerted) error {
 		return fmt.Errorf("projections: CA horizon authority id is invalid: %w", err)
 	}
 	if strings.TrimSpace(p.CommonName) == "" || (p.Kind != "root" && p.Kind != "intermediate") ||
-		p.DependentCertificates < 0 || strings.TrimSpace(p.AlertDetail) == "" {
+		p.DependentCertificates < 0 || p.TruncatedLeaves < 0 || strings.TrimSpace(p.AlertDetail) == "" {
 		return fmt.Errorf("projections: CA horizon event has incomplete authority or alert facts")
 	}
 	if p.ExpiryUnknown {

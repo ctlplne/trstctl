@@ -92,13 +92,22 @@ func (m *Manager) AlertCAHorizon(ctx context.Context, tenantID string) (int, err
 
 		kind := notify.KindCAHorizon
 		detail := caHorizonDetail(ca.Kind, band, MonthsRemaining(now, notAfter), dependents)
+		truncated := 0
 		if compressed {
 			// The compressing case is a different problem with a different fix, so
 			// it gets its own kind rather than a longer sentence on the same one:
 			// renewing the parent restores full leaf validity, and until it is
 			// renewed every new leaf under it is quietly short.
 			kind = notify.KindCAValidityCompression
-			detail = caCompressionDetail(ca.Kind, leafValidity, actual, dependents)
+			// A24: the retrospective half — leaves already issued short under
+			// this parent, so the alert says how much of the estate is affected
+			// today, not only that new leaves will be.
+			if _, total, err := m.store.ListTruncatedLeavesForAuthority(ctx, tenantID, ca.ID, notAfter, leafValidity, 1); err != nil {
+				return alerted, err
+			} else {
+				truncated = total
+			}
+			detail = caCompressionDetail(ca.Kind, leafValidity, actual, dependents, truncated)
 		}
 
 		horizonMonths := band
@@ -121,6 +130,7 @@ func (m *Manager) AlertCAHorizon(ctx context.Context, tenantID string) (int, err
 			MonthsRemaining: MonthsRemaining(now, notAfter), RenewBy: renewBy,
 			ValidityCompressed: compressed, DependentCertificates: dependents,
 			AlertKind: alert.Kind, AlertDetail: alert.Detail, Severity: alert.Severity,
+			TruncatedLeaves: truncated,
 		}); err != nil {
 			return alerted, err
 		}
@@ -168,11 +178,11 @@ func caNotAfterFromPEM(pem string) (time.Time, bool) {
 	return info.NotAfter.UTC(), true
 }
 
-func caCompressionDetail(kind string, want, actual time.Duration, dependents int) string {
+func caCompressionDetail(kind string, want, actual time.Duration, dependents, truncated int) string {
 	return fmt.Sprintf(
 		"%s CA has less life left (%d day(s)) than the %d-day validity its leaves are issued with, so every new leaf under it is being truncated to the parent's expiry; "+
-			"%d active certificate(s) chain to it. Issuance keeps succeeding — the certificates just get shorter — so renew or re-key the authority to restore full leaf validity",
-		caKindLabel(kind), int(actual.Hours()/24), int(want.Hours()/24), dependents)
+			"%d active certificate(s) chain to it and %d already carry the parent's expiry. Issuance keeps succeeding — the certificates just get shorter — so renew or re-key the authority to restore full leaf validity",
+		caKindLabel(kind), int(actual.Hours()/24), int(want.Hours()/24), dependents, truncated)
 }
 
 func caKindLabel(kind string) string {

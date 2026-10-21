@@ -130,3 +130,64 @@ func (s *Store) CountActiveLeavesForAuthority(ctx context.Context, tenantID, aut
 	})
 	return count, err
 }
+
+// TruncatedLeaf is an already-issued leaf whose validity was clamped to its
+// authority's expiry (A24): it expires with the authority and received less
+// than the reference leaf validity.
+type TruncatedLeaf struct {
+	CertificateID string
+	Serial        string
+	Subject       string
+	NotBefore     time.Time
+	NotAfter      time.Time
+}
+
+// ListTruncatedLeavesForAuthority is the retrospective half of the validity
+// compression check: every active leaf issued under the authority whose
+// not_after equals the authority's (the clamp's signature, to the second) and
+// whose validity is shorter than the reference. It returns the total and the
+// first `limit` leaves by expiry, so a run of thousands still answers.
+func (s *Store) ListTruncatedLeavesForAuthority(ctx context.Context, tenantID, authorityID string, authorityNotAfter time.Time, leafValidity time.Duration, limit int) ([]TruncatedLeaf, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var out []TruncatedLeaf
+	total := 0
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx,
+			`SELECT COUNT(*)
+			   FROM ca_issued_certs i
+			   JOIN certificates c ON c.tenant_id = i.tenant_id AND c.serial = i.serial
+			  WHERE i.tenant_id = $1 AND i.ca_id = $2 AND i.revoked_at IS NULL
+			    AND c.status = 'active' AND c.not_before IS NOT NULL AND c.not_after IS NOT NULL
+			    AND abs(extract(epoch FROM (c.not_after - $3::timestamptz))) < 1
+			    AND (c.not_after - c.not_before) < $4::interval`,
+			tenantID, authorityID, authorityNotAfter.UTC(), leafValidity).Scan(&total); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx,
+			`SELECT c.id::text, c.serial, c.subject, c.not_before, c.not_after
+			   FROM ca_issued_certs i
+			   JOIN certificates c ON c.tenant_id = i.tenant_id AND c.serial = i.serial
+			  WHERE i.tenant_id = $1 AND i.ca_id = $2 AND i.revoked_at IS NULL
+			    AND c.status = 'active' AND c.not_before IS NOT NULL AND c.not_after IS NOT NULL
+			    AND abs(extract(epoch FROM (c.not_after - $3::timestamptz))) < 1
+			    AND (c.not_after - c.not_before) < $4::interval
+			  ORDER BY c.not_before, c.id
+			  LIMIT $5`,
+			tenantID, authorityID, authorityNotAfter.UTC(), leafValidity, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var l TruncatedLeaf
+			if err := rows.Scan(&l.CertificateID, &l.Serial, &l.Subject, &l.NotBefore, &l.NotAfter); err != nil {
+				return err
+			}
+			out = append(out, l)
+		}
+		return rows.Err()
+	})
+	return out, total, err
+}

@@ -6349,6 +6349,16 @@
             ],
             "type": "string"
           },
+          "truncated_leaf_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "truncated_leaves": {
+            "type": "integer"
+          },
           "validity_compressed": {
             "type": "boolean"
           }

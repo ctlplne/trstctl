@@ -500,7 +500,9 @@ func (a *API) listCAAuthorities(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	out := make([]caAuthorityResponse, 0, len(items))
 	for _, item := range items {
-		out = append(out, a.toCAAuthorityResponse(item, now))
+		resp := a.toCAAuthorityResponse(item, now)
+		a.attachTruncatedLeaves(r.Context(), tenantID, &resp)
+		out = append(out, resp)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: out})
 }

@@ -9102,6 +9102,8 @@ export interface components {
             renew_by?: string;
             /** @enum {string} */
             severity: "low" | "informational" | "warning" | "critical";
+            truncated_leaf_ids?: string[];
+            truncated_leaves?: number;
             validity_compressed: boolean;
         };
         CAAuthorityList: {

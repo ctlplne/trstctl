@@ -1544,6 +1544,8 @@ export interface CAAuthorityHorizon {
   months_remaining: number;
   renew_by?: string;
   severity: "low" | "informational" | "warning" | "critical";
+  truncated_leaf_ids?: string[];
+  truncated_leaves?: number;
   validity_compressed: boolean;
 }
 

@@ -517,6 +517,6 @@ func aiQueryAnsweredV2PrivacyPayloadShape() PrivacyPayloadShape {
 }
 
 func caHorizonAlertedV2PrivacyPayloadShape() PrivacyPayloadShape {
-	return catalogPrivacyPayloadShape(`{"ca_authority_id":"","common_name":"","kind":"","not_after":"","horizon_months":1,"months_remaining":1,"renew_by":"","validity_compressed":true,"dependent_certificates":1,"alert_kind":"","alert_detail":"","severity":"","expiry_unknown":true}`,
-		catalogPrivacyShapeOptions{Optional: []string{"/expiry_unknown"}})
+	return catalogPrivacyPayloadShape(`{"ca_authority_id":"","common_name":"","kind":"","not_after":"","horizon_months":1,"months_remaining":1,"renew_by":"","validity_compressed":true,"dependent_certificates":1,"alert_kind":"","alert_detail":"","severity":"","expiry_unknown":true,"truncated_leaves":1}`,
+		catalogPrivacyShapeOptions{Optional: []string{"/expiry_unknown", "/truncated_leaves"}})
 }

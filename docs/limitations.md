@@ -1592,11 +1592,15 @@ than a blank. An unknown expiry is a real state, not a passing one. An authority
 beyond the widest 36-month band announces itself once as a planning entry
 (severity low, band 37, "on the expiry calendar") and is then quiet until it
 crosses into a band; the stamp orders before every real band, so each later
-tightening still re-fires. What is **not** served: the compression check is
-forward-looking (it says new leaves are being truncated); it does not
-retrospectively scan already-issued leaves to report which ones were shortened.
-Nothing here schedules or performs the renewal — it tells you when to start, and
-the re-key and rotation routes remain the operator's action.
+tightening still re-fires. The compression check also looks back: every active
+leaf issued under the authority whose expiry equals the authority's (the clamp's
+signature) and whose validity is shorter than the reference is counted, the
+compression alert says how many already carry the parent's expiry, and the
+served authority lists `horizon.truncated_leaves` with the first fifty
+`truncated_leaf_ids` by validity start, so the shortened certificates can be
+walked to rather than inferred. What is **not** served: nothing here schedules
+or performs the renewal — it tells you when to start, and the re-key and
+rotation routes remain the operator's action.
 
 ### Agent roles: a vantage in the certificate
 
