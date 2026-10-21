@@ -131,13 +131,24 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 		// certificate named by the successor's issuance ReplacesID edge. A
 		// previous successful rollback is a common reason for that difference.
 		// Restrict the predecessor to this exact agent, target and identity.
-		err = tx.QueryRow(ctx, `
+		// The predecessor is the last certificate a host agent proved serving
+		// on this target for the same identity before the successor job. It is
+		// restricted to this exact agent first; when this agent has no earlier
+		// delivery (a re-enrolled agent, or a first deploy over a pre-trstctl
+		// install), the latest delivery by any host agent is used, because the
+		// agent adopts the pair it found installed before its first deploy
+		// (A45) and refuses the restore itself if it did not retain it.
+		for _, agentPredicate := range []string{
+			"AND prior_job.claimed_by_agent_id = $4::uuid",
+			"AND prior_job.claimed_by_agent_id IS NOT NULL AND $4::uuid IS NOT NULL",
+		} {
+			err = tx.QueryRow(ctx, `
 			SELECT receipt.fingerprint
 			  FROM connector_delivery_receipts receipt
 			  JOIN outbox prior_job ON prior_job.tenant_id = $1 AND prior_job.id = receipt.outbox_id
 			  JOIN certificates cert ON cert.tenant_id = $1 AND cert.fingerprint = receipt.fingerprint
 			 WHERE receipt.tenant_id = $1 AND receipt.identity_id::text = $3
-			   AND prior_job.claimed_by_agent_id = $4::uuid
+			   `+agentPredicate+`
 			   AND prior_job.required_agent_role = 'host'
 			   AND prior_job.status = 'delivered'
 			   AND (prior_job.delivered_at < $5
@@ -154,6 +165,10 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 			           AND failed.idempotency_key = receipt.idempotency_key || ':verified')))
 			 ORDER BY prior_job.delivered_at DESC, prior_job.id DESC
 			 LIMIT 1`, tenantID, targetID, out.IdentityID, out.AgentID, deliveredAt, currentJobID).Scan(&out.PredecessorFingerprint)
+			if !errors.Is(err, pgx.ErrNoRows) {
+				break
+			}
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			err = nil
 		}

@@ -400,6 +400,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	}
 
 	var stats connector.Stats
+	// A45: before this agent's first deploy to a host target, keep what the
+	// host already serves so a rollback can restore it. Read only; the bytes
+	// are adopted into the ledger after the deploy and its record succeed.
+	adopted := readAdoptablePredecessor(hostProfile, hostRollback, hostJob, intent)
+	defer adopted.wipe()
+
 	var execErr error
 	if pluginJob {
 		// The module runs under the operator's grant, on this machine, inside
@@ -439,6 +445,15 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 			// to durably bind the rollback state before verification is reported.
 			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
 			return false
+		}
+		if adopted.ok {
+			if err := hostRollback.AdoptPredecessor(intent.Connector, intent.TargetID, adopted.fingerprint,
+				adopted.certPEM, adopted.keyPEM); err != nil {
+				// The deploy landed and its own record is durable; an adoption
+				// that fails loses only the pre-trstctl predecessor. Log it rather
+				// than fail a deploy that happened.
+				log.Printf("trstctl-agent: job %d: installed predecessor could not be adopted into the rollback ledger: %v", job.JobID, err)
+			}
 		}
 	}
 	// D2: the deploy applied. Whether the listener is SERVING it is a different
@@ -707,7 +722,7 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 	}
 	defer destroy()
 
-	stats, execErr := Rollback(ctx, client, intent, material)
+	stats, result, execErr := RollbackWithResult(ctx, client, intent, material)
 	switch {
 	case errors.Is(execErr, connector.ErrNoPredecessorInstalled):
 		// The distinction an operator acts on: the object is not there, so no
@@ -723,6 +738,13 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 	if stats.Denied > 0 {
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedCapability)
 		return false
+	}
+	if result.LegacyObject {
+		// A45: the re-bind went to the object from before fingerprint naming.
+		// Say so in the signed report; the receipt must not read as a verified
+		// predecessor restore.
+		report(ctx, ch, job, OutcomeExecuted, transport.RollbackExecutedLegacyObject)
+		return true
 	}
 	report(ctx, ch, job, OutcomeExecuted, "")
 	return true

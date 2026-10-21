@@ -727,6 +727,51 @@ func (s *HostRollbackStore) Restore(connectorName, targetID, fingerprint string,
 	return s.save(state)
 }
 
+// HasState reports whether this agent retains any snapshot for the target.
+func (s *HostRollbackStore) HasState(connectorName, targetID string) (bool, error) {
+	connectorName, targetID, _, err := normalizeHostRollbackIdentity(connectorName, targetID, "unused")
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Lstat(s.statePath(connectorName, targetID))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// AdoptPredecessor records the pair that was installed on the host before this
+// agent's first deploy as the retained predecessor (A45), so a rollback can
+// restore what the operator had, not only what this agent deployed. It never
+// displaces a predecessor this agent already retains and never adopts the
+// active fingerprint itself.
+func (s *HostRollbackStore) AdoptPredecessor(connectorName, targetID, fingerprint string, certPEM, keyPEM []byte) error {
+	connectorName, targetID, fingerprint, err := normalizeHostRollbackIdentity(connectorName, targetID, fingerprint)
+	if err != nil {
+		return err
+	}
+	if len(certPEM) == 0 || len(keyPEM) == 0 {
+		return errors.New("relay: an adopted predecessor requires certificate and private-key bytes")
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	state, err := s.load(connectorName, targetID)
+	if err != nil {
+		return err
+	}
+	defer wipeHostRollbackState(state)
+	if state.Previous != nil || (state.Active != nil && state.Active.Fingerprint == fingerprint) {
+		return nil
+	}
+	state.Previous = &hostRollbackSnapshot{
+		Fingerprint: fingerprint,
+		CertPEM:     append([]byte(nil), certPEM...),
+		KeyPEM:      append([]byte(nil), keyPEM...),
+	}
+	return s.save(state)
+}
+
 // PurgeFingerprint wipes every ledger snapshot that carries fingerprint (A49):
 // the active slot, the retained predecessor and any PQC or re-protection pin.
 // A rollback can then never reinstall the purged material. When the active

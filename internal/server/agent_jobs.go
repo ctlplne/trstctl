@@ -621,7 +621,9 @@ func (a *agentService) recordExecutedReportObservations(ctx context.Context, inf
 	// is what the control plane itself queued — an agent cannot name a
 	// different target in its result and have that recorded as fact.
 	if destination == "connector.rollback" && a.recordRollback != nil {
-		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, req.Attempt, idemKey, req.Outcome, "")
+		// An executed report may carry the closed legacy-object phrase (A45);
+		// verified reports carry their transcript, which the receipt ignores.
+		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, req.Attempt, idemKey, req.Outcome, strings.TrimSpace(req.Detail))
 	}
 }
 

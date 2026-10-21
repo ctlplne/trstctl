@@ -246,6 +246,9 @@ type RollbackIntent struct {
 	// deploy used. Empty still means "restored but not listener-verified".
 	VerifyAddress    string `json:"verify_address,omitempty"`
 	VerifyServerName string `json:"verify_server_name,omitempty"`
+	// AllowLegacyObject lets an appliance re-bind fall back to the object a
+	// pre-fingerprint deploy installed under the target-derived name (A45).
+	AllowLegacyObject bool `json:"allow_legacy_object,omitempty"`
 	// Reason is operator context for the transcript. It never reaches the
 	// appliance.
 	Reason          string `json:"reason,omitempty"`
@@ -264,38 +267,45 @@ type RollbackIntent struct {
 // key. A relay still has to log in to re-point a listener; it just has nothing
 // to upload once it is there.
 func Rollback(ctx context.Context, client *http.Client, intent RollbackIntent, material Material) (connector.Stats, error) {
+	stats, _, err := RollbackWithResult(ctx, client, intent, material)
+	return stats, err
+}
+
+// RollbackWithResult is Rollback plus which object the re-bind used.
+func RollbackWithResult(ctx context.Context, client *http.Client, intent RollbackIntent, material Material) (connector.Stats, connector.RollbackResult, error) {
 	if !Executes(intent.Connector) {
-		return connector.Stats{}, fmt.Errorf("relay: connector %q is not relay-executable", intent.Connector)
+		return connector.Stats{}, connector.RollbackResult{}, fmt.Errorf("relay: connector %q is not relay-executable", intent.Connector)
 	}
 	if !connector.CanRollback(intent.Connector) {
 		// Refused rather than attempted. A connector whose API cannot address an
 		// installed object separately from uploading one has no re-bind to
 		// perform, and pretending otherwise would report a rollback that did
 		// nothing while a bad certificate kept serving traffic.
-		return connector.Stats{}, connector.ErrRollbackUnsupported
+		return connector.Stats{}, connector.RollbackResult{}, connector.ErrRollbackUnsupported
 	}
 	if strings.TrimSpace(intent.PredecessorFingerprint) == "" {
-		return connector.Stats{}, connector.ErrNoPredecessorInstalled
+		return connector.Stats{}, connector.RollbackResult{}, connector.ErrNoPredecessorInstalled
 	}
 
 	var target TargetConfig
 	if len(intent.TargetConfig) > 0 {
 		if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
-			return connector.Stats{}, fmt.Errorf("relay: decode target config: %w", err)
+			return connector.Stats{}, connector.RollbackResult{}, fmt.Errorf("relay: decode target config: %w", err)
 		}
 	}
 	if strings.TrimSpace(target.Endpoint) == "" {
-		return connector.Stats{}, errors.New("relay: target config carries no endpoint")
+		return connector.Stats{}, connector.RollbackResult{}, errors.New("relay: target config carries no endpoint")
 	}
 
 	built, err := buildRelayConnector(intent.Connector, target, material)
 	if err != nil {
-		return connector.Stats{}, err
+		return connector.Stats{}, connector.RollbackResult{}, err
 	}
-	return connector.RunRollback(ctx, built, connector.NewHTTPOps(client), connector.Rollback{
+	return connector.RunRollbackWithResult(ctx, built, connector.NewHTTPOps(client), connector.Rollback{
 		Target:                 intent.Target,
 		PredecessorFingerprint: intent.PredecessorFingerprint,
 		Reason:                 intent.Reason,
+		AllowLegacyObject:      intent.AllowLegacyObject,
 	})
 }
 

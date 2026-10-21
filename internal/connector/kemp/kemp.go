@@ -189,3 +189,19 @@ func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td conne
 	}
 	return nil
 }
+
+// RollbackLegacy re-binds the virtual service to the certificate a
+// pre-fingerprint deploy uploaded under the target-derived name (A45).
+func (c *Connector) RollbackLegacy(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if strings.TrimSpace(rb.Target) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	certName := connector.LegacyObjectName(rb.Target + "-trstctl")
+	if err := c.mustExist(ctx, sb, "/access/certificates/"+url.PathEscape(certName)); err != nil {
+		return fmt.Errorf("kemp: legacy certificate %q: %w", certName, err)
+	}
+	if err := c.bind(ctx, sb, rb.Target, certName); err != nil {
+		return fmt.Errorf("kemp: re-bind virtual service %q to legacy certificate: %w", rb.Target, err)
+	}
+	return nil
+}

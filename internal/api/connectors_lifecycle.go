@@ -905,6 +905,10 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 			IdentityID: strings.TrimSpace(req.IdentityID), TargetConfig: target.Config,
 			PredecessorFingerprint: predecessor.Fingerprint, PredecessorSerial: predecessor.Serial,
 			SuccessorFingerprint: fingerprint, RequiredAgentID: requiredAgentID, Reason: reason,
+			// A45: an appliance predecessor delivered before fingerprint naming
+			// sits under the target-derived name; the relay tries the
+			// fingerprint-named object first and says which one it re-bound to.
+			AllowLegacyObject: connector.CanRollback(target.Type),
 		}, store.ConnectorDeliveryReceipt{
 			IdentityID: identityID, Target: target.Name, Reason: statusReason, Detail: reason,
 			RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,

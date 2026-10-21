@@ -61,6 +61,15 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string
 		detail += " The same agent re-handshook the listener and verified the predecessor is serving."
 	case transport.JobOutcomeExecuted:
 		detail += " No listener verification address was configured, so this receipt does not claim what is serving."
+		if reason == transport.RollbackExecutedLegacyObject {
+			// A45: no fingerprint-named predecessor object existed; the relay
+			// re-bound to the object installed under the target-derived name
+			// from before fingerprint naming. Its contents were not re-read.
+			receiptReason = "rolled_back_to_legacy_object"
+			detail = "agent " + agentName + " found no fingerprint-named predecessor object and re-bound the target to the " +
+				"object installed under its target-derived name from before fingerprint naming (expected to hold serial " +
+				req.PredecessorSerial + "). That object's contents were not re-read: verify the listener independently."
+		}
 	case transport.JobOutcomeVerifyFailed:
 		status = servedstatus.ConnectorRollbackFailed
 		receiptReason = "rollback_restore_reverify_failed"

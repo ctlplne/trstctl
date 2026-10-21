@@ -212,6 +212,12 @@ const (
 	RollbackFailedAtTarget        = "connector rollback failed against the target"
 )
 
+// RollbackExecutedLegacyObject is the executed-report detail a relay sends when
+// no fingerprint-named predecessor existed and the re-bind went to the object
+// installed under the target-derived name from before fingerprint naming
+// (A45). Its contents were not re-read; the listener must be verified.
+const RollbackExecutedLegacyObject = "re-bound to the legacy target-named object; its contents were not re-read"
+
 // Takedown refusals and failures (A43) follow the same contact discipline.
 const (
 	TakedownRefusedBadPayload    = "job payload is not a takedown intent"

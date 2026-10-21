@@ -48,6 +48,9 @@ type ConnectorRollbackRequest struct {
 	TargetConfig json.RawMessage `json:"target_config,omitempty"`
 	// PredecessorFingerprint names the installed object to bind back to.
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
+	// AllowLegacyObject lets an appliance re-bind fall back to the object a
+	// pre-fingerprint deploy installed under the target-derived name (A45).
+	AllowLegacyObject bool `json:"allow_legacy_object,omitempty"`
 	// PredecessorSerial is carried for the operator-facing receipt only. The
 	// relay binds by fingerprint; the serial is what a human recognizes.
 	PredecessorSerial string `json:"predecessor_serial,omitempty"`
@@ -92,6 +95,7 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 		IdentityID:             strings.TrimSpace(in.IdentityID),
 		TargetConfig:           in.TargetConfig,
 		PredecessorFingerprint: strings.TrimSpace(in.PredecessorFingerprint),
+		AllowLegacyObject:      in.AllowLegacyObject,
 		PredecessorSerial:      strings.TrimSpace(in.PredecessorSerial),
 		SuccessorFingerprint:   strings.TrimSpace(in.SuccessorFingerprint),
 		Reason:                 strings.TrimSpace(in.Reason),

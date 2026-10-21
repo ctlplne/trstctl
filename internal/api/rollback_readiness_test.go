@@ -26,7 +26,7 @@ func TestRollbackReadinessMirrorsTheRollbackRouteRefusals(t *testing.T) {
 		"paloalto without commit_admin":                 {rollbackReadinessInputs{Family: "paloalto", Rebind: true, Config: []byte(`{"ssl_tls_profile":"web"}`)}, "re-bind", false, "commit_admin"},
 		"f5 with no bound identity":                     {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`)}, "re-bind", false, "no identity is bound"},
 		"f5 bound identity without predecessor":         {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1"}, "re-bind", false, "no predecessor certificate"},
-		"f5 predecessor never deployed through trstctl": {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1", PredecessorKnown: true, PredecessorFingerprint: "ee", PredecessorSerial: "7"}, "re-bind", false, "not deployed to this target through trstctl"},
+		"f5 predecessor never deployed through trstctl": {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1", PredecessorKnown: true, PredecessorFingerprint: "ee", PredecessorSerial: "7"}, "re-bind", false, "never delivered"},
 		"f5 ready": {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1", PredecessorKnown: true, PredecessorFingerprint: "ee", PredecessorSerial: "7", PredecessorDeliveredHere: true}, "re-bind", true, ""},
 	} {
 		t.Run(name, func(t *testing.T) {

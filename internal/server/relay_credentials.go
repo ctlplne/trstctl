@@ -520,6 +520,7 @@ type RelayRollbackIntent struct {
 	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
 	// PredecessorFingerprint names the installed object to bind back to.
 	PredecessorFingerprint string   `json:"predecessor_fingerprint"`
+	AllowLegacyObject      bool     `json:"allow_legacy_object,omitempty"`
 	SuccessorFingerprint   string   `json:"successor_fingerprint,omitempty"`
 	Reason                 string   `json:"reason,omitempty"`
 	CredentialRefs         []string `json:"credential_refs,omitempty"`

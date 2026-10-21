@@ -355,3 +355,22 @@ func (c *Connector) deleteObject(ctx context.Context, sb connector.Sandbox, path
 	}
 	return true, nil
 }
+
+// RollbackLegacy re-binds the profile to the objects a pre-fingerprint deploy
+// installed under the target-derived name (A45).
+func (c *Connector) RollbackLegacy(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	base := connector.LegacyObjectName(c.name)
+	certName := base + ".crt"
+	keyName := base + ".key"
+	if err := c.mustExist(ctx, sb, "/mgmt/tm/sys/crypto/cert/"+url.PathEscape(certName)); err != nil {
+		return fmt.Errorf("f5: legacy certificate %q: %w", certName, err)
+	}
+	if err := c.mustExist(ctx, sb, "/mgmt/tm/sys/crypto/key/"+url.PathEscape(keyName)); err != nil {
+		return fmt.Errorf("f5: legacy key %q: %w", keyName, err)
+	}
+	if err := c.bindProfile(ctx, sb, base, certName, keyName); err != nil {
+		return fmt.Errorf("f5: re-bind profile %q to legacy object: %w", c.profile, err)
+	}
+	_ = rb
+	return nil
+}

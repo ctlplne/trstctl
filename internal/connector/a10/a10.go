@@ -273,3 +273,29 @@ func (c *Connector) Takedown(ctx context.Context, sb connector.Sandbox, td conne
 	}
 	return nil
 }
+
+// RollbackLegacy re-points the client-ssl template at the files a
+// pre-fingerprint deploy uploaded under the target-derived name (A45).
+func (c *Connector) RollbackLegacy(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if strings.TrimSpace(rb.Target) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return fmt.Errorf("a10: %w", err)
+	}
+	defer secret.Wipe(token)
+	base := connector.LegacyObjectName(rb.Target)
+	certFile := base + ".crt"
+	keyFile := base + ".key"
+	if err := c.mustExistFile(ctx, sb, token, "ssl-cert", certFile); err != nil {
+		return fmt.Errorf("a10: legacy certificate %q: %w", certFile, err)
+	}
+	if err := c.mustExistFile(ctx, sb, token, "ssl-key", keyFile); err != nil {
+		return fmt.Errorf("a10: legacy key %q: %w", keyFile, err)
+	}
+	if err := c.bind(ctx, sb, token, rb.Target, certFile, keyFile); err != nil {
+		return fmt.Errorf("a10: re-bind client-ssl template %q to legacy files: %w", rb.Target, err)
+	}
+	return nil
+}

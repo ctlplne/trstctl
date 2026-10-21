@@ -47,6 +47,34 @@ type Rollback struct {
 	// Reason is operator-facing context recorded with the transcript. It never
 	// reaches the appliance.
 	Reason string
+	// AllowLegacyObject lets a re-bind fall back to the object a pre-fingerprint
+	// deploy installed under the target-derived name (A45) when no
+	// fingerprint-named predecessor object exists. The legacy object's contents
+	// are not re-read, so the caller must report that the re-bind was to the
+	// legacy object and verify the listener independently.
+	AllowLegacyObject bool
+}
+
+// LegacyObjectName is the name a deploy installed under before objects carried
+// a fingerprint: the base itself. It is the same derivation with an empty
+// fingerprint, so the two can never disagree.
+func LegacyObjectName(base string) string { return DeployedObjectName(base, "") }
+
+// LegacyRollbacker is the optional capability to re-bind to the legacy,
+// target-named object (A45). Only families whose Rollback addresses an object
+// by name implement it; the census for it is the rollback census.
+type LegacyRollbacker interface {
+	Rollbacker
+	// RollbackLegacy re-binds the target to the object installed under the
+	// target-derived name. It must fail when that object is not present.
+	RollbackLegacy(ctx context.Context, sb Sandbox, rb Rollback) error
+}
+
+// RollbackResult says which object a re-bind used.
+type RollbackResult struct {
+	// LegacyObject reports that no fingerprint-named predecessor existed and
+	// the re-bind went to the legacy target-named object instead.
+	LegacyObject bool
 }
 
 // Rollbacker is the optional re-bind capability of a Connector.
@@ -217,13 +245,31 @@ func CanRollback(name string) bool {
 // nil. The difference is the whole point: an operator staring at a failing
 // listener needs to know that nothing happened.
 func RunRollback(ctx context.Context, c Connector, ops Ops, rb Rollback) (Stats, error) {
+	stats, _, err := RunRollbackWithResult(ctx, c, ops, rb)
+	return stats, err
+}
+
+// RunRollbackWithResult is RunRollback plus which object the re-bind used. The
+// fingerprint-named predecessor is always tried first; the legacy object only
+// when rb.AllowLegacyObject is set and the family can address it.
+func RunRollbackWithResult(ctx context.Context, c Connector, ops Ops, rb Rollback) (Stats, RollbackResult, error) {
 	r, ok := c.(Rollbacker)
 	if !ok {
-		return Stats{}, ErrRollbackUnsupported
+		return Stats{}, RollbackResult{}, ErrRollbackUnsupported
 	}
 	sb := &sandbox{ctx: ctx, grant: c.Capabilities(), ops: ops}
 	err := r.Rollback(ctx, sb, rb)
-	return Stats{Denied: sb.denied}, err
+	if !errors.Is(err, ErrNoPredecessorInstalled) || !rb.AllowLegacyObject {
+		return Stats{Denied: sb.denied}, RollbackResult{}, err
+	}
+	legacy, ok := c.(LegacyRollbacker)
+	if !ok {
+		return Stats{Denied: sb.denied}, RollbackResult{}, err
+	}
+	if legacyErr := legacy.RollbackLegacy(ctx, sb, rb); legacyErr != nil {
+		return Stats{Denied: sb.denied}, RollbackResult{}, legacyErr
+	}
+	return Stats{Denied: sb.denied}, RollbackResult{LegacyObject: true}, nil
 }
 
 // FingerprintFromObjectName recovers the fingerprint prefix an object name

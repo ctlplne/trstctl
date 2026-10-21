@@ -2154,11 +2154,18 @@ second predecessor is never retained, so this is a rollback buffer rather than
 a key archive. Losing that directory means the host predecessor is gone and the
 job is refused; the control plane cannot reconstruct it.
 
-**Two things to know before relying on it.** First, an existing install has no
-rollable target on day one: every certificate deployed before this change was
-installed under the old target-derived name, which no rollback looks for. A
-target becomes rollable once two deployments have landed under the new naming —
-one to be the predecessor, one to be the current. The single-target read
+**Two things to know before relying on it.** First, an install that predates
+fingerprint naming holds its last certificate under the old target-derived
+object name. An appliance rollback tries the fingerprint-named predecessor
+first and, when none exists, re-binds to that legacy object (f5, kemp,
+netscaler, a10); the receipt then reads `rolled_back_to_legacy_object` and says
+the object's contents were not re-read, so verify the listener independently.
+A host agent adopts the certificate and key it finds installed before its first
+deploy to a target as its retained predecessor, and the control plane names as
+predecessor the latest delivery to that target by any host agent, so a
+re-enrolled agent can restore what the host served; an agent that did not
+retain the pair still refuses the restore. A target with no earlier trstctl
+delivery at all becomes rollable after its second deployment. The single-target read
 (`GET /api/v1/connectors/targets/{id}`, the Connectors console's destination
 detail) now says so up front: `rollback_readiness` applies the same refusals
 the rollback route applies — no executable route for the family, a fortigate or

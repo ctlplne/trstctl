@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1586 annotated sites across 26 rules. Each row is
+1587 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (327 sites)
+### G101 — CWE-798 Use of hardcoded credentials (328 sites)
 
 | Location | Reason |
 |---|---|
@@ -91,6 +91,7 @@ not this file.
 | `internal/agent/discovery/kubernetes.go:89` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:30` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
+| `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:70` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:93` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
@@ -1203,7 +1204,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
 | `internal/agent/relay/hostexec.go:137` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
-| `internal/agent/relay/hostrollback.go:870` | validated agent-local state directory (CWE-22) |
+| `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:300` | test-owned state root (CWE-22) |
@@ -1729,7 +1730,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:163` | both paths are agent-owned fixed state paths |
 | `internal/agent/relay/host_renew_pending.go:223` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:254` | derived agent-owned state path |
-| `internal/agent/relay/hostrollback.go:894` | both paths are inside the validated agent-local state directory (CWE-22) |
+| `internal/agent/relay/hostrollback.go:939` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sshkrl/install.go:245` | staged path is created in the bound target directory by CreateTemp |
 | `internal/agent/sshkrl/install.go:246` | target is an absolute operator path bound to sshd's effective RevokedKeys path |
 | `internal/agent/sshkrl/install.go:265` | path is a derived predecessor name inside the checked private rollback directory |

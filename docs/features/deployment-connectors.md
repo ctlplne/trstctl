@@ -349,6 +349,13 @@ silently allocate a different host action.
 If the host is unreachable, inspect Jobs and queues and restore the exact
 agent/profile path. After a terminal non-success, review a new attempt; the
 old idempotency key must not be reused for a changed target or reason.
+**Predecessors from before fingerprint naming.** An appliance rollback tries
+the fingerprint-named predecessor object first and, when none exists, re-binds
+to the object the earlier deploy installed under the target-derived name; the
+receipt says so (`rolled_back_to_legacy_object`) and does not claim the
+object's contents were re-read. A host agent adopts the pair it finds installed
+before its first deploy to a target as its retained predecessor.
+
 **Take down a rogue object on an appliance.** For f5, kemp, netscaler and a10,
 `connector.takedown` lets a network relay delete the fingerprint-named
 certificate and key objects a deploy installed, under the same credential
