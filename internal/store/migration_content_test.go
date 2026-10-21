@@ -524,6 +524,58 @@ func testMigration0254PAMRevocationFailureStartsUnknown(t *testing.T) {
 		})
 }
 
+// Migration 0293 adds the provenance column to the upstream ARI projection.
+// Every row that exists before it was bound by an authenticated issuer, the
+// only binding that existed, so the default must say exactly that and nothing
+// else about the row may change.
+func TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 293)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	const tenant = "11111111-1111-4111-8111-111111111111"
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id',$1,true)`, tenant); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO acme_upstream_ari
+		(tenant_id, certificate_id, authority_id, certificate_id_ari, fingerprint, status,
+		 window_start, window_end, updated_at, fetched_at, next_poll_at, failure_count, error_class, event_sequence)
+		VALUES ($1,'29300000-0000-4000-8000-000000000001','public-acme','AQID.BAUG','pre-293','ready',
+		 '2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-08-31T00:00:00Z','2026-08-31T00:00:00Z','2026-08-31T06:00:00Z',0,'',41)`,
+		tenant); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("seed pre-0293 observation: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const stable = `SELECT tenant_id::text,certificate_id::text,authority_id,certificate_id_ari,fingerprint,status,
+		window_start::text,window_end::text,updated_at::text,fetched_at::text,next_poll_at::text,failure_count,error_class,event_sequence
+		FROM acme_upstream_ari ORDER BY tenant_id,certificate_id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 1 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0293 changed an existing observation: %d/%s before, %d/%s after", beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var provenance string
+	if err := pool.QueryRow(ctx, `SELECT provenance FROM acme_upstream_ari WHERE certificate_id='29300000-0000-4000-8000-000000000001'`).Scan(&provenance); err != nil || provenance != "authenticated_issuer" {
+		t.Fatalf("0293 provenance for a pre-existing row = %q err=%v, want authenticated_issuer", provenance, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE acme_upstream_ari SET provenance='guessed' WHERE certificate_id='29300000-0000-4000-8000-000000000001'`); err == nil {
+		t.Fatal("0293 accepted a provenance outside the closed set")
+	}
+}
+
 // Migration 0247 must not guess an external ACME authority for old leaves.
 // The separate cursor starts at zero even when the ordinary projection is
 // already ahead, so retained issuance events can repair provenance on upgrade.
@@ -992,6 +1044,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
+	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
 	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor
 	237: true, // TestMigration0237PreservesProviderAuthorityReceipts

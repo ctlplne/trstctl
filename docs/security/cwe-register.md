@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1596 annotated sites across 26 rules. Each row is
+1597 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (337 sites)
+### G101 — CWE-798 Use of hardcoded credentials (338 sites)
 
 | Location | Reason |
 |---|---|
@@ -189,8 +189,9 @@ not this file.
 | `internal/config/external_ca_test.go:52` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:53` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
 | `internal/config/external_ca_test.go:54` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:72` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:58` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:75` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:99` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/migrate_config_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/migrate_config_test.go:45` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -567,9 +568,9 @@ not this file.
 | `internal/signing/keystore.go:133` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/store/acme_dns01.go:292` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/acme_dns01.go:337` | non-negative by construction (CWE-190) |
-| `internal/store/acme_upstream_ari.go:204` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
-| `internal/store/acme_upstream_ari.go:251` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
-| `internal/store/acme_upstream_ari.go:278` | DB CHECK keeps event_sequence positive (CWE-190) |
+| `internal/store/acme_upstream_ari.go:312` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
+| `internal/store/acme_upstream_ari.go:361` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
+| `internal/store/acme_upstream_ari.go:388` | DB CHECK keeps event_sequence positive (CWE-190) |
 | `internal/store/application_secret_approval_test.go:49` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/store/audit_checkpoint.go:52` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -786,7 +787,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3910` | closed test table list above |
+| `internal/store/migration_content_test.go:3963` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

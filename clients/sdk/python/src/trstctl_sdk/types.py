@@ -22,6 +22,7 @@ ACMEARICertificatePosture = TypedDict(
         'upstream_error_class': str,
         'upstream_fetched_at': str,
         'upstream_next_poll_at': str,
+        'upstream_provenance': str,
         'upstream_status': str,
         'window_source': str,
     },

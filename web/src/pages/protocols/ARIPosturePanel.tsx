@@ -117,6 +117,9 @@ export function ARIPosturePanel() {
           {item.upstream_next_poll_at ? (
             <span className="text-xs text-muted-foreground">{t("protocols.ari.nextPollAt", { at: formatDateTime(item.upstream_next_poll_at) })}</span>
           ) : null}
+          {item.upstream_provenance === "issuer_key_id" && item.upstream_authority_id ? (
+            <span className="text-xs text-muted-foreground">{t("protocols.ari.upstreamByIssuerKeyID", { authority: item.upstream_authority_id })}</span>
+          ) : null}
         </span>
       ),
     },

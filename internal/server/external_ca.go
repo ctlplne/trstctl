@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/netsec"
@@ -47,6 +48,10 @@ type ExternalCA struct {
 	CA       ca.CA
 	Factory  ExternalCAFactory
 	ARIFetch ExternalARIFetch
+	// ARIIssuerKeyIDs are the normalized Subject Key Identifiers of this
+	// authority's issuing intermediates (A51): a discovered leaf whose
+	// Authority Key Identifier is one of them is polled for ARI here.
+	ARIIssuerKeyIDs []string
 	// ReplaySafety may opt a custom adapter into retry-after-ambiguous-failure
 	// only when its receiver enforces ca.ProviderIdempotencyKey.
 	ReplaySafety ca.ExternalIssueReplaySafety
@@ -138,6 +143,18 @@ type externalCAEntry struct {
 	svc          *ca.IssuanceService
 	revocationCA ca.CA
 	ariFetch     ExternalARIFetch
+	// ariIssuerKeyIDs is the normalized ARIIssuerKeyIDs set (A51).
+	ariIssuerKeyIDs map[string]struct{}
+}
+
+// matchesARIIssuer reports whether a leaf's Authority Key Identifier names one
+// of this authority's declared issuing intermediates.
+func (e externalCAEntry) matchesARIIssuer(authorityKeyID string) bool {
+	if len(e.ariIssuerKeyIDs) == 0 || authorityKeyID == "" {
+		return false
+	}
+	_, ok := e.ariIssuerKeyIDs[strings.ToLower(authorityKeyID)]
+	return ok
 }
 
 // A factory wrapper exposes Revoke even when its real adapter cannot revoke.
@@ -211,9 +228,23 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		if cfg.ARIFetch != nil && typ != "letsencrypt" {
 			return nil, fmt.Errorf("server: external CA %q cannot fetch ACME ARI for type %q", id, typ)
 		}
+		var issuerKeyIDs map[string]struct{}
+		if len(cfg.ARIIssuerKeyIDs) > 0 {
+			if cfg.ARIFetch == nil {
+				return nil, fmt.Errorf("server: external CA %q declares ARI issuer key ids but cannot fetch ACME ARI", id)
+			}
+			issuerKeyIDs = make(map[string]struct{}, len(cfg.ARIIssuerKeyIDs))
+			for _, keyID := range cfg.ARIIssuerKeyIDs {
+				normalized, err := config.NormalizeARIIssuerKeyID(keyID)
+				if err != nil {
+					return nil, fmt.Errorf("server: external CA %q ari_issuer_key_ids: %w", id, err)
+				}
+				issuerKeyIDs[normalized] = struct{}{}
+			}
+		}
 		reg.byID[id] = externalCAEntry{
 			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID), revocationCA: implementation,
-			ariFetch: cfg.ARIFetch,
+			ariFetch: cfg.ARIFetch, ariIssuerKeyIDs: issuerKeyIDs,
 			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithLifetimeWarning(d.Logger, d.LifecycleAlertBefore),
 				ca.WithOutboxIssueWorker(id, s.wakeOutbox), ca.WithExternalIssueReplaySafety(replaySafety)),
 		}

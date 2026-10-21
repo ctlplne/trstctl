@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/ari"
 )
 
@@ -68,6 +69,7 @@ func (s *Server) ACMEARIPosture(
 		if row.IssuingExternalCAID != "" {
 			item.UpstreamAuthorityID = row.IssuingExternalCAID
 			item.UpstreamStatus = api.ACMEARIUpstreamNotRequested
+			item.UpstreamProvenance = projections.ACMEUpstreamARIProvenanceAuthenticatedIssuer
 		}
 
 		if len(row.CertificateDER) > 0 {
@@ -88,16 +90,29 @@ func (s *Server) ACMEARIPosture(
 						}
 					}
 				}
-				if row.IssuingExternalCAID != "" {
-					observed, err := s.store.GetACMEUpstreamARI(ctx, tenantID, row.CertificateID)
-					if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-						return api.ACMEARIPosture{}, "", err
-					}
-					if err == nil {
-						if observed.AuthorityID != row.IssuingExternalCAID ||
-							observed.Fingerprint != row.Fingerprint || observed.ARICertificateID != certID {
+				observed, err := s.store.GetACMEUpstreamARI(ctx, tenantID, row.CertificateID)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return api.ACMEARIPosture{}, "", err
+				}
+				if err == nil {
+					// A51: a discovered leaf's observation is bound by a
+					// declared issuer key id instead of an authenticated issuer.
+					provenance, _ := projections.NormalizeACMEUpstreamARIProvenance(observed.Provenance)
+					if row.IssuingExternalCAID != "" {
+						if observed.AuthorityID != row.IssuingExternalCAID || provenance != projections.ACMEUpstreamARIProvenanceAuthenticatedIssuer {
 							return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
 						}
+					} else {
+						if provenance != projections.ACMEUpstreamARIProvenanceIssuerKeyID {
+							return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
+						}
+						item.UpstreamAuthorityID = observed.AuthorityID
+					}
+					if observed.Fingerprint != row.Fingerprint || observed.ARICertificateID != certID {
+						return api.ACMEARIPosture{}, "", fmt.Errorf("ARI observation does not match certificate %s", row.CertificateID)
+					}
+					item.UpstreamProvenance = provenance
+					{
 						item.UpstreamStatus = observed.Status
 						item.UpstreamErrorClass = observed.ErrorClass
 						item.UpstreamFetchedAt = observed.FetchedAt

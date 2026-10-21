@@ -26,6 +26,7 @@ export interface ACMEARICertificatePosture {
   upstream_error_class?: "not_advertised" | "upstream_timeout" | "upstream_unavailable";
   upstream_fetched_at?: string;
   upstream_next_poll_at?: string;
+  upstream_provenance?: "authenticated_issuer" | "issuer_key_id";
   upstream_status?: "not_requested" | "queued" | "ready" | "error" | "unavailable";
   window_source: "served_acme" | "upstream_ca" | "local_estimate" | "none";
 }

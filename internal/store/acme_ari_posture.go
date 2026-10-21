@@ -105,6 +105,7 @@ func (s *Store) ListACMEARIPosturePage(ctx context.Context, tenantID, afterID st
 			    AND (
 			         c.source = 'protocol:acme'
 			         OR c.issuing_external_ca_id <> ''
+			         OR EXISTS (SELECT 1 FROM acme_upstream_ari a WHERE a.tenant_id = c.tenant_id AND a.certificate_id = c.id)
 			         OR (
 			             c.source = 'issued'
 			             AND (i.id IS NOT NULL OR ari_rr.id IS NOT NULL OR rr.id IS NOT NULL)

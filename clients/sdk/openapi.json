@@ -86,6 +86,13 @@
             "format": "date-time",
             "type": "string"
           },
+          "upstream_provenance": {
+            "enum": [
+              "authenticated_issuer",
+              "issuer_key_id"
+            ],
+            "type": "string"
+          },
           "upstream_status": {
             "enum": [
               "not_requested",

@@ -34,6 +34,25 @@ type ACMEUpstreamARI struct {
 	ErrorClass       string
 	EventID          string
 	EventSequence    uint64
+	// Provenance is how the leaf was tied to the authority: an authenticated
+	// issuance fact, or an operator-declared issuer key id on a discovered
+	// leaf (A51). Empty reads as the authenticated default.
+	Provenance string
+}
+
+const (
+	ACMEUpstreamARIProvenanceAuthenticatedIssuer = "authenticated_issuer"
+	ACMEUpstreamARIProvenanceIssuerKeyID         = "issuer_key_id"
+)
+
+func normalizeACMEUpstreamARIProvenance(raw string) (string, bool) {
+	switch raw {
+	case "", ACMEUpstreamARIProvenanceAuthenticatedIssuer:
+		return ACMEUpstreamARIProvenanceAuthenticatedIssuer, true
+	case ACMEUpstreamARIProvenanceIssuerKeyID:
+		return ACMEUpstreamARIProvenanceIssuerKeyID, true
+	}
+	return "", false
 }
 
 type acmeUpstreamARIFetchPayload struct {
@@ -41,6 +60,80 @@ type acmeUpstreamARIFetchPayload struct {
 	AuthorityID      string `json:"authority_id"`
 	ARICertificateID string `json:"ari_certificate_id"`
 	Fingerprint      string `json:"fingerprint"`
+	Provenance       string `json:"provenance,omitempty"`
+}
+
+// ACMEUpstreamARIDiscoveredCandidate is an active discovered leaf with no
+// authenticated issuer and no ARI request yet (A51). The caller reads the
+// Authority Key Identifier off CertificateDER and matches it to a configured
+// authority's declared issuer key ids before anything is appended.
+type ACMEUpstreamARIDiscoveredCandidate struct {
+	CertificateID  string
+	Fingerprint    string
+	Serial         string
+	CertificateDER []byte
+	NotAfter       time.Time
+}
+
+// TenantsWithDiscoveredLeavesMissingACMEUpstreamARI enumerates tenants that
+// hold an active discovered leaf with captured DER, no authenticated external
+// issuer and no ARI row. Leaf details are read under tenant RLS afterwards.
+func (s *Store) TenantsWithDiscoveredLeavesMissingACMEUpstreamARI(ctx context.Context, authorityTenant string, now time.Time, limit int) ([]string, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.SystemPool().Query(ctx,
+		//trstctl:system-query — leader-only cross-tenant enumeration returns tenant IDs; certificate details are read later under each tenant's RLS context (AN-1).
+		`SELECT DISTINCT c.tenant_id::text FROM certificates c
+		 LEFT JOIN acme_upstream_ari a ON a.tenant_id=c.tenant_id AND a.certificate_id=c.id
+		 WHERE c.issuing_external_ca_id='' AND c.source LIKE 'discovery:%' AND c.status='active'
+		   AND c.not_after>$1 AND length(c.certificate_der)>0 AND a.certificate_id IS NULL
+		   AND ($2::text='' OR c.tenant_id::text=$2)
+		 ORDER BY 1 LIMIT $3`, now, authorityTenant, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tenants []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		tenants = append(tenants, tenantID)
+	}
+	return tenants, rows.Err()
+}
+
+// ListDiscoveredLeavesMissingACMEUpstreamARI pages one tenant's discovered
+// leaves that have no authenticated issuer and no ARI request, keyset-bounded.
+func (s *Store) ListDiscoveredLeavesMissingACMEUpstreamARI(ctx context.Context, tenantID, afterID string, now time.Time, limit int) ([]ACMEUpstreamARIDiscoveredCandidate, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var candidates []ACMEUpstreamARIDiscoveredCandidate
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT c.id::text,c.fingerprint,c.serial,c.certificate_der,c.not_after
+			FROM certificates c
+			LEFT JOIN acme_upstream_ari a ON a.tenant_id=$1 AND a.certificate_id=c.id
+			WHERE c.tenant_id=$1 AND c.id>$2 AND c.issuing_external_ca_id='' AND c.source LIKE 'discovery:%'
+			  AND c.status='active' AND c.not_after>$3 AND length(c.certificate_der)>0 AND a.certificate_id IS NULL
+			ORDER BY c.id LIMIT $4`, tenantID, afterID, now, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var candidate ACMEUpstreamARIDiscoveredCandidate
+			if err := rows.Scan(&candidate.CertificateID, &candidate.Fingerprint, &candidate.Serial,
+				&candidate.CertificateDER, &candidate.NotAfter); err != nil {
+				return err
+			}
+			candidates = append(candidates, candidate)
+		}
+		return rows.Err()
+	})
+	return candidates, err
 }
 
 // ACMEUpstreamARICandidate is an active external leaf without an initial ARI
@@ -121,6 +214,9 @@ func (s *Store) ListMissingACMEUpstreamARI(ctx context.Context, tenantID, afterI
 }
 
 func validateACMEUpstreamARI(a ACMEUpstreamARI) error {
+	if _, ok := normalizeACMEUpstreamARIProvenance(a.Provenance); !ok {
+		return errors.New("store: unknown upstream ARI provenance")
+	}
 	if a.TenantID == "" || a.CertificateID == "" || a.AuthorityID == "" ||
 		a.ARICertificateID == "" || a.Fingerprint == "" || a.EventID == "" ||
 		a.EventSequence == 0 || a.UpdatedAt.IsZero() || !a.NextPollAt.After(a.UpdatedAt) && a.Status != "queued" {
@@ -141,12 +237,20 @@ func validateACMEUpstreamARI(a ACMEUpstreamARI) error {
 	return nil
 }
 
+// exactExternalARICertificateTx binds the observation to the exact leaf. An
+// authenticated-issuer observation must match the certificate's recorded
+// external issuer; an issuer-key-id observation (A51) must sit on a leaf with
+// NO authenticated issuer, so a declaration can never override a fact.
 func exactExternalARICertificateTx(ctx context.Context, tx pgx.Tx, a ACMEUpstreamARI) (string, time.Time, error) {
 	var status string
 	var notAfter time.Time
+	boundAuthority := a.AuthorityID
+	if provenance, _ := normalizeACMEUpstreamARIProvenance(a.Provenance); provenance == ACMEUpstreamARIProvenanceIssuerKeyID {
+		boundAuthority = ""
+	}
 	err := tx.QueryRow(ctx, `SELECT status, not_after FROM certificates
 		WHERE tenant_id=$1 AND id=$2 AND fingerprint=$3 AND issuing_external_ca_id=$4 AND not_after IS NOT NULL
-		FOR UPDATE`, a.TenantID, a.CertificateID, a.Fingerprint, a.AuthorityID).
+		FOR UPDATE`, a.TenantID, a.CertificateID, a.Fingerprint, boundAuthority).
 		Scan(&status, &notAfter)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("store: upstream ARI certificate binding: %w", err)
@@ -155,9 +259,11 @@ func exactExternalARICertificateTx(ctx context.Context, tx pgx.Tx, a ACMEUpstrea
 }
 
 func upstreamARIPayload(a ACMEUpstreamARI) ([]byte, error) {
+	provenance, _ := normalizeACMEUpstreamARIProvenance(a.Provenance)
 	return json.Marshal(acmeUpstreamARIFetchPayload{
 		CertificateID: a.CertificateID, AuthorityID: a.AuthorityID,
 		ARICertificateID: a.ARICertificateID, Fingerprint: a.Fingerprint,
+		Provenance: provenance,
 	})
 }
 
@@ -189,19 +295,21 @@ func (s *Store) ApplyACMEUpstreamARIRequestedTx(ctx context.Context, tx pgx.Tx, 
 	if status != "active" || !notAfter.After(a.UpdatedAt) {
 		return nil
 	}
+	provenance, _ := normalizeACMEUpstreamARIProvenance(a.Provenance)
 	tag, err := tx.Exec(ctx, `INSERT INTO acme_upstream_ari
 		(tenant_id, certificate_id, authority_id, certificate_id_ari, fingerprint,
-		 status, updated_at, next_poll_at, event_sequence)
-		VALUES ($1,$2,$3,$4,$5,'queued',$6,$6,$7)
+		 status, updated_at, next_poll_at, event_sequence, provenance)
+		VALUES ($1,$2,$3,$4,$5,'queued',$6,$6,$7,$8)
 		ON CONFLICT (tenant_id, certificate_id) DO UPDATE SET
 		 status='queued', updated_at=EXCLUDED.updated_at,
 		 next_poll_at=EXCLUDED.next_poll_at, event_sequence=EXCLUDED.event_sequence
 		WHERE acme_upstream_ari.authority_id=EXCLUDED.authority_id
 		 AND acme_upstream_ari.fingerprint=EXCLUDED.fingerprint
 		 AND acme_upstream_ari.certificate_id_ari=EXCLUDED.certificate_id_ari
+		 AND acme_upstream_ari.provenance=EXCLUDED.provenance
 		 AND acme_upstream_ari.event_sequence < EXCLUDED.event_sequence`,
 		a.TenantID, a.CertificateID, a.AuthorityID, a.ARICertificateID,
-		a.Fingerprint, a.UpdatedAt, int64(a.EventSequence)) // #nosec G115 -- JetStream sequence is bounded by PostgreSQL bigint (CWE-190)
+		a.Fingerprint, a.UpdatedAt, int64(a.EventSequence), provenance) // #nosec G115 -- JetStream sequence is bounded by PostgreSQL bigint (CWE-190)
 	if err != nil {
 		return err
 	}
@@ -226,11 +334,12 @@ func (s *Store) ApplyACMEUpstreamARIObservedTx(ctx context.Context, tx pgx.Tx, a
 	if err != nil {
 		return err
 	}
+	provenance, _ := normalizeACMEUpstreamARIProvenance(a.Provenance)
 	tag, err := tx.Exec(ctx, `INSERT INTO acme_upstream_ari
 		(tenant_id, certificate_id, authority_id, certificate_id_ari, fingerprint,
 		 status, window_start, window_end, updated_at, fetched_at, next_poll_at,
-		 failure_count, error_class, event_sequence)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		 failure_count, error_class, event_sequence, provenance)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		ON CONFLICT (tenant_id, certificate_id) DO UPDATE SET
 		 status=EXCLUDED.status,
 		 window_start=CASE WHEN EXCLUDED.status='ready' THEN EXCLUDED.window_start ELSE acme_upstream_ari.window_start END,
@@ -244,11 +353,12 @@ func (s *Store) ApplyACMEUpstreamARIObservedTx(ctx context.Context, tx pgx.Tx, a
 		WHERE acme_upstream_ari.authority_id=EXCLUDED.authority_id
 		 AND acme_upstream_ari.fingerprint=EXCLUDED.fingerprint
 		 AND acme_upstream_ari.certificate_id_ari=EXCLUDED.certificate_id_ari
+		 AND acme_upstream_ari.provenance=EXCLUDED.provenance
 		 AND acme_upstream_ari.event_sequence < EXCLUDED.event_sequence`,
 		a.TenantID, a.CertificateID, a.AuthorityID, a.ARICertificateID,
 		a.Fingerprint, a.Status, a.WindowStart, a.WindowEnd, a.UpdatedAt,
 		a.FetchedAt, a.NextPollAt, a.FailureCount, a.ErrorClass,
-		int64(a.EventSequence)) // #nosec G115 -- JetStream sequence is bounded by PostgreSQL bigint (CWE-190)
+		int64(a.EventSequence), provenance) // #nosec G115 -- JetStream sequence is bounded by PostgreSQL bigint (CWE-190)
 	if err != nil {
 		return err
 	}
@@ -266,11 +376,11 @@ func (s *Store) GetACMEUpstreamARI(ctx context.Context, tenantID, certificateID 
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT tenant_id::text, certificate_id::text, authority_id,
 		 certificate_id_ari, fingerprint, status, window_start, window_end,
-		 updated_at, fetched_at, next_poll_at, failure_count, error_class, event_sequence
+		 updated_at, fetched_at, next_poll_at, failure_count, error_class, event_sequence, provenance
 		 FROM acme_upstream_ari WHERE tenant_id=$1 AND certificate_id=$2`, tenantID, certificateID).
 			Scan(&a.TenantID, &a.CertificateID, &a.AuthorityID, &a.ARICertificateID,
 				&a.Fingerprint, &a.Status, &a.WindowStart, &a.WindowEnd, &a.UpdatedAt,
-				&a.FetchedAt, &a.NextPollAt, &a.FailureCount, &a.ErrorClass, &seq)
+				&a.FetchedAt, &a.NextPollAt, &a.FailureCount, &a.ErrorClass, &seq, &a.Provenance)
 	})
 	if err != nil {
 		return ACMEUpstreamARI{}, err

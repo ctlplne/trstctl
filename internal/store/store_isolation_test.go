@@ -266,7 +266,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// The ARI leader enumerates tenant IDs with an active leaf missing its
 		// first upstream poll. It reads no certificate material through this
 		// system pool; each candidate is loaded inside its tenant's RLS context.
-		"internal/store/acme_upstream_ari.go": 1,
+		// A51 adds the second: enumerating tenants that hold a discovered leaf
+		// with no authenticated issuer, matched to an authority in Go under
+		// the tenant's own RLS read afterwards.
+		"internal/store/acme_upstream_ari.go": 2,
 		// A1: two leader-side job-ledger operations. The lapsed-lease sweep must
 		// cross tenants because a dead agent leaves work in whatever tenant it
 		// served, and it touches lease bookkeeping only. The queue-depth read is

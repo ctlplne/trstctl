@@ -113,6 +113,16 @@ type ExternalCAConfig struct {
 	// has not decided to hand trstctl publish rights in their zones.
 	UpstreamDNS01 bool `json:"upstream_dns01,omitempty"`
 
+	// ARIIssuerKeyIDs names this authority's issuing intermediates by their
+	// Subject Key Identifier (hex), so a DISCOVERED leaf that carries one of
+	// them as its Authority Key Identifier gets an upstream ARI poll too (A51).
+	// A leaf trstctl obtained from this authority is bound to it by an
+	// authenticated issuance fact and needs no entry here; this list is the
+	// operator's declaration for leaves that arrived through discovery, whose
+	// issuer trstctl can only read off the certificate. The poll is a public,
+	// unauthenticated GET against this authority's fixed directory.
+	ARIIssuerKeyIDs []string `json:"ari_issuer_key_ids,omitempty"`
+
 	// CAAIssuerDomain is THIS authority's CAA identifier ("letsencrypt.org"),
 	// not trstctl's. It is required whenever UpstreamDNS01 is on: the check
 	// asks whether the domain's CAA policy authorizes the CA about to issue,
@@ -385,6 +395,11 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 				"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
 					"must name the authority that will issue, and an empty issuer authorizes every CA", where))
 		}
+		for i, keyID := range c.ARIIssuerKeyIDs {
+			if _, err := NormalizeARIIssuerKeyID(keyID); err != nil {
+				errs = append(errs, fmt.Errorf("%s.ari_issuer_key_ids[%d]: %w", where, i, err))
+			}
+		}
 	case "sectigo":
 		require(c.Login, "login")
 		credential(c.PasswordRef, "password_ref", false)
@@ -420,6 +435,9 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 	// automated right up until the reuse window closes.
 	if c.Type != "letsencrypt" && strings.TrimSpace(c.ACMEProfile) != "" {
 		errs = append(errs, fmt.Errorf("%s.acme_profile applies only to ACME (letsencrypt) authorities, not %q", where, c.Type))
+	}
+	if c.Type != "letsencrypt" && len(c.ARIIssuerKeyIDs) > 0 {
+		errs = append(errs, fmt.Errorf("%s.ari_issuer_key_ids applies only to ACME (letsencrypt) authorities, not %q", where, c.Type))
 	}
 	if c.Type != "letsencrypt" && (strings.TrimSpace(c.EABKeyID) != "" || strings.TrimSpace(c.EABHMACKeyRef) != "") {
 		errs = append(errs, fmt.Errorf("%s.eab_key_id/eab_hmac_key_ref apply only to ACME (letsencrypt) authorities, not %q", where, c.Type))
@@ -459,4 +477,23 @@ func normalizedExternalCAStrings(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// NormalizeARIIssuerKeyID canonicalizes one ari_issuer_key_ids entry: hex of a
+// Subject Key Identifier, case-insensitive, with optional colon separators,
+// between 8 and 64 bytes (RFC 5280 SKIs are 20 bytes; HSM-derived ones vary).
+func NormalizeARIIssuerKeyID(raw string) (string, error) {
+	cleaned := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(raw), ":", ""))
+	if cleaned == "" {
+		return "", fmt.Errorf("issuer key id is empty")
+	}
+	if len(cleaned)%2 != 0 || len(cleaned) < 16 || len(cleaned) > 128 {
+		return "", fmt.Errorf("issuer key id must be 8 to 64 bytes of hex")
+	}
+	for _, r := range cleaned {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return "", fmt.Errorf("issuer key id must be hex")
+		}
+	}
+	return cleaned, nil
 }

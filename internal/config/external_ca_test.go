@@ -53,6 +53,9 @@ func TestValidateExternalCAsFailsClosed(t *testing.T) {
 		{"eab-inline-secret", ExternalCAConfig{ID: "le", Type: "letsencrypt", Name: "le", DirectoryURL: "https://acme.example/directory", EABKeyID: "kid-1", EABHMACKeyRef: "plaintext"}, "file:/absolute/path"},                                // #nosec G101 -- a deliberately malformed reference the validator must refuse; no credential (CWE-798)
 		{"eab-on-non-acme", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "file:/safe/key", EABKeyID: "kid-1", EABHMACKeyRef: "file:/safe/eab"}, "apply only to ACME"},                      // #nosec G101 -- fabricated fixture reference, no credential (CWE-798)
 		{"partial-mtls", ExternalCAConfig{ID: "e", Type: "entrust", Name: "e", Endpoint: "https://ca.example", CAID: "ca", Network: ExternalCANetworkConfig{ClientCertFile: "/safe/client.pem"}}, "must be set together"},
+		{"ari-issuer-key-id-not-hex", ExternalCAConfig{ID: "le", Type: "letsencrypt", Name: "le", DirectoryURL: "https://acme.example/directory", ARIIssuerKeyIDs: []string{"not-hex-at-all"}}, "ari_issuer_key_ids[0]"},
+		{"ari-issuer-key-id-short", ExternalCAConfig{ID: "le", Type: "letsencrypt", Name: "le", DirectoryURL: "https://acme.example/directory", ARIIssuerKeyIDs: []string{"abcd"}}, "8 to 64 bytes"},
+		{"ari-issuer-key-ids-on-non-acme", ExternalCAConfig{ID: "d", Type: "digicert", Name: "d", Endpoint: "https://ca.example", APIKeyRef: "file:/safe/key", ARIIssuerKeyIDs: []string{"0011223344556677"}}, "ari_issuer_key_ids applies only to ACME"}, // #nosec G101 -- fabricated fixture reference, no credential (CWE-798)
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

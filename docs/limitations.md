@@ -4169,7 +4169,14 @@ This is a deliberate, documented trust boundary, not an accident.
   outbox worker fetches that CA's `renewalInfo` through the selected issuer's
   egress policy. The scheduler and posture use the retained per-certificate
   window; the console labels its source and fetch state. A discovered external
-  leaf without authenticated issuer provenance has no upstream poll path.
+  leaf has no authenticated issuer, so it is matched to an authority by its
+  Authority Key Identifier against that authority's operator-declared
+  `ari_issuer_key_ids` (the Subject Key Identifiers of its issuing
+  intermediates); a match gets the same upstream poll, the request and
+  observation events, the row and the posture carry `provenance:
+  issuer_key_id` so the two bindings are never confused, and the worker
+  re-matches the key id before every GET. A discovered leaf whose issuer no
+  authority declares is listed with a local estimate and nothing is polled.
   Local Pebble evidence qualifies the supported client contract, not a public
   CA's production availability or network behavior.
   The upstream client presents an RFC 8555 §7.3.4 external account binding

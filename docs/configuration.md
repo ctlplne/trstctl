@@ -326,7 +326,8 @@ CIDRs, custom roots, and mTLS identities are operator-owned:
     "directory_url": "https://acme.harica.gr/acme/directory",
     "eab_key_id": "kid-issued-by-the-ca",
     "eab_hmac_key_ref": "file:/run/secrets/harica-eab-hmac",
-    "acme_profile": "tcs-ov"
+    "acme_profile": "tcs-ov",
+    "ari_issuer_key_ids": ["<hex subject key identifier of the issuing intermediate>"]
   }, {
     "id": "shell-ca-prod",
     "type": "shellca",

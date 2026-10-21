@@ -5960,7 +5960,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, CertificateID: pl.CertificateID,
 			AuthorityID: pl.AuthorityID, ARICertificateID: pl.ARICertificateID,
 			Fingerprint: pl.Fingerprint, UpdatedAt: e.Time, NextPollAt: e.Time,
-			EventID: e.ID, EventSequence: e.Sequence,
+			EventID: e.ID, EventSequence: e.Sequence, Provenance: pl.Provenance,
 		})
 	case EventACMEUpstreamARIObserved:
 		var pl ACMEUpstreamARIObserved
@@ -5977,7 +5977,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Fingerprint: pl.Fingerprint, Status: pl.Status,
 			WindowStart: pl.WindowStart, WindowEnd: pl.WindowEnd,
 			UpdatedAt: e.Time, FetchedAt: fetchedAt, NextPollAt: pl.NextPollAt,
-			FailureCount: pl.FailureCount, ErrorClass: pl.ErrorClass,
+			FailureCount: pl.FailureCount, ErrorClass: pl.ErrorClass, Provenance: pl.Provenance,
 			EventID: e.ID, EventSequence: e.Sequence,
 		})
 	case EventACMEDNS01Preflighted:

@@ -2956,6 +2956,7 @@ func componentSchemas() map[string]*Schema {
 			ACMEARIWindowLocalEstimate, ACMEARIWindowNone,
 		}},
 		"upstream_authority_id": str(),
+		"upstream_provenance":   {Type: "string", Enum: []string{ACMEARIProvenanceAuthenticatedIssuer, ACMEARIProvenanceIssuerKeyID}},
 		"upstream_status": {Type: "string", Enum: []string{
 			ACMEARIUpstreamNotRequested, ACMEARIUpstreamQueued, ACMEARIUpstreamReady,
 			ACMEARIUpstreamError, ACMEARIUpstreamUnavailable,

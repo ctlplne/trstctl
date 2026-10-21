@@ -41,6 +41,9 @@ const (
 	ACMEARIUpstreamReady        = "ready"
 	ACMEARIUpstreamError        = "error"
 	ACMEARIUpstreamUnavailable  = "unavailable"
+
+	ACMEARIProvenanceAuthenticatedIssuer = "authenticated_issuer"
+	ACMEARIProvenanceIssuerKeyID         = "issuer_key_id"
 )
 
 // ACMEARIPostureProvider is the narrow server-owned seam for the ARI operator
@@ -84,15 +87,19 @@ type ACMEARICertificatePosture struct {
 	SuggestedWindow     *ACMEARIWindow `json:"suggested_window,omitempty"`
 	WindowSource        string         `json:"window_source"`
 	UpstreamAuthorityID string         `json:"upstream_authority_id,omitempty"`
-	UpstreamStatus      string         `json:"upstream_status,omitempty"`
-	UpstreamErrorClass  string         `json:"upstream_error_class,omitempty"`
-	UpstreamFetchedAt   *time.Time     `json:"upstream_fetched_at,omitempty"`
-	UpstreamNextPollAt  *time.Time     `json:"upstream_next_poll_at,omitempty"`
-	SchedulerStatus     string         `json:"scheduler_status"`
-	SchedulerConsumed   bool           `json:"scheduler_consumed"`
-	SchedulerSource     string         `json:"scheduler_source"`
-	RotationRunID       string         `json:"rotation_run_id,omitempty"`
-	ConsumedAt          *time.Time     `json:"consumed_at,omitempty"`
+	// UpstreamProvenance says how the leaf was tied to the upstream authority:
+	// an authenticated issuance fact, or an operator-declared issuer key id on
+	// a discovered leaf (A51).
+	UpstreamProvenance string     `json:"upstream_provenance,omitempty"`
+	UpstreamStatus     string     `json:"upstream_status,omitempty"`
+	UpstreamErrorClass string     `json:"upstream_error_class,omitempty"`
+	UpstreamFetchedAt  *time.Time `json:"upstream_fetched_at,omitempty"`
+	UpstreamNextPollAt *time.Time `json:"upstream_next_poll_at,omitempty"`
+	SchedulerStatus    string     `json:"scheduler_status"`
+	SchedulerConsumed  bool       `json:"scheduler_consumed"`
+	SchedulerSource    string     `json:"scheduler_source"`
+	RotationRunID      string     `json:"rotation_run_id,omitempty"`
+	ConsumedAt         *time.Time `json:"consumed_at,omitempty"`
 }
 
 // ACMEARIPosture separates three facts that must not be conflated:

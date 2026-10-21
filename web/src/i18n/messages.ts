@@ -17040,6 +17040,10 @@ export const messages = {
     defaultMessage: "Next CA poll {at}",
     description: "Scheduled next upstream ARI poll.",
   },
+  "protocols.ari.upstreamByIssuerKeyID": {
+    defaultMessage: "Discovered leaf matched to {authority} by its issuer key id",
+    description: "A51: the upstream ARI poll for a discovered leaf rests on an operator-declared issuer key id, not an authenticated issuance.",
+  },
   "protocols.ari.consumedAt": {
     defaultMessage: "Consumed {at}",
     description: "Timestamp when the lifecycle scheduler selected an ARI window.",

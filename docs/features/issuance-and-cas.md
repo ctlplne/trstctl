@@ -561,9 +561,13 @@ clients that poll ARI can act on that signal.
 The local window is served by trstctl's ACME server at
 `GET /acme/renewal-info/{certid}` and used by its lifecycle scheduler for deployed
 X.509 identities. Certificates can renew when that local window opens, even before
-the fixed `renew_before` fallback. For certificates issued by an external ACME CA,
-the current scheduler does not fetch that CA's ARI window; see
-[the lifecycle limit](lifecycle-and-pqc.md#pitfalls--limits).
+the fixed `renew_before` fallback. For certificates issued by an external ACME CA
+through trstctl, the control plane polls that CA's `renewalInfo` and the scheduler
+uses the retained window. A leaf that arrived through discovery has no authenticated
+issuer; set `ari_issuer_key_ids` on the `letsencrypt`-type authority to the Subject
+Key Identifiers of its issuing intermediates and a discovered leaf whose Authority
+Key Identifier matches is polled the same way, with its posture labeled as matched
+by issuer key id rather than by an issuance fact.
 
 Operators inspect the same chain through the read-only
 `GET /api/v1/acme/ari/posture` route, the `trstctl-cli acme ari posture` command,

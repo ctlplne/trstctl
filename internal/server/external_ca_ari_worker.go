@@ -32,6 +32,7 @@ type externalARIFetchPayload struct {
 	AuthorityID      string `json:"authority_id"`
 	ARICertificateID string `json:"ari_certificate_id"`
 	Fingerprint      string `json:"fingerprint"`
+	Provenance       string `json:"provenance,omitempty"`
 }
 
 // deliverExternalCAARI performs only public, unauthenticated GETs from the
@@ -53,6 +54,10 @@ func (d *issuanceDispatcher) deliverExternalCAARI(ctx context.Context, m orchest
 		(entry.tenantID != "" && entry.tenantID != m.TenantID) {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI authority is not configured for tenant"))
 	}
+	provenance, ok := projections.NormalizeACMEUpstreamARIProvenance(command.Provenance)
+	if !ok {
+		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI command carries an unknown provenance"))
+	}
 	cert, err := d.store.GetCertificate(ctx, m.TenantID, command.CertificateID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI certificate is absent"))
@@ -60,7 +65,14 @@ func (d *issuanceDispatcher) deliverExternalCAARI(ctx context.Context, m orchest
 	if err != nil {
 		return err
 	}
-	if cert.Fingerprint != command.Fingerprint || cert.IssuingExternalCAID != command.AuthorityID ||
+	// An authenticated-issuer command must match the certificate's recorded
+	// external issuer; an issuer-key-id command (A51) is only valid on a leaf
+	// with no authenticated issuer, and the key id is re-matched below.
+	boundIssuer := command.AuthorityID
+	if provenance == projections.ACMEUpstreamARIProvenanceIssuerKeyID {
+		boundIssuer = ""
+	}
+	if cert.Fingerprint != command.Fingerprint || cert.IssuingExternalCAID != boundIssuer ||
 		len(cert.CertificateDER) == 0 || !ari.ValidCertID(command.ARICertificateID) {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI certificate binding differs"))
 	}
@@ -68,6 +80,9 @@ func (d *issuanceDispatcher) deliverExternalCAARI(ctx context.Context, m orchest
 	if err != nil || leaf.IsCA || leaf.SHA256Fingerprint != cert.Fingerprint || leaf.SerialNumber != cert.Serial ||
 		cert.NotAfter == nil || !leaf.NotAfter.Equal(*cert.NotAfter) {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI retained leaf differs from inventory"))
+	}
+	if provenance == projections.ACMEUpstreamARIProvenanceIssuerKeyID && !entry.matchesARIIssuer(leaf.AuthorityKeyID) {
+		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI discovered leaf no longer matches a declared issuer key id"))
 	}
 	derivedID, err := certinfo.ARICertID(cert.CertificateDER)
 	if err != nil || derivedID != command.ARICertificateID {
@@ -93,7 +108,8 @@ func (d *issuanceDispatcher) deliverExternalCAARI(ctx context.Context, m orchest
 	if err != nil {
 		return err
 	}
-	if prior.AuthorityID != command.AuthorityID ||
+	priorProvenance, _ := projections.NormalizeACMEUpstreamARIProvenance(prior.Provenance)
+	if prior.AuthorityID != command.AuthorityID || priorProvenance != provenance ||
 		prior.ARICertificateID != command.ARICertificateID || prior.Fingerprint != command.Fingerprint {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI projection binding differs"))
 	}
@@ -106,6 +122,9 @@ func (d *issuanceDispatcher) deliverExternalCAARI(ctx context.Context, m orchest
 		CertificateID: command.CertificateID, AuthorityID: command.AuthorityID,
 		ARICertificateID: command.ARICertificateID, Fingerprint: command.Fingerprint,
 		FailureCount: prior.FailureCount,
+	}
+	if provenance == projections.ACMEUpstreamARIProvenanceIssuerKeyID {
+		observed.Provenance = provenance
 	}
 	switch {
 	case fetchErr == nil:
@@ -149,10 +168,12 @@ func (d *issuanceDispatcher) projectExternalARICanonical(
 	if err := json.Unmarshal(event.Data, &retained); err != nil {
 		return err
 	}
+	retainedProvenance, _ := projections.NormalizeACMEUpstreamARIProvenance(retained.Provenance)
+	commandProvenance, _ := projections.NormalizeACMEUpstreamARIProvenance(command.Provenance)
 	if retained.CertificateID != command.CertificateID ||
 		retained.AuthorityID != command.AuthorityID ||
 		retained.ARICertificateID != command.ARICertificateID ||
-		retained.Fingerprint != command.Fingerprint {
+		retained.Fingerprint != command.Fingerprint || retainedProvenance != commandProvenance {
 		return orchestrator.DefiniteNoEffect(errors.New("server: external ACME ARI canonical certificate binding differs"))
 	}
 	return projections.New(d.store).Apply(ctx, event)

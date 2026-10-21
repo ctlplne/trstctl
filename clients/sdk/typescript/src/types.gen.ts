@@ -7566,6 +7566,8 @@ export interface components {
             /** Format: date-time */
             upstream_next_poll_at?: string;
             /** @enum {string} */
+            upstream_provenance?: "authenticated_issuer" | "issuer_key_id";
+            /** @enum {string} */
             upstream_status?: "not_requested" | "queued" | "ready" | "error" | "unavailable";
             /** @enum {string} */
             window_source: "served_acme" | "upstream_ca" | "local_estimate" | "none";
