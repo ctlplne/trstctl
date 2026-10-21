@@ -115,8 +115,9 @@ export function caHorizonLabel(horizon: NonNullable<CAAuthority["horizon"]>): st
  * rather than being rendered as healthy — an unknown expiry is a real state. */
 export function CAHorizonBadge({ authority }: { authority: CAAuthority }) {
   const horizon = authority.horizon;
-  if (!horizon) {
-    return <span className="text-xs text-muted-foreground">{translateNow("source.no.recorded.expiry.0511b89b6b")}</span>;
+  if (!horizon || horizon.expiry_unknown) {
+    // A22: an unknown expiry is a warning the sweep has alerted on, not a quiet gap.
+    return <StatusBadge value="unknown" label={translateNow("source.no.recorded.expiry.0511b89b6b")} tone="warning" />;
   }
   return (
     <div className="grid gap-1">

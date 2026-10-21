@@ -23,17 +23,21 @@ import (
 // CAHorizonCandidate is a CA authority the horizon sweep evaluates, carrying only
 // what the decision needs: the expiry, and the tightest band already notified.
 type CAHorizonCandidate struct {
-	ID               string
-	CommonName       string
-	Kind             string
-	NotAfter         time.Time
+	ID         string
+	CommonName string
+	Kind       string
+	// NotAfter is nil for an authority whose expiry was never recorded (A22);
+	// CertificatePEM lets the sweep derive it from the authority's own
+	// certificate.
+	NotAfter         *time.Time
+	CertificatePEM   string
 	AlertedMonths    *int
 	HorizonAlertedAt *time.Time
 	ActiveLeafCount  int
 }
 
 // TenantsWithCAHorizonCandidates returns tenant ids that operate at least one
-// active CA authority with a known expiry. It is a system enumerator only: the
+// active CA authority, known expiry or not (A22 evaluates the unknown ones). It is a system enumerator only: the
 // leader uses it to decide which tenants to sweep, then re-enters tenant-scoped
 // RLS for the authority rows themselves.
 func (s *Store) TenantsWithCAHorizonCandidates(ctx context.Context) ([]string, error) {
@@ -42,7 +46,6 @@ func (s *Store) TenantsWithCAHorizonCandidates(ctx context.Context) ([]string, e
 		`SELECT DISTINCT tenant_id::text
 		   FROM ca_authorities
 		  WHERE status = 'active'
-		    AND not_after IS NOT NULL
 		  ORDER BY 1`)
 	if err != nil {
 		return nil, err
@@ -59,27 +62,26 @@ func (s *Store) TenantsWithCAHorizonCandidates(ctx context.Context) ([]string, e
 	return tenants, rows.Err()
 }
 
-// ListCAHorizonCandidates returns a tenant's active CA authorities that carry an
-// expiry, soonest first. The sweep evaluates every one of them rather than
+// ListCAHorizonCandidates returns a tenant's active CA authorities, soonest
+// expiry first and the ones with no recorded expiry last. The sweep evaluates every one of them rather than
 // pre-filtering in SQL: the band thresholds are policy, and keeping policy in one
 // place (internal/lifecycle) beats splitting it across a WHERE clause.
 func (s *Store) ListCAHorizonCandidates(ctx context.Context, tenantID string) ([]CAHorizonCandidate, error) {
 	var out []CAHorizonCandidate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, common_name, kind, not_after, horizon_alerted_months, horizon_alerted_at
+			`SELECT id::text, common_name, kind, not_after, certificate_pem, horizon_alerted_months, horizon_alerted_at
 			   FROM ca_authorities
 			  WHERE tenant_id = $1
 			    AND status = 'active'
-			    AND not_after IS NOT NULL
-			  ORDER BY not_after, id`, tenantID)
+			  ORDER BY not_after NULLS LAST, id`, tenantID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var c CAHorizonCandidate
-			if err := rows.Scan(&c.ID, &c.CommonName, &c.Kind, &c.NotAfter, &c.AlertedMonths, &c.HorizonAlertedAt); err != nil {
+			if err := rows.Scan(&c.ID, &c.CommonName, &c.Kind, &c.NotAfter, &c.CertificatePEM, &c.AlertedMonths, &c.HorizonAlertedAt); err != nil {
 				return err
 			}
 			out = append(out, c)
@@ -92,15 +94,20 @@ func (s *Store) ListCAHorizonCandidates(ctx context.Context, tenantID string) ([
 // MarkCAAuthorityHorizonAlertedTx projects an immutable horizon decision in the
 // caller's transaction. A replay of an older band must leave both the tightest
 // band and its timestamp unchanged.
-func (s *Store) MarkCAAuthorityHorizonAlertedTx(ctx context.Context, tx pgx.Tx, tenantID, id string, band int, at time.Time) error {
+//
+// derivedNotAfter, when set, records an expiry the row never carried (A22): the
+// sweep derived it from the authority's own certificate and the decision event
+// is the immutable source of that fact. A recorded expiry is never overwritten.
+func (s *Store) MarkCAAuthorityHorizonAlertedTx(ctx context.Context, tx pgx.Tx, tenantID, id string, band int, at time.Time, derivedNotAfter *time.Time) error {
 	tag, err := tx.Exec(ctx,
 		`UPDATE ca_authorities
 		    SET horizon_alerted_at = CASE
 		            WHEN horizon_alerted_months IS NULL OR horizon_alerted_months > $3 THEN $4
 		            ELSE horizon_alerted_at END,
-		        horizon_alerted_months = LEAST(COALESCE(horizon_alerted_months, $3), $3)
+		        horizon_alerted_months = LEAST(COALESCE(horizon_alerted_months, $3), $3),
+		        not_after = COALESCE(not_after, $5)
 		  WHERE tenant_id = $1 AND id = $2`,
-		tenantID, id, band, at.UTC())
+		tenantID, id, band, at.UTC(), derivedNotAfter)
 	if err != nil {
 		return err
 	}

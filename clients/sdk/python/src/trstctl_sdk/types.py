@@ -2123,6 +2123,7 @@ CAAuthorityHorizon = TypedDict(
     {
         'band_months': int,
         'expired': bool,
+        'expiry_unknown': bool,
         'leaf_validity_days': int,
         'months_remaining': int,
         'renew_by': str,

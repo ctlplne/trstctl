@@ -9095,6 +9095,7 @@ export interface components {
         CAAuthorityHorizon: {
             band_months?: number;
             expired: boolean;
+            expiry_unknown: boolean;
             leaf_validity_days: number;
             months_remaining: number;
             /** Format: date-time */

@@ -597,7 +597,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/renew_by", opaque), catalogPrivacyRule("/validity_compressed", opaque),
 			catalogPrivacyRule("/dependent_certificates", opaque),
 			catalogPrivacyRule("/alert_kind", opaque), catalogPrivacyRule("/alert_detail", token),
-			catalogPrivacyRule("/severity", opaque)),
+			catalogPrivacyRule("/severity", opaque), catalogPrivacyRule("/expiry_unknown", opaque)),
 	})
 	sort.Slice(catalog, func(i, j int) bool {
 		if catalog[i].EventType == catalog[j].EventType {

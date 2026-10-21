@@ -774,7 +774,8 @@ func componentSchemas() map[string]*Schema {
 		"validity_compressed": {Type: "boolean"},
 		"leaf_validity_days":  {Type: "integer"},
 		"expired":             {Type: "boolean"},
-	}, "months_remaining", "severity", "validity_compressed", "leaf_validity_days", "expired")
+		"expiry_unknown":      {Type: "boolean"},
+	}, "months_remaining", "severity", "validity_compressed", "leaf_validity_days", "expired", "expiry_unknown")
 	caAuthority := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "parent_id": uuid(), "common_name": str(),
 		"kind": str(), "status": str(), "certificate_pem": str(), "signer_handle": str(),

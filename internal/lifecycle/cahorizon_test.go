@@ -166,3 +166,22 @@ func TestCARenewByIsWhenTruncationStarts(t *testing.T) {
 		t.Error("with no leaf-validity opinion, renew-by collapses to the expiry itself")
 	}
 }
+
+// A22/A23: the planning entry beyond the widest band and the unknown-expiry
+// stamp both sit wider than every real band, so the "only tightens" rule fires
+// each real band after them; an unknown expiry is a warning, not a pass.
+func TestCAHorizonBeyondAndUnknownBandsOrderBeforeEveryRealBand(t *testing.T) {
+	t.Parallel()
+	if CAHorizonBeyondBand <= CAHorizonThresholdMonths[0] {
+		t.Fatalf("beyond band %d must sit past the widest threshold %d", CAHorizonBeyondBand, CAHorizonThresholdMonths[0])
+	}
+	if CAHorizonUnknownExpiryBand <= CAHorizonBeyondBand {
+		t.Fatalf("unknown-expiry stamp %d must sit past the beyond band %d", CAHorizonUnknownExpiryBand, CAHorizonBeyondBand)
+	}
+	if got := CAHorizonSeverity(CAHorizonUnknownExpiryBand); got != "warning" {
+		t.Fatalf("unknown expiry severity = %q, want warning", got)
+	}
+	if got := CAHorizonSeverity(CAHorizonBeyondBand); got != "low" {
+		t.Fatalf("beyond-band severity = %q, want low", got)
+	}
+}

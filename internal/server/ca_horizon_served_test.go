@@ -3,8 +3,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
@@ -325,15 +328,106 @@ func TestServedCAHorizonFlagsLeafValidityCompression(t *testing.T) {
 
 // TestServedCAHorizonStaysQuietBeyondTheWidestBand keeps the calendar from
 // becoming noise: a healthy root a decade out is known, fine, and not news.
-func TestServedCAHorizonStaysQuietBeyondTheWidestBand(t *testing.T) {
+// A23: a root beyond the widest band announces itself once as a planning
+// entry (severity low, no band) and is then quiet until it crosses into a band.
+func TestServedCAHorizonAnnouncesOnceBeyondTheWidestBand(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 
-	seedCAAuthority(t, ctx, h.store, h.tenant, "acme root R0", "root", "ca-root-00",
+	root := seedCAAuthority(t, ctx, h.store, h.tenant, "acme root R0", "root", "ca-root-00",
 		time.Now().UTC().Add(10*365*24*time.Hour))
 
+	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 1 {
+		t.Fatalf("first sweep alerted %d (err %v) for a root ten years out, want the one planning entry", alerted, err)
+	}
 	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 0 {
-		t.Fatalf("sweep alerted %d (err %v) for a root ten years out, want 0", alerted, err)
+		t.Fatalf("second sweep alerted %d (err %v), want 0 — the planning entry fires once", alerted, err)
+	}
+	stamped := horizonCandidate(t, ctx, h.store, h.tenant, root.ID)
+	if stamped.AlertedMonths == nil || *stamped.AlertedMonths != lifecycle.CAHorizonBeyondBand {
+		t.Fatalf("beyond-band stamp = %v, want %d", stamped.AlertedMonths, lifecycle.CAHorizonBeyondBand)
+	}
+}
+
+// horizonCandidate reads an authority's horizon stamp and recorded expiry.
+func horizonCandidate(t *testing.T, ctx context.Context, st *store.Store, tenantID, id string) store.CAHorizonCandidate {
+	t.Helper()
+	candidates, err := st.ListCAHorizonCandidates(ctx, tenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range candidates {
+		if c.ID == id {
+			return c
+		}
+	}
+	t.Fatalf("authority %s is not a horizon candidate", id)
+	return store.CAHorizonCandidate{}
+}
+
+// A22: an authority with no recorded expiry and a certificate that yields none
+// alerts once at warning severity and is served as expiry_unknown, never as
+// healthy.
+func TestServedCAHorizonRaisesUnknownExpiryOnce(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ctx := t.Context()
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read")
+
+	ca, err := h.store.InsertCAAuthority(ctx, store.CAAuthority{
+		TenantID: h.tenant, CommonName: "acme root R9", Kind: "root", Status: "active",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nca-root-09\n-----END CERTIFICATE-----", Serial: "ca-root-09",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 1 {
+		t.Fatalf("first sweep alerted %d (err %v) for an authority with no recorded expiry, want 1", alerted, err)
+	}
+	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 0 {
+		t.Fatalf("second sweep alerted %d (err %v), want 0", alerted, err)
+	}
+	stamped := horizonCandidate(t, ctx, h.store, h.tenant, ca.ID)
+	if stamped.AlertedMonths == nil || *stamped.AlertedMonths != lifecycle.CAHorizonUnknownExpiryBand || stamped.NotAfter != nil {
+		t.Fatalf("unknown-expiry stamp = %v not_after=%v", stamped.AlertedMonths, stamped.NotAfter)
+	}
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/ca/authorities", tok, nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"expiry_unknown":true`)) || !bytes.Contains(body, []byte(`"severity":"warning"`)) {
+		t.Fatalf("served authority must say its expiry is unknown at warning severity: %d %s", status, body)
+	}
+}
+
+// A22: an authority whose row never recorded an expiry but whose stored
+// certificate parses gets its expiry derived and recorded by the sweep's
+// decision, and alerts in the band that expiry puts it in.
+func TestServedCAHorizonDerivesExpiryFromTheStoredCertificate(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	ctx := t.Context()
+
+	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer signer.Destroy()
+	der, err := crypto.SelfSignedCACert(signer, "acme root R30", 30*30*24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := h.store.InsertCAAuthority(ctx, store.CAAuthority{
+		TenantID: h.tenant, CommonName: "acme root R30", Kind: "root", Status: "active",
+		CertificatePEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), Serial: "ca-root-30",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alerted, err := h.srv.runCAHorizonAlertsOnce(ctx); err != nil || alerted != 1 {
+		t.Fatalf("sweep alerted %d (err %v) for a derived 30-month expiry, want 1", alerted, err)
+	}
+	stamped := horizonCandidate(t, ctx, h.store, h.tenant, ca.ID)
+	if stamped.NotAfter == nil || stamped.AlertedMonths == nil || *stamped.AlertedMonths != 36 {
+		t.Fatalf("derived expiry: not_after=%v stamp=%v, want a recorded expiry inside the 36-month band", stamped.NotAfter, stamped.AlertedMonths)
+	}
+	if months := lifecycle.MonthsRemaining(time.Now().UTC(), *stamped.NotAfter); months < 28 || months > 31 {
+		t.Fatalf("derived months remaining = %d, want about 30", months)
 	}
 }
 

@@ -1582,13 +1582,21 @@ facts needed to recover an interrupted outbox command without recomputing it. A
 subject erasure rewrites any still-retained v2 notification outbox command from
 the rewritten event before reconciliation may execute it again.
 
-What is **not** served: an authority with no recorded `not_after` raises nothing
-and is shown as "no recorded expiry" rather than healthy — an unknown expiry is a
-real state, not a passing one. Authorities beyond 36 months raise nothing. The
-compression check is forward-looking (it says new leaves are being truncated); it
-does not retrospectively scan already-issued leaves to report which ones were
-shortened. Nothing here schedules or performs the renewal — it tells you when to
-start, and the re-key and rotation routes remain the operator's action.
+Two edges that used to be silent now speak. An authority with no recorded
+`not_after` is evaluated from its own stored certificate: when that parses, the
+sweep's decision records the derived expiry on the row and alerts in whatever
+band it lands in; when it does not, the sweep raises one `ca.horizon` alert at
+warning severity, stamps the reserved unknown-expiry band, and the served
+authority carries `horizon.expiry_unknown` so the console shows a warning rather
+than a blank. An unknown expiry is a real state, not a passing one. An authority
+beyond the widest 36-month band announces itself once as a planning entry
+(severity low, band 37, "on the expiry calendar") and is then quiet until it
+crosses into a band; the stamp orders before every real band, so each later
+tightening still re-fires. What is **not** served: the compression check is
+forward-looking (it says new leaves are being truncated); it does not
+retrospectively scan already-issued leaves to report which ones were shortened.
+Nothing here schedules or performs the renewal — it tells you when to start, and
+the re-key and rotation routes remain the operator's action.
 
 ### Agent roles: a vantage in the certificate
 

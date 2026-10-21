@@ -35,6 +35,18 @@ import (
 // tightening — the re-alerting the leaf-scale scheduler cannot express.
 var CAHorizonThresholdMonths = []int{36, 24, 12, 6, 3}
 
+// CAHorizonBeyondBand is the planning-only band an authority alerts in once
+// when it is first seen beyond the widest threshold (A23): the calendar entry
+// exists before the migration has to start. It sits one month past the widest
+// threshold so the "only tightens" stamp rule orders it before every real band.
+const CAHorizonBeyondBand = 37
+
+// CAHorizonUnknownExpiryBand is the stamp for an authority whose expiry could
+// not be recorded or derived (A22). An unknown expiry is a real state, not a
+// passing one, so it alerts once at warning severity; the sentinel is wider
+// than any band so a later known expiry re-fires every real band.
+const CAHorizonUnknownExpiryBand = 1200
+
 // approxMonth is the averaged Gregorian month used to convert a duration into a
 // horizon band. Band boundaries are advisory planning markers, not deadlines, so
 // an averaged month is the right precision here; the exact not_after travels in
@@ -81,6 +93,9 @@ func MonthsRemaining(now, notAfter time.Time) int {
 // is critical; a year or less is warning because a migration program has to be
 // funded and staffed; beyond that it is a planning signal, not an alarm.
 func CAHorizonSeverity(band int) string {
+	if band == CAHorizonUnknownExpiryBand {
+		return "warning"
+	}
 	switch {
 	case band <= 3:
 		return notify.AlertSeverityCritical

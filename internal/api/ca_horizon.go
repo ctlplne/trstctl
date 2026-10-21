@@ -44,6 +44,9 @@ type caAuthorityHorizon struct {
 	LeafValidityDays int `json:"leaf_validity_days"`
 	// Expired reports an authority already past its not_after.
 	Expired bool `json:"expired"`
+	// ExpiryUnknown reports an authority with no recorded expiry (A22): a real
+	// state at warning severity, never shown as healthy.
+	ExpiryUnknown bool `json:"expiry_unknown"`
 }
 
 // caAuthorityResponse is a CA authority plus its computed horizon.
@@ -69,6 +72,12 @@ func (a *API) leafValidityReference() time.Duration {
 func (a *API) toCAAuthorityResponse(ca CAAuthority, now time.Time) caAuthorityResponse {
 	out := caAuthorityResponse{CAAuthority: ca}
 	if ca.NotAfter == nil || ca.NotAfter.IsZero() {
+		// A22: no recorded expiry is a state the console must show as a
+		// warning, not as an authority with nothing to say.
+		out.Horizon = &caAuthorityHorizon{
+			Severity: lifecycle.CAHorizonSeverity(lifecycle.CAHorizonUnknownExpiryBand), ExpiryUnknown: true,
+			LeafValidityDays: int(a.leafValidityReference().Hours() / 24),
+		}
 		return out
 	}
 	notAfter := ca.NotAfter.UTC()

@@ -6327,6 +6327,9 @@
           "expired": {
             "type": "boolean"
           },
+          "expiry_unknown": {
+            "type": "boolean"
+          },
           "leaf_validity_days": {
             "type": "integer"
           },
@@ -6355,7 +6358,8 @@
           "severity",
           "validity_compressed",
           "leaf_validity_days",
-          "expired"
+          "expired",
+          "expiry_unknown"
         ],
         "type": "object"
       },

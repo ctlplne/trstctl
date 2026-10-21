@@ -1539,6 +1539,7 @@ export interface CAAuthority {
 export interface CAAuthorityHorizon {
   band_months?: number;
   expired: boolean;
+  expiry_unknown: boolean;
   leaf_validity_days: number;
   months_remaining: number;
   renew_by?: string;

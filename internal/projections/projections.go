@@ -1793,6 +1793,9 @@ type CAAuthorityHorizonAlerted struct {
 	AlertKind             string    `json:"alert_kind"`
 	AlertDetail           string    `json:"alert_detail"`
 	Severity              string    `json:"severity"`
+	// ExpiryUnknown marks the one-time alert for an authority with no recorded
+	// or derivable expiry (A22): not_after and renew_by are then zero.
+	ExpiryUnknown bool `json:"expiry_unknown,omitempty"`
 }
 
 func ValidateCAAuthorityHorizonAlerted(p CAAuthorityHorizonAlerted) error {
@@ -1800,12 +1803,24 @@ func ValidateCAAuthorityHorizonAlerted(p CAAuthorityHorizonAlerted) error {
 		return fmt.Errorf("projections: CA horizon authority id is invalid: %w", err)
 	}
 	if strings.TrimSpace(p.CommonName) == "" || (p.Kind != "root" && p.Kind != "intermediate") ||
-		p.NotAfter.IsZero() || p.RenewBy.IsZero() || !p.RenewBy.Before(p.NotAfter) ||
 		p.DependentCertificates < 0 || strings.TrimSpace(p.AlertDetail) == "" {
+		return fmt.Errorf("projections: CA horizon event has incomplete authority or alert facts")
+	}
+	if p.ExpiryUnknown {
+		// A22: the unknown-expiry alert carries no dates and no compression.
+		if p.HorizonMonths != 1200 || !p.NotAfter.IsZero() || !p.RenewBy.IsZero() || p.ValidityCompressed || p.MonthsRemaining != 0 {
+			return fmt.Errorf("projections: CA horizon unknown-expiry event contradicts its facts")
+		}
+	} else if p.NotAfter.IsZero() || p.RenewBy.IsZero() || !p.RenewBy.Before(p.NotAfter) {
 		return fmt.Errorf("projections: CA horizon event has incomplete authority or alert facts")
 	}
 	switch p.HorizonMonths {
 	case 0, 3, 6, 12, 24, 36:
+	case 37: // A23: first sight beyond the widest planning band.
+	case 1200: // A22: unknown expiry.
+		if !p.ExpiryUnknown {
+			return fmt.Errorf("projections: CA horizon band 1200 is reserved for an unknown expiry")
+		}
 	default:
 		return fmt.Errorf("projections: CA horizon band %d is invalid", p.HorizonMonths)
 	}
@@ -5112,8 +5127,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := ValidateCAAuthorityHorizonAlerted(pl); err != nil {
 			return err
 		}
+		// A22: a decision derived from the authority's own certificate also
+		// records the expiry the row never carried.
+		var derivedNotAfter *time.Time
+		if !pl.ExpiryUnknown && !pl.NotAfter.IsZero() {
+			notAfter := pl.NotAfter
+			derivedNotAfter = &notAfter
+		}
 		return p.store.MarkCAAuthorityHorizonAlertedTx(ctx, tx, e.TenantID,
-			pl.CAAuthorityID, pl.HorizonMonths, e.Time)
+			pl.CAAuthorityID, pl.HorizonMonths, e.Time, derivedNotAfter)
 	case EventCACrossSigned:
 		var pl privacyCACrossSignedV1
 		if err := decode(e, &pl); err != nil {
