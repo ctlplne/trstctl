@@ -865,6 +865,17 @@ func seedRecoveredFromPostgresTables(
 				}},
 			{`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-token-hash", "full-dr-share", []byte{0xee, 0xff}, now.Add(time.Hour)}},
 			{`INSERT INTO vault_cubbyhole (tenant_id, token_sha256, path, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-cubby-token", "scratch/note", []byte{0xcc, 0xbb}, now.Add(time.Hour)}},
+			// A14: a completed static-provider rotation command is independent
+			// PostgreSQL recovery state (its sealed predecessor and successor stay
+			// under the tenant key domain); full DR must carry it across.
+			{`INSERT INTO secret_static_rotation_commands
+			        (tenant_id, id, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, phase,
+			         expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
+			         idempotency_key_digest, request_binding, created_at, updated_at, terminal_at)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+				[]any{tenantA, "00000000-0000-0000-0000-00000000a029", "00000000-0000-0000-0000-00000000a017", "pg-main", "postgresql",
+					"db/reporting", "role:old", "role:new", "completed", 1, 2, 0, []byte{0xa1, 0x4e}, []byte{0xa1, 0x4f}, "connected", "",
+					"sha256:full-dr-static-rotation", "sha256:full-dr-static-binding", now, now, now}},
 			// AUD-77: a crash fence and a completed mutation receipt are independent
 			// PostgreSQL recovery state. They intentionally use different event IDs:
 			// a completed command deletes its fence atomically, while an interrupted
