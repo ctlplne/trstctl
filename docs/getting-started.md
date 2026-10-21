@@ -49,7 +49,7 @@ For a read-only, click-by-click product tour, open the
 - `trstctl-cli` only if you choose the command-line appendix. `make build` puts
   it at `./bin/trstctl-cli`; it is not installed on the host by Compose.
 - A patched Go
-  1.26.9+ toolchain only when building host binaries from source.
+  1.26.10+ toolchain only when building host binaries from source.
 
 ## Shortest safe path
 

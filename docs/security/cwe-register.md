@@ -542,7 +542,7 @@ not this file.
 | `internal/server/protocol_mounts.go:920` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:436` | value reduced modulo the shard count before conversion (CWE-190) |
-| `internal/server/run.go:213` | bounded small ints from config (CWE-190) |
+| `internal/server/run.go:217` | bounded small ints from config (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:1051` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:1055` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
@@ -1396,9 +1396,9 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/run.go:542` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1170` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1570` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:546` | operator-configured public recovery kit (CWE-22) |
+| `internal/server/run.go:1174` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1574` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
