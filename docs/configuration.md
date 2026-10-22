@@ -1234,6 +1234,9 @@ auth:
     password_change:
       enabled: true
       mode: active_directory
+    nested_groups:
+      enabled: true
+      mode: in_chain          # recursive (default) walks parents up to max_depth
     url: ldaps://ad.example.com:636
     bind_dn: cn=trstctl-reader,ou=service-accounts,dc=example,dc=com
     bind_password_file: /etc/trstctl/ldap-bind.secret

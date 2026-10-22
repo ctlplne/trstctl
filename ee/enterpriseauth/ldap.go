@@ -38,6 +38,22 @@ type LDAPVerifier struct {
 	// PasswordChangeMode selects how ChangePassword writes the new password
 	// (A81): config.LDAPPasswordChangeExop or LDAPPasswordChangeActiveDirectory.
 	PasswordChangeMode string
+	// NestedGroups expands membership transitively (A82). Mode "" disables;
+	// "recursive" walks parents through NestedGroupFilter ({group_dn}) up to
+	// NestedMaxDepth; "in_chain" uses Active Directory's matching rule.
+	NestedGroupsMode  string
+	NestedMaxDepth    int
+	NestedGroupFilter string
+}
+
+// adMatchingRuleInChain is LDAP_MATCHING_RULE_IN_CHAIN: Active Directory
+// evaluates transitive membership server-side.
+const adMatchingRuleInChain = "1.2.840.113556.1.4.1941"
+
+// inChainGroupFilter asks the directory for every group the user is a member
+// of transitively.
+func inChainGroupFilter(userDN string) string {
+	return "(member:" + adMatchingRuleInChain + ":=" + ldap.EscapeFilter(userDN) + ")"
 }
 
 // LDAPPasswordRefusedError is a directory's refusal of a new password (its
@@ -153,6 +169,10 @@ func (v LDAPVerifier) lookupGroups(conn *ldap.Conn, username, userDN string) ([]
 		attr = "cn"
 	}
 	filter := ldapTemplate(v.GroupFilter, username, userDN)
+	mode := strings.ToLower(strings.TrimSpace(v.NestedGroupsMode))
+	if mode == "in_chain" {
+		filter = inChainGroupFilter(userDN)
+	}
 	req := ldap.NewSearchRequest(v.GroupSearchBaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 100, 5, false, filter, []string{attr}, nil)
 	req.EnforceSizeLimit = true
 	res, err := conn.Search(req)
@@ -161,22 +181,60 @@ func (v LDAPVerifier) lookupGroups(conn *ldap.Conn, username, userDN string) ([]
 	}
 	seen := map[string]struct{}{}
 	var groups []string
-	add := func(s string) {
+	add := func(s string) bool {
 		s = strings.TrimSpace(s)
 		if s == "" {
-			return
+			return false
 		}
 		if _, ok := seen[s]; ok {
-			return
+			return false
 		}
 		seen[s] = struct{}{}
 		groups = append(groups, s)
+		return true
 	}
+	var frontier []string
 	for _, entry := range res.Entries {
-		add(entry.DN)
+		if add(entry.DN) {
+			frontier = append(frontier, entry.DN)
+		}
 		for _, value := range entry.GetAttributeValues(attr) {
 			add(value)
 		}
+	}
+	if mode != "recursive" {
+		return groups, nil
+	}
+	// A82: walk parent groups breadth-first, bounded by depth and by the
+	// seen set, so a membership cycle in the directory cannot loop.
+	depth := v.NestedMaxDepth
+	if depth <= 0 {
+		depth = 5
+	}
+	parentFilter := strings.TrimSpace(v.NestedGroupFilter)
+	if parentFilter == "" {
+		parentFilter = "(member={group_dn})"
+	}
+	for level := 0; level < depth && len(frontier) > 0; level++ {
+		var next []string
+		for _, groupDN := range frontier {
+			req := ldap.NewSearchRequest(v.GroupSearchBaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 100, 5, false,
+				strings.ReplaceAll(parentFilter, "{group_dn}", ldap.EscapeFilter(groupDN)), []string{attr}, nil)
+			req.EnforceSizeLimit = true
+			parents, err := conn.Search(req)
+			if err != nil {
+				return nil, fmt.Errorf("auth: LDAP nested group search: %w", err)
+			}
+			for _, entry := range parents.Entries {
+				if add(entry.DN) {
+					next = append(next, entry.DN)
+				}
+				for _, value := range entry.GetAttributeValues(attr) {
+					add(value)
+				}
+			}
+		}
+		frontier = next
 	}
 	return groups, nil
 }

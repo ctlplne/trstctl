@@ -790,11 +790,16 @@ type LDAP struct {
 	// (mode "active_directory"), by replacing unicodePwd over ldaps://. A login
 	// whose password the directory reports expired or "must change" is
 	// answered with the password-change-required problem instead of a session.
-	PasswordChange    LDAPPasswordChange `json:"password_change,omitempty"`
-	SessionSecretFile string             `json:"session_secret_file,omitempty"`
-	SessionTTL        string             `json:"session_ttl,omitempty"`
-	LoginRedirect     string             `json:"login_redirect,omitempty"`
-	Timeout           string             `json:"timeout,omitempty"`
+	PasswordChange LDAPPasswordChange `json:"password_change,omitempty"`
+	// NestedGroups expands group membership transitively for role mapping
+	// (A82): mode "recursive" walks parent groups through NestedGroupFilter up
+	// to MaxDepth; mode "in_chain" asks Active Directory for the transitive set
+	// in one search (LDAP_MATCHING_RULE_IN_CHAIN). Off, only direct groups map.
+	NestedGroups      LDAPNestedGroups `json:"nested_groups,omitempty"`
+	SessionSecretFile string           `json:"session_secret_file,omitempty"`
+	SessionTTL        string           `json:"session_ttl,omitempty"`
+	LoginRedirect     string           `json:"login_redirect,omitempty"`
+	Timeout           string           `json:"timeout,omitempty"`
 
 	TenantMappings     []TenantMapping `json:"tenant_mappings,omitempty"`
 	DefaultRoles       []string        `json:"default_roles,omitempty"`
@@ -899,6 +904,25 @@ func (s SAML) SessionTTLDuration() (time.Duration, error) {
 	}
 	return time.ParseDuration(s.SessionTTL)
 }
+
+// LDAPNestedGroups configures transitive group expansion (A82).
+type LDAPNestedGroups struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// Mode is "recursive" (default) or "in_chain" (Active Directory's
+	// LDAP_MATCHING_RULE_IN_CHAIN, one server-side search).
+	Mode string `json:"mode,omitempty"`
+	// MaxDepth bounds the recursive walk; empty means 5, the ceiling is 20.
+	MaxDepth int `json:"max_depth,omitempty"`
+	// GroupFilter finds the parents of a group in recursive mode; {group_dn}
+	// is filter-escaped. Empty means "(member={group_dn})".
+	GroupFilter string `json:"group_filter,omitempty"`
+}
+
+// LDAP nested-group expansion modes.
+const (
+	LDAPNestedGroupsRecursive = "recursive"
+	LDAPNestedGroupsInChain   = "in_chain"
+)
 
 // LDAPPasswordChange configures the LDAP self-service password change (A81).
 type LDAPPasswordChange struct {
@@ -4958,6 +4982,19 @@ func (l LDAP) validate() []error {
 	}
 	req(l.URL, "url")
 	req(l.SessionSecretFile, "session_secret_file")
+	if l.NestedGroups.Enabled {
+		switch strings.ToLower(strings.TrimSpace(l.NestedGroups.Mode)) {
+		case "", LDAPNestedGroupsRecursive, LDAPNestedGroupsInChain:
+		default:
+			errs = append(errs, fmt.Errorf("auth.ldap.nested_groups.mode %q must be \"recursive\" or \"in_chain\"", l.NestedGroups.Mode))
+		}
+		if l.NestedGroups.MaxDepth < 0 || l.NestedGroups.MaxDepth > 20 {
+			errs = append(errs, errors.New("auth.ldap.nested_groups.max_depth must be between 1 and 20 (empty means 5)"))
+		}
+		if strings.TrimSpace(l.GroupSearchBaseDN) == "" {
+			errs = append(errs, errors.New("auth.ldap.nested_groups needs group_search_base_dn"))
+		}
+	}
 	if l.PasswordChange.Enabled {
 		switch strings.ToLower(strings.TrimSpace(l.PasswordChange.Mode)) {
 		case "", LDAPPasswordChangeExop:

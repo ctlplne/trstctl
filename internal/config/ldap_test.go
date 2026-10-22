@@ -99,3 +99,32 @@ func TestLDAPPasswordChangeModesFailClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestLDAPNestedGroupsFailClosed(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mut func(*LDAP)
+		ok  bool
+	}{
+		"recursive default": {func(l *LDAP) { l.NestedGroups = LDAPNestedGroups{Enabled: true} }, true},
+		"in chain":          {func(l *LDAP) { l.NestedGroups = LDAPNestedGroups{Enabled: true, Mode: "in_chain"} }, true},
+		"unknown mode":      {func(l *LDAP) { l.NestedGroups = LDAPNestedGroups{Enabled: true, Mode: "memberOf"} }, false},
+		"depth too deep":    {func(l *LDAP) { l.NestedGroups = LDAPNestedGroups{Enabled: true, MaxDepth: 50} }, false},
+		"no group base": {func(l *LDAP) {
+			l.NestedGroups = LDAPNestedGroups{Enabled: true}
+			l.GroupSearchBaseDN = ""
+		}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			l := fullLDAP()
+			if l.GroupSearchBaseDN == "" {
+				l.GroupSearchBaseDN = "ou=groups,dc=example,dc=org"
+			}
+			tc.mut(&l)
+			c.Auth.LDAP = l
+			if err := c.Validate(); (err == nil) != tc.ok {
+				t.Fatalf("validate = %v, want ok=%v", err, tc.ok)
+			}
+		})
+	}
+}

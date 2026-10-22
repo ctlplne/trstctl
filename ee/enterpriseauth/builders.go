@@ -166,6 +166,14 @@ func buildLDAPAuthConfig(l config.LDAP, secure bool, newSessionIssuer func([]byt
 		Timeout:            timeout,
 		PasswordChangeMode: l.PasswordChange.Mode,
 	}
+	if l.NestedGroups.Enabled {
+		verifier.NestedGroupsMode = l.NestedGroups.Mode
+		if verifier.NestedGroupsMode == "" {
+			verifier.NestedGroupsMode = config.LDAPNestedGroupsRecursive
+		}
+		verifier.NestedMaxDepth = l.NestedGroups.MaxDepth
+		verifier.NestedGroupFilter = l.NestedGroups.GroupFilter
+	}
 	cfg := &api.AuthConfig{
 		LDAPEnabled:        l.Enabled,
 		TenantMappings:     ldapMappingsForAPI(l),

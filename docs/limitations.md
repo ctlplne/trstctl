@@ -4960,8 +4960,14 @@ sign-in whose password the directory reports expired or "must change at next
 logon" (OpenLDAP ppolicy `passwordExpired` / `changeAfterReset`, Active
 Directory `data 773` / `data 532`) is answered with
 `problem.auth.password_change_required` instead of a session, and the
-console opens the change form on it. It does not yet implement nested-group
-expansion or directory writeback. API/CI access still uses scoped API tokens.
+console opens the change form on it. Nested groups map roles when
+`auth.ldap.nested_groups.enabled` is on: mode `recursive` walks parent groups
+through `group_filter` (`{group_dn}`, default `(member={group_dn})`) up to
+`max_depth` (default 5, ceiling 20) with a seen-set so a membership cycle
+cannot loop, and mode `in_chain` asks Active Directory for the transitive set
+in one search (`LDAP_MATCHING_RULE_IN_CHAIN`); a mapping on a grandparent
+group then signs the user in. It does not yet implement directory writeback.
+API/CI access still uses scoped API tokens.
 Kerberos/GSSAPI browser login is served (`auth.kerberos`, Enterprise SSO):
 `GET /auth/kerberos/login` answers with a Negotiate challenge, the SPNEGO
 ticket the browser presents is verified against the service keytab

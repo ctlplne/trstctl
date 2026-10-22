@@ -259,4 +259,15 @@ dn: cn=trstctl-admins,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
 cn: trstctl-admins
 member: uid=alice,ou=people,dc=example,dc=org
+
+dn: cn=platform-admins,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: platform-admins
+member: cn=trstctl-admins,ou=groups,dc=example,dc=org
+
+dn: cn=everyone,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: everyone
+member: cn=platform-admins,ou=groups,dc=example,dc=org
+member: cn=everyone,ou=groups,dc=example,dc=org
 `
