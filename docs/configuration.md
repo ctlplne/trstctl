@@ -1198,6 +1198,8 @@ auth:
     keytab_file: /etc/trstctl/http.keytab
     service_principal: HTTP/trstctl.example.com
     realm: EXAMPLE.COM
+    # true only with an Active Directory KDC: map PAC group SIDs through tenant_mappings[].group
+    pac_groups: false
     session_secret_file: /var/lib/trstctl/kerberos-session.secret
     tenant_mappings:
       - subject: alice@EXAMPLE.COM

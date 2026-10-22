@@ -4,7 +4,9 @@ package enterpriseauth
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -45,6 +47,7 @@ func buildKerberosAuthConfig(k config.Kerberos, secure bool, newSessionIssuer fu
 	}
 	service, err := kerberos.New(kerberos.Config{
 		KeytabFile: k.KeytabFile, ServicePrincipal: strings.TrimSpace(k.ServicePrincipal), Realm: k.Realm, MaxClockSkew: skew,
+		DecodePAC: k.PACGroups, Logger: log.New(os.Stderr, "trstctl: kerberos: ", log.LstdFlags),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("server: auth.kerberos: %w", err)

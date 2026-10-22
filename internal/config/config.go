@@ -616,7 +616,11 @@ type Kerberos struct {
 	Realm string `json:"realm,omitempty"`
 	// MaxClockSkew bounds ticket and authenticator time checks; empty uses the
 	// Kerberos default of five minutes.
-	MaxClockSkew      string          `json:"max_clock_skew,omitempty"`
+	MaxClockSkew string `json:"max_clock_skew,omitempty"`
+	// PACGroups decodes the Active Directory PAC so group SIDs can map to
+	// tenants. Leave it off for an MIT KDC, whose PAC carries no logon info and
+	// would be refused when decoded.
+	PACGroups         bool            `json:"pac_groups,omitempty"`
 	SessionSecretFile string          `json:"session_secret_file,omitempty"`
 	SessionTTL        string          `json:"session_ttl,omitempty"`
 	LoginRedirect     string          `json:"login_redirect,omitempty"`

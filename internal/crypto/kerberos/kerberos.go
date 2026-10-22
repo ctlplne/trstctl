@@ -10,6 +10,7 @@ package kerberos
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -34,6 +35,14 @@ type Config struct {
 	// MaxClockSkew bounds authenticator and ticket time checks; zero uses the
 	// Kerberos default of five minutes.
 	MaxClockSkew time.Duration
+	// DecodePAC decodes the Active Directory PAC for group SIDs. Off, the PAC
+	// is left alone, which an MIT KDC needs: its PAC carries no logon info and
+	// decoding it would refuse every ticket. On, an undecodable PAC refuses.
+	DecodePAC bool
+	// Logger receives the library's own verdict on a refused token (no
+	// secrets: the remote address, account and reason), so an operator can
+	// tell a clock problem from a wrong keytab from the server log.
+	Logger *log.Logger
 }
 
 // Identity is the verified subject of a Kerberos login.
@@ -43,7 +52,7 @@ type Identity struct {
 	Username  string
 	Realm     string
 	// GroupSIDs are the Active Directory group SIDs from the ticket's PAC,
-	// when the KDC is AD and included one; an MIT KDC yields none.
+	// when Config.DecodePAC is on and the KDC is AD; otherwise none.
 	GroupSIDs []string
 	AuthTime  time.Time
 }
@@ -82,7 +91,10 @@ func NewFromKeytab(kt *keytab.Keytab, cfg Config) (*Service, error) {
 	if kt == nil || len(kt.Entries) == 0 {
 		return nil, errors.New("kerberos: the keytab holds no service keys")
 	}
-	settings := []func(*service.Settings){service.DecodePAC(true)}
+	settings := []func(*service.Settings){service.DecodePAC(cfg.DecodePAC)}
+	if cfg.Logger != nil {
+		settings = append(settings, service.Logger(cfg.Logger))
+	}
 	if spn := strings.TrimSpace(cfg.ServicePrincipal); spn != "" {
 		found := false
 		for _, entry := range kt.Entries {

@@ -4957,11 +4957,23 @@ ticket the browser presents is verified against the service keytab
 (`keytab_file`, optionally pinned to `service_principal` and `realm`) inside
 the cryptography boundary, and the principal (`user@REALM`) maps to a tenant
 through `tenant_mappings` by subject, or by Active Directory PAC group SID
-when the KDC is AD; a ticket under another key, an expired or replayed one,
+when `pac_groups` is on (leave it off for an MIT KDC, whose PAC carries no
+logon info); a ticket under another key, an expired or replayed one,
 or a principal that maps to no tenant is refused. The console offers it as
 "Continue with Kerberos"; browsers negotiate only for hosts they trust for
 integrated authentication, so the console host must be in that zone. Built
-and proven against a local MIT KDC; NTLM is not served.
+and proven against a local MIT KDC. NTLM browser login is served the way
+non-Windows servers serve it (`auth.ntlm`, Enterprise SSO): trstctl holds no
+NT hashes and validates no NTLM response itself; `GET /auth/ntlm/login` runs
+the NTLM challenge sequence over the client's connection and relays each
+message to a domain-joined helper speaking the squid-2.5-ntlmssp line protocol
+(Samba's `ntlm_auth`, reached as a local `helper_command` or over a
+`helper_address` socket), and only an account the helper reports as
+authenticated (`DOMAIN\user`, normalized to `user@DOMAIN`, optionally pinned to
+`domain`) maps to a tenant through `tenant_mappings`. A handshake is bound to
+the connection that started it, expires after thirty seconds, and a refused or
+completed one cannot be replayed. Built and proven against a Samba Active
+Directory domain controller; a Windows forest is the remaining proof.
 
 ## CA key custody
 
