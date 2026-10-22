@@ -28,7 +28,7 @@ func Build(d editionseam.TenantAuthDeps) (editionseam.TenantAuthConfig, error) {
 		return out, errors.New("enterprise auth requires the core browser-session issuer")
 	}
 	var err error
-	out.SAML, err = buildSAMLAuthConfig(d.SAML, d.Secure, d.NewSessionIssuer)
+	out.SAML, err = buildSAMLAuthConfig(d.SAML, d.Secure, d.NewSessionIssuer, d.SAMLEncryptionCertDER, d.SAMLEncryptionKeyPKCS8)
 	if err != nil {
 		return out, err
 	}
@@ -40,7 +40,7 @@ func Build(d editionseam.TenantAuthDeps) (editionseam.TenantAuthConfig, error) {
 	return out, err
 }
 
-func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byte, time.Duration) *auth.SessionIssuer) (*api.AuthConfig, error) {
+func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byte, time.Duration) *auth.SessionIssuer, encryptionCertDER, encryptionKeyPKCS8 []byte) (*api.AuthConfig, error) {
 	if !s.Enabled {
 		return nil, nil
 	}
@@ -58,6 +58,8 @@ func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byt
 		IDPMetadataXML:      metadata,
 		ResponseBinding:     s.ResponseBinding,
 		NewArtifactResolver: samlArtifactResolver,
+		EncryptionCertDER:   encryptionCertDER,
+		EncryptionKeyPKCS8:  encryptionKeyPKCS8,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("server: configure SAML SP: %w", err)

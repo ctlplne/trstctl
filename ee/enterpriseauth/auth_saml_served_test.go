@@ -25,6 +25,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/samltest"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
@@ -405,6 +406,11 @@ func mustParseSAMLURL(t *testing.T, raw string) url.URL {
 
 func buildSAMLServer(t *testing.T, ctx context.Context, dsn string, samlCfg config.SAML) *server.Server {
 	t.Helper()
+	return buildSAMLServerWithDeps(t, ctx, dsn, samlCfg, nil)
+}
+
+func buildSAMLServerWithDeps(t *testing.T, ctx context.Context, dsn string, samlCfg config.SAML, mutate func(*server.Deps)) *server.Server {
+	t.Helper()
 	phaseStore, err := store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open served store: %v", err)
@@ -414,7 +420,11 @@ func buildSAMLServer(t *testing.T, ctx context.Context, dsn string, samlCfg conf
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)
 	}
-	srv, err := server.Build(ctx, server.Deps{TenantAuthFactory: Build, Store: phaseStore, Log: log, SAML: samlCfg})
+	deps := server.Deps{TenantAuthFactory: Build, Store: phaseStore, Log: log, SAML: samlCfg}
+	if mutate != nil {
+		mutate(&deps)
+	}
+	srv, err := server.Build(ctx, deps)
 	if err != nil {
 		_ = log.Close()
 		phaseStore.Close()
@@ -513,4 +523,97 @@ func TestServedSAMLArtifactBindingLoginResolvesOverTheBackChannel(t *testing.T) 
 	if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("replayed artifact = %d, want a refusal", resp.StatusCode)
 	}
+}
+
+// A77: with auth.saml.sp_key_file the SP advertises an encryption certificate,
+// the IdP (the library's, which honors an encryption KeyDescriptor) sends an
+// EncryptedAssertion instead of a plaintext one, and the served binary
+// decrypts it inside the cryptography boundary and mints the same session.
+func TestServedSAMLEncryptedAssertionIsDecryptedBehindTheBoundary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	const tenantA = "11111111-1111-1111-1111-111111111111"
+	dsn := serverTestPostgresDSN(t)
+	st, err := store.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	resetServerTestStore(t, st)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	baseURL := "http://" + ln.Addr().String()
+	idp := newMockSAMLIdP(t)
+	samlCfg := config.SAML{
+		Enabled: true, EntityID: baseURL + "/auth/saml/metadata", MetadataURL: baseURL + "/auth/saml/metadata",
+		ACSURL: baseURL + "/auth/saml/acs", IDPMetadataXML: idp.metadataXML(t),
+		SPKeyFile:         t.TempDir() + "/sp-encryption.sealed",
+		SessionSecretFile: t.TempDir() + "/session.secret", SessionTTL: "1h", LoginRedirect: "/",
+		TenantClaim: "tenant", GroupsClaim: "groups", EmailAttribute: "email",
+		TenantMappings: []config.TenantMapping{{Subject: "alice@example.test", TenantID: tenantA, Roles: []string{"admin"}}},
+	}
+	idp.spEntityID = samlCfg.EntityID
+	idp.spMetadataURL = samlCfg.MetadataURL
+	idp.registerUser("alice", "alice@example.test", "alice@example.test", tenantA, []string{"admins"})
+	rawKEK, err := seal.GenerateKEK()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kek, err := seal.NewLocalKEK(rawKEK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(kek.Destroy)
+	srv := buildSAMLServerWithDeps(t, ctx, dsn, samlCfg, func(d *server.Deps) { d.KEK = kek })
+	defer func() { _ = srv.Shutdown(context.Background()) }()
+	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = httpSrv.Serve(ln) }()
+	defer func() { _ = httpSrv.Close() }()
+
+	resp, err := http.Get(baseURL + "/auth/saml/metadata")
+	if err != nil {
+		t.Fatalf("GET SP metadata: %v", err)
+	}
+	metadata, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(metadata), `use="encryption"`) {
+		t.Fatalf("SP metadata advertises no encryption key: %s", metadata)
+	}
+
+	jar, _ := cookiejar.New(nil)
+	client := noFollowClient(jar)
+	idp.nextUser = "alice"
+	resp, err = client.Get(baseURL + "/auth/saml/login")
+	if err != nil || resp.StatusCode != http.StatusFound {
+		t.Fatalf("GET /auth/saml/login = %v %v", resp, err)
+	}
+	idpURL := resp.Header.Get("Location")
+	_ = resp.Body.Close()
+	resp, err = client.Get(idpURL)
+	if err != nil {
+		t.Fatalf("GET IdP SSO: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("IdP SSO = %d: %s", resp.StatusCode, body)
+	}
+	wire, err := base64.StdEncoding.DecodeString(samlHiddenInput(t, body, "SAMLResponse"))
+	if err != nil {
+		t.Fatalf("decode the IdP response: %v", err)
+	}
+	if !strings.Contains(string(wire), "EncryptedAssertion") || strings.Contains(string(wire), "<saml:Assertion") {
+		t.Fatalf("the IdP response on the wire is not an encrypted assertion: %s", wire)
+	}
+	if got := postSAMLForm(t, client, body); got != "/" {
+		t.Fatalf("encrypted-assertion login landed on %q, want /", got)
+	}
+	assertAuthMeTenant(t, baseURL, jar, tenantA)
 }

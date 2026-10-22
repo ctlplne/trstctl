@@ -552,6 +552,14 @@ type SAML struct {
 	// resolution service declared in its metadata (A76). That endpoint must be
 	// https, or plain http on a loopback host.
 	ResponseBinding string `json:"response_binding,omitempty"`
+	// SPKeyFile is the sealed-at-rest RSA identity this service provider
+	// advertises for assertion encryption (A77): its metadata then carries an
+	// encryption KeyDescriptor, an IdP that honors it sends EncryptedAssertion
+	// elements, and the SP decrypts them inside the cryptography boundary. It is
+	// generated on first start when the file is absent, sealed with the
+	// deployment KEK (secrets.kek_file is required), and shared by replicas.
+	// Unset, assertions are accepted in plaintext as before.
+	SPKeyFile string `json:"sp_key_file,omitempty"`
 	// SessionSecretFile persists the HMAC secret that signs browser sessions.
 	SessionSecretFile string `json:"session_secret_file,omitempty"`
 	// SessionTTL is the lifetime of a session cookie. Empty defaults to 12h.
@@ -1411,6 +1419,7 @@ type ProviderSAML struct {
 	IDPMetadataFile   string   `json:"idp_metadata_file,omitempty"`
 	IDPMetadataXML    string   `json:"idp_metadata_xml,omitempty"`
 	ResponseBinding   string   `json:"response_binding,omitempty"`
+	SPKeyFile         string   `json:"sp_key_file,omitempty"`
 	SessionSecretFile string   `json:"session_secret_file,omitempty"`
 	SessionTTL        string   `json:"session_ttl,omitempty"`
 	LoginRedirect     string   `json:"login_redirect,omitempty"`

@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	cryptosamlsp "trstctl.com/trstctl/internal/crypto/samlsp"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/events"
@@ -243,7 +244,7 @@ func attachEEProviderAPI(
 		providerIdempotency = orchestrator.NewIdempotency(deps.Store,
 			orchestrator.WithResultProtector(deps.IdempotencyResultProtector))
 	}
-	samlAuth, err := providerSAMLAuthenticator(cfg, access)
+	samlAuth, err := providerSAMLAuthenticator(cfg, access, deps.KEK)
 	if err != nil {
 		return err
 	}
@@ -344,9 +345,21 @@ func providerOIDCAuthenticator(
 func providerSAMLAuthenticator(
 	cfg *config.Config,
 	directory eeprovider.OperatorDirectory,
+	kek seal.KeyWrapper,
 ) (*eeprovider.SAMLAuthenticator, error) {
 	if !cfg.Provider.SAML.Enabled {
 		return nil, nil
+	}
+	var encryptionCertDER, encryptionKeyPKCS8 []byte
+	if strings.TrimSpace(cfg.Provider.SAML.SPKeyFile) != "" {
+		// A77: the provider SP's assertion-encryption identity, sealed under
+		// the deployment KEK like the tenant plane's.
+		var err error
+		encryptionCertDER, encryptionKeyPKCS8, err = server.SAMLEncryptionIdentity(cfg.Provider.SAML.SPKeyFile, kek)
+		if err != nil {
+			return nil, fmt.Errorf("provider.saml.sp_key_file: %w", err)
+		}
+		defer secret.Wipe(encryptionKeyPKCS8)
 	}
 	metadata := cfg.Provider.SAML.IDPMetadataXML
 	if path := strings.TrimSpace(cfg.Provider.SAML.IDPMetadataFile); path != "" {
@@ -363,6 +376,7 @@ func providerSAMLAuthenticator(
 		NewArtifactResolver: func(endpoint string) (*http.Client, error) {
 			return netsec.OutboundClientForEndpoint(endpoint, 10*time.Second)
 		},
+		EncryptionCertDER: encryptionCertDER, EncryptionKeyPKCS8: encryptionKeyPKCS8,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provider.saml: %w", err)

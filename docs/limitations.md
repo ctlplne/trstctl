@@ -4927,8 +4927,14 @@ IdP's artifact resolution service, dialed under the same endpoint rule as every
 configured URL (https, or plain http on a loopback host), so the signed response
 never transits the browser; an artifact arriving at an SP that did not ask for
 the binding is refused, and an IdP whose metadata declares no SOAP artifact
-resolution service fails startup. It does not yet expose encrypted assertion
-decryption or SLO/logout propagation. LDAP / Active Directory serves username/password bind at
+resolution service fails startup. Encrypted assertions are served
+(`auth.saml.sp_key_file`, `provider.saml.sp_key_file`): the SP keeps an RSA
+identity sealed at rest under the deployment KEK (generated on first start,
+shared by replicas), advertises its certificate in the SP metadata with
+`use="encryption"`, and decrypts `EncryptedAssertion` elements inside the
+cryptography boundary; an IdP that honors the metadata then never sends the
+assertion in the clear. Without the file, assertions are accepted in plaintext
+as before. It does not yet expose SLO/logout propagation. LDAP / Active Directory serves username/password bind at
 `POST /auth/ldap/login`, supports direct-bind or service-account user search plus
 group search, and maps directory groups to tenant roles. It does not yet implement
 Kerberos/GSSAPI, NTLM, password-change flows, nested-group expansion, or directory

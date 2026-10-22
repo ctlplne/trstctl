@@ -877,22 +877,74 @@ func (s *Server) protocolTransportKey(keyFile string, wrapper sealKeyWrapper) (c
 }
 
 func loadProtocolTransportKey(path string, wrapper sealKeyWrapper) (certDER, keyPKCS8 []byte, err error) {
+	return loadSealedTransportIdentity(path, wrapper, protocolRAAAD)
+}
+
+func saveProtocolTransportKey(path string, wrapper sealKeyWrapper, certDER, keyPKCS8 []byte) error {
+	return saveSealedTransportIdentity(path, wrapper, protocolRAAAD, certDER, keyPKCS8)
+}
+
+// samlSPEncryptionAAD binds a sealed SAML SP encryption identity to its purpose
+// (A77), so a protocol RA file cannot be presented as one or vice versa.
+const samlSPEncryptionAAD = "trstctl-saml-sp-encryption-v1"
+
+// SAMLEncryptionIdentity loads the sealed RSA identity a SAML service provider
+// advertises for assertion encryption (A77), generating and sealing one on
+// first use the way the protocol RA identity is: RSA-2048 under a self-signed
+// certificate, sealed with the deployment KEK, created atomically so replicas
+// that race converge on one file. The caller owns and wipes the returned key.
+func SAMLEncryptionIdentity(path string, wrapper sealKeyWrapper) (certDER, keyPKCS8 []byte, err error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, nil, errors.New("SAML SP encryption key file is required")
+	}
+	if wrapper == nil {
+		return nil, nil, errors.New("SAML SP encryption key requires a KEK (secrets.kek_file)")
+	}
+	if certDER, keyPKCS8, err := loadSealedTransportIdentity(path, wrapper, samlSPEncryptionAAD); err == nil {
+		return certDER, keyPKCS8, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, err
+	}
+	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer signer.Destroy()
+	der, err := crypto.SelfSignedCACert(signer, "trstctl SAML SP encryption", protocolRATTL)
+	if err != nil {
+		return nil, nil, err
+	}
+	pkcs8, err := signer.PKCS8()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := saveSealedTransportIdentity(path, wrapper, samlSPEncryptionAAD, der, pkcs8); err != nil {
+		secret.Wipe(pkcs8)
+		if errors.Is(err, os.ErrExist) {
+			return SAMLEncryptionIdentity(path, wrapper)
+		}
+		return nil, nil, err
+	}
+	return der, pkcs8, nil
+}
+
+func loadSealedTransportIdentity(path string, wrapper sealKeyWrapper, aad string) (certDER, keyPKCS8 []byte, err error) {
 	sealed, err := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
 		return nil, nil, err
 	}
-	plaintext, err := seal.Open(wrapper, sealed, []byte(protocolRAAAD))
+	plaintext, err := seal.Open(wrapper, sealed, []byte(aad))
 	if err != nil {
-		return nil, nil, fmt.Errorf("open sealed protocol RA identity: %w", err)
+		return nil, nil, fmt.Errorf("open sealed transport identity: %w", err)
 	}
 	defer secret.Wipe(plaintext)
 	return decodeProtocolTransportKey(plaintext)
 }
 
-func saveProtocolTransportKey(path string, wrapper sealKeyWrapper, certDER, keyPKCS8 []byte) error {
+func saveSealedTransportIdentity(path string, wrapper sealKeyWrapper, aad string, certDER, keyPKCS8 []byte) error {
 	plaintext := encodeProtocolTransportKey(certDER, keyPKCS8)
 	defer secret.Wipe(plaintext)
-	sealed, err := seal.Seal(wrapper, plaintext, []byte(protocolRAAAD))
+	sealed, err := seal.Seal(wrapper, plaintext, []byte(aad))
 	if err != nil {
 		return err
 	}

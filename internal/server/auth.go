@@ -92,12 +92,23 @@ func buildBrowserAuthWithSCIM(d Deps) (options []api.Option, scimConfig *api.SCI
 	}
 	var extra editionseam.TenantAuthConfig
 	if d.TenantAuthFactory != nil {
-		extra, err = d.TenantAuthFactory(editionseam.TenantAuthDeps{
+		deps := editionseam.TenantAuthDeps{
 			SAML: d.SAML, LDAP: d.LDAP, SCIM: d.SCIM, Secure: d.SecurityHeaders.TLS,
 			NewSessionIssuer: func(secret []byte, ttl time.Duration) *auth.SessionIssuer {
 				return newBrowserSessionIssuer(secret, ttl, d.Store)
 			},
-		})
+		}
+		if d.SAML.Enabled && strings.TrimSpace(d.SAML.SPKeyFile) != "" {
+			// A77: the SP's assertion-encryption identity is core-owned sealed
+			// material; the enterprise factory only receives bytes it copies.
+			certDER, keyPKCS8, err := SAMLEncryptionIdentity(d.SAML.SPKeyFile, d.KEK)
+			if err != nil {
+				return nil, nil, fmt.Errorf("server: auth.saml.sp_key_file: %w", err)
+			}
+			defer secret.Wipe(keyPKCS8)
+			deps.SAMLEncryptionCertDER, deps.SAMLEncryptionKeyPKCS8 = certDER, keyPKCS8
+		}
+		extra, err = d.TenantAuthFactory(deps)
 		if err != nil {
 			return nil, nil, err
 		}

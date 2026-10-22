@@ -19,6 +19,12 @@ type TenantAuthDeps struct {
 	SCIM             config.SCIM
 	Secure           bool
 	NewSessionIssuer func([]byte, time.Duration) *auth.SessionIssuer
+	// SAMLEncryptionCertDER and SAMLEncryptionKeyPKCS8 are the service
+	// provider's assertion-encryption identity (A77), loaded by the core from
+	// auth.saml.sp_key_file; nil when none is configured. The factory copies
+	// what it keeps; the core wipes these after the call.
+	SAMLEncryptionCertDER  []byte
+	SAMLEncryptionKeyPKCS8 []byte
 }
 type TenantAuthConfig struct {
 	SAML *api.AuthConfig

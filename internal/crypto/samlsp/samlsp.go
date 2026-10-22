@@ -7,6 +7,8 @@
 package samlsp
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -38,6 +40,13 @@ type Config struct {
 	// call, given the IdP's artifact resolution endpoint, so the caller's
 	// outbound network policy applies to it. Required with the artifact binding.
 	NewArtifactResolver func(endpoint string) (*http.Client, error)
+	// EncryptionCertDER and EncryptionKeyPKCS8 are the SP's assertion
+	// encryption identity (A77): the certificate is advertised in the SP
+	// metadata with use="encryption" and the RSA key decrypts
+	// EncryptedAssertion elements. The key bytes are copied and the caller's
+	// slice may be wiped after construction. Both empty means plaintext only.
+	EncryptionCertDER  []byte
+	EncryptionKeyPKCS8 []byte
 }
 
 // Response bindings an SP may ask the IdP for.
@@ -74,11 +83,16 @@ type Assertion struct {
 type ServiceProvider struct {
 	sp       *saml.ServiceProvider
 	artifact bool
+	decrypts bool
 }
 
 // ArtifactBinding reports whether this SP asks the IdP for the artifact
 // response binding.
 func (p *ServiceProvider) ArtifactBinding() bool { return p.artifact }
+
+// DecryptsAssertions reports whether this SP advertises an encryption key and
+// can decrypt EncryptedAssertion elements (A77).
+func (p *ServiceProvider) DecryptsAssertions() bool { return p.decrypts }
 
 // NewServiceProvider builds a SAML SP from operator configuration.
 func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
@@ -118,6 +132,29 @@ func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
 		return nil, fmt.Errorf("samlsp: response_binding %q must be %q or %q", cfg.ResponseBinding, ResponseBindingPost, ResponseBindingArtifact)
 	}
 	out := &ServiceProvider{sp: sp}
+	if len(cfg.EncryptionCertDER) != 0 || len(cfg.EncryptionKeyPKCS8) != 0 {
+		if len(cfg.EncryptionCertDER) == 0 || len(cfg.EncryptionKeyPKCS8) == 0 {
+			return nil, errors.New("samlsp: assertion encryption needs both the certificate and the key")
+		}
+		cert, err := x509.ParseCertificate(cfg.EncryptionCertDER)
+		if err != nil {
+			return nil, fmt.Errorf("samlsp: parse encryption certificate: %w", err)
+		}
+		parsed, err := x509.ParsePKCS8PrivateKey(cfg.EncryptionKeyPKCS8)
+		if err != nil {
+			return nil, fmt.Errorf("samlsp: parse encryption key: %w", err)
+		}
+		key, ok := parsed.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("samlsp: assertion encryption needs an RSA key, not %T (XML Encryption key transport is RSA-OAEP/RSA-1.5)", parsed)
+		}
+		if pub, ok := cert.PublicKey.(*rsa.PublicKey); !ok || !pub.Equal(key.Public()) {
+			return nil, errors.New("samlsp: encryption certificate does not match its key")
+		}
+		sp.Certificate = cert
+		sp.Key = key
+		out.decrypts = true
+	}
 	if strings.EqualFold(strings.TrimSpace(cfg.ResponseBinding), ResponseBindingArtifact) {
 		endpoint := sp.GetArtifactBindingLocation(saml.SOAPBinding)
 		if endpoint == "" {
