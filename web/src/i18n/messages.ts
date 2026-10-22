@@ -27563,7 +27563,7 @@ export const messages = {
   "posture.pqcPilot.waves": { defaultMessage: "Waves (JSON)", description: "Field label for the waves definition." },
   "posture.pqcPilot.wavesHelp": {
     defaultMessage:
-      "An ordered list; the first wave is the canary. Each wave has a name and targets with target_id, address, optional server_name and the served leaf's SHA-256 fingerprint.",
+      "An ordered list; the first wave is the canary. Each wave has a name and targets with target_id, address, optional server_name and the endpoint's current leaf's SHA-256 fingerprint.",
     description: "Help text for the waves JSON field.",
   },
   "posture.pqcPilot.wavesInvalid": {
@@ -27581,7 +27581,7 @@ export const messages = {
   "posture.pqcPilot.loading": { defaultMessage: "Loading pilots…", description: "Loading state for the pilot list." },
   "posture.pqcPilot.empty": { defaultMessage: "No pilots yet", description: "Empty state title for the pilot list." },
   "posture.pqcPilot.emptyBody": {
-    defaultMessage: "Start one above once a post-quantum leaf is served on at least one endpoint.",
+    defaultMessage: "Start one above once a post-quantum leaf is live on at least one endpoint.",
     description: "Empty state body for the pilot list.",
   },
   "posture.pqcPilot.waveProgress": {
