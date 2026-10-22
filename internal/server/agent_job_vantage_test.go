@@ -59,11 +59,12 @@ func TestVantageCensusCoversEveryShippedConnector(t *testing.T) {
 		"a10": connector.VantageNetworkRelay, "kemp": connector.VantageNetworkRelay,
 		"cisco": connector.VantageNetworkRelay, "fortigate": connector.VantageNetworkRelay,
 		"paloalto": connector.VantageNetworkRelay,
-		// Cloud certificate stores: the current runtime is the control plane's
-		// egress-guarded client. E1 still reports their network-relay migration
-		// unimplemented; the current vantage cannot silently close that scope.
-		"aws-acm": connector.VantageControlPlane, "azure-keyvault": connector.VantageControlPlane,
-		"gcp-certificate-manager": connector.VantageControlPlane,
+		// Cloud certificate stores: reached over their management APIs from
+		// inside the segment a relay sits in (A59). ControlPlaneCarriesNatively
+		// keeps the control plane's egress-guarded client as their executor
+		// where a tenant has no relay enrolled.
+		"aws-acm": connector.VantageNetworkRelay, "azure-keyvault": connector.VantageNetworkRelay,
+		"gcp-certificate-manager": connector.VantageNetworkRelay,
 	}
 	for _, name := range shipped {
 		want, declared := explicit[name]

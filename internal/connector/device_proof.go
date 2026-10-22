@@ -40,6 +40,14 @@ var deviceProvenFamilies = []string{
 	"kemp",
 	"netscaler",
 	"paloalto",
+	// The cloud stores' doubles model the provider REST surface the
+	// connector speaks (SigV4-signed ImportCertificate, the vault import
+	// endpoint, Certificate Manager create/patch/map entries with
+	// long-running operations), and the connector tests and the relay
+	// execution proof drive the real connectors against them (A59).
+	"aws-acm",
+	"azure-keyvault",
+	"gcp-certificate-manager",
 }
 
 // DeviceProven reports whether this family's deploy is proven against a faithful

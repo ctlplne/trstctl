@@ -32,8 +32,10 @@ func TestConnectorCatalogPublishesTheAcceptedThirteenFamilyParityProgram(t *test
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("catalog parity families = %v, want the accepted E1 denominator %v", got, want)
 	}
-	if counts["migrated"] != 6 || counts["architecture_exception"] != 1 || counts["unimplemented"] != 6 || len(counts) != 3 {
-		t.Fatalf("catalog parity dispositions = %v, want migrated=6 architecture_exception=1 unimplemented=6", counts)
+	// A59: GCP Certificate Manager migrated; ACM and Key Vault retained
+	// beside cisco; Envoy, PostgreSQL and MySQL remain host work.
+	if counts["migrated"] != 7 || counts["architecture_exception"] != 3 || counts["unimplemented"] != 3 || len(counts) != 3 {
+		t.Fatalf("catalog parity dispositions = %v, want migrated=7 architecture_exception=3 unimplemented=3", counts)
 	}
 }
 
@@ -45,7 +47,7 @@ func TestConnectorCatalogPublishesShippedVantageWithoutControlPlaneRegistration(
 	want := map[string]string{
 		"apache":  string(connector.VantageHostAgent),
 		"f5":      string(connector.VantageNetworkRelay),
-		"aws-acm": string(connector.VantageControlPlane),
+		"aws-acm": string(connector.VantageNetworkRelay),
 	}
 	for _, item := range items {
 		vantage, ok := want[item.Name]

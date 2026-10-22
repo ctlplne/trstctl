@@ -46,6 +46,17 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 			return nil, nil
 		}
 		vantage := s.connectorRegistry.TargetVantageFor(target.Type)
+		// A59: a cloud store's preview runs on the control-plane outbox worker
+		// where the tenant has no network relay enrolled, as its deploys do.
+		if connector.ControlPlaneCarriesNatively(target.Type) && vantage == connector.VantageNetworkRelay {
+			hasRelay, err := s.store.TenantHasNetworkRelay(ctx, tenantID)
+			if err != nil {
+				return nil, err
+			}
+			if !hasRelay {
+				vantage = connector.VantageControlPlane
+			}
+		}
 		if vantage != connector.VantageControlPlane && !claimable["connector.test"] {
 			// Agent-owned tests are an explicit operator choice. A disabled claim
 			// kind keeps the historical honest local fallback instead of queueing
@@ -116,6 +127,19 @@ func (d *issuanceDispatcher) routeConnectorTest(ctx context.Context, m orchestra
 	if m.RequiredAgentRole == string(connector.VantageControlPlane) {
 		return d.handleControlPlaneConnectorTest(ctx, m)
 	}
+	// A59: a cloud store's row stamped for a relay still runs here while the
+	// tenant has no relay enrolled (the relay may have been offboarded after
+	// the row was queued); an appliance row never does.
+	var payload connector.DeployPayload
+	if m.RequiredAgentRole == "network" && json.Unmarshal(m.Payload, &payload) == nil {
+		fallback, err := d.cloudRowFallsBackToControlPlane(ctx, m.TenantID, payload.Connector)
+		if err != nil {
+			return orchestrator.DeferDelivery(fmt.Errorf("server: check network relay before %s preview: %w", payload.Connector, err))
+		}
+		if fallback {
+			return d.handleControlPlaneConnectorTest(ctx, m)
+		}
+	}
 	return orchestrator.DeferDelivery(fmt.Errorf(
 		"server: %s executes on a target-vantage agent, not the control plane", m.Destination))
 }
@@ -148,7 +172,7 @@ func (d *issuanceDispatcher) handleControlPlaneConnectorTest(ctx context.Context
 	if d.connectorRegistry == nil || !d.connectorRegistry.Has(payload.Connector) {
 		return recordBlocked("preview stopped before target contact: the configured native connector is not loaded")
 	}
-	if d.connectorDeployVantage(payload.Connector) != connector.VantageControlPlane {
+	if d.connectorDeployVantage(payload.Connector) != connector.VantageControlPlane && !connector.ControlPlaneCarriesNatively(payload.Connector) {
 		return orchestrator.DeferDelivery(fmt.Errorf("server: %s connector preview executes at its target vantage, not the control plane", payload.Connector))
 	}
 	plan, err := d.connectorRegistry.Preview(ctx, payload)

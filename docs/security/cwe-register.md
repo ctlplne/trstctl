@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1606 annotated sites across 26 rules. Each row is
+1611 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (339 sites)
+### G101 — CWE-798 Use of hardcoded credentials (344 sites)
 
 | Location | Reason |
 |---|---|
@@ -93,15 +93,18 @@ not this file.
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:70` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:93` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:113` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:132` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:151` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:171` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:190` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:297` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:75` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:98` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:118` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:137` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:156` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:176` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:195` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:216` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:239` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:258` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:331` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:369` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
 | `internal/agent/relay/relay_test.go:147` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:342` | reference NAME, not a credential (CWE-798) |
@@ -286,6 +289,8 @@ not this file.
 | `internal/server/audit_feed_served_test.go:167` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/auth_unit_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/cloud_relay_execution_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/cloud_relay_execution_served_test.go:32` | a secret-store NAME the target references, not a credential value (CWE-798) |
 | `internal/server/cmdb_served_test.go:32` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:44` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1287,7 +1292,7 @@ not this file.
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2542` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/connector/device_proof_census_test.go:46` | fixed in-tree path derived from the census (CWE-22) |
+| `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:353` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |

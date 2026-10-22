@@ -129,15 +129,21 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 		if req.RequiredAgentID != "" {
 			return ConnectorRollbackQueued{}, errors.New("orchestrator: an appliance re-bind cannot be pinned to a host agent")
 		}
-		// A family whose shipped vantage is the control plane (the cloud
-		// certificate stores, A58) re-binds from the control plane's own
-		// egress-guarded client, exactly where its deploys run. The row is
-		// stamped control_plane so no agent can claim it; the outbox
-		// dispatcher executes it. Appliance families stay relay work.
-		if vantage, shipped := connector.ShippedTargetVantage(req.Connector); shipped && vantage == connector.VantageControlPlane {
-			req.RequiredAgentRole = string(connector.VantageControlPlane)
-		} else {
-			req.RequiredAgentRole = "network"
+		// A cloud certificate store (A58/A59) re-binds from the control
+		// plane's own egress-guarded client where the tenant has no network
+		// relay, exactly where its deploys then run: the row is stamped
+		// control_plane so no agent can claim it and the outbox dispatcher
+		// executes it. With a relay enrolled the relay executes it, as it
+		// does the deploys. Appliance families are always relay work.
+		req.RequiredAgentRole = "network"
+		if connector.ControlPlaneCarriesNatively(req.Connector) {
+			hasRelay, err := o.store.TenantHasNetworkRelay(ctx, tenantID)
+			if err != nil {
+				return ConnectorRollbackQueued{}, fmt.Errorf("orchestrator: check network relay before rollback: %w", err)
+			}
+			if !hasRelay {
+				req.RequiredAgentRole = string(connector.VantageControlPlane)
+			}
 		}
 	default:
 		return ConnectorRollbackQueued{}, connector.ErrRollbackUnsupported

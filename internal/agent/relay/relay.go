@@ -33,12 +33,16 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/a10"
+	"trstctl.com/trstctl/internal/connector/acm"
+	"trstctl.com/trstctl/internal/connector/azurekv"
 	"trstctl.com/trstctl/internal/connector/cisco"
 	"trstctl.com/trstctl/internal/connector/f5"
 	"trstctl.com/trstctl/internal/connector/fortigate"
+	"trstctl.com/trstctl/internal/connector/gcpcm"
 	"trstctl.com/trstctl/internal/connector/kemp"
 	"trstctl.com/trstctl/internal/connector/netscaler"
 	"trstctl.com/trstctl/internal/connector/paloalto"
@@ -149,6 +153,22 @@ type TargetConfig struct {
 	// object base name on the peer when it differs.
 	PeerEndpoint   string `json:"peer_endpoint,omitempty"`
 	PeerObjectName string `json:"peer_object_name,omitempty"`
+	// Cloud certificate stores (A59). The access key id, project, location,
+	// region and API version are routing facts; every credential is a
+	// secret:// reference the relay redeems for one attempt.
+	Region             string `json:"region,omitempty"`
+	AccessKeyID        string `json:"access_key_id,omitempty"`
+	SecretAccessKeyRef string `json:"secret_access_key_ref,omitempty"`
+	SessionTokenRef    string `json:"session_token_ref,omitempty"`
+	BearerTokenRef     string `json:"bearer_token_ref,omitempty"`
+	APIVersion         string `json:"api_version,omitempty"`
+	Project            string `json:"project,omitempty"`
+	Location           string `json:"location,omitempty"`
+	PollInterval       string `json:"poll_interval,omitempty"`
+	// CertificateMapEntry ("map/entry") makes gcp-certificate-manager deploys
+	// fingerprint-named and bound, which is what makes the target
+	// rollback-capable (A58).
+	CertificateMapEntry string `json:"certificate_map_entry,omitempty"`
 }
 
 // RelayConnectorKinds is the closed set a relay can execute.
@@ -418,6 +438,53 @@ func buildRelayConnector(name string, target TargetConfig, material Material) (c
 			return nil, err
 		}
 		return fortigate.New(target.Endpoint, token, fortigate.WithBindTo(bind)), nil
+	case "aws-acm":
+		// The relay mirrors the control plane's cloud constructors (A59):
+		// same packages, same options, credentials redeemed by reference.
+		secretKey, err := require(target.SecretAccessKeyRef, "AWS secret access key")
+		if err != nil {
+			return nil, err
+		}
+		creds := acm.Credentials{AccessKeyID: target.AccessKeyID, SecretAccessKey: secretKey}
+		if strings.TrimSpace(target.SessionTokenRef) != "" {
+			sessionToken, err := require(target.SessionTokenRef, "AWS session token")
+			if err != nil {
+				return nil, err
+			}
+			creds.SessionToken = sessionToken
+		}
+		return acm.New(target.Region, creds, acm.WithEndpoint(target.Endpoint)), nil
+	case "azure-keyvault":
+		token, err := require(target.BearerTokenRef, "Azure bearer token")
+		if err != nil {
+			return nil, err
+		}
+		var options []azurekv.Option
+		if target.APIVersion != "" {
+			options = append(options, azurekv.WithAPIVersion(target.APIVersion))
+		}
+		return azurekv.New(target.Endpoint, azurekv.StaticToken(token), options...), nil
+	case "gcp-certificate-manager":
+		token, err := require(target.BearerTokenRef, "GCP bearer token")
+		if err != nil {
+			return nil, err
+		}
+		entry, err := gcpcm.ParseCertificateMapEntry(target.CertificateMapEntry)
+		if err != nil {
+			return nil, err
+		}
+		options := []gcpcm.Option{gcpcm.WithEndpoint(target.Endpoint)}
+		if entry.Map != "" {
+			options = append(options, gcpcm.WithCertificateMapEntry(entry))
+		}
+		if target.PollInterval != "" {
+			interval, err := time.ParseDuration(target.PollInterval)
+			if err != nil || interval <= 0 {
+				return nil, errors.New("relay: invalid GCP poll_interval")
+			}
+			options = append(options, gcpcm.WithPollInterval(interval))
+		}
+		return gcpcm.New(target.Project, target.Location, gcpcm.StaticToken(token), options...), nil
 	case "paloalto":
 		apiKey, err := require(target.APIKeyRef, "palo alto api key")
 		if err != nil {

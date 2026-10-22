@@ -21,13 +21,13 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 | Family | API/local contract | E1 disposition | Rollback | External target tested |
 | --- | --- | --- | --- | --- |
 | `a10` | A10 Thunder aXAPI v3 | `migrated` | yes (re-bind) | no |
-| `aws-acm` | AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4) | `unimplemented` | no | no |
-| `azure-keyvault` | Azure Key Vault Certificates REST import API v7.4 | `unimplemented` | no | no |
+| `aws-acm` | AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4) | `architecture_exception` | no | no |
+| `azure-keyvault` | Azure Key Vault Certificates REST import API v7.4 | `architecture_exception` | no | no |
 | `cisco` | Cisco management certificate-import API (HTTP Basic, JSON) | `architecture_exception` | no | no |
 | `envoy` | Envoy SDS management HTTP resource (v3 Secret payload) | `unimplemented` | yes (host restore) | no |
 | `f5` | F5 BIG-IP iControl REST | `migrated` | yes (re-bind) | no |
 | `fortigate` | FortiOS CMDB REST (vpn.certificate/local, system/global, vpn.ssl/settings) | `migrated` | yes (re-bind) | no |
-| `gcp-certificate-manager` | Google Cloud Certificate Manager certificates and certificateMapEntries REST API | `unimplemented` | yes (re-bind) | no |
+| `gcp-certificate-manager` | Google Cloud Certificate Manager certificates and certificateMapEntries REST API | `migrated` | yes (re-bind) | no |
 | `kemp` | Kemp LoadMaster RESTful API | `migrated` | yes (re-bind) | no |
 | `mysql` | host-local MySQL TLS files plus a fixed mysql-tls-reload action for ALTER INSTANCE RELOAD TLS | `unimplemented` | yes (host restore) | no |
 | `netscaler` | Citrix NetScaler NITRO REST | `migrated` | yes (re-bind) | no |
@@ -53,33 +53,33 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 **API/local contract:** AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4)
 
-**E1 disposition:** `unimplemented`
+**E1 disposition:** `architecture_exception`
 
-**Exercised by connector tests (not a device-API proof):**
+**Exercised against a faithful management-API double:**
 
 - deploy: import an externally issued certificate and key into a new or existing ACM ARN
 - request contract: sign the exact AWS JSON 1.1 request with SigV4 through the connector sandbox
 
 **Known limits:**
 
-- no rollback: the connector does not retain and re-import a predecessor ACM version
-- no E1 relay migration: execution remains in the control plane with no relay constructor, relay proof, or control-plane refusal
+- no rollback: ACM re-imports in place under one certificate ARN and keeps no previous version, so there is no installed predecessor to re-bind and no readback; restoring one would mean re-uploading a key the control plane no longer holds
+- E1 architecture exception: an enrolled network relay executes imports and the control plane's egress-guarded client remains the executor where no relay is enrolled; rollback and readback are not expressible, so the family keeps E1 open
 
 ## azure-keyvault
 
 **API/local contract:** Azure Key Vault Certificates REST import API v7.4
 
-**E1 disposition:** `unimplemented`
+**E1 disposition:** `architecture_exception`
 
-**Exercised by connector tests (not a device-API proof):**
+**Exercised against a faithful management-API double:**
 
 - deploy: import a PEM certificate and key as a new version of a named vault certificate
 - authentication contract: acquire and wipe an Entra ID bearer token per operation
 
 **Known limits:**
 
-- no rollback: the connector does not select and restore a predecessor certificate version
-- no E1 relay migration: execution remains in the control plane with no relay constructor, relay proof, or control-plane refusal
+- no rollback: Key Vault keeps every imported version but serves the newest to consumers that read by name and exposes no call that makes an older version current; re-pointing consumers at a version is outside this connector, and there is no readback of what a consumer serves
+- E1 architecture exception: an enrolled network relay executes imports and the control plane's egress-guarded client remains the executor where no relay is enrolled; rollback and readback are not expressible, so the family keeps E1 open
 
 ## cisco
 
@@ -152,9 +152,9 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 **API/local contract:** Google Cloud Certificate Manager certificates and certificateMapEntries REST API
 
-**E1 disposition:** `unimplemented`
+**E1 disposition:** `migrated`
 
-**Exercised by connector tests (not a device-API proof):**
+**Exercised against a faithful management-API double:**
 
 - deploy: patch a self-managed certificate and private key with updateMask=self_managed; with certificate_map_entry the deploy instead creates a fingerprint-named certificate and points the map entry at it, leaving the predecessor in the project
 - rollback: re-point the certificate map entry at a previously created fingerprint-named certificate, uploading nothing (targets with certificate_map_entry only); a predecessor the project no longer holds fails rather than reporting success
@@ -164,8 +164,8 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 **Known limits:**
 
 - a target without certificate_map_entry patches the target-named certificate in place, so no predecessor survives and its rollback is refused as not configured
-- rollback executes in the control plane, the family's shipped vantage; objects accumulate one certificate per deploy and nothing prunes them
-- no E1 relay migration: execution remains in the control plane with no relay constructor, relay proof, or control-plane refusal
+- objects accumulate one certificate per deploy on a map-entry target and nothing prunes them
+- E1 migrated: an enrolled network relay executes deploys, re-binds and readbacks and the control plane refuses the deploy while a relay is enrolled; where none is enrolled the control plane's egress-guarded client executes them, including the re-bind rollback
 
 ## kemp
 

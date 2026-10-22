@@ -93,6 +93,13 @@ var relayVantageFamilies = []string{
 	"kemp",
 	"netscaler",
 	"paloalto",
+	// The cloud certificate stores are reached over their management APIs
+	// like an appliance, from inside the VPC or private-endpoint segment a
+	// relay sits in (A59). ControlPlaneCarriesNatively keeps the control
+	// plane's own client as their executor where no relay is enrolled.
+	"aws-acm",
+	"azure-keyvault",
+	"gcp-certificate-manager",
 }
 
 // IsRelayVantageFamily reports whether a family's deploys execute on a relay.
@@ -167,6 +174,13 @@ const (
 // which point it must pass the same gates as everyone else, not skip them.
 var cpRetainedFamilies = []string{
 	"cisco",
+	// ACM re-imports in place under one ARN with no previous version; Key
+	// Vault serves the newest version by name with no call that makes an
+	// older one current. Neither API can express a re-bind or a readback, so
+	// like cisco they execute on a relay where one is enrolled and keep the
+	// control-plane path as an explicit exception (A58, A59).
+	"aws-acm",
+	"azure-keyvault",
 }
 
 // CPRetained reports whether a family's control-plane execution remains as an
@@ -181,30 +195,40 @@ func CPRetained(family string) bool {
 	return false
 }
 
-// retainedScopeNote is the operator-facing sentence for a retained family.
-const retainedScopeNote = "open architecture exception: control-plane execution remains because this " +
-	"device's management API imports a certificate by name with no separately addressable " +
-	"installed object, so relay rollback and readback are not expressible; this family keeps E1 " +
-	"open and its support-matrix row records the limitation"
+// retainedScopeNotes are the operator-facing sentences for the retained
+// families, each naming the API property that keeps E1 open for it.
+var retainedScopeNotes = map[string]string{
+	"cisco": "open architecture exception: control-plane execution remains because this " +
+		"device's management API imports a certificate by name with no separately addressable " +
+		"installed object, so relay rollback and readback are not expressible; this family keeps E1 " +
+		"open and its support-matrix row records the limitation",
+	"aws-acm": "open architecture exception: an enrolled network relay executes ACM imports, but " +
+		"the control-plane path remains because ACM re-imports in place under one certificate ARN " +
+		"and keeps no previous version, so relay rollback and readback are not expressible; this " +
+		"family keeps E1 open and its support-matrix row records the limitation",
+	"azure-keyvault": "open architecture exception: an enrolled network relay executes Key Vault " +
+		"imports, but the control-plane path remains because Key Vault serves the newest version " +
+		"by name and exposes no call that makes an older version current, so relay rollback and " +
+		"readback are not expressible; this family keeps E1 open and its support-matrix row " +
+		"records the limitation",
+}
 
 // unimplementedScopeNotes state where each omitted family executes today and
 // which E1 proof is absent. They are deliberately per family: one generic
 // "pending" label would hide that cloud stores still run in the control plane
 // while Envoy and the database connectors already run on host agents.
 var unimplementedScopeNotes = map[string]string{
-	"envoy": "E1 network-relay migration is unimplemented: Envoy SDS currently executes on the " +
-		"co-resident host agent and has no network-relay constructor, relay proof, or E1 refusal",
-	"aws-acm": "E1 network-relay migration is unimplemented: AWS ACM currently executes in the " +
-		"control plane and has no relay constructor, relay proof, or control-plane refusal",
-	"azure-keyvault": "E1 network-relay migration is unimplemented: Azure Key Vault currently executes " +
-		"in the control plane and has no relay constructor, relay proof, or control-plane refusal",
-	"gcp-certificate-manager": "E1 network-relay migration is unimplemented: GCP Certificate Manager " +
-		"currently executes in the control plane and has no relay constructor, relay proof, or " +
-		"control-plane refusal",
-	"postgresql": "E1 network-relay migration is unimplemented: PostgreSQL currently executes on the " +
-		"host agent and has no network-relay constructor, relay proof, or E1 refusal",
-	"mysql": "E1 network-relay migration is unimplemented: MySQL currently executes on the host agent " +
-		"and has no network-relay constructor, relay proof, or E1 refusal",
+	"envoy": "E1 network-relay migration is unimplemented: Envoy SDS executes on the co-resident " +
+		"host agent because the admin/SDS socket binds loopback in the deployments shipped for; a " +
+		"remote Envoy reached over the network needs a per-target vantage choice before a relay " +
+		"constructor, relay proof, or E1 refusal can honestly exist",
+	"postgresql": "E1 network-relay migration is unimplemented and not expressible as relay work: " +
+		"PostgreSQL's connector writes the server's own TLS files and runs a local reload, which " +
+		"only the host agent on that machine can do; no network-relay constructor, relay proof, or " +
+		"E1 refusal exists",
+	"mysql": "E1 network-relay migration is unimplemented and not expressible as relay work: MySQL's " +
+		"connector writes the server's own TLS files and runs a local reload, which only the host " +
+		"agent on that machine can do; no network-relay constructor, relay proof, or E1 refusal exists",
 }
 
 // haPairedFamilies are families whose HA deployment gives each peer its own
@@ -420,7 +444,7 @@ func ParityStatusFor(family string) ParityStatus {
 	}
 	if CPRetained(family) {
 		status.CPRetained = true
-		status.ScopeNote = retainedScopeNote
+		status.ScopeNote = retainedScopeNotes[family]
 	}
 	if !IsE1Family(family) {
 		return status

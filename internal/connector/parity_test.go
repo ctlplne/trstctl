@@ -29,11 +29,6 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		ParityGateRelayExecutionProof,
 		ParityGateCPPathRefusal,
 	}
-	missingRelayImplementationWithRebind := []ParityGate{
-		ParityGateDeviceProof,
-		ParityGateRelayExecutionProof,
-		ParityGateCPPathRefusal,
-	}
 	want := map[string]struct {
 		migrated    bool
 		retained    bool
@@ -70,17 +65,16 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// readback as not configured.
 		"fortigate": {migrated: true, disposition: ParityDispositionMigrated},
 		"paloalto":  {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
-		// The source plan's six omitted families. None has a network-relay
-		// constructor, relay execution proof, or control-plane refusal. Envoy,
-		// PostgreSQL, and MySQL currently execute on host agents; the cloud
-		// stores execute in the control plane. Those are honest runtime facts,
-		// not permission to remove them from E1's accepted denominator.
-		"envoy":          {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
-		"aws-acm":        {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
-		"azure-keyvault": {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
-		// A58: the GCP connector re-binds a certificate map entry and reads
-		// it back, so those two gates are met; relay execution is not.
-		"gcp-certificate-manager": {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementationWithRebind},
+		// The source plan's six omitted families, after A59. The cloud stores
+		// execute on an enrolled relay: GCP re-binds a certificate map entry and
+		// passes every gate; ACM and Key Vault cannot express a re-bind or a
+		// readback, so like cisco they are retained exceptions. Envoy,
+		// PostgreSQL and MySQL execute on host agents and remain in the
+		// accepted denominator rather than being removed from it.
+		"envoy":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"aws-acm":                 {migrated: false, retained: true, disposition: ParityDispositionArchitectureException, missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
+		"azure-keyvault":          {migrated: false, retained: true, disposition: ParityDispositionArchitectureException, missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
+		"gcp-certificate-manager": {migrated: true, disposition: ParityDispositionMigrated},
 		"postgresql":              {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
 		"mysql":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
 	}
@@ -138,7 +132,7 @@ func TestNoFamilyIsUnmigratedWithoutSayingWhy(t *testing.T) {
 func TestOnlyApplianceFamiliesCanBeRelayMigrated(t *testing.T) {
 	t.Parallel()
 	for _, family := range []string{"nginx", "apache", "iis", "tomcat", "aws-acm",
-		"azure-keyvault", "gcp-certificate-manager", "", "does-not-exist"} {
+		"azure-keyvault", "postgresql", "", "does-not-exist"} {
 		if RelayMigrated(family) {
 			t.Errorf("%q reports relay-migrated; the control plane would refuse to deploy it "+
 				"and no relay would ever claim it", family)
@@ -184,7 +178,7 @@ func TestEveryRelayFamilyReportsItsExecutionProof(t *testing.T) {
 			t.Errorf("%s is relay-vantage and reports no relay execution proof", family)
 		}
 	}
-	for _, family := range []string{"nginx", "aws-acm", ""} {
+	for _, family := range []string{"nginx", "postgresql", ""} {
 		if gateMet(family, ParityGateRelayExecutionProof) {
 			t.Errorf("%q is not relay work and must not report a relay execution proof", family)
 		}

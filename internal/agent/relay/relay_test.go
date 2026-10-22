@@ -235,7 +235,7 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 			t.Errorf("declared relay connector %q is not executable", kind)
 		}
 	}
-	for _, kind := range []string{"nginx", "apache", "aws-acm", "azure-keyvault", "envoy", ""} {
+	for _, kind := range []string{"nginx", "apache", "postgresql", "mysql", "envoy", ""} {
 		if relay.Executes(kind) {
 			t.Errorf("relay claims it can execute %q, which is not relay work", kind)
 		}

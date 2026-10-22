@@ -636,8 +636,14 @@ func (s *Store) RedeemAgentJobCredential(
 			               SELECT 1 FROM deployment_targets dt
 			                WHERE dt.tenant_id = $1 AND dt.id::text = $11
 			                  AND dt.enabled AND dt.type = $12
-			                  AND dt.config->>'executor' = 'agent'
-			                  AND dt.config->>'required_agent_id' = o.claimed_by_agent_id::text
+			                  -- The exact host assignment binds only work that demands
+			                  -- a host agent. A network relay redeems for an appliance
+			                  -- or cloud-store target that names no host executor, and
+			                  -- the row's role plus the target's enabled type and (for
+			                  -- a rollback) its reviewed config are what bind it (A59).
+			                  AND ((o.required_agent_role <> 'host' AND $10::text = '') OR
+			                       (dt.config->>'executor' = 'agent'
+			                        AND dt.config->>'required_agent_id' = o.claimed_by_agent_id::text))
 			                  AND ($7 <> 'connector.rollback' OR
 			                       dt.config - 'auto_rollback_on_verify_failure' =
 			                       (convert_from($9, 'UTF8')::jsonb->'target_config') - 'auto_rollback_on_verify_failure')

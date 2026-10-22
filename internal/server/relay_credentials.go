@@ -70,6 +70,12 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		if json.Unmarshal(job.Payload, &intent) == nil && connector.CanRollbackOnHost(intent.Connector) {
 			return r.resolveHostRollbackReferences(ctx, tenantID, job, intent)
 		}
+		// An appliance or cloud-store re-bind carries no certificate or key
+		// and is never sealed; like a takedown (A43) it redeems only the
+		// management credential the reviewed target configuration names.
+		// Falling through to the sealed-deploy opener below refused every
+		// relay re-bind before it could contact the target.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "adcs.inventory":
 		// F1: an AD CS inventory redeems a directory bind credential. Its
 		// payload is not a sealed connector deploy, so it resolves the

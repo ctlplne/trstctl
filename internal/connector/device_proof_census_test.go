@@ -31,26 +31,27 @@ func TestEveryDeviceProvenFamilyCarriesAnEmulatorAndATest(t *testing.T) {
 		family := family
 		t.Run(family, func(t *testing.T) {
 			t.Parallel()
-			dir := filepath.Join("..", "..", "internal", "connector", family)
+			pkg := packageDirForFamily(family)
+			dir := filepath.Join("..", "..", "internal", "connector", pkg)
 
-			emulator := filepath.Join(dir, family+"test")
+			emulator := filepath.Join(dir, pkg+"test")
 			if info, err := os.Stat(emulator); err != nil || !info.IsDir() {
 				t.Fatalf("%s claims its deploy is proven against a device double, but there is no "+
 					"%s package; the catalog would tell an operator this family is verified when "+
-					"nothing exercises its API conversation", family, family+"test")
+					"nothing exercises its API conversation", family, pkg+"test")
 			}
 
 			// The emulator must be reached by a test. An emulator nothing drives
 			// is scaffolding that makes the census look satisfied.
-			testFile := filepath.Join(dir, family+"_test.go")
+			testFile := filepath.Join(dir, pkg+"_test.go")
 			body, err := os.ReadFile(testFile) // #nosec G304 -- fixed in-tree path derived from the census (CWE-22)
 			if err != nil {
-				t.Fatalf("%s claims device proof but has no %s_test.go: %v", family, family, err)
+				t.Fatalf("%s claims device proof but has no %s_test.go: %v", family, pkg, err)
 			}
-			if !strings.Contains(string(body), family+"test.") &&
-				!strings.Contains(string(body), family+"test\"") {
+			if !strings.Contains(string(body), pkg+"test.") &&
+				!strings.Contains(string(body), pkg+"test\"") {
 				t.Errorf("%s_test.go does not reference the %stest emulator, so the claimed proof "+
-					"does not run against a device double", family, family)
+					"does not run against a device double", pkg, pkg)
 			}
 		})
 	}
@@ -72,11 +73,26 @@ func TestEveryRelayVantageFamilyIsDeviceProven(t *testing.T) {
 	// internal/agent/relay: this package must not depend on the agent runtime,
 	// and a drift between the two lists is caught by the relay's own census
 	// test, which checks that every kind it executes is one this package ships.
-	for _, family := range []string{"a10", "cisco", "f5", "fortigate", "kemp", "netscaler", "paloalto"} {
+	for _, family := range []string{"a10", "cisco", "f5", "fortigate", "kemp", "netscaler", "paloalto",
+		"aws-acm", "azure-keyvault", "gcp-certificate-manager"} {
 		if !proven[family] {
 			t.Errorf("relay-vantage family %q has no device proof; its entire implementation is "+
 				"an API conversation, so passing the MemoryOps conformance suite says nothing "+
 				"about whether the appliance would have accepted it", family)
 		}
 	}
+}
+
+// packageDirForFamily maps a family name to its connector package directory;
+// the cloud stores are not named after their families.
+func packageDirForFamily(family string) string {
+	switch family {
+	case "aws-acm":
+		return "acm"
+	case "azure-keyvault":
+		return "azurekv"
+	case "gcp-certificate-manager":
+		return "gcpcm"
+	}
+	return family
 }

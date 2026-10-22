@@ -45,7 +45,9 @@ func TestE1ScopeEveryAcceptedFamilyHasOneTruthfulDisposition(t *testing.T) {
 		}
 	}
 
-	if counts[ParityDispositionMigrated] != 6 || counts[ParityDispositionArchitectureException] != 1 || counts[ParityDispositionUnimplemented] != 6 {
-		t.Errorf("E1 disposition counts = %v, want migrated=6 architecture_exception=1 unimplemented=6", counts)
+	// A59: GCP Certificate Manager migrated; ACM and Key Vault joined cisco as
+	// retained exceptions; Envoy, PostgreSQL and MySQL remain host-local work.
+	if counts[ParityDispositionMigrated] != 7 || counts[ParityDispositionArchitectureException] != 3 || counts[ParityDispositionUnimplemented] != 3 {
+		t.Errorf("E1 disposition counts = %v, want migrated=7 architecture_exception=3 unimplemented=3", counts)
 	}
 }

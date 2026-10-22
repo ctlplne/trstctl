@@ -75,9 +75,12 @@ var supportMatrix = []SupportRow{
 			"request contract: sign the exact AWS JSON 1.1 request with SigV4 through the connector sandbox",
 		},
 		KnownLimits: []string{
-			"no rollback: the connector does not retain and re-import a predecessor ACM version",
-			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
-				"relay proof, or control-plane refusal",
+			"no rollback: ACM re-imports in place under one certificate ARN and keeps no previous " +
+				"version, so there is no installed predecessor to re-bind and no readback; restoring one " +
+				"would mean re-uploading a key the control plane no longer holds",
+			"E1 architecture exception: an enrolled network relay executes imports and the control " +
+				"plane's egress-guarded client remains the executor where no relay is enrolled; " +
+				"rollback and readback are not expressible, so the family keeps E1 open",
 		},
 	},
 	{
@@ -88,9 +91,13 @@ var supportMatrix = []SupportRow{
 			"authentication contract: acquire and wipe an Entra ID bearer token per operation",
 		},
 		KnownLimits: []string{
-			"no rollback: the connector does not select and restore a predecessor certificate version",
-			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
-				"relay proof, or control-plane refusal",
+			"no rollback: Key Vault keeps every imported version but serves the newest to consumers " +
+				"that read by name and exposes no call that makes an older version current; " +
+				"re-pointing consumers at a version is outside this connector, and there is no readback " +
+				"of what a consumer serves",
+			"E1 architecture exception: an enrolled network relay executes imports and the control " +
+				"plane's egress-guarded client remains the executor where no relay is enrolled; " +
+				"rollback and readback are not expressible, so the family keeps E1 open",
 		},
 	},
 	{
@@ -171,10 +178,10 @@ var supportMatrix = []SupportRow{
 		KnownLimits: []string{
 			"a target without certificate_map_entry patches the target-named certificate in place, so no " +
 				"predecessor survives and its rollback is refused as not configured",
-			"rollback executes in the control plane, the family's shipped vantage; objects accumulate one " +
-				"certificate per deploy and nothing prunes them",
-			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
-				"relay proof, or control-plane refusal",
+			"objects accumulate one certificate per deploy on a map-entry target and nothing prunes them",
+			"E1 migrated: an enrolled network relay executes deploys, re-binds and readbacks and the " +
+				"control plane refuses the deploy while a relay is enrolled; where none is enrolled the " +
+				"control plane's egress-guarded client executes them, including the re-bind rollback",
 		},
 	},
 	{

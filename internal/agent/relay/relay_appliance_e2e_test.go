@@ -6,15 +6,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/a10/a10test"
+	"trstctl.com/trstctl/internal/connector/acm/acmtest"
+	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
 	"trstctl.com/trstctl/internal/connector/cisco/ciscotest"
 	"trstctl.com/trstctl/internal/connector/f5/f5test"
 	"trstctl.com/trstctl/internal/connector/fortigate/fortigatetest"
+	"trstctl.com/trstctl/internal/connector/gcpcm/gcpcmtest"
 	"trstctl.com/trstctl/internal/connector/kemp/kemptest"
 	"trstctl.com/trstctl/internal/connector/netscaler/netscalertest"
 	"trstctl.com/trstctl/internal/connector/paloalto/paloaltotest"
@@ -195,6 +200,73 @@ func TestARelayDeployReachesEveryApplianceItAdvertises(t *testing.T) {
 						}
 						if !bytes.Equal(obj.CertPEM, certPEM) {
 							t.Fatal("palo alto stored different certificate bytes than the relay deployed")
+						}
+					}
+			},
+		},
+		// A59: the cloud certificate stores, driven through the relay against
+		// the same doubles their device proofs use.
+		{
+			connector: "aws-acm", target: "arn:aws:acm:us-east-1:123456789012:certificate/relay-e2e",
+			start: func(t *testing.T) (string, *http.Client, relay.Material, relay.TargetConfig, func(*testing.T, string, string)) {
+				srv := acmtest.New("AKIDRELAYE2E", "relay-e2e-secret-key")
+				t.Cleanup(srv.Close)
+				return srv.URL(), srv.Client(),
+					relay.Material{"credential.aws_secret": []byte("relay-e2e-secret-key")},
+					relay.TargetConfig{Region: "us-east-1", AccessKeyID: "AKIDRELAYE2E", SecretAccessKeyRef: "credential.aws_secret"}, // #nosec G101 -- a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798)
+					func(t *testing.T, target, _ string) {
+						got, ok := srv.Imported(target)
+						if !ok {
+							t.Fatalf("ACM holds no import for %q after a relay deploy", target)
+						}
+						// ACM receives the leaf and chain as separate blobs; the
+						// connector re-encodes the leaf block, so compare DER.
+						want, _ := pem.Decode(certPEM)
+						gotBlock, _ := pem.Decode(got.Certificate)
+						if want == nil || gotBlock == nil || !bytes.Equal(gotBlock.Bytes, want.Bytes) {
+							t.Fatal("ACM imported a different leaf than the relay deployed")
+						}
+					}
+			},
+		},
+		{
+			connector: "azure-keyvault", target: "relay-e2e-web",
+			start: func(t *testing.T) (string, *http.Client, relay.Material, relay.TargetConfig, func(*testing.T, string, string)) {
+				srv := azurekvtest.New("relay-e2e-azure-token")
+				t.Cleanup(srv.Close)
+				return srv.URL(), srv.Client(),
+					relay.Material{"credential.azure_token": []byte("relay-e2e-azure-token")},
+					relay.TargetConfig{BearerTokenRef: "credential.azure_token"}, // #nosec G101 -- a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798)
+					func(t *testing.T, target, _ string) {
+						got, ok := srv.Imported(target)
+						if !ok {
+							t.Fatalf("Key Vault holds no certificate %q after a relay deploy", target)
+						}
+						if !bytes.Contains(got.PEM, certPEM) {
+							t.Fatal("Key Vault imported a bundle without the certificate the relay deployed")
+						}
+					}
+			},
+		},
+		{
+			connector: "gcp-certificate-manager", target: "relay-e2e",
+			start: func(t *testing.T) (string, *http.Client, relay.Material, relay.TargetConfig, func(*testing.T, string, string)) {
+				srv := gcpcmtest.New("relay-e2e-gcp-token")
+				t.Cleanup(srv.Close)
+				return srv.URL(), srv.Client(),
+					relay.Material{"credential.gcp_token": []byte("relay-e2e-gcp-token")},
+					relay.TargetConfig{Project: "relay-project", Location: "global", BearerTokenRef: "credential.gcp_token", CertificateMapEntry: "web-map/web-entry", PollInterval: "1ms"}, // #nosec G101 -- a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798)
+					func(t *testing.T, target, fingerprint string) {
+						name := connector.DeployedObjectName(target, fingerprint)
+						got, ok := srv.Imported(name)
+						if !ok {
+							t.Fatalf("Certificate Manager holds no certificate %q after a relay deploy", name)
+						}
+						if !bytes.Equal(got.PEMCertificate, certPEM) {
+							t.Fatal("Certificate Manager stored different certificate bytes than the relay deployed")
+						}
+						if bound := srv.MapEntry("web-map/web-entry"); len(bound) != 1 || !strings.HasSuffix(bound[0], "/certificates/"+name) {
+							t.Fatalf("map entry after a relay deploy = %v, want %q", bound, name)
 						}
 					}
 			},

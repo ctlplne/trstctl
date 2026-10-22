@@ -3,7 +3,9 @@
 package api
 
 import (
+	"context"
 	"net/http"
+
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/custody"
 )
@@ -18,12 +20,20 @@ func WithAgentJobClaimability(provider func(string) bool) Option {
 // Preview and durable execution must require the same job kind the dispatcher
 // will enqueue. Host key generation uses endpoint.renew even for first issuance;
 // connector.deploy alone cannot execute that CSR-and-install workflow.
-func (a *API) validateEndpointExecutionReady(target endpointBindingTargetSummary) error {
+func (a *API) validateEndpointExecutionReady(ctx context.Context, tenantID string, target endpointBindingTargetSummary) error {
 	kind := ""
 	if custody.TargetExecutorIsAgent(target.Config) {
 		kind = "endpoint.renew"
 	} else if a.connectorRegistry.TargetVantageFor(target.Connector) != connector.VantageControlPlane {
 		kind = "connector.deploy"
+		// A59: a cloud store's deploy runs on the control plane's own client
+		// while the tenant has no network relay enrolled, so no claimable
+		// agent kind is required for it then.
+		if connector.ControlPlaneCarriesNatively(target.Connector) && a.store != nil {
+			if hasRelay, err := a.store.TenantHasNetworkRelay(ctx, tenantID); err == nil && !hasRelay {
+				kind = ""
+			}
+		}
 	}
 	if kind == "" {
 		return nil

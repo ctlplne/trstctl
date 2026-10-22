@@ -697,12 +697,19 @@ never live in the API process. What you can do end to end against the running bi
   constraint. These rows KEEP E1 OPEN. Re-check on new PAN-OS / FortiOS /
   IOS-XE majors: a vendor API that grows an addressable installed object re-opens
   that family's migration through the same gates, not around them.
-  Six accepted families have no network-relay migration: Envoy, PostgreSQL, and
-  MySQL execute on co-resident host agents, while AWS ACM, Azure Key Vault, and GCP
-  Certificate Manager execute in the control plane. None has a network-relay
-  constructor, relay execution proof, and E1 refusal. Their `unimplemented` rows
-  name those missing gates and current vantage instead of disappearing from the
-  denominator. The executor census remains a separate fail-closed list: publishing
+  Of the six families the source plan omitted, the three cloud stores now have
+  relay execution (A59): AWS ACM, Azure Key Vault and GCP Certificate Manager
+  carry network-relay constructors, a relay execution proof against their API
+  doubles, and the control-plane refusal while a tenant has a network relay
+  enrolled; where no relay is enrolled the control plane's egress-guarded client
+  remains their executor, for deploys, previews and GCP's re-bind rollback alike.
+  GCP Certificate Manager passes every gate and is `migrated`; ACM and Key Vault
+  are `architecture_exception` rows beside cisco because their APIs cannot
+  express a re-bind or a readback (A58). Envoy, PostgreSQL and MySQL execute on
+  co-resident host agents and stay `unimplemented`: the database connectors
+  write the server's own TLS files and run a local reload, which is not relay
+  work by nature, and a remote Envoy needs a per-target vantage choice first.
+  Their rows name those facts instead of disappearing from the denominator. The executor census remains a separate fail-closed list: publishing
   an E1 row does not let an agent claim work it cannot construct.
   Device-generated CSR is reported as outstanding on the five families whose
   device APIs support it — a separate custody enhancement, not a migration gate:

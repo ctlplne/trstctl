@@ -67,7 +67,9 @@ func TestServedConnectorCatalogPublishesAllE1Dispositions(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("served E1 families = %v, want %v", got, want)
 	}
-	if counts["migrated"] != 6 || counts["architecture_exception"] != 1 || counts["unimplemented"] != 6 || len(counts) != 3 {
+	// A59: GCP Certificate Manager migrated; ACM and Key Vault retained
+	// beside cisco; Envoy, PostgreSQL and MySQL remain host work.
+	if counts["migrated"] != 7 || counts["architecture_exception"] != 3 || counts["unimplemented"] != 3 || len(counts) != 3 {
 		t.Fatalf("served E1 dispositions = %v", counts)
 	}
 }

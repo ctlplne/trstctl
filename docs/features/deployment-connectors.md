@@ -1083,9 +1083,13 @@ keeps active plus one predecessor in an encrypted local ledger at
 `--host-rollback-dir` (by default `host-rollbacks` beside the agent key). A
 rollback is routed to that exact enrolled agent, serialized with deploys for the
 target, restores files, runs the allowlisted reload, and re-handshakes
-`verify_address`. The four migrated appliance families use object re-bind instead.
-Cisco, FortiGate, Palo Alto, and the three cloud stores have no executable rollback;
-their support rows say so, and a refusal records no rollback-shaped success.
+`verify_address`. The migrated appliance families use object re-bind instead: f5, kemp, netscaler
+and a10 always, fortigate and paloalto when the target names its binding, and
+GCP Certificate Manager when the target names a `certificate_map_entry`. Cisco,
+AWS ACM and Azure Key Vault have no executable rollback because their APIs
+cannot address an installed object separately from uploading one; their support
+rows say so, the refusal names the reason, and no rollback-shaped success is
+recorded.
 
 ## Pitfalls & limits
 
@@ -1102,12 +1106,16 @@ their support rows say so, and a refusal records no rollback-shaped success.
 - **Host target testing:** `connector.test` is separately enabled. It checks target
   reachability and local authority without granting `connector.deploy`; a green test
   is a plan, not proof that a certificate was installed.
-- **Control-plane cloud target testing:** AWS ACM, Azure Key Vault, and GCP
-  Certificate Manager previews run on the bounded control-plane outbox worker.
-  Each uses the exact saved target revision and a one-attempt secret lease for an
-  authenticated, provider-specific read-only operation, then returns the later
-  import plan. Provider I/O never occurs in the request handler, and preview never
-  calls the connector's deploy method.
+- **Cloud target execution and testing:** AWS ACM, Azure Key Vault, and GCP
+  Certificate Manager are network-relay work: an enrolled network relay claims
+  their deploys, previews and (for GCP) re-bind rollbacks and redeems the
+  target's credential references for one attempt, and the control plane refuses
+  the deploy while a relay is enrolled. A tenant with no network relay keeps the
+  control plane's egress-guarded client as the executor, so previews then run on
+  the bounded control-plane outbox worker with the exact saved target revision
+  and a one-attempt secret lease for an authenticated, provider-specific
+  read-only operation. Provider I/O never occurs in the request handler, and a
+  preview never calls the connector's deploy method.
 - **Target evidence:** selecting a target in Connectors shows one time-ordered deploy,
   listener-verification, and rollback timeline. Agent verification rows name the
   certificate identity that produced the signed observation; a delivery receipt alone

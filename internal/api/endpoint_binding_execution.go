@@ -197,7 +197,7 @@ func (a *API) endpointEnrollmentSnapshot(ctx context.Context, tenantID, keyDiges
 }
 
 func (a *API) validateEndpointEnrollmentSnapshot(ctx context.Context, tenantID string, req endpointBindingRequest, snapshot endpointEnrollmentSnapshot) error {
-	if err := a.validateEndpointExecutionReady(snapshot.Preview.Target); err != nil {
+	if err := a.validateEndpointExecutionReady(ctx, tenantID, snapshot.Preview.Target); err != nil {
 		return err
 	}
 	if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, snapshot.Preview.Target.Connector, snapshot.Preview.Target.Config); err != nil {

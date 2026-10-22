@@ -234,7 +234,8 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 				"server: host connector deploy executes on the enrolled host agent, not the control plane"))
 		case "", "network", "control_plane":
 			// Empty is a legacy row classified from its payload below. Network
-			// retains its E1 migration gate; cloud stores remain CP-owned.
+			// retains its E1 migration gate; a cloud store's network row runs
+			// here only while the tenant has no relay enrolled (A59).
 		default:
 			// Unknown routing metadata is not authority to guess an executor.
 			return orchestrator.DeferDelivery(errors.New(
@@ -1371,7 +1372,10 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 	// connector.test: attempt-budget-neutral, so the row re-pends and stays
 	// claimable by the relay that is supposed to run it. An aged row is already
 	// reported by the ops doctor probe rather than lost silently.
-	if connector.RelayMigrated(p.Connector) && d.relayPresenceSource() != nil {
+	// A59: the cloud stores follow the same rule whether or not E1 calls
+	// them migrated — an enrolled relay executes them, the control plane's
+	// client remains the executor where none is enrolled.
+	if (connector.RelayMigrated(p.Connector) || connector.ControlPlaneCarriesNatively(p.Connector)) && d.relayPresenceSource() != nil {
 		hasRelay, relayErr := d.relayPresenceSource().TenantHasNetworkRelay(ctx, m.TenantID)
 		if relayErr != nil {
 			// Failing the lookup must not silently hand the work back to the
@@ -1909,6 +1913,22 @@ func sansOf(info certinfo.Info) []string {
 // stand up PostgreSQL to exercise three branches would end up exercising one.
 type relayPresence interface {
 	TenantHasNetworkRelay(ctx context.Context, tenantID string) (bool, error)
+}
+
+// cloudRowFallsBackToControlPlane reports whether a relay-vantage row for a
+// cloud certificate store (A59) should execute here: the family is one the
+// control plane carries natively and the tenant has no network relay enrolled.
+// An error reading relay presence answers false, so the work waits rather than
+// running where a relay may own it.
+func (d *issuanceDispatcher) cloudRowFallsBackToControlPlane(ctx context.Context, tenantID, family string) (bool, error) {
+	if !connector.ControlPlaneCarriesNatively(family) || d.relayPresenceSource() == nil {
+		return false, nil
+	}
+	hasRelay, err := d.relayPresenceSource().TenantHasNetworkRelay(ctx, tenantID)
+	if err != nil {
+		return false, err
+	}
+	return !hasRelay, nil
 }
 
 // relayPresenceSource prefers an injected seam and falls back to the store.

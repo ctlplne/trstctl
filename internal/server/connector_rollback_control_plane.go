@@ -37,6 +37,18 @@ func (d *issuanceDispatcher) routeConnectorRollback(ctx context.Context, m orche
 	if m.RequiredAgentRole == string(connector.VantageControlPlane) {
 		return d.handleControlPlaneConnectorRollback(ctx, m)
 	}
+	// A59: a cloud store's row stamped for a relay still runs here while the
+	// tenant has no relay enrolled; an appliance row never does.
+	var req controlPlaneRollbackCommand
+	if m.RequiredAgentRole == "network" && json.Unmarshal(m.Payload, &req) == nil {
+		fallback, err := d.cloudRowFallsBackToControlPlane(ctx, m.TenantID, req.Connector)
+		if err != nil {
+			return orchestrator.DeferDelivery(fmt.Errorf("server: check network relay before %s rollback: %w", req.Connector, err))
+		}
+		if fallback {
+			return d.handleControlPlaneConnectorRollback(ctx, m)
+		}
+	}
 	// DeferDelivery is attempt-budget-neutral: it proves no receiver I/O
 	// began, so the row re-pends indefinitely and stays claimable by the
 	// agent that is actually supposed to run it. Without this the default
@@ -95,7 +107,7 @@ func (d *issuanceDispatcher) handleControlPlaneConnectorRollback(ctx context.Con
 	if d.connectorRegistry == nil || !d.connectorRegistry.Has(req.Connector) {
 		return refuse(transport.RollbackRefusedNotExecutable, errors.New("server: the configured native connector is not loaded on this control plane"))
 	}
-	if d.connectorDeployVantage(req.Connector) != connector.VantageControlPlane {
+	if d.connectorDeployVantage(req.Connector) != connector.VantageControlPlane && !connector.ControlPlaneCarriesNatively(req.Connector) {
 		// Routing disagreement is not a reason to run someone else's work.
 		return orchestrator.DeferDelivery(fmt.Errorf("server: %s rollback executes at its target vantage, not the control plane", req.Connector))
 	}

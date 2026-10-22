@@ -149,10 +149,12 @@ func nativeConnectorReplaySafety(name string) connector.ReplaySafety {
 //     is network-relay work: driven over its API from inside its segment, by a
 //     relay holding the credentials that drive it (A2's network role).
 //   - A cloud certificate store — ACM, Azure Key Vault, GCP Certificate
-//     Manager — is neither a host nor an appliance. The currently shipped path
-//     is the control plane's egress-guarded client. E1 still names all three for
-//     network-relay migration, so this is current runtime truth, not permission
-//     to call that migration complete; ParityProgram reports them unimplemented.
+//     Manager — is reached over its management API like an appliance, from
+//     inside the VPC or private-endpoint segment a relay sits in, so it is
+//     network-relay work (A59). ControlPlaneCarriesNatively keeps the control
+//     plane's egress-guarded client as the executor where a tenant runs no
+//     relay; ParityProgram records GCP as migrated and ACM/Key Vault as
+//     retained exceptions whose APIs cannot express a re-bind.
 //
 // envoy is declared host-agent deliberately: its admin/SDS surface binds
 // loopback in the deployments we ship for, so the executor must be on the box

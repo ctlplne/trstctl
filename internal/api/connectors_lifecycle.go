@@ -905,7 +905,7 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				" (fingerprint " + predecessor.Fingerprint + ") from that agent's encrypted local ledger. " +
 				"The predecessor key never passes through the control plane. " +
 				"The agent reloads the service and reverifies the configured listener; missing or mismatched local state fails closed."
-		} else if rollbackExecutesOnControlPlane(target.Type) {
+		} else if a.rollbackExecutesOnControlPlane(ctx, tenantID, target.Type) {
 			statusReason = "rollback_queued_for_control_plane_execution"
 			rollbackRef = "queued for control-plane execution on " + target.Name +
 				": re-bind to the predecessor certificate serial " + predecessor.Serial +
@@ -1039,7 +1039,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, target.Connector, target.Config); err != nil {
 		return endpointBindingPreviewResponse{}, errWithStatus(http.StatusUnprocessableEntity, err)
 	}
-	if err := a.validateEndpointExecutionReady(target); err != nil {
+	if err := a.validateEndpointExecutionReady(ctx, tenantID, target); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
 	if err := validateEndpointBindingVerificationName(req.IdentityName, target.Config); err != nil {
@@ -1756,14 +1756,16 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 }
 
 // rollbackExecutesOnControlPlane reports whether a re-bind family's rollback
-// runs on the control plane's outbox worker (the cloud certificate stores,
-// A58) rather than on a network relay. It mirrors the orchestrator's routing.
-func rollbackExecutesOnControlPlane(family string) bool {
-	if !connector.CanRollback(family) {
+// runs on the control plane's outbox worker rather than on a network relay: a
+// cloud certificate store (A58/A59) while the tenant has no relay enrolled. It
+// mirrors the orchestrator's routing; a presence read error answers false so
+// the receipt never promises control-plane execution it may not get.
+func (a *API) rollbackExecutesOnControlPlane(ctx context.Context, tenantID, family string) bool {
+	if !connector.CanRollback(family) || !connector.ControlPlaneCarriesNatively(family) || a.store == nil {
 		return false
 	}
-	vantage, shipped := connector.ShippedTargetVantage(family)
-	return shipped && vantage == connector.VantageControlPlane
+	hasRelay, err := a.store.TenantHasNetworkRelay(ctx, tenantID)
+	return err == nil && !hasRelay
 }
 
 func replaySafetyLabel(safety connector.ReplaySafety) string {
