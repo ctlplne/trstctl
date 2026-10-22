@@ -46,6 +46,9 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 			return nil, nil
 		}
 		vantage := s.connectorRegistry.TargetVantageFor(target.Type)
+		if override, ok, err := connector.TargetVantageOverride(target.Type, target.Config); err == nil && ok {
+			vantage = override // A61: the target declared its executor.
+		}
 		// A59: a cloud store's preview runs on the control-plane outbox worker
 		// where the tenant has no network relay enrolled, as its deploys do.
 		if connector.ControlPlaneCarriesNatively(target.Type) && vantage == connector.VantageNetworkRelay {

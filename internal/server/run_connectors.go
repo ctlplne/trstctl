@@ -261,6 +261,9 @@ type nativeTargetConfig struct {
 	// fingerprint-named and bound, which is what makes the target
 	// rollback-capable (A58).
 	CertificateMapEntry string `json:"certificate_map_entry,omitempty"`
+	// Vantage lets an envoy target declare "network" so a relay drives a
+	// remote SDS endpoint instead of the co-resident host agent (A61).
+	Vantage string `json:"vantage,omitempty"`
 }
 
 func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name string, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
@@ -711,7 +714,7 @@ var nativeTargetFields = map[string]map[string]bool{
 	"rabbitmq":                fields("profile", "cert_path", "key_path"),
 	"elasticsearch":           fields("profile", "cert_path", "key_path"),
 	"tomcat":                  fields("profile", "cert_path", "key_path"),
-	"envoy":                   fields("endpoint", "secret_name"),
+	"envoy":                   fields("endpoint", "secret_name", "vantage"),
 	"a10":                     fields("endpoint", "username", "password_ref"),
 	"f5":                      fields("endpoint", "client_ssl_profile", "object_name", "username", "password_ref"),
 	"netscaler":               fields("endpoint", "username", "password_ref", "file_location"),
@@ -760,6 +763,9 @@ func validateNativeTarget(name string, target nativeTargetConfig) error {
 	case "envoy":
 		if !require(target.Endpoint, target.SecretName) {
 			return fmt.Errorf("connector: envoy requires endpoint and secret_name")
+		}
+		if v := strings.ToLower(strings.TrimSpace(target.Vantage)); v != "" && v != connector.VantageNetworkDeclaration {
+			return fmt.Errorf("connector: envoy vantage must be empty (co-resident host agent) or %q", connector.VantageNetworkDeclaration)
 		}
 	case "a10", "cisco", "netscaler":
 		if !require(target.Endpoint, target.Username, target.PasswordRef) {

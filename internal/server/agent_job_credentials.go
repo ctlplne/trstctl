@@ -72,7 +72,7 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 			Config    json.RawMessage `json:"target_config"`
 		}
 		if json.Unmarshal(job.Payload, &route) == nil {
-			if vantage, known := connector.ShippedTargetVantage(route.Connector); known && vantage == connector.VantageHostAgent {
+			if vantage, known := connector.EffectiveTargetVantage(route.Connector, route.Config); known && vantage == connector.VantageHostAgent {
 				configuredID, configErr := connector.TargetHostAgentID(route.Config)
 				if job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "host") || configErr != nil || (configuredID != "" && configuredID != agentID) {
 					return nil, status.Error(codes.FailedPrecondition, "host work requires an exact destination assignment; review and requeue this job")

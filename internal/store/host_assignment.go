@@ -15,7 +15,13 @@ import (
 // grant before accepting work. Claim authorization still uses the authenticated
 // certificate. An offline host remains assigned; no other host inherits its work.
 func (s *Store) ValidateHostTargetAssignment(ctx context.Context, tenantID, family string, config json.RawMessage) (string, error) {
-	if vantage, known := connector.ShippedTargetVantage(family); !known || vantage != connector.VantageHostAgent {
+	// A61: a declared executor is validated here so an impermissible one is
+	// refused before the target is saved, and a remote Envoy declared for a
+	// relay needs no host assignment.
+	if _, _, err := connector.TargetVantageOverride(family, config); err != nil {
+		return "", err
+	}
+	if vantage, known := connector.EffectiveTargetVantage(family, config); !known || vantage != connector.VantageHostAgent {
 		return "", nil
 	}
 	id, err := connector.TargetHostAgentID(config)

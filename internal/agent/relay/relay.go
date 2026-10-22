@@ -40,6 +40,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/acm"
 	"trstctl.com/trstctl/internal/connector/azurekv"
 	"trstctl.com/trstctl/internal/connector/cisco"
+	"trstctl.com/trstctl/internal/connector/envoy"
 	"trstctl.com/trstctl/internal/connector/f5"
 	"trstctl.com/trstctl/internal/connector/fortigate"
 	"trstctl.com/trstctl/internal/connector/gcpcm"
@@ -169,6 +170,25 @@ type TargetConfig struct {
 	// fingerprint-named and bound, which is what makes the target
 	// rollback-capable (A58).
 	CertificateMapEntry string `json:"certificate_map_entry,omitempty"`
+	// Vantage is the target's declared executor (A61). Only an envoy target
+	// may say "network", which makes a remote SDS endpoint relay work.
+	Vantage string `json:"vantage,omitempty"`
+}
+
+// relayVantageOverride reports whether a target config declares the relay as
+// its executor for a family that is host work by default: today a remote
+// Envoy (A61). It reads only the declaration; the control plane validated it
+// when the target was saved and stamped the row's role from it.
+func relayVantageOverride(name string, raw json.RawMessage) bool {
+	override, ok, err := connector.TargetVantageOverride(name, raw)
+	return err == nil && ok && override == connector.VantageNetworkRelay
+}
+
+// executesIntent reports whether this relay can execute the named connector
+// for this target: a relay-vantage family, or a host-default family whose
+// target declared the relay.
+func executesIntent(name string, raw json.RawMessage) bool {
+	return Executes(name) || relayVantageOverride(name, raw)
 }
 
 // RelayConnectorKinds is the closed set a relay can execute.
@@ -209,7 +229,7 @@ type Material map[string][]byte
 // the control plane can promise about where a relay connects, and it is stated
 // in docs/limitations.md rather than left to be discovered.
 func Execute(ctx context.Context, client *http.Client, intent DeployIntent, material Material) (connector.Stats, error) {
-	if !Executes(intent.Connector) {
+	if !executesIntent(intent.Connector, intent.TargetConfig) {
 		return connector.Stats{}, fmt.Errorf("relay: connector %q is not relay-executable", intent.Connector)
 	}
 	certPEM, ok := material["credential.cert_pem"]
@@ -438,6 +458,16 @@ func buildRelayConnector(name string, target TargetConfig, material Material) (c
 			return nil, err
 		}
 		return fortigate.New(target.Endpoint, token, fortigate.WithBindTo(bind)), nil
+	case "envoy":
+		// A61: only reached for a target that declared the relay as its
+		// executor; the host agent keeps the co-resident loopback path.
+		if !strings.EqualFold(strings.TrimSpace(target.Vantage), connector.VantageNetworkDeclaration) {
+			return nil, errors.New("relay: an envoy target drives a relay only when it declares vantage network")
+		}
+		if strings.TrimSpace(target.SecretName) == "" {
+			return nil, errors.New("relay: envoy target config carries no secret_name")
+		}
+		return envoy.New(target.Endpoint, target.SecretName), nil
 	case "aws-acm":
 		// The relay mirrors the control plane's cloud constructors (A59):
 		// same packages, same options, credentials redeemed by reference.

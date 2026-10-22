@@ -81,7 +81,7 @@ const dryRunProbeTimeout = 10 * time.Second
 func DryRun(ctx context.Context, client *http.Client, intent DeployIntent, material Material) (Plan, error) {
 	plan := Plan{Connector: intent.Connector, Target: intent.Target}
 
-	if !Executes(intent.Connector) {
+	if !executesIntent(intent.Connector, intent.TargetConfig) {
 		plan.Steps = append(plan.Steps, PlanStep{
 			Name: "connector", Status: StepFailed,
 			Detail: fmt.Sprintf("connector %q is not executable by this relay", intent.Connector),

@@ -126,6 +126,13 @@ func TestSideEffectRoleClassifier(t *testing.T) {
 		}
 		return b
 	}
+	payloadWithConfig := func(name, cfg string) []byte {
+		b, err := json.Marshal(connector.DeployPayload{Connector: name, Target: "t", TargetConfig: json.RawMessage(cfg)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
 	cases := []struct {
 		destination string
 		payload     []byte
@@ -134,6 +141,10 @@ func TestSideEffectRoleClassifier(t *testing.T) {
 		{"connector.deploy", payload("nginx"), "host"},
 		{"connector.deploy", payload("f5"), "network"},
 		{"connector.deploy", payload("acm"), "control_plane"},
+		// A61: an envoy target that declares the relay is network work; an
+		// impermissible declaration leaves the family answer standing.
+		{"connector.deploy", payloadWithConfig("envoy", `{"endpoint":"https://sds.remote:9901","secret_name":"s","vantage":"network"}`), "network"},
+		{"connector.deploy", payloadWithConfig("nginx", `{"vantage":"network"}`), "host"},
 		// Undeclared connector: fail closed, stays with the control plane.
 		{"connector.deploy", payload("mystery"), "control_plane"},
 		// Unreadable payload: if the control plane cannot tell what a deploy is,

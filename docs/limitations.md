@@ -708,7 +708,9 @@ never live in the API process. What you can do end to end against the running bi
   express a re-bind or a readback (A58). Envoy, PostgreSQL and MySQL execute on
   co-resident host agents and stay `unimplemented`: the database connectors
   write the server's own TLS files and run a local reload, which is not relay
-  work by nature, and a remote Envoy needs a per-target vantage choice first.
+  work by nature, and Envoy is host work by default; an Envoy target that
+  declares `vantage: network` is driven by a relay instead (A61) without that
+  making the family migrated, since SDS cannot express a re-bind or readback.
   Their rows name those facts instead of disappearing from the denominator. The executor census remains a separate fail-closed list: publishing
   an E1 row does not let an agent claim work it cannot construct.
   Device-generated CSR is reported as outstanding on the five families whose
@@ -1721,10 +1723,17 @@ defers it before unsealing, and its direct handler repeats the family check befo
 registry lookup. Classification failure is therefore a refusal, never permission
 to touch the control-plane host.
 
-**What is still not served: per-target vantage overrides** (declaring that one
-particular Envoy is remote and needs a relay). The `roles` column on the agents
-read model is a **projection** for the console only: writing `network` into it
-grants nothing, because the certificate still says host and the claim path still
+**Per-target vantage overrides are served for Envoy only (A61).** An Envoy
+target may declare `vantage: network` in its configuration: its deploys and
+previews are then stamped for the network role, need no host assignment, are
+refused by the control plane like any host-family row, and are executed by an
+enrolled network relay against the remote SDS endpoint with the same connector
+the host agent uses. The declaration is validated when the target is saved —
+any other family, or any value but `network`, is refused — and the row's role is
+derived from it at enqueue, so neither an agent nor the console can relocate
+work by editing anything else. The `roles` column on the agents read model is
+still a **projection** for the console only: writing `network` into it grants
+nothing, because the certificate still says host and the claim path still
 refuses. Host availability also never re-enables the old path: with no eligible
 host agent the deploy stays pending for Operations to surface.
 

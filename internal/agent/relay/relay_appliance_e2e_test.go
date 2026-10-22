@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/acm/acmtest"
 	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
 	"trstctl.com/trstctl/internal/connector/cisco/ciscotest"
+	"trstctl.com/trstctl/internal/connector/envoy/envoytest"
 	"trstctl.com/trstctl/internal/connector/f5/f5test"
 	"trstctl.com/trstctl/internal/connector/fortigate/fortigatetest"
 	"trstctl.com/trstctl/internal/connector/gcpcm/gcpcmtest"
@@ -397,5 +398,51 @@ func TestARelayF5DeployReachesBothHAPeers(t *testing.T) {
 			t.Fatalf("%s BIG-IP does not hold the deployed certificate at %s.crt (ok=%v); a relay HA "+
 				"deploy that skips a peer is the defect this gate closes", name, base, ok)
 		}
+	}
+}
+
+// A61: an Envoy target that declares vantage network is driven by the relay
+// against its remote SDS endpoint, through the same connector the host agent
+// uses co-resident; without the declaration the relay refuses it before any
+// I/O, because that target belongs to a host agent.
+func TestARelayDeployReachesARemoteEnvoyOnlyWhenTheTargetDeclaresIt(t *testing.T) {
+	certPEM := []byte(testCertPEM)
+	keyPEM := []byte(testKeyPEM)
+	sds := envoytest.New()
+	t.Cleanup(sds.Close)
+	fingerprint := connector.CertificateFingerprint(certPEM)
+	material := relay.Material{"credential.cert_pem": certPEM, "credential.key_pem": keyPEM}
+
+	undeclared, err := json.Marshal(relay.TargetConfig{Endpoint: sds.URL(), SecretName: "server_cert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := relay.Execute(context.Background(), sds.Client(), relay.DeployIntent{
+		Connector: "envoy", Target: "edge/envoy", Fingerprint: fingerprint, TargetConfig: undeclared,
+	}, material); err == nil || !strings.Contains(err.Error(), "not relay-executable") {
+		t.Fatalf("relay deploy to an envoy target without vantage network = %v, want a refusal", err)
+	}
+	if sds.Puts() != 0 || len(sds.Paths()) != 0 {
+		t.Fatalf("the refused deploy reached the SDS endpoint: puts=%d paths=%v", sds.Puts(), sds.Paths())
+	}
+
+	declared, err := json.Marshal(relay.TargetConfig{Endpoint: sds.URL(), SecretName: "server_cert", Vantage: "network"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := relay.Execute(context.Background(), sds.Client(), relay.DeployIntent{
+		Connector: "envoy", Target: "edge/envoy", Fingerprint: fingerprint, TargetConfig: declared,
+	}, material); err != nil {
+		t.Fatalf("relay deploy to a declared remote envoy: %v", err)
+	}
+	got, ok := sds.Secret("server_cert")
+	if !ok || !bytes.Equal(got.CertPEM, certPEM) || got.Fingerprint != fingerprint {
+		t.Fatalf("remote SDS holds %+v ok=%v, want the deployed certificate", got, ok)
+	}
+	plan, err := relay.DryRun(context.Background(), sds.Client(), relay.DeployIntent{
+		Connector: "envoy", Target: "edge/envoy", TargetConfig: declared,
+	}, material)
+	if err != nil || !plan.Ready {
+		t.Fatalf("dry-run for a declared remote envoy = %+v %v, want ready", plan, err)
 	}
 }

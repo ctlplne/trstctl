@@ -357,7 +357,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// unexecutable by a relay that is in fact carrying it.
 	pluginJob := plugins.Has(intent.Connector)
 
-	hostJob := ExecutesOnHost(intent.Connector)
+	// A61: a host-default family whose target declared the relay (a remote
+	// Envoy) is relay work on this agent, not host work.
+	hostJob := ExecutesOnHost(intent.Connector) && !relayVantageOverride(intent.Connector, intent.TargetConfig)
 	if job.Kind == KindConnectorTest {
 		// A target test is terminal whether its plan is ready or blocked. Its
 		// whole purpose is to explain a deterministic prerequisite without
@@ -372,7 +374,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// reader. Skip the connector checks rather than failing it for not
 		// naming one it has no use for.
 		hostJob = false
-	} else if !hostJob && !pluginJob && !Executes(intent.Connector) {
+	} else if !hostJob && !pluginJob && !executesIntent(intent.Connector, intent.TargetConfig) {
 		report(ctx, ch, job, OutcomeFailed, "connector is not executable by this agent")
 		return false
 	}
@@ -534,7 +536,7 @@ func runConnectorTest(
 			}},
 		})
 	}
-	if !hostJob && !Executes(intent.Connector) {
+	if !hostJob && !executesIntent(intent.Connector, intent.TargetConfig) {
 		return reportConnectorTestPlan(ctx, ch, job, Plan{
 			Connector: intent.Connector, Target: intent.Target,
 			Steps: []PlanStep{{

@@ -106,11 +106,13 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 - deploy: read the current SDS secret and push the desired v3 Secret only when it differs
 - compensation: re-push the previous SDS secret when an update fails after current-state read
+- relay deploy: a target declaring vantage network is driven by the network relay through the same connector (targets with vantage network only)
 
 **Known limits:**
 
-- the shipped target is a co-resident loopback SDS endpoint and executes on a host agent
-- no E1 network-relay migration: there is no network-relay constructor, relay proof, or E1 refusal
+- the default target is a co-resident loopback SDS endpoint and executes on a host agent; a target that declares vantage network is driven by a network relay against a remote SDS endpoint
+- no rollback: SDS replaces the secret in place, so no predecessor object survives to re-bind
+- no E1 network-relay migration as a family: the relay path exists only for targets that declare it, and no family-wide refusal or readback exists
 
 ## f5
 

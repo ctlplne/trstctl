@@ -719,8 +719,14 @@ func TestTLSRolloutTargetPreflightRoutesHostWorkWithoutControlPlaneExecution(t *
 	if err := requirePostureExecutionVantage(target.ID, target.Type, connector.NewRegistry()); !errors.Is(err, errPostureRequiresAgent) || !strings.Contains(err.Error(), "requires host_agent") {
 		t.Fatalf("old queued host intent through in-process registry error = %v, want host-agent refusal", err)
 	}
-	if err := requirePostureExecutionVantage(target.ID, "aws-acm", connector.NewRegistry()); err != nil {
-		t.Fatalf("control-plane target rejected by vantage check: %v", err)
+	// A59: the cloud stores are relay work now, so an old queued intent for
+	// one is refused by the in-process registry like any agent-vantage family;
+	// only a family with no shipped vantage (a plugin) still passes here.
+	if err := requirePostureExecutionVantage(target.ID, "aws-acm", connector.NewRegistry()); !errors.Is(err, errPostureRequiresAgent) || !strings.Contains(err.Error(), "requires network_relay") {
+		t.Fatalf("cloud-store intent through in-process registry error = %v, want network-relay refusal", err)
+	}
+	if err := requirePostureExecutionVantage(target.ID, "acme-corp-wasm", connector.NewRegistry()); err != nil {
+		t.Fatalf("plugin target rejected by vantage check: %v", err)
 	}
 }
 

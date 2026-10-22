@@ -823,7 +823,7 @@ instead of being ignored:
 | `iis` | `profile`, `binding`, `import_dir`; optional `store`, `app_id` |
 | `postfix` | `profile`, `postfix_cert_path`, `postfix_key_path`, `dovecot_cert_path`, `dovecot_key_path` |
 | `java-keystore` | `profile`, `keystore_path`, `keystore_password_ref`, `alias`; optional `format` (`jks` or `pkcs12`) and `reload_action` |
-| `envoy` | `endpoint`, `secret_name` |
+| `envoy` | `endpoint`, `secret_name`; optional `vantage` (`network`) makes a remote SDS endpoint relay work instead of co-resident host-agent work |
 | `f5` | `endpoint`, `client_ssl_profile`, `username`, `password_ref`; optional `object_name` |
 | `netscaler` | `endpoint`, `username`, `password_ref`; optional `file_location` |
 | `a10`, `cisco` | `endpoint`, `username`, `password_ref` |

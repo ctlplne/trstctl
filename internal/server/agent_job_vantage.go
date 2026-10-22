@@ -57,6 +57,11 @@ func connectorSideEffectRoleClassifier(registry *connector.Registry) func(destin
 		if err := json.Unmarshal(payload, &p); err != nil || p.Connector == "" {
 			return "control_plane"
 		}
+		// A61: a target may declare its own executor where the family admits
+		// one (a remote Envoy driven by a relay); the row follows the target.
+		if override, ok, err := connector.TargetVantageOverride(p.Connector, p.TargetConfig); err == nil && ok {
+			return agentRoleForVantage(override)
+		}
 		return agentRoleForVantage(registry.TargetVantageFor(p.Connector))
 	}
 }

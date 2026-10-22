@@ -553,7 +553,7 @@ func (s *pqcMigrationService) preflightTLSRolloutTargets(ctx context.Context, te
 }
 
 func hostPQCPostureTarget(target store.DeploymentTarget) bool {
-	vantage, known := connector.ShippedTargetVantage(target.Type)
+	vantage, known := connector.EffectiveTargetVantage(target.Type, target.Config)
 	return known && vantage == connector.VantageHostAgent && target.Type == "envoy"
 }
 

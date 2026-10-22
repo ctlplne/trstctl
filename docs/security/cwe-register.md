@@ -93,18 +93,18 @@ not this file.
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:75` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:98` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:118` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:137` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:156` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:176` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:195` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:216` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:239` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:258` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:331` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
-| `internal/agent/relay/relay_appliance_e2e_test.go:369` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:76` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:99` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:119` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:138` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:157` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:177` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:196` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:217` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:240` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:332` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
+| `internal/agent/relay/relay_appliance_e2e_test.go:370` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
 | `internal/agent/relay/relay_test.go:147` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:342` | reference NAME, not a credential (CWE-798) |

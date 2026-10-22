@@ -218,10 +218,11 @@ var retainedScopeNotes = map[string]string{
 // "pending" label would hide that cloud stores still run in the control plane
 // while Envoy and the database connectors already run on host agents.
 var unimplementedScopeNotes = map[string]string{
-	"envoy": "E1 network-relay migration is unimplemented: Envoy SDS executes on the co-resident " +
-		"host agent because the admin/SDS socket binds loopback in the deployments shipped for; a " +
-		"remote Envoy reached over the network needs a per-target vantage choice before a relay " +
-		"constructor, relay proof, or E1 refusal can honestly exist",
+	"envoy": "E1 network-relay migration is unimplemented as a family: Envoy SDS executes on the " +
+		"co-resident host agent because the admin/SDS socket binds loopback in the deployments shipped " +
+		"for. A target that declares vantage network is driven by a relay instead (A61), proven against " +
+		"the SDS double; SDS replaces the secret in place, so relay rollback and readback are not " +
+		"expressible and the family keeps E1 open",
 	"postgresql": "E1 network-relay migration is unimplemented and not expressible as relay work: " +
 		"PostgreSQL's connector writes the server's own TLS files and runs a local reload, which " +
 		"only the host agent on that machine can do; no network-relay constructor, relay proof, or " +
