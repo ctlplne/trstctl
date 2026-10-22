@@ -1425,8 +1425,8 @@ not this file.
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:546` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1176` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1576` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1174` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1574` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |

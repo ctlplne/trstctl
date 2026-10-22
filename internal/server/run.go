@@ -746,10 +746,8 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
 		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentChannelPublicAddress: cfg.AgentChannel.PublicAddress, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr, ESTMTLSAddr: cfg.Protocols.ESTMTLSAddr, ServerTLS: cfg.Server.TLS,
-		AgentClaimableJobKinds:     cfg.AgentChannel.ClaimableJobKinds,
-		AgentMaxLiveClaimsPerAgent: cfg.AgentChannel.MaxLiveClaimsPerAgent,
-		AgentCACertFile:            agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
-		AgentChannelServerName: cfg.AgentChannel.ServerName,
+		AgentClaimableJobKinds: cfg.AgentChannel.ClaimableJobKinds, AgentMaxLiveClaimsPerAgent: cfg.AgentChannel.MaxLiveClaimsPerAgent,
+		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg), AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
 }
 

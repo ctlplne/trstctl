@@ -1355,43 +1355,8 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 			"missing_connector", "identity has no connector target configured",
 			orchestrator.DefiniteNoEffect(errors.New("server: connector.deploy has no configured connector")))
 	}
-	// E1: a family through its relay parity gate executes on a relay, and the
-	// control plane must not race the relay for its work.
-	//
-	// The dispatcher sees required_agent_role on its claimed Message, but network
-	// migration remains conditional on a relay being present. The role stamp
-	// gates agent claims; this presence check decides whether the control-plane
-	// fallback is still allowed for the migrated appliance family.
-	//
-	// Conditional on a relay actually being ENROLLED, and that condition is the
-	// difference between a guarantee and an outage. Refusing unconditionally
-	// would turn "this estate has not deployed a relay yet" into "this estate's
-	// appliance deploys stopped working", and would retire the one path with
-	// end-to-end proof through the served API. Refusing only when a relay exists
-	// keeps the promise where it can be kept: if you run a relay, the control
-	// plane will not do its work behind its back.
-	//
-	// DeferDelivery rather than a failure, matching connector.rollback and
-	// connector.test: attempt-budget-neutral, so the row re-pends and stays
-	// claimable by the relay that is supposed to run it. An aged row is already
-	// reported by the ops doctor probe rather than lost silently.
-	// A59: the cloud stores follow the same rule whether or not E1 calls
-	// them migrated — an enrolled relay executes them, the control plane's
-	// client remains the executor where none is enrolled.
-	if (connector.RelayMigrated(p.Connector) || connector.ControlPlaneCarriesNatively(p.Connector)) && d.relayPresenceSource() != nil {
-		hasRelay, relayErr := d.relayPresenceSource().TenantHasNetworkRelay(ctx, m.TenantID)
-		if relayErr != nil {
-			// Failing the lookup must not silently hand the work back to the
-			// control plane: that is the fallback direction that removes the
-			// guarantee. Defer and let the next tick re-ask.
-			return orchestrator.DeferDelivery(fmt.Errorf(
-				"server: check network relay before %s deploy: %w", p.Connector, relayErr))
-		}
-		if hasRelay {
-			return orchestrator.DeferDelivery(fmt.Errorf(
-				"server: %s completed its relay parity gate and this tenant has a network relay "+
-					"enrolled, so its deploys execute there, not in the control plane", p.Connector))
-		}
+	if err := d.deferDeployToEnrolledRelay(ctx, m.TenantID, p.Connector); err != nil {
+		return err
 	}
 	if d.connectorRegistry != nil && d.connectorRegistry.Has(p.Connector) {
 		if len(p.CertPEM) == 0 || len(p.KeyPEM) == 0 {
@@ -1473,6 +1438,50 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		return []byte("deployed:" + p.Connector), nil
 	}
 	return d.runConnectorEffect(ctx, m, receipt, connector.ReplaySafetyAtMostOnce, effect)
+}
+
+// deferDeployToEnrolledRelay is the E1 stage of handleDeploy: a family through
+// its relay parity gate executes on a relay, and the control plane must not
+// race the relay for its work.
+//
+// The dispatcher sees required_agent_role on its claimed Message, but network
+// migration remains conditional on a relay being present. The role stamp gates
+// agent claims; this presence check decides whether the control-plane fallback
+// is still allowed for the migrated appliance family.
+//
+// Conditional on a relay actually being ENROLLED, and that condition is the
+// difference between a guarantee and an outage. Refusing unconditionally would
+// turn "this estate has not deployed a relay yet" into "this estate's appliance
+// deploys stopped working", and would retire the one path with end-to-end proof
+// through the served API. Refusing only when a relay exists keeps the promise
+// where it can be kept: if you run a relay, the control plane will not do its
+// work behind its back.
+//
+// DeferDelivery rather than a failure, matching connector.rollback and
+// connector.test: attempt-budget-neutral, so the row re-pends and stays
+// claimable by the relay that is supposed to run it. An aged row is already
+// reported by the ops doctor probe rather than lost silently. A59: the cloud
+// stores follow the same rule whether or not E1 calls them migrated — an
+// enrolled relay executes them, the control plane's client remains the
+// executor where none is enrolled.
+func (d *issuanceDispatcher) deferDeployToEnrolledRelay(ctx context.Context, tenantID, connectorName string) error {
+	if (!connector.RelayMigrated(connectorName) && !connector.ControlPlaneCarriesNatively(connectorName)) || d.relayPresenceSource() == nil {
+		return nil
+	}
+	hasRelay, relayErr := d.relayPresenceSource().TenantHasNetworkRelay(ctx, tenantID)
+	if relayErr != nil {
+		// Failing the lookup must not silently hand the work back to the control
+		// plane: that is the fallback direction that removes the guarantee. Defer
+		// and let the next tick re-ask.
+		return orchestrator.DeferDelivery(fmt.Errorf(
+			"server: check network relay before %s deploy: %w", connectorName, relayErr))
+	}
+	if hasRelay {
+		return orchestrator.DeferDelivery(fmt.Errorf(
+			"server: %s completed its relay parity gate and this tenant has a network relay "+
+				"enrolled, so its deploys execute there, not in the control plane", connectorName))
+	}
+	return nil
 }
 
 func (d *issuanceDispatcher) requireControlPlaneDeployAuthority(ctx context.Context, tenantID string, identityID *string, connectorName string) error {

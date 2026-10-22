@@ -830,24 +830,7 @@ func (a *agentService) ingestExecutedReport(
 		}
 		return a.recordEndpointPurgeResult(ctx, info, claim, req, result)
 	case relay.KindConnectorRightSize:
-		if req.Outcome != transport.JobOutcomeExecuted {
-			return errors.New("right-size result needs a terminal executed report")
-		}
-		var intent relay.RightSizeIntent
-		var result relay.RightSizeReport
-		if err := json.Unmarshal(claim.Payload, &intent); err != nil {
-			return err
-		}
-		if err := decodeStrictJSON([]byte(req.Detail), &result); err != nil {
-			return err
-		}
-		if err := relay.ValidateRightSizeReport(intent, result, req.EvidenceDigest); err != nil {
-			return err
-		}
-		if a.recordRightSize == nil {
-			return errors.New("right-size receipt receiver is unavailable")
-		}
-		return a.recordRightSize(ctx, info.TenantID, req.JobID, req.Attempt, claim.Payload, &result, "")
+		return a.ingestRightSizeReport(ctx, info.TenantID, claim, req)
 	case relay.KindConnectorTakedown:
 		if req.Outcome != transport.JobOutcomeExecuted {
 			return errors.New("takedown result needs a terminal executed report")
@@ -919,6 +902,30 @@ func (a *agentService) ingestExecutedReport(
 	default:
 		return nil
 	}
+}
+
+// ingestRightSizeReport is the connector.right_size stage of ingestExecutedReport
+// (A64): the relay's signed report is validated against the queued intent and
+// the evidence digest before it becomes the operation's terminal receipt.
+func (a *agentService) ingestRightSizeReport(ctx context.Context, tenantID string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+	if req.Outcome != transport.JobOutcomeExecuted {
+		return errors.New("right-size result needs a terminal executed report")
+	}
+	var intent relay.RightSizeIntent
+	var result relay.RightSizeReport
+	if err := json.Unmarshal(claim.Payload, &intent); err != nil {
+		return err
+	}
+	if err := decodeStrictJSON([]byte(req.Detail), &result); err != nil {
+		return err
+	}
+	if err := relay.ValidateRightSizeReport(intent, result, req.EvidenceDigest); err != nil {
+		return err
+	}
+	if a.recordRightSize == nil {
+		return errors.New("right-size receipt receiver is unavailable")
+	}
+	return a.recordRightSize(ctx, tenantID, req.JobID, req.Attempt, claim.Payload, &result, "")
 }
 
 // acceptFailedReport releases — or permanently retires — work an agent could not
