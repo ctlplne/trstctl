@@ -3513,6 +3513,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/renewal/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lift an operator rollback's renewal pause on one target; the resume is recorded in the audit log */
+        post: operations["resumeIdentityRenewal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/transitions": {
         parameters: {
             query?: never;
@@ -10694,6 +10711,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            renewal_paused_identities?: string[];
             revision_id: string;
             rollback_readiness?: {
                 /** Format: uuid */
@@ -12188,6 +12206,7 @@ export interface components {
             not_before?: string;
             /** Format: uuid */
             owner_id: string;
+            renewal_paused?: components["schemas"]["IdentityRenewalPause"][];
             status: string;
             /** Format: uuid */
             tenant_id?: string;
@@ -12235,6 +12254,17 @@ export interface components {
             items: components["schemas"]["Identity"][];
             next_cursor?: string;
             summary?: components["schemas"]["IdentityStatusSummary"];
+        };
+        IdentityRenewalPause: {
+            /** Format: date-time */
+            paused_at: string;
+            reason: string;
+            /** Format: uuid */
+            target_id: string;
+        };
+        IdentityRenewalResumeRequest: {
+            /** Format: uuid */
+            target_id: string;
         };
         IdentityRequest: {
             attributes?: Record<string, never>;
@@ -27077,6 +27107,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnershipException"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeIdentityRenewal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityRenewalResumeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Identity"];
                 };
             };
             /** @description client error */

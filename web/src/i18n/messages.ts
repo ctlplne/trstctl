@@ -30303,6 +30303,28 @@ export const messages = {
   "privacy.review.executeErasure": { defaultMessage: "Erase reviewed subject", description: "Execute the exact reviewed subject erasure." },
   "privacy.review.executeRetention": { defaultMessage: "Enforce reviewed retention", description: "Execute retention after exact review." },
   "privacy.review.dataHandling": { defaultMessage: "Data boundary", description: "Heading for privacy-preview data handling." },
+  "identities.renewal.pausedHeading": {
+    defaultMessage: "Automatic renewal paused",
+    description: "Heading for the targets where an operator rollback holds this identity's automatic renewal.",
+  },
+  "identities.renewal.pausedBody": {
+    defaultMessage:
+      "An operator rollback holds automatic renewal of this identity on the targets below until an operator resumes it. Expiry alerts keep firing, and its other targets keep renewing.",
+    description: "Explains what a renewal pause does and does not stop.",
+  },
+  "identities.renewal.pausedSince": {
+    defaultMessage: "Paused {at}: {reason}",
+    description: "One paused target: when the pause was recorded and the rollback reason.",
+  },
+  "identities.renewal.resume": { defaultMessage: "Resume renewal", description: "Lifts the renewal pause on one target; the resume is audited." },
+  "identities.renewal.resumed": {
+    defaultMessage: "Automatic renewal resumed on this target. The resume is in the audit log.",
+    description: "Confirmation after a renewal pause was lifted.",
+  },
+  "connectors.renewal.pausedOnTarget": {
+    defaultMessage: "Automatic renewal is paused here for {count} identities after an operator rollback. Resume it from each identity's detail view.",
+    description: "Target detail: identities whose automatic renewal an operator rollback holds on this target.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;

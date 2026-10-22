@@ -3973,6 +3973,7 @@ DeploymentTarget = TypedDict(
         'enabled': bool,
         'id': str,
         'name': str,
+        'renewal_paused_identities': list[str],
         'revision_id': str,
         'rollback_readiness': dict[str, Any],
         'tenant_id': str,
@@ -5860,6 +5861,7 @@ Identity = TypedDict(
         'not_after': str,
         'not_before': str,
         'owner_id': str,
+        'renewal_paused': list[dict[str, Any]],
         'status': str,
         'tenant_id': str,
         'terminal_pending': bool,
@@ -5907,6 +5909,24 @@ IdentityList = TypedDict(
         'items': list[dict[str, Any]],
         'next_cursor': str,
         'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+IdentityRenewalPause = TypedDict(
+    'IdentityRenewalPause',
+    {
+        'paused_at': str,
+        'reason': str,
+        'target_id': str,
+    },
+    total=False,
+)
+
+IdentityRenewalResumeRequest = TypedDict(
+    'IdentityRenewalResumeRequest',
+    {
+        'target_id': str,
     },
     total=False,
 )

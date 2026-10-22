@@ -421,6 +421,8 @@ public final class OpenApiSchemas {
       "IdentityDeploymentEvidence",
       "IdentityIssuanceResult",
       "IdentityList",
+      "IdentityRenewalPause",
+      "IdentityRenewalResumeRequest",
       "IdentityRequest",
       "IdentityStatusSummary",
       "IdentityTransitionPreview",

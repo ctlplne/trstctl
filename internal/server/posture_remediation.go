@@ -92,6 +92,12 @@ func (s *Server) remediateTenantPosture(ctx context.Context, tenantID string, no
 		if rule == "" {
 			continue
 		}
+		if ident, err := s.store.GetIdentity(ctx, tenantID, row.IdentityID); err == nil {
+			if _, paused := orchestrator.RenewalPausedTarget(ident); paused {
+				// B4-8: a posture rule does not override an operator's rollback pause.
+				continue
+			}
+		}
 		reason := postureRemediationReasonPrefix + rule
 		payload, err := json.Marshal(transitionTrigger{
 			IdentityID: row.IdentityID, To: string(orchestrator.StateRenewing), Reason: reason,

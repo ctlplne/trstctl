@@ -80,6 +80,9 @@ export function Connectors() {
   // A46: the single-target read says whether a rollback would find a
   // predecessor to restore, and why not, before the operator asks for one.
   const [targetReadiness, setTargetReadiness] = useState<DeploymentTarget["rollback_readiness"] | null>(null);
+  // B4-8: the same read lists identities whose automatic renewal an operator
+  // rollback holds on this target.
+  const [targetRenewalPaused, setTargetRenewalPaused] = useState<string[]>([]);
   const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | "cancel" | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
   const [connectorName, setConnectorName] = useState("nginx");
@@ -240,13 +243,16 @@ export function Connectors() {
   useEffect(() => {
     let cancelled = false;
     setTargetReadiness(null);
+    setTargetRenewalPaused([]);
     if (!selectedTarget) return;
     void (async () => {
       try {
         const detail = await api.connectorTarget(selectedTarget);
         if (!cancelled) setTargetReadiness(detail?.rollback_readiness ?? null);
+        if (!cancelled) setTargetRenewalPaused(detail?.renewal_paused_identities ?? []);
       } catch {
         if (!cancelled) setTargetReadiness(null);
+        if (!cancelled) setTargetRenewalPaused([]);
       }
     })();
     return () => {
@@ -768,6 +774,12 @@ export function Connectors() {
                 {selectedTargetRecord && selectedConnectorRecord?.target_vantage === "host_agent" && (
                   <EndpointPurge key={`purge-${selectedTargetRecord.id}`} target={selectedTargetRecord} reason={reason} />
                 )}
+                {targetRenewalPaused.length > 0 ? (
+                  <p role="status" className="text-sm text-status-warning md:col-span-3">
+                    {t("connectors.renewal.pausedOnTarget", { count: String(targetRenewalPaused.length) })}{" "}
+                    <code className="break-all text-xs">{targetRenewalPaused.join(", ")}</code>
+                  </p>
+                ) : null}
                 {actionResult && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{actionResult}</output>}
                 {selectedTargetRecord && selectedConnectorRecord && !selectedConnectorRecord.executes_rollback ? (
                   <p className="text-sm text-muted-foreground md:col-span-3">{t("connectors.recovery.unavailable")}</p>

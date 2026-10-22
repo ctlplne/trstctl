@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -262,4 +263,49 @@ func (s *Store) IdentityHoldingCertificateOnTarget(ctx context.Context, tenantID
 		return nil
 	})
 	return holder, err
+}
+
+// IdentityRenewalPause records why automatic renewal of an identity on one
+// target is held (B4-8): an operator rolled that target back, and until an
+// operator resumes it the control plane must not redeploy there on its own.
+type IdentityRenewalPause struct {
+	PausedAt time.Time `json:"paused_at"`
+	Reason   string    `json:"reason"`
+}
+
+// identityRenewalPausedAttribute is the attributes key holding the pauses, a
+// JSON object keyed by target id. The identity's other targets keep renewing.
+const identityRenewalPausedAttribute = "renewal_paused"
+
+// IdentityRenewalPauses reads the pauses off an identity's attributes; a
+// malformed or absent object reads as no pause, never as one.
+func IdentityRenewalPauses(attributes json.RawMessage) map[string]IdentityRenewalPause {
+	var attrs struct {
+		Paused map[string]IdentityRenewalPause `json:"renewal_paused"`
+	}
+	if len(attributes) == 0 || json.Unmarshal(attributes, &attrs) != nil {
+		return nil
+	}
+	return attrs.Paused
+}
+
+// ApplyIdentityRenewalPauseTx projects identity.renewal_paused / resumed: the
+// pause is added under its target id with the time and reason, or removed.
+func (s *Store) ApplyIdentityRenewalPauseTx(ctx context.Context, tx pgx.Tx, tenantID, identityID, targetID string, paused bool, reason string, at time.Time) error {
+	if strings.TrimSpace(identityID) == "" || strings.TrimSpace(targetID) == "" {
+		return fmt.Errorf("store: a renewal pause names an identity and a target")
+	}
+	if paused {
+		_, err := tx.Exec(ctx, `UPDATE identities
+			SET attributes = COALESCE(attributes, '{}'::jsonb) || jsonb_build_object($3::text,
+			      COALESCE(attributes -> $3::text, '{}'::jsonb) || jsonb_build_object($4::text,
+			        jsonb_build_object('paused_at', $5::timestamptz, 'reason', $6::text)))
+			WHERE tenant_id = $1 AND id = $2`, tenantID, identityID, identityRenewalPausedAttribute, targetID, at.UTC(), reason)
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE identities
+		SET attributes = COALESCE(attributes, '{}'::jsonb) || jsonb_build_object($3::text,
+		      COALESCE(attributes -> $3::text, '{}'::jsonb) - $4::text)
+		WHERE tenant_id = $1 AND id = $2`, tenantID, identityID, identityRenewalPausedAttribute, targetID)
+	return err
 }

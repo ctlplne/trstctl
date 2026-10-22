@@ -1723,6 +1723,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventAgentUpgradeCampaignOpened, 1}:                                        privacyPayloadShape[AgentUpgradeCampaignOpened](),
 		{EventAgentUpgradeCampaignAdvanced, 1}:                                      privacyPayloadShape[AgentUpgradeCampaignAdvanced](),
 		{EventAgentUpgradeRingAssigned, 1}:                                          privacyPayloadShape[AgentUpgradeRingAssigned](),
+		{EventIdentityRenewalPaused, 1}:                                             privacyPayloadShape[IdentityRenewalPaused](),
+		{EventIdentityRenewalResumed, 1}:                                            privacyPayloadShape[IdentityRenewalResumed](),
 		{EventAgentUpgradeRingDispatched, 1}:                                        privacyPayloadShape[AgentUpgradeRingDispatched](),
 		{EventIssuerCreated, 1}:                                                     privacyPayloadShape[IssuerCreated](),
 		{EventCertificateSuperseded, 1}:                                             privacyPayloadShape[CertificateSuperseded](),

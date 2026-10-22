@@ -227,6 +227,15 @@ func TestServedGCPCertificateManagerRollbackRepointsTheMapEntryFromTheControlPla
 	if !h.hasEvent(t, "connector.rollback.requested") {
 		t.Fatal("rollback request did not append connector.rollback.requested")
 	}
+	// B4-8: the operator's rollback paused automatic renewal of this identity
+	// on this target; the identity view says so until an operator resumes it.
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+ident.ID, tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"renewal_paused":[{"target_id":"`+target.ID+`"`) || !strings.Contains(string(body), "operator rollback: a58 rollback drill") {
+		t.Fatalf("identity after an operator rollback: %d %s; want renewal paused on the rolled-back target", status, body)
+	}
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/renewal/resume", tok, "a58-resume", map[string]any{"target_id": target.ID}); status != http.StatusOK || !strings.Contains(string(body), `"renewal_paused":[]`) {
+		t.Fatalf("resume after the rollback: %d %s", status, body)
+	}
 	if pending, err := h.srv.outbox.Pending(t.Context(), h.tenant); err != nil || len(pending) != 0 {
 		t.Fatalf("pending outbox after rollback = %d %v", len(pending), err)
 	}

@@ -142,14 +142,19 @@ const (
 	EventIdentityIssued               = "identity.issued"
 	EventIdentityDeployed             = "identity.deployed"
 	EventIdentityUndeployed           = "identity.undeployed"
-	EventIdentityRevoked              = "identity.revoked"
-	EventIdentityRenewing             = "identity.renewing"
-	EventIdentityRenewed              = "identity.renewed"
-	EventIdentityRenewalFailed        = "identity.renewal_failed"
-	EventIdentityRenewalRecovered     = "identity.renewal_recovered"
-	EventIdentityRetired              = "identity.retired"
-	EventCertificateRecorded          = "certificate.recorded"
-	EventCertificateCustodyAttested   = "certificate.custody.attested"
+	// EventIdentityRenewalPaused / Resumed record an operator's rollback pausing
+	// automatic renewal of one identity on one target, and the operator's
+	// resume (B4-8). The resume event is the audit record of that decision.
+	EventIdentityRenewalPaused      = "identity.renewal_paused"
+	EventIdentityRenewalResumed     = "identity.renewal_resumed"
+	EventIdentityRevoked            = "identity.revoked"
+	EventIdentityRenewing           = "identity.renewing"
+	EventIdentityRenewed            = "identity.renewed"
+	EventIdentityRenewalFailed      = "identity.renewal_failed"
+	EventIdentityRenewalRecovered   = "identity.renewal_recovered"
+	EventIdentityRetired            = "identity.retired"
+	EventCertificateRecorded        = "certificate.recorded"
+	EventCertificateCustodyAttested = "certificate.custody.attested"
 	// CertificateApprovalEventSchemaVersion adds both the exact one-shot
 	// approval and the privacy-stable command binding recomputed from the issued
 	// certificate. Version 1 remains replayable for ordinary inventory and
@@ -521,6 +526,20 @@ type AgentUpgradeCampaignAdvanced struct {
 type AgentUpgradeRingAssigned struct {
 	AgentID string `json:"agent_id"`
 	Ring    string `json:"ring"`
+}
+
+// IdentityRenewalPaused is the payload of identity.renewal_paused (B4-8): the
+// identity, the target an operator rolled back, and why renewal is held.
+type IdentityRenewalPaused struct {
+	IdentityID string `json:"identity_id"`
+	TargetID   string `json:"target_id"`
+	Reason     string `json:"reason"`
+}
+
+// IdentityRenewalResumed is the payload of identity.renewal_resumed (B4-8).
+type IdentityRenewalResumed struct {
+	IdentityID string `json:"identity_id"`
+	TargetID   string `json:"target_id"`
 }
 
 // AgentUpgradeRingDispatched records one ring's dispatch: which agents were
@@ -4127,6 +4146,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
 	EventAgentUpgradeRingAssigned:                 {1: true},
+	EventIdentityRenewalPaused:                    {1: true},
+	EventIdentityRenewalResumed:                   {1: true},
 	EventAgentUpgradeRingDispatched:               {1: true},
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
@@ -4580,6 +4601,18 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyAgentUpgradeRingAssignedTx(ctx, tx, e.TenantID, pl.AgentID, pl.Ring)
+	case EventIdentityRenewalPaused:
+		var pl IdentityRenewalPaused
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyIdentityRenewalPauseTx(ctx, tx, e.TenantID, pl.IdentityID, pl.TargetID, true, pl.Reason, e.Time)
+	case EventIdentityRenewalResumed:
+		var pl IdentityRenewalResumed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyIdentityRenewalPauseTx(ctx, tx, e.TenantID, pl.IdentityID, pl.TargetID, false, "", e.Time)
 	case EventOwnershipConflictResolved:
 		var pl OwnershipConflictResolved
 		if err := decode(e, &pl); err != nil {

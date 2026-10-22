@@ -281,8 +281,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// containment or dead-lettered CA publication recovers on the same command.
 	// Secret sync adds one reconcile operation for a lost receiver result.
 	// A69 adds one deterministic ring placement operation beside the per-agent one.
-	if len(out) != 512 {
-		t.Fatalf("OpenAPI operationIds = %d, want 512", len(out))
+	// B4-8 adds the renewal resume after an operator rollback.
+	if len(out) != 513 {
+		t.Fatalf("OpenAPI operationIds = %d, want 513", len(out))
 	}
 	return out
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -121,6 +122,14 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 			source = "in_flight"
 			explanation = "Renewal is already queued or running."
 			blockers = append(blockers, "The existing renewal is still queued or running; follow its retry evidence before starting another renewal.")
+		}
+		if ident, err := s.store.GetIdentity(ctx, tenantID, row.IdentityID); err == nil {
+			if pausedTarget, paused := orchestrator.RenewalPausedTarget(ident); paused {
+				due = false
+				source = "paused_by_operator_rollback"
+				explanation = "An operator rolled this target back; automatic renewal is paused there until an operator resumes it."
+				blockers = append(blockers, "Resume renewal on target "+pausedTarget+" (POST /api/v1/identities/{id}/renewal/resume) once the rollback is understood; expiry alerts keep firing meanwhile.")
+			}
 		}
 		if row.TargetID != "" {
 			conflicts, err := s.store.ConflictingTargetBindings(ctx, tenantID, row.TargetID, row.IdentityID, row.PredecessorID, false)

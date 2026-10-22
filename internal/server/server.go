@@ -3776,6 +3776,12 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 					if !eligible {
 						continue
 					}
+					// B4-8: an operator rollback holds automatic renewal on that target until
+					// an operator resumes it; alerts still fire, nothing redeploys on its own.
+					if pausedTarget, paused := orchestrator.RenewalPausedTarget(ident); paused {
+						s.logger.Info("lifecycle renewal held: paused by an operator rollback", slog.String("tenant_id", tenant), slog.String("identity_id", ident.ID), slog.String("target_id", pausedTarget))
+						continue
+					}
 					candidate.Certificate = servedCertificate
 					reason, due, decisionErr := s.lifecycleRenewalReasonForCertificate(ctx, tenant, candidate.Certificate, now, cutoff)
 					if decisionErr != nil {

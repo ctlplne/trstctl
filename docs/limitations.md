@@ -2193,7 +2193,16 @@ cisco does not implement re-bind and the census says so rather than offering a
 rollback that would return success having changed nothing; **aws-acm** (one ARN,
 re-imported in place, no previous version) and **azure-keyvault** (versions kept,
 newest always served by name, no call to make an older one current) are refused
-with those reasons on the route and in `rollback_readiness`. Plugin-backed
+with those reasons on the route and in `rollback_readiness`. An operator's
+rollback also pauses automatic renewal of that identity on that target until
+an operator resumes it (`POST /api/v1/identities/{id}/renewal/resume`,
+`trstctl identities renewal-resume`): the identity's `renewal_paused` list and
+the target's `renewal_paused_identities` show the hold, the lifecycle plan
+reports it as `paused_by_operator_rollback`, expiry alerts keep firing, the
+scheduler and posture remediation never redeploy there on their own, the
+identity's other targets keep renewing, and the resume is an audited event
+(`identity.renewal_resumed`) carrying the operator who made it. An explicit
+operator-driven renewal transition is not held by the pause. Plugin-backed
 connectors are refused because the plugin ABI exports deploy only. A rollback whose predecessor object is no longer on the appliance
 **fails**, with a distinct error, because reporting success there tells an
 operator that a bad certificate stopped serving traffic when it did not.

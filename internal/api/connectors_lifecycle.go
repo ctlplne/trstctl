@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -186,6 +187,9 @@ type deploymentTargetResponse struct {
 	// RollbackReadiness is present on the single-target read (A46): whether a
 	// rollback would find a predecessor to restore, and if not, why.
 	RollbackReadiness *rollbackReadiness `json:"rollback_readiness,omitempty"`
+	// RenewalPausedIdentities lists identities whose automatic renewal an operator
+	// rollback holds on this target (B4-8); present on the single-target read.
+	RenewalPausedIdentities []string `json:"renewal_paused_identities,omitempty"`
 }
 
 type identityConnectorTargetRequest struct {
@@ -570,6 +574,7 @@ func (a *API) getConnectorTarget(w http.ResponseWriter, r *http.Request) {
 	response := toDeploymentTargetResponse(target)
 	readiness := a.rollbackReadiness(r.Context(), tenantID, target)
 	response.RollbackReadiness = &readiness
+	response.RenewalPausedIdentities = a.renewalPausedIdentitiesOn(r.Context(), tenantID, target.ID)
 	a.writeJSON(w, http.StatusOK, response)
 }
 
@@ -948,6 +953,13 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusConflict,
 				"a rollback for this target and predecessor exists and could not be re-queued; "+
 					"inspect the connector delivery receipts for its outcome before retrying")
+		}
+		// B4-8: an operator's rollback holds automatic renewal of this identity on
+		// this target until an operator resumes it; its other targets keep renewing.
+		if pausedIdentity := strings.TrimSpace(req.IdentityID); pausedIdentity != "" {
+			if err := a.orch.PauseIdentityRenewal(ctx, tenantID, pausedIdentity, target.ID, "operator rollback: "+reason); err != nil {
+				return 0, nil, err
+			}
 		}
 		return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
 	})
@@ -1834,4 +1846,59 @@ func parityGateNames(gates []connector.ParityGate) []string {
 		out = append(out, string(gate))
 	}
 	return out
+}
+
+// renewalPausedIdentitiesOn lists the identities bound to targetID whose
+// automatic renewal an operator rollback holds there (B4-8). A read failure
+// reads as no pause rather than as a 500 on the target view.
+func (a *API) renewalPausedIdentitiesOn(ctx context.Context, tenantID, targetID string) []string {
+	ids, err := a.store.IdentityIDsBoundToDeploymentTarget(ctx, tenantID, targetID)
+	if err != nil {
+		return nil
+	}
+	var paused []string
+	for _, id := range ids {
+		ident, err := a.store.GetIdentity(ctx, tenantID, id)
+		if err != nil {
+			continue
+		}
+		if _, held := store.IdentityRenewalPauses(ident.Attributes)[targetID]; held {
+			paused = append(paused, id)
+		}
+	}
+	sort.Strings(paused)
+	return paused
+}
+
+// identityRenewalResumeRequest names the target whose pause the operator lifts.
+type identityRenewalResumeRequest struct {
+	TargetID string `json:"target_id"`
+}
+
+// resumeIdentityRenewal lifts an operator rollback's renewal pause (B4-8). The
+// identity.renewal_resumed event this appends is the audit record: its actor
+// is the caller, its payload the identity and target.
+func (a *API) resumeIdentityRenewal(w http.ResponseWriter, r *http.Request) {
+	idem := r.Header.Get("Idempotency-Key")
+	identityID := r.PathValue("id")
+	a.mutate(w, r, idem, func(ctx context.Context, tenantID string) (int, any, error) {
+		var body identityRenewalResumeRequest
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if strings.TrimSpace(body.TargetID) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "target_id is required: a pause is held per target")
+		}
+		if err := a.orch.ResumeIdentityRenewal(ctx, tenantID, identityID, body.TargetID); err != nil {
+			if errors.Is(err, orchestrator.ErrInvalidTransition) {
+				return 0, nil, errStatus(http.StatusConflict, err.Error())
+			}
+			return 0, nil, err
+		}
+		ident, err := a.store.GetIdentity(ctx, tenantID, identityID)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toIdentityResponse(ident), nil
+	})
 }

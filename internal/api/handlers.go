@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -136,6 +137,26 @@ type identityResponse struct {
 	NotAfter            *time.Time      `json:"not_after"`
 	Attributes          json.RawMessage `json:"attributes"`
 	CreatedAt           time.Time       `json:"created_at"`
+	// RenewalPaused lists the targets on which an operator rollback holds this
+	// identity's automatic renewal (B4-8); empty means it renews everywhere.
+	RenewalPaused []identityRenewalPauseResponse `json:"renewal_paused"`
+}
+
+// identityRenewalPauseResponse is one held target: where, since when, and why.
+type identityRenewalPauseResponse struct {
+	TargetID string    `json:"target_id"`
+	PausedAt time.Time `json:"paused_at"`
+	Reason   string    `json:"reason"`
+}
+
+func identityRenewalPauses(it store.Identity) []identityRenewalPauseResponse {
+	pauses := store.IdentityRenewalPauses(it.Attributes)
+	out := make([]identityRenewalPauseResponse, 0, len(pauses))
+	for targetID, pause := range pauses {
+		out = append(out, identityRenewalPauseResponse{TargetID: targetID, PausedAt: pause.PausedAt, Reason: pause.Reason})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].TargetID < out[j].TargetID })
+	return out
 }
 
 func toIdentityResponse(it store.Identity) identityResponse {
@@ -147,6 +168,7 @@ func toIdentityResponse(it store.Identity) identityResponse {
 		ID: it.ID, TenantID: it.TenantID, Kind: string(it.Kind), Name: it.Name,
 		OwnerID: it.OwnerID, IssuerID: it.IssuerID, Status: it.Status,
 		NotBefore: it.NotBefore, NotAfter: it.NotAfter, Attributes: attrs, CreatedAt: it.CreatedAt,
+		RenewalPaused: identityRenewalPauses(it),
 	}
 }
 

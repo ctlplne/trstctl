@@ -2869,6 +2869,7 @@ export interface DeploymentTarget {
   enabled: boolean;
   id: string;
   name: string;
+  renewal_paused_identities?: string[];
   revision_id: string;
   rollback_readiness?: { identity_id?: string; model: "re-bind" | "host" | "none"; predecessor_fingerprint?: string; predecessor_serial?: string; ready: boolean; reason?: string };
   tenant_id: string;
@@ -4244,6 +4245,7 @@ export interface Identity {
   not_after?: string;
   not_before?: string;
   owner_id: string;
+  renewal_paused?: IdentityRenewalPause[];
   status: string;
   tenant_id?: string;
   terminal_pending?: boolean;
@@ -4275,6 +4277,16 @@ export interface IdentityList {
   items: Identity[];
   next_cursor?: string;
   summary?: IdentityStatusSummary;
+}
+
+export interface IdentityRenewalPause {
+  paused_at: string;
+  reason: string;
+  target_id: string;
+}
+
+export interface IdentityRenewalResumeRequest {
+  target_id: string;
 }
 
 export interface IdentityRequest {

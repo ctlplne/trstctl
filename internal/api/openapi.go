@@ -907,7 +907,9 @@ func componentSchemas() map[string]*Schema {
 	identity := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: identityKinds},
 		"name": str(), "owner_id": uuid(), "issuer_id": uuid(), "status": str(),
-		"terminal_pending":      {Type: "boolean", Description: "A revoked or retired identity command is already authoritative but its event has not projected. Signing, deployment and host renewal are denied while recovery completes."},
+		"terminal_pending": {Type: "boolean", Description: "A revoked or retired identity command is already authoritative but its event has not projected. Signing, deployment and host renewal are denied while recovery completes."},
+		// B4-8: targets on which an operator rollback holds automatic renewal.
+		"renewal_paused":        {Type: "array", Items: ref("IdentityRenewalPause")},
 		"terminal_target_state": {Type: "string", Enum: []string{"revoked", "retired"}, Description: "Target of the accepted pending terminal command; absent when no command is pending."},
 		"not_before":            timestamp(), "not_after": timestamp(), "attributes": {Type: "object"}, "created_at": timestamp(),
 	}, "id", "kind", "name", "owner_id", "status")
@@ -3127,7 +3129,9 @@ func componentSchemas() map[string]*Schema {
 	}, "model", "ready")
 	deploymentTarget := object(map[string]*Schema{
 		"rollback_readiness": rollbackReadiness,
-		"id":                 uuid(), "revision_id": str(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
+		// B4-8: identities whose automatic renewal an operator rollback holds here.
+		"renewal_paused_identities": {Type: "array", Items: uuid()},
+		"id":                        uuid(), "revision_id": str(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
 	}, "id", "revision_id", "tenant_id", "name", "connector", "config", "enabled", "created_at")
 	identityConnectorTargetReq := object(map[string]*Schema{
 		"target_id": uuid(),
@@ -5043,6 +5047,10 @@ func componentSchemas() map[string]*Schema {
 		"agent_id": uuid(),
 		"ring":     {Type: "string", Enum: []string{"canary", "early", "broad", ""}},
 	}, "agent_id")
+	identityRenewalPause := object(map[string]*Schema{
+		"target_id": uuid(), "paused_at": timestamp(), "reason": str(),
+	}, "target_id", "paused_at", "reason")
+	identityRenewalResumeRequest := object(map[string]*Schema{"target_id": uuid()}, "target_id")
 	agentRingAutoAssignInput := object(map[string]*Schema{
 		"canary_count":  {Type: "integer"},
 		"early_percent": {Type: "integer"},
@@ -7149,6 +7157,8 @@ func componentSchemas() map[string]*Schema {
 		"UpgradeArtifact":                          upgradeArtifactSchema,
 		"AgentRingInput":                           agentRingInput,
 		"AgentRingAutoAssignInput":                 agentRingAutoAssignInput,
+		"IdentityRenewalPause":                     identityRenewalPause,
+		"IdentityRenewalResumeRequest":             identityRenewalResumeRequest,
 		"AgentRingAutoAssignedAgent":               agentRingAutoAssignedAgent,
 		"AgentRingAutoAssignment":                  agentRingAutoAssignment,
 		"MDMDevice":                                mdmDeviceSchema,

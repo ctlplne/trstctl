@@ -11736,6 +11736,13 @@
           "name": {
             "type": "string"
           },
+          "renewal_paused_identities": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "revision_id": {
             "type": "string"
           },
@@ -17525,6 +17532,12 @@
             "format": "uuid",
             "type": "string"
           },
+          "renewal_paused": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityRenewalPause"
+            },
+            "type": "array"
+          },
           "status": {
             "type": "string"
           },
@@ -17678,6 +17691,39 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "IdentityRenewalPause": {
+        "properties": {
+          "paused_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "paused_at",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "IdentityRenewalResumeRequest": {
+        "properties": {
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id"
         ],
         "type": "object"
       },
@@ -51282,6 +51328,83 @@
         ],
         "summary": "Revoke an ownership-readiness exception",
         "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/identities/{id}/renewal/resume": {
+      "post": {
+        "operationId": "resumeIdentityRenewal",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityRenewalResumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Lift an operator rollback's renewal pause on one target; the resume is recorded in the audit log",
+        "x-trstctl-permission": "identities:write"
       }
     },
     "/api/v1/identities/{id}/transitions": {

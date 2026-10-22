@@ -230,6 +230,7 @@ import type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  IdentityRenewalResumeRequest,
   DiscoveryCapability,
   DiscoveryCapabilityCatalog,
   DiscoveryCapabilityField,
@@ -1038,6 +1039,7 @@ export type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  IdentityRenewalResumeRequest,
   DiscoveryCapability,
   DiscoveryCapabilityCatalog,
   DiscoveryCapabilityField,
@@ -1927,6 +1929,7 @@ export interface Api {
   previewEndpointBinding(input: EndpointBindingPlanRequest): Promise<EndpointBindingPreview>;
   createEndpointBinding(input: EndpointBindingRequest, idempotencyKey?: string): Promise<EndpointBinding>;
   bindIdentityConnectorTarget(id: string, input: IdentityConnectorTargetRequest): Promise<Identity>;
+  resumeIdentityRenewal(id: string, input: IdentityRenewalResumeRequest): Promise<Identity>;
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
   deployConnectorTarget(id: string, input: ConnectorTargetActionRequest, idempotencyKey?: string): Promise<Identity>;
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
@@ -2658,6 +2661,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewEndpointBinding: (input) => postRead<EndpointBindingPreview>("/api/v1/lifecycle/endpoint-bindings/preview", input),
   createEndpointBinding: (input, key) => mutate<EndpointBinding>("POST", "/api/v1/lifecycle/endpoint-bindings", input, key),
   bindIdentityConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/connector-target`, input),
+  resumeIdentityRenewal: (id, input) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/renewal/resume`, input),
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
   deployConnectorTarget: (id, input, key) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input, key),
   rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),

@@ -31,6 +31,7 @@ import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
 import { IdentityCertificateEvidence } from "@/pages/identities/IdentityCertificateEvidence";
 import { IdentityIssuerEvidence } from "@/pages/identities/IdentityIssuerEvidence";
+import { IdentityRenewalHold } from "@/pages/identities/IdentityRenewalHold";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -1722,6 +1723,8 @@ function IdentityDetailPanel({
               <p className="mt-1 text-muted-foreground">{translateNow("source.no.extra.kind.attributes.were.returned.9f899e73ae")}</p>
             )}
           </section>
+
+          <IdentityRenewalHold key={`renewal-hold-${identity.id}`} identity={identity} />
 
           <IdentityActivityEvidence key={identity.id} identity={identity} />
 

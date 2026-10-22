@@ -205,6 +205,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"identities", "deployment-evidence"}, Method: "GET", Path: "/api/v1/identities/{id}/deployment-evidence", Summary: "Read the certificate and historical receipt of the last completed deployment or restore"},
 	{Name: []string{"identities", "transition-preview"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions/preview", Body: bodyFile, ReadOnly: true, Summary: "Review the exact lifecycle transition plan without changing state"},
 	{Name: []string{"identities", "transition"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions", Body: bodyFile, Summary: "Apply a lifecycle transition"},
+	{Name: []string{"identities", "renewal-resume"}, Method: "POST", Path: "/api/v1/identities/{id}/renewal/resume", Body: bodyFile, Summary: "Lift an operator rollback's renewal pause on one target; the resume is audited"},
 	{Name: []string{"identities", "compromise-preview"}, Method: "POST", Path: "/api/v1/identities/{id}/compromise/preview", Body: bodyFile, ReadOnly: true, Summary: "Review exact issuing CAs and the deployed host leaf before key-compromise response"},
 	{Name: []string{"identities", "compromise"}, Method: "POST", Path: "/api/v1/identities/{id}/compromise", Body: bodyFile, Summary: "Queue one reviewed CA revocation and exact host containment command"},
 	{Name: []string{"identities", "compromise-status"}, Method: "GET", Path: "/api/v1/identities/{id}/compromise", Query: []string{"request_key"}, Summary: "Read independent CA and host results using the original compromise request key"},
