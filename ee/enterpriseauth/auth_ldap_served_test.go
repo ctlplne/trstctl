@@ -99,6 +99,18 @@ func TestServedLDAPLoginBindsOpenLDAPAndMapsGroupRole(t *testing.T) {
 	assertSessionCanReadAccessRoles(t, baseURL, jar)
 }
 
+// lastOpenLDAPContainer is the container the most recent startOpenLDAPContainer
+// created, for tests that inspect the directory directly.
+var lastOpenLDAPContainer string
+
+func openLDAPContainerName(t *testing.T) string {
+	t.Helper()
+	if lastOpenLDAPContainer == "" {
+		t.Fatal("no OpenLDAP container was started")
+	}
+	return lastOpenLDAPContainer
+}
+
 func startOpenLDAPContainer(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -109,6 +121,7 @@ func startOpenLDAPContainer(t *testing.T) string {
 	}
 
 	name := "trstctl-ldap-test-" + strings.NewReplacer(".", "-", "/", "-").Replace(t.Name()) + fmt.Sprintf("-%d", time.Now().UnixNano())
+	lastOpenLDAPContainer = name
 	ldifDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(ldifDir, "01-users.ldif"), []byte(openLDAPFixtureLDIF), 0o600); err != nil {
 		t.Fatalf("write OpenLDAP fixture LDIF: %v", err)
@@ -264,6 +277,11 @@ dn: cn=platform-admins,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
 cn: platform-admins
 member: cn=trstctl-admins,ou=groups,dc=example,dc=org
+
+dn: cn=trstctl-viewers,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: trstctl-viewers
+member: cn=admin,dc=example,dc=org
 
 dn: cn=everyone,ou=groups,dc=example,dc=org
 objectClass: groupOfNames

@@ -690,6 +690,7 @@ type Server struct {
 	outboxGC           *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler          orchestrator.Handler
 	scimWriteback      api.SCIMWritebackHandler
+	ldapWriteback      api.LDAPWritebackHandler
 	// secretIntegrations is the secret.sync/dynsecret outbox receiver; the
 	// served secret-sync reconciliation resolves it lazily because the API's
 	// secrets backend is built before the dispatcher.
@@ -1514,11 +1515,12 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// receives the live pool provider instead of permanently capturing the
 	// truthful-but-wrong served=false fallback during startup.
 	s.appendOperationalReadModels(d, &defaults)
-	authOptions, scimConfig, err := buildBrowserAuthWithSCIM(d)
+	authOptions, scimConfig, ldapWritebackConfig, err := buildBrowserAuthWithDirectory(d)
 	if err != nil {
 		return nil, nil, err
 	}
 	s.attachSCIMWriteback(d, scimConfig)
+	s.attachLDAPWriteback(d, ldapWritebackConfig)
 	defaults = append(defaults, authOptions...)
 	// Effect-free review evidence is a platform primitive, not a native-secret-
 	// store feature. Wire the KEK's keyed-digest seam even when that optional API
@@ -2093,9 +2095,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	default:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	}
 	return nil
 }
@@ -4454,6 +4456,17 @@ func (s *Server) recordRenewalDeferral(ctx context.Context, now time.Time, reaso
 			Type: "lifecycle.renewal.deferred", TenantID: tenant, Data: payload,
 		})
 	}
+}
+
+// attachLDAPWriteback wires LDAP directory writeback (A83): member changes
+// in the tenants the licensed LDAP config names are queued by the
+// orchestrator and applied to the directory's role groups by the worker.
+func (s *Server) attachLDAPWriteback(d Deps, cfg *api.LDAPWritebackConfig) {
+	if cfg == nil || cfg.NewWriteback == nil || len(cfg.BaseDNByTenant) == 0 {
+		return
+	}
+	s.orch.EnableLDAPWriteback(cfg.BaseDNByTenant)
+	s.ldapWriteback = cfg.NewWriteback(api.LDAPWritebackDeps{Store: d.Store, Orchestrator: s.orch})
 }
 
 // attachSCIMWriteback wires directory writeback (A73): tokens that name a

@@ -4966,8 +4966,18 @@ through `group_filter` (`{group_dn}`, default `(member={group_dn})`) up to
 `max_depth` (default 5, ceiling 20) with a seen-set so a membership cycle
 cannot loop, and mode `in_chain` asks Active Directory for the transitive set
 in one search (`LDAP_MATCHING_RULE_IN_CHAIN`); a mapping on a grandparent
-group then signs the user in. It does not yet implement directory writeback.
-API/CI access still uses scoped API tokens.
+group then signs the user in. Directory writeback is served
+(`auth.ldap.writeback`): a role change or offboarding an operator makes in
+trstctl to a member whose subject is a DN under `base_dn` is queued in the
+same transaction (outbox, AN-6) and applied by the licensed worker through
+the service account to the directory's role groups (`role_groups` maps a
+trstctl role to a group DN; the member DN is added to the groups its roles
+map to and removed from the mapped groups they no longer cover, idempotently),
+each application recorded as `ldap.writeback.recorded` with the groups added
+and removed; a directory refusal (missing group, insufficient access, policy)
+is recorded as refused and not retried, a transport failure is retried, and a
+member outside the base is never written back. API/CI access still uses
+scoped API tokens.
 Kerberos/GSSAPI browser login is served (`auth.kerberos`, Enterprise SSO):
 `GET /auth/kerberos/login` answers with a Negotiate challenge, the SPNEGO
 ticket the browser presents is verified against the service keytab

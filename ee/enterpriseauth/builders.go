@@ -45,6 +45,10 @@ func Build(d editionseam.TenantAuthDeps) (editionseam.TenantAuthConfig, error) {
 	if err != nil {
 		return out, err
 	}
+	out.LDAPWriteback, err = buildLDAPWritebackConfig(d.LDAP)
+	if err != nil {
+		return out, err
+	}
 	out.SCIM, err = buildSCIMConfig(d.SCIM)
 	return out, err
 }
@@ -291,4 +295,48 @@ func loadOrCreateNamedSessionSecret(field, path string) ([]byte, error) {
 // plain http on a loopback host only).
 func samlArtifactResolver(endpoint string) (*http.Client, error) {
 	return netsec.OutboundClientForEndpoint(endpoint, 10*time.Second)
+}
+
+// buildLDAPWritebackConfig turns auth.ldap.writeback into the core's
+// attachment (A83): every tenant the LDAP mapping can place a user in writes
+// back to the one configured directory through its service account.
+func buildLDAPWritebackConfig(l config.LDAP) (*api.LDAPWritebackConfig, error) {
+	if !l.Enabled || !l.Writeback.Enabled {
+		return nil, nil
+	}
+	if err := l.ValidateEnabled(); err != nil {
+		return nil, fmt.Errorf("server: LDAP writeback enabled but misconfigured (fail closed): %w", err)
+	}
+	bindPassword, err := secretfile.Load(l.BindPasswordFile)
+	if err != nil {
+		return nil, fmt.Errorf("server: read auth.ldap.bind_password_file %q: %w", l.BindPasswordFile, err)
+	}
+	timeout, err := l.TimeoutDuration()
+	if err != nil {
+		return nil, fmt.Errorf("server: auth.ldap.timeout: %w", err)
+	}
+	tenants := map[string]string{}
+	for _, m := range l.TenantMappings {
+		if id := strings.TrimSpace(m.TenantID); id != "" {
+			tenants[id] = l.Writeback.BaseDN
+		}
+	}
+	if l.AllowDefaultTenant && strings.TrimSpace(l.DefaultTenant) != "" {
+		tenants[strings.TrimSpace(l.DefaultTenant)] = l.Writeback.BaseDN
+	}
+	roleGroups := map[string]string{}
+	for role, dn := range l.Writeback.RoleGroups {
+		roleGroups[strings.TrimSpace(role)] = strings.TrimSpace(dn)
+	}
+	target := ldapWritebackTarget{URL: l.URL, BindDN: l.BindDN, BindPassword: bindPassword, Timeout: timeout, RoleGroups: roleGroups}
+	targets := map[string]ldapWritebackTarget{}
+	for tenant := range tenants {
+		targets[tenant] = target
+	}
+	return &api.LDAPWritebackConfig{
+		BaseDNByTenant: tenants,
+		NewWriteback: func(deps api.LDAPWritebackDeps) api.LDAPWritebackHandler {
+			return newLDAPWriteback(deps, targets)
+		},
+	}, nil
 }

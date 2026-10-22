@@ -276,7 +276,11 @@ const (
 	// EventSCIMWritebackRecorded is the audit record of one directory
 	// writeback (A73): what trstctl wrote to the directory's User for a
 	// member an operator changed here, and whether the readback agreed.
-	EventSCIMWritebackRecorded                    = "scim.writeback.recorded"
+	EventSCIMWritebackRecorded = "scim.writeback.recorded"
+	// EventLDAPWritebackRecorded is the audit record of one LDAP directory
+	// writeback (A83): a member change an operator made in trstctl applied to
+	// the directory's role groups.
+	EventLDAPWritebackRecorded                    = "ldap.writeback.recorded" // #nosec G101 -- an event type name, not a credential (CWE-798)
 	EventAPITokenCreated                          = "api_token.created"
 	EventAPITokenRevoked                          = "api_token.revoked"
 	EventHoneyTokenCreated                        = "honeytoken.created"
@@ -3630,6 +3634,23 @@ type SCIMWritebackRecorded struct {
 	SourceEventID string `json:"source_event_id,omitempty"`
 }
 
+// LDAPWritebackRecorded is the payload of ldap.writeback.recorded (A83).
+type LDAPWritebackRecorded struct {
+	Subject string `json:"subject"`
+	Change  string `json:"change"`
+	Active  bool   `json:"active"`
+	// Roles are the member's roles at writeback time; GroupsAdded and
+	// GroupsRemoved are the directory group DNs the member DN was added to or
+	// removed from.
+	Roles         []string `json:"roles,omitempty"`
+	GroupsAdded   []string `json:"groups_added,omitempty"`
+	GroupsRemoved []string `json:"groups_removed,omitempty"`
+	// Status is written or refused; Detail is a closed phrase.
+	Status        string `json:"status"`
+	Detail        string `json:"detail,omitempty"`
+	SourceEventID string `json:"source_event_id,omitempty"`
+}
+
 // TenantMemberOffboarded is the payload of a tenant.member.offboarded event.
 type TenantMemberOffboarded struct {
 	SCIM              *store.SCIMIdentity `json:"scim,omitempty"`
@@ -4298,6 +4319,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantMemberUpserted:                     {1: true, TenantMemberSCIMSchemaVersion: true},
 	EventTenantMemberOffboarded:                   {1: true, TenantMemberSCIMSchemaVersion: true},
 	EventSCIMWritebackRecorded:                    {1: true},
+	EventLDAPWritebackRecorded:                    {1: true},
 	EventAPITokenCreated:                          {1: true},
 	EventAPITokenRevoked:                          {1: true},
 	EventHoneyTokenCreated:                        {1: true},
@@ -4626,8 +4648,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyAgentUpgradeRingAssignedTx(ctx, tx, e.TenantID, pl.AgentID, pl.Ring)
-	case EventSCIMWritebackRecorded:
-		// Audit evidence only (A73): the member row is the directory's and
+	case EventSCIMWritebackRecorded, EventLDAPWritebackRecorded:
+		// Audit evidence only (A73/A83): the member row is the directory's and
 		// trstctl's shared truth already; nothing here changes a projection.
 		return nil
 	case EventIdentityRenewalPaused:

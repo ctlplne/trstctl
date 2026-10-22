@@ -795,11 +795,18 @@ type LDAP struct {
 	// (A82): mode "recursive" walks parent groups through NestedGroupFilter up
 	// to MaxDepth; mode "in_chain" asks Active Directory for the transitive set
 	// in one search (LDAP_MATCHING_RULE_IN_CHAIN). Off, only direct groups map.
-	NestedGroups      LDAPNestedGroups `json:"nested_groups,omitempty"`
-	SessionSecretFile string           `json:"session_secret_file,omitempty"`
-	SessionTTL        string           `json:"session_ttl,omitempty"`
-	LoginRedirect     string           `json:"login_redirect,omitempty"`
-	Timeout           string           `json:"timeout,omitempty"`
+	NestedGroups LDAPNestedGroups `json:"nested_groups,omitempty"`
+	// Writeback applies member role changes and offboarding made in trstctl
+	// to the directory's role groups (A83) through the service account
+	// (bind_dn): RoleGroups maps a trstctl role to the group DN whose member
+	// attribute carries that role; a member whose subject is a DN under
+	// BaseDN is added to or removed from those groups by an outbox-backed
+	// worker, and each application is recorded as ldap.writeback.recorded.
+	Writeback         LDAPWriteback `json:"writeback,omitempty"`
+	SessionSecretFile string        `json:"session_secret_file,omitempty"`
+	SessionTTL        string        `json:"session_ttl,omitempty"`
+	LoginRedirect     string        `json:"login_redirect,omitempty"`
+	Timeout           string        `json:"timeout,omitempty"`
 
 	TenantMappings     []TenantMapping `json:"tenant_mappings,omitempty"`
 	DefaultRoles       []string        `json:"default_roles,omitempty"`
@@ -903,6 +910,16 @@ func (s SAML) SessionTTLDuration() (time.Duration, error) {
 		return 12 * time.Hour, nil
 	}
 	return time.ParseDuration(s.SessionTTL)
+}
+
+// LDAPWriteback configures LDAP directory writeback (A83).
+type LDAPWriteback struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// BaseDN is the suffix a member subject must have to be a directory
+	// member (for example dc=example,dc=org).
+	BaseDN string `json:"base_dn,omitempty"`
+	// RoleGroups maps trstctl roles to directory group DNs.
+	RoleGroups map[string]string `json:"role_groups,omitempty"`
 }
 
 // LDAPNestedGroups configures transitive group expansion (A82).
@@ -4982,6 +4999,22 @@ func (l LDAP) validate() []error {
 	}
 	req(l.URL, "url")
 	req(l.SessionSecretFile, "session_secret_file")
+	if l.Writeback.Enabled {
+		if strings.TrimSpace(l.BindDN) == "" || strings.TrimSpace(l.BindPasswordFile) == "" {
+			errs = append(errs, errors.New("auth.ldap.writeback needs bind_dn and bind_password_file: the service account writes the groups"))
+		}
+		if strings.TrimSpace(l.Writeback.BaseDN) == "" || !strings.Contains(l.Writeback.BaseDN, "=") {
+			errs = append(errs, errors.New("auth.ldap.writeback.base_dn must be the DN suffix directory members live under"))
+		}
+		if len(l.Writeback.RoleGroups) == 0 {
+			errs = append(errs, errors.New("auth.ldap.writeback.role_groups must map at least one role to a group DN"))
+		}
+		for role, dn := range l.Writeback.RoleGroups {
+			if strings.TrimSpace(role) == "" || !strings.Contains(dn, "=") {
+				errs = append(errs, fmt.Errorf("auth.ldap.writeback.role_groups[%q] must name a group DN", role))
+			}
+		}
+	}
 	if l.NestedGroups.Enabled {
 		switch strings.ToLower(strings.TrimSpace(l.NestedGroups.Mode)) {
 		case "", LDAPNestedGroupsRecursive, LDAPNestedGroupsInChain:

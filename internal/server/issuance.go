@@ -214,6 +214,7 @@ type issuanceDispatcher struct {
 	// scimWriteback delivers scim.writeback rows (A73) through the licensed
 	// worker; nil refuses them as not configured.
 	scimWriteback api.SCIMWritebackHandler
+	ldapWriteback api.LDAPWritebackHandler
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -286,6 +287,11 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 			return orchestrator.DefiniteNoEffect(errors.New("server: SCIM directory writeback is not configured"))
 		}
 		return d.scimWriteback.Deliver(ctx, m)
+	case orchestrator.DestinationLDAPWriteback:
+		if d.ldapWriteback == nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: LDAP directory writeback is not configured"))
+		}
+		return d.ldapWriteback.Deliver(ctx, m)
 	case orchestrator.DestinationConnectorRollback:
 		// Agent-executed rows are deferred so they stay claimable; a
 		// control_plane row (a cloud store's re-bind, A58) runs here. See

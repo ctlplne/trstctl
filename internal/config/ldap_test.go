@@ -128,3 +128,31 @@ func TestLDAPNestedGroupsFailClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestLDAPWritebackFailsClosed(t *testing.T) {
+	good := func(l *LDAP) {
+		l.BindDN = "cn=admin,dc=example,dc=org"
+		l.BindPasswordFile = "/etc/trstctl/ldap-bind.secret"
+		l.Writeback = LDAPWriteback{Enabled: true, BaseDN: "dc=example,dc=org", RoleGroups: map[string]string{"viewer": "cn=viewers,ou=groups,dc=example,dc=org"}}
+	}
+	for name, tc := range map[string]struct {
+		mut func(*LDAP)
+		ok  bool
+	}{
+		"complete":           {good, true},
+		"no service account": {func(l *LDAP) { good(l); l.BindDN = "" }, false},
+		"no base dn":         {func(l *LDAP) { good(l); l.Writeback.BaseDN = "" }, false},
+		"no role groups":     {func(l *LDAP) { good(l); l.Writeback.RoleGroups = nil }, false},
+		"group not a dn":     {func(l *LDAP) { good(l); l.Writeback.RoleGroups = map[string]string{"viewer": "viewers"} }, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			l := fullLDAP()
+			tc.mut(&l)
+			c.Auth.LDAP = l
+			if err := c.Validate(); (err == nil) != tc.ok {
+				t.Fatalf("validate = %v, want ok=%v", err, tc.ok)
+			}
+		})
+	}
+}

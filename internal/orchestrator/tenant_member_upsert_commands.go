@@ -119,6 +119,9 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 				if err := o.enqueueSCIMWritebackTx(barrierCtx, tx, retained, payload.Subject, "upsert"); err != nil {
 					return err
 				}
+				if err := o.enqueueLDAPWritebackTx(barrierCtx, tx, retained, payload.Subject, "upsert"); err != nil {
+					return err
+				}
 				return o.proj.ApplyTx(barrierCtx, tx, retained)
 			})
 		})

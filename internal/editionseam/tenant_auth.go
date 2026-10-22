@@ -34,4 +34,6 @@ type TenantAuthConfig struct {
 	Kerberos *api.AuthConfig
 	NTLM     *api.AuthConfig
 	SCIM     *api.SCIMConfig
+	// LDAPWriteback attaches LDAP directory writeback (A83); nil when off.
+	LDAPWriteback *api.LDAPWritebackConfig
 }

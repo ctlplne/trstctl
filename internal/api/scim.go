@@ -46,6 +46,26 @@ type SCIMWritebackHandler interface {
 	Deliver(ctx context.Context, m orchestrator.Message) error
 }
 
+// LDAPWritebackDeps are the core seams the LDAP directory writeback worker
+// (A83) uses.
+type LDAPWritebackDeps struct {
+	Store        *store.Store
+	Orchestrator *orchestrator.Orchestrator
+}
+
+// LDAPWritebackHandler delivers one ldap.writeback outbox row.
+type LDAPWritebackHandler interface {
+	Deliver(ctx context.Context, m orchestrator.Message) error
+}
+
+// LDAPWritebackConfig is what the licensed auth factory hands the core to
+// attach LDAP directory writeback: the tenants that write back with their
+// directory base DN, and the worker constructor.
+type LDAPWritebackConfig struct {
+	BaseDNByTenant map[string]string
+	NewWriteback   func(LDAPWritebackDeps) LDAPWritebackHandler
+}
+
 // SCIMHandlerDeps preserves the shared mutation spine and route-admission
 // checks. The attached implementation cannot bypass tenant service/rate limits.
 type SCIMHandlerDeps struct {

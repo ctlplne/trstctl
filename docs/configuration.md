@@ -1237,6 +1237,12 @@ auth:
     nested_groups:
       enabled: true
       mode: in_chain          # recursive (default) walks parents up to max_depth
+    writeback:                # role changes made in trstctl flow back to these groups
+      enabled: true
+      base_dn: dc=example,dc=com
+      role_groups:
+        admin: cn=trstctl-admins,ou=groups,dc=example,dc=com
+        viewer: cn=trstctl-viewers,ou=groups,dc=example,dc=com
     url: ldaps://ad.example.com:636
     bind_dn: cn=trstctl-reader,ou=service-accounts,dc=example,dc=com
     bind_password_file: /etc/trstctl/ldap-bind.secret

@@ -101,7 +101,11 @@ type Orchestrator struct {
 	// changes back to the directory (A73); a change an operator makes to a
 	// directory-owned member in one of them queues a scim.writeback row in the
 	// same transaction as its event.
-	scimWritebackTenants             map[string]bool
+	scimWritebackTenants map[string]bool
+	// ldapWritebackBaseDNs maps tenants that write member changes back to
+	// their LDAP directory (A83) to the base DN their directory members live
+	// under.
+	ldapWritebackBaseDNs             map[string]string
 	claimableAgentJobKindsConfigured bool
 	// agentHeartbeatInterval is the served channel's next-beat hint. Discovery
 	// admission uses the same two-beat freshness window as Agents presence.

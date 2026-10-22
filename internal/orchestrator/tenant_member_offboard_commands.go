@@ -77,6 +77,9 @@ func (o *Orchestrator) reconcileTenantMemberOffboardCommand(ctx context.Context,
 				if err := o.enqueueSCIMWritebackTx(barrierCtx, tx, retained, payload.Subject, "offboard"); err != nil {
 					return err
 				}
+				if err := o.enqueueLDAPWritebackTx(barrierCtx, tx, retained, payload.Subject, "offboard"); err != nil {
+					return err
+				}
 				return o.proj.ApplyTx(barrierCtx, tx, retained)
 			})
 		})
