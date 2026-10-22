@@ -5,6 +5,7 @@ package tlsprobe
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -17,7 +18,19 @@ func ValidateOpenSSLExecutable(path string) error {
 		return errors.New("tlsprobe: native executable must be an absolute local path")
 	}
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+	if err != nil {
+		return errors.New("tlsprobe: native executable must be a regular executable file")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		// The pin names the binary that runs, not a link that can be repointed
+		// (Homebrew and alternatives install OpenSSL behind one, B6-2). Name
+		// the resolved target so the operator can pin it.
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return fmt.Errorf("tlsprobe: native executable %s is a symbolic link to %s; pin that resolved path", path, resolved)
+		}
+		return errors.New("tlsprobe: native executable must be a regular executable file, not a symbolic link")
+	}
+	if !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
 		return errors.New("tlsprobe: native executable must be a regular executable file")
 	}
 	return nil

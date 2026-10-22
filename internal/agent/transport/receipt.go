@@ -250,6 +250,17 @@ const (
 // profile (B6-1); the control plane carries it into the migration finding.
 const RenewRefusedNoPQCProbe = "PQC host migration requires tls_probe_openssl in the host execution profile before deployment"
 
+// The host install phrases name which step failed after a certificate was
+// issued (B6-2): the identity has a live certificate the estate is not
+// serving, and the repair differs by step. The agent's own log carries the
+// underlying error; these receipts carry only the step.
+const (
+	RenewInstallFailed           = "a certificate was issued for this host but could not be installed"
+	RenewInstallRefusedWrite     = "a certificate was issued for this host but the host sandbox refused writing it to the target's paths"
+	RenewInstallFailedConfigTest = "a certificate was issued for this host but the connector's configuration test refused it"
+	RenewInstallFailedReload     = "a certificate was issued for this host but the reload action failed"
+)
+
 const RollbackExecutedLegacyObject = "re-bound to the legacy target-named object; its contents were not re-read"
 
 // Right-size refusals and failures (A64) follow the same contact discipline:

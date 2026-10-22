@@ -272,9 +272,11 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	if _, err := ExecuteOnHost(ctx, profile, installIntent, material, client); err != nil {
 		// Reached only after a certificate was successfully issued. Naming that
 		// matters: the identity now has a live certificate the estate is not
-		// serving, which is a different repair than "renewal failed".
-		report(ctx, ch, job, OutcomeFailed,
-			"a certificate was issued for this host but could not be installed")
+		// serving, which is a different repair than "renewal failed". The
+		// underlying error stays on this machine's log (B6-2); the receipt
+		// names the step.
+		log.Printf("trstctl-agent: job %d attempt %d: host install of the issued certificate failed: %v", job.JobID, job.Attempt, err)
+		report(ctx, ch, job, OutcomeFailed, hostInstallFailurePhrase(err))
 		return false
 	}
 	if (intent.MigrationRunID != "" || intent.PQCRunID != "") && hostRollback == nil {
@@ -394,4 +396,20 @@ func renewalSubjectNames(intent DeployIntent) []string {
 	}
 	add(intent.SubjectCommonName)
 	return out
+}
+
+// hostInstallFailurePhrase names the install step that failed (B6-2): a
+// sandbox denial is the grant, the connector's own wording tells the
+// configuration test from the reload, and anything else keeps the generic
+// phrase. The error itself never leaves this host.
+func hostInstallFailurePhrase(err error) string {
+	switch {
+	case errors.Is(err, connector.ErrDenied):
+		return transport.RenewInstallRefusedWrite
+	case strings.Contains(err.Error(), "configuration test"):
+		return transport.RenewInstallFailedConfigTest
+	case strings.Contains(err.Error(), "reload"):
+		return transport.RenewInstallFailedReload
+	}
+	return transport.RenewInstallFailed
 }

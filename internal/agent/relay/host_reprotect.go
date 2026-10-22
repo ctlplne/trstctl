@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -138,6 +139,7 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 	installIntent := intent
 	installIntent.Fingerprint = fingerprint
 	if _, err := ExecuteOnHost(ctx, profile, installIntent, material, client); err != nil {
+		log.Printf("trstctl-agent: job %d attempt %d: host install of the CA successor failed: %v", job.JobID, job.Attempt, err)
 		restoreErr := rollbackReprotectHost(ctx, rollback, profile, client, intent, management)
 		report(ctx, ch, job, OutcomeFailed, reprotectFailureDetail("CA successor could not be installed", restoreErr))
 		return false

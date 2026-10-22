@@ -249,9 +249,10 @@ func sameCertificateFingerprint(a, b string) bool {
 // closed refusal phrase the control plane names; anything else stays out of
 // the finding, since an agent's free text is never recorded (A3).
 func closedHostRenewalRefusal(detail string) string {
-	switch strings.TrimSpace(detail) {
-	case transport.RenewRefusedNoPQCProbe:
-		return transport.RenewRefusedNoPQCProbe
+	switch trimmed := strings.TrimSpace(detail); trimmed {
+	case transport.RenewRefusedNoPQCProbe, transport.RenewInstallFailed, transport.RenewInstallRefusedWrite,
+		transport.RenewInstallFailedConfigTest, transport.RenewInstallFailedReload:
+		return trimmed
 	}
 	return ""
 }
