@@ -3148,8 +3148,13 @@ than sending an operator looking for a credential that was never there.
   verification is "the agent reports the target version and has been seen
   since" and nothing is pushed; the console says which mode a campaign is in.
   The artifact sha256 is operator-supplied — the platform guarantees the fleet
-  installs exactly those bytes, not that those bytes are good, and there is no
-  publisher signature over artifacts beyond the digest pin. Ring assignment is
+  installs exactly those bytes, not that those bytes are good. An artifact may
+  also carry its publisher's Ed25519 signature over that sha256: a control
+  plane that pins the publisher key (`agent_channel.upgrade_publisher_key_file`)
+  refuses to open a campaign whose artifacts it does not verify, and an agent
+  started with `--upgrade-publisher-key` refuses to stage an artifact that is
+  the pinned bytes but not the pinned publisher's. With neither key pinned the
+  digest is the only integrity control, which is the default. Ring assignment is
   manual with no automatic canary selection; there is no per-ring soak window
   beyond the 10-minute grace; and the verification remains a health signal
   (running the target build, answering the control plane), not a functional

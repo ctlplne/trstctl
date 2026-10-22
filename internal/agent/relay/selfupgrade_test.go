@@ -229,3 +229,49 @@ func TestUpgradeKindIsClaimedOnlyWithTheOptIn(t *testing.T) {
 		t.Fatal("the opted-in loop never asked for agent.upgrade, so no campaign could ever reach this agent")
 	}
 }
+
+// A68: with a publisher key pinned on the agent, the pinned bytes alone are not
+// enough — the campaign's artifact must carry that publisher's signature. An
+// unsigned artifact is refused by name and the running binary is untouched; the
+// signed one stages as before.
+func TestSelfUpgradeRequiresThePublisherSignatureWhenAKeyIsPinned(t *testing.T) {
+	newBinary := []byte("new-binary-3.0.0")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(newBinary)
+	}))
+	defer srv.Close()
+	privPEM, pubPEM, err := crypto.GenerateEd25519KeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := crypto.ParsePublicKeyPEM(pubPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := fleet.Artifact{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: srv.URL, SHA256: crypto.SHA256Hex(newBinary)}
+
+	exe := seedExecutable(t, "current-binary")
+	ch := &fakeChannel{jobs: []relay.Job{upgradeJob(t, fleet.UpgradeIntent{TargetVersion: "3.0.0", Artifacts: []fleet.Artifact{artifact}})}}
+	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0", Client: srv.Client(), PublisherKeyDER: pub.DER})
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed || !strings.Contains(ch.reports[0].detail, "publisher signature") {
+		t.Fatalf("reports = %+v, want one failed naming the publisher signature", ch.reports)
+	}
+	if current, _ := os.ReadFile(exe); string(current) != "current-binary" { // #nosec G304 -- the test reads its own temp fixture (CWE-22)
+		t.Fatal("an unsigned artifact replaced the running binary")
+	}
+
+	signature, err := fleet.SignArtifact(artifact, privPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed := artifact
+	signed.Signature = signature
+	ch = &fakeChannel{jobs: []relay.Job{upgradeJob(t, fleet.UpgradeIntent{TargetVersion: "3.0.0", Artifacts: []fleet.Artifact{signed}})}}
+	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0", Client: srv.Client(), PublisherKeyDER: pub.DER})
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
+		t.Fatalf("reports = %+v, want the signed artifact staged", ch.reports)
+	}
+	if current, _ := os.ReadFile(exe); string(current) != string(newBinary) { // #nosec G304 -- the test reads its own temp fixture (CWE-22)
+		t.Fatal("the signed artifact was not staged over the running binary")
+	}
+}

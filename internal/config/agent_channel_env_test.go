@@ -62,3 +62,15 @@ func TestThePerAgentClaimQuotaIsSettableByEnvironmentAndRefusesNegatives(t *test
 		t.Fatalf("zero (no quota) must pass; got %v", err)
 	}
 }
+
+// A68: the upgrade publisher key file is settable by environment like every
+// sibling, so a container deployment can pin the publisher without a config file.
+func TestTheUpgradePublisherKeyFileIsSettableByEnvironment(t *testing.T) {
+	t.Parallel()
+	env := map[string]string{"TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE": "/run/secrets/upgrade-publisher.pub"}
+	var c Config
+	c.applyEnv(func(k string) string { return env[k] })
+	if c.AgentChannel.UpgradePublisherKeyFile != "/run/secrets/upgrade-publisher.pub" {
+		t.Fatalf("upgrade_publisher_key_file = %q, want the environment value", c.AgentChannel.UpgradePublisherKeyFile)
+	}
+}

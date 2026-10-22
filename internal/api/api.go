@@ -85,34 +85,35 @@ type API struct {
 	oidcPreLogin           *oidcPreLoginStore
 	scim                   *SCIMConfig
 
-	agentTokens             BootstrapTokenIssuer
-	agentConnection         agentEnrollmentConnection
-	agentRenewalReady       bool
-	agentHeartbeatInterval  time.Duration
-	agentClaimQuota         int
-	agentEnroller           BootstrapEnroller
-	agentEnrollmentObserver func(result string)
-	rateLimiter             RateLimiter
-	specialAbuse            *specialRouteAbuseLimiter
-	denialAudit             *authzDenialAudit
-	gate                    MutationGate
-	abac                    ABACDenyEvaluator
-	abacEnvironment         map[string]string
-	abacNow                 func() time.Time
-	approvals               ApprovalRecorder
-	breakglass              BreakglassReconciler
-	breakglassIssuer        BreakglassIssuer
-	breakglassCeremonies    BreakglassCeremonyService
-	breakglassRotation      BreakglassRotationService
-	breakglassAdmin         *breakglass.AdminService
-	caHierarchy             CAHierarchyService
-	edgeDelegations         EdgeDelegationService
-	externalCAs             ExternalCAService
-	certRevocationAuthority CertificateRevocationAuthorityResolver
-	attestedIssuer          AttestedIssuerService
-	sshWorkflow             SSHWorkflowService
-	broker                  BrokerService
-	ephemeral               EphemeralIssuerService
+	agentTokens              BootstrapTokenIssuer
+	agentConnection          agentEnrollmentConnection
+	agentRenewalReady        bool
+	agentHeartbeatInterval   time.Duration
+	agentClaimQuota          int
+	agentUpgradePublisherKey []byte
+	agentEnroller            BootstrapEnroller
+	agentEnrollmentObserver  func(result string)
+	rateLimiter              RateLimiter
+	specialAbuse             *specialRouteAbuseLimiter
+	denialAudit              *authzDenialAudit
+	gate                     MutationGate
+	abac                     ABACDenyEvaluator
+	abacEnvironment          map[string]string
+	abacNow                  func() time.Time
+	approvals                ApprovalRecorder
+	breakglass               BreakglassReconciler
+	breakglassIssuer         BreakglassIssuer
+	breakglassCeremonies     BreakglassCeremonyService
+	breakglassRotation       BreakglassRotationService
+	breakglassAdmin          *breakglass.AdminService
+	caHierarchy              CAHierarchyService
+	edgeDelegations          EdgeDelegationService
+	externalCAs              ExternalCAService
+	certRevocationAuthority  CertificateRevocationAuthorityResolver
+	attestedIssuer           AttestedIssuerService
+	sshWorkflow              SSHWorkflowService
+	broker                   BrokerService
+	ephemeral                EphemeralIssuerService
 	// commandMAC produces server-keyed, domain-separated review evidence for
 	// core workflows that do not depend on the optional native secret store.
 	// The key stays behind the crypto boundary; callers receive only its digest.
@@ -232,6 +233,7 @@ type config struct {
 	agentRenewalReady           bool
 	agentHeartbeatInterval      time.Duration
 	agentClaimQuota             int
+	agentUpgradePublisherKey    []byte
 	agentEnroller               BootstrapEnroller
 	agentEnrollmentObserver     func(result string)
 	rateLimiter                 RateLimiter
@@ -549,6 +551,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		agentRenewalReady:           cfg.agentRenewalReady,
 		agentHeartbeatInterval:      cfg.agentHeartbeatInterval,
 		agentClaimQuota:             cfg.agentClaimQuota,
+		agentUpgradePublisherKey:    cfg.agentUpgradePublisherKey,
 		agentEnroller:               cfg.agentEnroller,
 		agentEnrollmentObserver:     cfg.agentEnrollmentObserver,
 		rateLimiter:                 cfg.rateLimiter,

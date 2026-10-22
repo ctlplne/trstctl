@@ -39,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/sshdiscovery"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
@@ -74,6 +75,7 @@ func main() {
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim certificate lifecycle jobs allowed by this agent's enrolled roles: host agents execute destinations assigned to their agent ID using --host-exec-profile; network agents execute appliance work in their segment. Off by default; enable deliberately because jobs may redeem credentials")
+	upgradePublisherKeyFile := flag.String("upgrade-publisher-key", "", "path to the upgrade publisher's Ed25519 public key (PEM) this agent pins (A68): with it set, a campaign artifact must carry that publisher's signature over its sha256 or the agent refuses to stage it; empty keeps the pinned sha256 as the only integrity control")
 	selfUpgrade := flag.Bool("self-upgrade", false, "claim this agent's own agent.upgrade jobs from staged rollout campaigns (epic A5): download the campaign's artifact for this platform, verify its sha256, swap the binary, and restart. Off by default because it replaces this executable — the control-plane operator starts the campaign, but replacing the binary on THIS machine is this machine's operator's decision. The previous binary is kept beside it as .old")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
 	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this host agent's encrypted, two-generation connector predecessor bundles (AUD32/G1). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for host rollback after restart")
@@ -391,6 +393,7 @@ func main() {
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
 		selfUpgrade:                       *selfUpgrade,
+		upgradePublisherKeyFile:           strings.TrimSpace(*upgradePublisherKeyFile),
 		workloadAPISocket:                 *workloadAPISocket,
 		enrollProxyListen:                 *enrollProxyListen,
 		enrollProxyUpstream:               *enrollProxyUpstream,
@@ -503,6 +506,9 @@ type agentOptions struct {
 	// this machine's operator's decision, made here, not implied by a
 	// control-plane campaign alone.
 	selfUpgrade bool
+	// upgradePublisherKeyFile pins the publisher key an artifact's signature must
+	// verify against (A68); empty keeps the digest pin as the only control.
+	upgradePublisherKeyFile string
 	// workloadAPISocket is the host-local SPIFFE Workload API socket (B3).
 	// Empty means the agent serves no Workload API, which is the default: the
 	// endpoint issues identities to every workload that can reach it.
@@ -806,8 +812,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: --self-upgrade disabled: cannot locate own executable:", exeErr)
 		} else {
 			selfUp = &relay.SelfUpgrade{
-				ExecutablePath: exe,
-				CurrentVersion: buildinfo.Version(),
+				ExecutablePath:  exe,
+				CurrentVersion:  buildinfo.Version(),
+				PublisherKeyDER: upgradePublisherKey(o.upgradePublisherKeyFile),
 				// Private ranges allowed, deliberately: this agent lives inside
 				// the customer network and an air-gapped estate's artifact
 				// mirror is RFC1918 by construction. --self-upgrade is the
@@ -1612,4 +1619,25 @@ func nextRotationDelay(rotateEvery time.Duration, notAfter, now time.Time, rng *
 		target = time.Second
 	}
 	return target
+}
+
+// upgradePublisherKey reads the pinned upgrade publisher key (A68). An
+// unreadable or non-public-key file is fatal: an operator who pinned a key
+// meant it, and silently falling back to the digest pin would be the opposite
+// of what they configured.
+func upgradePublisherKey(path string) []byte {
+	if path == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(path) // #nosec G304 -- operator-named key file (CWE-22)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: --upgrade-publisher-key:", err)
+		os.Exit(2)
+	}
+	key, err := crypto.ParsePublicKeyPEM(raw)
+	if err != nil || key.Algorithm != crypto.Ed25519 {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: --upgrade-publisher-key must be one Ed25519 PUBLIC KEY PEM block:", err)
+		os.Exit(2)
+	}
+	return key.DER
 }

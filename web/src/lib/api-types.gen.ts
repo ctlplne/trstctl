@@ -8816,6 +8816,7 @@ export interface UpgradeArtifact {
   arch: string;
   os: string;
   sha256: string;
+  signature?: string;
   url: string;
 }
 

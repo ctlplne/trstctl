@@ -17077,6 +17077,7 @@ export interface components {
             arch: string;
             os: string;
             sha256: string;
+            signature?: string;
             url: string;
         };
         UrgentRiskProjectionSummary: {

@@ -3,10 +3,14 @@
 package agentupgrade
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Artifact is one downloadable build of the agent for one platform.
@@ -23,6 +27,12 @@ type Artifact struct {
 	URL  string `json:"url"`
 	// SHA256 is the lowercase hex digest of the artifact bytes.
 	SHA256 string `json:"sha256"`
+	// Signature is the publisher's base64 Ed25519 signature over the raw sha256
+	// digest (A68). Optional unless the control plane or the agent pins a
+	// publisher key, in which case an artifact without a verifying signature
+	// is refused: the digest pins the bytes, the signature says who published
+	// them.
+	Signature string `json:"signature,omitempty"`
 }
 
 // UpgradeIntent is the payload of one agent.upgrade job. It is decoded by the
@@ -110,4 +120,70 @@ func DecodeArtifacts(raw []byte) ([]Artifact, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// ArtifactSignedMessage is the exact bytes a publisher signs for one artifact:
+// the raw SHA-256 digest the campaign pins. Signing the digest rather than the
+// file keeps the signature bound to the same bytes the agent verifies and lets
+// a publisher sign a release manifest without re-reading every binary.
+func ArtifactSignedMessage(sha256Hex string) ([]byte, error) {
+	if !isHexSHA256(sha256Hex) {
+		return nil, fmt.Errorf("agentupgrade: sha256 must be 64 hex characters")
+	}
+	return hex.DecodeString(strings.ToLower(sha256Hex))
+}
+
+// VerifyArtifactSignature checks the artifact's publisher signature (A68): a
+// base64 Ed25519 signature over ArtifactSignedMessage, against the pinned
+// publisher public key (PKIX DER). It fails closed on a missing, malformed or
+// mismatched signature; the digest pin alone is not enough once a key is pinned.
+func VerifyArtifactSignature(a Artifact, publisherKeyDER []byte) error {
+	if len(publisherKeyDER) == 0 {
+		return fmt.Errorf("agentupgrade: no publisher key pinned")
+	}
+	if strings.TrimSpace(a.Signature) == "" {
+		return fmt.Errorf("agentupgrade: artifact %s/%s carries no publisher signature", a.OS, a.Arch)
+	}
+	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(a.Signature))
+	if err != nil {
+		return fmt.Errorf("agentupgrade: artifact %s/%s signature is not base64: %w", a.OS, a.Arch, err)
+	}
+	msg, err := ArtifactSignedMessage(a.SHA256)
+	if err != nil {
+		return err
+	}
+	if err := crypto.VerifyEd25519(publisherKeyDER, msg, sig); err != nil {
+		return fmt.Errorf("agentupgrade: artifact %s/%s publisher signature does not verify against the pinned key", a.OS, a.Arch)
+	}
+	return nil
+}
+
+// ValidateArtifactSignatures refuses a campaign whose artifacts are not all
+// signed by the pinned publisher key. A control plane with no key pinned
+// accepts the digest pin alone and says so in its limitations.
+func ValidateArtifactSignatures(artifacts []Artifact, publisherKeyDER []byte) error {
+	if len(publisherKeyDER) == 0 {
+		return nil
+	}
+	for i, a := range artifacts {
+		if err := VerifyArtifactSignature(a, publisherKeyDER); err != nil {
+			return fmt.Errorf("artifact %d: %w; this control plane pins an upgrade publisher key, so every artifact must carry that publisher's Ed25519 signature over its sha256", i, err)
+		}
+	}
+	return nil
+}
+
+// SignArtifact produces the publisher signature VerifyArtifactSignature
+// checks, from a PEM-encoded Ed25519 private key. Release tooling and tests
+// use it; the control plane and the agent only ever verify.
+func SignArtifact(a Artifact, publisherPrivatePEM []byte) (string, error) {
+	msg, err := ArtifactSignedMessage(a.SHA256)
+	if err != nil {
+		return "", err
+	}
+	sig, err := crypto.SignEd25519(publisherPrivatePEM, msg)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(sig), nil
 }

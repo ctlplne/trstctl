@@ -366,6 +366,9 @@ type Deps struct {
 	// AgentMaxLiveClaimsPerAgent caps the leases one agent may hold at once (A66);
 	// zero means no per-agent quota beyond the shared bulkhead.
 	AgentMaxLiveClaimsPerAgent int
+	// AgentUpgradePublisherKeyFile pins the Ed25519 public key every upgrade artifact
+	// must be signed with (A68); empty accepts the sha256 pin alone.
+	AgentUpgradePublisherKeyFile string
 	// LifecycleLeafValidity is the reference leaf lifetime the CA calendar (H5)
 	// measures a parent authority's remaining horizon against, so it can say
 	// "this parent can no longer issue a full-length leaf" before anyone notices
@@ -735,8 +738,11 @@ type Server struct {
 	agentHTTPRenewalHandler http.Handler
 	agentChannelServerName  string        // SAN the agent verifies (server-name); from config
 	agentHeartbeatInterval  time.Duration // next-beat hint and stale-heartbeat threshold base
-	agentMetrics            *agentChannelMetrics
-	agentEnroll             *enroll.Authority // the agent bootstrap-enrollment authority (signs through the agent CA when the channel is on)
+	// agentUpgradePublisherKeyDER is the pinned upgrade publisher key (A68), loaded
+	// from Deps.AgentUpgradePublisherKeyFile; nil accepts the sha256 pin alone.
+	agentUpgradePublisherKeyDER []byte
+	agentMetrics                *agentChannelMetrics
+	agentEnroll                 *enroll.Authority // the agent bootstrap-enrollment authority (signs through the agent CA when the channel is on)
 
 	// revoc is the served revocation surface (EXC-REVOKE-01): the OCSP responder,
 	// the CRL endpoint, and the CRL freshness scheduler, all signing through the
@@ -1420,6 +1426,17 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 			return errors.New("server: agent channel enabled but the agent CA could not be provisioned")
 		}
 	}
+	if d.AgentUpgradePublisherKeyFile != "" {
+		raw, err := os.ReadFile(d.AgentUpgradePublisherKeyFile) // #nosec G304 -- operator-configured key file path (CWE-22)
+		if err != nil {
+			return fmt.Errorf("server: agent_channel.upgrade_publisher_key_file: %w", err)
+		}
+		key, err := crypto.ParsePublicKeyPEM(raw)
+		if err != nil || key.Algorithm != crypto.Ed25519 {
+			return fmt.Errorf("server: agent_channel.upgrade_publisher_key_file must be one Ed25519 PUBLIC KEY PEM block: %v", err)
+		}
+		s.agentUpgradePublisherKeyDER = key.DER
+	}
 	var authority *enroll.Authority
 	var err error
 	if s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
@@ -1634,6 +1651,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithAgentEnrollmentRenewal(d.EnableAgentChannel && s.agentCASigner != nil && len(s.agentCACertDER) > 0),
 		api.WithAgentHeartbeatInterval(d.AgentHeartbeatInterval),
 		api.WithAgentClaimQuota(d.AgentMaxLiveClaimsPerAgent),
+		api.WithAgentUpgradePublisherKey(s.agentUpgradePublisherKeyDER),
 		api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),

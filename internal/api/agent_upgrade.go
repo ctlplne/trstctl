@@ -101,6 +101,10 @@ func (a *API) openUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		if err := fleet.ValidateArtifacts(body.Artifacts); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		// A68: with a publisher key pinned, the digest pin alone is refused.
+		if err := fleet.ValidateArtifactSignatures(body.Artifacts, a.agentUpgradePublisherKey); err != nil {
+			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
+		}
 		c, err := a.orch.OpenAgentUpgradeCampaign(ctx, tenantID, body.TargetVersion, principalSubject(ctx), body.Artifacts)
 		if err != nil {
 			var active *orchestrator.AgentUpgradeCampaignActiveError

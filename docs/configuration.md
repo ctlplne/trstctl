@@ -2165,6 +2165,7 @@ interrupts agent claims and application-certificate delivery.
 | `TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL` | `30s` | Next-beat hint returned to agents. |
 | `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` | empty | Comma-separated, explicit allowlist of estate-touching jobs agents may claim. Empty fails closed. |
 | `TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT` | `0` (no quota) | Most leases one agent may hold at once. At the cap the channel withholds new claims for that agent until a lease completes, fails or lapses; the Agents page shows the held count against it. The shared agent bulkhead still bounds the channel as a whole. |
+| `TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE` | empty | Path to the upgrade publisher's Ed25519 public key (one `PUBLIC KEY` PEM block). When set, a staged upgrade campaign may only publish artifacts that carry that publisher's signature over their sha256; empty accepts the operator-supplied sha256 pin alone. Agents pin the same key with `--upgrade-publisher-key`. |
 
 **Which work agents may claim.** `agent_channel.claimable_job_kinds`, or its
 comma-separated `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` environment form,
@@ -2182,6 +2183,15 @@ doing it. Anything outside that list is dropped even if you write it here, so
 control plane's own effects. `GET /api/v1/operations/jobs` and the Operations
 console show what is waiting, what an agent holds, and how long the oldest job has
 waited.
+
+**Who published the upgrade.** `agent_channel.upgrade_publisher_key_file`, or
+`TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE`, pins the Ed25519 public key
+of whoever publishes agent builds. With it set, opening a staged upgrade campaign
+refuses any artifact that does not carry that publisher's signature over its
+sha256 (`artifacts[].signature`, base64). Each agent can pin the same key with
+`--upgrade-publisher-key <pem>` and then refuses to stage an artifact that is the
+pinned bytes but not the pinned publisher's. Neither key set keeps the
+operator-supplied sha256 as the only integrity control.
 
 **How much one agent may hold.** `agent_channel.max_live_claims_per_agent`, or
 `TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT`, caps the unexpired leases a

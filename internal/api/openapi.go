@@ -5021,6 +5021,9 @@ func componentSchemas() map[string]*Schema {
 		// is what makes an artifact host a download mirror rather than a
 		// trusted party.
 		"sha256": str(),
+		// A68: the publisher's base64 Ed25519 signature over the raw sha256;
+		// required when the control plane pins a publisher key.
+		"signature": str(),
 	}, "os", "arch", "url", "sha256")
 	agentUpgradeCampaignInput := object(map[string]*Schema{
 		"target_version": str(),

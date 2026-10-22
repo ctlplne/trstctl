@@ -12132,6 +12132,7 @@ UpgradeArtifact = TypedDict(
         'arch': str,
         'os': str,
         'sha256': str,
+        'signature': str,
         'url': str,
     },
     total=False,

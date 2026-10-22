@@ -36120,6 +36120,9 @@
           "sha256": {
             "type": "string"
           },
+          "signature": {
+            "type": "string"
+          },
           "url": {
             "type": "string"
           }

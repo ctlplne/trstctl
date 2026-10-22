@@ -144,6 +144,13 @@ func WithAgentClaimQuota(quota int) Option {
 	return func(c *config) { c.agentClaimQuota = quota }
 }
 
+// WithAgentUpgradePublisherKey pins the Ed25519 public key (PKIX DER) every
+// staged-upgrade artifact must be signed with (A68). Nil accepts the sha256 pin
+// alone.
+func WithAgentUpgradePublisherKey(der []byte) Option {
+	return func(c *config) { c.agentUpgradePublisherKey = der }
+}
+
 // WithAgentEnrollmentObserver records aggregate bootstrap-enrollment outcomes for
 // fleet rollout observability. The observer receives a low-cardinality result
 // label ("success" or "failed") and must not depend on per-agent identifiers.

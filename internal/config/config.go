@@ -2326,6 +2326,10 @@ type AgentChannel struct {
 	// the channel withholds new claims until a lease completes, fails or lapses.
 	// Zero, the default, means no per-agent quota.
 	MaxLiveClaimsPerAgent int `json:"max_live_claims_per_agent,omitempty"`
+	// UpgradePublisherKeyFile pins the Ed25519 public key (PEM) that must have signed
+	// every artifact a staged upgrade campaign publishes (A68). Empty, the default,
+	// accepts the operator-supplied sha256 pin alone.
+	UpgradePublisherKeyFile string `json:"upgrade_publisher_key_file,omitempty"`
 }
 
 // HeartbeatIntervalDuration parses the agent channel's next-beat hint. An empty value
@@ -2802,6 +2806,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 	// set a variable nothing reads.
 	setCSV(getenv, "TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS", &a.ClaimableJobKinds)
 	setInt(getenv, "TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT", &a.MaxLiveClaimsPerAgent)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE", &a.UpgradePublisherKeyFile)
 }
 
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {

@@ -49,7 +49,12 @@ type SelfUpgrade struct {
 	// an unreported success would read as silence — the exact signal that
 	// halts the ring. Nil skips the restart (tests, and "stage now, restart
 	// in the window" setups).
-	Restart func() error
+	// PublisherKeyDER pins the upgrade publisher's Ed25519 public key (PKIX DER,
+	// A68). When set, an artifact whose signature does not verify is refused
+	// after the digest check and before the swap; nil keeps the digest pin as
+	// the only integrity control, which the limitations state.
+	PublisherKeyDER []byte
+	Restart         func() error
 }
 
 func (su *SelfUpgrade) client() *http.Client {
@@ -113,6 +118,14 @@ func runSelfUpgrade(ctx context.Context, ch Channel, su *SelfUpgrade, job Job) b
 		report(ctx, ch, job, OutcomeFailed, upgradeFailurePhrase(err))
 		return false
 	}
+	if len(su.PublisherKeyDER) > 0 {
+		if err := fleet.VerifyArtifactSignature(artifact, su.PublisherKeyDER); err != nil {
+			_ = os.Remove(staged)
+			fmt.Fprintln(os.Stderr, "trstctl-agent: self-upgrade:", err)
+			report(ctx, ch, job, OutcomeFailed, upgradePublisherRefusal)
+			return false
+		}
+	}
 
 	if err := swapBinary(su.ExecutablePath, staged); err != nil {
 		_ = os.Remove(staged)
@@ -134,6 +147,11 @@ func runSelfUpgrade(ctx context.Context, ch Channel, su *SelfUpgrade, job Job) b
 	}
 	return true
 }
+
+// upgradePublisherRefusal is the closed phrase for an artifact that is the
+// pinned bytes but not the pinned publisher's: the campaign must be re-opened
+// with a signature this agent's key verifies.
+const upgradePublisherRefusal = "artifact publisher signature missing or invalid for this agent's pinned publisher key"
 
 // errUpgradeDigestMismatch marks the one failure that must be phrased apart:
 // the bytes arrived and they are not the published build.
