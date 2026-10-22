@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1620 annotated sites across 26 rules. Each row is
+1621 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -422,7 +422,7 @@ not this file.
 | `internal/server/ca_hierarchy_pqc_served_test.go:166` | served test harness URL |
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 
-### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (13 sites)
+### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (14 sites)
 
 | Location | Reason |
 |---|---|
@@ -436,6 +436,7 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:530` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
+| `internal/server/migration_appliance_served_test.go:115` | loopback fixture closed below (CWE-400) |
 | `internal/server/migration_run_served_test.go:98` | loopback fixture is closed below (CWE-400) |
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |

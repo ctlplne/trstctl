@@ -13372,6 +13372,8 @@ export interface components {
         };
         MigrationMemberBinding: {
             connector: string;
+            /** @enum {string} */
+            execution_model?: "host" | "appliance";
             issuing_authority_id: string;
             /** @enum {string} */
             issuing_authority_source?: "platform" | "private" | "external";
@@ -13435,7 +13437,7 @@ export interface components {
             agent_id: string;
             /** Format: uuid */
             identity_id: string;
-            trust_anchor_path: string;
+            trust_anchor_path?: string;
         };
         MigrationRunStartPending: {
             approval_disposition: string;

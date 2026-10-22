@@ -7341,6 +7341,7 @@ MigrationMemberBinding = TypedDict(
     'MigrationMemberBinding',
     {
         'connector': str,
+        'execution_model': str,
         'issuing_authority_id': str,
         'issuing_authority_source': str,
         'predecessor_certificate_id': str,

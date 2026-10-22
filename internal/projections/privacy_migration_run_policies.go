@@ -70,6 +70,7 @@ func migrationRunPrivacyPolicy() events.PrivacyEventPolicy {
 		privacyRule("/run/waves/*/members/*/binding/predecessor_fingerprint", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_source", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_external_ca_id", opaque),
+		privacyRule("/run/waves/*/members/*/binding/execution_model", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_ca_id", opaque),
 		privacyRule("/run/waves/*/members/*/binding/environment", opaque),
 		privacyRule("/run/waves/*/members/*/binding/successor_fingerprint", opaque),

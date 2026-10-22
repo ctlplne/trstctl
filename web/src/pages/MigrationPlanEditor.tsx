@@ -15,7 +15,9 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type MigrationRunStartRequest } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 
-type Member = MigrationRunStartRequest["waves"][number]["members"][number];
+// trust_anchor_path is always a string in the form; an empty value means an
+// appliance member (A33), which the request omits the path for.
+type Member = { identity_id: string; agent_id: string; trust_anchor_path: string };
 type PlanForm = {
   plan_id: string;
   new_authority_id: string;
@@ -32,7 +34,7 @@ const initialPlan: PlanForm = {
 const advancedMemberSchema = z.strictObject({
   identity_id: z.string().trim().min(1),
   agent_id: z.string().trim().min(1),
-  trust_anchor_path: z.string().trim().min(1),
+  trust_anchor_path: z.string().trim(),
 });
 const advancedSchema = z.strictObject({
   plan_id: z.string().trim().min(1),
@@ -56,7 +58,16 @@ function parseAdvanced(value: string): MigrationRunStartRequest | null {
 }
 
 function requestFromForm(form: PlanForm): MigrationRunStartRequest {
-  return { ...form, waves: form.waves.map((wave, index) => ({ ...wave, ordinal: index + 1 })) };
+  return {
+    ...form,
+    waves: form.waves.map((wave, index) => ({
+      ...wave,
+      ordinal: index + 1,
+      members: wave.members.map(({ identity_id, agent_id, trust_anchor_path }) =>
+        trust_anchor_path.trim() ? { identity_id, agent_id, trust_anchor_path: trust_anchor_path.trim() } : { identity_id, agent_id },
+      ),
+    })),
+  };
 }
 
 export function MigrationPlanEditor({
@@ -81,7 +92,7 @@ export function MigrationPlanEditor({
     const member = z.object({
       identity_id: z.string().trim().min(1, required),
       agent_id: z.string().trim().min(1, required),
-      trust_anchor_path: z.string().trim().min(1, required),
+      trust_anchor_path: z.string().trim(),
     });
     return z
       .object({
@@ -367,8 +378,8 @@ export function MigrationPlanEditor({
                               </Field>
                               <Field
                                 label={t("migration.form.path")}
+                                description={t("migration.form.pathHint")}
                                 error={errors.waves?.[waveIndex]?.members?.[memberIndex]?.trust_anchor_path?.message}
-                                required
                               >
                                 {(field) => (
                                   <Input {...field} className="font-mono" {...register(`waves.${waveIndex}.members.${memberIndex}.trust_anchor_path`)} />

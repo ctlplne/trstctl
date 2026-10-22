@@ -21966,6 +21966,13 @@
           "connector": {
             "type": "string"
           },
+          "execution_model": {
+            "enum": [
+              "host",
+              "appliance"
+            ],
+            "type": "string"
+          },
           "issuing_authority_id": {
             "type": "string"
           },
@@ -22195,8 +22202,7 @@
         },
         "required": [
           "identity_id",
-          "agent_id",
-          "trust_anchor_path"
+          "agent_id"
         ],
         "type": "object"
       },

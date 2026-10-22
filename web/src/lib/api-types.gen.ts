@@ -5313,6 +5313,7 @@ export interface MigrationAssessment {
 
 export interface MigrationMemberBinding {
   connector: string;
+  execution_model?: "host" | "appliance";
   issuing_authority_id: string;
   issuing_authority_source?: "platform" | "private" | "external";
   predecessor_certificate_id: string;
@@ -5371,7 +5372,7 @@ export interface MigrationRunMember {
 export interface MigrationRunStartMember {
   agent_id: string;
   identity_id: string;
-  trust_anchor_path: string;
+  trust_anchor_path?: string;
 }
 
 export interface MigrationRunStartPending {

@@ -28,6 +28,24 @@ var migrationEventNamespace = uuid.MustParse("c6bf2f04-3314-5ed8-926d-64fc97f0aa
 // listener verdict.
 const DestinationIncidentMigrationRevoke = "incident.fleet_reissuance.revoke"
 
+// DestinationMigrationApplianceIssue is the control-plane half of an appliance
+// member's successor (A33): the control plane issues the leaf under the run's
+// authority and queues its sealed deploy for the exact network relay the member
+// binds. The relay's signed verified receipt then closes the live gate.
+const DestinationMigrationApplianceIssue = "migration.appliance_issue"
+
+// MigrationApplianceIssueIntent names the member whose successor the control
+// plane issues. It carries public identity only; the worker re-reads the
+// immutable member binding from the run before it mints anything.
+type MigrationApplianceIssueIntent struct {
+	RunID                    string `json:"run_id"`
+	WaveID                   string `json:"wave_id"`
+	IdentityID               string `json:"identity_id"`
+	TargetID                 string `json:"target_id"`
+	RequiredAgentID          string `json:"required_agent_id"`
+	PredecessorCertificateID string `json:"predecessor_certificate_id"`
+}
+
 // MigrationEventID gives API commands and signed receipts a retry-stable event
 // identity without retaining a raw Idempotency-Key in the event stream.
 func MigrationEventID(tenantID, runID, purpose string) string {
@@ -320,6 +338,9 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 	)
 	switch action.Kind {
 	case migration.ActionDistributeTrust, migration.ActionRemoveTrust:
+		if b.OnAppliance() {
+			return Entry{}, errors.New("orchestrator: an appliance member has no trust anchor to distribute or remove")
+		}
 		operation := relay.TrustInstall
 		anchor := append([]byte(nil), b.TrustAnchorPEM...)
 		if action.Kind == migration.ActionRemoveTrust {
@@ -332,6 +353,15 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 			AnchorFingerprint: b.TrustAnchorFingerprint, RequiredAgentID: b.RequiredAgentID,
 		})
 	case migration.ActionIssueSuccessor:
+		if b.OnAppliance() {
+			destination = DestinationMigrationApplianceIssue
+			payload, err = json.Marshal(MigrationApplianceIssueIntent{
+				RunID: run.ID, WaveID: action.WaveID, IdentityID: action.IdentityID,
+				TargetID: b.TargetID, RequiredAgentID: b.RequiredAgentID,
+				PredecessorCertificateID: b.PredecessorCertificateID,
+			})
+			break
+		}
 		destination = relay.KindEndpointRenew
 		payload, err = json.Marshal(migrationEndpointRenewIntent{
 			IssuingAuthorityID: b.IssuingAuthorityID,
@@ -385,9 +415,16 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		EffectLane:        effectLane,
 		RequiredAgentRole: mtls.AgentRoleHost, RequiredAgentID: b.RequiredAgentID,
 	}
-	if action.Kind == migration.ActionRevokePredecessor {
+	if action.Kind == migration.ActionRevokePredecessor ||
+		(action.Kind == migration.ActionIssueSuccessor && b.OnAppliance()) {
 		entry.RequiredAgentRole = "control_plane"
 		entry.RequiredAgentID = ""
+	}
+	if action.Kind == migration.ActionRollbackSuccessor && b.OnAppliance() {
+		// The network relay that installed the successor re-binds the
+		// predecessor object it kept on the appliance (A46), under the same
+		// exact-agent binding.
+		entry.RequiredAgentRole = mtls.AgentRoleNetwork
 	}
 	return entry, nil
 }

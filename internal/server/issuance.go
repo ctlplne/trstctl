@@ -276,6 +276,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleFleetReissuanceBatch(ctx, m)
 	case orchestrator.DestinationIncidentMigrationRevoke:
 		return d.handleIncidentMigrationRevoke(ctx, m)
+	case orchestrator.DestinationMigrationApplianceIssue:
+		return d.handleMigrationApplianceIssue(ctx, m)
 	case orchestrator.DestinationConnectorRollback:
 		// Agent-executed rows are deferred so they stay claimable; a
 		// control_plane row (a cloud store's re-bind, A58) runs here. See
@@ -474,6 +476,12 @@ type sealedConnectorDeployPayload struct {
 	TargetID     string          `json:"target_id,omitempty"`
 	Revision     string          `json:"target_revision,omitempty"`
 	TargetConfig json.RawMessage `json:"target_config,omitempty"`
+	// MigrationRunID, MigrationWaveID and RequiredAgentID correlate an
+	// appliance member's successor deploy with its CA migration (A33). Public
+	// like the routing above: the run id is already in the tenant's run view.
+	MigrationRunID  string `json:"migration_run_id,omitempty"`
+	MigrationWaveID string `json:"migration_wave_id,omitempty"`
+	RequiredAgentID string `json:"required_agent_id,omitempty"`
 }
 
 type issuedLeafMaterial struct {
@@ -729,7 +737,28 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 	if len(dnsNames) == 0 {
 		dnsNames = []string{commonName}
 	}
-	subject, retained, err := d.prepareLeafSubject(ctx, tenantID, ownerID, commonName, dnsNames, selection)
+	return d.mintServedLeafMaterialFromTemplate(ctx, tenantID, ownerID,
+		crypto.CertificateRequestTemplate{CommonName: commonName, DNSNames: dnsNames}, selection, issueKey, issuance...)
+}
+
+// mintServedLeafMaterialFromTemplate is the control-plane keygen mint for a
+// subject with every identifier kind (A33): an appliance successor asserts the
+// DNS names, IP addresses, rfc822Names and URIs its predecessor carried, and
+// nothing else. The profile gate and the authority seam are the same ones the
+// DNS-only path uses.
+func (d *issuanceDispatcher) mintServedLeafMaterialFromTemplate(
+	ctx context.Context,
+	tenantID, ownerID string,
+	tmpl crypto.CertificateRequestTemplate,
+	selection endpointAuthoritySelection,
+	issueKey string,
+	issuance ...*store.OperationApprovalIssuanceBinding,
+) (issuedLeafMaterial, error) {
+	commonName, dnsNames := tmpl.CommonName, tmpl.DNSNames
+	if len(dnsNames) == 0 {
+		dnsNames = []string{commonName}
+	}
+	subject, retained, err := d.prepareLeafSubjectFromTemplate(ctx, tenantID, ownerID, tmpl, selection)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -1689,16 +1718,18 @@ func (d *issuanceDispatcher) sealConnectorDeployBytes(ctx context.Context, tenan
 		return nil, fmt.Errorf("server: seal connector deploy payload: %w", err)
 	}
 	out, err := json.Marshal(sealedConnectorDeployPayload{
-		Format:       connectorDeploySealedFormat,
-		Version:      connectorDeploySealedVersion,
-		IdentityID:   identityID,
-		Fingerprint:  fingerprint,
-		Sealed:       sealed,
-		Connector:    p.Connector,
-		Target:       p.Target,
-		TargetID:     p.TargetID,
-		Revision:     p.TargetRevision,
-		TargetConfig: append(json.RawMessage(nil), p.TargetConfig...),
+		Format:         connectorDeploySealedFormat,
+		Version:        connectorDeploySealedVersion,
+		IdentityID:     identityID,
+		Fingerprint:    fingerprint,
+		Sealed:         sealed,
+		Connector:      p.Connector,
+		Target:         p.Target,
+		TargetID:       p.TargetID,
+		Revision:       p.TargetRevision,
+		MigrationRunID: p.MigrationRunID, MigrationWaveID: p.MigrationWaveID,
+		RequiredAgentID: p.RequiredAgentID,
+		TargetConfig:    append(json.RawMessage(nil), p.TargetConfig...),
 	})
 	if err != nil {
 		return nil, err

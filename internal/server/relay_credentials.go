@@ -548,6 +548,9 @@ func relayDeployIntentFromSealed(job store.AgentJob) (RelayDeployIntent, error) 
 		CredentialRefs:   refs,
 		VerifyAddress:    sealedAddr,
 		VerifyServerName: sealedSNI,
+		MigrationRunID:   strings.TrimSpace(wrapped.MigrationRunID),
+		MigrationWaveID:  strings.TrimSpace(wrapped.MigrationWaveID),
+		RequiredAgentID:  strings.TrimSpace(wrapped.RequiredAgentID),
 	}, nil
 }
 

@@ -22,6 +22,13 @@ type DeployPayload struct {
 	CertPEM        []byte          `json:"cert_pem"`
 	KeyPEM         []byte          `json:"key_pem"`
 	Fingerprint    string          `json:"fingerprint"`
+	// MigrationRunID, MigrationWaveID and RequiredAgentID correlate an
+	// appliance member's successor deploy with the CA migration that licensed
+	// it (A33). They are public routing facts, carried outside the seal too,
+	// so the relay's receipt can close the run's live gate.
+	MigrationRunID  string `json:"migration_run_id,omitempty"`
+	MigrationWaveID string `json:"migration_wave_id,omitempty"`
+	RequiredAgentID string `json:"required_agent_id,omitempty"`
 
 	// TenantID is authoritative dispatch context supplied from the outbox
 	// envelope. It is never accepted from durable JSON (AN-1).

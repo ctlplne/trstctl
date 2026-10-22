@@ -30333,6 +30333,21 @@ export const messages = {
     defaultMessage: "External CA {id} (through the external registry)",
     description: "Member binding row value when the leaf being replaced was issued by the external CA registry.",
   },
+  "migration.design.executesOn": { defaultMessage: "Executes on", description: "Member binding row: which enrolled agent carries the member's leaf work." },
+  "migration.design.executesOnHost": {
+    defaultMessage: "Host agent: installs the trust anchor, generates the successor key on the host, reloads the listener.",
+    description: "Member binding row value for a host-executed member.",
+  },
+  "migration.design.executesOnAppliance": {
+    defaultMessage:
+      "Network relay: installs the control-plane issued successor on the appliance. No trust stage: the appliance has no trust store this control plane manages.",
+    description: "Member binding row value for a network-appliance member.",
+  },
+  "migration.form.pathHint": {
+    defaultMessage:
+      "Required for a host member. Leave empty for a network appliance: its relay installs the successor, and the appliance has no trust store to write.",
+    description: "Hint under the trust anchor path field of a migration plan member.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;

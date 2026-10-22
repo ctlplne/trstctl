@@ -32,9 +32,13 @@ const initialFleetRequest: FleetReissuanceRequest = {
   ],
 };
 
-type FleetReissuanceForm = Omit<FleetReissuanceRequest, "reason" | "rollback_ref"> & {
+// Incident cohorts are host members: every member installs the replacement
+// anchor at its trust path, so the form keeps the path required even though
+// the shared start request leaves it optional for appliance members (A33).
+type FleetReissuanceForm = Omit<FleetReissuanceRequest, "reason" | "rollback_ref" | "cohorts"> & {
   reason: string;
   rollback_ref: string;
+  cohorts: { id: string; ordinal: number; members: { identity_id: string; agent_id: string; trust_anchor_path: string }[] }[];
 };
 
 type FleetReissuanceConfigurationProps = {

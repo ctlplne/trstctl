@@ -3551,8 +3551,26 @@ than sending an operator looking for a credential that was never there.
   leaf; a receipt naming a leaf the inventory does not hold, or one no longer
   active, is refused at start by name. An incident run still revokes through a
   served internal authority, so its cohorts are the compromised internal CA's
-  leaves, never externally issued ones. Network-appliance and cloud-store
-  migrations are refused at start rather than represented as executable. An imported offline root may be named as the new authority: its key
+  leaves, never externally issued ones. A network appliance (an f5, kemp,
+  netscaler, a10, fortigate or paloalto target the connector catalog marks
+  `executes_rollback`) joins a run as an appliance member: the operator names
+  the network relay the target is assigned to (`required_agent_id`), and the
+  member binding records `execution_model: appliance`. An appliance has no
+  trust stage of its own — a relay cannot write a trust store on an appliance
+  and the appliance has none this control plane manages — so its trust verdict
+  reads `not_applicable` rather than verified, it takes no `trust_anchor_path`,
+  and the hosts whose clients must trust the new anchor are members of their
+  own; a cohort of only appliances opens at the leaf gate. The control plane
+  then issues the successor under the new authority with the predecessor's
+  exact identifiers, records it as the predecessor's successor, and queues the
+  sealed deploy for that relay alone; the relay installs it and its signed
+  post-deploy handshake is the live gate. Rollback re-binds the predecessor
+  object through the same relay (the A46 re-bind families) and removes no
+  anchor. An appliance family without an executable re-bind, a host agent
+  named for an appliance, or a target not yet assigned to the relay is refused
+  at start by name. Built and proven against appliance doubles; proof on a
+  real appliance needs the operator's device. Cloud-store migrations are
+  refused at start rather than represented as executable. An imported offline root may be named as the new authority: its key
   never enters the signer, so successors are issued by the root's one active
   signer-backed intermediate (imported through the offline-intermediate
   ceremony) while the root certificate is the anchor hosts receive; the member

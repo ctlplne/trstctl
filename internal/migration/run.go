@@ -36,6 +36,23 @@ type Verdict string
 const (
 	VerdictVerified Verdict = "verified"
 	VerdictFailed   Verdict = "failed"
+	// VerdictNotApplicable is set by the engine, never by a receipt, on a stage
+	// a member has no work in: an appliance member (A33) distributes no trust
+	// anchor, because a network relay cannot write a trust store on an
+	// appliance and the appliance has none this control plane manages. The
+	// stage is honestly named rather than silently counted as verified.
+	VerdictNotApplicable Verdict = "not_applicable"
+)
+
+// ExecutionModel names where a member's leaf work executes (A33).
+const (
+	// ExecutionHost: an enrolled host agent writes the trust anchor, generates
+	// the successor key on the host and reloads the listener.
+	ExecutionHost = "host"
+	// ExecutionAppliance: an enrolled network relay installs a control-plane
+	// issued successor on a network appliance and re-binds the predecessor on
+	// rollback. The appliance has no trust stage of its own.
+	ExecutionAppliance = "appliance"
 )
 
 // ObservationStage identifies which safety gate a receipt licenses.
@@ -167,6 +184,10 @@ type MemberBinding struct {
 	// authority issued it; these fields keep that provenance in the run.
 	PredecessorSource       string `json:"predecessor_source,omitempty"`
 	PredecessorExternalCAID string `json:"predecessor_external_ca_id,omitempty"`
+	// ExecutionModel is ExecutionHost (the default when empty) or
+	// ExecutionAppliance (A33). It decides which stages the member has work in
+	// and which agent role the outbox rows demand.
+	ExecutionModel string `json:"execution_model,omitempty"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
 	// response requires it; a generic migration may leave it empty.
 	PredecessorCAID string `json:"predecessor_ca_id,omitempty"`
@@ -175,6 +196,10 @@ type MemberBinding struct {
 	Environment          string `json:"environment,omitempty"`
 	SuccessorFingerprint string `json:"successor_fingerprint,omitempty"`
 }
+
+// OnAppliance reports whether the member's leaf work executes on a network
+// relay against an appliance (A33), which has no trust stage of its own.
+func (b MemberBinding) OnAppliance() bool { return b.ExecutionModel == ExecutionAppliance }
 
 // IssuanceBinding freezes the certificate profile and lifetime reviewed when
 // the run starts. It has the same wire shape as the store's issuance binding,
@@ -267,9 +292,59 @@ func StartRun(in Run) (Run, []Action, error) {
 		out.Waves[i].Started = false
 		out.Waves[i].HaltReason = ""
 	}
-	out.Waves[0].Phase = PhaseVerifyingTrust
-	out.Waves[0].Started = true
-	return out, actionsFor(out.Waves[0], ActionDistributeTrust), nil
+	return out, openWave(&out, 0), nil
+}
+
+// openWave starts a cohort at its trust gate. Appliance members have no trust
+// work (A33): their trust stage is marked not applicable, and a cohort whose
+// every member is an appliance has nothing to wait for, so it moves straight to
+// the leaf gate and licenses its successor issuance.
+func openWave(out *Run, index int) []Action {
+	wave := &out.Waves[index]
+	wave.Phase = PhaseVerifyingTrust
+	wave.Started = true
+	for i := range wave.Members {
+		if wave.Members[i].Binding.OnAppliance() && wave.Members[i].TrustVerdict == "" {
+			wave.Members[i].TrustVerdict = VerdictNotApplicable
+		}
+	}
+	if allVerified(*wave, StageTrust) {
+		wave.Phase = PhaseVerifyingLive
+		return actionsFor(*wave, ActionIssueSuccessor)
+	}
+	return actionsFor(*wave, ActionDistributeTrust)
+}
+
+// openRollbackTrust enters the trust-removal stage of a rollback. Appliance
+// members have no anchor to remove (A33); a cohort of only appliances finishes
+// the stage at once.
+func openRollbackTrust(out *Run, waveIndex int) []Action {
+	out.RollbackStage = StageRollbackTrust
+	wave := &out.Waves[waveIndex]
+	for i := range wave.Members {
+		if wave.Members[i].Binding.OnAppliance() && wave.Members[i].RollbackTrustVerdict == "" {
+			wave.Members[i].RollbackTrustVerdict = VerdictNotApplicable
+		}
+	}
+	if allVerified(*wave, StageRollbackTrust) {
+		return finishRollbackWave(out, waveIndex)
+	}
+	return missingActions(*wave, StageRollbackTrust, ActionRemoveTrust)
+}
+
+// finishRollbackWave closes a rolled-back cohort and moves the cursor to the
+// next one that may have live successors, or ends the rollback.
+func finishRollbackWave(out *Run, waveIndex int) []Action {
+	out.Waves[waveIndex].Phase = PhaseRolledBack
+	if next := nextRollbackWave(*out, waveIndex); next >= 0 {
+		out.RollbackWaveID = out.Waves[next].ID
+		out.RollbackStage = StageRollbackSuccessor
+		return actionsFor(out.Waves[next], ActionRollbackSuccessor)
+	}
+	out.Status = RunRolledBack
+	out.RollbackWaveID = ""
+	out.RollbackStage = ""
+	return nil
 }
 
 // Observe applies one already-authorized signed fact and returns newly licensed
@@ -364,35 +439,21 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		}
 		wave.Phase = PhaseComplete
 		if next := nextPlannedWave(out, waveIndex); next >= 0 {
-			out.Waves[next].Phase = PhaseVerifyingTrust
-			out.Waves[next].Started = true
-			return out, actionsFor(out.Waves[next], ActionDistributeTrust), nil
+			return out, openWave(&out, next), nil
 		}
 		out.Status = RunComplete
 		return out, nil, nil
 	case StageRevocation:
 		wave.Phase = PhaseComplete
 		if next := nextPlannedWave(out, waveIndex); next >= 0 {
-			out.Waves[next].Phase = PhaseVerifyingTrust
-			out.Waves[next].Started = true
-			return out, actionsFor(out.Waves[next], ActionDistributeTrust), nil
+			return out, openWave(&out, next), nil
 		}
 		out.Status = RunComplete
 		return out, nil, nil
 	case StageRollbackSuccessor:
-		out.RollbackStage = StageRollbackTrust
-		return out, missingActions(*wave, StageRollbackTrust, ActionRemoveTrust), nil
+		return out, openRollbackTrust(&out, waveIndex), nil
 	case StageRollbackTrust:
-		wave.Phase = PhaseRolledBack
-		if next := nextRollbackWave(out, waveIndex); next >= 0 {
-			out.RollbackWaveID = out.Waves[next].ID
-			out.RollbackStage = StageRollbackSuccessor
-			return out, actionsFor(out.Waves[next], ActionRollbackSuccessor), nil
-		}
-		out.Status = RunRolledBack
-		out.RollbackWaveID = ""
-		out.RollbackStage = ""
-		return out, nil, nil
+		return out, finishRollbackWave(&out, waveIndex), nil
 	default:
 		return in, nil, fmt.Errorf("migration: unsupported observation stage %q", obs.Stage)
 	}
@@ -433,9 +494,7 @@ func ResumeRun(in Run) (Run, []Action, error) {
 			}
 			wave.Phase = PhaseComplete
 			if next := nextPlannedWave(out, waveIndex); next >= 0 {
-				out.Waves[next].Phase = PhaseVerifyingTrust
-				out.Waves[next].Started = true
-				return out, actionsFor(out.Waves[next], ActionDistributeTrust), nil
+				return out, openWave(&out, next), nil
 			}
 			out.Status = RunComplete
 			return out, nil, nil
@@ -529,8 +588,7 @@ func beginRollback(out Run, reason string) (Run, []Action, error) {
 		out.RollbackStage = StageRollbackSuccessor
 		return out, missingActions(out.Waves[index], StageRollbackSuccessor, ActionRollbackSuccessor), nil
 	}
-	out.RollbackStage = StageRollbackTrust
-	return out, missingActions(out.Waves[index], StageRollbackTrust, ActionRemoveTrust), nil
+	return out, openRollbackTrust(&out, index), nil
 }
 
 func validateRun(run Run) error {
@@ -636,7 +694,8 @@ func ValidateExecutableRun(run Run) error {
 			}
 			if strings.TrimSpace(b.IssuingAuthorityID) == "" || strings.TrimSpace(b.TargetID) == "" || strings.TrimSpace(b.TargetRevision) == "" ||
 				strings.TrimSpace(b.Connector) == "" || strings.TrimSpace(b.Target) == "" ||
-				strings.TrimSpace(b.RequiredAgentID) == "" || strings.TrimSpace(b.TrustAnchorPath) == "" ||
+				strings.TrimSpace(b.RequiredAgentID) == "" || (!b.OnAppliance() && strings.TrimSpace(b.TrustAnchorPath) == "") ||
+				(b.ExecutionModel != "" && b.ExecutionModel != ExecutionHost && b.ExecutionModel != ExecutionAppliance) ||
 				len(b.TrustAnchorPEM) == 0 || strings.TrimSpace(b.TrustAnchorFingerprint) == "" ||
 				strings.TrimSpace(b.VerifyAddress) == "" || strings.TrimSpace(b.SubjectCommonName) == "" ||
 				(len(b.SubjectDNSNames) == 0 && len(b.SubjectIPAddresses) == 0 && len(b.SubjectEmailAddresses) == 0 && len(b.SubjectURIs) == 0) || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
@@ -651,9 +710,15 @@ func ValidateExecutableRun(run Run) error {
 				RequiredAgentID string `json:"required_agent_id"`
 			}
 			if err := json.Unmarshal(b.TargetConfig, &targetAssignment); err != nil ||
-				!strings.EqualFold(strings.TrimSpace(targetAssignment.Executor), "agent") ||
-				strings.TrimSpace(targetAssignment.RequiredAgentID) != b.RequiredAgentID {
-				return fmt.Errorf("migration: member %s target does not bind its exact host agent", member.IdentityID)
+				!strings.EqualFold(strings.TrimSpace(targetAssignment.Executor), "agent") {
+				return fmt.Errorf("migration: member %s target does not bind an enrolled agent executor", member.IdentityID)
+			}
+			// Every target names its exact agent in its configuration: the host
+			// agent for a host target, the network relay for an appliance (A33).
+			// Credential redemption grants material only to the agent the
+			// target names, so an unnamed relay could claim but never deploy.
+			if strings.TrimSpace(targetAssignment.RequiredAgentID) != b.RequiredAgentID {
+				return fmt.Errorf("migration: member %s target does not bind its exact agent", member.IdentityID)
 			}
 			if authorityID == "" {
 				authorityID, anchorFingerprint = b.IssuingAuthorityID, b.TrustAnchorFingerprint
@@ -677,6 +742,9 @@ func ValidateExecutableRun(run Run) error {
 				return fmt.Errorf("migration: deployment target %s appears more than once", b.TargetID)
 			}
 			targets[b.TargetID] = true
+			if b.OnAppliance() {
+				continue
+			}
 			trust := trustTarget{agentID: b.RequiredAgentID, path: b.TrustAnchorPath}
 			if priorWave, found := trustWaves[trust]; found && priorWave != wave.ID {
 				return fmt.Errorf("migration: agent trust path %s cannot be shared across waves", b.TrustAnchorPath)
@@ -827,11 +895,27 @@ func requireObservationPhase(run Run, waveIndex int, stage ObservationStage) err
 func allVerified(wave RunWave, stage ObservationStage) bool {
 	for i := range wave.Members {
 		verdict := verdictForStage(&wave.Members[i], stage)
-		if verdict == nil || *verdict != VerdictVerified {
+		if verdict == nil {
+			return false
+		}
+		if *verdict == VerdictNotApplicable && trustStage(stage) && wave.Members[i].Binding.OnAppliance() {
+			continue
+		}
+		if *verdict != VerdictVerified {
 			return false
 		}
 	}
 	return true
+}
+
+// trustStage reports the two stages an appliance member has no work in (A33).
+func trustStage(stage ObservationStage) bool {
+	return stage == StageTrust || stage == StageRollbackTrust
+}
+
+// trustAction reports the two action kinds that never target an appliance.
+func trustAction(kind ActionKind) bool {
+	return kind == ActionDistributeTrust || kind == ActionRemoveTrust
 }
 
 func hasVerified(wave RunWave, stage ObservationStage) bool {
@@ -847,6 +931,9 @@ func hasVerified(wave RunWave, stage ObservationStage) bool {
 func actionsFor(wave RunWave, kind ActionKind) []Action {
 	out := make([]Action, 0, len(wave.Members))
 	for _, member := range wave.Members {
+		if trustAction(kind) && member.Binding.OnAppliance() {
+			continue
+		}
 		out = append(out, Action{Kind: kind, WaveID: wave.ID, IdentityID: member.IdentityID})
 	}
 	return out
@@ -856,6 +943,9 @@ func missingActions(wave RunWave, stage ObservationStage, kind ActionKind) []Act
 	out := make([]Action, 0, len(wave.Members))
 	for i := range wave.Members {
 		verdict := verdictForStage(&wave.Members[i], stage)
+		if trustAction(kind) && wave.Members[i].Binding.OnAppliance() {
+			continue
+		}
 		if verdict != nil && *verdict == "" {
 			out = append(out, Action{Kind: kind, WaveID: wave.ID, IdentityID: wave.Members[i].IdentityID})
 		}

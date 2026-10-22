@@ -396,8 +396,8 @@ func (a *API) buildMigrationMember(
 	anchorFingerprint, identityID, agentID, anchorPath string,
 ) (migration.RunMember, *migrationGatedMember, error) {
 	identityID, agentID, anchorPath = strings.TrimSpace(identityID), strings.TrimSpace(agentID), strings.TrimSpace(anchorPath)
-	if identityID == "" || anchorPath == "" || guuid.Validate(agentID) != nil {
-		return migration.RunMember{}, nil, errors.New("each migration member requires identity_id, enrolled agent_id, and trust_anchor_path")
+	if identityID == "" || guuid.Validate(agentID) != nil {
+		return migration.RunMember{}, nil, errors.New("each migration member requires identity_id and an enrolled agent_id")
 	}
 	ident, err := a.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
@@ -435,16 +435,12 @@ func (a *API) buildMigrationMember(
 		return migration.RunMember{}, nil, errors.New("migration member has no deployment target binding")
 	}
 	target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
-	if err != nil || !target.Enabled || !custody.TargetExecutorIsAgent(target.Config) || !relay.ExecutesOnHost(target.Type) {
-		return migration.RunMember{}, nil, errors.New("migration member target must be an enabled host-agent connector")
+	if err != nil || !target.Enabled || !custody.TargetExecutorIsAgent(target.Config) {
+		return migration.RunMember{}, nil, errors.New("migration member target must be an enabled connector target executed by an enrolled agent")
 	}
-	assignedAgentID, err := connector.TargetHostAgentID(target.Config)
-	if err != nil || assignedAgentID == "" || assignedAgentID != agentID {
-		return migration.RunMember{}, nil, errors.New("migration member agent_id must match the target's assigned host agent")
-	}
-	agent, err := a.store.GetAgent(ctx, tenantID, agentID)
-	if err != nil || agent.Status != "active" || !sourceKindsContain(agent.Roles, mtls.AgentRoleHost) {
-		return migration.RunMember{}, nil, errors.New("agent_id must name an active host-role agent in this tenant")
+	executionModel, err := a.migrationMemberExecutor(ctx, tenantID, target, agentID, anchorPath)
+	if err != nil {
+		return migration.RunMember{}, nil, err
 	}
 	predecessor, err := a.migrationPredecessorCertificate(ctx, tenantID, ident)
 	if err != nil {
@@ -487,7 +483,58 @@ func (a *API) buildMigrationMember(
 		PredecessorFingerprint:   cleanMigrationFingerprint(predecessor.Fingerprint),
 		PredecessorSource:        predecessor.Source,
 		PredecessorExternalCAID:  predecessor.IssuingExternalCAID,
+		ExecutionModel:           executionModel,
 	}}, gated, nil
+}
+
+// migrationMemberExecutor decides where a member's leaf work runs and checks
+// the agent the operator named can run it. A host target binds its exact
+// host agent, which also writes the trust anchor at trust_anchor_path. A
+// network appliance (A33) binds the network relay the operator names — the
+// one that will install the control-plane issued successor and re-bind the
+// predecessor on rollback — and takes no trust_anchor_path, because a relay
+// cannot write a trust store on an appliance and the appliance has none this
+// control plane manages: the hosts that must trust the new anchor are members
+// of their own. Cloud stores are not migrated by a run.
+func (a *API) migrationMemberExecutor(ctx context.Context, tenantID string, target store.DeploymentTarget, agentID, anchorPath string) (string, error) {
+	vantage, _ := connector.EffectiveTargetVantage(target.Type, target.Config)
+	switch {
+	case vantage == connector.VantageHostAgent && relay.ExecutesOnHost(target.Type):
+		if anchorPath == "" {
+			return "", errors.New("a host member requires trust_anchor_path: its host agent installs the new anchor there before the successor is issued")
+		}
+		assignedAgentID, err := connector.TargetHostAgentID(target.Config)
+		if err != nil || assignedAgentID == "" || assignedAgentID != agentID {
+			return "", errors.New("migration member agent_id must match the target's assigned host agent")
+		}
+		agent, err := a.store.GetAgent(ctx, tenantID, agentID)
+		if err != nil || agent.Status != "active" || !sourceKindsContain(agent.Roles, mtls.AgentRoleHost) {
+			return "", errors.New("agent_id must name an active host-role agent in this tenant")
+		}
+		return migration.ExecutionHost, nil
+	case vantage == connector.VantageNetworkRelay:
+		if anchorPath != "" {
+			return "", errors.New("an appliance member takes no trust_anchor_path: a network relay cannot write a trust store on an appliance; name the hosts that must trust the new anchor as members of their own")
+		}
+		if !connector.CanExecuteRollback(target.Type) {
+			return "", fmt.Errorf("appliance family %s has no executable rollback, so a run could not restore its predecessor; migrate it with a reviewed connector target deploy once its clients trust the new anchor", target.Type)
+		}
+		// Credential redemption hands material only to the agent the target
+		// names, so the appliance must already be assigned to this relay.
+		var assignment struct {
+			RequiredAgentID string `json:"required_agent_id"`
+		}
+		if json.Unmarshal(target.Config, &assignment) != nil || strings.TrimSpace(assignment.RequiredAgentID) != agentID {
+			return "", errors.New("migration member agent_id must match the network relay the target names in required_agent_id; assign the target to that relay first")
+		}
+		agent, err := a.store.GetAgent(ctx, tenantID, agentID)
+		if err != nil || agent.Status != "active" || !sourceKindsContain(agent.Roles, mtls.AgentRoleNetwork) {
+			return "", errors.New("agent_id must name an active network-role relay in this tenant for an appliance target")
+		}
+		return migration.ExecutionAppliance, nil
+	default:
+		return "", errors.New("migration member target must be a host-agent or network-appliance connector; cloud-store targets are not migrated by a run")
+	}
 }
 
 // migrationPredecessorCertificate resolves the leaf a member serves today

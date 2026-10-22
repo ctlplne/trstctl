@@ -24,6 +24,9 @@ type migrationReceiptClaim struct {
 	trust                     *relay.TrustDistributionIntent
 	renew                     *RelayDeployIntent
 	rollback                  *relay.RollbackIntent
+	// appliance is a network relay's connector.deploy of a control-plane
+	// issued successor (A33), read from the sealed payload's public wrapper.
+	appliance *RelayDeployIntent
 }
 
 // recordMigrationResult applies only results whose immutable payload carries a
@@ -99,6 +102,25 @@ func decodeMigrationReceiptClaim(destination string, payload []byte) (migrationR
 			runID: intent.MigrationRunID, waveID: intent.MigrationWaveID,
 			identityID: intent.IdentityID, stage: migration.StageSuccessor, renew: &intent,
 		}
+	case "connector.deploy":
+		var wrapped sealedConnectorDeployPayload
+		if err := json.Unmarshal(payload, &wrapped); err != nil || wrapped.Format != connectorDeploySealedFormat ||
+			strings.TrimSpace(wrapped.MigrationRunID) == "" {
+			return claim, false, nil
+		}
+		address, serverName := verifyTargetFromConfig(wrapped.TargetConfig)
+		intent := RelayDeployIntent{
+			Connector: wrapped.Connector, Target: wrapped.Target, TargetID: wrapped.TargetID,
+			Revision: wrapped.Revision, IdentityID: wrapped.IdentityID, Fingerprint: wrapped.Fingerprint,
+			TargetConfig:  append(json.RawMessage(nil), wrapped.TargetConfig...),
+			VerifyAddress: address, VerifyServerName: serverName,
+			MigrationRunID: wrapped.MigrationRunID, MigrationWaveID: wrapped.MigrationWaveID,
+			RequiredAgentID: wrapped.RequiredAgentID,
+		}
+		claim = migrationReceiptClaim{
+			runID: intent.MigrationRunID, waveID: intent.MigrationWaveID,
+			identityID: intent.IdentityID, stage: migration.StageSuccessor, appliance: &intent,
+		}
 	case relay.KindConnectorRollback:
 		var intent relay.RollbackIntent
 		if err := json.Unmarshal(payload, &intent); err != nil {
@@ -156,8 +178,18 @@ func validateVerifiedMigrationReport(
 			return errors.New("server: migration listener transcript is not a verified signed observation")
 		}
 		if claim.stage == migration.StageSuccessor {
-			if claim.renew == nil || result.EndpointID != claim.renew.TargetID ||
-				cleanFingerprint(result.Transcript.ExpectedFingerprint) != cleanFingerprint(result.Transcript.ObservedFingerprint) {
+			targetID, issuedFingerprint := "", ""
+			switch {
+			case claim.renew != nil:
+				targetID = claim.renew.TargetID
+			case claim.appliance != nil:
+				// The relay installed exactly the leaf the control plane
+				// sealed for it; the listener must now serve that leaf.
+				targetID, issuedFingerprint = claim.appliance.TargetID, claim.appliance.Fingerprint
+			}
+			if targetID == "" || result.EndpointID != targetID ||
+				cleanFingerprint(result.Transcript.ExpectedFingerprint) != cleanFingerprint(result.Transcript.ObservedFingerprint) ||
+				(issuedFingerprint != "" && cleanFingerprint(result.Transcript.ObservedFingerprint) != cleanFingerprint(issuedFingerprint)) {
 				return errors.New("server: successor listener result does not match the renewal target")
 			}
 			obs.SuccessorFingerprint = cleanFingerprint(result.Transcript.ObservedFingerprint)
@@ -206,6 +238,23 @@ func validateMigrationClaimBinding(binding migration.MemberBinding, agentID stri
 			return errors.New("server: renewal claim drifted from the migration predecessor binding")
 		case !sameMigrationJSON(intent.TargetConfig, binding.TargetConfig):
 			return errors.New("server: renewal claim drifted from the migration target configuration")
+		}
+	case claim.appliance != nil:
+		intent := claim.appliance
+		switch {
+		case !binding.OnAppliance():
+			return errors.New("server: appliance deploy receipt names a host-executed migration member")
+		case intent.RequiredAgentID != binding.RequiredAgentID:
+			return errors.New("server: appliance deploy claim drifted from the migration relay binding")
+		case intent.TargetID != binding.TargetID || intent.Revision != binding.TargetRevision:
+			return errors.New("server: appliance deploy claim drifted from the migration target revision")
+		case intent.Connector != binding.Connector || intent.Target != binding.Target:
+			return errors.New("server: appliance deploy claim drifted from the migration route binding")
+		case strings.TrimSpace(binding.SuccessorFingerprint) == "" ||
+			cleanFingerprint(intent.Fingerprint) != cleanFingerprint(binding.SuccessorFingerprint):
+			return errors.New("server: appliance deploy claim does not carry the successor this migration issued")
+		case !sameMigrationJSON(intent.TargetConfig, binding.TargetConfig):
+			return errors.New("server: appliance deploy claim drifted from the migration target configuration")
 		}
 	case claim.rollback != nil:
 		intent := claim.rollback
