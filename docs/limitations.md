@@ -253,7 +253,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
-| SCIM 2.0 + NHI inventory/posture | Tenant SCIM requires Enterprise SSO; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
+| SCIM 2.0 + NHI inventory/posture | Tenant SCIM requires Enterprise SSO; SCIM Bulk served on both planes; directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
 | AI / RCA / MCP surface | Served, off by default, air-gapped unless an operator opts in | [AI, RCA, and MCP surface](#ai-rca-and-mcp-surface) |
 | Secrets, identity frameworks, transit/KMIP | Served (six of six frameworks); Vault shim is a partial subset | [Secrets and identity frameworks](#secrets-and-identity-frameworks) |
 | RBAC / ABAC / OPA policy gates | Served, fail-closed, off by default | [Authorization policy gates](#authorization-policy-gates-and-abac-overlays-served-by-the-binary) |
@@ -445,8 +445,11 @@ never live in the API process. What you can do end to end against the running bi
   so a deprovisioned operator's still-valid credential is refused immediately
   and the same projection revokes all standing customer authority. Provider
   admin + MFA list/grant/revoke/role routes expose identity source, customer,
-  operation, expiry, last use, and retained revocation evidence. SCIM Bulk and
-  arbitrary custom Provider roles are not implemented; group remove/replace is
+  operation, expiry, last use, and retained revocation evidence. Provider SCIM
+  Bulk (`POST /provider/scim/v2/Bulk`, A89) applies User operations in order
+  with `bulkId` references, each under its own idempotency key so a replayed
+  request appends nothing twice; group operations are refused per operation.
+  Arbitrary custom Provider roles are not implemented; group remove/replace is
   refused in favor of an explicit User `active:false`/DELETE leaver event.
   Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
   console panel order every observed crypto asset by WHO DEPENDS ON IT, not by
@@ -3743,13 +3746,20 @@ path used by RBAC. SCIM `active:false`, DELETE, or group removal changes the
 projected tenant-member roles, so the next browser-session API request sees
 the new authorization result.
 
-Current SCIM limits are deliberate and fail closed: SCIM Bulk is not
-implemented; password management and password-change flows are not
-implemented; SCIM groups do not create new custom roles (a group's
-`displayName` or id must match a configured RBAC role such as `admin`,
-`operator`, `viewer`, `auditor`, or `ra-officer`). Directory writeback is not
-implemented. Token rotation is operator-managed: write a new token file and
-restart the control plane so the new hash loads.
+SCIM Bulk (RFC 7644 §3.7) is served at `POST /scim/v2/Bulk` (A72) and
+advertised in `ServiceProviderConfig` (`maxOperations` 100, `maxPayloadSize`
+1 MiB): the operations run in order through the same per-operation logic as
+the single routes, a POST's `bulkId` names its created user or group for the
+operations after it (in a path or in any string value of the data), each
+operation reports its own status and body, `failOnErrors` stops the request
+after that many failures, and the whole request is one idempotent mutation —
+a replay under the same `Idempotency-Key` returns the recorded response.
+Current SCIM limits are deliberate and fail closed: password management and
+password-change flows are not implemented; SCIM groups do not create new
+custom roles (a group's `displayName` or id must match a configured RBAC role
+such as `admin`, `operator`, `viewer`, `auditor`, or `ra-officer`). Directory
+writeback is not implemented. Token rotation is operator-managed: write a new
+token file and restart the control plane so the new hash loads.
 
 ### Unified NHI inventory
 

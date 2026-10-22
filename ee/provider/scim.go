@@ -83,12 +83,14 @@ func (h *providerSCIMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	case r.Method == http.MethodGet && path == "/ServiceProviderConfig":
 		writeProviderSCIM(w, http.StatusOK, map[string]any{
 			"schemas": []string{scim.SchemaSPConfig}, "patch": map[string]bool{"supported": true},
-			"bulk":           map[string]any{"supported": false, "maxOperations": 0, "maxPayloadSize": 0},
+			"bulk":           map[string]any{"supported": true, "maxOperations": providerSCIMBulkMaxOperations, "maxPayloadSize": providerSCIMMaxBody},
 			"filter":         map[string]any{"supported": true, "maxResults": 200},
 			"changePassword": map[string]bool{"supported": false}, "sort": map[string]bool{"supported": false},
 			"etag":                  map[string]bool{"supported": false},
 			"authenticationSchemes": []any{map[string]any{"type": "oauthbearertoken", "name": "OAuth Bearer Token"}},
 		})
+	case path == "/Bulk" && r.Method == http.MethodPost:
+		h.bulk(w, r, token)
 	case path == "/Users" && r.Method == http.MethodPost:
 		h.createUser(w, r, token)
 	case path == "/Users" && r.Method == http.MethodGet:
@@ -521,16 +523,8 @@ func providerSCIMEqFilter(filter, attribute string) string {
 }
 
 func (h *providerSCIMHandler) writeMutationError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, ErrNotFound):
-		writeProviderSCIMError(w, http.StatusNotFound, "", "user not found")
-	case errors.Is(err, ErrMutationConflict):
-		writeProviderSCIMError(w, http.StatusConflict, "uniqueness", "idempotency key was reused for a different SCIM command")
-	case errors.Is(err, ErrMutationPersistence):
-		writeProviderSCIMError(w, http.StatusInternalServerError, "", "provider workforce change could not be recorded; retry the same command")
-	default:
-		writeProviderSCIMError(w, http.StatusBadRequest, "invalidValue", err.Error())
-	}
+	status, scimType, detail := providerSCIMMutationStatus(err)
+	writeProviderSCIMError(w, status, scimType, detail)
 }
 
 func writeProviderSCIM(w http.ResponseWriter, status int, body any) {

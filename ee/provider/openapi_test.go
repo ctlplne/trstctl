@@ -148,8 +148,9 @@ func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 	for _, methods := range paths {
 		operationCount += len(methods)
 	}
-	if len(paths) != 31 || operationCount != 39 {
-		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 31 / 39", len(paths), operationCount)
+	// A89 adds POST /provider/scim/v2/Bulk.
+	if len(paths) != 32 || operationCount != 40 {
+		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 32 / 40", len(paths), operationCount)
 	}
 	components := doc["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)

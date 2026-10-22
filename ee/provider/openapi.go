@@ -46,6 +46,7 @@ var providerOperations = []providerOperation{
 	{"POST", "/provider/v1/breakglass/{id}/consent", "consentProviderBreakGlass", "Record one distinct custodian decision", "200", "ProviderBreakGlassConsent", "ProviderBreakGlassGrant", false, false, false},
 	{"POST", "/provider/v1/breakglass/{id}/results", "readProviderBreakGlassResults", "Read an active two-custodian emergency snapshot", "200", "", "ProviderTenantHealth", false, false, false},
 	{"GET", "/provider/scim/v2/ServiceProviderConfig", "getProviderSCIMConfig", "Read Provider SCIM capabilities", "200", "", "ProviderSCIMConfig", false, false, true},
+	{"POST", "/provider/scim/v2/Bulk", "bulkProviderSCIM", "Apply several Provider SCIM User operations in one request", "200", "ProviderSCIMBulkRequest", "ProviderSCIMBulkResponse", false, false, true},
 	{"POST", "/provider/scim/v2/Users", "createProviderSCIMUser", "Provision a Provider operator identity", "201", "ProviderSCIMUser", "ProviderSCIMUser", false, false, true},
 	{"GET", "/provider/scim/v2/Users", "listProviderSCIMUsers", "List Provider operator identities", "200", "", "ProviderSCIMList", false, false, true},
 	{"GET", "/provider/scim/v2/Users/{id}", "getProviderSCIMUser", "Read a Provider operator identity", "200", "", "ProviderSCIMUser", false, false, true},
@@ -228,6 +229,8 @@ func providerOpenAPISchemas() map[string]any {
 		"ProviderSCIMUser":            object(map[string]any{"schemas": array(str), "id": str, "externalId": str, "userName": str, "active": boolean, "displayName": str, "name": map[string]any{"type": "object"}, "emails": array(map[string]any{"type": "object"}), "roles": array(map[string]any{"type": "object"}), "meta": map[string]any{"type": "object"}}, "schemas", "userName"),
 		"ProviderSCIMGroup":           object(map[string]any{"schemas": array(str), "id": str, "externalId": str, "displayName": str, "members": array(map[string]any{"type": "object"}), "meta": map[string]any{"type": "object"}}, "schemas", "id", "displayName"),
 		"ProviderSCIMPatch":           object(map[string]any{"schemas": array(str), "Operations": array(map[string]any{"type": "object"})}, "schemas", "Operations"),
+		"ProviderSCIMBulkRequest":     object(map[string]any{"schemas": array(str), "failOnErrors": map[string]any{"type": "integer"}, "Operations": array(object(map[string]any{"method": str, "path": str, "bulkId": str, "data": map[string]any{"type": "object"}}, "method", "path"))}, "schemas", "Operations"),
+		"ProviderSCIMBulkResponse":    object(map[string]any{"schemas": array(str), "Operations": array(object(map[string]any{"method": str, "bulkId": str, "location": str, "status": str, "response": map[string]any{"type": "object"}}, "method", "status"))}, "schemas", "Operations"),
 		"ProviderSCIMList":            object(map[string]any{"schemas": array(str), "totalResults": integer, "Resources": array(map[string]any{"type": "object"})}, "schemas", "totalResults", "Resources"),
 	}
 }

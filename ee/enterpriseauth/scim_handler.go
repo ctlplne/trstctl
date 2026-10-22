@@ -96,7 +96,7 @@ func (a *scimHandler) scimServiceProviderConfig(w http.ResponseWriter, r *http.R
 		"schemas":          []string{scim.SchemaSPConfig},
 		"documentationUri": "https://docs.trstctl.local/configuration/#scim-provisioning",
 		"patch":            map[string]any{"supported": true},
-		"bulk":             map[string]any{"supported": false, "maxOperations": 0, "maxPayloadSize": 0},
+		"bulk":             map[string]any{"supported": true, "maxOperations": scimBulkMaxOperations, "maxPayloadSize": scimMaxBody},
 		"filter":           map[string]any{"supported": true, "maxResults": 200},
 		"changePassword":   map[string]any{"supported": false},
 		"sort":             map[string]any{"supported": false},
@@ -127,12 +127,9 @@ func (a *scimHandler) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		member, err := a.applySCIMUser(ctx, tok, subject, in)
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusCreated, userToSCIM(member, scimBase(r)), nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		status, body, _, err := a.opCreateUser(ctx, tok, scimBase(r), subject, in)
+		return status, body, err
 	})
 }
 
@@ -200,12 +197,8 @@ func (a *scimHandler) scimPutUser(w http.ResponseWriter, r *http.Request) {
 		in.UserName = subject
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		member, err := a.applySCIMUser(ctx, tok, subject, in)
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusOK, userToSCIM(member, scimBase(r)), nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		return a.opPutUser(ctx, tok, scimBase(r), subject, in)
 	})
 }
 
@@ -225,20 +218,8 @@ func (a *scimHandler) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		cur, err := a.store.GetTenantMember(ctx, tenantID, subject)
-		if err != nil || !scimMemberVisible(tok, cur) {
-			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
-		}
-		su := userToSCIM(cur, scimBase(r))
-		if err := scim.ApplyUserPatch(&su, patch.Operations); err != nil {
-			return 0, nil, scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "invalid user patch"}
-		}
-		member, err := a.applySCIMUser(ctx, tok, subject, su)
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusOK, userToSCIM(member, scimBase(r)), nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		return a.opPatchUser(ctx, tok, scimBase(r), subject, patch)
 	})
 }
 
@@ -254,14 +235,8 @@ func (a *scimHandler) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		if cur, err := a.store.GetTenantMember(ctx, tenantID, subject); err != nil || !scimMemberVisible(tok, cur) {
-			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
-		}
-		if _, _, err := a.orch.OffboardTenantMember(ctx, tenantID, subject, "scim delete"); err != nil {
-			return 0, nil, err
-		}
-		return http.StatusNoContent, nil, nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		return a.opDeleteUser(ctx, tok, subject)
 	})
 }
 
@@ -332,30 +307,14 @@ func (a *scimHandler) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
 	if !decodeSCIMRaw(w, raw, &in) {
 		return
 	}
-	roleName := strings.TrimSpace(in.DisplayName)
-	if roleName == "" {
-		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "displayName is required")
-		return
-	}
-	if _, ok := a.roles.Role(roleName); !ok {
-		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "SCIM group must match a configured RBAC role")
+	if _, err := scimGroupRole(a.roles, in); err != nil {
+		writeSCIMMappedError(w, err)
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		for _, m := range in.Members {
-			if strings.TrimSpace(m.Value) == "" {
-				continue
-			}
-			if err := a.addRoleToMember(ctx, tok, m.Value, roleName); err != nil {
-				return 0, nil, err
-			}
-		}
-		g, err := a.groupToSCIM(ctx, tok, roleName, scimBase(r))
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusCreated, g, nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		status, body, _, err := a.opCreateGroup(ctx, tok, scimBase(r), in)
+		return status, body, err
 	})
 }
 
@@ -411,52 +370,13 @@ func (a *scimHandler) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 	if !decodeSCIMRaw(w, raw, &patch) {
 		return
 	}
-	gp := scim.ParseGroupPatch(patch.Operations)
-	if gp.DisplayName != nil && strings.TrimSpace(*gp.DisplayName) != roleName {
-		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "renaming SCIM groups is not supported; group id is the RBAC role name")
+	if err := scimGroupPatchRename(roleName, patch); err != nil {
+		writeSCIMMappedError(w, err)
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		if gp.ReplaceAll != nil {
-			current, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
-			if err != nil {
-				return 0, nil, err
-			}
-			want := map[string]bool{}
-			for _, m := range *gp.ReplaceAll {
-				if strings.TrimSpace(m) != "" {
-					want[m] = true
-				}
-			}
-			for _, m := range current {
-				if scimMemberVisible(tok, m) && !want[m.Subject] {
-					if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
-						return 0, nil, err
-					}
-				}
-			}
-			for m := range want {
-				if err := a.addRoleToMember(ctx, tok, m, roleName); err != nil {
-					return 0, nil, err
-				}
-			}
-		}
-		for _, m := range gp.Add {
-			if err := a.addRoleToMember(ctx, tok, m, roleName); err != nil {
-				return 0, nil, err
-			}
-		}
-		for _, m := range gp.Remove {
-			if err := a.removeRoleFromMember(ctx, tok, m, roleName); err != nil {
-				return 0, nil, err
-			}
-		}
-		g, err := a.groupToSCIM(ctx, tok, roleName, scimBase(r))
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusOK, g, nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		return a.opPatchGroup(ctx, tok, scimBase(r), roleName, patch)
 	})
 }
 
@@ -472,17 +392,8 @@ func (a *scimHandler) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		members, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
-		if err != nil {
-			return 0, nil, err
-		}
-		for _, m := range members {
-			if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
-				return 0, nil, err
-			}
-		}
-		return http.StatusNoContent, nil, nil
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
+		return a.opDeleteGroup(ctx, tok, roleName)
 	})
 }
 
@@ -799,24 +710,31 @@ func writeSCIM(w http.ResponseWriter, status int, body any) {
 }
 
 func writeSCIMMappedError(w http.ResponseWriter, err error) {
+	status, scimType, detail := scimMappedError(err)
+	writeSCIMError(w, status, scimType, detail)
+}
+
+// scimMappedError maps a mutation error to its SCIM status, type and detail;
+// the single HTTP path and each Bulk operation share one mapping.
+func scimMappedError(err error) (int, string, string) {
 	var scimErr scimHTTPError
+	var refusal scim.BulkRefusal
+	if errors.As(err, &refusal) {
+		return refusal.Status, refusal.ScimType, refusal.Detail
+	}
 	if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
-		writeSCIMError(w, http.StatusConflict, "", "Idempotency-Key was already used for a different authenticated SCIM request")
-		return
+		return http.StatusConflict, "", "Idempotency-Key was already used for a different authenticated SCIM request"
 	}
 	if errors.Is(err, store.ErrTenantMemberOffboarded) {
-		writeSCIMError(w, http.StatusConflict, "invalidValue", "member offboarding is in progress; retry explicit activation after recovery")
-		return
+		return http.StatusConflict, "invalidValue", "member offboarding is in progress; retry explicit activation after recovery"
 	}
 	if errors.As(err, &scimErr) {
-		writeSCIMError(w, scimErr.status, scimErr.scimType, scimErr.detail)
-		return
+		return scimErr.status, scimErr.scimType, scimErr.detail
 	}
 	if store.IsNotFound(err) {
-		writeSCIMError(w, http.StatusNotFound, "", "resource not found")
-		return
+		return http.StatusNotFound, "", "resource not found"
 	}
-	writeSCIMError(w, http.StatusInternalServerError, "", "SCIM mutation failed")
+	return http.StatusInternalServerError, "", "SCIM mutation failed"
 }
 
 func writeSCIMError(w http.ResponseWriter, status int, scimType, detail string) {
@@ -960,6 +878,7 @@ func NewSCIMHandler(cfg api.SCIMConfig, d api.SCIMHandlerDeps) http.Handler {
 	h := &scimHandler{store: d.Store, orch: d.Orchestrator, idem: d.Idempotency, roles: d.Roles, scimTokens: tokens, allowRequest: d.AllowRequest}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /scim/v2/ServiceProviderConfig", h.scimServiceProviderConfig)
+	mux.HandleFunc("POST /scim/v2/Bulk", h.scimBulk)
 	mux.HandleFunc("POST /scim/v2/Users", h.scimCreateUser)
 	mux.HandleFunc("GET /scim/v2/Users", h.scimListUsers)
 	mux.HandleFunc("GET /scim/v2/Users/{id}", h.scimGetUser)
@@ -1001,4 +920,153 @@ func bearerTokenBytes(r *http.Request) []byte {
 		return []byte(tok)
 	}
 	return nil
+}
+
+// The per-operation logic below is shared by the single routes and Bulk
+// (A72): one implementation of each SCIM mutation, called from the HTTP
+// handler and from each Bulk operation alike.
+
+func (a *scimHandler) opCreateUser(ctx context.Context, tok scimToken, base, subject string, in scim.User) (int, any, string, error) {
+	member, err := a.applySCIMUser(ctx, tok, subject, in)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	return http.StatusCreated, userToSCIM(member, base), member.Subject, nil
+}
+
+func (a *scimHandler) opPutUser(ctx context.Context, tok scimToken, base, subject string, in scim.User) (int, any, error) {
+	member, err := a.applySCIMUser(ctx, tok, subject, in)
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusOK, userToSCIM(member, base), nil
+}
+
+func (a *scimHandler) opPatchUser(ctx context.Context, tok scimToken, base, subject string, patch scim.PatchOp) (int, any, error) {
+	cur, err := a.store.GetTenantMember(ctx, tok.TenantID, subject)
+	if err != nil || !scimMemberVisible(tok, cur) {
+		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
+	}
+	su := userToSCIM(cur, base)
+	if err := scim.ApplyUserPatch(&su, patch.Operations); err != nil {
+		return 0, nil, scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "invalid user patch"}
+	}
+	member, err := a.applySCIMUser(ctx, tok, subject, su)
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusOK, userToSCIM(member, base), nil
+}
+
+func (a *scimHandler) opDeleteUser(ctx context.Context, tok scimToken, subject string) (int, any, error) {
+	if cur, err := a.store.GetTenantMember(ctx, tok.TenantID, subject); err != nil || !scimMemberVisible(tok, cur) {
+		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
+	}
+	if _, _, err := a.orch.OffboardTenantMember(ctx, tok.TenantID, subject, "scim delete"); err != nil {
+		return 0, nil, err
+	}
+	return http.StatusNoContent, nil, nil
+}
+
+// scimGroupRole resolves a SCIM group to the configured RBAC role it must
+// name; groups never create roles.
+func scimGroupRole(roles *authz.Registry, in scim.Group) (string, error) {
+	roleName := strings.TrimSpace(in.DisplayName)
+	if roleName == "" {
+		return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "displayName is required"}
+	}
+	if _, ok := roles.Role(roleName); !ok {
+		return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "SCIM group must match a configured RBAC role"}
+	}
+	return roleName, nil
+}
+
+func scimGroupPatchRename(roleName string, patch scim.PatchOp) error {
+	gp := scim.ParseGroupPatch(patch.Operations)
+	if gp.DisplayName != nil && strings.TrimSpace(*gp.DisplayName) != roleName {
+		return scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "renaming SCIM groups is not supported; group id is the RBAC role name"}
+	}
+	return nil
+}
+
+func (a *scimHandler) opCreateGroup(ctx context.Context, tok scimToken, base string, in scim.Group) (int, any, string, error) {
+	roleName, err := scimGroupRole(a.roles, in)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	for _, m := range in.Members {
+		if strings.TrimSpace(m.Value) == "" {
+			continue
+		}
+		if err := a.addRoleToMember(ctx, tok, m.Value, roleName); err != nil {
+			return 0, nil, "", err
+		}
+	}
+	g, err := a.groupToSCIM(ctx, tok, roleName, base)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	return http.StatusCreated, g, roleName, nil
+}
+
+func (a *scimHandler) opPatchGroup(ctx context.Context, tok scimToken, base, roleName string, patch scim.PatchOp) (int, any, error) {
+	if _, ok := a.roles.Role(roleName); !ok {
+		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "group not found"}
+	}
+	gp := scim.ParseGroupPatch(patch.Operations)
+	if gp.ReplaceAll != nil {
+		current, err := a.store.ListTenantMembersByRole(ctx, tok.TenantID, roleName)
+		if err != nil {
+			return 0, nil, err
+		}
+		want := map[string]bool{}
+		for _, m := range *gp.ReplaceAll {
+			if strings.TrimSpace(m) != "" {
+				want[m] = true
+			}
+		}
+		for _, m := range current {
+			if scimMemberVisible(tok, m) && !want[m.Subject] {
+				if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
+					return 0, nil, err
+				}
+			}
+		}
+		for m := range want {
+			if err := a.addRoleToMember(ctx, tok, m, roleName); err != nil {
+				return 0, nil, err
+			}
+		}
+	}
+	for _, m := range gp.Add {
+		if err := a.addRoleToMember(ctx, tok, m, roleName); err != nil {
+			return 0, nil, err
+		}
+	}
+	for _, m := range gp.Remove {
+		if err := a.removeRoleFromMember(ctx, tok, m, roleName); err != nil {
+			return 0, nil, err
+		}
+	}
+	g, err := a.groupToSCIM(ctx, tok, roleName, base)
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusOK, g, nil
+}
+
+func (a *scimHandler) opDeleteGroup(ctx context.Context, tok scimToken, roleName string) (int, any, error) {
+	if _, ok := a.roles.Role(roleName); !ok {
+		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "group not found"}
+	}
+	members, err := a.store.ListTenantMembersByRole(ctx, tok.TenantID, roleName)
+	if err != nil {
+		return 0, nil, err
+	}
+	for _, m := range members {
+		if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
+			return 0, nil, err
+		}
+	}
+	return http.StatusNoContent, nil, nil
 }

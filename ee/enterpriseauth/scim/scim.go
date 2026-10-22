@@ -16,6 +16,9 @@ const (
 	SchemaPatchOp  = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 	SchemaError    = "urn:ietf:params:scim:api:messages:2.0:Error"
 	SchemaSPConfig = "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+	// SchemaBulkRequest and SchemaBulkResponse are RFC 7644 §3.7 (A72/A89).
+	SchemaBulkRequest  = "urn:ietf:params:scim:api:messages:2.0:BulkRequest"
+	SchemaBulkResponse = "urn:ietf:params:scim:api:messages:2.0:BulkResponse"
 )
 
 type Meta struct {
