@@ -297,7 +297,9 @@ a pilot whose every wave negotiated completes. Waves after a halt are marked
 `skipped` and are never probed. A finished pilot's evidence is signed inside the
 isolated signer under its `pqc-readiness-report` key and returned as
 `signed_report`, which verifies offline against that key alone; `GET
-/api/v1/pqc/pilots/{id}` returns the waves, their results and verdicts.
+/api/v1/pqc/pilots/{id}` returns the waves, their results and verdicts. The
+Posture page's **Post-quantum pilot waves** panel starts pilots and shows each
+wave's outcomes, verdicts, skipped waves and the signed report.
 
 Campaign mutations emit immutable `pqc.migration_campaign.*` events. PostgreSQL
 projections carry `tenant_id` and forced row-level security. Closure is rejected until

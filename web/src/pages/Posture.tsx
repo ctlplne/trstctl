@@ -32,6 +32,7 @@ import {
 import { useApiQuery } from "@/lib/query";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
+import { PQCPilots } from "@/pages/posture/PQCPilots";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 import { loadLatestDriftRuns } from "@/pages/posture/DriftLatestRuns";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
@@ -435,6 +436,7 @@ export function Posture() {
             readinessError={cryptoReadiness.error}
           />
           <PQCCampaigns assets={cbomInventory.items} />
+          <PQCPilots />
           <PQCMigrationWorkflow assets={cbomInventory.items} />
           <PCASSuccessionWorkflow />
         </section>

@@ -11938,6 +11938,8 @@
             "source_frontend": [
                 "web/src/pages/Posture.tsx",
                 "web/src/pages/posture/PQCCampaigns.tsx",
+                "web/src/pages/posture/PQCPilots.tsx",
+                "web/src/__tests__/pqc_pilots.test.tsx",
                 "web/src/components/PQCMigrationWorkflow.tsx",
                 "web/src/__tests__/pqc_campaigns.test.tsx",
                 "web/src/__tests__/posture.test.tsx"

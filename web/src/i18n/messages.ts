@@ -27494,6 +27494,73 @@ export const messages = {
   "posture.pqcCampaign.exportEvidence": { defaultMessage: "Load signed closure evidence", description: "PQC evidence export action." },
   "posture.pqcCampaign.evidenceLoaded": { defaultMessage: "Signed closure evidence loaded.", description: "PQC evidence export success." },
   "posture.pqcCampaign.signedEvidence": { defaultMessage: "Signed PQC campaign closure evidence", description: "Accessible label for signed closure JSON." },
+  "posture.pqcPilot.heading": { defaultMessage: "Post-quantum pilot waves", description: "Heading for the PQC pilot panel on the posture page." },
+  "posture.pqcPilot.description": {
+    defaultMessage:
+      "Prove a post-quantum leaf against real clients in stages. The network relay handshakes each wave's endpoints; one refusal in the canary halts the pilot before any later wave runs, and a finished pilot's evidence is signed inside the isolated signer.",
+    description: "Explains what a PQC pilot does and how the canary halt works.",
+  },
+  "posture.pqcPilot.createHeading": { defaultMessage: "Start a pilot", description: "Heading for the pilot start form." },
+  "posture.pqcPilot.name": { defaultMessage: "Pilot name", description: "Pilot name field label." },
+  "posture.pqcPilot.authority": { defaultMessage: "Issuing authority ID", description: "Field label for the authority whose leaf the pilot proves." },
+  "posture.pqcPilot.authorityHelp": {
+    defaultMessage:
+      "The signer-backed authority (for example an ML-DSA-65 issuing CA) whose leaf the targets serve. The signed readiness report is a statement about this authority.",
+    description: "Help text for the authority field.",
+  },
+  "posture.pqcPilot.waves": { defaultMessage: "Waves (JSON)", description: "Field label for the waves definition." },
+  "posture.pqcPilot.wavesHelp": {
+    defaultMessage:
+      "An ordered list; the first wave is the canary. Each wave has a name and targets with target_id, address, optional server_name and the served leaf's SHA-256 fingerprint.",
+    description: "Help text for the waves JSON field.",
+  },
+  "posture.pqcPilot.wavesInvalid": {
+    defaultMessage: "Waves must be a JSON array of {name, targets[]} with at least one target each.",
+    description: "Validation error for the waves JSON field.",
+  },
+  "posture.pqcPilot.create": { defaultMessage: "Start pilot", description: "Submit button for the pilot start form." },
+  "posture.pqcPilot.creating": { defaultMessage: "Starting…", description: "Submit button while a pilot starts." },
+  "posture.pqcPilot.created": {
+    defaultMessage: "Pilot {name} started; the canary wave is queued for the network relay.",
+    description: "Notice after a pilot starts.",
+  },
+  "posture.pqcPilot.error": { defaultMessage: "Unable to complete the pilot operation.", description: "Fallback error for pilot operations." },
+  "posture.pqcPilot.listHeading": { defaultMessage: "Pilots", description: "Heading for the pilot list." },
+  "posture.pqcPilot.loading": { defaultMessage: "Loading pilots…", description: "Loading state for the pilot list." },
+  "posture.pqcPilot.empty": { defaultMessage: "No pilots yet", description: "Empty state title for the pilot list." },
+  "posture.pqcPilot.emptyBody": {
+    defaultMessage: "Start one above once a post-quantum leaf is served on at least one endpoint.",
+    description: "Empty state body for the pilot list.",
+  },
+  "posture.pqcPilot.waveProgress": {
+    defaultMessage: "wave {current} of {total}",
+    description: "Progress line for a pilot; {current} and {total} are wave numbers.",
+  },
+  "posture.pqcPilot.haltedAt": { defaultMessage: "halted at {wave}", description: "Which wave halted a pilot." },
+  "posture.pqcPilot.waveHeading": { defaultMessage: "Waves and evidence", description: "Heading for the selected pilot's waves." },
+  "posture.pqcPilot.target": { defaultMessage: "Target", description: "Column header: target id." },
+  "posture.pqcPilot.outcome": { defaultMessage: "Outcome", description: "Column header: handshake outcome." },
+  "posture.pqcPilot.handshake": { defaultMessage: "Handshake", description: "Column header: handshake latency and chain size." },
+  "posture.pqcPilot.detail": { defaultMessage: "Detail", description: "Column header: outcome detail." },
+  "posture.pqcPilot.handshakeCost": { defaultMessage: "{ms} ms · {bytes} B", description: "Handshake latency in milliseconds and served chain size in bytes." },
+  "posture.pqcPilot.notProbed": {
+    defaultMessage: "Not probed: an earlier wave halted the pilot.",
+    description: "Shown for a wave that was skipped after a halt.",
+  },
+  "posture.pqcPilot.awaitingRelay": {
+    defaultMessage: "Queued for the network relay; results arrive with its signed sweep.",
+    description: "Shown for a wave that is probing.",
+  },
+  "posture.pqcPilot.pending": { defaultMessage: "Waits for the previous wave's verdict.", description: "Shown for a wave not yet dispatched." },
+  "posture.pqcPilot.report": { defaultMessage: "Signed readiness report", description: "Heading for the signed report block." },
+  "posture.pqcPilot.reportBody": {
+    defaultMessage:
+      "Signed inside the isolated signer with key {keyId} ({algorithm}); the signature covers the full evidence, so it verifies offline from this report alone.",
+    description: "Describes the signed report; {keyId} and {algorithm} come from the signature.",
+  },
+  "posture.pqcPilot.reportPending": { defaultMessage: "The report is signed when the pilot finishes.", description: "Shown while a pilot is still running." },
+  "posture.pqcPilot.reportDownload": { defaultMessage: "Copy report JSON", description: "Button that copies the signed report JSON." },
+  "posture.pqcPilot.reportCopied": { defaultMessage: "Signed report copied.", description: "Notice after the report is copied." },
   "posture.pqcCampaign.error": { defaultMessage: "Unable to complete the PQC campaign operation.", description: "PQC campaign fallback error." },
   "source.principal.afc19f1734": {
     defaultMessage: "Principal",

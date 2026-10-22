@@ -447,6 +447,9 @@ import type {
   PQCMigrationCampaignStartRequest,
   PQCMigrationCampaignUpdateRequest,
   PQCMigrationFindingDispositionRequest,
+  PQCPilot,
+  PQCPilotList,
+  PQCPilotStartRequest,
   PendingApprovalRequest as GenPendingApprovalRequest,
   Profile as GenProfile,
   ProfileApprovalResponse,
@@ -714,6 +717,9 @@ export interface BrokerHistoryQuery {
 }
 export type CBOMAsset = GenCBOMAsset;
 export type {
+  PQCPilot,
+  PQCPilotList,
+  PQCPilotStartRequest,
   PQCMigrationCampaign,
   PQCMigrationCampaignCloseRequest,
   PQCMigrationCampaignClosure,
@@ -2170,6 +2176,9 @@ export interface Api {
   dispositionPQCCampaignFinding(id: string, findingId: string, input: PQCMigrationFindingDispositionRequest): Promise<PQCMigrationCampaign>;
   closePQCCampaign(id: string, input?: PQCMigrationCampaignCloseRequest): Promise<PQCMigrationCampaign>;
   pqcCampaignEvidence(id: string): Promise<PQCMigrationCampaignClosure>;
+  pqcPilots(options?: { limit?: number; cursor?: string }): Promise<PQCPilotList>;
+  pqcPilot(id: string): Promise<PQCPilot>;
+  startPQCPilot(input: PQCPilotStartRequest): Promise<PQCPilot>;
   planPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationPlan>;
   startPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationRun>;
   getPQCMigrationProgress(runId: string): Promise<PQCMigrationProgress>;
@@ -2925,6 +2934,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<PQCMigrationCampaign>("POST", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/disposition`, input),
   closePQCCampaign: (id, input) => mutate<PQCMigrationCampaign>("POST", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}/close`, input),
   pqcCampaignEvidence: (id) => req<PQCMigrationCampaignClosure>(`/api/v1/pqc/campaigns/${encodeURIComponent(id)}/evidence`),
+  pqcPilots: (options) => req<PQCPilotList>(`/api/v1/pqc/pilots${pageQueryString(options)}`),
+  pqcPilot: (id) => req<PQCPilot>(`/api/v1/pqc/pilots/${encodeURIComponent(id)}`),
+  startPQCPilot: (input) => mutate<PQCPilot>("POST", "/api/v1/pqc/pilots", input),
   planPQCMigration: (input) => postRead<PQCMigrationPlan>("/api/v1/pqc/migrations/plan", input),
   startPQCMigration: (input) => mutate<PQCMigrationRun>("POST", "/api/v1/pqc/migrations", input),
   getPQCMigrationProgress: (runId) => req<PQCMigrationProgress>(`/api/v1/pqc/migrations/${encodeURIComponent(runId)}`),

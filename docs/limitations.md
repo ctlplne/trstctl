@@ -3194,9 +3194,11 @@ than sending an operator looking for a credential that was never there.
   verdict over everything probed so far, and halts the instant a canary refuses
   or cannot be reached — later waves are never dispatched — or dispatches the
   next wave; a finished pilot's evidence is signed inside the isolated signer
-  as the readiness report, verifiable offline. The PQC lab console view is not
-  yet built and the acceptance's end-to-end pilot on the lab is not yet
-  demonstrated.
+  as the readiness report, verifiable offline. The console's Posture page
+  carries the lab view (A30): start a pilot, follow each wave's outcomes with
+  handshake latency and chain size, the verdict that halted or advanced it,
+  the skipped waves, and the signed report. The acceptance's end-to-end pilot
+  on the lab is not yet demonstrated.
 - Per-tenant silo isolation identifiers all key on the tenant ID (L4): a siloed
   tenant's Postgres schema, JetStream subject lane, and object-key prefix are
   each derived from the tenant's unique, immutable ID. The event LANE used to be
