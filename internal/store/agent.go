@@ -71,10 +71,15 @@ type Agent struct {
 	RevocationCachesSignature         []byte
 	RevocationCachesSignerFingerprint string
 	RevocationCachesReportedAt        *time.Time
-	CreatedAt                         time.Time
-	OffboardedAt                      *time.Time
-	OffboardedBy                      string
-	OffboardReason                    string
+	// Executors is the enrolled binary's own executor census as reported on
+	// its newest heartbeat (A62), opaque JSON here; ExecutorsReportedAt nil
+	// means the agent has never reported one (an older build).
+	Executors           []byte
+	ExecutorsReportedAt *time.Time
+	CreatedAt           time.Time
+	OffboardedAt        *time.Time
+	OffboardedBy        string
+	OffboardReason      string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -148,6 +153,10 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 	if err != nil {
 		return fmt.Errorf("store: encode revocation cache posture: %w", err)
 	}
+	executors := a.Executors
+	if len(executors) == 0 {
+		executors = []byte("{}")
+	}
 	// The synchronous read-after-write projector and the durable event consumer
 	// can insert one event concurrently. The current schema makes (tenant_id, id)
 	// both the primary and foreign-key identity, so every matching unique index is
@@ -163,11 +172,13 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		                     relay_plugins, relay_plugins_statement, relay_plugins_signature,
 		                     relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 		                     revocation_caches, revocation_caches_statement, revocation_caches_signature,
-		                     revocation_caches_signer_fingerprint, revocation_caches_reported_at)
+		                     revocation_caches_signer_fingerprint, revocation_caches_reported_at,
+		                     executors, executors_reported_at)
 		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10,
 		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
 		         $23::jsonb, $24, $25, $26, $27,
-		         $28::jsonb, $29, $30, $31, $32)
+		         $28::jsonb, $29, $30, $31, $32,
+		         $33::jsonb, $34)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
@@ -269,7 +280,15 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		        revocation_caches_reported_at = CASE
 		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches_reported_at
 		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches_reported_at
-		            ELSE EXCLUDED.revocation_caches_reported_at END
+		            ELSE EXCLUDED.revocation_caches_reported_at END,
+		        executors = CASE
+		            WHEN EXCLUDED.executors_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.executors
+		            WHEN agents.executors_reported_at IS NOT NULL AND EXCLUDED.executors_reported_at <= agents.executors_reported_at THEN agents.executors
+		            ELSE EXCLUDED.executors END,
+		        executors_reported_at = CASE
+		            WHEN EXCLUDED.executors_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.executors_reported_at
+		            WHEN agents.executors_reported_at IS NOT NULL AND EXCLUDED.executors_reported_at <= agents.executors_reported_at THEN agents.executors_reported_at
+		            ELSE EXCLUDED.executors_reported_at END
 		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
 		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
@@ -280,7 +299,8 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		relayPlugins, a.RelayPluginsStatement, signature,
 		a.RelayPluginsSignerFingerprint, a.RelayPluginsReportedAt,
 		revocationCaches, a.RevocationCachesStatement, cacheSignature,
-		a.RevocationCachesSignerFingerprint, a.RevocationCachesReportedAt)
+		a.RevocationCachesSignerFingerprint, a.RevocationCachesReportedAt,
+		executors, a.ExecutorsReportedAt)
 	return err
 }
 
@@ -469,7 +489,8 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 			        relay_plugins, relay_plugins_statement, relay_plugins_signature,
 			        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 			        revocation_caches, revocation_caches_statement, revocation_caches_signature,
-			        revocation_caches_signer_fingerprint, revocation_caches_reported_at
+			        revocation_caches_signer_fingerprint, revocation_caches_reported_at,
+			        executors, executors_reported_at
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
@@ -481,7 +502,8 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 				&relayPlugins, &a.RelayPluginsStatement, &a.RelayPluginsSignature,
 				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt,
 				&revocationCaches, &a.RevocationCachesStatement, &a.RevocationCachesSignature,
-				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt)
+				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt,
+				&a.Executors, &a.ExecutorsReportedAt)
 	})
 	if err == nil {
 		err = json.Unmarshal(relayPlugins, &a.RelayPlugins)
@@ -515,7 +537,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        relay_plugins, relay_plugins_statement, relay_plugins_signature,
 				        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 				        revocation_caches, revocation_caches_statement, revocation_caches_signature,
-				        revocation_caches_signer_fingerprint, revocation_caches_reported_at
+				        revocation_caches_signer_fingerprint, revocation_caches_reported_at,
+				        executors, executors_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -533,7 +556,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        relay_plugins, relay_plugins_statement, relay_plugins_signature,
 				        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 				        revocation_caches, revocation_caches_statement, revocation_caches_signature,
-				        revocation_caches_signer_fingerprint, revocation_caches_reported_at
+				        revocation_caches_signer_fingerprint, revocation_caches_reported_at,
+				        executors, executors_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -557,7 +581,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				&relayPlugins, &a.RelayPluginsStatement, &a.RelayPluginsSignature,
 				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt,
 				&revocationCaches, &a.RevocationCachesStatement, &a.RevocationCachesSignature,
-				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt); err != nil {
+				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt,
+				&a.Executors, &a.ExecutorsReportedAt); err != nil {
 				return err
 			}
 			if err := json.Unmarshal(relayPlugins, &a.RelayPlugins); err != nil {

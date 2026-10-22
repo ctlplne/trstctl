@@ -107,6 +107,7 @@ public final class OpenApiSchemas {
       "AgentOffboardResponse",
       "AgentPresence",
       "AgentRelayCapability",
+      "AgentReportedCapability",
       "AgentRingInput",
       "AgentUpgradeCampaign",
       "AgentUpgradeCampaignInput",

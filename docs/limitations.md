@@ -2104,14 +2104,21 @@ a closed phrase and keeps the target's words local, because an appliance can and
 does echo the credential it received back in an error body. A sandbox
 denial is reported as a failure, not as a deploy with a footnote.
 
-Seven connectors are relay-executable — `f5`, `netscaler`, `a10`, `kemp`,
-`cisco`, `fortigate`, `paloalto` — and the Agents console shows exactly that set
-for network-role agents, derived from the agent package's own census so the console
+Ten connectors are relay-executable — `f5`, `netscaler`, `a10`, `kemp`,
+`cisco`, `fortigate`, `paloalto` and, since A59, `aws-acm`, `azure-keyvault` and
+`gcp-certificate-manager` — and the Agents console shows exactly that set for
+network-role agents, derived from the agent package's own census so the console
 cannot advertise an executor the binary lacks. Host-role agents see their host job
 kinds and host connector families instead. The server uses that same job-kind role
-census at claim time. The list describes this server build and certificate roles;
-the enrolled binary's version, configured flags, and terminal receipts must still
-be checked before calling work ready or complete.
+census at claim time. That list describes this server build and certificate
+roles. Since A62 each agent also reports its own executor census on its
+heartbeat — the job kinds and connector families the enrolled binary ships, its
+version, and the enabling flags that process was started without — and the
+console shows that reported list, role-filtered the same way, with the server
+census beside it (`capability_source` says which one describes the agent; an
+older agent that has never reported one shows the server census alone). The
+report authorizes nothing: certificate roles and the server census still gate
+every claim, and terminal receipts remain the evidence that work completed.
 
 **Host connector execution ships too.** The thirteen file/exec connectors —
 nginx, Apache, Caddy, HAProxy, IIS, Postfix, Traefik, Java keystore, PostgreSQL,

@@ -664,6 +664,23 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		beatPayload.RevocationCaches = report
 		eventSchemaVersion = projections.AgentHeartbeatRevocationCacheSchemaVersion
 	}
+	if req.Executors != nil {
+		// A62: the binary's own executor census. A self-report over the
+		// authenticated channel that authorizes nothing; bounded here and in
+		// the projector so a heartbeat cannot carry arbitrary bulk.
+		census := &projections.AgentExecutorCensus{Version: strings.TrimSpace(req.Executors.Version), Kinds: []projections.AgentExecutorKind{}}
+		if census.Version == "" {
+			census.Version = strings.TrimSpace(req.Version)
+		}
+		for _, kind := range req.Executors.Kinds {
+			census.Kinds = append(census.Kinds, projections.AgentExecutorKind{
+				Kind: strings.TrimSpace(kind.Kind), Connectors: append([]string(nil), kind.Connectors...),
+				MissingFlags: append([]string(nil), kind.MissingFlags...),
+			})
+		}
+		beatPayload.Executors = census
+		eventSchemaVersion = projections.AgentHeartbeatExecutorCensusSchemaVersion
+	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)

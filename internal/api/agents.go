@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -113,6 +114,17 @@ type agentResponse struct {
 	// roles last reported from this agent's certificate. It is not a report of
 	// the enrolled binary's version, configured flags, or completed work.
 	RelayCapabilities []agentRelayCapabilityResponse `json:"relay_capabilities"`
+	// ReportedCapabilities is what the ENROLLED BINARY itself reported on its
+	// newest heartbeat (A62), filtered by the same certificate roles: the
+	// kinds and connector families it ships and the enabling flags it was
+	// started without. Absent for an agent that has never reported one.
+	ReportedCapabilities []agentReportedCapabilityResponse `json:"reported_capabilities,omitempty"`
+	// CapabilitySource says which list describes this agent: "reported" when
+	// the binary has said what it carries, "server_census" when only this
+	// server build's census is available (an older agent).
+	CapabilitySource        string  `json:"capability_source"`
+	CapabilitiesReportedAt  *string `json:"capabilities_reported_at,omitempty"`
+	ReportedExecutorVersion string  `json:"reported_executor_version,omitempty"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	WorkloadAPI agentWorkloadAPIStatus `json:"workload_api"`
 	// EnrollmentProxy is this certificate-bound relay's measured A4 topology
@@ -313,6 +325,66 @@ type agentRelayCapabilityResponse struct {
 	EnableFlags []string `json:"enable_flags,omitempty"`
 }
 
+// agentReportedCapabilityResponse is one job kind as the enrolled binary
+// reported it (A62).
+type agentReportedCapabilityResponse struct {
+	Kind       string   `json:"kind"`
+	Connectors []string `json:"connectors"`
+	// MissingFlags are the enabling flags the process was started without;
+	// Enabled is true only when none are missing.
+	MissingFlags []string `json:"missing_flags"`
+	Enabled      bool     `json:"enabled"`
+}
+
+const (
+	agentCapabilitySourceReported     = "reported"
+	agentCapabilitySourceServerCensus = "server_census"
+)
+
+// agentReportedCapabilities decodes the binary's self-reported census and
+// filters it by the certificate roles, the way the server census is filtered,
+// so an operator sees one role-scoped answer from each source.
+func agentReportedCapabilities(a store.Agent) []agentReportedCapabilityResponse {
+	if a.ExecutorsReportedAt == nil || len(a.Executors) == 0 {
+		return nil
+	}
+	var census struct {
+		Kinds []struct {
+			Kind         string   `json:"kind"`
+			Connectors   []string `json:"connectors"`
+			MissingFlags []string `json:"missing_flags"`
+		} `json:"kinds"`
+	}
+	if err := json.Unmarshal(a.Executors, &census); err != nil {
+		return nil
+	}
+	shippedRoles := map[string][]string{}
+	for _, kind := range relay.ShippedJobKinds() {
+		shippedRoles[kind.Kind] = kind.Roles
+	}
+	out := make([]agentReportedCapabilityResponse, 0, len(census.Kinds))
+	for _, kind := range census.Kinds {
+		roles, known := shippedRoles[kind.Kind]
+		if known && !slices.ContainsFunc(a.Roles, func(role string) bool { return slices.Contains(roles, role) }) {
+			continue
+		}
+		connectors := make([]string, 0, len(kind.Connectors))
+		for _, name := range kind.Connectors {
+			if (slices.Contains(a.Roles, mtls.AgentRoleHost) && relay.ExecutesOnHost(name)) ||
+				(slices.Contains(a.Roles, mtls.AgentRoleNetwork) && relay.Executes(name)) ||
+				(!relay.ExecutesOnHost(name) && !relay.Executes(name)) {
+				connectors = append(connectors, name)
+			}
+		}
+		missing := append([]string(nil), kind.MissingFlags...)
+		if missing == nil {
+			missing = []string{}
+		}
+		out = append(out, agentReportedCapabilityResponse{Kind: kind.Kind, Connectors: connectors, MissingFlags: missing, Enabled: len(missing) == 0})
+	}
+	return out
+}
+
 // agentListResponse is the envelope for GET /api/v1/agents.
 type agentListResponse struct {
 	Agents     []agentResponse `json:"agents"`
@@ -368,8 +440,20 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		Roles:                 a.Roles,
 		RoleSource:            agentRoleSourceCertificate,
 		RelayCapabilities:     agentRelayCapabilities(a.Roles),
+		ReportedCapabilities:  agentReportedCapabilities(a),
+		CapabilitySource:      agentCapabilitySourceServerCensus,
 		WorkloadAPI:           agentWorkloadAPIFor(a),
 		EnrollmentProxy:       agentEnrollmentProxyFor(a),
+	}
+	if out.ReportedCapabilities != nil {
+		out.CapabilitySource = agentCapabilitySourceReported
+		reported := a.ExecutorsReportedAt.UTC().Format(time.RFC3339)
+		out.CapabilitiesReportedAt = &reported
+		var census struct {
+			Version string `json:"version"`
+		}
+		_ = json.Unmarshal(a.Executors, &census)
+		out.ReportedExecutorVersion = census.Version
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}

@@ -2000,6 +2000,77 @@ type AgentHeartbeat struct {
 	// RevocationCaches is present only on v3 events after the server verified
 	// the report against the exact mTLS peer certificate and freshness window.
 	RevocationCaches *AgentRevocationCachePosture `json:"revocation_caches,omitempty"`
+	// Executors is present only on v4 events: the enrolled binary's own
+	// executor census (A62), bounded by the server before it is recorded.
+	Executors *AgentExecutorCensus `json:"executors,omitempty"`
+}
+
+// AgentExecutorCensus is what one agent process says it ships and has enabled.
+// It is a self-report over the authenticated channel, read by the console and
+// authorizing nothing; the certificate role and the server census still gate
+// every claim.
+type AgentExecutorCensus struct {
+	Version string              `json:"version"`
+	Kinds   []AgentExecutorKind `json:"kinds"`
+}
+
+// AgentExecutorKind is one job kind in an agent's self-reported census.
+type AgentExecutorKind struct {
+	Kind         string   `json:"kind"`
+	Connectors   []string `json:"connectors,omitempty"`
+	MissingFlags []string `json:"missing_flags,omitempty"`
+}
+
+// AgentHeartbeatExecutorCensusSchemaVersion adds the enrolled binary's own
+// executor census (A62). Plugin census and cache posture stay independently
+// optional, as on v3.
+const AgentHeartbeatExecutorCensusSchemaVersion = 4
+
+// Bounds on a self-reported executor census: a census is a short list of
+// kinds and families, and the heartbeat is not a channel for anything bigger.
+const (
+	maxAgentExecutorKinds      = 64
+	maxAgentExecutorConnectors = 64
+	maxAgentExecutorFlags      = 16
+	maxAgentExecutorName       = 128
+)
+
+// validateAgentHeartbeatExecutors binds the executor census to the schema
+// version that introduced it and bounds its size.
+func validateAgentHeartbeatExecutors(schemaVersion int, heartbeat AgentHeartbeat) error {
+	report := heartbeat.Executors
+	switch schemaVersion {
+	case events.DefaultSchemaVersion, AgentHeartbeatPluginCensusSchemaVersion, AgentHeartbeatRevocationCacheSchemaVersion:
+		if report != nil {
+			return fmt.Errorf("projections: agent.heartbeat v%d cannot carry an executor census", schemaVersion)
+		}
+		return nil
+	case AgentHeartbeatExecutorCensusSchemaVersion:
+		if report == nil {
+			return errors.New("projections: agent.heartbeat v4 requires an executor census")
+		}
+	default:
+		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
+	}
+	if len(report.Version) > maxAgentExecutorName || len(report.Kinds) > maxAgentExecutorKinds {
+		return errors.New("projections: agent executor census exceeds its bounds")
+	}
+	seen := make(map[string]bool, len(report.Kinds))
+	for _, kind := range report.Kinds {
+		if strings.TrimSpace(kind.Kind) == "" || len(kind.Kind) > maxAgentExecutorName || seen[kind.Kind] {
+			return errors.New("projections: agent executor census names an empty, oversized or repeated kind")
+		}
+		seen[kind.Kind] = true
+		if len(kind.Connectors) > maxAgentExecutorConnectors || len(kind.MissingFlags) > maxAgentExecutorFlags {
+			return errors.New("projections: agent executor census exceeds its bounds")
+		}
+		for _, name := range append(append([]string(nil), kind.Connectors...), kind.MissingFlags...) {
+			if strings.TrimSpace(name) == "" || len(name) > maxAgentExecutorName {
+				return errors.New("projections: agent executor census carries an empty or oversized name")
+			}
+		}
+	}
+	return nil
 }
 
 // AgentHeartbeatPluginCensusSchemaVersion adds signed relay-plugin metadata to
@@ -2042,10 +2113,11 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
 		}
-	case AgentHeartbeatRevocationCacheSchemaVersion:
-		// A v3 heartbeat is introduced by revocation-cache posture. Plugin census
-		// remains independently optional so a compatible relay need not invent a
-		// plugin report merely to publish cache state.
+	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion:
+		// A v3 heartbeat is introduced by revocation-cache posture and a v4 by
+		// the executor census. Plugin census remains independently optional so
+		// a compatible relay need not invent a plugin report merely to publish
+		// other state.
 		if report == nil {
 			return nil
 		}
@@ -2080,6 +2152,12 @@ func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, 
 	case AgentHeartbeatRevocationCacheSchemaVersion:
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v3 requires revocation cache posture")
+		}
+	case AgentHeartbeatExecutorCensusSchemaVersion:
+		// A v4 heartbeat is introduced by the executor census; cache posture
+		// stays independently optional.
+		if report == nil {
+			return nil
 		}
 	default:
 		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
@@ -4085,7 +4163,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true},
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
@@ -5385,6 +5463,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := validateAgentHeartbeatRevocationCaches(schemaVersionOf(e), e.TenantID, pl); err != nil {
 			return err
 		}
+		if err := validateAgentHeartbeatExecutors(schemaVersionOf(e), pl); err != nil {
+			return err
+		}
 		lastSeen := e.Time
 		row := store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
@@ -5423,6 +5504,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			row.RelayPluginsSignerFingerprint = report.SignerFingerprint
 			reported := time.Unix(report.IssuedAtUnix, 0).UTC()
 			row.RelayPluginsReportedAt = &reported
+		}
+		if report := pl.Executors; report != nil {
+			encoded, err := json.Marshal(report)
+			if err != nil {
+				return err
+			}
+			row.Executors = encoded
+			reported := e.Time
+			row.ExecutorsReportedAt = &reported
 		}
 		if report := pl.RevocationCaches; report != nil {
 			row.RevocationCaches = report.Entries

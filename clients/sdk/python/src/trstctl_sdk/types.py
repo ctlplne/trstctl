@@ -1212,6 +1212,8 @@ ActiveActiveIssuancePlan = TypedDict(
 Agent = TypedDict(
     'Agent',
     {
+        'capabilities_reported_at': str,
+        'capability_source': str,
         'discovery_capabilities': list[dict[str, Any]],
         'enrollment_proxy': dict[str, Any],
         'id': str,
@@ -1223,6 +1225,8 @@ Agent = TypedDict(
         'offboarded_by': str,
         'presence': dict[str, Any],
         'relay_capabilities': list[dict[str, Any]],
+        'reported_capabilities': list[dict[str, Any]],
+        'reported_executor_version': str,
         'role_source': str,
         'roles': list[str],
         'status': str,
@@ -1379,6 +1383,17 @@ AgentRelayCapability = TypedDict(
         'connectors': list[str],
         'enable_flags': list[str],
         'kind': str,
+    },
+    total=False,
+)
+
+AgentReportedCapability = TypedDict(
+    'AgentReportedCapability',
+    {
+        'connectors': list[str],
+        'enabled': bool,
+        'kind': str,
+        'missing_flags': list[str],
     },
     total=False,
 )

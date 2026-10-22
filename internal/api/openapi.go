@@ -5418,9 +5418,16 @@ func componentSchemas() map[string]*Schema {
 		// A3: what a relay build executes, derived from the agent's shipped
 		// census so the console cannot advertise an executor the binary lacks.
 		"relay_capabilities": {Type: "array", Items: ref("AgentRelayCapability")},
-		"workload_api":       ref("AgentWorkloadAPIStatus"),
-		"enrollment_proxy":   ref("AgentEnrollmentProxyStatus"),
-	}, "id", "name", "status", "presence", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "workload_api", "enrollment_proxy")
+		// A62: what the enrolled binary itself reported on its newest
+		// heartbeat, role-filtered the same way; capability_source says which
+		// list describes this agent.
+		"reported_capabilities":     {Type: "array", Items: ref("AgentReportedCapability")},
+		"capability_source":         {Type: "string", Enum: []string{"reported", "server_census"}},
+		"capabilities_reported_at":  timestamp(),
+		"reported_executor_version": str(),
+		"workload_api":              ref("AgentWorkloadAPIStatus"),
+		"enrollment_proxy":          ref("AgentEnrollmentProxyStatus"),
+	}, "id", "name", "status", "presence", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "capability_source", "workload_api", "enrollment_proxy")
 	// B3: whether this host serves the SPIFFE Workload API for its own workloads.
 	agentWorkloadAPIStatus := object(map[string]*Schema{
 		"state":        {Type: "string", Enum: []string{"serving", "not_serving", "unreported"}},
@@ -5448,6 +5455,12 @@ func componentSchemas() map[string]*Schema {
 		"connectors":   {Type: "array", Items: str()},
 		"enable_flags": {Type: "array", Items: str()},
 	}, "kind", "connectors")
+	agentReportedCapability := object(map[string]*Schema{
+		"kind":          str(),
+		"connectors":    {Type: "array", Items: str()},
+		"missing_flags": {Type: "array", Items: str()},
+		"enabled":       {Type: "boolean"},
+	}, "kind", "connectors", "missing_flags", "enabled")
 	agentList := object(map[string]*Schema{
 		"agents":      {Type: "array", Items: ref("Agent")},
 		"next_cursor": str(),
@@ -6681,6 +6694,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentWorkloadAPIStatus":                   agentWorkloadAPIStatus,
 		"AgentEnrollmentProxyStatus":               agentEnrollmentProxyStatus,
 		"AgentRelayCapability":                     agentRelayCapability,
+		"AgentReportedCapability":                  agentReportedCapability,
 		"AgentList":                                agentList,
 		"EnrollmentTokenRequest":                   enrollmentTokenReq,
 		"EnrollmentToken":                          enrollmentToken,

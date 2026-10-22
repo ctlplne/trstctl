@@ -527,6 +527,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/revocation_caches/signature", opaque),
 		privacyRule("/revocation_caches/statement", opaque),
 		privacyRule("/revocation_caches/signer_fingerprint", opaque),
+		privacyRule("/executors/version", opaque),
+		privacyRule("/executors/kinds/*/kind", opaque),
+		privacyRule("/executors/kinds/*/connectors/*", opaque),
+		privacyRule("/executors/kinds/*/missing_flags/*", opaque),
 	)
 	agentCertRenewed := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
@@ -900,6 +904,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAgentHeartbeat, 1}:                                          agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:    agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}: agentHeartbeat,
+		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:  agentHeartbeat,
 		{EventAgentCertRenewed, 1}:                                        agentCertRenewed,
 		{EventAgentCertRevoked, 1}:                                        agentCertRevoked,
 		{EventAgentOffboarded, 1}:                                         agentOffboarded,
@@ -1594,6 +1599,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAgentHeartbeat, 1}:                                          privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:    privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}: privacyPayloadShape[AgentHeartbeat](),
+		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:  privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentCertRenewed, 1}:                                        privacyPayloadShape[AgentCertRenewed](),
 		{EventAgentCertRevoked, 1}:                                        privacyPayloadShape[AgentCertRevoked](),
 		{EventAgentOffboarded, 1}:                                         privacyPayloadShape[AgentOffboarded](),

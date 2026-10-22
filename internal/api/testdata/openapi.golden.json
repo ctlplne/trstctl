@@ -3660,6 +3660,17 @@
       },
       "Agent": {
         "properties": {
+          "capabilities_reported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "capability_source": {
+            "enum": [
+              "reported",
+              "server_census"
+            ],
+            "type": "string"
+          },
           "discovery_capabilities": {
             "items": {
               "$ref": "#/components/schemas/AgentDiscoveryCapability"
@@ -3702,6 +3713,15 @@
             },
             "type": "array"
           },
+          "reported_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/AgentReportedCapability"
+            },
+            "type": "array"
+          },
+          "reported_executor_version": {
+            "type": "string"
+          },
           "role_source": {
             "enum": [
               "certificate",
@@ -3739,6 +3759,7 @@
           "roles",
           "role_source",
           "relay_capabilities",
+          "capability_source",
           "workload_api",
           "enrollment_proxy"
         ],
@@ -4088,6 +4109,35 @@
         "required": [
           "kind",
           "connectors"
+        ],
+        "type": "object"
+      },
+      "AgentReportedCapability": {
+        "properties": {
+          "connectors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "missing_flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "connectors",
+          "missing_flags",
+          "enabled"
         ],
         "type": "object"
       },

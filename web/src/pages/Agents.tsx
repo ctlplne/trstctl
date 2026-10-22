@@ -945,6 +945,41 @@ function AgentDetail({ agent }: { agent: Agent }) {
           </dd>
           {agent.roles?.some((role) => role === "host" || role === "network") ? (
             <>
+              <dt className="font-medium text-muted-foreground">{t("agents.executors.reportedHeading")}</dt>
+              <dd>
+                {agent.capability_source === "reported" && agent.reported_capabilities ? (
+                  <>
+                    <span className="block text-xs text-muted-foreground">
+                      {t("agents.executors.reportedBy", {
+                        version: agent.reported_executor_version || agent.version || "?",
+                        at: agent.capabilities_reported_at ? formatAgentTime(agent.capabilities_reported_at) : "?",
+                      })}
+                    </span>
+                    {agent.reported_capabilities.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">{t("agents.executors.reportedNone")}</span>
+                    ) : (
+                      <ul className="grid gap-1">
+                        {agent.reported_capabilities.map((capability) => (
+                          <li key={"reported-" + capability.kind}>
+                            <span className="font-mono text-xs">{capability.kind}</span>{" "}
+                            <span className={capability.enabled ? "text-xs text-status-success" : "text-xs text-status-warning"}>
+                              {capability.enabled ? t("agents.executors.enabled") : t("agents.executors.disabled")}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">{(capability.connectors ?? []).join(", ")}</span>
+                            {(capability.missing_flags ?? []).length > 0 ? (
+                              <span className="block text-xs text-status-warning">
+                                {t("agents.executors.missingFlags")} <span className="font-mono">{(capability.missing_flags ?? []).join(" ")}</span>
+                              </span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{t("agents.executors.notReported")}</span>
+                )}
+              </dd>
               <dt className="font-medium text-muted-foreground">{translateNow("source.relay.executes.a3rel0001")}</dt>
               <dd>
                 {(agent.relay_capabilities ?? []).length === 0 ? (

@@ -8570,6 +8570,10 @@ export interface components {
             write_model: string;
         };
         Agent: {
+            /** Format: date-time */
+            capabilities_reported_at?: string;
+            /** @enum {string} */
+            capability_source: "reported" | "server_census";
             discovery_capabilities: components["schemas"]["AgentDiscoveryCapability"][];
             enrollment_proxy: components["schemas"]["AgentEnrollmentProxyStatus"];
             /** Format: uuid */
@@ -8584,6 +8588,8 @@ export interface components {
             offboarded_by?: string;
             presence: components["schemas"]["AgentPresence"];
             relay_capabilities: components["schemas"]["AgentRelayCapability"][];
+            reported_capabilities?: components["schemas"]["AgentReportedCapability"][];
+            reported_executor_version?: string;
             /** @enum {string} */
             role_source: "certificate" | "unreported";
             roles: ("host" | "network")[];
@@ -8687,6 +8693,12 @@ export interface components {
             connectors: string[];
             enable_flags?: string[];
             kind: string;
+        };
+        AgentReportedCapability: {
+            connectors: string[];
+            enabled: boolean;
+            kind: string;
+            missing_flags: string[];
         };
         AgentRingInput: {
             /** Format: uuid */

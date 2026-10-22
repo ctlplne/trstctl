@@ -679,6 +679,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		enrollmentProxy:    reportEnrollmentProxy,
 		revocationCaches:   reportRevocationCaches,
 		revocationIssuedAt: &atomic.Int64{},
+		executors:          func() *transport.ExecutorReport { return executorCensus(o) },
 	}
 	if agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		ch.pluginIdentity = a.Identity()
@@ -1346,6 +1347,32 @@ type channelAdapter struct {
 	// revocationIssuedAt makes signed evidence strictly newer across immediate
 	// reconnects even when the wall clock has only one-second wire precision.
 	revocationIssuedAt *atomic.Int64
+	// executors reports this binary's own executor census (A62).
+	executors func() *transport.ExecutorReport
+}
+
+// executorCensus is what THIS binary ships and which enabling flags this
+// process was started without, so the console can show the enrolled binary's
+// own executor list rather than the server build's. It authorizes nothing.
+func executorCensus(o agentOptions) *transport.ExecutorReport {
+	set := map[string]bool{
+		"--relay-claim":       o.relayClaim,
+		"--host-exec-profile": o.hostExecProfile != "",
+		"--host-rollback-dir": o.hostRollbackDir != "",
+	}
+	report := &transport.ExecutorReport{Version: buildinfo.Version(), Kinds: []transport.ExecutorKind{}}
+	for _, kind := range relay.ShippedJobKinds() {
+		missing := []string{}
+		for _, flag := range kind.Flags {
+			if enabled, known := set[flag]; known && !enabled {
+				missing = append(missing, flag)
+			}
+		}
+		report.Kinds = append(report.Kinds, transport.ExecutorKind{
+			Kind: kind.Kind, Connectors: append([]string(nil), kind.Connectors...), MissingFlags: missing,
+		})
+	}
+	return report
 }
 
 func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
@@ -1355,6 +1382,9 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 	}
 	if a.enrollmentProxy != nil {
 		wire.EnrollmentProxy = a.enrollmentProxy()
+	}
+	if a.executors != nil {
+		wire.Executors = a.executors()
 	}
 	if a.pluginCensus != nil {
 		if a.pluginIdentity == nil {

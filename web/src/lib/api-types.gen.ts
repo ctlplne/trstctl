@@ -888,6 +888,8 @@ export interface ActiveActiveIssuancePlan {
 }
 
 export interface Agent {
+  capabilities_reported_at?: string;
+  capability_source: "reported" | "server_census";
   discovery_capabilities: AgentDiscoveryCapability[];
   enrollment_proxy: AgentEnrollmentProxyStatus;
   id: string;
@@ -899,6 +901,8 @@ export interface Agent {
   offboarded_by?: string;
   presence: AgentPresence;
   relay_capabilities: AgentRelayCapability[];
+  reported_capabilities?: AgentReportedCapability[];
+  reported_executor_version?: string;
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
   status: string;
@@ -1003,6 +1007,13 @@ export interface AgentRelayCapability {
   connectors: string[];
   enable_flags?: string[];
   kind: string;
+}
+
+export interface AgentReportedCapability {
+  connectors: string[];
+  enabled: boolean;
+  kind: string;
+  missing_flags: string[];
 }
 
 export interface AgentRingInput {

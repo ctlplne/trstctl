@@ -103,6 +103,32 @@ type HeartbeatRequest struct {
 	// RevocationCaches is signed metadata for every local CRL/OCSP cache this
 	// relay serves. Cached protocol bytes and upstream URLs stay in the segment.
 	RevocationCaches *revcacheposture.Report `json:"revocation_caches,omitempty"`
+	// Executors is this exact binary's own executor census (A62): the job
+	// kinds and connector families it ships, and which of their enabling
+	// flags this process was started with. Nil means an older agent cannot
+	// report it. Nothing is authorized from it: the certificate role still
+	// gates every claim, and the server still applies its own kind census.
+	// It exists so the console can show what the enrolled binary carries
+	// rather than what this server build would carry.
+	Executors *ExecutorReport `json:"executors,omitempty"`
+}
+
+// ExecutorReport is one agent process's executor census.
+type ExecutorReport struct {
+	// Version is the agent build version the census belongs to.
+	Version string `json:"version"`
+	// Kinds are the job kinds this binary ships, with the connectors it
+	// carries for each and the enabling flags this process lacks.
+	Kinds []ExecutorKind `json:"kinds"`
+}
+
+// ExecutorKind is one shipped job kind as the binary itself reports it.
+type ExecutorKind struct {
+	Kind       string   `json:"kind"`
+	Connectors []string `json:"connectors,omitempty"`
+	// MissingFlags are the enabling flags this process was NOT started with;
+	// a kind with none is live on this process as far as the binary knows.
+	MissingFlags []string `json:"missing_flags,omitempty"`
 }
 
 // EnrollmentProxyReport is metadata-only evidence from one relay process.

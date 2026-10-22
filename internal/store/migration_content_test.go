@@ -1089,6 +1089,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	254: true, // TestMigrationDataContentBackfills/0254_pam_revocation_failure_starts_unknown
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
+	296: true, // TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus
 	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
@@ -1632,6 +1633,53 @@ func TestMigration0176RetiresOnlyCursorlessCMDBJobsAUD46(t *testing.T) {
 	}
 	if sweepID != "" || complete {
 		t.Fatalf("migrated schedule checkpoint = sweep %q complete=%t, want a fresh named sweep on the next tick", sweepID, complete)
+	}
+}
+
+// A62: an agent enrolled before the executor census exists gains an empty
+// census and no reported_at, which the API reads as "never reported" rather
+// than as an invented empty report.
+func TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 296)
+	if target.noTx || target.name != "0296_agent_executor_census.sql" {
+		t.Fatalf("migration 0296 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	agentID := uuid(tenantA, 29601)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+		VALUES ($1, $2, 'agent-before-0296', 'active', '1.0.0', now())`, agentID, tenantA); err != nil {
+		t.Fatalf("seed pre-0296 agent: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	var executors, name, version string
+	var reportedAt sql.NullTime
+	if err := pool.QueryRow(ctx, `
+		SELECT executors::text, executors_reported_at, name, version
+		  FROM agents WHERE tenant_id=$1 AND id=$2`, tenantA, agentID).
+		Scan(&executors, &reportedAt, &name, &version); err != nil {
+		t.Fatal(err)
+	}
+	if executors != "{}" || reportedAt.Valid || name != "agent-before-0296" || version != "1.0.0" {
+		t.Fatalf("legacy agent after 0296 = executors=%s reported_at=%v name=%q version=%q", executors, reportedAt, name, version)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE agents SET executors='[]'::jsonb WHERE tenant_id=$1 AND id=$2`, tenantA, agentID); err == nil {
+		t.Fatal("0296 accepted a non-object executor census")
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE agents SET executors='{"version":"2.0","kinds":[]}'::jsonb, executors_reported_at=now()
+		 WHERE tenant_id=$1 AND id=$2`, tenantA, agentID); err != nil {
+		t.Fatalf("0296 refused a reported census: %v", err)
 	}
 }
 

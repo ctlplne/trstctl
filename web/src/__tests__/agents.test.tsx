@@ -253,6 +253,63 @@ describe("agent fleet surface", () => {
     expect(screen.queryByText("discovery.run")).not.toBeInTheDocument();
   });
 
+  it("shows the executor census the enrolled binary reported beside the server census", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "relay-agent-1",
+        name: "segment-relay",
+        status: "active",
+        version: "relay-0.9.1",
+        roles: ["network"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-06T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [{ kind: "connector.deploy", connectors: ["f5", "kemp"], enable_flags: ["--relay-claim"] }],
+        capability_source: "reported",
+        capabilities_reported_at: "2026-10-06T06:59:00Z",
+        reported_executor_version: "relay-0.9.1",
+        reported_capabilities: [
+          { kind: "connector.deploy", connectors: ["f5", "kemp", "future-appliance"], missing_flags: ["--relay-claim"], enabled: false },
+          { kind: "revocation.probe", connectors: [], missing_flags: [], enabled: true },
+        ],
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "segment-relay" });
+    expect(screen.getByText("Executors reported by the enrolled binary")).toBeInTheDocument();
+    expect(screen.getByText(/Reported by agent build relay-0\.9\.1/)).toBeInTheDocument();
+    expect(screen.getByText("future-appliance", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("not enabled on this process")).toBeInTheDocument();
+    expect(screen.getByText("enabled on this process")).toBeInTheDocument();
+    // The flag appears once as a missing flag in the reported list and once
+    // as a required flag in the server census below it.
+    expect(screen.getAllByText("--relay-claim", { exact: false, selector: ".font-mono" }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Agent job capabilities")).toBeInTheDocument();
+  });
+
+  it("says when an agent has not reported its own executors", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "old-agent-1",
+        name: "old-host",
+        status: "active",
+        roles: ["host"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-06T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [{ kind: "connector.deploy", connectors: ["nginx"], enable_flags: ["--relay-claim", "--host-exec-profile"] }],
+        capability_source: "server_census",
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "old-host" });
+    expect(screen.getByText(/has not reported its own executors/)).toBeInTheDocument();
+  });
+
   it("renders heartbeat, service, and queue evidence in the selected console time zone", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {

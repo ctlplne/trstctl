@@ -13923,6 +13923,34 @@ export const messages = {
     defaultMessage: "Secret",
     description: "Global search result kind label.",
   },
+  "agents.executors.reportedHeading": {
+    defaultMessage: "Executors reported by the enrolled binary",
+    description: "A62: heading for the agent's self-reported executor census on the Agents detail pane.",
+  },
+  "agents.executors.reportedBy": {
+    defaultMessage: "Reported by agent build {version} at {at}. Certificate roles still decide what it may claim.",
+    description: "A62: provenance line under the self-reported executor census.",
+  },
+  "agents.executors.reportedNone": {
+    defaultMessage: "The enrolled binary reports no job kind for this agent's certificate roles.",
+    description: "A62: empty self-reported executor census.",
+  },
+  "agents.executors.notReported": {
+    defaultMessage: "This agent has not reported its own executors (an older agent build); the list below is this server build's census.",
+    description: "A62: shown when an agent predates the executor census report.",
+  },
+  "agents.executors.enabled": {
+    defaultMessage: "enabled on this process",
+    description: "A62: a self-reported job kind whose enabling flags are all set.",
+  },
+  "agents.executors.disabled": {
+    defaultMessage: "not enabled on this process",
+    description: "A62: a self-reported job kind missing at least one enabling flag.",
+  },
+  "agents.executors.missingFlags": {
+    defaultMessage: "Missing flags:",
+    description: "A62: prefix before the enabling flags a self-reported job kind lacks.",
+  },
   "agents.endpointDiscovery.heading": {
     defaultMessage: "Endpoint discovery",
     description: "Heading for the served endpoint discovery capability panel on an agent detail view.",
