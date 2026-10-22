@@ -2628,7 +2628,13 @@ than sending an operator looking for a credential that was never there.
   that would execute. Both paths also preflight each exact TLS deployment
   target; an Envoy host-agent target requires an enrolled, assigned host,
   co-resident management endpoint, and loopback served-listener binding. A TLS
-  finding without an explicit operator target binding returns HTTP 400.
+  finding without an explicit operator target binding returns HTTP 400. An
+  ML-DSA host-csr re-issue is refused by the host agent's name when that
+  agent's executor census reports no `tls_probe_openssl` in its host
+  execution profile (the native probe the agent needs to verify a served
+  ML-DSA leaf; `reported_host_tls_probe` on the agent), so the run is not
+  queued only to fail fifteen attempts; an agent that reports no census is
+  admitted, and its own refusal phrase then names the cause in the finding.
 - Signing history is verifiable after the fact: `GET
   /api/v1/code-signing/identities` (and `trstctl-cli code-signing identities`)
   lists recent signing operations with their identity kind (`managed` for a

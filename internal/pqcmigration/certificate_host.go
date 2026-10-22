@@ -79,7 +79,8 @@ func (h HostAgentHooks) RecordCertificateResult(ctx context.Context, tenantID, a
 	}
 	if req.Outcome != transport.JobOutcomeVerified {
 		return h.appendHostReceiptEvent(ctx, tenantID, intent.PQCRunID, intent.PQCAssetID+":issue",
-			EventCertificateFindingFailed, CertificateFindingFailure{RunID: intent.PQCRunID, AssetID: intent.PQCAssetID, Operation: "issue"})
+			EventCertificateFindingFailed, CertificateFindingFailure{RunID: intent.PQCRunID, AssetID: intent.PQCAssetID, Operation: "issue",
+				Detail: closedHostRenewalRefusal(req.Detail)})
 	}
 	if req.CredentialFingerprint == "" || req.Custody == nil || statement == "" || len(req.Signature) == 0 || signerFingerprint == "" {
 		return errors.New("pqcmigration: verified certificate result lacks signed custody evidence")
@@ -242,4 +243,15 @@ func sameCertificateFingerprint(a, b string) bool {
 	a = strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(strings.TrimSpace(a), "sha256:"), ":", ""))
 	b = strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(strings.TrimSpace(b), "sha256:"), ":", ""))
 	return len(a) == 64 && a == b
+}
+
+// closedHostRenewalRefusal returns the agent's detail only when it is a
+// closed refusal phrase the control plane names; anything else stays out of
+// the finding, since an agent's free text is never recorded (A3).
+func closedHostRenewalRefusal(detail string) string {
+	switch strings.TrimSpace(detail) {
+	case transport.RenewRefusedNoPQCProbe:
+		return transport.RenewRefusedNoPQCProbe
+	}
+	return ""
 }

@@ -19,6 +19,9 @@ type CertificateFindingFailure struct {
 	RunID     string `json:"run_id"`
 	AssetID   string `json:"asset_id"`
 	Operation string `json:"operation"`
+	// Detail is the host agent's closed refusal phrase when its failed
+	// receipt carried one the control plane names (B6-1); never free text.
+	Detail string `json:"detail,omitempty"`
 }
 
 func init() {
@@ -27,6 +30,7 @@ func init() {
 			{Path: "/run_id", Mode: events.PrivacyFieldOpaqueExact},
 			{Path: "/asset_id", Mode: events.PrivacyFieldOpaqueExact},
 			{Path: "/operation", Mode: events.PrivacyFieldOpaqueExact},
+			{Path: "/detail", Mode: events.PrivacyFieldFreeTextClear},
 		},
 		PayloadShape: events.PrivacyPayloadShapeOf[CertificateFindingFailure](), RejectSubjectData: true,
 	}); err != nil {
@@ -87,6 +91,9 @@ func (p *ProgressProjection) applyCertificateFailure(ev eventspec.Event, failed 
 		status, reason = TLSFindingRollbackFailed, "Certificate rollback attempts exhausted"
 	} else if failed.Operation != "issue" {
 		return errors.New("pqcmigration: unsupported certificate failure operation")
+	}
+	if detail := strings.TrimSpace(failed.Detail); detail != "" {
+		reason += ": " + detail
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()

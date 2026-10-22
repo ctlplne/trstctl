@@ -245,6 +245,11 @@ const (
 // no fingerprint-named predecessor existed and the re-bind went to the object
 // installed under the target-derived name from before fingerprint naming
 // (A45). Its contents were not re-read; the listener must be verified.
+// RenewRefusedNoPQCProbe is the closed phrase a host agent reports when an
+// ML-DSA host migration reaches it without tls_probe_openssl in its exec
+// profile (B6-1); the control plane carries it into the migration finding.
+const RenewRefusedNoPQCProbe = "PQC host migration requires tls_probe_openssl in the host execution profile before deployment"
+
 const RollbackExecutedLegacyObject = "re-bound to the legacy target-named object; its contents were not re-read"
 
 // Right-size refusals and failures (A64) follow the same contact discipline:

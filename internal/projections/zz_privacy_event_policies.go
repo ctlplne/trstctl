@@ -538,6 +538,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/executors/kinds/*/kind", opaque),
 		privacyRule("/executors/kinds/*/connectors/*", opaque),
 		privacyRule("/executors/kinds/*/missing_flags/*", opaque),
+		privacyRule("/executors/host_tls_probe", opaque),
 	)
 	agentCertRenewed := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),

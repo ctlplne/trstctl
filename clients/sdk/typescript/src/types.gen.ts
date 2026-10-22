@@ -8627,6 +8627,7 @@ export interface components {
             relay_capabilities: components["schemas"]["AgentRelayCapability"][];
             reported_capabilities?: components["schemas"]["AgentReportedCapability"][];
             reported_executor_version?: string;
+            reported_host_tls_probe?: boolean;
             /** @enum {string} */
             role_source: "certificate" | "unreported";
             roles: ("host" | "network")[];

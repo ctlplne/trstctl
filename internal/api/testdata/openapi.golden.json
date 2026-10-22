@@ -3734,6 +3734,9 @@
           "reported_executor_version": {
             "type": "string"
           },
+          "reported_host_tls_probe": {
+            "type": "boolean"
+          },
           "role_source": {
             "enum": [
               "certificate",

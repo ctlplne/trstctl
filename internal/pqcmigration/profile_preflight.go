@@ -88,6 +88,9 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		if agentID == "" {
 			return nil, api.ErrStatus(http.StatusConflict, "PQC certificate target has no enrolled host agent")
 		}
+		if err := s.requireHostTLSProbeForMLDSA(ctx, tenantID, agentID, reissue.TargetAlgorithm, identity.Name); err != nil {
+			return nil, err
+		}
 		if _, err := s.store.GetOwner(ctx, tenantID, identity.OwnerID); err != nil {
 			return nil, err
 		}
@@ -152,4 +155,32 @@ func validatePQCReissueProfile(selected profile.CertificateProfile, asset Asset,
 		KeyAlgorithm: algorithm, RequestedEKUs: selected.AllowedEKUs,
 		TTL: ttl, DNSNames: []string{dnsName}, Protocol: "api",
 	})
+}
+
+// requireHostTLSProbeForMLDSA refuses an ML-DSA host migration whose bound
+// host agent reports, in its executor census, that its exec profile pins no
+// tls_probe_openssl (B6-1): the agent would refuse every attempt on arrival,
+// and the run would end "attempts exhausted" after fifteen of them. An agent
+// that has reported no census (an older build) is not refused here; its own
+// refusal still carries the same phrase into the finding.
+func (s *pqcMigrationService) requireHostTLSProbeForMLDSA(ctx context.Context, tenantID, agentID, algorithm, identityName string) error {
+	if !IsMLDSATarget(algorithm) {
+		return nil
+	}
+	agent, err := s.store.GetAgent(ctx, tenantID, agentID)
+	if err != nil {
+		return err
+	}
+	if agent.ExecutorsReportedAt == nil || len(agent.Executors) == 0 {
+		return nil
+	}
+	var census struct {
+		HostTLSProbe bool `json:"host_tls_probe"`
+	}
+	if json.Unmarshal(agent.Executors, &census) != nil || census.HostTLSProbe {
+		return nil
+	}
+	return api.ErrStatus(http.StatusConflict, fmt.Sprintf(
+		"PQC host migration of %s to %s needs host agent %s to pin tls_probe_openssl in its host execution profile; it reports none. Add the native probe and restart the agent before starting",
+		identityName, algorithm, agent.Name))
 }

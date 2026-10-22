@@ -5464,6 +5464,7 @@ func componentSchemas() map[string]*Schema {
 		"capability_source":         {Type: "string", Enum: []string{"reported", "server_census"}},
 		"capabilities_reported_at":  timestamp(),
 		"reported_executor_version": str(),
+		"reported_host_tls_probe":   {Type: "boolean"},
 		// A66/A67: the jobs this agent holds under an unexpired lease and the
 		// per-agent quota (0 = none) the channel enforces on new claims.
 		"live_claims":         {Type: "array", Items: ref("AgentLiveClaim")},

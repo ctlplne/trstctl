@@ -125,6 +125,9 @@ type agentResponse struct {
 	CapabilitySource        string  `json:"capability_source"`
 	CapabilitiesReportedAt  *string `json:"capabilities_reported_at,omitempty"`
 	ReportedExecutorVersion string  `json:"reported_executor_version,omitempty"`
+	// ReportedHostTLSProbe says whether the binary's host exec profile pins
+	// tls_probe_openssl (B6-1); absent until the binary has reported a census.
+	ReportedHostTLSProbe *bool `json:"reported_host_tls_probe,omitempty"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	// LiveClaims are the jobs this agent holds under an unexpired lease (A67):
 	// job id, kind, attempt and lease expiry from the ledger, never a payload.
@@ -352,6 +355,21 @@ const (
 // agentReportedCapabilities decodes the binary's self-reported census and
 // filters it by the certificate roles, the way the server census is filtered,
 // so an operator sees one role-scoped answer from each source.
+// agentReportedHostTLSProbe reads the census's probe flag; nil until a
+// census was reported.
+func agentReportedHostTLSProbe(a store.Agent) *bool {
+	if a.ExecutorsReportedAt == nil || len(a.Executors) == 0 {
+		return nil
+	}
+	var census struct {
+		HostTLSProbe bool `json:"host_tls_probe"`
+	}
+	if err := json.Unmarshal(a.Executors, &census); err != nil {
+		return nil
+	}
+	return &census.HostTLSProbe
+}
+
 func agentReportedCapabilities(a store.Agent) []agentReportedCapabilityResponse {
 	if a.ExecutorsReportedAt == nil || len(a.Executors) == 0 {
 		return nil
@@ -463,6 +481,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		}
 		_ = json.Unmarshal(a.Executors, &census)
 		out.ReportedExecutorVersion = census.Version
+		out.ReportedHostTLSProbe = agentReportedHostTLSProbe(a)
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}

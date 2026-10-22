@@ -118,6 +118,20 @@ func TestServedPQCPlanAcceptsTheRequestedReplacementBesideTheIdentityItSucceeds(
 			"certificate_bindings": []map[string]string{{"asset_id": asset.ID, "identity_id": successorID, "target_id": targetID}},
 		})
 	}
+	// B6-1: the host agent's census says its exec profile pins no native TLS
+	// probe; an ML-DSA host migration is refused by name before any attempt
+	// is queued, and admitted once the binary reports the probe.
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "host-test", Status: "active",
+		Executors: &transport.ExecutorReport{Version: "host-test", HostTLSProbe: false, Kinds: []transport.ExecutorKind{{Kind: "endpoint.renew", Connectors: []string{"nginx"}}}}}); err != nil {
+		t.Fatalf("heartbeat without the probe: %v", err)
+	}
+	if status, body := plan(); status != http.StatusConflict || !strings.Contains(string(body), "pin tls_probe_openssl") || !strings.Contains(string(body), h.agent) {
+		t.Fatalf("plan with a host that reports no TLS probe: status %d body %s", status, body)
+	}
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "host-test", Status: "active",
+		Executors: &transport.ExecutorReport{Version: "host-test", HostTLSProbe: true, Kinds: []transport.ExecutorKind{{Kind: "endpoint.renew", Connectors: []string{"nginx"}}}}}); err != nil {
+		t.Fatalf("heartbeat with the probe: %v", err)
+	}
 	status, body := plan()
 	if status != http.StatusOK {
 		t.Fatalf("plan beside the identity it succeeds: status %d body %s", status, body)

@@ -106,8 +106,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	// or changing the listener; otherwise a real successful deploy is reported
 	// as failed and the original files may already have been replaced.
 	if intent.PQCRunID != "" && strings.HasPrefix(intent.SubjectKeyAlgorithm, "ML-DSA-") && profile.TLSProbeOpenSSL == "" {
-		report(ctx, ch, job, OutcomeFailed,
-			"PQC host migration requires tls_probe_openssl in the host execution profile before deployment")
+		report(ctx, ch, job, OutcomeFailed, transport.RenewRefusedNoPQCProbe)
 		return false
 	}
 

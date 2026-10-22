@@ -120,6 +120,11 @@ type ExecutorReport struct {
 	// Kinds are the job kinds this binary ships, with the connectors it
 	// carries for each and the enabling flags this process lacks.
 	Kinds []ExecutorKind `json:"kinds"`
+	// HostTLSProbe is true when this host's exec profile pins
+	// tls_probe_openssl, the native probe an ML-DSA host migration needs to
+	// verify the served leaf (B6-1). The control plane refuses such a
+	// migration to a host that reports none instead of queuing attempts.
+	HostTLSProbe bool `json:"host_tls_probe,omitempty"`
 }
 
 // ExecutorKind is one shipped job kind as the binary itself reports it.

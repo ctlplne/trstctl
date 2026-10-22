@@ -49,8 +49,8 @@ func TestServedAgentsReportTheEnrolledBinaryExecutorCensus(t *testing.T) {
 		t.Fatalf("plain heartbeat: %v", err)
 	}
 	agent := readAgent()
-	if agent["capability_source"] != "server_census" || agent["reported_capabilities"] != nil {
-		t.Fatalf("agent without a report = source %v reported %v, want server_census and no reported list", agent["capability_source"], agent["reported_capabilities"])
+	if agent["capability_source"] != "server_census" || agent["reported_capabilities"] != nil || agent["reported_host_tls_probe"] != nil {
+		t.Fatalf("agent without a report = source %v reported %v probe %v, want server_census, no reported list and no probe answer", agent["capability_source"], agent["reported_capabilities"], agent["reported_host_tls_probe"])
 	}
 
 	// The binary's own census: a network relay started without --relay-claim,
@@ -58,7 +58,7 @@ func TestServedAgentsReportTheEnrolledBinaryExecutorCensus(t *testing.T) {
 	// connector.deploy, plus a host-only kind its certificate role filters out.
 	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{
 		AgentID: h.agent, Version: "relay-0.9.1", Status: "active",
-		Executors: &transport.ExecutorReport{Version: "relay-0.9.1", Kinds: []transport.ExecutorKind{
+		Executors: &transport.ExecutorReport{Version: "relay-0.9.1", HostTLSProbe: true, Kinds: []transport.ExecutorKind{
 			{Kind: "connector.deploy", Connectors: []string{"f5", "kemp", "nginx", "future-appliance"}, MissingFlags: []string{"--relay-claim"}},
 			{Kind: "revocation.probe"},
 			{Kind: "trust.distribute", MissingFlags: []string{"--relay-claim", "--host-exec-profile"}},
@@ -69,6 +69,11 @@ func TestServedAgentsReportTheEnrolledBinaryExecutorCensus(t *testing.T) {
 	agent = readAgent()
 	if agent["capability_source"] != "reported" || agent["reported_executor_version"] != "relay-0.9.1" || agent["capabilities_reported_at"] == nil {
 		t.Fatalf("agent with a report = %v", agent)
+	}
+	// B6-1: the census says whether the host profile pins the native TLS
+	// probe an ML-DSA host migration needs.
+	if agent["reported_host_tls_probe"] != true {
+		t.Fatalf("reported_host_tls_probe = %v, want true from the census", agent["reported_host_tls_probe"])
 	}
 	reported, _ := agent["reported_capabilities"].([]any)
 	byKind := map[string]map[string]any{}

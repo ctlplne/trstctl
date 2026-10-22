@@ -1361,13 +1361,24 @@ type channelAdapter struct {
 // executorCensus is what THIS binary ships and which enabling flags this
 // process was started without, so the console can show the enrolled binary's
 // own executor list rather than the server build's. It authorizes nothing.
+// hostProfilePinsTLSProbe reports whether this host's exec profile pins the
+// native TLS probe an ML-DSA host migration needs (B6-1). An unreadable
+// profile reports false; the relay loop refuses to start on it anyway.
+func hostProfilePinsTLSProbe(o agentOptions) bool {
+	if o.hostExecProfile == "" {
+		return false
+	}
+	loaded, err := relay.LoadHostProfile(o.hostExecProfile)
+	return err == nil && loaded.TLSProbeOpenSSL != ""
+}
+
 func executorCensus(o agentOptions) *transport.ExecutorReport {
 	set := map[string]bool{
 		"--relay-claim":       o.relayClaim,
 		"--host-exec-profile": o.hostExecProfile != "",
 		"--host-rollback-dir": o.hostRollbackDir != "",
 	}
-	report := &transport.ExecutorReport{Version: buildinfo.Version(), Kinds: []transport.ExecutorKind{}}
+	report := &transport.ExecutorReport{Version: buildinfo.Version(), Kinds: []transport.ExecutorKind{}, HostTLSProbe: hostProfilePinsTLSProbe(o)}
 	for _, kind := range relay.ShippedJobKinds() {
 		missing := []string{}
 		for _, flag := range kind.Flags {

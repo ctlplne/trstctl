@@ -2038,6 +2038,8 @@ type AgentHeartbeat struct {
 type AgentExecutorCensus struct {
 	Version string              `json:"version"`
 	Kinds   []AgentExecutorKind `json:"kinds"`
+	// HostTLSProbe: the host exec profile pins tls_probe_openssl (B6-1).
+	HostTLSProbe bool `json:"host_tls_probe,omitempty"`
 }
 
 // AgentExecutorKind is one job kind in an agent's self-reported census.

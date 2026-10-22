@@ -906,6 +906,7 @@ export interface Agent {
   relay_capabilities: AgentRelayCapability[];
   reported_capabilities?: AgentReportedCapability[];
   reported_executor_version?: string;
+  reported_host_tls_probe?: boolean;
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
   status: string;
