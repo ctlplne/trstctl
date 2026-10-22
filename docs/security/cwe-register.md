@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1615 annotated sites across 26 rules. Each row is
+1616 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -411,7 +411,7 @@ not this file.
 | `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 
-### G107 — CWE-88 Argument injection (variable URL request) (5 sites)
+### G107 — CWE-88 Argument injection (variable URL request) (6 sites)
 
 | Location | Reason |
 |---|---|
@@ -419,6 +419,7 @@ not this file.
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:53` | the served test harness URL |
 | `internal/server/ca_hierarchy_pqc_served_test.go:55` | the served test harness URL |
+| `internal/server/ca_hierarchy_pqc_served_test.go:166` | served test harness URL |
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 
 ### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (13 sites)

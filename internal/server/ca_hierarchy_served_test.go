@@ -643,8 +643,11 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if mintFacts != 1 {
 		t.Errorf("served hierarchy leaf has %d immutable mint facts, want 1 for the independently verified certificate", mintFacts)
 	}
-	if intents := exactRevocationOutboxCount(t, h); intents != 1 {
-		t.Fatalf("managed CA issuance has %d initial signed-CRL intents, want one", intents)
+	// B5-4: each signer-backed authority queued one publication at its creation
+	// (root, intermediate) so its responder exists before any leaf; the
+	// issuance adds exactly one more.
+	if intents := exactRevocationOutboxCount(t, h); intents != 3 {
+		t.Fatalf("managed CA creation and issuance queued %d signed-CRL intents, want three (two creations, one issuance)", intents)
 	}
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("publish initial managed CA CRL from the durable outbox: %v", err)
@@ -732,8 +735,8 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("publish managed CA revocation from the durable outbox: %v", err)
 	}
-	if count := exactRevocationOutboxCount(t, h); count != 2 {
-		t.Fatalf("managed CA initial and revoked publication intents = %d, want exactly two", count)
+	if count := exactRevocationOutboxCount(t, h); count != 4 {
+		t.Fatalf("managed CA creation, initial and revoked publication intents = %d, want exactly four", count)
 	}
 	response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + inter.ID)
 	if err != nil {

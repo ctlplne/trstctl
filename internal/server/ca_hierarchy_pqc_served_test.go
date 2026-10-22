@@ -150,6 +150,32 @@ func TestServedPostQuantumHierarchyBesideClassical(t *testing.T) {
 	if got := readAuthority(pqInter.ID); got.KeyAlgorithm != "ml-dsa-65" || got.ParentID == nil || *got.ParentID != pqRoot.ID {
 		t.Fatalf("post-quantum intermediate readback = %+v", got)
 	}
+	// B5-4: creating the authority queued its first publication; delivering it
+	// provisions the OCSP responder before any leaf exists, so the status
+	// endpoints answer honestly from the start: "not published yet" is a 404,
+	// never the 502 the lab saw while the responder did not exist.
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("drain after the intermediate's creation: %v", err)
+	}
+	var undelivered int
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND destination='revocation.crl.publish' AND delivered_at IS NULL`, h.tenant).Scan(&undelivered); err != nil || undelivered != 0 {
+		t.Fatalf("creation-time CRL publications undelivered = %d (%v); want every one delivered", undelivered, err)
+	}
+	statusAt := func(when string) int {
+		t.Helper()
+		response, err := http.Get(h.ts.URL + "/crl/" + h.tenant + "/authorities/" + pqInter.ID) // #nosec G107 -- served test harness URL
+		if err != nil {
+			t.Fatalf("fetch CRL %s: %v", when, err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode == http.StatusBadGateway {
+			t.Fatalf("CRL %s = 502: the authority's status surface is not provisioned", when)
+		}
+		return response.StatusCode
+	}
+	if code := statusAt("before any leaf"); code != http.StatusNotFound {
+		t.Fatalf("CRL before any leaf = %d; want 404 (nothing issued, nothing published)", code)
+	}
 
 	// The classical hierarchy runs beside it, through the same ceremonies.
 	classicalRootSpec := map[string]any{
@@ -203,6 +229,9 @@ func TestServedPostQuantumHierarchyBesideClassical(t *testing.T) {
 		t.Fatal(err)
 	}
 	pqLeaf, _ := issue(pqInter.ID, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: pqCSR})), "pq-mldsa-leaf")
+	// The lab's window: leaves issued, their publication intent not yet
+	// delivered. The read must not be a 502.
+	statusAt("after issuance, before the publication delivered")
 	pqInterDER := caCertDER(t, []byte(pqInter.CertificatePEM))
 	for _, leaf := range [][]byte{ecdsaLeaf, pqLeaf} {
 		if err := crypto.VerifyLeafSignedByCA(leaf, pqInterDER); err != nil {

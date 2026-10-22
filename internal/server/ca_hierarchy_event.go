@@ -21,6 +21,17 @@ func (h *caHierarchyService) appendAuthorityCreatedEventTx(ctx context.Context, 
 	if err := projections.New(h.store).ApplyTx(ctx, tx, ev); err != nil {
 		return ev, err
 	}
+	// B5-4: a managed authority's CRL and OCSP responder exist only once the
+	// first publication has run, and until then its status endpoints answered
+	// 502. Queue that publication with the creation event, in the same
+	// transaction, so the outbox provisions the responder as soon as the
+	// authority exists rather than when the due scheduler next looks. Idempotent
+	// on the event id; an offline root has no served signer to publish with.
+	if authority.SignerHandle != "" && !offlineRoot {
+		if err := h.store.EnsureCertificateCRLPublicationTx(ctx, tx, tenantID, ev.ID, authority.ID); err != nil {
+			return ev, err
+		}
+	}
 	return ev, nil
 }
 

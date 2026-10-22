@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -91,8 +92,12 @@ func (s *Server) publishManagedAuthorityCRL(ctx context.Context, tenantID, caID 
 	}
 	// The trusted event projection committed both the certificate and issuer
 	// ledger before the outbox intent. Never replay unrelated projections on the
-	// delivery worker's deadline.
-	if _, err := service.generateCRLFromCurrentProjection(ctx, tenantID); err != nil {
+	// delivery worker's deadline. A publication queued by the authority's own
+	// creation (B5-4) finds nothing issued yet: that is not a failure, the point
+	// of that row is the responder provisioned below, so the status endpoints
+	// answer honestly (CRL not published yet) instead of 502 until the first
+	// leaf's publication lands.
+	if _, err := service.generateCRLFromCurrentProjection(ctx, tenantID); err != nil && !errors.Is(err, errNoCRLSurface) {
 		return err
 	}
 	_, err = service.activeOCSPResponder(ctx, tenantID)
@@ -145,6 +150,12 @@ func (s *Server) managedCARoutes(mux *http.ServeMux) {
 				if errors.Is(err, api.ErrCAHierarchyUnavailable) {
 					http.Error(w, "revocation: authority is unavailable", http.StatusServiceUnavailable)
 					return
+				}
+				// B5-4: the cause used to vanish here; an operator saw only a 502. The
+				// usual one is a responder not yet provisioned on a fresh authority.
+				if s.logger != nil {
+					s.logger.Warn("managed CA revocation status unavailable",
+						slog.String("tenant_id", r.PathValue("tenant")), slog.String("ca_id", r.PathValue("ca")), slog.String("error", err.Error()))
 				}
 				http.Error(w, "revocation: authority cannot serve status", http.StatusBadGateway)
 				return
