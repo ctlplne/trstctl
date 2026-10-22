@@ -19,6 +19,7 @@ import (
 // writeError maps an error to a problem+json response.
 func (a *API) writeError(w http.ResponseWriter, err error) {
 	var ae *apiError
+	var profileNotActive *orchestrator.ProfileNotActiveError
 	switch {
 	case errors.Is(err, context.Canceled):
 		// The caller went away while a bounded datastore read was running (for
@@ -58,6 +59,8 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, usage.ErrQuotaUnavailable):
 		w.Header().Set("Retry-After", "1")
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "quota authority is unavailable; retry the same request"))
+	case errors.As(err, &profileNotActive):
+		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, profileNotActive.Error()))
 	case store.IsNotFound(err):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrRenewalWorkPending):

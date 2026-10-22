@@ -554,6 +554,9 @@ func (o *Orchestrator) ProfileApprovalRequirementByName(ctx context.Context, ten
 	}
 	rec, err := o.store.GetActiveProfile(ctx, tenantID, profileName)
 	if err != nil {
+		if store.IsNotFound(err) {
+			return ProfileApprovalRequirement{}, &ProfileNotActiveError{Name: profileName}
+		}
 		return ProfileApprovalRequirement{}, err
 	}
 	requires, err := profileSpecRequiresApproval(rec.Spec)
@@ -585,6 +588,29 @@ func defaultProfileApprovalRequirement(profileName string) ProfileApprovalRequir
 		ProfileName: strings.TrimSpace(profileName), RequestedTTLSeconds: seconds,
 		EffectiveTTLSeconds: seconds,
 	}
+}
+
+// ProfileNotActiveError names a certificate profile an identity or the served
+// default refers to that has no active revision in the tenant. It used to
+// surface as a bare "resource not found" on the issuance, deploy and
+// enrollment paths (B6-2 lead), where the resource the caller named was the
+// identity or target, not the profile.
+type ProfileNotActiveError struct{ Name string }
+
+func (e *ProfileNotActiveError) Error() string {
+	return fmt.Sprintf("certificate profile %q has no active revision in this tenant; create or activate the profile, or clear profile_name on the identity; nothing was queued or changed", e.Name)
+}
+
+// ValidateIdentityProfile refuses identity attributes that name a certificate
+// profile with no active revision, so the gap is reported at creation rather
+// than at the first issuance. Attributes without a profile name pass.
+func (o *Orchestrator) ValidateIdentityProfile(ctx context.Context, tenantID string, attrs json.RawMessage) error {
+	name, err := profileNameFromIdentityAttributes(attrs)
+	if err != nil || name == "" {
+		return err
+	}
+	_, err = o.ProfileApprovalRequirementByName(ctx, tenantID, name)
+	return err
 }
 
 func profileNameFromIdentityAttributes(attrs json.RawMessage) (string, error) {

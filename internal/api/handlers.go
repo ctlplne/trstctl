@@ -429,6 +429,9 @@ func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 			}
 			issuerID = &req.IssuerID
 		}
+		if err := a.orch.ValidateIdentityProfile(ctx, tenantID, req.Attributes); err != nil {
+			return 0, nil, err
+		}
 		created, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
 			Kind: store.IdentityKind(req.Kind), Name: req.Name,
 			OwnerID: req.OwnerID, IssuerID: issuerID, Attributes: req.Attributes,

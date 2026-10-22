@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -333,8 +334,8 @@ func TestServedMissingConfiguredProfileCreatesNoApprovalOrLifecycleWork(t *testi
 	req.Header.Set("X-Subject", "alice")
 	req.Header.Set("Idempotency-Key", "missing-profile-issue")
 	code, response := doReq(t, ts, req)
-	if code != http.StatusNotFound {
-		t.Fatalf("missing configured profile issue = %d, want 404; body=%s", code, response)
+	if code != http.StatusUnprocessableEntity || !strings.Contains(string(response), "has no active revision") {
+		t.Fatalf("missing configured profile issue = %d, want 422 naming the profile; body=%s", code, response)
 	}
 	requestsAfter, err := st.ListOperationApprovals(ctx, tenantID, "", 20)
 	if err != nil || len(requestsAfter) != 0 {
