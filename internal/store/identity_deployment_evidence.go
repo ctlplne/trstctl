@@ -32,3 +32,28 @@ func (s *Store) LatestIdentityDeploymentReceipt(ctx context.Context, tenantID, i
 	}
 	return receipt, err == nil, err
 }
+
+// LatestServedCertificateReceipt is the receipt that names the certificate the
+// identity's target verifiably received last: a completed control-plane
+// deploy, a verified host renewal, or a rollback that restored a predecessor.
+// It is how a migration (A34) learns what it is replacing, whichever
+// authority issued that leaf — a receipt reports the fingerprint, not the
+// issuer — so an externally issued leaf resolves exactly like a local one.
+func (s *Store) LatestServedCertificateReceipt(ctx context.Context, tenantID, identityID string) (ConnectorDeliveryReceipt, bool, error) {
+	var receipt ConnectorDeliveryReceipt
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanConnectorDeliveryReceipt(tx.QueryRow(ctx, `
+			SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
+			       connector, target, fingerprint, status, attempts, reason, detail,
+			       rollback_ref, idempotency_key, created_at, updated_at, adopted_predecessor_fingerprint
+			FROM connector_delivery_receipts
+			WHERE tenant_id=$1 AND identity_id=$2 AND fingerprint<>''
+			  AND ((destination IN ('connector.deploy','endpoint.renew') AND status IN ('delivered','verified'))
+			    OR (destination='connector.rollback' AND status='rolled_back'))
+			ORDER BY updated_at DESC, id DESC LIMIT 1`, tenantID, identityID), &receipt)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ConnectorDeliveryReceipt{}, false, nil
+	}
+	return receipt, err == nil, err
+}

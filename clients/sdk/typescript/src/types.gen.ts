@@ -13377,7 +13377,9 @@ export interface components {
             issuing_authority_source?: "platform" | "private" | "external";
             /** Format: uuid */
             predecessor_certificate_id: string;
+            predecessor_external_ca_id?: string;
             predecessor_fingerprint: string;
+            predecessor_source?: string;
             /** Format: uuid */
             required_agent_id: string;
             subject_common_name: string;

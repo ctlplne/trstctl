@@ -21981,7 +21981,13 @@
             "format": "uuid",
             "type": "string"
           },
+          "predecessor_external_ca_id": {
+            "type": "string"
+          },
           "predecessor_fingerprint": {
+            "type": "string"
+          },
+          "predecessor_source": {
             "type": "string"
           },
           "required_agent_id": {

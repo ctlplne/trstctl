@@ -30325,6 +30325,14 @@ export const messages = {
     defaultMessage: "Automatic renewal is paused here for {count} identities after an operator rollback. Resume it from each identity's detail view.",
     description: "Target detail: identities whose automatic renewal an operator rollback holds on this target.",
   },
+  "migration.design.predecessorIssuer": {
+    defaultMessage: "Current leaf issued by",
+    description: "Member binding row: the inventory source of the leaf the migration replaces.",
+  },
+  "migration.design.predecessorExternal": {
+    defaultMessage: "External CA {id} (through the external registry)",
+    description: "Member binding row value when the leaf being replaced was issued by the external CA registry.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;

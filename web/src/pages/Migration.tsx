@@ -349,6 +349,12 @@ function MigrationMemberEvidence({ member }: { member: MigrationRun["waves"][num
         <dd className="break-all">{mapping}</dd>
         <dt className="text-muted-foreground">{t("migration.design.currentFingerprint")}</dt>
         <dd className="break-all font-mono text-xs">{binding.predecessor_fingerprint || t("migration.design.notReturned")}</dd>
+        <dt className="text-muted-foreground">{t("migration.design.predecessorIssuer")}</dt>
+        <dd className="break-all">
+          {binding.predecessor_external_ca_id
+            ? t("migration.design.predecessorExternal", { id: binding.predecessor_external_ca_id })
+            : binding.predecessor_source || t("migration.design.notReturned")}
+        </dd>
         <dt className="text-muted-foreground">{t("migration.design.nextFingerprint")}</dt>
         <dd className="break-all font-mono text-xs">{binding.successor_fingerprint || t("migration.design.notObserved")}</dd>
         <dt className="text-muted-foreground">{t("migration.design.trustEvidence")}</dt>

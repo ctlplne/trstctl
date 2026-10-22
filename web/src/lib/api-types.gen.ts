@@ -5316,7 +5316,9 @@ export interface MigrationMemberBinding {
   issuing_authority_id: string;
   issuing_authority_source?: "platform" | "private" | "external";
   predecessor_certificate_id: string;
+  predecessor_external_ca_id?: string;
   predecessor_fingerprint: string;
+  predecessor_source?: string;
   required_agent_id: string;
   subject_common_name: string;
   subject_dns_names: string[];

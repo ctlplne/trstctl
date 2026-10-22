@@ -3530,7 +3530,7 @@ than sending an operator looking for a credential that was never there.
   Served through `/api/v1/migrations/runs` plus `/{id}/pause`, `/{id}/resume`, and
   `/{id}/rollback`, the matching `trstctl migrations` commands, SDKs, and the
   `/migration` console. Scope: executable membership is deliberately narrower than
-  assessment today — one active internally issued predecessor per identity that
+  assessment today — one active predecessor per identity that
   carries any mix of DNS names, IP addresses, rfc822Names and URIs, an enabled
   host-agent connector with `verify_address`, and an active host-role agent. The
   member binding freezes each kind of identifier on its own half
@@ -3540,9 +3540,19 @@ than sending an operator looking for a credential that was never there.
   any other name, address, email or URI by name, so a client that connects by IP,
   matches an rfc822Name or pins a SPIFFE URI keeps working after the migration.
   The same binding shape serves host-generated renewal and CA re-protection, so
-  such leaves renew and re-protect on the host path too. Network-appliance,
-  cloud-store and externally issued migrations are refused at start rather than
-  represented as executable. An imported offline root may be named as the new authority: its key
+  such leaves renew and re-protect on the host path too. The predecessor is the
+  leaf the identity's last completed deploy, verified host renewal or rollback
+  receipt names on its target, whichever authority issued it: a leaf a public or
+  partner CA issued through the external registry migrates onto the new private
+  authority exactly like a locally issued one, the member binding records its
+  inventory source and the issuing external CA id (`predecessor_source`,
+  `predecessor_external_ca_id`), and the successor supersedes it in inventory. An
+  identity with no such receipt falls back to its one active internally issued
+  leaf; a receipt naming a leaf the inventory does not hold, or one no longer
+  active, is refused at start by name. An incident run still revokes through a
+  served internal authority, so its cohorts are the compromised internal CA's
+  leaves, never externally issued ones. Network-appliance and cloud-store
+  migrations are refused at start rather than represented as executable. An imported offline root may be named as the new authority: its key
   never enters the signer, so successors are issued by the root's one active
   signer-backed intermediate (imported through the offline-intermediate
   ceremony) while the root certificate is the anchor hosts receive; the member

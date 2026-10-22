@@ -160,6 +160,13 @@ type MemberBinding struct {
 	SubjectURIs              []string `json:"subject_uris,omitempty"`
 	PredecessorCertificateID string   `json:"predecessor_certificate_id"`
 	PredecessorFingerprint   string   `json:"predecessor_fingerprint"`
+	// PredecessorSource and PredecessorExternalCAID record where the predecessor
+	// came from (A34): its inventory source as recorded, and, for a leaf the
+	// external CA registry issued, that authority's id as authenticated from the
+	// issuance event. A migration replaces the leaf a target serves whichever
+	// authority issued it; these fields keep that provenance in the run.
+	PredecessorSource       string `json:"predecessor_source,omitempty"`
+	PredecessorExternalCAID string `json:"predecessor_external_ca_id,omitempty"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
 	// response requires it; a generic migration may leave it empty.
 	PredecessorCAID string `json:"predecessor_ca_id,omitempty"`

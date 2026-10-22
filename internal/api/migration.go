@@ -446,11 +446,10 @@ func (a *API) buildMigrationMember(
 	if err != nil || agent.Status != "active" || !sourceKindsContain(agent.Roles, mtls.AgentRoleHost) {
 		return migration.RunMember{}, nil, errors.New("agent_id must name an active host-role agent in this tenant")
 	}
-	certs, err := a.store.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, ident.OwnerID, ident.Name)
-	if err != nil || len(certs) != 1 {
-		return migration.RunMember{}, nil, errors.New("migration member must have exactly one active internally issued predecessor certificate")
+	predecessor, err := a.migrationPredecessorCertificate(ctx, tenantID, ident)
+	if err != nil {
+		return migration.RunMember{}, nil, err
 	}
-	predecessor := certs[0]
 	info, err := certinfo.Inspect(predecessor.CertificateDER)
 	if err != nil {
 		return migration.RunMember{}, nil, errors.New("migration member predecessor certificate could not be read")
@@ -486,7 +485,42 @@ func (a *API) buildMigrationMember(
 		SubjectEmailAddresses: subjectEmailAddresses, SubjectURIs: subjectURIs,
 		PredecessorCertificateID: predecessor.ID,
 		PredecessorFingerprint:   cleanMigrationFingerprint(predecessor.Fingerprint),
+		PredecessorSource:        predecessor.Source,
+		PredecessorExternalCAID:  predecessor.IssuingExternalCAID,
 	}}, gated, nil
+}
+
+// migrationPredecessorCertificate resolves the leaf a member serves today
+// (A34). The receipt of the identity's last completed deploy, verified host
+// renewal or rollback names the fingerprint its target verifiably received,
+// whichever authority issued that leaf: an externally issued predecessor is
+// migrated exactly like a locally issued one, and the binding records where
+// it came from. An identity with no such receipt falls back to its one active
+// internally issued leaf, as before. A receipt whose leaf is not inventoried
+// or no longer active is refused by name rather than guessed around.
+func (a *API) migrationPredecessorCertificate(ctx context.Context, tenantID string, ident store.Identity) (store.Certificate, error) {
+	receipt, found, err := a.store.LatestServedCertificateReceipt(ctx, tenantID, ident.ID)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	if found {
+		cert, err := a.store.GetCertificateByFingerprint(ctx, tenantID, receipt.Fingerprint)
+		if store.IsNotFound(err) {
+			return store.Certificate{}, errors.New("migration member's last delivered certificate is not inventoried; the predecessor must be an inventoried active leaf")
+		}
+		if err != nil {
+			return store.Certificate{}, err
+		}
+		if cert.Status != "active" {
+			return store.Certificate{}, fmt.Errorf("migration member's last delivered certificate is %s, not active", cert.Status)
+		}
+		return cert, nil
+	}
+	certs, err := a.store.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, ident.OwnerID, ident.Name)
+	if err != nil || len(certs) != 1 {
+		return store.Certificate{}, errors.New("migration member must serve exactly one active predecessor certificate: no delivery receipt names one and the identity has no single active internally issued leaf")
+	}
+	return certs[0], nil
 }
 
 // migrationIssuingAuthority picks the authority that signs successors for a
