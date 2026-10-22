@@ -73,10 +73,13 @@ type licensedCryptoMigrationHostCertificateRollbackRequested struct {
 // transaction. The read model is written only by the projector, so the state and
 // history are reconstructable purely from the event log.
 type Orchestrator struct {
-	log                  *events.Log
-	store                *store.Store
-	outbox               *Outbox
-	proj                 *projections.Projector
+	log    *events.Log
+	store  *store.Store
+	outbox *Outbox
+	proj   *projections.Projector
+	// pqcPilotReportSigner signs a finished pilot's readiness report inside
+	// the isolated signer (A28/A29); nil leaves finished pilots unsigned.
+	pqcPilotReportSigner PQCPilotReportSigner
 	durableIdem          *Idempotency
 	tenantDataRewrite    []events.TenantDataRewriteOption
 	tenantCommandService *tenantCommandService

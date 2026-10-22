@@ -9039,6 +9039,115 @@ PQCMigrationFindingDispositionRequest = TypedDict(
     total=False,
 )
 
+PQCPilot = TypedDict(
+    'PQCPilot',
+    {
+        'authority_id': str,
+        'created_at': str,
+        'current_wave': int,
+        'finished_at': str,
+        'halted_at_wave': str,
+        'id': str,
+        'name': str,
+        'requested_by': str,
+        'signed_report': dict[str, Any],
+        'status': str,
+        'tenant_id': str,
+        'updated_at': str,
+        'verdict_summary': str,
+        'wave_count': int,
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PQCPilotList = TypedDict(
+    'PQCPilotList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PQCPilotResult = TypedDict(
+    'PQCPilotResult',
+    {
+        'chain_bytes': int,
+        'detail': str,
+        'evidence_digest': str,
+        'handshake_ms': int,
+        'observed_at': str,
+        'outcome': str,
+        'target_id': str,
+    },
+    total=False,
+)
+
+PQCPilotStartRequest = TypedDict(
+    'PQCPilotStartRequest',
+    {
+        'authority_id': str,
+        'id': str,
+        'name': str,
+        'timeout_seconds': int,
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PQCPilotTarget = TypedDict(
+    'PQCPilotTarget',
+    {
+        'address': str,
+        'connector': str,
+        'fingerprint': str,
+        'server_name': str,
+        'target_id': str,
+    },
+    total=False,
+)
+
+PQCPilotVerdict = TypedDict(
+    'PQCPilotVerdict',
+    {
+        'halt': bool,
+        'negotiated': int,
+        'not_attempted': int,
+        'ready': bool,
+        'rejected': int,
+        'summary': str,
+        'unreachable': int,
+    },
+    total=False,
+)
+
+PQCPilotWave = TypedDict(
+    'PQCPilotWave',
+    {
+        'assessed_at': str,
+        'dispatched_at': str,
+        'idempotency_key': str,
+        'index': int,
+        'name': str,
+        'outbox_id': int,
+        'results': list[dict[str, Any]],
+        'status': str,
+        'targets': list[dict[str, Any]],
+        'verdict': dict[str, Any],
+    },
+    total=False,
+)
+
+PQCPilotWaveRequest = TypedDict(
+    'PQCPilotWaveRequest',
+    {
+        'name': str,
+        'targets': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 PendingApprovalRequest = TypedDict(
     'PendingApprovalRequest',
     {

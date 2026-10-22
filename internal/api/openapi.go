@@ -1660,6 +1660,46 @@ func componentSchemas() map[string]*Schema {
 		"findings": {Type: "array", Items: ref("PQCMigrationCampaignFinding")},
 		"closure":  ref("PQCMigrationCampaignClosure"),
 	}, "id", "tenant_id", "name", "owner", "deadline", "wave", "readiness_criteria", "readiness_status", "readiness_evidence_refs", "status", "finding_count", "pending_count", "remediated_count", "excepted_count", "automated_execution_available", "automated_execution_note", "created_at", "updated_at")
+	pqcPilotTarget := object(map[string]*Schema{
+		"target_id": str(), "address": str(), "server_name": str(), "connector": str(), "fingerprint": str(),
+	}, "target_id", "address", "fingerprint")
+	pqcPilotWaveReq := object(map[string]*Schema{
+		"name": str(), "targets": {Type: "array", Items: ref("PQCPilotTarget")},
+	}, "name", "targets")
+	pqcPilotStartReq := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "authority_id": str(), "timeout_seconds": {Type: "integer"},
+		"waves": {Type: "array", Items: ref("PQCPilotWaveRequest")},
+	}, "name", "authority_id", "waves")
+	pqcPilotResult := object(map[string]*Schema{
+		"target_id": str(), "outcome": {Type: "string", Enum: []string{"negotiated", "rejected", "unreachable", "not_attempted"}},
+		"handshake_ms": {Type: "integer"}, "chain_bytes": {Type: "integer"}, "detail": str(), "evidence_digest": str(),
+		"observed_at": timestamp(),
+	}, "target_id", "outcome", "handshake_ms", "chain_bytes", "observed_at")
+	pqcPilotVerdict := object(map[string]*Schema{
+		"ready": {Type: "boolean"}, "halt": {Type: "boolean"}, "summary": str(),
+		"negotiated": {Type: "integer"}, "rejected": {Type: "integer"}, "unreachable": {Type: "integer"}, "not_attempted": {Type: "integer"},
+	}, "ready", "halt", "summary", "negotiated", "rejected", "unreachable", "not_attempted")
+	pqcPilotWave := object(map[string]*Schema{
+		"index": {Type: "integer"}, "name": str(),
+		"status":          {Type: "string", Enum: []string{"pending", "probing", "assessed", "skipped"}},
+		"targets":         {Type: "array", Items: ref("PQCPilotTarget")},
+		"outbox_id":       {Type: "integer"},
+		"idempotency_key": str(),
+		"results":         {Type: "array", Items: ref("PQCPilotResult")},
+		"verdict":         ref("PQCPilotVerdict"),
+		"dispatched_at":   timestamp(), "assessed_at": timestamp(),
+	}, "index", "name", "status", "targets")
+	pqcPilot := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "authority_id": str(), "requested_by": str(),
+		"status":          {Type: "string", Enum: []string{"running", "halted", "completed"}},
+		"wave_count":      {Type: "integer"},
+		"current_wave":    {Type: "integer"},
+		"halted_at_wave":  str(),
+		"verdict_summary": str(),
+		"signed_report":   {Type: "object", AdditionalProperties: &Schema{}},
+		"created_at":      timestamp(), "updated_at": timestamp(), "finished_at": timestamp(),
+		"waves": {Type: "array", Items: ref("PQCPilotWave")},
+	}, "id", "tenant_id", "name", "status", "wave_count", "current_wave", "created_at", "updated_at")
 	accessChangeRequestCreateReq := object(map[string]*Schema{
 		"id": uuid(), "requested_action": {Type: "string", Enum: []string{"grant", "modify", "revoke", "rotate", "deploy", "break_glass"}},
 		"requester_subject": str(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
@@ -6622,6 +6662,14 @@ func componentSchemas() map[string]*Schema {
 		"PQCMigrationCampaignClosure":              pqcCampaignClosure,
 		"PQCMigrationCampaign":                     pqcCampaign,
 		"PQCMigrationCampaignList":                 list("PQCMigrationCampaign"),
+		"PQCPilotTarget":                           pqcPilotTarget,
+		"PQCPilotWaveRequest":                      pqcPilotWaveReq,
+		"PQCPilotStartRequest":                     pqcPilotStartReq,
+		"PQCPilotResult":                           pqcPilotResult,
+		"PQCPilotVerdict":                          pqcPilotVerdict,
+		"PQCPilotWave":                             pqcPilotWave,
+		"PQCPilot":                                 pqcPilot,
+		"PQCPilotList":                             list("PQCPilot"),
 		"AccessChangeRequestCreateRequest":         accessChangeRequestCreateReq,
 		"AccessChangeDecisionRequest":              accessChangeDecisionReq,
 		"AccessChangeDecision":                     accessChangeDecision,

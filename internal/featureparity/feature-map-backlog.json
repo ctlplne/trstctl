@@ -11952,7 +11952,10 @@
                 "setPQCMigrationCampaignReadiness",
                 "dispositionPQCMigrationFinding",
                 "closePQCMigrationCampaign",
-                "getPQCMigrationCampaignEvidence"
+                "getPQCMigrationCampaignEvidence",
+                "startPQCPilot",
+                "listPQCPilots",
+                "getPQCPilot"
             ],
             "api_na": "",
             "cli_surface": [
@@ -11963,7 +11966,10 @@
                 "pqc campaigns readiness",
                 "pqc campaigns disposition",
                 "pqc campaigns close",
-                "pqc campaigns evidence"
+                "pqc campaigns evidence",
+                "pqc pilots create",
+                "pqc pilots list",
+                "pqc pilots get"
             ],
             "cli_na": "",
             "facet_evidence": {

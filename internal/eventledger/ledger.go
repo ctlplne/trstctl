@@ -95,6 +95,10 @@ const (
 	EventPQCMigrationCampaignUpdated              = "pqc.migration_campaign.updated"
 	EventPQCMigrationCampaignFindingDispositioned = "pqc.migration_campaign.finding_dispositioned"
 	EventPQCMigrationCampaignClosed               = "pqc.migration_campaign.closed"
+	EventPQCPilotStarted                          = "pqc.pilot.started"
+	EventPQCPilotWaveDispatched                   = "pqc.pilot.wave_dispatched"
+	EventPQCPilotWaveAssessed                     = "pqc.pilot.wave_assessed"
+	EventPQCPilotReportSigned                     = "pqc.pilot.report_signed"
 	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
 	EventLicensedCryptoMigrationAssetCompleted    = "licensed_crypto.migration.asset_completed"
 	EventLicensedCryptoMigrationRollbackCompleted = "licensed_crypto.migration.rollback_completed"
@@ -221,6 +225,8 @@ var ledger = []FeatureEvent{
 	{"F52", "Cryptographic Bill of Materials", "record_readiness", "setPQCMigrationCampaignReadiness", []string{EventPQCMigrationCampaignUpdated}},
 	{"F52", "Cryptographic Bill of Materials", "record_finding_disposition", "dispositionPQCMigrationFinding", []string{EventPQCMigrationCampaignFindingDispositioned}},
 	{"F52", "Cryptographic Bill of Materials", "close_campaign", "closePQCMigrationCampaign", []string{EventPQCMigrationCampaignClosed}},
+	{"F52", "Cryptographic Bill of Materials", "start_pilot", "startPQCPilot", []string{EventPQCPilotStarted, EventPQCPilotWaveDispatched}},
+	{"F52", "Cryptographic Bill of Materials", "assess_pilot_wave", "reportPQCPilotWave", []string{EventPQCPilotWaveAssessed, EventPQCPilotWaveDispatched, EventPQCPilotReportSigned}},
 
 	// F69-F74 — served ACME DNS-01 provider configuration and validation policy.
 	{"F69", "DNS-01 challenge automation", "configure_provider", "createACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigUpserted}},

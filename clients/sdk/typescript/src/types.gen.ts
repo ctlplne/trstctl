@@ -5492,6 +5492,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pqc/pilots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List post-quantum handshake pilots */
+        get: operations["listPQCPilots"];
+        put?: never;
+        /** Start a staged post-quantum handshake pilot that halts on its canary's evidence */
+        post: operations["startPQCPilot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/pilots/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a post-quantum handshake pilot with its waves, verdicts and signed readiness report */
+        get: operations["getPQCPilot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/archive-erasure-attestations": {
         parameters: {
             query?: never;
@@ -14653,6 +14688,89 @@ export interface components {
             evidence_refs?: string[];
             method: string;
             reason: string;
+        };
+        PQCPilot: {
+            authority_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            current_wave: number;
+            /** Format: date-time */
+            finished_at?: string;
+            halted_at_wave?: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            requested_by?: string;
+            signed_report?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            status: "running" | "halted" | "completed";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            verdict_summary?: string;
+            wave_count: number;
+            waves?: components["schemas"]["PQCPilotWave"][];
+        };
+        PQCPilotList: {
+            items: components["schemas"]["PQCPilot"][];
+            next_cursor?: string;
+        };
+        PQCPilotResult: {
+            chain_bytes: number;
+            detail?: string;
+            evidence_digest?: string;
+            handshake_ms: number;
+            /** Format: date-time */
+            observed_at: string;
+            /** @enum {string} */
+            outcome: "negotiated" | "rejected" | "unreachable" | "not_attempted";
+            target_id: string;
+        };
+        PQCPilotStartRequest: {
+            authority_id: string;
+            /** Format: uuid */
+            id?: string;
+            name: string;
+            timeout_seconds?: number;
+            waves: components["schemas"]["PQCPilotWaveRequest"][];
+        };
+        PQCPilotTarget: {
+            address: string;
+            connector?: string;
+            fingerprint: string;
+            server_name?: string;
+            target_id: string;
+        };
+        PQCPilotVerdict: {
+            halt: boolean;
+            negotiated: number;
+            not_attempted: number;
+            ready: boolean;
+            rejected: number;
+            summary: string;
+            unreachable: number;
+        };
+        PQCPilotWave: {
+            /** Format: date-time */
+            assessed_at?: string;
+            /** Format: date-time */
+            dispatched_at?: string;
+            idempotency_key?: string;
+            index: number;
+            name: string;
+            outbox_id?: number;
+            results?: components["schemas"]["PQCPilotResult"][];
+            /** @enum {string} */
+            status: "pending" | "probing" | "assessed" | "skipped";
+            targets: components["schemas"]["PQCPilotTarget"][];
+            verdict?: components["schemas"]["PQCPilotVerdict"];
+        };
+        PQCPilotWaveRequest: {
+            name: string;
+            targets: components["schemas"]["PQCPilotTarget"][];
         };
         PendingApprovalRequest: {
             /** @enum {string} */
@@ -32849,6 +32967,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPQCPilots: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCPilotList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startPQCPilot: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCPilotStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCPilot"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPQCPilot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCPilot"];
                 };
             };
             /** @description client error */

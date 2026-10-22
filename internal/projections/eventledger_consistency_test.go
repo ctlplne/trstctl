@@ -151,6 +151,10 @@ var projectionEventConstants = map[string]string{
 	projections.EventApprovalStatusChanged:                    "EventApprovalStatusChanged",
 	projections.EventIdentityRenewalFailed:                    "EventIdentityRenewalFailed",
 	projections.EventIdentityRenewalRecovered:                 "EventIdentityRenewalRecovered",
+	projections.EventPQCPilotStarted:                          "EventPQCPilotStarted",
+	projections.EventPQCPilotWaveDispatched:                   "EventPQCPilotWaveDispatched",
+	projections.EventPQCPilotWaveAssessed:                     "EventPQCPilotWaveAssessed",
+	projections.EventPQCPilotReportSigned:                     "EventPQCPilotReportSigned",
 }
 
 // TestEventLedgerConstantsMatchProjector asserts every event type the ledger

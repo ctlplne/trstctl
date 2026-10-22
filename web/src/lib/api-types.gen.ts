@@ -6569,6 +6569,83 @@ export interface PQCMigrationFindingDispositionRequest {
   reason: string;
 }
 
+export interface PQCPilot {
+  authority_id?: string;
+  created_at: string;
+  current_wave: number;
+  finished_at?: string;
+  halted_at_wave?: string;
+  id: string;
+  name: string;
+  requested_by?: string;
+  signed_report?: Record<string, unknown>;
+  status: "running" | "halted" | "completed";
+  tenant_id: string;
+  updated_at: string;
+  verdict_summary?: string;
+  wave_count: number;
+  waves?: PQCPilotWave[];
+}
+
+export interface PQCPilotList {
+  items: PQCPilot[];
+  next_cursor?: string;
+}
+
+export interface PQCPilotResult {
+  chain_bytes: number;
+  detail?: string;
+  evidence_digest?: string;
+  handshake_ms: number;
+  observed_at: string;
+  outcome: "negotiated" | "rejected" | "unreachable" | "not_attempted";
+  target_id: string;
+}
+
+export interface PQCPilotStartRequest {
+  authority_id: string;
+  id?: string;
+  name: string;
+  timeout_seconds?: number;
+  waves: PQCPilotWaveRequest[];
+}
+
+export interface PQCPilotTarget {
+  address: string;
+  connector?: string;
+  fingerprint: string;
+  server_name?: string;
+  target_id: string;
+}
+
+export interface PQCPilotVerdict {
+  halt: boolean;
+  negotiated: number;
+  not_attempted: number;
+  ready: boolean;
+  rejected: number;
+  summary: string;
+  unreachable: number;
+}
+
+export interface PQCPilotWave {
+  assessed_at?: string;
+  dispatched_at?: string;
+  idempotency_key?: string;
+  index: number;
+  name: string;
+  outbox_id?: number;
+  results?: PQCPilotResult[];
+  status: "pending" | "probing" | "assessed" | "skipped";
+  targets: PQCPilotTarget[];
+  verdict?: PQCPilotVerdict;
+}
+
+export interface PQCPilotWaveRequest {
+  name: string;
+  targets: PQCPilotTarget[];
+}
+
 export interface PendingApprovalRequest {
   action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
   approval_count: number;

@@ -3185,12 +3185,18 @@ than sending an operator looking for a credential that was never there.
   ceremony whose `signature_algorithm` is `ml-dsa-44`, `ml-dsa-65` or
   `ml-dsa-87` mints that key in the isolated signer, the authority issues
   classical and pure ML-DSA leaves, and its CRL and OCSP responses carry its
-  ML-DSA signature, all beside the classical hierarchy. Nothing yet drives a
-  cohort's probes as a wave, so the report still has no live evidence to sign
-  unless a caller supplies it; the relay records handshake cost
-  (`HandshakeMillis`, `ChainBytes`) but no wave orchestration, canary-halt
-  execution, or PQC lab console view is built. The acceptance's end-to-end
-  pilot is not demonstrated.
+  ML-DSA signature, all beside the classical hierarchy. Pilot waves with a
+  canary halt are served (A28/A29): `POST /api/v1/pqc/pilots` records an
+  ordered plan of endpoint targets bound to the exact leaf each must present,
+  dispatches the canary wave as one relay endpoint-verification sweep through
+  the durable outbox, classifies the relay's signed transcripts (negotiated,
+  rejected, unreachable, with handshake size and latency), takes the compat-lab
+  verdict over everything probed so far, and halts the instant a canary refuses
+  or cannot be reached — later waves are never dispatched — or dispatches the
+  next wave; a finished pilot's evidence is signed inside the isolated signer
+  as the readiness report, verifiable offline. The PQC lab console view is not
+  yet built and the acceptance's end-to-end pilot on the lab is not yet
+  demonstrated.
 - Per-tenant silo isolation identifiers all key on the tenant ID (L4): a siloed
   tenant's Postgres schema, JetStream subject lane, and object-key prefix are
   each derived from the tenant's unique, immutable ID. The event LANE used to be

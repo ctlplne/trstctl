@@ -277,6 +277,28 @@ Graph-bound campaigns refuse further mutation with `409 Conflict` when a depende
 edge or attributed owner changes. This prevents old coordination evidence from being
 applied to a newly different blast radius.
 
+### Post-quantum pilot waves (A28/A29)
+
+A pilot proves a post-quantum leaf against real clients in stages before a
+rollout. `POST /api/v1/pqc/pilots` (`trstctl-cli pqc pilots create`) records an
+ordered plan: a name, the issuing authority whose leaf is being proven, and
+waves of endpoint targets, each bound to the exact leaf it must present (its
+SHA-256 fingerprint, address and SNI). The first wave is the canary. Each wave
+is one relay endpoint-verification sweep dispatched through the durable outbox
+in the same transaction as the immutable event that records it; the network
+relay performs the real handshakes and reports a signed sweep. The control plane
+classifies every transcript — `negotiated` when the client got exactly that
+leaf, `rejected` when the endpoint was reached but the handshake was refused or
+served a different leaf, `unreachable` when the dial failed — keeping each
+handshake's size and latency, and takes the compat-lab verdict over everything
+probed so far. One refusal halts the pilot; an unreachable canary halts it too,
+because silence is not compatibility; otherwise the next wave is dispatched, and
+a pilot whose every wave negotiated completes. Waves after a halt are marked
+`skipped` and are never probed. A finished pilot's evidence is signed inside the
+isolated signer under its `pqc-readiness-report` key and returned as
+`signed_report`, which verifies offline against that key alone; `GET
+/api/v1/pqc/pilots/{id}` returns the waves, their results and verdicts.
+
 Campaign mutations emit immutable `pqc.migration_campaign.*` events. PostgreSQL
 projections carry `tenant_id` and forced row-level security. Closure is rejected until
 the readiness gate passes and every selected finding is marked `remediated` or

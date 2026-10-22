@@ -27017,6 +27017,299 @@
         ],
         "type": "object"
       },
+      "PQCPilot": {
+        "properties": {
+          "authority_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_wave": {
+            "type": "integer"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "halted_at_wave": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "signed_report": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "halted",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verdict_summary": {
+            "type": "string"
+          },
+          "wave_count": {
+            "type": "integer"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/PQCPilotWave"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "status",
+          "wave_count",
+          "current_wave",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "PQCPilotList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PQCPilot"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PQCPilotResult": {
+        "properties": {
+          "chain_bytes": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "evidence_digest": {
+            "type": "string"
+          },
+          "handshake_ms": {
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "negotiated",
+              "rejected",
+              "unreachable",
+              "not_attempted"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "outcome",
+          "handshake_ms",
+          "chain_bytes",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "PQCPilotStartRequest": {
+        "properties": {
+          "authority_id": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/PQCPilotWaveRequest"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "authority_id",
+          "waves"
+        ],
+        "type": "object"
+      },
+      "PQCPilotTarget": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "server_name": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "address",
+          "fingerprint"
+        ],
+        "type": "object"
+      },
+      "PQCPilotVerdict": {
+        "properties": {
+          "halt": {
+            "type": "boolean"
+          },
+          "negotiated": {
+            "type": "integer"
+          },
+          "not_attempted": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "unreachable": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ready",
+          "halt",
+          "summary",
+          "negotiated",
+          "rejected",
+          "unreachable",
+          "not_attempted"
+        ],
+        "type": "object"
+      },
+      "PQCPilotWave": {
+        "properties": {
+          "assessed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dispatched_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PQCPilotResult"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "probing",
+              "assessed",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/PQCPilotTarget"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/PQCPilotVerdict"
+          }
+        },
+        "required": [
+          "index",
+          "name",
+          "status",
+          "targets"
+        ],
+        "type": "object"
+      },
+      "PQCPilotWaveRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/PQCPilotTarget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "targets"
+        ],
+        "type": "object"
+      },
       "PendingApprovalRequest": {
         "properties": {
           "action": {
@@ -59409,6 +59702,195 @@
         ],
         "summary": "Record a PQC campaign readiness gate",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/pqc/pilots": {
+      "get": {
+        "operationId": "listPQCPilots",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCPilotList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List post-quantum handshake pilots",
+        "x-trstctl-permission": "risk:read"
+      },
+      "post": {
+        "operationId": "startPQCPilot",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCPilotStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCPilot"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start a staged post-quantum handshake pilot that halts on its canary's evidence",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/pqc/pilots/{id}": {
+      "get": {
+        "operationId": "getPQCPilot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCPilot"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a post-quantum handshake pilot with its waves, verdicts and signed readiness report",
+        "x-trstctl-permission": "risk:read"
       }
     },
     "/api/v1/privacy/archive-erasure-attestations": {

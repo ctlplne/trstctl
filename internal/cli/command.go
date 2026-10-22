@@ -546,6 +546,9 @@ var coreCommandTable = []Command{
 	{Name: []string{"pqc", "campaigns", "readiness"}, Method: "POST", Path: "/api/v1/pqc/campaigns/{id}/readiness", Body: bodyFile, Summary: "Record a PQC campaign readiness gate"},
 	{Name: []string{"pqc", "campaigns", "disposition"}, Method: "POST", Path: "/api/v1/pqc/campaigns/{id}/findings/{finding_id}/disposition", Body: bodyFile, Summary: "Record manual or external remediation evidence"},
 	{Name: []string{"pqc", "campaigns", "close"}, Method: "POST", Path: "/api/v1/pqc/campaigns/{id}/close", Body: bodyOptionalFile, Summary: "Close a ready PQC campaign with signed evidence"},
+	{Name: []string{"pqc", "pilots", "create"}, Method: "POST", Path: "/api/v1/pqc/pilots", Body: bodyFile, Summary: "Start a staged post-quantum handshake pilot that halts on its canary's evidence"},
+	{Name: []string{"pqc", "pilots", "list"}, Method: "GET", Path: "/api/v1/pqc/pilots", Query: []string{"limit", "cursor"}, Summary: "List post-quantum handshake pilots"},
+	{Name: []string{"pqc", "pilots", "get"}, Method: "GET", Path: "/api/v1/pqc/pilots/{id}", Summary: "Get a post-quantum handshake pilot with its waves, verdicts and signed readiness report"},
 	{Name: []string{"pqc", "campaigns", "evidence"}, Method: "GET", Path: "/api/v1/pqc/campaigns/{id}/evidence", Summary: "Export signed PQC campaign closure evidence"},
 
 	// The licensed crypto-migration commands that used to sit here now live in

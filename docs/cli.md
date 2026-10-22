@@ -284,6 +284,7 @@ exhaustive subcommand list:
 | `ca keys`                         | Read retirement dependencies, record a successor and host route for a certificate (`reprotect plan`), queue re-protection jobs (`reprotect`), and request irreversible signer-gated retirement (`retirement` · `retire`). A plan or enqueue receipt is not evidence that a credential was reissued or deployed. |
 | `ca discovery`                    | List public and private CA discovery inventory (`list`)                                                                                                                                                                                                                                                             |
 | `cbom`                            | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                                                                                                                                                                                   |
+| `pqc pilots`                      | Staged post-quantum handshake pilots with a canary halt and a signer-signed readiness report (`create` · `list` · `get`)
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
 | `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                                                                                                                                                                                |
 | `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `preview` · `sign` · `keyless-preview` · `keyless`)                                                                                                                                                                               |
@@ -1008,6 +1009,13 @@ printf '{"status":"passed","evidence_refs":["change:CAB-2048"]}\n' | trstctl-cli
 printf '{"disposition":"remediated","method":"manual","reason":"replaced through the existing CA workflow","evidence_refs":["audit:certificate.issued:replacement"],"evidence_digests":["sha256:<64-lowercase-hex>"]}\n' | trstctl-cli --idempotency-key pqc-payments-finding pqc campaigns disposition <campaign-id> <finding-id> -f -
 trstctl-cli --idempotency-key pqc-payments-close pqc campaigns close <campaign-id> --force
 trstctl-cli pqc campaigns evidence <campaign-id>
+
+# Prove a post-quantum leaf in waves: the canary first; one refusal halts the pilot.
+cat > pq-pilot.json <<'JSON'
+{"name":"Payments PQ pilot","authority_id":"<ml-dsa-issuing-authority-id>","waves":[{"name":"canary","targets":[{"target_id":"<host-target-id>","address":"api.internal:443","server_name":"api.internal","fingerprint":"<served-leaf-sha256>"}]},{"name":"broad","targets":[{"target_id":"<second-target-id>","address":"web.internal:443","server_name":"web.internal","fingerprint":"<served-leaf-sha256>"}]}]}
+JSON
+trstctl-cli --idempotency-key pq-pilot-1 pqc pilots create -f pq-pilot.json
+trstctl-cli pqc pilots get <pilot-id>   # waves, outcomes, verdicts and the signed readiness report
 
 # Core PQC migration: review the exact CBOM asset IDs before starting.
 # Preview and start refuse an observed certificate name denied by the active

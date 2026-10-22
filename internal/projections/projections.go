@@ -296,18 +296,24 @@ const (
 	EventPQCMigrationCampaignUpdated              = "pqc.migration_campaign.updated"
 	EventPQCMigrationCampaignFindingDispositioned = "pqc.migration_campaign.finding_dispositioned"
 	EventPQCMigrationCampaignClosed               = "pqc.migration_campaign.closed"
-	EventAccessChangeRequestCreated               = "access.change_request.created"
-	EventAccessChangeRequestDecided               = "access.change_request.decided"
-	EventTenantKeyDomainMigrationStarted          = "tenant.key_domain.migration_started"
-	EventTenantKeyDomainMigrationProgressed       = "tenant.key_domain.migration_progressed"
-	EventTenantKeyDomainMigrationCompleted        = "tenant.key_domain.migration_completed"
-	EventTenantKeyDomainMigrationFailed           = "tenant.key_domain.migration_failed"
-	EventTenantKeyDomainSealRequested             = "tenant.key_domain.seal_requested"
-	EventTenantKeyDomainSealFailed                = "tenant.key_domain.seal_failed"
-	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
-	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
-	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
-	EventRestoreDrillRecorded                     = "backup.restore_drill.recorded"
+	// PQC pilot waves (A28/A29): a staged post-quantum handshake proof that
+	// halts the instant a wave's evidence says to.
+	EventPQCPilotStarted                    = "pqc.pilot.started"
+	EventPQCPilotWaveDispatched             = "pqc.pilot.wave_dispatched"
+	EventPQCPilotWaveAssessed               = "pqc.pilot.wave_assessed"
+	EventPQCPilotReportSigned               = "pqc.pilot.report_signed"
+	EventAccessChangeRequestCreated         = "access.change_request.created"
+	EventAccessChangeRequestDecided         = "access.change_request.decided"
+	EventTenantKeyDomainMigrationStarted    = "tenant.key_domain.migration_started"
+	EventTenantKeyDomainMigrationProgressed = "tenant.key_domain.migration_progressed"
+	EventTenantKeyDomainMigrationCompleted  = "tenant.key_domain.migration_completed"
+	EventTenantKeyDomainMigrationFailed     = "tenant.key_domain.migration_failed"
+	EventTenantKeyDomainSealRequested       = "tenant.key_domain.seal_requested"
+	EventTenantKeyDomainSealFailed          = "tenant.key_domain.seal_failed"
+	EventTenantKeyDomainSealed              = "tenant.key_domain.sealed"
+	EventTenantKeyDomainUnsealRequested     = "tenant.key_domain.unseal_requested"
+	EventTenantKeyDomainUnsealed            = "tenant.key_domain.unsealed"
+	EventRestoreDrillRecorded               = "backup.restore_drill.recorded"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -1489,6 +1495,82 @@ type NHIAccessReviewItemDecided struct {
 	Reason               string    `json:"reason,omitempty"`
 	DecisionEvidenceRefs []string  `json:"decision_evidence_refs,omitempty"`
 	DecidedAt            time.Time `json:"decided_at,omitempty"`
+}
+
+// PQCPilotStarted is the full rebuildable plan of a staged post-quantum
+// handshake proof (A28): ordered waves of endpoint targets, the first being
+// the canary, each bound to the exact leaf it must present.
+type PQCPilotStarted struct {
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	AuthorityID    string         `json:"authority_id,omitempty"`
+	RequestedBy    string         `json:"requested_by,omitempty"`
+	TimeoutSeconds int            `json:"timeout_seconds,omitempty"`
+	Waves          []PQCPilotWave `json:"waves"`
+}
+
+type PQCPilotWave struct {
+	Name    string           `json:"name"`
+	Targets []PQCPilotTarget `json:"targets"`
+}
+
+type PQCPilotTarget struct {
+	TargetID    string `json:"target_id"`
+	Address     string `json:"address"`
+	ServerName  string `json:"server_name,omitempty"`
+	Connector   string `json:"connector,omitempty"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// PQCPilotWaveDispatched retains the exact outbox row a wave's relay probe
+// rides on, so a retry restores the same job rather than a second one.
+type PQCPilotWaveDispatched struct {
+	PilotID        string    `json:"pilot_id"`
+	Wave           int       `json:"wave"`
+	OutboxID       int64     `json:"outbox_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
+	DispatchedAt   time.Time `json:"dispatched_at"`
+}
+
+// PQCPilotWaveAssessed carries the wave's classified evidence and the verdict
+// over everything accumulated through it; a canary refusal halts the pilot
+// (A29) and later waves never run.
+type PQCPilotWaveAssessed struct {
+	PilotID      string           `json:"pilot_id"`
+	Wave         int              `json:"wave"`
+	Results      []PQCPilotResult `json:"results"`
+	Verdict      PQCPilotVerdict  `json:"verdict"`
+	Status       string           `json:"status"`
+	HaltedAtWave string           `json:"halted_at_wave,omitempty"`
+	AssessedAt   time.Time        `json:"assessed_at"`
+}
+
+type PQCPilotResult struct {
+	TargetID        string    `json:"target_id"`
+	Outcome         string    `json:"outcome"`
+	HandshakeMillis int64     `json:"handshake_ms"`
+	ChainBytes      int       `json:"chain_bytes"`
+	Detail          string    `json:"detail,omitempty"`
+	EvidenceDigest  string    `json:"evidence_digest,omitempty"`
+	ObservedAt      time.Time `json:"observed_at"`
+}
+
+type PQCPilotVerdict struct {
+	Ready        bool   `json:"ready"`
+	Halt         bool   `json:"halt"`
+	Summary      string `json:"summary"`
+	Negotiated   int    `json:"negotiated"`
+	Rejected     int    `json:"rejected"`
+	Unreachable  int    `json:"unreachable"`
+	NotAttempted int    `json:"not_attempted"`
+}
+
+// PQCPilotReportSigned retains the signer-signed readiness report (M1) as its
+// canonical JSON, verifiable offline from the report alone.
+type PQCPilotReportSigned struct {
+	PilotID          string    `json:"pilot_id"`
+	SignedReportJSON string    `json:"signed_report_json"`
+	SignedAt         time.Time `json:"signed_at"`
 }
 
 // PQCMigrationCampaignStarted is the full rebuildable snapshot of a core
@@ -4117,6 +4199,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPQCMigrationCampaignUpdated:              {1: true},
 	EventPQCMigrationCampaignFindingDispositioned: {1: true},
 	EventPQCMigrationCampaignClosed:               {1: true},
+	EventPQCPilotStarted:                          {1: true},
+	EventPQCPilotWaveDispatched:                   {1: true},
+	EventPQCPilotWaveAssessed:                     {1: true},
+	EventPQCPilotReportSigned:                     {1: true},
 	EventAccessChangeRequestCreated:               {1: true},
 	EventAccessChangeRequestDecided:               {1: true},
 	EventTenantKeyDomainMigrationStarted:          {1: true},
@@ -7232,6 +7318,85 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			EvidenceRefs: pl.EvidenceRefs, EvidenceDigests: pl.EvidenceDigests,
 			DispositionedAt: dispositionedAt,
 		})
+	case EventPQCPilotStarted:
+		var pl PQCPilotStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || len(pl.Waves) == 0 {
+			return fmt.Errorf("projections: %s requires id, name and waves", e.Type)
+		}
+		pilot := store.PQCPilot{ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, AuthorityID: pl.AuthorityID,
+			RequestedBy: pl.RequestedBy, CreatedAt: e.Time}
+		for i, wave := range pl.Waves {
+			if wave.Name == "" || len(wave.Targets) == 0 {
+				return fmt.Errorf("projections: %s wave %d requires a name and targets", e.Type, i+1)
+			}
+			targets := make([]store.PQCPilotTarget, 0, len(wave.Targets))
+			for _, target := range wave.Targets {
+				if target.TargetID == "" || target.Address == "" || target.Fingerprint == "" {
+					return fmt.Errorf("projections: %s target requires target_id, address and fingerprint", e.Type)
+				}
+				targets = append(targets, store.PQCPilotTarget{TargetID: target.TargetID, Address: target.Address,
+					ServerName: target.ServerName, Connector: target.Connector, Fingerprint: target.Fingerprint})
+			}
+			pilot.Waves = append(pilot.Waves, store.PQCPilotWave{PilotID: pl.ID, Index: i + 1, Name: wave.Name, Targets: targets})
+		}
+		return p.store.ApplyPQCPilotStartedTx(ctx, tx, pilot)
+	case EventPQCPilotWaveDispatched:
+		var pl PQCPilotWaveDispatched
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.PilotID == "" || pl.Wave <= 0 || pl.OutboxID <= 0 || pl.IdempotencyKey == "" {
+			return fmt.Errorf("projections: %s requires pilot_id, wave, outbox_id and idempotency_key", e.Type)
+		}
+		at := pl.DispatchedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		return p.store.ApplyPQCPilotWaveDispatchedTx(ctx, tx, e.TenantID, pl.PilotID, pl.Wave, pl.OutboxID, pl.IdempotencyKey, at)
+	case EventPQCPilotWaveAssessed:
+		var pl PQCPilotWaveAssessed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.PilotID == "" || pl.Wave <= 0 || pl.Status == "" {
+			return fmt.Errorf("projections: %s requires pilot_id, wave and status", e.Type)
+		}
+		switch pl.Status {
+		case "running", "halted", "completed":
+		default:
+			return fmt.Errorf("projections: %s status %q is not a pilot status", e.Type, pl.Status)
+		}
+		at := pl.AssessedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		results := make([]store.PQCPilotResult, 0, len(pl.Results))
+		for _, r := range pl.Results {
+			results = append(results, store.PQCPilotResult{TargetID: r.TargetID, Outcome: r.Outcome, HandshakeMillis: r.HandshakeMillis,
+				ChainBytes: r.ChainBytes, Detail: r.Detail, EvidenceDigest: r.EvidenceDigest, ObservedAt: r.ObservedAt})
+		}
+		return p.store.ApplyPQCPilotWaveAssessedTx(ctx, tx, e.TenantID, store.PQCPilotWaveAssessment{
+			PilotID: pl.PilotID, Wave: pl.Wave, Results: results,
+			Verdict: store.PQCPilotVerdict{Ready: pl.Verdict.Ready, Halt: pl.Verdict.Halt, Summary: pl.Verdict.Summary,
+				Negotiated: pl.Verdict.Negotiated, Rejected: pl.Verdict.Rejected, Unreachable: pl.Verdict.Unreachable, NotAttempted: pl.Verdict.NotAttempted},
+			Status: pl.Status, HaltedAtWave: pl.HaltedAtWave, AssessedAt: at,
+		})
+	case EventPQCPilotReportSigned:
+		var pl PQCPilotReportSigned
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.PilotID == "" || pl.SignedReportJSON == "" {
+			return fmt.Errorf("projections: %s requires pilot_id and signed_report_json", e.Type)
+		}
+		at := pl.SignedAt
+		if at.IsZero() {
+			at = e.Time
+		}
+		return p.store.ApplyPQCPilotReportSignedTx(ctx, tx, e.TenantID, pl.PilotID, pl.SignedReportJSON, at)
 	case EventPQCMigrationCampaignClosed:
 		var pl PQCMigrationCampaignClosed
 		if err := decode(e, &pl); err != nil {

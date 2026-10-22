@@ -44,6 +44,17 @@ type EndpointVerifyIntent struct {
 	Endpoints []EndpointExpectation `json:"endpoints"`
 	// TimeoutSeconds bounds each handshake. Zero uses the package default.
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+	// Pilot names the PQC pilot wave this sweep is the probe for (A28). The
+	// relay probes exactly as for any sweep; the control plane routes the
+	// signed report to the pilot's assessment instead of the endpoint
+	// verification read model.
+	Pilot *EndpointVerifyPilot `json:"pilot,omitempty"`
+}
+
+// EndpointVerifyPilot binds a sweep to one pilot wave.
+type EndpointVerifyPilot struct {
+	PilotID string `json:"pilot_id"`
+	Wave    int    `json:"wave"`
 }
 
 // EndpointExpectation is one listener and what it should be serving.

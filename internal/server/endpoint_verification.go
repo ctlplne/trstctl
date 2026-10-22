@@ -131,6 +131,12 @@ func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, 
 	if err != nil {
 		return err
 	}
+	// A pilot wave's sweep (A28) is evidence for that pilot, not an endpoint
+	// verification of record: its targets serve the pilot's leaf on purpose.
+	var intent relay.EndpointVerifyIntent
+	if err := json.Unmarshal(jobPayload, &intent); err == nil && intent.Pilot != nil {
+		return s.orch.RecordPQCPilotWave(ctx, tenantID, intent.Pilot.PilotID, intent.Pilot.Wave, report)
+	}
 	for _, res := range report.Results {
 		id := res.EndpointID
 		eventID := orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "endpoint-verification:"+id)

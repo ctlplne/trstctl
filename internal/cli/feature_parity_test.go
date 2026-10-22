@@ -317,7 +317,7 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// The key-compromise command adds a --force-guarded effect retry so a failed
 	// host containment or dead-lettered CA publication recovers headlessly.
 	// Secret sync adds one reconcile command for a lost receiver result.
-	if len(out) != 562 {
+	if len(out) != 565 {
 		t.Fatalf("CLI commands = %d, want 562", len(out))
 	}
 	return out

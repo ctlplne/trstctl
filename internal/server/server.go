@@ -1377,6 +1377,11 @@ func (s *Server) configureMutationSpine(
 		orchestrator.WithResultProtector(d.IdempotencyResultProtector),
 	)
 	orchOptions = append(orchOptions, orchestrator.WithDurableIdempotency(idem))
+	if d.Signer != nil {
+		// A finished PQC pilot's readiness report is signed inside the isolated
+		// signer under its own pqc-readiness-report key (M1, A28/A29).
+		orchOptions = append(orchOptions, orchestrator.WithPQCPilotReportSigner(pqcPilotReportSigner(d.Signer)))
+	}
 	orch := orchestrator.NewOrchestrator(
 		d.Log,
 		d.Store,
