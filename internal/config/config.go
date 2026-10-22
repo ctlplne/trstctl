@@ -395,6 +395,7 @@ type Auth struct {
 	SAML      SAML      `json:"saml"`
 	LDAP      LDAP      `json:"ldap"`
 	Kerberos  Kerberos  `json:"kerberos"`
+	NTLM      NTLM      `json:"ntlm"`
 	SCIM      SCIM      `json:"scim"`
 	ABAC      ABAC      `json:"abac"`
 	APITokens APITokens `json:"api_tokens,omitempty"`
@@ -669,6 +670,88 @@ func (k Kerberos) validate() []error {
 		errs = append(errs, errors.New("auth.kerberos.max_clock_skew must not be negative"))
 	}
 	errs = append(errs, validateTenantMappings("auth.kerberos", k.TenantMappings, "", k.AllowDefaultTenant, k.DefaultTenant)...)
+	return errs
+}
+
+// NTLM configures served NTLM browser login (A80). trstctl never holds NT
+// hashes and never validates an NTLM response itself: the handshake is relayed
+// to a domain-joined NTLM helper speaking the squid-2.5-ntlmssp protocol
+// (Samba's ntlm_auth, the same helper Apache and Squid use), reached as a
+// local command or over a socket. GET /auth/ntlm/login answers with the NTLM
+// challenge sequence and mints the normal session once the helper reports AF.
+// OFF by default; fails closed at startup when the helper, session secret or
+// tenant mapping is incomplete.
+type NTLM struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// HelperCommand is the absolute path of a squid-2.5-ntlmssp helper to run
+	// per handshake (for example /usr/bin/ntlm_auth) with HelperArgs
+	// (defaults to --helper-protocol=squid-2.5-ntlmssp). Exactly one of
+	// HelperCommand and HelperAddress is required.
+	HelperCommand string   `json:"helper_command,omitempty"`
+	HelperArgs    []string `json:"helper_args,omitempty"`
+	// HelperAddress reaches a helper exposed over a socket: tcp://host:port or
+	// unix:///path, one connection per handshake, the same line protocol.
+	HelperAddress string `json:"helper_address,omitempty"`
+	// HelperTimeout bounds one handshake with the helper; empty means 10s.
+	HelperTimeout string `json:"helper_timeout,omitempty"`
+	// Domain, when set, admits only accounts the helper reports in that domain.
+	Domain            string          `json:"domain,omitempty"`
+	SessionSecretFile string          `json:"session_secret_file,omitempty"`
+	SessionTTL        string          `json:"session_ttl,omitempty"`
+	LoginRedirect     string          `json:"login_redirect,omitempty"`
+	TenantMappings    []TenantMapping `json:"tenant_mappings,omitempty"`
+	DefaultRoles      []string        `json:"default_roles,omitempty"`
+	DefaultTenant     string          `json:"default_tenant,omitempty"`
+	// AllowDefaultTenant opts into the DefaultTenant fallback. Off by default.
+	AllowDefaultTenant bool `json:"allow_default_tenant,omitempty"`
+}
+
+// ValidateEnabled reports NTLM configuration problems as if the block were enabled.
+func (n NTLM) ValidateEnabled() error { return errors.Join(n.validate()...) }
+
+// SessionTTLDuration parses the NTLM-backed browser session lifetime.
+func (n NTLM) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(n.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(n.SessionTTL)
+}
+
+// HelperTimeoutDuration parses helper_timeout; empty means ten seconds.
+func (n NTLM) HelperTimeoutDuration() (time.Duration, error) {
+	if strings.TrimSpace(n.HelperTimeout) == "" {
+		return 10 * time.Second, nil
+	}
+	return time.ParseDuration(n.HelperTimeout)
+}
+
+func (n NTLM) validate() []error {
+	var errs []error
+	command, address := strings.TrimSpace(n.HelperCommand), strings.TrimSpace(n.HelperAddress)
+	switch {
+	case command == "" && address == "":
+		errs = append(errs, errors.New("auth.ntlm needs helper_command or helper_address when enabled"))
+	case command != "" && address != "":
+		errs = append(errs, errors.New("auth.ntlm.helper_command and helper_address are mutually exclusive"))
+	case command != "" && !filepath.IsAbs(command):
+		errs = append(errs, errors.New("auth.ntlm.helper_command must be an absolute path"))
+	case address != "" && !strings.HasPrefix(address, "tcp://") && !strings.HasPrefix(address, "unix://"):
+		errs = append(errs, errors.New("auth.ntlm.helper_address must be tcp://host:port or unix:///path"))
+	}
+	if strings.TrimSpace(n.SessionSecretFile) == "" {
+		errs = append(errs, errors.New("auth.ntlm.session_secret_file is required when auth.ntlm.enabled is true"))
+	}
+	if d, err := n.SessionTTLDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.ntlm.session_ttl %q is invalid: %w", n.SessionTTL, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.ntlm.session_ttl must be positive"))
+	}
+	if d, err := n.HelperTimeoutDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.ntlm.helper_timeout %q is invalid: %w", n.HelperTimeout, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.ntlm.helper_timeout must be positive"))
+	}
+	errs = append(errs, validateTenantMappings("auth.ntlm", n.TenantMappings, "", n.AllowDefaultTenant, n.DefaultTenant)...)
 	return errs
 }
 
@@ -4083,6 +4166,9 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	if c.Auth.Kerberos.Enabled {
 		errs = append(errs, c.Auth.Kerberos.validate()...)
+	}
+	if c.Auth.NTLM.Enabled {
+		errs = append(errs, c.Auth.NTLM.validate()...)
 	}
 	if c.Auth.LDAP.Enabled {
 		errs = append(errs, c.Auth.LDAP.validate()...)

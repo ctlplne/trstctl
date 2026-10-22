@@ -1352,6 +1352,8 @@ export interface AuthMethods {
   ldap: boolean;
   /** Kerberos/GSSAPI browser login is mounted (A79); absent on older servers. */
   kerberos?: boolean;
+  /** NTLM browser login through a domain-joined helper is mounted (A80). */
+  ntlm?: boolean;
   /** Boolean-only public preflight. Provider identity, license, and customer
    * metadata remain inside the separately authenticated Provider plane. */
   provider_plane: boolean;

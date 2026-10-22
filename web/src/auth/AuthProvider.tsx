@@ -21,6 +21,7 @@ interface AuthState {
   samlAvailable: boolean;
   ldapAvailable: boolean;
   kerberosAvailable: boolean;
+  ntlmAvailable: boolean;
   preview: boolean;
   previewAvailable: boolean;
   startPreview: () => void;
@@ -45,6 +46,7 @@ const AuthContext = createContext<AuthState>({
   samlAvailable: false,
   ldapAvailable: false,
   kerberosAvailable: false,
+  ntlmAvailable: false,
   preview: false,
   previewAvailable: false,
   startPreview: () => {},
@@ -70,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           samlAvailable: false,
           ldapAvailable: false,
           kerberosAvailable: false,
+          ntlmAvailable: false,
           preview: true,
           previewAvailable: true,
         }
@@ -81,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           samlAvailable: false,
           ldapAvailable: false,
           kerberosAvailable: false,
+          ntlmAvailable: false,
           preview: false,
           previewAvailable: previewAllowed,
         },
@@ -100,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       samlAvailable: current.samlAvailable,
       ldapAvailable: current.ldapAvailable,
       kerberosAvailable: current.kerberosAvailable,
+      ntlmAvailable: current.ntlmAvailable,
       preview: true,
       previewAvailable: true,
     }));
@@ -118,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         samlAvailable: current.samlAvailable,
         ldapAvailable: current.ldapAvailable,
         kerberosAvailable: current.kerberosAvailable,
+        ntlmAvailable: current.ntlmAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -143,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         samlAvailable: current.samlAvailable,
         ldapAvailable: current.ldapAvailable,
         kerberosAvailable: current.kerberosAvailable,
+        ntlmAvailable: current.ntlmAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -159,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Login-method discovery is public UI metadata, not the session
       // authority. A transient failure here must hide login actions safely,
       // but it must not evict an already-authenticated operator.
-      const methods = await api.authMethods().catch(() => ({ oidc: false, saml: false, ldap: false, kerberos: false }));
+      const methods = await api.authMethods().catch(() => ({ oidc: false, saml: false, ldap: false, kerberos: false, ntlm: false }));
       try {
         const user = await api.me();
         if (!active || previewRef.current) return;
@@ -173,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           samlAvailable: methods.saml,
           ldapAvailable: methods.ldap,
           kerberosAvailable: methods.kerberos ?? false,
+          ntlmAvailable: methods.ntlm ?? false,
           preview: false,
           previewAvailable: import.meta.env.DEV,
         });
@@ -189,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             samlAvailable: methods.saml,
             ldapAvailable: methods.ldap,
             kerberosAvailable: methods.kerberos ?? false,
+            ntlmAvailable: methods.ntlm ?? false,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -201,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             samlAvailable: methods.saml,
             ldapAvailable: methods.ldap,
             kerberosAvailable: methods.kerberos ?? false,
+            ntlmAvailable: methods.ntlm ?? false,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -229,6 +239,12 @@ export function beginLogin(returnTo?: string) {
 export function beginKerberosLogin(returnTo?: string) {
   const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
   window.location.assign(query ? `/auth/kerberos/login?${query}` : "/auth/kerberos/login");
+}
+
+/** beginNTLMLogin sends the browser to the NTLM-challenged login route (A80). */
+export function beginNTLMLogin(returnTo?: string) {
+  const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
+  window.location.assign(query ? `/auth/ntlm/login?${query}` : "/auth/ntlm/login");
 }
 
 /** beginSAMLLogin starts the configured SAML provider flow. */

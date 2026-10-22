@@ -769,6 +769,10 @@ export const messages = {
     description: "Login heading when no browser sign-in method is available.",
   },
   "auth.saml.action": { defaultMessage: "Continue with SAML", description: "Starts the configured SAML browser sign-in flow." },
+  "auth.ntlm.action": {
+    defaultMessage: "Continue with Windows sign-in (NTLM)",
+    description: "Starts the NTLM browser sign-in, which the browser completes with its Windows domain credentials.",
+  },
   "auth.kerberos.action": {
     defaultMessage: "Continue with Kerberos",
     description: "Starts the Kerberos/GSSAPI browser sign-in, which the browser negotiates with its domain ticket.",

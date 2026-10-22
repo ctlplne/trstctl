@@ -148,6 +148,11 @@ type AuthConfig struct {
 	KerberosEnabled       bool
 	KerberosLogin         func(next func(http.ResponseWriter, *http.Request, auth.Claims)) http.Handler
 	ResolveKerberosTenant func(auth.Claims) (tenantID string, roles []string, err error)
+	// NTLMEnabled and NTLMLogin serve NTLM browser login through a
+	// domain-joined helper (A80), with the same continuation shape as Kerberos.
+	NTLMEnabled       bool
+	NTLMLogin         func(next func(http.ResponseWriter, *http.Request, auth.Claims)) http.Handler
+	ResolveNTLMTenant func(auth.Claims) (tenantID string, roles []string, err error)
 
 	LDAPEnabled bool
 	// VerifyLDAPLogin binds the supplied directory credentials and returns normalized
@@ -177,6 +182,7 @@ type authMethodsResponse struct {
 	SAML          bool `json:"saml"`
 	LDAP          bool `json:"ldap"`
 	Kerberos      bool `json:"kerberos"`
+	NTLM          bool `json:"ntlm"`
 	ProviderPlane bool `json:"provider_plane"`
 }
 
@@ -193,6 +199,7 @@ func (a *API) authMethods(w http.ResponseWriter, _ *http.Request) {
 		methods.SAML = a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil
 		methods.LDAP = a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil
 		methods.Kerberos = a.auth.KerberosEnabled || a.auth.KerberosLogin != nil
+		methods.NTLM = a.auth.NTLMEnabled || a.auth.NTLMLogin != nil
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	a.writeJSON(w, http.StatusOK, methods)
@@ -612,6 +619,35 @@ func (a *API) authKerberosLogin(w http.ResponseWriter, r *http.Request) {
 		})
 	})
 	a.kerberosHandler.ServeHTTP(w, r)
+}
+
+// authNTLMLogin serves GET /auth/ntlm/login (A80): the NTLM challenge sequence
+// is relayed to the configured domain-joined helper; once it reports the
+// authenticated account, the account is mapped to a tenant and the normal
+// browser session is minted, honoring a local return_to.
+func (a *API) authNTLMLogin(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil || a.auth.NTLMLogin == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "NTLM login is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
+	a.ntlmOnce.Do(func() {
+		a.ntlmHandler = a.auth.NTLMLogin(func(w http.ResponseWriter, r *http.Request, claims auth.Claims) {
+			resolve := a.auth.ResolveNTLMTenant
+			if resolve == nil {
+				resolve = a.auth.ResolveTenant
+			}
+			tenantID, roles, err := a.resolveLoginTenantWith(claims, resolve)
+			if err != nil {
+				a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
+				return
+			}
+			a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, safeLoginReturnPath(r.URL.Query().Get("return_to")), nil)
+		})
+	})
+	a.ntlmHandler.ServeHTTP(w, r)
 }
 
 func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, clearCookies ...string) {

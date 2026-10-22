@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
-import { beginLogin, beginSAMLLogin, beginKerberosLogin, useAuth } from "@/auth/AuthProvider";
+import { beginLogin, beginSAMLLogin, beginKerberosLogin, beginNTLMLogin, useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BrandMark } from "@/components/BrandMark";
 import { ErrorState } from "@/components/StatePrimitives";
@@ -11,8 +11,8 @@ import { translateNow } from "@/i18n/I18nProvider";
 const LDAPLoginForm = lazy(() => import("./login/LDAPLoginForm"));
 
 export function Login() {
-  const { oidcAvailable, samlAvailable, ldapAvailable, kerberosAvailable, previewAvailable, startPreview } = useAuth();
-  const browserLoginAvailable = oidcAvailable || samlAvailable || ldapAvailable || kerberosAvailable;
+  const { oidcAvailable, samlAvailable, ldapAvailable, kerberosAvailable, ntlmAvailable, previewAvailable, startPreview } = useAuth();
+  const browserLoginAvailable = oidcAvailable || samlAvailable || ldapAvailable || kerberosAvailable || ntlmAvailable;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const needsTenantAccess = searchParams.get("error") === "tenant_access_not_configured";
@@ -67,6 +67,15 @@ export function Login() {
                 {translateNow("auth.kerberos.action")}
               </Button>
             )}
+            {ntlmAvailable && (
+              <Button
+                className="mt-3 min-h-11 w-full"
+                variant={oidcAvailable || samlAvailable || kerberosAvailable ? "outline" : "default"}
+                onClick={() => beginNTLMLogin(searchParams.get("return_to") ?? undefined)}
+              >
+                {translateNow("auth.ntlm.action")}
+              </Button>
+            )}
             {ldapAvailable && (
               <Suspense
                 fallback={
@@ -75,7 +84,10 @@ export function Login() {
                   </p>
                 }
               >
-                <LDAPLoginForm returnTo={searchParams.get("return_to") ?? undefined} secondary={oidcAvailable || samlAvailable || kerberosAvailable} />
+                <LDAPLoginForm
+                  returnTo={searchParams.get("return_to") ?? undefined}
+                  secondary={oidcAvailable || samlAvailable || kerberosAvailable || ntlmAvailable}
+                />
               </Suspense>
             )}
             {previewAvailable && (

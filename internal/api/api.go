@@ -48,8 +48,12 @@ const (
 type API struct {
 	// kerberosHandler is the SPNEGO login handler, built once from the
 	// configured hook (A79).
-	kerberosOnce        sync.Once
-	kerberosHandler     http.Handler
+	kerberosOnce    sync.Once
+	kerberosHandler http.Handler
+	// ntlmHandler is the NTLM login handler, built once from the configured
+	// hook (A80).
+	ntlmOnce            sync.Once
+	ntlmHandler         http.Handler
 	guardedPatterns     map[string]bool
 	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
 	tenantServiceCheck  tenancy.ServiceCheck
@@ -724,6 +728,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		}
 		if a.auth.KerberosEnabled || a.auth.KerberosLogin != nil {
 			mux.HandleFunc("GET /auth/kerberos/login", a.authKerberosLogin)
+		}
+		if a.auth.NTLMEnabled || a.auth.NTLMLogin != nil {
+			mux.HandleFunc("GET /auth/ntlm/login", a.authNTLMLogin)
 		}
 		mux.HandleFunc("GET /auth/me", a.authMe)
 		mux.HandleFunc("POST /auth/logout", a.authLogout)

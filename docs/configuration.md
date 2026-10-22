@@ -1207,6 +1207,22 @@ auth:
         roles: [admin]
 ```
 
+Example NTLM config (the handshake is relayed to Samba's `ntlm_auth` on a
+domain-joined host; the helper, not trstctl, validates the NTLM response):
+
+```yaml
+auth:
+  ntlm:
+    enabled: true
+    helper_command: /usr/bin/ntlm_auth        # or helper_address: tcp://ntlm-helper.internal:3101
+    domain: CORP
+    session_secret_file: /var/lib/trstctl/ntlm-session.secret
+    tenant_mappings:
+      - subject: alice@CORP
+        tenant_id: 11111111-1111-1111-1111-111111111111
+        roles: [admin]
+```
+
 Example LDAP / Active Directory config:
 
 ```yaml

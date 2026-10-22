@@ -507,6 +507,9 @@ type Deps struct {
 	// Kerberos configures served Kerberos/GSSAPI browser login (A79). Run
 	// fills this from config.Auth.Kerberos.
 	Kerberos config.Kerberos
+	// NTLM configures served NTLM browser login through a domain-joined
+	// helper (A80). Run fills this from config.Auth.NTLM.
+	NTLM config.NTLM
 	// SCIM configures served SCIM 2.0 provisioning under /scim/v2. Run fills this
 	// from config.Auth.SCIM.
 	SCIM config.SCIM

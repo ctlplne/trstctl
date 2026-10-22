@@ -260,7 +260,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Plugin isolation | First-party runs trusted in-process; third-party is WASM-sandboxed and signature-verified | [Plugin isolation](#plugin-isolation-first-party-in-process-third-party-sandboxed) |
 | Protocols: ACME/EST/SCEP/CMP/SPIFFE/SSH/TSA | Served end to end, each behind its own enable flag | [Protocols](#protocols) |
 | Revocation (OCSP/CRL) | Served, signed by the isolated signer | [Revocation](#revocation) |
-| Single sign-on detail | Served, including SAML single logout and Kerberos/GSSAPI login on the tenant plane; NTLM not yet implemented | [Single sign-on](#single-sign-on) |
+| Single sign-on detail | Served, including SAML single logout, Kerberos/GSSAPI and NTLM (through a domain-joined helper) login on the tenant plane | [Single sign-on](#single-sign-on) |
 | CA key custody / HSM / BYOK | Sealed local key store by default; six of six HSM/KMS backends served | [CA key custody](#ca-key-custody) |
 | Post-quantum cryptography | ML-DSA/ML-KEM/SLH-DSA available; compatibility-bounded proofs | [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms) |
 | PCAS KEM data re-wrap | Not built; the served route prepares successor keys but cannot migrate ciphertext | [PCAS KEM data re-wrap](#pcas-kem-data-re-wrap-not-built) |

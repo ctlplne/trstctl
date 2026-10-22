@@ -93,7 +93,7 @@ func buildBrowserAuthWithSCIM(d Deps) (options []api.Option, scimConfig *api.SCI
 	var extra editionseam.TenantAuthConfig
 	if d.TenantAuthFactory != nil {
 		deps := editionseam.TenantAuthDeps{
-			SAML: d.SAML, LDAP: d.LDAP, Kerberos: d.Kerberos, SCIM: d.SCIM, Secure: d.SecurityHeaders.TLS,
+			SAML: d.SAML, LDAP: d.LDAP, Kerberos: d.Kerberos, NTLM: d.NTLM, SCIM: d.SCIM, Secure: d.SecurityHeaders.TLS,
 			NewSessionIssuer: func(secret []byte, ttl time.Duration) *auth.SessionIssuer {
 				return newBrowserSessionIssuer(secret, ttl, d.Store)
 			},
@@ -128,6 +128,11 @@ func buildBrowserAuthWithSCIM(d Deps) (options []api.Option, scimConfig *api.SCI
 		base = extra.Kerberos
 	} else if extra.Kerberos != nil {
 		mergeKerberosAuthConfig(base, extra.Kerberos)
+	}
+	if base == nil {
+		base = extra.NTLM
+	} else if extra.NTLM != nil {
+		mergeNTLMAuthConfig(base, extra.NTLM)
 	}
 	if base != nil {
 		options = append(options, api.WithAuth(*base))
@@ -285,6 +290,18 @@ func mergeKerberosAuthConfig(dst, src *api.AuthConfig) {
 	dst.KerberosEnabled = src.KerberosEnabled
 	dst.KerberosLogin = src.KerberosLogin
 	dst.ResolveKerberosTenant = src.ResolveKerberosTenant
+	if dst.LoginRedirect == "" {
+		dst.LoginRedirect = src.LoginRedirect
+	}
+	if dst.Sessions == nil {
+		dst.Sessions = src.Sessions
+	}
+}
+
+func mergeNTLMAuthConfig(dst, src *api.AuthConfig) {
+	dst.NTLMEnabled = src.NTLMEnabled
+	dst.NTLMLogin = src.NTLMLogin
+	dst.ResolveNTLMTenant = src.ResolveNTLMTenant
 	if dst.LoginRedirect == "" {
 		dst.LoginRedirect = src.LoginRedirect
 	}

@@ -15,7 +15,7 @@ func (enterpriseSSORequiredError) Error() string {
 }
 
 func requireTenantAuthAttachment(d Deps) error {
-	if (d.SAML.Enabled || d.LDAP.Enabled || d.Kerberos.Enabled || d.SCIM.Enabled) && d.TenantAuthFactory == nil {
+	if (d.SAML.Enabled || d.LDAP.Enabled || d.Kerberos.Enabled || d.NTLM.Enabled || d.SCIM.Enabled) && d.TenantAuthFactory == nil {
 		return ErrEnterpriseSSORequired
 	}
 	return nil

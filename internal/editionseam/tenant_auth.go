@@ -17,6 +17,7 @@ type TenantAuthDeps struct {
 	SAML             config.SAML
 	LDAP             config.LDAP
 	Kerberos         config.Kerberos
+	NTLM             config.NTLM
 	SCIM             config.SCIM
 	Secure           bool
 	NewSessionIssuer func([]byte, time.Duration) *auth.SessionIssuer
@@ -31,5 +32,6 @@ type TenantAuthConfig struct {
 	SAML     *api.AuthConfig
 	LDAP     *api.AuthConfig
 	Kerberos *api.AuthConfig
+	NTLM     *api.AuthConfig
 	SCIM     *api.SCIMConfig
 }
