@@ -5308,7 +5308,9 @@ export interface MigrationMemberBinding {
   required_agent_id: string;
   subject_common_name: string;
   subject_dns_names: string[];
+  subject_email_addresses?: string[];
   subject_ip_addresses?: string[];
+  subject_uris?: string[];
   successor_fingerprint?: string;
   target: string;
   target_config: Record<string, unknown>;

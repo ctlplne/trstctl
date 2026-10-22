@@ -90,7 +90,7 @@ func TestACSRMayAssertOnlyTheIPAddressesItsJobCarries(t *testing.T) {
 		"ip common name":      {csr("10.0.0.8", dns), ips, codes.PermissionDenied, "10.0.0.8"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			err := authorizeAgentCSRWithInspector(tc.csr, []string{"api.example.test"}, tc.ips, crypto.InspectCSR)
+			err := authorizeAgentCSRWithInspector(tc.csr, []string{"api.example.test"}, tc.ips, nil, nil, crypto.InspectCSR)
 			if status.Code(err) != tc.code {
 				t.Fatalf("authorize = %v, want %v", err, tc.code)
 			}
@@ -128,30 +128,29 @@ func TestHostRenewalSubjectKeepsIPIdentifiers(t *testing.T) {
 		}
 		return store.Certificate{CertificateDER: der}
 	}
-	dnsNames, ips, ok := hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
+	dnsNames, ips, _, _, ok := hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
 		CommonName: "api.example.test", DNSNames: []string{"api.example.test"},
 		IPAddresses: []net.IP{net.ParseIP("10.0.0.7")},
 	}))
 	if !ok || len(dnsNames) != 1 || len(ips) != 1 || ips[0] != "10.0.0.7" {
 		t.Fatalf("dns+ip predecessor: dns=%v ips=%v ok=%v; want both identifier sets kept", dnsNames, ips, ok)
 	}
-	dnsNames, ips, ok = hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
+	dnsNames, ips, _, _, ok = hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
 		CommonName: "10.0.0.7", IPAddresses: []net.IP{net.ParseIP("10.0.0.7")},
 	}))
 	if !ok || len(dnsNames) != 0 || len(ips) != 1 {
 		t.Fatalf("ip-only predecessor: dns=%v ips=%v ok=%v; want renewable", dnsNames, ips, ok)
 	}
-	if _, _, ok := hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
+	// A35 extension: rfc822Names and URIs ride their own halves, exactly.
+	dnsNames, ips, emails, uris, ok := hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
 		CommonName: "api.example.test", DNSNames: []string{"api.example.test"},
-		EmailAddresses: []string{"ops@example.test"},
-	})); ok {
-		t.Fatal("an rfc822Name predecessor was offered to a path that cannot preserve it")
+		EmailAddresses: []string{"Ops@example.test"}, URIs: []string{"spiffe://example.test/api"},
+	}))
+	if !ok || len(dnsNames) != 1 || len(ips) != 0 || len(emails) != 1 || emails[0] != "Ops@example.test" || len(uris) != 1 || uris[0] != "spiffe://example.test/api" {
+		t.Fatalf("email+uri predecessor: dns=%v ips=%v emails=%v uris=%v ok=%v; want every identifier kept as spelled", dnsNames, ips, emails, uris, ok)
 	}
-	if _, _, ok := hostRenewalSubject(leaf(crypto.CertificateRequestTemplate{
-		CommonName: "api.example.test", DNSNames: []string{"api.example.test"},
-		URIs: []string{"spiffe://example.test/api"},
-	})); ok {
-		t.Fatal("a URI predecessor was offered to a path that cannot preserve it")
+	if hostRenewalCommonName(nil, nil, emails, uris) != "Ops@example.test" || hostRenewalCommonName(nil, nil, nil, uris) != "spiffe://example.test/api" {
+		t.Fatal("the common name does not follow the binding order: DNS, IP, email, URI")
 	}
 }
 

@@ -30,7 +30,7 @@ func runHostReprotect(ctx context.Context, ch Channel, client *http.Client, prof
 	if intent.PQCRunID != "" || intent.MigrationRunID != "" || intent.ReprotectJobID == "" ||
 		intent.ReprotectPredecessorFingerprint == "" || intent.ReprotectPredecessorSPKISHA256 == "" ||
 		intent.PredecessorCertificateID == "" || intent.IdentityID == "" || intent.IssuingAuthoritySource != "private" ||
-		intent.IssuingAuthorityID == "" || (len(intent.SubjectDNSNames) == 0 && len(intent.SubjectIPAddresses) == 0) ||
+		intent.IssuingAuthorityID == "" || (len(intent.SubjectDNSNames) == 0 && len(intent.SubjectIPAddresses) == 0 && len(intent.SubjectEmailAddresses) == 0 && len(intent.SubjectURIs) == 0) ||
 		intent.VerifyAddress == "" || intent.VerifyServerName == "" {
 		report(ctx, ch, job, OutcomeFailed, "CA re-protection intent is incomplete or mixed with another migration")
 		return false

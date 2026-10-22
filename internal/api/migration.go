@@ -455,7 +455,7 @@ func (a *API) buildMigrationMember(
 	if err != nil {
 		return migration.RunMember{}, nil, errors.New("migration member predecessor certificate could not be read")
 	}
-	subjectCommonName, subjectDNSNames, subjectIPAddresses, err := migrationMemberSubject(info)
+	subjectCommonName, subjectDNSNames, subjectIPAddresses, subjectEmailAddresses, subjectURIs, err := migrationMemberSubject(info)
 	if err != nil {
 		return migration.RunMember{}, nil, err
 	}
@@ -483,6 +483,7 @@ func (a *API) buildMigrationMember(
 		TrustAnchorFingerprint: cleanMigrationFingerprint(anchorFingerprint),
 		VerifyAddress:          verifyAddress, VerifyServerName: verifyServerName,
 		SubjectCommonName: subjectCommonName, SubjectDNSNames: subjectDNSNames, SubjectIPAddresses: subjectIPAddresses,
+		SubjectEmailAddresses: subjectEmailAddresses, SubjectURIs: subjectURIs,
 		PredecessorCertificateID: predecessor.ID,
 		PredecessorFingerprint:   cleanMigrationFingerprint(predecessor.Fingerprint),
 	}}, gated, nil
@@ -527,16 +528,12 @@ func migrationIssuingAuthority(authority store.CAAuthority, authorities []store.
 }
 
 // migrationMemberSubject freezes what the successor may certify from the
-// predecessor's identifiers (A35). DNS names and IP addresses are the two
-// kinds a host listener binding can express; an rfc822Name or URI predecessor
-// is refused rather than silently narrowed, because the successor would stop
-// asserting an identity some client relies on. The common name follows the
-// first DNS name, else the first address, so the name set the host may request
-// is exactly the set the binding carries.
-func migrationMemberSubject(info certinfo.Info) (commonName string, dnsNames, ipAddresses []string, err error) {
-	if len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
-		return "", nil, nil, errors.New("migration member predecessor must carry DNS or IP identifiers only")
-	}
+// predecessor's identifiers (A35, extended): DNS names, IP addresses,
+// rfc822Names and URIs each on their own half of the binding, exactly as the
+// predecessor carried them, so the successor asserts every identity some
+// client relies on and nothing more. The common name follows the first DNS
+// name, else the first address, else the first rfc822Name, else the first URI.
+func migrationMemberSubject(info certinfo.Info) (commonName string, dnsNames, ipAddresses, emailAddresses, uris []string, err error) {
 	seen := map[string]bool{}
 	for _, name := range info.DNSNames {
 		name = strings.TrimSpace(name)
@@ -548,11 +545,25 @@ func migrationMemberSubject(info certinfo.Info) (commonName string, dnsNames, ip
 	for _, raw := range info.IPAddresses {
 		ip := net.ParseIP(strings.TrimSpace(raw))
 		if ip == nil {
-			return "", nil, nil, errors.New("migration member predecessor carries an unreadable IP address")
+			return "", nil, nil, nil, nil, errors.New("migration member predecessor carries an unreadable IP address")
 		}
 		if key := ip.String(); !seen["ip:"+key] {
 			seen["ip:"+key] = true
 			ipAddresses = append(ipAddresses, key)
+		}
+	}
+	for _, raw := range info.EmailAddresses {
+		email := strings.TrimSpace(raw)
+		if key := "email:" + strings.ToLower(email); email != "" && !seen[key] {
+			seen[key] = true
+			emailAddresses = append(emailAddresses, email)
+		}
+	}
+	for _, raw := range info.URIs {
+		uri := strings.TrimSpace(raw)
+		if key := "uri:" + uri; uri != "" && !seen[key] {
+			seen[key] = true
+			uris = append(uris, uri)
 		}
 	}
 	switch {
@@ -560,10 +571,14 @@ func migrationMemberSubject(info certinfo.Info) (commonName string, dnsNames, ip
 		commonName = dnsNames[0]
 	case len(ipAddresses) > 0:
 		commonName = ipAddresses[0]
+	case len(emailAddresses) > 0:
+		commonName = emailAddresses[0]
+	case len(uris) > 0:
+		commonName = uris[0]
 	default:
-		return "", nil, nil, errors.New("migration member predecessor carries no DNS name or IP address")
+		return "", nil, nil, nil, nil, errors.New("migration member predecessor carries no DNS name, IP address, email address or URI")
 	}
-	return commonName, dnsNames, ipAddresses, nil
+	return commonName, dnsNames, ipAddresses, emailAddresses, uris, nil
 }
 
 func migrationVerifyTarget(cfg json.RawMessage) (string, string) {

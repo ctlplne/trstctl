@@ -387,6 +387,12 @@ func renewalSubjectNames(intent DeployIntent) []string {
 	for _, n := range intent.SubjectIPAddresses {
 		add(n)
 	}
+	for _, n := range intent.SubjectEmailAddresses {
+		add(n)
+	}
+	for _, n := range intent.SubjectURIs {
+		add(n)
+	}
 	add(intent.SubjectCommonName)
 	return out
 }

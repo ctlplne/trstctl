@@ -37,6 +37,16 @@ func hostSubjectTemplate(intent DeployIntent) (crypto.CertificateRequestTemplate
 		}
 		tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
 	}
+	for _, raw := range intent.SubjectEmailAddresses {
+		if raw = strings.TrimSpace(raw); raw != "" {
+			tmpl.EmailAddresses = append(tmpl.EmailAddresses, raw)
+		}
+	}
+	for _, raw := range intent.SubjectURIs {
+		if raw = strings.TrimSpace(raw); raw != "" {
+			tmpl.URIs = append(tmpl.URIs, raw)
+		}
+	}
 	return tmpl, nil
 }
 

@@ -87,10 +87,12 @@ type DeployIntent struct {
 	// its CSR would get a refusal rather than a wider certificate.
 	// SubjectKeyAlgorithm is the reviewed key choice retained in this job.
 	// Empty preserves legacy ECDSA-P256 jobs. Explicit choices never fall back.
-	SubjectKeyAlgorithm string   `json:"subject_key_algorithm,omitempty"`
-	SubjectCommonName   string   `json:"subject_common_name,omitempty"`
-	SubjectDNSNames     []string `json:"subject_dns_names,omitempty"`
-	SubjectIPAddresses  []string `json:"subject_ip_addresses,omitempty"`
+	SubjectKeyAlgorithm   string   `json:"subject_key_algorithm,omitempty"`
+	SubjectCommonName     string   `json:"subject_common_name,omitempty"`
+	SubjectDNSNames       []string `json:"subject_dns_names,omitempty"`
+	SubjectIPAddresses    []string `json:"subject_ip_addresses,omitempty"`
+	SubjectEmailAddresses []string `json:"subject_email_addresses,omitempty"`
+	SubjectURIs           []string `json:"subject_uris,omitempty"`
 	// A PQC certificate migration binds the discovered public predecessor to
 	// this exact host job. The agent verifies it on the listener and seals the
 	// local certificate/key pair before generating any replacement key.

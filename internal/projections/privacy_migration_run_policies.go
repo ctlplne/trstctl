@@ -64,6 +64,8 @@ func migrationRunPrivacyPolicy() events.PrivacyEventPolicy {
 		privacyRule("/run/waves/*/members/*/binding/subject_common_name", token),
 		privacyRule("/run/waves/*/members/*/binding/subject_dns_names/*", token),
 		privacyRule("/run/waves/*/members/*/binding/subject_ip_addresses/*", token),
+		privacyRule("/run/waves/*/members/*/binding/subject_email_addresses/*", token),
+		privacyRule("/run/waves/*/members/*/binding/subject_uris/*", token),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_certificate_id", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_fingerprint", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_ca_id", opaque),

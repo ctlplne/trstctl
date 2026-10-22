@@ -21951,7 +21951,19 @@
             },
             "type": "array"
           },
+          "subject_email_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "subject_ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject_uris": {
             "items": {
               "type": "string"
             },

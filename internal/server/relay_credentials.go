@@ -436,6 +436,8 @@ type RelayDeployIntent struct {
 	SubjectCommonName               string   `json:"subject_common_name,omitempty"`
 	SubjectDNSNames                 []string `json:"subject_dns_names,omitempty"`
 	SubjectIPAddresses              []string `json:"subject_ip_addresses,omitempty"`
+	SubjectEmailAddresses           []string `json:"subject_email_addresses,omitempty"`
+	SubjectURIs                     []string `json:"subject_uris,omitempty"`
 	PQCRunID                        string   `json:"pqc_run_id,omitempty"`
 	PQCAssetID                      string   `json:"pqc_asset_id,omitempty"`
 	PQCPredecessorFingerprint       string   `json:"pqc_predecessor_fingerprint,omitempty"`

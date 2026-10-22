@@ -40,6 +40,8 @@ type hostReprotectIntent struct {
 	SubjectCommonName               string          `json:"subject_common_name"`
 	SubjectDNSNames                 []string        `json:"subject_dns_names"`
 	SubjectIPAddresses              []string        `json:"subject_ip_addresses,omitempty"`
+	SubjectEmailAddresses           []string        `json:"subject_email_addresses,omitempty"`
+	SubjectURIs                     []string        `json:"subject_uris,omitempty"`
 	PredecessorCertificateID        string          `json:"predecessor_certificate_id"`
 	IssuingAuthoritySource          string          `json:"issuing_authority_source"`
 	IssuingAuthorityID              string          `json:"issuing_authority_id"`
@@ -109,6 +111,7 @@ func (h Handler) dispatchHostCredentialReissue(ctx context.Context, job Job, suc
 		TargetConfig: target.Config, CredentialRefs: hostReprotectSecretRefs(target.Config),
 		VerifyAddress: plan.VerifyAddress, VerifyServerName: plan.VerifyServerName,
 		SubjectCommonName: info.CommonName, SubjectDNSNames: info.DNSNames, SubjectIPAddresses: info.IPAddresses,
+		SubjectEmailAddresses: info.EmailAddresses, SubjectURIs: info.URIs,
 		PredecessorCertificateID: job.Dependent.ID, IssuingAuthoritySource: "private",
 		IssuingAuthorityID: successorID, RequiredAgentID: plan.RequiredAgentID,
 		ReprotectJobID: job.ID, ReprotectPredecessorFingerprint: plan.PredecessorFingerprint,

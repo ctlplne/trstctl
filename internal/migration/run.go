@@ -137,24 +137,29 @@ func RecordSuccessorIssued(in Run, waveID, identityID, fingerprint string) (Run,
 // AnchorPEM and certificate metadata are public; private-key material has no
 // field in this contract.
 type MemberBinding struct {
-	IssuingAuthorityID       string           `json:"issuing_authority_id"`
-	Issuance                 *IssuanceBinding `json:"issuance,omitempty"`
-	TargetID                 string           `json:"target_id"`
-	TargetRevision           string           `json:"target_revision"`
-	Connector                string           `json:"connector"`
-	Target                   string           `json:"target"`
-	TargetConfig             json.RawMessage  `json:"target_config"`
-	RequiredAgentID          string           `json:"required_agent_id"`
-	TrustAnchorPath          string           `json:"trust_anchor_path"`
-	TrustAnchorPEM           []byte           `json:"trust_anchor_pem"`
-	TrustAnchorFingerprint   string           `json:"trust_anchor_fingerprint"`
-	VerifyAddress            string           `json:"verify_address"`
-	VerifyServerName         string           `json:"verify_server_name,omitempty"`
-	SubjectCommonName        string           `json:"subject_common_name"`
-	SubjectDNSNames          []string         `json:"subject_dns_names"`
-	SubjectIPAddresses       []string         `json:"subject_ip_addresses,omitempty"`
-	PredecessorCertificateID string           `json:"predecessor_certificate_id"`
-	PredecessorFingerprint   string           `json:"predecessor_fingerprint"`
+	IssuingAuthorityID     string           `json:"issuing_authority_id"`
+	Issuance               *IssuanceBinding `json:"issuance,omitempty"`
+	TargetID               string           `json:"target_id"`
+	TargetRevision         string           `json:"target_revision"`
+	Connector              string           `json:"connector"`
+	Target                 string           `json:"target"`
+	TargetConfig           json.RawMessage  `json:"target_config"`
+	RequiredAgentID        string           `json:"required_agent_id"`
+	TrustAnchorPath        string           `json:"trust_anchor_path"`
+	TrustAnchorPEM         []byte           `json:"trust_anchor_pem"`
+	TrustAnchorFingerprint string           `json:"trust_anchor_fingerprint"`
+	VerifyAddress          string           `json:"verify_address"`
+	VerifyServerName       string           `json:"verify_server_name,omitempty"`
+	SubjectCommonName      string           `json:"subject_common_name"`
+	SubjectDNSNames        []string         `json:"subject_dns_names"`
+	SubjectIPAddresses     []string         `json:"subject_ip_addresses,omitempty"`
+	// SubjectEmailAddresses and SubjectURIs are the rfc822Name and URI halves of
+	// the binding (A35 extension), frozen from the predecessor exactly: a
+	// successor asserts every identifier the predecessor carried and no other.
+	SubjectEmailAddresses    []string `json:"subject_email_addresses,omitempty"`
+	SubjectURIs              []string `json:"subject_uris,omitempty"`
+	PredecessorCertificateID string   `json:"predecessor_certificate_id"`
+	PredecessorFingerprint   string   `json:"predecessor_fingerprint"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
 	// response requires it; a generic migration may leave it empty.
 	PredecessorCAID string `json:"predecessor_ca_id,omitempty"`
@@ -627,7 +632,7 @@ func ValidateExecutableRun(run Run) error {
 				strings.TrimSpace(b.RequiredAgentID) == "" || strings.TrimSpace(b.TrustAnchorPath) == "" ||
 				len(b.TrustAnchorPEM) == 0 || strings.TrimSpace(b.TrustAnchorFingerprint) == "" ||
 				strings.TrimSpace(b.VerifyAddress) == "" || strings.TrimSpace(b.SubjectCommonName) == "" ||
-				(len(b.SubjectDNSNames) == 0 && len(b.SubjectIPAddresses) == 0) || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
+				(len(b.SubjectDNSNames) == 0 && len(b.SubjectIPAddresses) == 0 && len(b.SubjectEmailAddresses) == 0 && len(b.SubjectURIs) == 0) || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
 				strings.TrimSpace(b.PredecessorFingerprint) == "" || len(b.TargetConfig) == 0 {
 				return fmt.Errorf("migration: member %s has incomplete immutable execution authority", member.IdentityID)
 			}

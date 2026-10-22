@@ -45,42 +45,40 @@ import (
 //
 // A silent narrowing of what an endpoint asserts is the worst available outcome
 // — the deploy succeeds, verification passes against the fingerprint, and some
-// client that connected by the dropped identifier starts failing. So a
-// certificate carrying an rfc822Name or URI, which a host listener binding
-// cannot express, is REFUSED for this path and left on the one that can
-// represent it. That is a real limitation of host-generated renewal, and acting
-// on it is better than papering over it.
-func hostRenewalSubject(cert store.Certificate) (dnsNames, ipAddresses []string, ok bool) {
+// client that connected by the dropped identifier starts failing. So the
+// binding carries rfc822Names and URIs on their own halves too (A35 extension),
+// exactly as the certificate spelled them; nothing the predecessor asserted is
+// dropped and nothing is added.
+func hostRenewalSubject(cert store.Certificate) (dnsNames, ipAddresses, emailAddresses, uris []string, ok bool) {
 	if len(cert.CertificateDER) == 0 {
 		// Nothing to inspect means nothing can be asserted about the shape.
-		return nil, nil, false
+		return nil, nil, nil, nil, false
 	}
 	info, err := certinfo.Inspect(cert.CertificateDER)
 	if err != nil {
-		return nil, nil, false
-	}
-	if len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
-		return nil, nil, false
+		return nil, nil, nil, nil, false
 	}
 	ipAddresses = canonicalBoundIPAddresses(info.IPAddresses)
 	if len(ipAddresses) != len(info.IPAddresses) {
 		// An address the binding cannot spell canonically cannot be authorized.
-		return nil, nil, false
+		return nil, nil, nil, nil, false
 	}
-	if len(info.DNSNames) == 0 && len(ipAddresses) == 0 {
-		return nil, nil, false
+	emailAddresses = canonicalBoundEmailAddresses(info.EmailAddresses)
+	uris = canonicalBoundURIs(info.URIs)
+	if len(info.DNSNames) == 0 && len(ipAddresses) == 0 && len(emailAddresses) == 0 && len(uris) == 0 {
+		return nil, nil, nil, nil, false
 	}
-	return append([]string(nil), info.DNSNames...), ipAddresses, true
+	return append([]string(nil), info.DNSNames...), ipAddresses, emailAddresses, uris, true
 }
 
-// hostRenewalCommonName follows the first DNS name, else the first address, so
-// the name set the host may request is exactly the set the binding carries.
-func hostRenewalCommonName(dnsNames, ipAddresses []string) string {
-	if len(dnsNames) > 0 {
-		return dnsNames[0]
-	}
-	if len(ipAddresses) > 0 {
-		return ipAddresses[0]
+// hostRenewalCommonName follows the first DNS name, else the first address,
+// else the first rfc822Name, else the first URI, so the name set the host may
+// request is exactly the set the binding carries.
+func hostRenewalCommonName(dnsNames, ipAddresses, emailAddresses, uris []string) string {
+	for _, half := range [][]string{dnsNames, ipAddresses, emailAddresses, uris} {
+		if len(half) > 0 {
+			return half[0]
+		}
 	}
 	return ""
 }
@@ -138,7 +136,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	ident store.Identity,
 	target store.DeploymentTarget,
 	commonName string,
-	dnsNames, ipAddresses []string,
+	dnsNames, ipAddresses, emailAddresses, uris []string,
 	predecessorCertificateID, rotationRunID string,
 	issuance *store.OperationApprovalIssuanceBinding,
 	idempotencyKey string,
@@ -178,6 +176,8 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
 		SubjectIPAddresses:       ipAddresses,
+		SubjectEmailAddresses:    emailAddresses,
+		SubjectURIs:              uris,
 		PredecessorCertificateID: predecessorCertificateID,
 		RotationRunID:            rotationRunID,
 		IssuingAuthoritySource:   selection.Source,
@@ -221,7 +221,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 // the absence of deploy receipts.
 func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 	ctx context.Context, tenantID string, ident store.Identity,
-	target store.DeploymentTarget, dnsNames, ipAddresses []string,
+	target store.DeploymentTarget, dnsNames, ipAddresses, emailAddresses, uris []string,
 ) {
 	if d.log == nil {
 		return
@@ -363,17 +363,17 @@ func (d *issuanceDispatcher) dispatchHostRenewal(
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}
-	dnsNames, ipAddresses, hostRenewable := hostRenewalSubject(predecessor)
+	dnsNames, ipAddresses, emailAddresses, uris, hostRenewable := hostRenewalSubject(predecessor)
 	if !hostExecuted || !hostRenewable {
 		return false, nil
 	}
 	if err := d.enqueueHostRenewal(ctx, tenantID, ident, target,
-		hostRenewalCommonName(dnsNames, ipAddresses), dnsNames, ipAddresses,
+		hostRenewalCommonName(dnsNames, ipAddresses, emailAddresses, uris), dnsNames, ipAddresses, emailAddresses, uris,
 		predecessor.ID, run.ID, issuance, "host-renew:"+idemKey); err != nil {
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}
-	d.recordAgentRenewalDispatch(ctx, tenantID, ident, target, dnsNames, ipAddresses)
+	d.recordAgentRenewalDispatch(ctx, tenantID, ident, target, dnsNames, ipAddresses, emailAddresses, uris)
 	return true, nil
 }
 

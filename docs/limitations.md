@@ -3522,18 +3522,18 @@ than sending an operator looking for a credential that was never there.
   `/{id}/rollback`, the matching `trstctl migrations` commands, SDKs, and the
   `/migration` console. Scope: executable membership is deliberately narrower than
   assessment today — one active internally issued predecessor per identity that
-  carries DNS names, IP addresses or both, an enabled host-agent connector with
-  `verify_address`, and an active host-role agent. The member binding freezes the
-  predecessor's DNS names and IP addresses separately; the host-generated
+  carries any mix of DNS names, IP addresses, rfc822Names and URIs, an enabled
+  host-agent connector with `verify_address`, and an active host-role agent. The
+  member binding freezes each kind of identifier on its own half
+  (`subject_dns_names`, `subject_ip_addresses`, `subject_email_addresses`,
+  `subject_uris`) exactly as the predecessor spelled it; the host-generated
   successor CSR asserts exactly those identifiers and the control plane refuses
-  any other address or name, so a client that connects by IP keeps working after
-  the migration. The same binding shape serves host-generated renewal and CA
-  re-protection, so an IP-SAN leaf renews and re-protects on the host path too.
-  Network-appliance, cloud-store, externally issued, and email/URI SAN
-  migrations are refused at start rather than represented as executable: an
-  rfc822Name or URI identity is not a host listener identity, the binding cannot
-  express it, and narrowing it silently would drop an identifier some client
-  relies on. An imported offline root may be named as the new authority: its key
+  any other name, address, email or URI by name, so a client that connects by IP,
+  matches an rfc822Name or pins a SPIFFE URI keeps working after the migration.
+  The same binding shape serves host-generated renewal and CA re-protection, so
+  such leaves renew and re-protect on the host path too. Network-appliance,
+  cloud-store and externally issued migrations are refused at start rather than
+  represented as executable. An imported offline root may be named as the new authority: its key
   never enters the signer, so successors are issued by the root's one active
   signer-backed intermediate (imported through the offline-intermediate
   ceremony) while the root certificate is the anchor hosts receive; the member

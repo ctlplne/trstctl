@@ -98,18 +98,39 @@ func normalizeHostSubjectTemplate(tmpl CertificateRequestTemplate) (CertificateR
 			ips = append(ips, ip)
 		}
 	}
-	if tmpl.CommonName == "" && len(cleaned) == 0 && len(ips) == 0 {
+	emails := make([]string, 0, len(tmpl.EmailAddresses))
+	for _, e := range tmpl.EmailAddresses {
+		if e = strings.TrimSpace(e); e != "" {
+			emails = append(emails, e)
+		}
+	}
+	uris := make([]string, 0, len(tmpl.URIs))
+	for _, u := range tmpl.URIs {
+		if u = strings.TrimSpace(u); u != "" {
+			uris = append(uris, u)
+		}
+	}
+	if tmpl.CommonName == "" && len(cleaned) == 0 && len(ips) == 0 && len(emails) == 0 && len(uris) == 0 {
 		return tmpl, ErrNoSubjectNames
 	}
+	// The common name follows the first DNS name, else the first address, else
+	// the first rfc822Name, else the first URI: the binding's own order.
 	if tmpl.CommonName == "" {
-		if len(cleaned) > 0 {
+		switch {
+		case len(cleaned) > 0:
 			tmpl.CommonName = cleaned[0]
-		} else {
+		case len(ips) > 0:
 			tmpl.CommonName = ips[0].String()
+		case len(emails) > 0:
+			tmpl.CommonName = emails[0]
+		default:
+			tmpl.CommonName = uris[0]
 		}
 	}
 	tmpl.DNSNames = cleaned
 	tmpl.IPAddresses = ips
+	tmpl.EmailAddresses = emails
+	tmpl.URIs = uris
 	return tmpl, nil
 }
 

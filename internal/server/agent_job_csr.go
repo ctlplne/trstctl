@@ -94,7 +94,8 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 
 	permitted := signJobCSRPermittedNames(job.Payload)
 	permittedIPs := signJobCSRPermittedIPAddresses(job.Payload)
-	if len(permitted) == 0 && len(permittedIPs) == 0 {
+	permittedEmails, permittedURIs := signJobCSRPermittedEmailAndURIs(job.Payload)
+	if len(permitted) == 0 && len(permittedIPs) == 0 && len(permittedEmails) == 0 && len(permittedURIs) == 0 {
 		return nil, status.Error(codes.FailedPrecondition,
 			"this renewal job names no subject, so there is nothing it authorizes")
 	}
@@ -105,7 +106,7 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 	}
 	a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.csr_signed", map[string]any{
 		"agent": info.CommonName, "job_id": req.JobID,
-		"names": append(append([]string(nil), permitted...), permittedIPs...), "fingerprint": resp.Fingerprint,
+		"names": append(append(append(append([]string(nil), permitted...), permittedIPs...), permittedEmails...), permittedURIs...), "fingerprint": resp.Fingerprint,
 	})
 	return resp, nil
 }
@@ -203,4 +204,49 @@ func csrNamesWithinBinding(requested, permitted []string) (string, bool) {
 		}
 	}
 	return "", true
+}
+
+// signJobCSRPermittedEmailAndURIs reads the rfc822Name and URI halves of the
+// binding (A35 extension) from the job payload, never from the request.
+func signJobCSRPermittedEmailAndURIs(payload []byte) (emails, uris []string) {
+	var intent RelayDeployIntent
+	if err := json.Unmarshal(payload, &intent); err != nil {
+		return nil, nil
+	}
+	return canonicalBoundEmailAddresses(intent.SubjectEmailAddresses), canonicalBoundURIs(intent.SubjectURIs)
+}
+
+// canonicalBoundEmailAddresses trims and de-duplicates rfc822Names
+// case-insensitively (the mailbox part is compared as spelled by the binding;
+// matching happens through csrIdentifiersWithinBinding), bounded like the DNS
+// set.
+func canonicalBoundEmailAddresses(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, entry := range raw {
+		entry = strings.TrimSpace(entry)
+		key := strings.ToLower(entry)
+		if entry == "" || seen[key] || len(out) >= signJobCSRNameLimit {
+			continue
+		}
+		seen[key] = true
+		out = append(out, entry)
+	}
+	return out
+}
+
+// canonicalBoundURIs trims and de-duplicates URIs exactly as spelled: a URI
+// identifier is opaque to the binding and is matched byte for byte.
+func canonicalBoundURIs(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, entry := range raw {
+		entry = strings.TrimSpace(entry)
+		if entry == "" || seen[entry] || len(out) >= signJobCSRNameLimit {
+			continue
+		}
+		seen[entry] = true
+		out = append(out, entry)
+	}
+	return out
 }

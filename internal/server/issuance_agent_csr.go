@@ -106,7 +106,8 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	// The IP half of the binding is read from the same job payload the DNS
 	// half came from; neither is taken from the request.
 	if err := authorizeAgentCSRWithInspector(csrDER, permitted,
-		canonicalBoundIPAddresses(intent.SubjectIPAddresses), d.inspectSubjectCSR); err != nil {
+		canonicalBoundIPAddresses(intent.SubjectIPAddresses), canonicalBoundEmailAddresses(intent.SubjectEmailAddresses),
+		canonicalBoundURIs(intent.SubjectURIs), d.inspectSubjectCSR); err != nil {
 		return nil, err
 	}
 	if err := d.authorizeAgentSubjectAlgorithm(csrDER, intent.SubjectKeyAlgorithm); err != nil {
@@ -406,7 +407,7 @@ func (d *issuanceDispatcher) bindAgentCSRMigrationSuccessor(
 // than as a prologue to issuance — and because it is the part worth reading on
 // its own. Everything after it is ordinary minting; everything that stops an
 // agent widening its certificate is here.
-func authorizeAgentCSRWithInspector(csrDER []byte, permitted, permittedIPs []string, inspect func([]byte) (crypto.CSRInfo, error)) error {
+func authorizeAgentCSRWithInspector(csrDER []byte, permitted, permittedIPs, permittedEmails, permittedURIs []string, inspect func([]byte) (crypto.CSRInfo, error)) error {
 	// Parse before trusting anything about it. InspectCSR also verifies the
 	// request's self-signature, which is what makes the CSR proof of possession
 	// rather than an assertion: an agent cannot get a certificate for a public
@@ -426,17 +427,19 @@ func authorizeAgentCSRWithInspector(csrDER []byte, permitted, permittedIPs []str
 	// api.example.test could add an iPAddress SAN, or a spiffe:// URI, or an
 	// rfc822Name, and the control plane would sign every one of them.
 	//
-	// A host listener binding names DNS hosts and IP addresses (A35) and
-	// nothing else, so it can authorize nothing else. rfc822Name and URI SANs
-	// are therefore REFUSED outright rather than compared: there is no value
-	// of the binding that could permit them, and silently dropping them would
-	// issue a certificate that does not match the request the agent proved
-	// possession of.
-	if offending, ok := csrCarriesOnlyHostIdentifiers(info); !ok {
+	// rfc822Name and URI SANs are compared on their own halves of the binding
+	// (A35 extension): an email the binding carries matches case-insensitively,
+	// a URI byte for byte, and a binding with no such half still refuses every
+	// identifier of that kind. Nothing is dropped and nothing is widened.
+	if offending, ok := csrIdentifiersWithinBinding(info.EmailAddresses, permittedEmails, true); !ok {
 		return status.Errorf(codes.PermissionDenied,
-			"this renewal job authorizes DNS names and IP addresses only, and the request also asserts %s; a "+
-				"host may request a certificate for the identifiers its binding carries and no others",
-			offending)
+			"this renewal job does not authorize the email address %s; a host may request a certificate for "+
+				"the identifiers its binding already carries and no others", offending)
+	}
+	if offending, ok := csrIdentifiersWithinBinding(info.URIs, permittedURIs, false); !ok {
+		return status.Errorf(codes.PermissionDenied,
+			"this renewal job does not authorize the URI %s; a host may request a certificate for "+
+				"the identifiers its binding already carries and no others", offending)
 	}
 
 	// IP addresses are compared on their own half of the binding, canonically
@@ -490,22 +493,31 @@ func authorizeAgentCSRWithInspector(csrDER []byte, permitted, permittedIPs []str
 	return nil
 }
 
-// csrCarriesOnlyHostIdentifiers refuses a renewal CSR asserting anything a host
-// listener binding cannot authorize.
-//
-// Named separately from the subset rules because it answers a different
-// question. The subset rules ask "is this name one the job carries"; this asks
-// "is this even a KIND of identifier the job could carry". A binding built from
-// SubjectDNSNames and SubjectIPAddresses has no way to express an rfc822Name or
-// a URI, so a request containing one is outside the vocabulary of the
-// authorization entirely — and an authorization that cannot express a claim
-// must never be read as granting it.
-func csrCarriesOnlyHostIdentifiers(info crypto.CSRInfo) (string, bool) {
-	switch {
-	case len(info.EmailAddresses) > 0:
-		return fmt.Sprintf("the email address %s", info.EmailAddresses[0]), false
-	case len(info.URIs) > 0:
-		return fmt.Sprintf("the URI %s", info.URIs[0]), false
+// csrIdentifiersWithinBinding is the subset rule for the rfc822Name and URI
+// halves (A35 extension). Each requested identifier must appear in the
+// binding's half: emails case-insensitively, URIs byte for byte. An empty half
+// authorizes nothing of that kind, so a DNS-only binding still refuses every
+// rfc822Name and URI — a binding that cannot express a claim never grants it.
+func csrIdentifiersWithinBinding(requested, permitted []string, caseInsensitive bool) (string, bool) {
+	if len(requested) > signJobCSRNameLimit {
+		return "this request asserts more identifiers than a renewal binding may carry", false
+	}
+	allowed := make(map[string]bool, len(permitted))
+	for _, p := range permitted {
+		p = strings.TrimSpace(p)
+		if caseInsensitive {
+			p = strings.ToLower(p)
+		}
+		allowed[p] = true
+	}
+	for _, r := range requested {
+		key := strings.TrimSpace(r)
+		if caseInsensitive {
+			key = strings.ToLower(key)
+		}
+		if key == "" || !allowed[key] {
+			return fmt.Sprintf("%q", r), false
+		}
 	}
 	return "", true
 }

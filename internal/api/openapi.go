@@ -4885,6 +4885,8 @@ func componentSchemas() map[string]*Schema {
 		"trust_anchor_fingerprint": str(), "verify_address": str(), "verify_server_name": str(),
 		"subject_common_name": str(), "subject_dns_names": {Type: "array", Items: str()},
 		"subject_ip_addresses":       {Type: "array", Items: str()},
+		"subject_email_addresses":    {Type: "array", Items: str()},
+		"subject_uris":               {Type: "array", Items: str()},
 		"predecessor_certificate_id": uuid(), "predecessor_fingerprint": str(),
 		"successor_fingerprint": str(),
 	}, "issuing_authority_id", "target_id", "target_revision", "connector", "target", "target_config", "required_agent_id",
