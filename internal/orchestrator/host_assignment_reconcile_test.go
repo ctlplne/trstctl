@@ -22,7 +22,7 @@ func TestHostAssignmentSurvivesLifecycleCrashRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	ob := orchestrator.NewOutbox(s)
-	orch := orchestrator.NewOrchestrator(log, s, ob, orchestrator.WithSideEffectRoleClassifier(func(string, []byte) string { return "host" }))
+	orch := orchestrator.NewOrchestrator(log, s, ob, orchestrator.WithSideEffectRoleClassifier(func(context.Context, string, string, []byte) string { return "host" }))
 	raw := []byte(`{"connector":"nginx","target_config":{"required_agent_id":"` + hostID + `"}}`)
 	if err := orch.TransitionWithSideEffectPayloadTransform(ctx, tenantA, identityID, orchestrator.StateDeployed, "deploy to assigned host", raw,
 		func(context.Context, orchestrator.SideEffectPayloadContext) ([]byte, error) {

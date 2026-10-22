@@ -87,7 +87,7 @@ type Orchestrator struct {
 	// (epic A3) from its destination and RAW (pre-seal) payload. Injected by the
 	// composition root; nil means every row gets the empty demand, which is the
 	// pre-A3 behavior.
-	effectRole func(destination string, payload []byte) string
+	effectRole SideEffectRoleClassifier
 	// ownershipAttestationCadence enables the I1 steady-state authority gate.
 	// Zero keeps source-compatible embedded/test orchestrators disabled; the
 	// shipped composition always supplies its validated production setting.
@@ -146,7 +146,13 @@ func WithTenantRegistrationIdempotency(idempotency *Idempotency) OrchestratorOpt
 // the payload's connector name. The result is durable in the lifecycle event's
 // side-effect record, so reconciliation replays the same stamp instead of
 // re-deriving it against a possibly-changed census.
-func WithSideEffectRoleClassifier(classify func(destination string, payload []byte) string) OrchestratorOption {
+// SideEffectRoleClassifier stamps a side effect's required agent role from its
+// destination and raw payload, in the tenant the effect belongs to: the tenant
+// matters because a plugin-backed connector is relay work only where one of
+// that tenant's relays has reported carrying the plugin (A63).
+type SideEffectRoleClassifier func(ctx context.Context, tenantID, destination string, payload []byte) string
+
+func WithSideEffectRoleClassifier(classify SideEffectRoleClassifier) OrchestratorOption {
 	return func(orchestrator *Orchestrator) {
 		orchestrator.effectRole = classify
 	}
@@ -582,7 +588,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	// and the orchestrator must not import the registry.
 	requiredAgentRole := ""
 	if hasSideEffect && !sideEffectCompleted && o.effectRole != nil {
-		requiredAgentRole = o.effectRole(sideEffectDest, sideEffectPayload)
+		requiredAgentRole = o.effectRole(ctx, tenantID, sideEffectDest, sideEffectPayload)
 	}
 	requiredAgentID := ""
 	if requiredAgentRole == "host" {

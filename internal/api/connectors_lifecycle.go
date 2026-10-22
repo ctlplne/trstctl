@@ -519,6 +519,9 @@ func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if err := a.requireAdmittedConnector(ctx, tenantID, req.Connector); err != nil {
+			return 0, nil, err
+		}
 		if deploymentTargetRequestEnabled(req.Enabled) {
 			if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
 				return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
@@ -577,6 +580,9 @@ func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		req, err := decodeDeploymentTargetRequest(r)
 		if err != nil {
+			return 0, nil, err
+		}
+		if err := a.requireAdmittedConnector(ctx, tenantID, req.Connector); err != nil {
 			return 0, nil, err
 		}
 		current, err := a.store.GetDeploymentTarget(ctx, tenantID, id)
@@ -1249,6 +1255,9 @@ func (a *API) endpointBindingPreviewTarget(ctx context.Context, tenantID string,
 		return endpointBindingTargetSummary{}, errStatus(http.StatusConflict,
 			"deployment target is disabled; enable it only after its agent or relay and endpoint have been verified; nothing was queued or changed")
 	}
+	if err := a.requireAdmittedConnector(ctx, tenantID, req.Target.Connector); err != nil {
+		return endpointBindingTargetSummary{}, err
+	}
 	return endpointBindingTargetSummary{
 		Name: req.Target.Name, Connector: req.Target.Connector, Config: req.Target.Config, Enabled: true,
 	}, nil
@@ -1467,8 +1476,8 @@ func decodeDeploymentTargetRequest(r *http.Request) (deploymentTargetRequest, er
 	if req.Connector == "" {
 		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector is required")
 	}
-	if !servedConnectorName(req.Connector) {
-		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector must name a served connector catalog entry")
+	if !servedConnectorName(req.Connector) && !pluginConnectorName(req.Connector) {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector must name a served connector catalog entry or a plugin name")
 	}
 	if len(req.Config) == 0 {
 		req.Config = json.RawMessage("{}")
@@ -1555,8 +1564,8 @@ func validateDeploymentTargetRequest(req deploymentTargetRequest) (deploymentTar
 	if req.Connector == "" {
 		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector is required")
 	}
-	if !servedConnectorName(req.Connector) {
-		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector must name a served connector catalog entry")
+	if !servedConnectorName(req.Connector) && !pluginConnectorName(req.Connector) {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector must name a served connector catalog entry or a plugin name")
 	}
 	if len(req.Config) == 0 {
 		req.Config = json.RawMessage("{}")
@@ -1585,6 +1594,46 @@ func decodeConnectorTargetActionRequest(r *http.Request) (connectorTargetActionR
 	req.IdentityID = strings.TrimSpace(req.IdentityID)
 	req.Reason = strings.TrimSpace(req.Reason)
 	return req, nil
+}
+
+// pluginConnectorName is the shape of a WASM connector plugin name as the
+// relay census normalizes it: the catalog check lets such a name through to
+// the tenant-aware admission below, which asks whether a relay carries it.
+func pluginConnectorName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	for i, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case (r == '-' || r == '_' || r == '.') && i > 0:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// requireAdmittedConnector admits a target's connector when it is a served
+// catalog family or, for a plugin name, when one of this tenant's network
+// relays has reported carrying that plugin (A63). A plugin nobody carries is
+// refused here rather than becoming a target whose deploys can only fail.
+func (a *API) requireAdmittedConnector(ctx context.Context, tenantID, name string) error {
+	if servedConnectorName(name) {
+		return nil
+	}
+	if a.store != nil {
+		carries, err := a.store.TenantNetworkRelayCarriesPlugin(ctx, tenantID, name)
+		if err != nil {
+			return err
+		}
+		if carries {
+			return nil
+		}
+	}
+	return errStatus(http.StatusUnprocessableEntity,
+		"connector "+name+" is not a served connector family and no enrolled network relay in this tenant reports carrying a plugin by that name")
 }
 
 func servedConnectorName(name string) bool {

@@ -993,7 +993,11 @@ never live in the API process. What you can do end to end against the running bi
   tenant-isolated projection after restart. The connector catalog API and the
   Connectors console show each reporting relay separately. A signed empty census
   means “this relay loaded no third-party modules”; no report means an older agent
-  cannot make the claim. The report contains no module bytes, publisher keys,
+  cannot make the claim. The census is also what routes work (A63): a deploy or
+  preview for a connector no shipped family owns is stamped for the network role
+  when a relay in the tenant has reported carrying that plugin, and the control
+  plane defers the row to it; without such a report the control plane's own
+  plugin surface remains the executor. The report contains no module bytes, publisher keys,
   credentials, or secrets. The control plane still does not distribute modules or
   operator trust keys. Third-party connectors also never receive redeemed
   credential material; a module that could read an appliance password would make
@@ -2248,9 +2252,14 @@ against the same listener. Unrelated targets remain parallel.
 Automatic rollback is served when a target explicitly sets
 `auto_rollback_on_verify_failure`; manual console rollback queues the same
 command. Unsupported connector families and targets with no predecessor are
-refused at request time with no memo-only success receipt. Plugin-backed
-connectors, `connector.right_size` and the TLS
-posture path stay control-plane-only. No job kind is claimable by default:
+refused at request time with no memo-only success receipt. A plugin-backed
+connector executes on a network relay once one of the tenant's relays has
+reported, in its signed census, that it loaded that plugin (A63): the deploy and
+preview rows are stamped for the network role from that census at enqueue, the
+control plane leaves them for the relay while it is enrolled, and falls back to
+its own plugin surface only when no relay carries the plugin any more. Plugins
+have no rollback. `connector.right_size` and the TLS posture path stay
+control-plane-only. No job kind is claimable by default:
 `agent_channel.claimable_job_kinds` must name each kind before any of this
 moves, which is deliberate rather than unfinished. `connector.rollback` is named
 separately from `connector.deploy` on purpose — an operator should be able to

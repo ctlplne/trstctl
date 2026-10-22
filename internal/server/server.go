@@ -1365,13 +1365,12 @@ func (s *Server) configureMutationSpine(
 	if d.OwnershipAttestationCadence > 0 {
 		orchOptions = append(orchOptions, orchestrator.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))
 	}
-	if d.ConnectorRegistry != nil {
-		// Stamp each connector side effect's per-row agent-role demand from the
-		// shipped vantage census at enqueue (epic A3). Without a registry there
-		// is nothing to classify against, and rows keep the empty demand.
-		orchOptions = append(orchOptions,
-			orchestrator.WithSideEffectRoleClassifier(connectorSideEffectRoleClassifier(d.ConnectorRegistry)))
-	}
+	// Stamp each connector side effect's per-row agent-role demand from the
+	// shipped vantage census at enqueue (epic A3), and from the relay plugin
+	// census for plugin-backed connectors (A63). Without a registry the family
+	// census still answers, and a plugin a relay carries still routes to it.
+	orchOptions = append(orchOptions,
+		orchestrator.WithSideEffectRoleClassifier(connectorSideEffectRoleClassifier(d.ConnectorRegistry, relayPluginCarrierFor(d.Store))))
 	idem := orchestrator.NewIdempotency(
 		d.Store,
 		orchestrator.WithResultProtector(d.IdempotencyResultProtector),

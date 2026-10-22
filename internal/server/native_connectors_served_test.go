@@ -739,7 +739,7 @@ func enqueueServedConnectorDeploy(t *testing.T, h *servedHarness, idemKey, conne
 	// and persists that demand beside the opaque payload. Keep this direct test
 	// helper on the same path; classifying after sealing would lose the routing
 	// fact and turn every fixture into a legacy row.
-	requiredAgentRole := connectorSideEffectRoleClassifier(handler.connectorRegistry)("connector.deploy", payload)
+	requiredAgentRole := connectorSideEffectRoleClassifier(handler.connectorRegistry, relayPluginCarrierFor(h.store))(context.Background(), h.tenant, "connector.deploy", payload)
 	payload, err = handler.sealConnectorDeployBytes(context.Background(), h.tenant, "connector.deploy", idemKey, payload)
 	if err != nil {
 		t.Fatalf("seal connector deploy: %v", err)

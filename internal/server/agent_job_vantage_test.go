@@ -117,7 +117,10 @@ func TestSideEffectRoleClassifier(t *testing.T) {
 			t.Fatalf("declare %s: %v", name, err)
 		}
 	}
-	classify := connectorSideEffectRoleClassifier(registry)
+	classifyWith := connectorSideEffectRoleClassifier(registry, fakeRelayPluginCarrier{"partner": true})
+	classify := func(destination string, payload []byte) string {
+		return classifyWith(context.Background(), "tenant-a", destination, payload)
+	}
 
 	payload := func(name string) []byte {
 		b, err := json.Marshal(connector.DeployPayload{Connector: name, Target: "t"})
@@ -147,6 +150,11 @@ func TestSideEffectRoleClassifier(t *testing.T) {
 		{"connector.deploy", payloadWithConfig("nginx", `{"vantage":"network"}`), "host"},
 		// Undeclared connector: fail closed, stays with the control plane.
 		{"connector.deploy", payload("mystery"), "control_plane"},
+		// A63: a plugin a network relay reported carrying is relay work; a
+		// rollback for it is not (plugins cannot roll back).
+		{"connector.deploy", payload("partner"), "network"},
+		{"connector.test", payload("partner"), "network"},
+		{"connector.rollback", payload("partner"), "control_plane"},
 		// Unreadable payload: if the control plane cannot tell what a deploy is,
 		// it must not hand it to an agent.
 		{"connector.deploy", []byte("not json"), "control_plane"},
@@ -160,4 +168,11 @@ func TestSideEffectRoleClassifier(t *testing.T) {
 			t.Errorf("classify(%s, %.20q) = %q, want %q", tc.destination, tc.payload, got, tc.want)
 		}
 	}
+}
+
+// fakeRelayPluginCarrier answers the relay plugin census question from a map.
+type fakeRelayPluginCarrier map[string]bool
+
+func (f fakeRelayPluginCarrier) TenantNetworkRelayCarriesPlugin(_ context.Context, _, name string) (bool, error) {
+	return f[name], nil
 }

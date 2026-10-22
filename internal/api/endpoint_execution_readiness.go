@@ -35,6 +35,15 @@ func (a *API) validateEndpointExecutionReady(ctx context.Context, tenantID strin
 			}
 		}
 	}
+	if kind == "" && a.store != nil {
+		// A63: a plugin-backed target whose plugin a network relay reports
+		// carrying is relay work and needs the deploy kind claimable.
+		if _, shipped := connector.ShippedTargetVantage(target.Connector); !shipped && !a.connectorRegistry.Has(target.Connector) {
+			if carries, err := a.store.TenantNetworkRelayCarriesPlugin(ctx, tenantID, target.Connector); err == nil && carries {
+				kind = "connector.deploy"
+			}
+		}
+	}
 	if kind == "" {
 		return nil
 	}

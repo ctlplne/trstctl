@@ -671,6 +671,33 @@ func (s *Store) AgentFleetHealth(ctx context.Context, staleBefore time.Time) (Ag
 	return out, err
 }
 
+// TenantNetworkRelayCarriesPlugin reports whether an enrolled, non-offboarded
+// network relay in this tenant has reported, in its newest signed plugin census,
+// that it loaded the named WASM connector plugin (A63). It reads the projected
+// census only; the signature was verified when the heartbeat was accepted.
+func (s *Store) TenantNetworkRelayCarriesPlugin(ctx context.Context, tenantID, pluginName string) (bool, error) {
+	pluginName = strings.TrimSpace(pluginName)
+	if pluginName == "" {
+		return false, nil
+	}
+	var present bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			     SELECT 1 FROM agents
+			      WHERE tenant_id = $1
+			        AND offboarded_at IS NULL
+			        AND $2 = ANY(roles)
+			        AND relay_plugins_reported_at IS NOT NULL
+			        AND relay_plugins @> jsonb_build_array(jsonb_build_object('name', $3::text))
+			 )`, tenantID, mtls.AgentRoleNetwork, pluginName).Scan(&present)
+	})
+	if err != nil {
+		return false, fmt.Errorf("store: check tenant relay plugin census: %w", err)
+	}
+	return present, nil
+}
+
 // TenantHasNetworkRelay reports whether this tenant has an active network relay
 // enrolled (epic E1).
 //

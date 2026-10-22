@@ -1275,10 +1275,7 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 	// Classify the claim demand from the raw payload BEFORE sealing makes the
 	// connector name unreadable (epic A3) — the same classifier the transition
 	// path uses, so the two enqueue routes cannot disagree about a target.
-	requiredAgentRole := ""
-	if d.connectorRegistry != nil {
-		requiredAgentRole = connectorSideEffectRoleClassifier(d.connectorRegistry)("connector.deploy", payload)
-	}
+	requiredAgentRole := connectorSideEffectRoleClassifier(d.connectorRegistry, relayPluginCarrierFor(d.store))(ctx, tenantID, "connector.deploy", payload)
 	requiredAgentID := ""
 	if requiredAgentRole == "host" {
 		var route connector.DeployPayload
@@ -1419,6 +1416,20 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 			return []byte("deployed:" + p.Connector), nil
 		}
 		return d.runConnectorEffect(ctx, m, receipt, d.connectorRegistry.ReplaySafetyFor(p.Connector), effect)
+	}
+	// A63: a plugin-backed row stamped for a relay belongs to the relay that
+	// reported carrying the plugin. While one is enrolled the control plane
+	// leaves the row for it; if none carries it any more the row falls back to
+	// the control plane's own plugin surface below.
+	if m.RequiredAgentRole == "network" && d.store != nil {
+		carries, carryErr := d.store.TenantNetworkRelayCarriesPlugin(ctx, m.TenantID, p.Connector)
+		if carryErr != nil {
+			return orchestrator.DeferDelivery(fmt.Errorf("server: check relay plugin census before %s deploy: %w", p.Connector, carryErr))
+		}
+		if carries {
+			return orchestrator.DeferDelivery(fmt.Errorf(
+				"server: a network relay reports carrying the %s plugin, so its deploys execute there, not in the control plane", p.Connector))
+		}
 	}
 	if d.plugins == nil {
 		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
@@ -1913,6 +1924,16 @@ func sansOf(info certinfo.Info) []string {
 // stand up PostgreSQL to exercise three branches would end up exercising one.
 type relayPresence interface {
 	TenantHasNetworkRelay(ctx context.Context, tenantID string) (bool, error)
+}
+
+// relayPluginCarrierFor returns the store as the relay plugin census reader, or
+// nil when no store is assembled, so the classifier never dereferences a nil
+// store through an interface that hides it.
+func relayPluginCarrierFor(st *store.Store) relayPluginCarrier {
+	if st == nil {
+		return nil
+	}
+	return st
 }
 
 // cloudRowFallsBackToControlPlane reports whether a relay-vantage row for a
