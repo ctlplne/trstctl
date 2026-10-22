@@ -255,7 +255,8 @@ or escape its allowed roots:
       "tenant_id": "11111111-1111-4111-8111-111111111111",
       "connector": "least-privilege",
       "endpoint": "https://entitlements.internal",
-      "token_ref": "secret://connectors/right-size-token"
+      "token_ref": "secret://connectors/right-size-token",
+      "executor": "network"
     }]
   }
 }
@@ -274,7 +275,12 @@ operator endpoint and a same-tenant encrypted-secret reference. The durable
 mutation receipt, performs an authenticated `GET` readback, and only then records a
 delivered connector receipt. Store the referenced token through the tenant secrets
 surface (`secrets.enable_api=true`) before enabling the binding. An unconfigured
-tenant/connector pair fails closed.
+tenant/connector pair fails closed. `executor` is empty or `control_plane` by
+default; `network` hands each operation to an enrolled network relay in that
+tenant, which redeems the token for one attempt, runs the same mutation and
+readback from inside its segment, and signs the evidence. For that, enable
+`connector.right_size` in `agent_channel.claimable_job_kinds`; until a relay
+claims it the operation stays queued rather than running on the control plane.
 
 External-CA credentials use `file:/absolute/path` references. Files are loaded into
 locked memory for one outbox attempt and wiped afterward. Network policy, private

@@ -3,26 +3,23 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"sort"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
-	"trstctl.com/trstctl/internal/secretjson"
-	"trstctl.com/trstctl/internal/secrettext"
+	"trstctl.com/trstctl/internal/rightsize"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -52,39 +49,29 @@ type connectorRightSizeScopeDelta struct {
 	RecommendedScopes []string `json:"recommended_scopes"`
 }
 
-type connectorRightSizeRequest struct {
-	SchemaVersion     int      `json:"schema_version"`
-	TenantID          string   `json:"tenant_id"`
-	Connector         string   `json:"connector"`
-	Target            string   `json:"target"`
-	InventoryID       string   `json:"inventory_id,omitempty"`
-	TargetIdentityID  string   `json:"target_identity_id,omitempty"`
-	RemoveScopes      []string `json:"remove_scopes"`
-	RecommendedScopes []string `json:"recommended_scopes"`
-	Reason            string   `json:"reason,omitempty"`
-}
-
-type connectorRightSizeResponse struct {
-	Status        secretjson.StringBytes   `json:"status"`
-	MutationID    secretjson.StringBytes   `json:"mutation_id"`
-	RemovedScopes []secretjson.StringBytes `json:"removed_scopes"`
-	RollbackRef   secretjson.StringBytes   `json:"rollback_ref"`
-}
-
-type connectorRightSizeReadback struct {
-	Scopes []secretjson.StringBytes `json:"scopes"`
-}
-
 func (d *issuanceDispatcher) handleConnectorRightSize(ctx context.Context, message orchestrator.Message) error {
-	if d.connectorRightSize == nil {
-		return fmt.Errorf("server: connector right-size outbox destination is not configured")
-	}
 	var playbook projections.RemediationPlaybookRunRecorded
 	if err := json.Unmarshal(message.Payload, &playbook); err != nil {
 		return fmt.Errorf("server: decode connector right-size intent: %w", err)
 	}
 	if playbook.Action != "right_size" || strings.TrimSpace(playbook.Connector) == "" || strings.TrimSpace(playbook.Target) == "" {
 		return fmt.Errorf("server: connector right-size intent is incomplete")
+	}
+	// A64: a binding that names a network relay hands the operation to the
+	// relay. The row is stamped for the network role the first time the
+	// control plane sees it (the projector that queued it knows no bindings)
+	// and left pending for the relay to claim; no endpoint I/O happens here.
+	if _, relayBound := d.relayRightSizeBinding(message.TenantID, playbook); relayBound {
+		if message.RequiredAgentRole != "network" && d.store != nil {
+			if _, err := d.store.StampOutboxAgentRole(ctx, message.TenantID, message.ID, "network"); err != nil {
+				return orchestrator.DeferDelivery(err)
+			}
+		}
+		return orchestrator.DeferDelivery(fmt.Errorf(
+			"server: the %s right-size binding names a network relay, so this operation executes there, not in the control plane", playbook.Connector))
+	}
+	if d.connectorRightSize == nil {
+		return fmt.Errorf("server: connector right-size outbox destination is not configured")
 	}
 	if playbook.RequestBinding != "" {
 		return d.handleDurableConnectorRightSize(ctx, message, playbook)
@@ -301,6 +288,70 @@ func rightSizeBindingKey(tenantID, connectorName string) string {
 	return tenantID + "\x00" + connectorName
 }
 
+// rightSizeBindingMap indexes the operator's bindings by tenant and connector.
+func rightSizeBindingMap(bindings []config.ConnectorRightSizeBinding) map[string]config.ConnectorRightSizeBinding {
+	out := make(map[string]config.ConnectorRightSizeBinding, len(bindings))
+	for _, binding := range bindings {
+		binding.TenantID = strings.TrimSpace(binding.TenantID)
+		binding.Connector = strings.TrimSpace(binding.Connector)
+		binding.Endpoint = strings.TrimRight(strings.TrimSpace(binding.Endpoint), "/")
+		binding.TokenRef = strings.TrimSpace(binding.TokenRef)
+		if binding.TenantID == "" || binding.Connector == "" {
+			continue
+		}
+		out[rightSizeBindingKey(binding.TenantID, binding.Connector)] = binding
+	}
+	return out
+}
+
+// relayRightSizeBinding reports the binding a queued operation falls under
+// when that binding names a network relay as its executor (A64).
+func (d *issuanceDispatcher) relayRightSizeBinding(tenantID string, playbook projections.RemediationPlaybookRunRecorded) (config.ConnectorRightSizeBinding, bool) {
+	binding, ok := d.rightSizeBindings[rightSizeBindingKey(tenantID, strings.TrimSpace(playbook.Connector))]
+	if !ok || !binding.ExecutesOnRelay() {
+		return config.ConnectorRightSizeBinding{}, false
+	}
+	return binding, true
+}
+
+// completeRelayRightSize records a relay's verified right-size mutation as the
+// operation's deterministic terminal receipt, exactly as the control-plane
+// worker would after its own readback (A64). The evidence is the relay's: the
+// server verified the signed report's shape and digest, not the endpoint.
+func (d *issuanceDispatcher) completeRelayRightSize(ctx context.Context, tenantID string, jobID int64, attempt int, payload []byte, result relay.RightSizeReport) error {
+	var playbook projections.RemediationPlaybookRunRecorded
+	if err := json.Unmarshal(payload, &playbook); err != nil {
+		return fmt.Errorf("server: decode relay right-size intent: %w", err)
+	}
+	if _, relayBound := d.relayRightSizeBinding(tenantID, playbook); !relayBound {
+		return errors.New("server: right-size binding no longer names a network relay; the result is not recorded")
+	}
+	message := orchestrator.Message{ID: jobID, TenantID: tenantID, Destination: orchestrator.DestinationConnectorRightSize,
+		IdempotencyKey: playbook.OutboxIdempotencyKey, Attempts: attempt}
+	return d.appendConnectorRightSizeTerminal(ctx, message, playbook, "delivered",
+		"entitlements_mutated",
+		"external entitlement mutation "+result.MutationID+" verified by network-relay readback sha256:"+result.ReadbackDigest,
+		result.ReadbackDigest, result.RollbackRef)
+}
+
+// failRelayRightSize closes the operation after a relay reported that the
+// endpoint refused or failed the mutation.
+func (d *issuanceDispatcher) failRelayRightSize(ctx context.Context, tenantID string, jobID int64, attempt int, payload []byte, reason string) error {
+	var playbook projections.RemediationPlaybookRunRecorded
+	if err := json.Unmarshal(payload, &playbook); err != nil {
+		return fmt.Errorf("server: decode relay right-size intent: %w", err)
+	}
+	rollbackRef := ""
+	if len(playbook.RollbackRefs) > 0 {
+		rollbackRef = playbook.RollbackRefs[0]
+	}
+	message := orchestrator.Message{ID: jobID, TenantID: tenantID, Destination: orchestrator.DestinationConnectorRightSize,
+		IdempotencyKey: playbook.OutboxIdempotencyKey, Attempts: attempt}
+	return d.appendConnectorRightSizeTerminal(ctx, message, playbook, "failed",
+		"entitlement_mutation_failed_on_relay",
+		"the network relay reported: "+reason, "", rollbackRef)
+}
+
 func (r *connectorRightSizeRuntime) Mutate(ctx context.Context, message orchestrator.Message, playbook projections.RemediationPlaybookRunRecorded) (RightSizeMutation, error) {
 	if message.Destination != orchestrator.DestinationConnectorRightSize || playbook.Action != "right_size" {
 		return RightSizeMutation{}, fmt.Errorf("connector right-size handler received an invalid intent")
@@ -309,265 +360,42 @@ func (r *connectorRightSizeRuntime) Mutate(ctx context.Context, message orchestr
 	if !ok {
 		return RightSizeMutation{}, fmt.Errorf("connector right-size binding is not configured for tenant and connector")
 	}
-	target := strings.TrimSpace(playbook.Target)
-	if target == "" {
+	if strings.TrimSpace(playbook.Target) == "" {
 		return RightSizeMutation{}, fmt.Errorf("connector right-size intent has no target")
 	}
-	var delta connectorRightSizeScopeDelta
-	if err := json.Unmarshal(playbook.ScopeDelta, &delta); err != nil {
-		return RightSizeMutation{}, fmt.Errorf("decode connector right-size scope delta: %w", err)
-	}
-	remove, err := normalizedRightSizeScopes(delta.RemoveScopes, true)
-	if err != nil {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size remove_scopes: %w", err)
-	}
-	recommended, err := normalizedRightSizeScopes(delta.RecommendedScopes, false)
-	if err != nil {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size recommended_scopes: %w", err)
-	}
-	for _, scope := range recommended {
-		if containsRightSizeScope(remove, scope) {
-			return RightSizeMutation{}, fmt.Errorf("connector right-size scope %q cannot be both removed and recommended", scope)
-		}
-	}
-
-	requestBody, err := json.Marshal(connectorRightSizeRequest{
-		SchemaVersion: 1, TenantID: message.TenantID, Connector: playbook.Connector,
-		Target: target, InventoryID: playbook.InventoryID, TargetIdentityID: playbook.TargetIdentityID,
-		RemoveScopes: remove, RecommendedScopes: recommended, Reason: playbook.Reason,
-	})
-	if err != nil {
-		return RightSizeMutation{}, err
-	}
-	endpoint := binding.Endpoint + "/v1/entitlements/" + url.PathEscape(target)
 	token, cleanup, err := r.credential(ctx, message.TenantID, binding.TokenRef)
 	if err != nil {
 		return RightSizeMutation{}, fmt.Errorf("resolve connector right-size credential: %w", err)
 	}
 	defer cleanup()
-
-	applyRequest, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint, bytes.NewReader(requestBody))
+	// The conversation itself lives in internal/rightsize so a network relay
+	// runs the same bytes against the same contract (A64).
+	mutation, err := rightsize.Apply(ctx, r.client, rightsize.Input{
+		Endpoint: binding.Endpoint, Token: token, TenantID: message.TenantID, IdempotencyKey: message.IdempotencyKey,
+		Connector: playbook.Connector, Target: strings.TrimSpace(playbook.Target), InventoryID: playbook.InventoryID,
+		TargetIdentityID: playbook.TargetIdentityID, Reason: playbook.Reason, ScopeDelta: playbook.ScopeDelta,
+	})
 	if err != nil {
 		return RightSizeMutation{}, err
 	}
-	setRightSizeHeaders(applyRequest, token, message)
-	applyResponse, err := r.client.Do(applyRequest)
-	if err != nil {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size mutation request: %w", err)
-	}
-	applyBody, err := readRightSizeResponse(applyResponse)
-	if err != nil {
-		return RightSizeMutation{}, err
-	}
-	defer secret.Wipe(applyBody)
-	if rightSizeResponseContainsCredential(applyBody, token) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size mutation response reflected the request credential")
-	}
-	var applied connectorRightSizeResponse
-	defer applied.wipe()
-	if err := json.Unmarshal(applyBody, &applied); err != nil {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size mutation returned invalid JSON")
-	}
-	if applied.containsCredential(token) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size mutation response reflected the request credential")
-	}
-	mutationID := bytes.TrimSpace(applied.MutationID)
-	rollbackRef := bytes.TrimSpace(applied.RollbackRef)
-	if !bytes.Equal(applied.Status, []byte("applied")) || !validRightSizeReceiptRef(mutationID) || !validRightSizeReceiptRef(rollbackRef) || !equalRightSizeByteScopes(applied.RemovedScopes, remove) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size mutation response did not attest the requested scope removal")
-	}
-
-	readbackRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return RightSizeMutation{}, err
-	}
-	setRightSizeHeaders(readbackRequest, token, message)
-	readbackResponse, err := r.client.Do(readbackRequest)
-	if err != nil {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size readback request: %w", err)
-	}
-	readbackBody, err := readRightSizeResponse(readbackResponse)
-	if err != nil {
-		return RightSizeMutation{}, err
-	}
-	defer secret.Wipe(readbackBody)
-	if rightSizeResponseContainsCredential(readbackBody, token) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size readback response reflected the request credential")
-	}
-	var readback connectorRightSizeReadback
-	defer readback.wipe()
-	if err := json.Unmarshal(readbackBody, &readback); err != nil {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size readback returned invalid JSON")
-	}
-	if readback.containsCredential(token) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size readback response reflected the request credential")
-	}
-	if !validRightSizeByteScopes(readback.Scopes) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size readback returned invalid scopes")
-	}
-	for _, scope := range remove {
-		if containsRightSizeByteScope(readback.Scopes, scope) {
-			return RightSizeMutation{}, fmt.Errorf("connector right-size readback still contains removed scope %q", scope)
-		}
-	}
-	if len(recommended) > 0 && !equalRightSizeByteScopes(readback.Scopes, recommended) {
-		return RightSizeMutation{}, fmt.Errorf("connector right-size readback does not match recommended scopes")
-	}
-	return RightSizeMutation{
-		MutationID: string(mutationID), RollbackRef: string(rollbackRef),
-		ReadbackDigest: crypto.SHA256Hex(readbackBody),
-	}, nil
+	return RightSizeMutation{MutationID: mutation.MutationID, RollbackRef: mutation.RollbackRef, ReadbackDigest: mutation.ReadbackDigest}, nil
 }
 
-func (r *connectorRightSizeResponse) wipe() {
-	secret.Wipe(r.Status)
-	secret.Wipe(r.MutationID)
-	for _, scope := range r.RemovedScopes {
-		secret.Wipe(scope)
-	}
-	secret.Wipe(r.RollbackRef)
-}
-
-func (r connectorRightSizeResponse) containsCredential(token []byte) bool {
-	fields := make([]secretjson.StringBytes, 0, 3+len(r.RemovedScopes))
-	fields = append(fields, r.Status, r.MutationID, r.RollbackRef)
-	fields = append(fields, r.RemovedScopes...)
-	return rightSizeFieldsContainCredential(fields, token)
-}
-
-func (r *connectorRightSizeReadback) wipe() {
-	for _, scope := range r.Scopes {
-		secret.Wipe(scope)
-	}
-}
-
-func (r connectorRightSizeReadback) containsCredential(token []byte) bool {
-	return rightSizeFieldsContainCredential(r.Scopes, token)
-}
-
-func rightSizeResponseContainsCredential(body, token []byte) bool {
-	if len(token) == 0 {
-		return false
-	}
-	quoted := secretjson.QuoteBytes(token)
-	defer secret.Wipe(quoted)
-	base64Quoted := secretjson.QuoteBase64(token)
-	defer secret.Wipe(base64Quoted)
-	return bytes.Contains(body, token) || bytes.Contains(body, quoted[1:len(quoted)-1]) || bytes.Contains(body, base64Quoted[1:len(base64Quoted)-1])
-}
-
-func rightSizeFieldsContainCredential(fields []secretjson.StringBytes, token []byte) bool {
-	if len(token) == 0 {
-		return false
-	}
-	base64Quoted := secretjson.QuoteBase64(token)
-	defer secret.Wipe(base64Quoted)
-	encoded := base64Quoted[1 : len(base64Quoted)-1]
-	for _, field := range fields {
-		if bytes.Contains(field, token) || bytes.Contains(field, encoded) {
-			return true
-		}
-	}
-	return false
-}
-
-func validRightSizeReceiptRef(value []byte) bool {
-	if len(value) == 0 || len(value) > 1024 {
-		return false
-	}
-	for _, character := range value {
-		if character < 0x21 || character > 0x7e {
-			return false
-		}
-	}
-	return true
-}
-
-func validRightSizeByteScopes(values []secretjson.StringBytes) bool {
-	for index, value := range values {
-		if len(value) == 0 || !bytes.Equal(value, bytes.TrimSpace(value)) {
-			return false
-		}
-		for previous := 0; previous < index; previous++ {
-			if bytes.Equal(value, values[previous]) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func containsRightSizeByteScope(values []secretjson.StringBytes, want string) bool {
-	for _, value := range values {
-		if bytes.Equal(value, []byte(want)) {
-			return true
-		}
-	}
-	return false
-}
-
-func equalRightSizeByteScopes(values []secretjson.StringBytes, wanted []string) bool {
-	if len(values) != len(wanted) || !validRightSizeByteScopes(values) {
-		return false
-	}
-	for _, want := range wanted {
-		if !containsRightSizeByteScope(values, want) {
-			return false
-		}
-	}
-	return true
-}
-
-func setRightSizeHeaders(request *http.Request, token []byte, message orchestrator.Message) {
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+secrettext.String(token))
-	request.Header.Set("Idempotency-Key", message.IdempotencyKey)
-	request.Header.Set("X-Trstctl-Tenant", message.TenantID)
-}
-
+// readRightSizeResponse keeps the package-local name the tests exercise; the
+// bounded, wiping reader is the shared one.
 func readRightSizeResponse(response *http.Response) ([]byte, error) {
-	if response == nil {
-		return nil, fmt.Errorf("connector right-size endpoint returned no response")
-	}
-	defer func() { _ = response.Body.Close() }()
-	body, err := secret.ReadBounded(response.Body, (1<<20)+1)
-	if err != nil {
-		return nil, fmt.Errorf("read connector right-size response: %w", err)
-	}
-	if len(body) > 1<<20 {
-		secret.Wipe(body)
-		return nil, fmt.Errorf("connector right-size response exceeds 1 MiB")
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		secret.Wipe(body)
-		return nil, fmt.Errorf("connector right-size endpoint returned HTTP %d", response.StatusCode)
-	}
-	return body, nil
+	return rightsize.ReadResponse(response)
 }
 
-func normalizedRightSizeScopes(values []string, required bool) ([]string, error) {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(values))
-	for _, raw := range values {
-		scope := strings.TrimSpace(raw)
-		if scope == "" {
-			return nil, fmt.Errorf("scope must not be empty")
-		}
-		if seen[scope] {
-			return nil, fmt.Errorf("scope %q is duplicated", scope)
-		}
-		seen[scope] = true
-		out = append(out, scope)
+// relayRightSizeResult is the agent channel's hook for a relay's right-size
+// report: a verified report completes the operation, a failure closes it.
+func (s *Server) relayRightSizeResult(ctx context.Context, tenantID string, jobID int64, attempt int, payload []byte, result *relay.RightSizeReport, failure string) error {
+	dispatcher, ok := s.obHandler.(*issuanceDispatcher)
+	if !ok || dispatcher == nil {
+		return errors.New("server: right-size receipt receiver is not the issuance dispatcher")
 	}
-	if required && len(out) == 0 {
-		return nil, fmt.Errorf("at least one scope is required")
+	if result != nil {
+		return dispatcher.completeRelayRightSize(ctx, tenantID, jobID, attempt, payload, *result)
 	}
-	sort.Strings(out)
-	return out, nil
-}
-
-func containsRightSizeScope(values []string, want string) bool {
-	index := sort.SearchStrings(values, want)
-	return index < len(values) && values[index] == want
+	return dispatcher.failRelayRightSize(ctx, tenantID, jobID, attempt, payload, failure)
 }

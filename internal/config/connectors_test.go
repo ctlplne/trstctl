@@ -44,3 +44,26 @@ func TestValidateConnectorsRestrictsInsecureRightSizeEndpointToLoopback(t *testi
 		t.Fatalf("loopback emulator endpoint: %v", err)
 	}
 }
+
+// A64: a right-size binding may name the control plane or a network relay as
+// its executor; anything else is refused at load.
+func TestValidateConnectorsRightSizeExecutor(t *testing.T) {
+	binding := ConnectorRightSizeBinding{
+		TenantID: "d0d00000-0000-4000-8000-000000000301", Connector: "least-privilege",
+		Endpoint: "https://entitlements.example.test", TokenRef: "secret://right-size/token",
+	}
+	for _, executor := range []string{"", "control_plane", "network", " Network "} {
+		binding.Executor = executor
+		if err := errors.Join(validateConnectors(Connectors{HTTPTimeout: "10s", RightSize: []ConnectorRightSizeBinding{binding}})...); err != nil {
+			t.Errorf("executor %q refused: %v", executor, err)
+		}
+	}
+	if !(ConnectorRightSizeBinding{Executor: " network "}).ExecutesOnRelay() || (ConnectorRightSizeBinding{Executor: "control_plane"}).ExecutesOnRelay() || (ConnectorRightSizeBinding{}).ExecutesOnRelay() {
+		t.Fatal("ExecutesOnRelay does not follow the declaration")
+	}
+	binding.Executor = "relay"
+	message := errors.Join(validateConnectors(Connectors{HTTPTimeout: "10s", RightSize: []ConnectorRightSizeBinding{binding}})...)
+	if message == nil || !strings.Contains(message.Error(), "executor must be empty") {
+		t.Fatalf("executor \"relay\" = %v, want a refusal", message)
+	}
+}

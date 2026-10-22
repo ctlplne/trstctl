@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1611 annotated sites across 26 rules. Each row is
+1615 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (344 sites)
+### G101 — CWE-798 Use of hardcoded credentials (348 sites)
 
 | Location | Reason |
 |---|---|
@@ -107,13 +107,15 @@ not this file.
 | `internal/agent/relay/relay_appliance_e2e_test.go:370` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
 | `internal/agent/relay/relay_test.go:147` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:342` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:400` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:344` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:402` | reference NAME (CWE-798) |
+| `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/transport/agentservice.go:795` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:802` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/transport/receipt.go:254` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |
 | `internal/aimodel/redactor_test.go:69` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -369,6 +371,8 @@ not this file.
 | `internal/server/response_integrations_served_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:52` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:54` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/right_size_relay_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/right_size_relay_served_test.go:35` | a secret-store NAME the binding references, not a credential value (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_integrations.go:1043` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1034,7 +1038,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2561` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2624` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2630` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1234,8 +1238,8 @@ not this file.
 | `internal/agent/relay/plugins.go:141` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:145` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
-| `internal/agent/relay/relay_test.go:679` | certPath is created beneath this test's private t.TempDir, |
-| `internal/agent/relay/relay_test.go:1110` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
+| `internal/agent/relay/relay_test.go:681` | certPath is created beneath this test's private t.TempDir, |
+| `internal/agent/relay/relay_test.go:1112` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
 | `internal/agent/relay/rollback_test.go:206` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
@@ -1365,7 +1369,7 @@ not this file.
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
 | `internal/server/agent_roles_served_test.go:509` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
-| `internal/server/agentchannel.go:125` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/agentchannel.go:126` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:143` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:207` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:379` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -1421,16 +1425,16 @@ not this file.
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:546` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1174` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1574` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1175` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1575` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2551` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2628` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2557` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2634` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
@@ -1614,7 +1618,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2634` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2640` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

@@ -109,8 +109,16 @@ func ClaimableKinds() []string {
 		KindEndpointPurge,
 		KindConnectorTakedown,
 		KindPQCPosture, KindPQCPostureRollback,
+		// A64: an entitlement right-size whose binding names a network relay.
+		KindConnectorRightSize,
 	}
 }
+
+// KindConnectorRightSize is the usage-backed entitlement reduction (A64): the
+// relay redeems the binding's bearer token for one attempt, runs the shared
+// mutate-and-readback conversation against the entitlement endpoint inside
+// its segment, and reports the mutation evidence. Nothing is cached.
+const KindConnectorRightSize = "connector.right_size"
 
 // KindConnectorTest is the dry-run kind (epic D5): resolve everything a deploy
 // needs, probe the target, describe what would change, mutate nothing.
@@ -320,6 +328,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	}
 	if job.Kind == KindConnectorTakedown {
 		return runTakedown(ctx, ch, client, job)
+	}
+	if job.Kind == KindConnectorRightSize {
+		return runRightSize(ctx, ch, client, job)
 	}
 	// H2: trust distribution is public anchor material and host-local I/O. It
 	// redeems no credential, and routing it before deploy is what enforces that.

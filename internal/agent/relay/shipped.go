@@ -119,6 +119,15 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles:      []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// A64: the entitlement right-size for bindings that name a relay.
+			// Not connector work despite its name: the executor is the shared
+			// entitlement-API conversation bound by connectors.right_size, so
+			// like a revocation probe it names no connector family.
+			Kind:  KindConnectorRightSize,
+			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			Kind:       KindPQCPosture,
 			Connectors: []string{"envoy"},
 			Flags:      []string{"--relay-claim"},

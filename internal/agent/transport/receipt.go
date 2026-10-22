@@ -247,6 +247,15 @@ const (
 // (A45). Its contents were not re-read; the listener must be verified.
 const RollbackExecutedLegacyObject = "re-bound to the legacy target-named object; its contents were not re-read"
 
+// Right-size refusals and failures (A64) follow the same contact discipline:
+// the first three are decided before the entitlement endpoint is contacted.
+const (
+	RightSizeRefusedBadPayload   = "job payload is not a right-size intent"
+	RightSizeRefusedNoCredential = "entitlement credential redemption was not granted" // #nosec G101 -- an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798)
+	RightSizeRefusedNoEndpoint   = "no entitlement endpoint was redeemed for this attempt"
+	RightSizeFailedAtEndpoint    = "entitlement mutation or readback failed at the endpoint"
+)
+
 // Takedown refusals and failures (A43) follow the same contact discipline.
 const (
 	TakedownRefusedBadPayload    = "job payload is not a takedown intent"

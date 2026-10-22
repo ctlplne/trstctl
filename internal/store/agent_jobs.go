@@ -940,3 +940,27 @@ func (s *Store) HasPendingTicketSyncJob(ctx context.Context, tenantID, system st
 	})
 	return pending, err
 }
+
+// StampOutboxAgentRole sets the required agent role on a pending, unclaimed
+// outbox row whose executor was decided after enqueue: a right-size operation
+// whose binding names a network relay (A64). A claimed or terminal row is left
+// alone; the caller re-reads the row before relying on the stamp.
+func (s *Store) StampOutboxAgentRole(ctx context.Context, tenantID string, outboxID int64, role string) (bool, error) {
+	var stamped bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// The dispatcher calls this while it holds the row's own delivery lease
+		// (status processing); a row an agent has claimed is never restamped.
+		tag, err := tx.Exec(ctx, `UPDATE outbox SET required_agent_role = $3
+		   WHERE tenant_id = $1 AND id = $2 AND status IN ('pending', 'processing')
+		     AND claimed_by_agent_id IS NULL AND COALESCE(required_agent_role, '') <> $3`, tenantID, outboxID, role)
+		if err != nil {
+			return err
+		}
+		stamped = tag.RowsAffected() == 1
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("store: stamp outbox agent role: %w", err)
+	}
+	return stamped, nil
+}

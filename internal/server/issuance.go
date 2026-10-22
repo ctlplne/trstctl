@@ -17,6 +17,7 @@ import (
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -163,6 +164,9 @@ type issuanceDispatcher struct {
 	// connectorRightSize applies connector.right_size entitlement mutations and
 	// verifies the effective scopes before the outbox row is acknowledged.
 	connectorRightSize RightSizeMutator
+	// rightSizeBindings, keyed by rightSizeBindingKey, say which executor each
+	// binding names (A64).
+	rightSizeBindings map[string]config.ConnectorRightSizeBinding
 	// The right-size seams are test-only crash boundaries. Production leaves them
 	// nil; adversarial tests fail after receiver I/O or after the terminal append
 	// to prove retry/reconciliation converges without inventing a second identity.

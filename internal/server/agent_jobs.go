@@ -69,6 +69,8 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindEndpointContain:   true,
 	relay.KindEndpointPurge:     true,
 	relay.KindConnectorTakedown: true,
+	// A64: the entitlement right-size for bindings that name a relay.
+	relay.KindConnectorRightSize: true,
 	// D5: the dry-run. It is a first-class job kind rather than a flag on
 	// connector.deploy so an operator can enable testing without enabling
 	// deploying — the whole point of a test is that you run it before you trust
@@ -809,6 +811,25 @@ func (a *agentService) ingestExecutedReport(
 			return err
 		}
 		return a.recordEndpointPurgeResult(ctx, info, claim, req, result)
+	case relay.KindConnectorRightSize:
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("right-size result needs a terminal executed report")
+		}
+		var intent relay.RightSizeIntent
+		var result relay.RightSizeReport
+		if err := json.Unmarshal(claim.Payload, &intent); err != nil {
+			return err
+		}
+		if err := decodeStrictJSON([]byte(req.Detail), &result); err != nil {
+			return err
+		}
+		if err := relay.ValidateRightSizeReport(intent, result, req.EvidenceDigest); err != nil {
+			return err
+		}
+		if a.recordRightSize == nil {
+			return errors.New("right-size receipt receiver is unavailable")
+		}
+		return a.recordRightSize(ctx, info.TenantID, req.JobID, req.Attempt, claim.Payload, &result, "")
 	case relay.KindConnectorTakedown:
 		if req.Outcome != transport.JobOutcomeExecuted {
 			return errors.New("takedown result needs a terminal executed report")
@@ -1030,6 +1051,14 @@ func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.Pee
 			return false, "", status.Errorf(codes.Internal, "record failed connector takedown: %v", err)
 		}
 	}
+	if claim.Destination == relay.KindConnectorRightSize && a.recordRightSize != nil {
+		// A64: a relay's failure closes the operation; the operator re-runs the
+		// playbook rather than the queue retrying a mutation the endpoint
+		// already refused.
+		if err := a.recordRightSize(ctx, info.TenantID, req.JobID, req.Attempt, claim.Payload, nil, strings.TrimSpace(req.Detail)); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record failed connector right-size: %v", err)
+		}
+	}
 	// Keep the exact failed attempt in the identity timeline before releasing
 	// its lease. A projection failure leaves the signed result retryable;
 	// response loss reuses the same event ID instead of duplicating history.
@@ -1097,6 +1126,9 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	}
 	if claim.Destination == relay.KindConnectorTakedown {
 		terminalReason = "takedown_failed"
+	}
+	if claim.Destination == relay.KindConnectorRightSize {
+		permanent, terminalReason = true, "right_size_failed"
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on
 	// any later attempt; requeueing it would claim the same job forever.

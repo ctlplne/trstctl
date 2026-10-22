@@ -682,7 +682,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   right-size runs require usage-backed CAP-POST-01 posture evidence and queue
   `connector.right_size` through the outbox. A configured tenant/connector binding
   applies the least-privilege scope removal to the external entitlement API, reads
-  the effective scopes back, and records a delivered/failed connector receipt;
+  the effective scopes back, and records a delivered/failed connector receipt; a
+  binding whose `executor` is `network` runs that same conversation on an enrolled
+  network relay inside its segment and records the relay's signed evidence;
   CA-compromise fleet re-issuance (F32) is served through
   `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl-cli incidents fleet-reissuance *`, and the `/incidents` console;

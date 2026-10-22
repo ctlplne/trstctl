@@ -48,6 +48,21 @@ type ConnectorRightSizeBinding struct {
 	Connector string `json:"connector"`
 	Endpoint  string `json:"endpoint"`
 	TokenRef  string `json:"token_ref"`
+	// Executor says where the mutation and readback run: empty or
+	// "control_plane" keeps the control plane's egress-guarded worker;
+	// "network" hands each operation to an enrolled network relay in the
+	// tenant, which redeems the token for one attempt and reaches an
+	// entitlement service only visible inside the segment (A64).
+	Executor string `json:"executor,omitempty"`
+}
+
+// RightSizeExecutorNetwork is the ConnectorRightSizeBinding.Executor value that
+// makes the binding relay work.
+const RightSizeExecutorNetwork = "network"
+
+// ExecutesOnRelay reports whether the binding declared a network relay.
+func (b ConnectorRightSizeBinding) ExecutesOnRelay() bool {
+	return strings.EqualFold(strings.TrimSpace(b.Executor), RightSizeExecutorNetwork)
 }
 
 var connectorRightSizeName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
@@ -170,6 +185,9 @@ func validateConnectors(c Connectors) []error {
 		secretRef, err := url.Parse(strings.TrimSpace(binding.TokenRef))
 		if err != nil || secretRef.Scheme != "secret" || strings.Trim(secretRef.Host+secretRef.Path, "/") == "" || secretRef.User != nil || secretRef.Fragment != "" {
 			errs = append(errs, fmt.Errorf("%s.token_ref must use secret://name", where))
+		}
+		if executor := strings.ToLower(strings.TrimSpace(binding.Executor)); executor != "" && executor != "control_plane" && executor != RightSizeExecutorNetwork {
+			errs = append(errs, fmt.Errorf("%s.executor must be empty, \"control_plane\" or \"network\"", where))
 		}
 	}
 	return errs

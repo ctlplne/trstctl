@@ -716,6 +716,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		CodeSigning:                  codeSigning,
 		ConnectorRegistry:            outbound.connectorRegistry,
 		ConnectorRightSize:           outbound.connectorRightSize,
+		ConnectorRightSizeBindings:   cfg.Connectors.RightSize,
 		ExternalCAs:                  outbound.externalCAs,
 		UpstreamDV:                   outbound.upstreamDV,
 		TenantDynamicSecretProviders: outbound.dynamicSecretProviders,

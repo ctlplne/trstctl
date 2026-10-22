@@ -53,6 +53,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
@@ -340,6 +341,9 @@ type agentService struct {
 	// recordRollback turns a relay's re-bind report into a delivery receipt
 	// (epic D4). Nil means rollback results live only in the event log.
 	recordRollback func(ctx context.Context, tenantID, agent string, jobID int64, attempt int, idempotencyKey, payload, outcome, reason string)
+	// recordRightSize turns a relay's verified right-size report, or its
+	// closed failure phrase, into the operation's terminal receipt (A64).
+	recordRightSize func(ctx context.Context, tenantID string, jobID int64, attempt int, payload []byte, result *relay.RightSizeReport, failure string) error
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC

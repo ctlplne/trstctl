@@ -248,8 +248,10 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 			t.Errorf("shipped kind %q needs a flag and must name it, or it reads as coverage that is not running", s.Kind)
 		}
 		// Connector work must name its connectors; a revocation probe drives
-		// none and must not pretend otherwise.
-		if strings.HasPrefix(s.Kind, "connector.") && len(s.Connectors) == 0 {
+		// none and must not pretend otherwise. connector.right_size (A64) is
+		// the entitlement-API conversation, not connector-family work, so it
+		// is the one connector.* kind that legitimately names none.
+		if strings.HasPrefix(s.Kind, "connector.") && s.Kind != relay.KindConnectorRightSize && len(s.Connectors) == 0 {
 			t.Errorf("connector kind %q declares no connectors", s.Kind)
 		}
 	}

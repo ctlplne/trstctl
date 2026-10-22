@@ -13,9 +13,12 @@ import (
 	"sort"
 	"strings"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -41,6 +44,9 @@ type relayCredentialResolver struct {
 	store        *store.Store
 	kek          sealKeyWrapper
 	tenantCrypto tenantseal.Access
+	// rightSizeBindings lets a relay attempt redeem the entitlement binding's
+	// token and learn its endpoint (A64); nothing of either rides the queue.
+	rightSizeBindings map[string]config.ConnectorRightSizeBinding
 }
 
 // redeemedMaterial is one resolved attempt's material plus the wipe that ends
@@ -92,6 +98,11 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	case "ticket.sync":
 		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case orchestrator.DestinationConnectorRightSize:
+		// A64: the binding's bearer token and endpoint for one relay attempt.
+		// The queued operation names only the tenant's connector; the binding
+		// (operator config) names the endpoint and the same-tenant secret.
+		return r.resolveRightSizeBinding(ctx, tenantID, job)
 	case "connector.takedown":
 		// A43: an appliance object removal redeems the same management
 		// credential a deploy would, resolved from the reviewed target
@@ -143,6 +154,35 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		refNames = append(refNames, ref)
 	}
 	return redeemedMaterial{items: items, refNames: refNames, wipe: wipeAll}, nil
+}
+
+// resolveRightSizeBinding redeems the right-size binding behind a queued
+// operation: its token (a same-tenant secret reference) plus, as non-secret
+// items the relay needs and the queue never carries, the endpoint and tenant.
+func (r *relayCredentialResolver) resolveRightSizeBinding(ctx context.Context, tenantID string, job store.AgentJobForRedemption) (redeemedMaterial, error) {
+	if r == nil || r.store == nil {
+		return redeemedMaterial{}, errors.New("credential reference resolver is not configured")
+	}
+	var intent relay.RightSizeIntent
+	if err := json.Unmarshal(job.Payload, &intent); err != nil || strings.TrimSpace(intent.Connector) == "" {
+		return redeemedMaterial{}, errors.New("right-size job payload names no connector")
+	}
+	binding, ok := r.rightSizeBindings[rightSizeBindingKey(tenantID, strings.TrimSpace(intent.Connector))]
+	if !ok || !binding.ExecutesOnRelay() {
+		return redeemedMaterial{}, errors.New("right-size binding is not configured for a network relay in this tenant")
+	}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID}
+	token, err := lease.require(ctx, binding.TokenRef)
+	if err != nil {
+		lease.Close()
+		return redeemedMaterial{}, fmt.Errorf("resolve right-size credential reference: %w", err)
+	}
+	items := []transport.RedeemedSecret{
+		{Name: relay.RightSizeTokenRef, Value: secret.JSONBytes(token)},
+		{Name: relay.RightSizeEndpointRef, Value: secret.JSONBytes([]byte(binding.Endpoint))},
+		{Name: "right_size.tenant_id", Value: secret.JSONBytes([]byte(tenantID))},
+	}
+	return redeemedMaterial{items: items, refNames: []string{binding.TokenRef, relay.RightSizeEndpointRef}, wipe: lease.Close}, nil
 }
 
 // resolveJobReferences resolves the secret:// references a non-connector job

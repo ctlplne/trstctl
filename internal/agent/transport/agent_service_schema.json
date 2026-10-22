@@ -235,6 +235,11 @@
           "go_type": "*revcacheposture.Report",
           "name": "revocation_caches",
           "presence": "optional"
+        },
+        {
+          "go_type": "*transport.ExecutorReport",
+          "name": "executors",
+          "presence": "optional"
         }
       ]
     },
