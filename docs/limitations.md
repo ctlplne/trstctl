@@ -2654,10 +2654,17 @@ than sending an operator looking for a credential that was never there.
   `fs.write`, `net.dial`, `process.exec`), and `replay_safety`
   (`reconciled` when the receiver converges on retry, otherwise
   `at-most-once`). Those come from the live registry, so the catalog cannot
-  claim a capability the process would not enforce; a connector this build
-  does not implement natively reports no capabilities and the conservative
-  at-most-once contract. Factory-registered connectors build their grant per
-  attempt and report none here.
+  claim a capability the process would not enforce. Each row also says who
+  executes the family in this estate (`executor`: `host_agent`,
+  `network_relay`, `control_plane`, or `none` — listed for its description,
+  nothing runs it until the family is enabled here or a relay reports a plugin
+  by that name) and where its grant was read from (`grant_source`): a
+  factory-registered family declares its operation kinds at registration from
+  a prototype of its own connector (A75), and a family an enrolled agent
+  executes reports the shipped binary's census for the same connector code
+  (A74), so a host family the control plane never enabled for itself no longer
+  reads as having no implementation. A real attempt's per-target grant narrows
+  the declared kinds to the target's paths and host; it never widens them.
 - The running system is readable: `GET /api/v1/platform/system` (and
   `trstctl-cli platform system`) reports the build version/commit/date, the Go
   toolchain, process start time and uptime, the live signer topology

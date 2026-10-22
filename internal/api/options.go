@@ -199,6 +199,15 @@ func WithConnectorRegistry(registry *connector.Registry) Option {
 	return func(c *config) { c.connectorRegistry = registry }
 }
 
+// WithConnectorGrantCensus supplies the per-family sandbox grant census the
+// catalog serves for families this process does not run itself (A74/A75): a
+// host family is executed by the enrolled host agent with the same connector
+// code, so its grant is known here even when the control plane never enables
+// it. nil for a family the binary does not ship.
+func WithConnectorGrantCensus(census func(name string) []string) Option {
+	return func(c *config) { c.connectorGrantCensus = census }
+}
+
 // WithCALeafValidity sets the reference leaf lifetime the CA calendar (H5)
 // measures each authority's remaining horizon against, so the console can serve a
 // "renew/re-key by" date and flag an authority that is already truncating the

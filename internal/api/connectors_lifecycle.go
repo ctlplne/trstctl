@@ -63,11 +63,23 @@ type connectorCatalogItem struct {
 	// Native is true when this build carries a native implementation;
 	// otherwise delivery falls to a signed plugin or a receipt.
 	Native bool `json:"native"`
-	// Capabilities is the sandbox grant a native connector declares
-	// (fs.read, fs.write, net.dial, process.exec). Empty means either a
-	// factory-built connector whose grant is per-attempt, or no privileged
-	// operation at all.
+	// Capabilities is the sandbox grant the family declares (fs.read,
+	// fs.write, net.dial, process.exec): the registry's for a connector this
+	// process runs, the shipped census's for one an enrolled agent runs
+	// (A75). Empty means no privileged operation, or a family this build does
+	// not ship.
 	Capabilities []string `json:"capabilities"`
+	// GrantSource says where Capabilities came from: "registry" (this
+	// process's live connector), "shipped" (the binary's grant census for a
+	// family an agent executes), or "none".
+	GrantSource string `json:"grant_source"`
+	// Executor says who performs this family's deploys in this estate (A74):
+	// "host_agent" (the enrolled host agent's binary), "network_relay" (an
+	// enrolled relay's binary), "control_plane" (this process's registry), or
+	// "none" — listed for its description, but nothing here executes it, and
+	// a target for it cannot deploy until the family is enabled or a relay
+	// reports carrying a plugin by that name.
+	Executor string `json:"executor"`
 	// ReplaySafety is the audited redelivery contract: "reconciled" when the
 	// receiver converges on retry, "at-most-once" otherwise. It fails closed
 	// to at-most-once for anything unregistered.
@@ -1803,17 +1815,43 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 				Detail:           detail,
 			}
 		}
+		item.GrantSource = "none"
 		if a.connectorRegistry != nil && a.connectorRegistry.Has(item.Name) {
 			item.Native = a.connectorRegistry.Has(item.Name)
 			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {
 				item.Capabilities = caps
+				item.GrantSource = "registry"
 			}
 			item.ReplaySafety = replaySafetyLabel(a.connectorRegistry.ReplaySafetyFor(item.Name))
 			item.TargetVantage = string(a.connectorRegistry.TargetVantageFor(item.Name))
 		}
+		if item.GrantSource == "none" && a.connectorGrantCensus != nil {
+			if caps := a.connectorGrantCensus(item.Name); len(caps) > 0 {
+				item.Capabilities = caps
+				item.GrantSource = "shipped"
+			}
+		}
+		item.Executor = connectorExecutorFor(item.TargetVantage, item.Native)
 		out = append(out, item)
 	}
 	return out
+}
+
+// connectorExecutorFor names who performs a family's deploys (A74). A host or
+// relay family is executed by the enrolled agent's binary, which ships every
+// family in this census whatever this process enabled; a control-plane family
+// runs here only when connectors.enabled turned it on.
+func connectorExecutorFor(vantage string, native bool) string {
+	switch vantage {
+	case string(connector.VantageHostAgent):
+		return "host_agent"
+	case string(connector.VantageNetworkRelay):
+		return "network_relay"
+	}
+	if native {
+		return "control_plane"
+	}
+	return "none"
 }
 
 // rollbackExecutesOnControlPlane reports whether a re-bind family's rollback

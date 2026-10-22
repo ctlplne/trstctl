@@ -10436,6 +10436,10 @@ export interface components {
             delivery_mode: string;
             device_proven: boolean;
             executes_rollback?: boolean;
+            /** @enum {string} */
+            executor?: "host_agent" | "network_relay" | "control_plane" | "none";
+            /** @enum {string} */
+            grant_source?: "registry" | "shipped" | "none";
             kind: string;
             name: string;
             native: boolean;

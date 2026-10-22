@@ -1731,6 +1731,11 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	if d.ConnectorRegistry != nil {
 		*defaults = append(*defaults, api.WithConnectorRegistry(d.ConnectorRegistry))
 	}
+	{
+		// A74/A75: the shipped grant census answers for families an enrolled
+		// agent executes, whatever this process enabled.
+		*defaults = append(*defaults, api.WithConnectorGrantCensus(NativeConnectorGrantNames))
+	}
 	// H5: the CA console needs the same reference leaf validity the horizon
 	// scheduler uses, so the "renew/re-key by" date it shows and the alert an
 	// operator receives are answering the same question.

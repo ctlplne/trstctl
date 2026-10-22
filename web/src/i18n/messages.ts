@@ -30353,6 +30353,27 @@ export const messages = {
       "Functional self-checks this round: {passed} passed, {pending} pending, {failed} failed. An agent on the target build verifies only once its check passed.",
     description: "Upgrade campaign panel: the post-upgrade self-check tally of the live round.",
   },
+  "connectors.catalog.executor": { defaultMessage: "Executed by", description: "Connector registry column: who performs the family's deploys in this estate." },
+  "connectors.catalog.executor.host_agent": { defaultMessage: "Enrolled host agent", description: "Executor value: the host agent's binary runs this family." },
+  "connectors.catalog.executor.network_relay": { defaultMessage: "Enrolled network relay", description: "Executor value: a relay's binary runs this family." },
+  "connectors.catalog.executor.control_plane": {
+    defaultMessage: "This control plane",
+    description: "Executor value: this process's connector registry runs this family.",
+  },
+  "connectors.catalog.executorNone": {
+    defaultMessage: "Nothing in this estate executes it yet: enable the family on the control plane or enroll a relay carrying a plugin by this name.",
+    description: "Executor value when a catalog row is listed for its description only.",
+  },
+  "connectors.catalog.grant": { defaultMessage: "Sandbox grant", description: "Connector registry column: the declared sandbox capabilities." },
+  "connectors.catalog.grantRegistry": {
+    defaultMessage: "declared by the live connector in this process",
+    description: "Grant source note for a registry-backed row.",
+  },
+  "connectors.catalog.grantShipped": {
+    defaultMessage: "declared by the shipped connector the agent runs",
+    description: "Grant source note for a census-backed row.",
+  },
+  "connectors.catalog.grantNone": { defaultMessage: "no privileged operation declared", description: "Grant cell when a family declares no capability." },
 } as const;
 
 export type MessageKey = keyof typeof messages;

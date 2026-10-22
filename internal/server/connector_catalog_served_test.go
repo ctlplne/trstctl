@@ -25,10 +25,13 @@ func TestServedConnectorCatalogReflectsConfiguredNativeRegistry(t *testing.T) {
 	}
 	var catalog struct {
 		Items []struct {
-			Name          string `json:"name"`
-			Native        bool   `json:"native"`
-			ReplaySafety  string `json:"replay_safety"`
-			TargetVantage string `json:"target_vantage"`
+			Name          string   `json:"name"`
+			Native        bool     `json:"native"`
+			ReplaySafety  string   `json:"replay_safety"`
+			TargetVantage string   `json:"target_vantage"`
+			Capabilities  []string `json:"capabilities"`
+			GrantSource   string   `json:"grant_source"`
+			Executor      string   `json:"executor"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &catalog); err != nil {
@@ -42,9 +45,25 @@ func TestServedConnectorCatalogReflectsConfiguredNativeRegistry(t *testing.T) {
 			if !item.Native || item.ReplaySafety != "reconciled" || item.TargetVantage != "host_agent" {
 				t.Errorf("enabled connector lost its runtime contract: %+v", item)
 			}
+			// A75: a factory registration declares its grant; the registry
+			// reports it without constructing a connector.
+			if item.GrantSource != "registry" || len(item.Capabilities) == 0 || item.Executor != "host_agent" {
+				t.Errorf("enabled factory connector reports no declared grant: %+v", item)
+			}
 		case "nginx":
 			if item.Native {
 				t.Error("disabled nginx was advertised as a native connector")
+			}
+			// A74: the host agent still executes nginx with the shipped
+			// connector, so its grant and executor are named.
+			if item.Executor != "host_agent" || item.GrantSource != "shipped" || len(item.Capabilities) == 0 {
+				t.Errorf("nginx the control plane never enabled reads as unexecuted: %+v", item)
+			}
+		case "aws-acm":
+			// A59: a cloud store runs on an enrolled relay; the census names
+			// its grant although this process never enabled it.
+			if item.Executor != "network_relay" || item.GrantSource != "shipped" || len(item.Capabilities) == 0 {
+				t.Errorf("aws-acm nothing enabled = %+v, want the relay as executor with its shipped grant", item)
 			}
 		}
 	}

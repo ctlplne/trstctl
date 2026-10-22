@@ -82,6 +82,11 @@ func connectorRegistryFromConfig(cfg config.Connectors, st *store.Store, kek sea
 		if err := registry.RegisterFactoryWithReplaySafety(name, factory, nativeConnectorReplaySafety(name)); err != nil {
 			return nil, err
 		}
+		if grant, ok := NativeConnectorGrant(name); ok {
+			if err := registry.DeclareCapabilities(name, grant); err != nil {
+				return nil, err
+			}
+		}
 		if nativeConnectorSupportsTLSPosture(name) {
 			if err := registry.MarkTLSPostureCapable(name); err != nil {
 				return nil, err

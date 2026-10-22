@@ -49,6 +49,21 @@ function VantageBadge({ vantage }: { vantage: string }) {
 
 import { newIdempotencyKey } from "@/lib/apiTransport";
 
+// A74: the executor column's message, or null for a row nothing in the
+// estate executes (or an older server that does not say).
+function executorMessageKey(executor?: string): string | null {
+  switch (executor) {
+    case "host_agent":
+      return "connectors.catalog.executor.host_agent";
+    case "network_relay":
+      return "connectors.catalog.executor.network_relay";
+    case "control_plane":
+      return "connectors.catalog.executor.control_plane";
+    default:
+      return null;
+  }
+}
+
 export function Connectors() {
   const deployAttempt = useRef<{ body: string; key: string } | null>(null);
   const { locale, timeZone, t } = useTranslation();
@@ -897,6 +912,8 @@ export function Connectors() {
                         <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
                         <th scope="col">{translateNow("source.delivery.mode.c9585346ea")}</th>
                         <th scope="col">{translateNow("source.executes.on.a3vant0001")}</th>
+                        <th scope="col">{t("connectors.catalog.executor")}</th>
+                        <th scope="col">{t("connectors.catalog.grant")}</th>
                         <th scope="col">{translateNow("source.rollback.evidence.bf960c995c")}</th>
                         <th scope="col">{translateNow("source.device.proof.e1dev00001")}</th>
                         <th scope="col">{translateNow("source.relay.migration.e1par00001")}</th>
@@ -910,6 +927,31 @@ export function Connectors() {
                           <td>{connector.delivery_mode}</td>
                           <td>
                             <VantageBadge vantage={connector.target_vantage} />
+                          </td>
+                          {/* A74: who performs this family's deploys in this estate. A
+                          host or relay family runs in the enrolled agent's binary
+                          whatever the control plane enabled for itself; a row nothing
+                          executes says so instead of reading as a native connector. */}
+                          <td className="max-w-[16rem]">
+                            {executorMessageKey(connector.executor) ? (
+                              <span>{t(executorMessageKey(connector.executor) as "connectors.catalog.executor.host_agent")}</span>
+                            ) : (
+                              <span className="text-status-warning">{t("connectors.catalog.executorNone")}</span>
+                            )}
+                          </td>
+                          {/* A75: the declared sandbox grant, from the live registry or
+                          the binary's shipped census, never from the description. */}
+                          <td className="max-w-[16rem]">
+                            {(connector.capabilities ?? []).length > 0 ? (
+                              <>
+                                <span className="font-mono text-xs">{(connector.capabilities ?? []).join(", ")}</span>
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {connector.grant_source === "registry" ? t("connectors.catalog.grantRegistry") : t("connectors.catalog.grantShipped")}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">{t("connectors.catalog.grantNone")}</span>
+                            )}
                           </td>
                           <td>
                             {/* D4: whether trstctl PERFORMS the rollback beside it

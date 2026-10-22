@@ -2602,6 +2602,8 @@ export interface ConnectorCatalogItem {
   delivery_mode: string;
   device_proven: boolean;
   executes_rollback?: boolean;
+  executor?: "host_agent" | "network_relay" | "control_plane" | "none";
+  grant_source?: "registry" | "shipped" | "none";
   kind: string;
   name: string;
   native: boolean;

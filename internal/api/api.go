@@ -159,6 +159,7 @@ type API struct {
 	tenantKeyDomains                   TenantKeyDomainLifecycle
 	tenantCrypto                       tenantseal.Access
 	connectorRegistry                  *connector.Registry
+	connectorGrantCensus               func(name string) []string
 	caLeafValidity                     time.Duration
 	sshFleet                           SSHFleetProvider
 	codeSigningIdentities              CodeSigningIdentityProvider
@@ -289,6 +290,7 @@ type config struct {
 	tenantKeyDomains            TenantKeyDomainLifecycle
 	tenantCrypto                tenantseal.Access
 	connectorRegistry           *connector.Registry
+	connectorGrantCensus        func(name string) []string
 	caLeafValidity              time.Duration
 	sshFleet                    SSHFleetProvider
 	codeSigningIdentities       CodeSigningIdentityProvider
@@ -609,6 +611,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		tenantKeyDomains:            cfg.tenantKeyDomains,
 		tenantCrypto:                cfg.tenantCrypto,
 		connectorRegistry:           cfg.connectorRegistry,
+		connectorGrantCensus:        cfg.connectorGrantCensus,
 		caLeafValidity:              cfg.caLeafValidity,
 		sshFleet:                    cfg.sshFleet,
 		codeSigningIdentities:       cfg.codeSigningIdentities,

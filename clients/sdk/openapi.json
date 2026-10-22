@@ -10670,6 +10670,23 @@
           "executes_rollback": {
             "type": "boolean"
           },
+          "executor": {
+            "enum": [
+              "host_agent",
+              "network_relay",
+              "control_plane",
+              "none"
+            ],
+            "type": "string"
+          },
+          "grant_source": {
+            "enum": [
+              "registry",
+              "shipped",
+              "none"
+            ],
+            "type": "string"
+          },
           "kind": {
             "type": "string"
           },

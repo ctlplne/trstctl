@@ -3610,6 +3610,8 @@ ConnectorCatalogItem = TypedDict(
         'delivery_mode': str,
         'device_proven': bool,
         'executes_rollback': bool,
+        'executor': str,
+        'grant_source': str,
         'kind': str,
         'name': str,
         'native': bool,

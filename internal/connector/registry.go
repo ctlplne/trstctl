@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // DeployPayload is the JSON body of a "connector.deploy" outbox message: which
@@ -73,10 +74,14 @@ func EncodeTargetIdentityDeploy(connectorName, identityID, targetID, revisionID 
 // through (real network/filesystem/exec in production; an in-memory double in
 // tests).
 type Registry struct {
-	mu           sync.RWMutex
-	connectors   map[string]Connector
-	opsFor       func(connectorName string) Ops
-	factories    map[string]Factory
+	mu         sync.RWMutex
+	connectors map[string]Connector
+	opsFor     func(connectorName string) Ops
+	factories  map[string]Factory
+	// declared holds the sandbox grant a factory-registered family declares
+	// up front (A75): the kinds of operation every attempt's per-target grant
+	// is built from, so the catalog can show them without running any code.
+	declared     map[string]pluginhost.Grant
 	replaySafety map[string]ReplaySafety
 	tlsPosture   map[string]bool
 	vantage      map[string]TargetVantage
@@ -114,6 +119,7 @@ func NewRegistry(opsFor ...func(connectorName string) Ops) *Registry {
 	return &Registry{
 		connectors:   map[string]Connector{},
 		factories:    map[string]Factory{},
+		declared:     map[string]pluginhost.Grant{},
 		replaySafety: map[string]ReplaySafety{},
 		tlsPosture:   map[string]bool{},
 		opsFor:       provider,
@@ -169,6 +175,25 @@ func (r *Registry) RegisterFactoryWithReplaySafety(name string, factory Factory,
 	return nil
 }
 
+// DeclareCapabilities records the sandbox grant a factory-registered family
+// declares (A75). A factory builds a per-target grant on every attempt and the
+// registry never constructs a connector to report on it, so the composition
+// declares the family's operation kinds here from a prototype instead; the
+// per-attempt grant is what the sandbox enforces, and it never exceeds these
+// kinds.
+func (r *Registry) DeclareCapabilities(name string, grant pluginhost.Grant) error {
+	if r == nil || name == "" {
+		return fmt.Errorf("connector: declared capabilities require a registry and a name")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.factories[name] == nil {
+		return fmt.Errorf("connector: %q has no factory to declare capabilities for", name)
+	}
+	r.declared[name] = grant
+	return nil
+}
+
 // Has reports whether a connector is registered under name.
 func (r *Registry) Has(name string) bool {
 	if r == nil {
@@ -181,20 +206,30 @@ func (r *Registry) Has(name string) bool {
 
 // CapabilitiesFor returns the sandbox capabilities a registered connector
 // declares, sorted, so an operator can see what a delivery is permitted to do
-// before authorizing one (B-6). A factory-registered connector builds its
-// grant per attempt and has none to report here; an unknown name returns nil.
-// This never constructs a connector: reporting must not run connector code.
+// before authorizing one (B-6). A factory-registered connector reports the
+// grant its composition declared (A75); an unknown name, or a factory nobody
+// declared for, returns nil. This never constructs a connector: reporting must
+// not run connector code.
 func (r *Registry) CapabilitiesFor(name string) []string {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	c := r.connectors[name]
-	if c == nil {
+	var grant pluginhost.Grant
+	switch {
+	case r.connectors[name] != nil:
+		grant = r.connectors[name].Capabilities()
+	case r.factories[name] != nil:
+		declared, ok := r.declared[name]
+		if !ok {
+			return nil
+		}
+		grant = declared
+	default:
 		return nil
 	}
-	caps := c.Capabilities().Capabilities()
+	caps := grant.Capabilities()
 	out := make([]string, 0, len(caps))
 	for _, capability := range caps {
 		out = append(out, string(capability))

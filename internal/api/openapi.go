@@ -2761,6 +2761,10 @@ func componentSchemas() map[string]*Schema {
 		"native":        {Type: "boolean"},
 		"capabilities":  {Type: "array", Items: str()},
 		"replay_safety": {Type: "string", Enum: []string{"at-most-once", "reconciled"}},
+		// A74/A75: who executes the family in this estate, and where its
+		// declared grant was read from.
+		"executor":     {Type: "string", Enum: []string{"host_agent", "network_relay", "control_plane", "none"}},
+		"grant_source": {Type: "string", Enum: []string{"registry", "shipped", "none"}},
 		// A3: where this connector's deploy work executes, from the live census.
 		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
 		// E1: present for every family in the accepted 13-family denominator,

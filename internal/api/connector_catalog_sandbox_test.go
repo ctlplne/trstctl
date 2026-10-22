@@ -179,3 +179,78 @@ func TestConnectorCatalogWithoutRegistryClaimsNothing(t *testing.T) {
 		}
 	}
 }
+
+// A74/A75: a factory-registered family reports the grant its composition
+// declared, a family this process does not run reports the shipped census's
+// grant with its executor named, and a control-plane family nothing enabled
+// says so instead of reading as a native connector.
+func TestConnectorCatalogNamesTheExecutorAndTheDeclaredGrant(t *testing.T) {
+	registry := connector.NewRegistry()
+	if err := registry.RegisterFactory("f5", func(context.Context, connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
+		t.Fatal("the catalog constructed a connector to report on it")
+		return nil, nil, nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.DeclareCapabilities("f5", pluginhost.NewGrant(pluginhost.CapNetDial)); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.DeclareTargetVantage("f5", connector.VantageNetworkRelay); err != nil {
+		t.Fatal(err)
+	}
+	census := func(name string) []string {
+		switch name {
+		case "nginx":
+			return []string{"fs.write", "process.exec"}
+		case "aws-acm":
+			return []string{"net.dial"}
+		}
+		return nil
+	}
+	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver(), api.WithConnectorRegistry(registry), api.WithConnectorGrantCensus(census))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/connectors/catalog", nil)
+	req.Header.Set("X-Tenant-ID", connectorTenantA)
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Items []struct {
+			Name         string   `json:"name"`
+			Native       bool     `json:"native"`
+			Capabilities []string `json:"capabilities"`
+			GrantSource  string   `json:"grant_source"`
+			Executor     string   `json:"executor"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string]struct {
+		Native       bool
+		Capabilities []string
+		GrantSource  string
+		Executor     string
+	}{}
+	for _, item := range body.Items {
+		rows[item.Name] = struct {
+			Native       bool
+			Capabilities []string
+			GrantSource  string
+			Executor     string
+		}{item.Native, item.Capabilities, item.GrantSource, item.Executor}
+	}
+	if f5 := rows["f5"]; !f5.Native || f5.GrantSource != "registry" || !reflect.DeepEqual(f5.Capabilities, []string{"net.dial"}) || f5.Executor != "network_relay" {
+		t.Fatalf("factory-registered f5 = %+v, want its declared net.dial grant from the registry on a network relay", f5)
+	}
+	if nginx := rows["nginx"]; nginx.Native || nginx.GrantSource != "shipped" || !reflect.DeepEqual(nginx.Capabilities, []string{"fs.write", "process.exec"}) || nginx.Executor != "host_agent" {
+		t.Fatalf("nginx the control plane never enabled = %+v, want the shipped grant and the host agent as executor", nginx)
+	}
+	// A cloud store nothing enabled here is still executed by an enrolled
+	// relay (A59); its shipped grant is named beside that executor.
+	if acm := rows["aws-acm"]; acm.Native || acm.Executor != "network_relay" || acm.GrantSource != "shipped" {
+		t.Fatalf("aws-acm nothing enabled = %+v, want the relay as executor with its shipped grant", acm)
+	}
+}
