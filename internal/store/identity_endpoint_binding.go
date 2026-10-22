@@ -215,3 +215,51 @@ func (s *Store) BindIdentityEndpointIssuerTx(ctx context.Context, tx pgx.Tx, ten
 		WHERE tenant_id = $1 AND id = $2`, tenantID, identityID, issuer.Source, issuer.ID, issuer.Name, issuer.PreviewFingerprint, issuer.SubjectKeyAlgorithm)
 	return err
 }
+
+// IdentityHoldingCertificateOnTarget names the active identity bound to
+// targetID whose issued or delivered certificate carries fingerprint: the
+// predecessor a post-quantum replacement on the same destination succeeds
+// (A41, B5-2). The replacement itself is excluded. Empty when no active
+// identity on the target owns that leaf, which leaves the conflict rule to
+// treat every other writer as a conflict.
+func (s *Store) IdentityHoldingCertificateOnTarget(ctx context.Context, tenantID, targetID, excludeIdentityID, fingerprint string) (string, error) {
+	if targetID == "" || fingerprint == "" {
+		return "", nil
+	}
+	var holder string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id::text FROM identities
+			WHERE tenant_id = $1 AND kind IN ('x509_certificate', 'x509')
+			AND attributes->>'deployment_target_id' = $2 AND id::text <> $3
+			AND status IN ('issued', 'deployed', 'renewing', 'renewal_failed')
+			ORDER BY created_at, id LIMIT 20`, tenantID, targetID, excludeIdentityID)
+		if err != nil {
+			return err
+		}
+		candidates := make([]string, 0, 4)
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			candidates = append(candidates, id)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, id := range candidates {
+			owns, err := s.IdentityOwnsCertificateFingerprintTx(ctx, tx, tenantID, id, fingerprint)
+			if err != nil {
+				return err
+			}
+			if owns {
+				holder = id
+				return nil
+			}
+		}
+		return nil
+	})
+	return holder, err
+}

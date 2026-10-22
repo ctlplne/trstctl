@@ -325,7 +325,11 @@ Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is t
 starting point. PQC migration planning and host execution are served in every
 build (`internal/pqcmigration`). A certificate-key asset must be bound to an
 exact enabled host target and a requested identity whose subject key is the run's
-`target_algorithm` (ML-DSA-44, ML-DSA-65 or ML-DSA-87) before start. The
+`target_algorithm` (ML-DSA-44, ML-DSA-65 or ML-DSA-87) before start. The identity
+currently serving that asset's certificate on the same target is the replacement's
+predecessor: it keeps serving until the host installs the successor and does not
+count as a competing binding, while any unrelated active identity on the target
+still refuses the plan. The
 outbox routes the work to that target's enrolled agent.
 
 The migration API attaches `POST /api/v1/pqc/migrations` and

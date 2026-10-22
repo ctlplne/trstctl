@@ -91,7 +91,15 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		if _, err := s.store.GetOwner(ctx, tenantID, identity.OwnerID); err != nil {
 			return nil, err
 		}
-		conflicts, err := s.store.ConflictingTargetBindings(ctx, tenantID, target.ID, identity.ID, "", true)
+		// The identity serving the asset's leaf on this target is what the
+		// replacement succeeds (B5-2): the documented flow binds a requested
+		// ML-DSA identity beside the deployed classical one, so that predecessor
+		// and its same-target ancestors must not count as competing writers.
+		predecessorID, err := s.store.IdentityHoldingCertificateOnTarget(ctx, tenantID, target.ID, identity.ID, reissue.Asset.CertificateFingerprint)
+		if err != nil {
+			return nil, err
+		}
+		conflicts, err := s.store.ConflictingTargetBindings(ctx, tenantID, target.ID, identity.ID, predecessorID, true)
 		if err != nil {
 			return nil, err
 		}
