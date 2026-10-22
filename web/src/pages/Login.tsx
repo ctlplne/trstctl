@@ -11,7 +11,8 @@ import { translateNow } from "@/i18n/I18nProvider";
 const LDAPLoginForm = lazy(() => import("./login/LDAPLoginForm"));
 
 export function Login() {
-  const { oidcAvailable, samlAvailable, ldapAvailable, kerberosAvailable, ntlmAvailable, previewAvailable, startPreview } = useAuth();
+  const { oidcAvailable, samlAvailable, ldapAvailable, kerberosAvailable, ntlmAvailable, ldapPasswordChangeAvailable, previewAvailable, startPreview } =
+    useAuth();
   const browserLoginAvailable = oidcAvailable || samlAvailable || ldapAvailable || kerberosAvailable || ntlmAvailable;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -87,6 +88,7 @@ export function Login() {
                 <LDAPLoginForm
                   returnTo={searchParams.get("return_to") ?? undefined}
                   secondary={oidcAvailable || samlAvailable || kerberosAvailable || ntlmAvailable}
+                  passwordChange={ldapPasswordChangeAvailable}
                 />
               </Suspense>
             )}

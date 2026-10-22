@@ -783,10 +783,18 @@ type LDAP struct {
 	GroupFilter        string `json:"group_filter,omitempty"`
 	GroupNameAttribute string `json:"group_name_attribute,omitempty"`
 	EmailAttribute     string `json:"email_attribute,omitempty"`
-	SessionSecretFile  string `json:"session_secret_file,omitempty"`
-	SessionTTL         string `json:"session_ttl,omitempty"`
-	LoginRedirect      string `json:"login_redirect,omitempty"`
-	Timeout            string `json:"timeout,omitempty"`
+	// PasswordChange serves the self-service password change (A81):
+	// POST /auth/ldap/password proves the current password by bind, then
+	// changes it through the LDAP Password Modify extended operation (mode
+	// "exop", RFC 3062: OpenLDAP, 389-ds, FreeIPA) or, for Active Directory
+	// (mode "active_directory"), by replacing unicodePwd over ldaps://. A login
+	// whose password the directory reports expired or "must change" is
+	// answered with the password-change-required problem instead of a session.
+	PasswordChange    LDAPPasswordChange `json:"password_change,omitempty"`
+	SessionSecretFile string             `json:"session_secret_file,omitempty"`
+	SessionTTL        string             `json:"session_ttl,omitempty"`
+	LoginRedirect     string             `json:"login_redirect,omitempty"`
+	Timeout           string             `json:"timeout,omitempty"`
 
 	TenantMappings     []TenantMapping `json:"tenant_mappings,omitempty"`
 	DefaultRoles       []string        `json:"default_roles,omitempty"`
@@ -891,6 +899,20 @@ func (s SAML) SessionTTLDuration() (time.Duration, error) {
 	}
 	return time.ParseDuration(s.SessionTTL)
 }
+
+// LDAPPasswordChange configures the LDAP self-service password change (A81).
+type LDAPPasswordChange struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// Mode is "exop" (default; RFC 3062 Password Modify as the bound user) or
+	// "active_directory" (unicodePwd delete/add as the bound user; needs ldaps://).
+	Mode string `json:"mode,omitempty"`
+}
+
+// LDAPPasswordChangeModes names the supported password-change mechanisms.
+const (
+	LDAPPasswordChangeExop            = "exop"
+	LDAPPasswordChangeActiveDirectory = "active_directory"
+)
 
 // ValidateEnabled reports LDAP configuration problems as if the block were enabled.
 func (l LDAP) ValidateEnabled() error { return errors.Join(l.validate()...) }
@@ -4936,6 +4958,17 @@ func (l LDAP) validate() []error {
 	}
 	req(l.URL, "url")
 	req(l.SessionSecretFile, "session_secret_file")
+	if l.PasswordChange.Enabled {
+		switch strings.ToLower(strings.TrimSpace(l.PasswordChange.Mode)) {
+		case "", LDAPPasswordChangeExop:
+		case LDAPPasswordChangeActiveDirectory:
+			if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(l.URL)), "ldaps://") {
+				errs = append(errs, errors.New("auth.ldap.password_change.mode active_directory needs an ldaps:// url: Active Directory accepts unicodePwd changes only over TLS"))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("auth.ldap.password_change.mode %q must be \"exop\" or \"active_directory\"", l.PasswordChange.Mode))
+		}
+	}
 	req(l.GroupSearchBaseDN, "group_search_base_dn")
 	req(l.GroupFilter, "group_filter")
 	if strings.TrimSpace(l.GroupNameAttribute) == "" {

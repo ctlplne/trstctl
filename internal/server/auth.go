@@ -278,6 +278,7 @@ func mergeLDAPAuthConfig(dst, src *api.AuthConfig) {
 	dst.LDAPEnabled = src.LDAPEnabled
 	dst.VerifyLDAPLogin = src.VerifyLDAPLogin
 	dst.ResolveLDAPTenant = src.ResolveLDAPTenant
+	dst.ChangeLDAPPassword = src.ChangeLDAPPassword
 	if dst.LoginRedirect == "" {
 		dst.LoginRedirect = src.LoginRedirect
 	}

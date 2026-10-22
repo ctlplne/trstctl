@@ -3,6 +3,7 @@
 package enterpriseauth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -163,6 +164,7 @@ func buildLDAPAuthConfig(l config.LDAP, secure bool, newSessionIssuer func([]byt
 		GroupNameAttribute: l.GroupNameAttribute,
 		EmailAttribute:     l.EmailAttribute,
 		Timeout:            timeout,
+		PasswordChangeMode: l.PasswordChange.Mode,
 	}
 	cfg := &api.AuthConfig{
 		LDAPEnabled:        l.Enabled,
@@ -175,6 +177,16 @@ func buildLDAPAuthConfig(l config.LDAP, secure bool, newSessionIssuer func([]byt
 		Sessions:           sessions,
 		LoginRedirect:      l.LoginRedirect,
 		Secure:             secure,
+	}
+	if l.PasswordChange.Enabled {
+		cfg.ChangeLDAPPassword = func(ctx context.Context, username string, current, next []byte) error {
+			err := verifier.ChangePassword(ctx, username, current, next)
+			var refused *LDAPPasswordRefusedError
+			if errors.As(err, &refused) {
+				return &api.PasswordRefusedError{Reason: refused.Reason}
+			}
+			return err
+		}
 	}
 	return cfg, nil
 }

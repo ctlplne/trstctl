@@ -161,6 +161,11 @@ type AuthConfig struct {
 	// ResolveLDAPTenant maps LDAP claims/groups to the tenant/roles for the browser
 	// session.
 	ResolveLDAPTenant func(auth.Claims) (tenantID string, roles []string, err error)
+	// ChangeLDAPPassword serves POST /auth/ldap/password (A81): it proves the
+	// current password and changes it in the directory. A directory refusal of
+	// the new password is a *PasswordRefusedError; a wrong current password is
+	// any other error. Nil leaves the route unmounted.
+	ChangeLDAPPassword func(ctx context.Context, username string, current, next []byte) error
 
 	Sessions      *auth.SessionIssuer
 	LoginRedirect string // where to send the browser after login (default "/")
@@ -178,12 +183,15 @@ type meResponse struct {
 }
 
 type authMethodsResponse struct {
-	OIDC          bool `json:"oidc"`
-	SAML          bool `json:"saml"`
-	LDAP          bool `json:"ldap"`
-	Kerberos      bool `json:"kerberos"`
-	NTLM          bool `json:"ntlm"`
-	ProviderPlane bool `json:"provider_plane"`
+	OIDC     bool `json:"oidc"`
+	SAML     bool `json:"saml"`
+	LDAP     bool `json:"ldap"`
+	Kerberos bool `json:"kerberos"`
+	NTLM     bool `json:"ntlm"`
+	// LDAPPasswordChange says the self-service password change route is
+	// mounted (A81), so the console can offer it.
+	LDAPPasswordChange bool `json:"ldap_password_change"`
+	ProviderPlane      bool `json:"provider_plane"`
 }
 
 // authMethods publishes only boolean browser-bootstrap truth: which tenant login
@@ -200,6 +208,7 @@ func (a *API) authMethods(w http.ResponseWriter, _ *http.Request) {
 		methods.LDAP = a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil
 		methods.Kerberos = a.auth.KerberosEnabled || a.auth.KerberosLogin != nil
 		methods.NTLM = a.auth.NTLMEnabled || a.auth.NTLMLogin != nil
+		methods.LDAPPasswordChange = a.auth.ChangeLDAPPassword != nil
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	a.writeJSON(w, http.StatusOK, methods)
@@ -208,6 +217,56 @@ func (a *API) authMethods(w http.ResponseWriter, _ *http.Request) {
 type ldapLoginRequest struct {
 	Username string       `json:"username"`
 	Password ldapPassword `json:"password"`
+}
+
+type ldapPasswordChangeRequest struct {
+	Username        string       `json:"username"`
+	CurrentPassword ldapPassword `json:"current_password"`
+	NewPassword     ldapPassword `json:"new_password"`
+}
+
+// PasswordRefusedError carries a directory's own reason for refusing a new
+// password (A81); the API answers 422 with that reason.
+type PasswordRefusedError struct{ Reason string }
+
+func (e *PasswordRefusedError) Error() string {
+	return "the directory refused the new password: " + e.Reason
+}
+
+// authLDAPPasswordChange serves POST /auth/ldap/password (A81).
+func (a *API) authLDAPPasswordChange(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil || a.auth.ChangeLDAPPassword == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "LDAP password change is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLDAPLoginBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var req ldapPasswordChangeRequest
+	if err := dec.Decode(&req); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid LDAP password change request"))
+		return
+	}
+	defer req.CurrentPassword.wipe()
+	defer req.NewPassword.wipe()
+	if strings.TrimSpace(req.Username) == "" || len(req.CurrentPassword) == 0 || len(req.NewPassword) == 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "username, current_password and new_password are required"))
+		return
+	}
+	err := a.auth.ChangeLDAPPassword(r.Context(), req.Username, []byte(req.CurrentPassword), []byte(req.NewPassword))
+	var refused *PasswordRefusedError
+	switch {
+	case err == nil:
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusNoContent)
+	case errors.As(err, &refused):
+		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, "the directory refused the new password: "+refused.Reason))
+	default:
+		a.writeError(w, errStatus(http.StatusUnauthorized, "LDAP bind failed"))
+	}
 }
 
 type ldapPassword []byte
@@ -577,6 +636,12 @@ func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 	defer req.Password.wipe()
 	claims, err := a.auth.VerifyLDAPLogin(r.Context(), req.Username, []byte(req.Password))
 	if err != nil {
+		if errors.Is(err, auth.ErrPasswordChangeRequired) {
+			// A81: the credential is right but the directory wants it changed;
+			// the console opens the password-change form on this problem.
+			a.writeProblem(w, problem.New(http.StatusForbidden, "password change required"))
+			return
+		}
 		a.writeError(w, errStatus(http.StatusUnauthorized, "LDAP bind failed"))
 		return
 	}

@@ -16,11 +16,15 @@ import (
 )
 
 var (
-	ErrSessionNotFound      = errors.New("auth: session not found")
-	ErrSessionRevoked       = errors.New("auth: session revoked")
-	ErrSessionExpired       = errors.New("auth: session has expired")
-	ErrSessionInvalid       = errors.New("auth: invalid signed session")
-	ErrOIDCSessionLoggedOut = errors.New("auth: OIDC session was signed out by its identity provider")
+	ErrSessionNotFound = errors.New("auth: session not found")
+	ErrSessionRevoked  = errors.New("auth: session revoked")
+	// ErrPasswordChangeRequired is returned by a directory login whose
+	// credential is correct but expired or flagged "must change at next
+	// logon" (A81); the caller offers the password-change flow.
+	ErrPasswordChangeRequired = errors.New("auth: password change required")
+	ErrSessionExpired         = errors.New("auth: session has expired")
+	ErrSessionInvalid         = errors.New("auth: invalid signed session")
+	ErrOIDCSessionLoggedOut   = errors.New("auth: OIDC session was signed out by its identity provider")
 )
 
 // Session is the authenticated session minted after a successful login. Roles

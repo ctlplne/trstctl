@@ -4948,9 +4948,20 @@ overrides the subject with `subject_attribute` is matched by that subject, so
 an IdP that names only the NameID then ends nothing. The provider plane's SAML
 sign-in has no single logout yet. LDAP / Active Directory serves username/password bind at
 `POST /auth/ldap/login`, supports direct-bind or service-account user search plus
-group search, and maps directory groups to tenant roles. It does not yet implement
-Kerberos/GSSAPI, NTLM, password-change flows, nested-group expansion, or directory
-writeback. API/CI access still uses scoped API tokens.
+group search, and maps directory groups to tenant roles. Password-change flows
+are served (`auth.ldap.password_change.enabled`): `POST /auth/ldap/password`
+proves the current password by binding as the user, then changes it through
+the LDAP Password Modify extended operation (mode `exop`, the OpenLDAP /
+389-ds / FreeIPA path) or, for Active Directory (mode `active_directory`,
+`ldaps://` required), by replacing `unicodePwd` as the user; the directory's
+own refusal of a new password (history, complexity, minimum age) comes back
+as HTTP 422 with its reason, and a wrong current password changes nothing. A
+sign-in whose password the directory reports expired or "must change at next
+logon" (OpenLDAP ppolicy `passwordExpired` / `changeAfterReset`, Active
+Directory `data 773` / `data 532`) is answered with
+`problem.auth.password_change_required` instead of a session, and the
+console opens the change form on it. It does not yet implement nested-group
+expansion or directory writeback. API/CI access still uses scoped API tokens.
 Kerberos/GSSAPI browser login is served (`auth.kerberos`, Enterprise SSO):
 `GET /auth/kerberos/login` answers with a Negotiate challenge, the SPNEGO
 ticket the browser presents is verified against the service keytab

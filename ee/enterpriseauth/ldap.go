@@ -4,11 +4,13 @@ package enterpriseauth
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	ldap "github.com/go-ldap/ldap/v3"
 
@@ -33,6 +35,18 @@ type LDAPVerifier struct {
 	EmailAttribute     string
 
 	Timeout time.Duration
+	// PasswordChangeMode selects how ChangePassword writes the new password
+	// (A81): config.LDAPPasswordChangeExop or LDAPPasswordChangeActiveDirectory.
+	PasswordChangeMode string
+}
+
+// LDAPPasswordRefusedError is a directory's refusal of a new password (its
+// policy: history, length, complexity, minimum age); Reason is the
+// directory's own wording, safe to show the user.
+type LDAPPasswordRefusedError struct{ Reason string }
+
+func (e *LDAPPasswordRefusedError) Error() string {
+	return "auth: the directory refused the new password: " + e.Reason
 }
 
 // Verify binds the supplied username/password to LDAP, reads the user's email
@@ -67,7 +81,10 @@ func (v LDAPVerifier) Verify(ctx context.Context, username string, password []by
 	if err != nil {
 		return auth.Claims{}, err
 	}
-	if err := bind(conn, userDN, password); err != nil {
+	if err := bindUser(conn, userDN, password); err != nil {
+		if errors.Is(err, auth.ErrPasswordChangeRequired) {
+			return auth.Claims{}, err
+		}
 		return auth.Claims{}, fmt.Errorf("auth: LDAP bind failed")
 	}
 	if v.BindDN != "" {
@@ -190,6 +207,141 @@ func uniqueNonEmpty(values ...string) []string {
 		}
 		seen[v] = struct{}{}
 		out = append(out, v)
+	}
+	return out
+}
+
+// bindUser binds as the user with the password-policy control attached, so a
+// correct but expired credential (OpenLDAP ppolicy: passwordExpired or
+// changeAfterReset; Active Directory: "data 773" must-change or "data 532"
+// expired in the diagnostic) surfaces as ErrPasswordChangeRequired rather than
+// as a plain refusal (A81).
+func bindUser(conn *ldap.Conn, dn string, password []byte) error {
+	if len(password) == 0 {
+		return errors.New("empty LDAP bind password")
+	}
+	result, err := conn.SimpleBind(&ldap.SimpleBindRequest{
+		Username: dn, Password: string(password), Controls: []ldap.Control{ldap.NewControlBeheraPasswordPolicy()},
+	})
+	if err != nil {
+		if ldapPasswordChangeRequired(err, nil) {
+			return auth.ErrPasswordChangeRequired
+		}
+		return err
+	}
+	if result != nil && ldapPasswordChangeRequired(nil, result.Controls) {
+		return auth.ErrPasswordChangeRequired
+	}
+	return nil
+}
+
+// ldapPasswordChangeRequired classifies a bind outcome.
+func ldapPasswordChangeRequired(err error, controls []ldap.Control) bool {
+	if err != nil {
+		var ldapErr *ldap.Error
+		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
+			text := ldapErr.Err.Error()
+			if strings.Contains(text, "data 773") || strings.Contains(text, "data 532") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, control := range controls {
+		if policy, ok := control.(*ldap.ControlBeheraPasswordPolicy); ok {
+			// Behera error codes: 0 passwordExpired, 2 changeAfterReset.
+			if policy.Error == 0 || policy.Error == 2 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ChangePassword proves the current password by binding as the user, then
+// changes it the way the directory expects (A81). A wrong current password is
+// a plain bind failure; the directory's refusal of the new password comes
+// back as LDAPPasswordRefusedError with its reason.
+func (v LDAPVerifier) ChangePassword(ctx context.Context, username string, current, next []byte) error {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return errors.New("auth: LDAP username is required")
+	}
+	if len(current) == 0 || len(next) == 0 {
+		return errors.New("auth: current and new passwords are required")
+	}
+	if string(current) == string(next) {
+		return &LDAPPasswordRefusedError{Reason: "the new password must differ from the current one"}
+	}
+	timeout := v.Timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	conn, err := ldap.DialURL(v.URL, ldap.DialWithDialer(&net.Dialer{Timeout: timeout}))
+	if err != nil {
+		return fmt.Errorf("auth: LDAP dial: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	conn.SetTimeout(timeout)
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	userDN, _, err := v.resolveUser(conn, username)
+	if err != nil {
+		return err
+	}
+	if err := conn.Bind(userDN, string(current)); err != nil {
+		var ldapErr *ldap.Error
+		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials && !ldapPasswordChangeRequired(err, nil) {
+			return errors.New("auth: LDAP bind failed")
+		}
+		if !ldapPasswordChangeRequired(err, nil) {
+			return fmt.Errorf("auth: LDAP bind: %w", err)
+		}
+		// An expired credential still binds for the change on directories
+		// that grant it; Active Directory does not, which is its policy.
+	}
+	switch strings.ToLower(strings.TrimSpace(v.PasswordChangeMode)) {
+	case "", "exop":
+		_, err = conn.PasswordModify(ldap.NewPasswordModifyRequest("", string(current), string(next)))
+	case "active_directory":
+		modify := ldap.NewModifyRequest(userDN, nil)
+		modify.Delete("unicodePwd", []string{string(adPasswordValue(current))})
+		modify.Add("unicodePwd", []string{string(adPasswordValue(next))})
+		err = conn.Modify(modify)
+	default:
+		return fmt.Errorf("auth: unknown LDAP password change mode %q", v.PasswordChangeMode)
+	}
+	if err != nil {
+		return classifyPasswordChangeError(err)
+	}
+	return nil
+}
+
+func classifyPasswordChangeError(err error) error {
+	var ldapErr *ldap.Error
+	if errors.As(err, &ldapErr) {
+		switch ldapErr.ResultCode {
+		case ldap.LDAPResultConstraintViolation, ldap.LDAPResultUnwillingToPerform, ldap.LDAPResultInsufficientAccessRights, ldap.LDAPResultInvalidCredentials:
+			reason := strings.TrimSpace(ldapErr.Err.Error())
+			if reason == "" {
+				reason = ldap.LDAPResultCodeMap[ldapErr.ResultCode]
+			}
+			return &LDAPPasswordRefusedError{Reason: reason}
+		}
+	}
+	return fmt.Errorf("auth: LDAP password change: %w", err)
+}
+
+// adPasswordValue encodes a password the way Active Directory's unicodePwd
+// attribute expects: the password in double quotes, as UTF-16LE.
+func adPasswordValue(password []byte) []byte {
+	quoted := utf16.Encode([]rune(`"` + string(password) + `"`))
+	out := make([]byte, 0, 2*len(quoted))
+	for _, unit := range quoted {
+		out = binary.LittleEndian.AppendUint16(out, unit)
 	}
 	return out
 }

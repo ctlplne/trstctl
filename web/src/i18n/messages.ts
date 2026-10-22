@@ -769,6 +769,36 @@ export const messages = {
     description: "Login heading when no browser sign-in method is available.",
   },
   "auth.saml.action": { defaultMessage: "Continue with SAML", description: "Starts the configured SAML browser sign-in flow." },
+  "auth.ldap.changePassword": {
+    defaultMessage: "Change directory password",
+    description: "Link on the LDAP sign-in form that opens the self-service password change.",
+  },
+  "auth.ldap.currentPassword": { defaultMessage: "Current password", description: "Field label on the LDAP password change form." },
+  "auth.ldap.newPassword": { defaultMessage: "New password", description: "Field label on the LDAP password change form." },
+  "auth.ldap.confirmPassword": { defaultMessage: "Confirm new password", description: "Field label on the LDAP password change form." },
+  "auth.ldap.passwordMismatch": {
+    defaultMessage: "The new passwords do not match.",
+    description: "Validation message when the confirmation differs from the new password.",
+  },
+  "auth.ldap.changeAction": { defaultMessage: "Change password", description: "Submit button of the LDAP password change form." },
+  "auth.ldap.backToSignIn": { defaultMessage: "Back to sign-in", description: "Returns from the password change form to the sign-in form." },
+  "auth.ldap.passwordChanged": {
+    defaultMessage: "Your directory password was changed. Sign in with the new password.",
+    description: "Status after a successful LDAP password change.",
+  },
+  "auth.ldap.passwordChangeFailed": { defaultMessage: "The password was not changed", description: "Error title on the LDAP password change form." },
+  "auth.ldap.passwordRefused": {
+    defaultMessage: "The directory refused the new password.",
+    description: "Fallback when the directory rejects a new password without a reason.",
+  },
+  "auth.ldap.passwordChangeRequired": {
+    defaultMessage: "Password change required",
+    description: "Title shown when the directory requires a new password before sign-in.",
+  },
+  "auth.ldap.passwordChangeRequiredBody": {
+    defaultMessage: "The directory reports that this password has expired or must be changed before you can sign in. Choose a new password to continue.",
+    description: "Explanation shown when the directory requires a new password before sign-in.",
+  },
   "auth.ntlm.action": {
     defaultMessage: "Continue with Windows sign-in (NTLM)",
     description: "Starts the NTLM browser sign-in, which the browser completes with its Windows domain credentials.",

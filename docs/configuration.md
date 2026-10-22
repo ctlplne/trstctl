@@ -1223,12 +1223,17 @@ auth:
         roles: [admin]
 ```
 
-Example LDAP / Active Directory config:
+Example LDAP / Active Directory config (`password_change` serves the self-service
+password change; mode `exop` for OpenLDAP-style directories, `active_directory`
+for AD over ldaps://):
 
 ```yaml
 auth:
   ldap:
     enabled: true
+    password_change:
+      enabled: true
+      mode: active_directory
     url: ldaps://ad.example.com:636
     bind_dn: cn=trstctl-reader,ou=service-accounts,dc=example,dc=com
     bind_password_file: /etc/trstctl/ldap-bind.secret

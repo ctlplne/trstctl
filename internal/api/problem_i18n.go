@@ -80,6 +80,13 @@ type problemCatalogEntry struct {
 }
 
 var problemCatalog = map[string]problemCatalogEntry{
+	"password change required": {
+		code: "problem.auth.password_change_required",
+		details: map[string]string{
+			"en-US": "password change required",
+			"es-ES": "se requiere cambiar la contrasena",
+		},
+	},
 	"missing or invalid tenant": {
 		code: "problem.auth.missing_or_invalid_tenant",
 		details: map[string]string{

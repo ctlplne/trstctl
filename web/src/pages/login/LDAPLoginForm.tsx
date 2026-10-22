@@ -41,7 +41,110 @@ function returnPath(value?: string): string {
   }
 }
 
-export default function LDAPLoginForm({ returnTo, secondary = false }: { returnTo?: string; secondary?: boolean }) {
+/** LDAPPasswordChangeForm changes the directory password through
+ * POST /auth/ldap/password after proving the current one (A81). */
+function LDAPPasswordChangeForm({ username, required, onDone }: { username?: string; required?: boolean; onDone: () => void }) {
+  const schema = z
+    .object({
+      username: z.string().trim().min(1, translateNow("auth.ldap.usernameRequired")),
+      currentPassword: z.string().min(1, translateNow("auth.ldap.passwordRequired")),
+      newPassword: z.string().min(1, translateNow("auth.ldap.passwordRequired")),
+      confirmPassword: z.string(),
+    })
+    .refine((values) => values.newPassword === values.confirmPassword, {
+      message: translateNow("auth.ldap.passwordMismatch"),
+      path: ["confirmPassword"],
+    });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: { username: username ?? "", currentPassword: "", newPassword: "", confirmPassword: "" },
+  });
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
+  const submit = handleSubmit(async (values) => {
+    setSubmitError(null);
+    try {
+      const response = await fetch("/auth/ldap/password", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ username: values.username, current_password: values.currentPassword, new_password: values.newPassword }),
+      });
+      if (response.status === 204) {
+        setChanged(true);
+        return;
+      }
+      if (response.status === 422) {
+        const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+        setSubmitError(problem?.detail ?? translateNow("auth.ldap.passwordRefused"));
+        return;
+      }
+      setSubmitError(
+        translateNow(response.status === 401 ? "auth.ldap.rejected" : response.status === 429 ? "auth.ldap.rateLimited" : "auth.ldap.unavailable"),
+      );
+    } catch {
+      setSubmitError(translateNow("auth.ldap.unavailable"));
+    } finally {
+      reset({ username: values.username, currentPassword: "", newPassword: "", confirmPassword: "" });
+      values.currentPassword = "";
+      values.newPassword = "";
+      values.confirmPassword = "";
+    }
+  });
+  if (changed) {
+    return (
+      <div className="mt-4 space-y-4" role="status">
+        <p className="text-body">{translateNow("auth.ldap.passwordChanged")}</p>
+        <Button type="button" variant="outline" className="min-h-11 w-full" onClick={onDone}>
+          {translateNow("auth.ldap.backToSignIn")}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <form className="mt-4 space-y-4" onSubmit={submit} noValidate>
+      {required && <ErrorState title={translateNow("auth.ldap.passwordChangeRequired")}>{translateNow("auth.ldap.passwordChangeRequiredBody")}</ErrorState>}
+      <fieldset disabled={isSubmitting} className="space-y-4">
+        <Field label={translateNow("auth.ldap.username")} error={errors.username?.message} required>
+          {(control) => <Input {...control} {...register("username")} autoComplete="username" />}
+        </Field>
+        <Field label={translateNow("auth.ldap.currentPassword")} error={errors.currentPassword?.message} required>
+          {(control) => <Input {...control} {...register("currentPassword")} type="password" autoComplete="current-password" />}
+        </Field>
+        <Field label={translateNow("auth.ldap.newPassword")} error={errors.newPassword?.message} required>
+          {(control) => <Input {...control} {...register("newPassword")} type="password" autoComplete="new-password" />}
+        </Field>
+        <Field label={translateNow("auth.ldap.confirmPassword")} error={errors.confirmPassword?.message} required>
+          {(control) => <Input {...control} {...register("confirmPassword")} type="password" autoComplete="new-password" />}
+        </Field>
+        {submitError && <ErrorState title={translateNow("auth.ldap.passwordChangeFailed")}>{submitError}</ErrorState>}
+        <Button type="submit" className="min-h-11 w-full" loading={isSubmitting}>
+          {translateNow("auth.ldap.changeAction")}
+        </Button>
+        <Button type="button" variant="outline" className="min-h-11 w-full" onClick={onDone}>
+          {translateNow("auth.ldap.backToSignIn")}
+        </Button>
+      </fieldset>
+    </form>
+  );
+}
+
+export default function LDAPLoginForm({
+  returnTo,
+  secondary = false,
+  passwordChange = false,
+}: {
+  returnTo?: string;
+  secondary?: boolean;
+  passwordChange?: boolean;
+}) {
+  const [changing, setChanging] = useState<{ username?: string; required: boolean } | null>(null);
   const schema = z.object({
     username: z.string().trim().min(1, translateNow("auth.ldap.usernameRequired")),
     // Password whitespace belongs to the credential; never trim it.
@@ -72,6 +175,13 @@ export default function LDAPLoginForm({ returnTo, secondary = false }: { returnT
         body: JSON.stringify(values),
       });
       if (!response.ok) {
+        if (response.status === 403 && passwordChange) {
+          const problem = (await response.json().catch(() => null)) as { code?: string } | null;
+          if (problem?.code === "problem.auth.password_change_required") {
+            setChanging({ username: values.username, required: true });
+            return;
+          }
+        }
         setSubmitError(
           translateNow(
             response.status === 401
@@ -96,6 +206,9 @@ export default function LDAPLoginForm({ returnTo, secondary = false }: { returnT
     // Reload to bootstrap all session-bound state from the verified session.
     if (authenticated) window.location.assign(returnPath(returnTo));
   });
+  if (changing) {
+    return <LDAPPasswordChangeForm username={changing.username} required={changing.required} onDone={() => setChanging(null)} />;
+  }
   return (
     <form className="mt-4 space-y-4" onSubmit={submit} noValidate>
       <fieldset disabled={isSubmitting} className="space-y-4">
@@ -109,6 +222,11 @@ export default function LDAPLoginForm({ returnTo, secondary = false }: { returnT
         <Button type="submit" variant={secondary ? "outline" : "default"} className="min-h-11 w-full" loading={isSubmitting}>
           {translateNow("auth.ldap.action")}
         </Button>
+        {passwordChange && (
+          <Button type="button" variant="ghost" className="w-full" onClick={() => setChanging({ required: false })}>
+            {translateNow("auth.ldap.changePassword")}
+          </Button>
+        )}
       </fieldset>
     </form>
   );

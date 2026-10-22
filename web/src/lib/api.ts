@@ -1354,6 +1354,8 @@ export interface AuthMethods {
   kerberos?: boolean;
   /** NTLM browser login through a domain-joined helper is mounted (A80). */
   ntlm?: boolean;
+  /** The LDAP self-service password change route is mounted (A81). */
+  ldap_password_change?: boolean;
   /** Boolean-only public preflight. Provider identity, license, and customer
    * metadata remain inside the separately authenticated Provider plane. */
   provider_plane: boolean;

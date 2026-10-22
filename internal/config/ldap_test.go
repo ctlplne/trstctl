@@ -75,3 +75,27 @@ func TestLDAPLDAPSAllowedForNonLoopback(t *testing.T) {
 		t.Fatalf("ldaps LDAP config must validate: %v", err)
 	}
 }
+
+func TestLDAPPasswordChangeModesFailClosed(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mode, url string
+		ok        bool
+	}{
+		"exop default":              {"", "ldap://127.0.0.1:389", true},
+		"exop explicit":             {"exop", "ldap://127.0.0.1:389", true},
+		"active directory on ldaps": {"active_directory", "ldaps://ad.example.com:636", true},
+		"active directory on ldap":  {"active_directory", "ldap://127.0.0.1:389", false},
+		"unknown mode":              {"unicodePwd", "ldaps://ad.example.com:636", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			l := fullLDAP()
+			l.URL = tc.url
+			l.PasswordChange = LDAPPasswordChange{Enabled: true, Mode: tc.mode}
+			c.Auth.LDAP = l
+			if err := c.Validate(); (err == nil) != tc.ok {
+				t.Fatalf("validate = %v, want ok=%v", err, tc.ok)
+			}
+		})
+	}
+}

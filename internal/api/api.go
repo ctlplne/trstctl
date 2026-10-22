@@ -726,6 +726,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		if a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil {
 			mux.HandleFunc("POST /auth/ldap/login", a.authLDAPLogin)
 		}
+		if a.auth.ChangeLDAPPassword != nil {
+			mux.HandleFunc("POST /auth/ldap/password", a.authLDAPPasswordChange)
+		}
 		if a.auth.KerberosEnabled || a.auth.KerberosLogin != nil {
 			mux.HandleFunc("GET /auth/kerberos/login", a.authKerberosLogin)
 		}

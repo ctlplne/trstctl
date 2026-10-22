@@ -22,6 +22,7 @@ interface AuthState {
   ldapAvailable: boolean;
   kerberosAvailable: boolean;
   ntlmAvailable: boolean;
+  ldapPasswordChangeAvailable: boolean;
   preview: boolean;
   previewAvailable: boolean;
   startPreview: () => void;
@@ -47,6 +48,7 @@ const AuthContext = createContext<AuthState>({
   ldapAvailable: false,
   kerberosAvailable: false,
   ntlmAvailable: false,
+  ldapPasswordChangeAvailable: false,
   preview: false,
   previewAvailable: false,
   startPreview: () => {},
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ldapAvailable: false,
           kerberosAvailable: false,
           ntlmAvailable: false,
+          ldapPasswordChangeAvailable: false,
           preview: true,
           previewAvailable: true,
         }
@@ -85,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ldapAvailable: false,
           kerberosAvailable: false,
           ntlmAvailable: false,
+          ldapPasswordChangeAvailable: false,
           preview: false,
           previewAvailable: previewAllowed,
         },
@@ -105,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ldapAvailable: current.ldapAvailable,
       kerberosAvailable: current.kerberosAvailable,
       ntlmAvailable: current.ntlmAvailable,
+      ldapPasswordChangeAvailable: current.ldapPasswordChangeAvailable,
       preview: true,
       previewAvailable: true,
     }));
@@ -124,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ldapAvailable: current.ldapAvailable,
         kerberosAvailable: current.kerberosAvailable,
         ntlmAvailable: current.ntlmAvailable,
+        ldapPasswordChangeAvailable: current.ldapPasswordChangeAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -150,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ldapAvailable: current.ldapAvailable,
         kerberosAvailable: current.kerberosAvailable,
         ntlmAvailable: current.ntlmAvailable,
+        ldapPasswordChangeAvailable: current.ldapPasswordChangeAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -166,7 +173,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Login-method discovery is public UI metadata, not the session
       // authority. A transient failure here must hide login actions safely,
       // but it must not evict an already-authenticated operator.
-      const methods = await api.authMethods().catch(() => ({ oidc: false, saml: false, ldap: false, kerberos: false, ntlm: false }));
+      const methods = await api
+        .authMethods()
+        .catch(() => ({ oidc: false, saml: false, ldap: false, kerberos: false, ntlm: false, ldap_password_change: false }));
       try {
         const user = await api.me();
         if (!active || previewRef.current) return;
@@ -181,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ldapAvailable: methods.ldap,
           kerberosAvailable: methods.kerberos ?? false,
           ntlmAvailable: methods.ntlm ?? false,
+          ldapPasswordChangeAvailable: methods.ldap_password_change ?? false,
           preview: false,
           previewAvailable: import.meta.env.DEV,
         });
@@ -198,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ldapAvailable: methods.ldap,
             kerberosAvailable: methods.kerberos ?? false,
             ntlmAvailable: methods.ntlm ?? false,
+            ldapPasswordChangeAvailable: methods.ldap_password_change ?? false,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -211,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ldapAvailable: methods.ldap,
             kerberosAvailable: methods.kerberos ?? false,
             ntlmAvailable: methods.ntlm ?? false,
+            ldapPasswordChangeAvailable: methods.ldap_password_change ?? false,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
