@@ -48,6 +48,10 @@ var deviceProvenFamilies = []string{
 	"aws-acm",
 	"azure-keyvault",
 	"gcp-certificate-manager",
+	// Envoy's SDS management surface is an HTTP API; envoytest models the v3
+	// Secret resource and the TLS posture document and the connector tests
+	// drive the real connector against it (A60).
+	"envoy",
 }
 
 // DeviceProven reports whether this family's deploy is proven against a faithful

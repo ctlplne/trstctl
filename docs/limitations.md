@@ -1039,9 +1039,15 @@ never live in the API process. What you can do end to end against the running bi
   a physical or vendor-hosted device, so a version claim would be unbacked, and it
   is precisely the line an operator would plan a migration around. What it publishes
   instead is the API or local execution contract each connector speaks, the
-  operations exercised by repository tests, and the family's known limits. The
-  seven appliance rows distinguish faithful management-API doubles from the six
-  rows that have only ordinary connector tests. A guard fails if a version claim
+  operations exercised by repository tests, and the family's known limits.
+  Eleven rows are proven against faithful management-API doubles: the seven
+  appliances, the three cloud stores and Envoy's SDS management surface (A59,
+  A60). PostgreSQL has no device API to double; its proof instead drives the
+  connector against the pinned bundled PostgreSQL runtime started with TLS on,
+  and a real SSLRequest handshake sees the renewed certificate after the
+  allowlisted pg_ctl reload. MySQL keeps sandboxed filesystem and process
+  operations as its only proof: no MySQL server is bundled or available to the
+  repository tests, and its row says so. A guard fails if a version claim
   appears, and all thirteen rows explicitly say no external target was tested.
   Rollback, restated honestly after that work: cisco CANNOT re-bind, and it is a
   property of its API rather than an unfinished feature. It exposes a single call

@@ -71,7 +71,8 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// readback, so like cisco they are retained exceptions. Envoy,
 		// PostgreSQL and MySQL execute on host agents and remain in the
 		// accepted denominator rather than being removed from it.
-		"envoy":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		// A60: Envoy's SDS surface is proven against the envoytest double.
+		"envoy":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: []ParityGate{ParityGateRollback, ParityGateReadback, ParityGateRelayExecutionProof, ParityGateCPPathRefusal}},
 		"aws-acm":                 {migrated: false, retained: true, disposition: ParityDispositionArchitectureException, missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
 		"azure-keyvault":          {migrated: false, retained: true, disposition: ParityDispositionArchitectureException, missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
 		"gcp-certificate-manager": {migrated: true, disposition: ParityDispositionMigrated},

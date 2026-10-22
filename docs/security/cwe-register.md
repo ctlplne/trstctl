@@ -555,7 +555,7 @@ not this file.
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/backup.go:220` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:388` | record counts bounded by the event log (CWE-190) |
-| `internal/server/bundled_pg.go:78` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
+| `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:720` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:928` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |

@@ -245,10 +245,13 @@ var supportMatrix = []SupportRow{
 		APIContract: "host-local PostgreSQL TLS files plus allowlisted pg_ctl reload",
 		ProvenOperations: []string{
 			"deploy: replace the configured certificate and key files and run the exact allowlisted reload",
+			"live reload: a bundled PostgreSQL server started with ssl=on serves the renewed certificate " +
+				"after the connector's pg_ctl reload, observed by a real SSLRequest handshake",
 			"rollback: restore the encrypted predecessor bundle on the exact host agent, reload, and reverify",
 		},
 		KnownLimits: []string{
-			"the connector proof uses sandboxed filesystem/process operations, not a live PostgreSQL server",
+			"the live proof runs the pinned bundled PostgreSQL runtime inside the repository tests; no " +
+				"external or customer PostgreSQL version was tested",
 			"no E1 network-relay migration: execution is host-agent local with no network-relay constructor, " +
 				"relay proof, or E1 refusal",
 		},

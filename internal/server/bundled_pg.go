@@ -43,8 +43,18 @@ func bundledPort(cfg config.Postgres) int {
 // invoked. Every start derives a fresh private binary tree; existing extracted
 // caches are neither trusted nor deleted.
 func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, err error) {
+	dsn, _, stop, err = startBundledPostgresWith(cfg, nil)
+	return dsn, stop, err
+}
+
+// startBundledPostgresWith is startBundledPostgres with extra server start
+// parameters, and it also reports the directory holding the verified binaries
+// so a repository proof can run the pinned server's own pg_ctl. The verified
+// runtime chooses that directory itself (a private temporary tree); nothing
+// outside it is trusted for binaries.
+func startBundledPostgresWith(cfg config.Postgres, extraParams map[string]string) (dsn, binariesPath string, stop func() error, err error) {
 	if cfg.Port < 0 || cfg.Port > 65535 {
-		return "", nil, fmt.Errorf("bundled postgres: port must be between 1 and 65535, or zero for the default")
+		return "", "", nil, fmt.Errorf("bundled postgres: port must be between 1 and 65535, or zero for the default")
 	}
 	dataDir := cfg.DataDir
 	if dataDir == "" {
@@ -54,65 +64,69 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 
 	identity, err := bundledPGArchiveIdentity()
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	cacheRoot := bundledPGCacheRoot()
 	legacyArchive := bundledPGCacheArchive(filepath.Join(cacheRoot, "trstctl-pg-bin"))
 	cache, err := embeddedpostgres.OpenVerifiedCache(cacheRoot, "trstctl-pg-archives", identity.OS+"-"+identity.Arch+"-"+string(identity.Version)+"-"+identity.SHA256)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	defer func() {
 		if closeErr := cache.Close(); closeErr != nil {
 			err = errors.Join(err, closeErr)
 			if stop != nil {
 				err = errors.Join(err, stop())
-				dsn, stop = "", nil
+				dsn, binariesPath, stop = "", "", nil
 			}
 		}
 	}()
 	cachePath := cache.Path()
+	// Use the numeric loopback address for this local-only server. Resolving
+	// localhost otherwise makes PostgreSQL depend on the host's resolver.
+	// Disable the unused Unix listener and its shared /tmp lock file.
+	params := map[string]string{"listen_addresses": "127.0.0.1", "unix_socket_directories": ""}
+	for key, value := range extraParams {
+		params[key] = value
+	}
 	db, err := embeddedpostgres.NewVerifiedDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.PostgresVersion(bundledPGVersion)).
 		Port(uint32(port)). // #nosec G115 -- cfg.Port is checked above and the zero default is 5432 (CWE-190)
 		DataPath(filepath.Join(dataDir, "db")).
 		CachePath(cachePath).
 		ArchiveSourcePath(legacyArchive).
-		// Use the numeric loopback address for this local-only server. Resolving
-		// localhost otherwise makes PostgreSQL depend on the host's resolver.
-		// Disable the unused Unix listener and its shared /tmp lock file.
-		StartParameters(map[string]string{"listen_addresses": "127.0.0.1", "unix_socket_directories": ""}).
+		StartParameters(params).
 		Logger(io.Discard).
 		StartTimeout(90*time.Second), identity)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	archivePath := bundledPGCacheArchive(cachePath)
 	verified, err := verifyArchiveFileAgainst(archivePath, identity.SHA256)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	if !verified {
 		if err := db.AcquireArchive(); err != nil {
-			return "", nil, err
+			return "", "", nil, err
 		}
 	}
 	verified, err = verifyArchiveFileAgainst(archivePath, identity.SHA256)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	if !verified {
-		return "", nil, fmt.Errorf("bundled postgres: archive absent after authenticated acquisition")
+		return "", "", nil, fmt.Errorf("bundled postgres: archive absent after authenticated acquisition")
 	}
 	// Start independently hashes its opened bytes and extracts a fresh tree, so
 	// these wrapper checks never grant trust to a later pathname reopen.
 	if err := db.Start(); err != nil {
-		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRSTCTL_POSTGRES_PORT to a free port, or use TRSTCTL_POSTGRES_MODE=external)", port, err)
+		return "", "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRSTCTL_POSTGRES_PORT to a free port, or use TRSTCTL_POSTGRES_MODE=external)", port, err)
 	}
 
 	dsn = fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres", port)
-	return dsn, db.Stop, nil
+	return dsn, db.BinariesPath(), db.Stop, nil
 }
 
 // An operator may place the verified, executable archive cache on a dedicated

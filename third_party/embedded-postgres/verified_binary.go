@@ -503,3 +503,12 @@ func (ep *EmbeddedPostgres) verifiedDataReady() (bool, error) {
 	}
 	return true, nil
 }
+
+// BinariesPath reports the directory holding this instance's verified
+// PostgreSQL binaries (bin/pg_ctl and friends) once Start has extracted them.
+// Repository proofs that drive the bundled server through its own tools, such
+// as a connector's allowlisted pg_ctl reload, read it rather than guessing a
+// cache layout. Empty before Start.
+func (ep *EmbeddedPostgres) BinariesPath() string {
+	return ep.config.binariesPath
+}
