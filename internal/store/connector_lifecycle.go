@@ -1255,10 +1255,10 @@ func (s *Store) IdentityIDsBoundToDeploymentTarget(ctx context.Context, tenantID
 	return out, err
 }
 
-// DeployDeliveredToTarget reports whether a connector.deploy of this exact
-// certificate to this target was recorded as delivered or verified (A46): the
-// evidence that the object a re-bind rollback would name was installed
-// through trstctl, under the fingerprint-carrying name a rollback looks for.
+// DeployDeliveredToTarget reports whether this exact certificate was recorded
+// as installed on this target through trstctl (A46): a delivered or verified
+// connector.deploy, or a rollback that restored it as the predecessor (A45),
+// under the fingerprint-carrying name a rollback or takedown looks for.
 func (s *Store) DeployDeliveredToTarget(ctx context.Context, tenantID, targetName, fingerprint string) (bool, error) {
 	if strings.TrimSpace(targetName) == "" || strings.TrimSpace(fingerprint) == "" {
 		return false, nil
@@ -1267,8 +1267,9 @@ func (s *Store) DeployDeliveredToTarget(ctx context.Context, tenantID, targetNam
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT EXISTS (
 			SELECT 1 FROM connector_delivery_receipts
-			 WHERE tenant_id = $1 AND destination = 'connector.deploy' AND target = $2
-			   AND lower(fingerprint) = lower($3) AND status IN ('delivered', 'verified'))`,
+			 WHERE tenant_id = $1 AND target = $2 AND lower(fingerprint) = lower($3)
+			   AND ((destination = 'connector.deploy' AND status IN ('delivered', 'verified'))
+			     OR (destination = 'connector.rollback' AND status = 'rolled_back')))`,
 			tenantID, targetName, fingerprint).Scan(&found)
 	})
 	return found, err
@@ -1282,7 +1283,8 @@ type DeliveredTarget struct {
 }
 
 // DeliveredTargetsForFingerprint lists the connector targets a certificate was
-// delivered to (delivered or verified connector.deploy receipts), so a rogue
+// delivered to (delivered or verified connector.deploy receipts) or restored
+// on by a rollback (rolled_back connector.rollback receipts), so a rogue
 // finding can say where the leaf is installed and what can remove it.
 func (s *Store) DeliveredTargetsForFingerprint(ctx context.Context, tenantID, fingerprint string) ([]DeliveredTarget, error) {
 	fingerprint = strings.TrimSpace(fingerprint)
@@ -1293,8 +1295,9 @@ func (s *Store) DeliveredTargetsForFingerprint(ctx context.Context, tenantID, fi
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT connector, target
 			  FROM connector_delivery_receipts
-			 WHERE tenant_id = $1 AND destination = 'connector.deploy'
-			   AND lower(fingerprint) = lower($2) AND status IN ('delivered', 'verified')
+			 WHERE tenant_id = $1 AND lower(fingerprint) = lower($2)
+			   AND ((destination = 'connector.deploy' AND status IN ('delivered', 'verified'))
+			     OR (destination = 'connector.rollback' AND status = 'rolled_back'))
 			 ORDER BY connector, target`, tenantID, fingerprint)
 		if err != nil {
 			return err

@@ -71,6 +71,9 @@ func (a *API) endpointContainmentPlan(ctx context.Context, tenantID, targetID st
 		return endpointContainmentPreview{}, errStatus(http.StatusConflict,
 			"the target no longer assigns the host agent that reported its last deployment; review target ownership first")
 	}
+	if evidence.Fingerprint, err = a.hostServedFingerprint(ctx, tenantID, target, evidence); err != nil {
+		return endpointContainmentPreview{}, err
+	}
 	owned, err := a.store.IdentityOwnsCertificateFingerprint(ctx, tenantID, evidence.IdentityID, evidence.Fingerprint)
 	if err != nil {
 		return endpointContainmentPreview{}, err

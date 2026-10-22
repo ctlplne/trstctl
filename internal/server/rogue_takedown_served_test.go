@@ -174,3 +174,97 @@ func seedRogueDeliveredLeaf(t *testing.T, ctx context.Context, h *roleHarness, n
 	}
 	return fingerprint
 }
+
+// A45 + A43: a pre-trstctl pair the host agent adopted at its first deploy and
+// an operator later rolled the target back to is installed on that host. The
+// rogue listing names the target with host_purge for the restored predecessor,
+// takedown dispatches the purge for exactly that fingerprint, and the leaf the
+// rollback retired is refused with the host's current fingerprint named.
+func TestServedRogueTakedownReachesAPairRestoredByRollback(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.deploy", relay.KindEndpointPurge)
+	token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read", "certs:read")
+	agentID := agentRowID(h.tenant, h.agent)
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "test-1.0", Status: "active"}); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	f := seedPurgeFixture(t, ctx, h, token, agentID)
+
+	// The ownerless pair the agent found installed before trstctl's first
+	// deploy, retained as the rollback predecessor (A45).
+	key, err := crypto.GenerateHostSubjectKey("a49.example.test", []string{"a49.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	issued, err := h.srv.issueLeafWithValidity(ctx, key.CSRDER, 24*time.Hour, crypto.LeafProfile{ClampTTLToIssuer: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := certinfo.Inspect(issued.DER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopted, err := h.srv.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
+		Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer, Serial: info.SerialNumber,
+		Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm, Source: "host-adopted:nginx",
+		CertificateDER: issued.DER, NotBefore: &info.NotBefore, NotAfter: &info.NotAfter, ValidityAnchor: &issued.ValidityAnchor,
+	})
+	if err != nil {
+		t.Fatalf("record adopted predecessor: %v", err)
+	}
+	predecessor := strings.ToLower(adopted.Fingerprint)
+	// The operator rolled the target back to it: the host's signed rollback
+	// result names the restored predecessor as what is installed now.
+	rollbackOutbox := int64(900045)
+	identityID := f.identityID
+	if _, err := h.srv.orch.RecordConnectorDeliveryWithEventID(ctx, h.tenant, "a45-rolled-back:"+f.targetID, store.ConnectorDeliveryReceipt{
+		ID: "a4500000-0000-4000-8000-00000000d002", OutboxID: &rollbackOutbox, IdentityID: &identityID,
+		Destination: "connector.rollback", Connector: "nginx", Target: "a49-nginx", Fingerprint: predecessor,
+		Status: "rolled_back", Attempts: 1, Reason: "rolled_back", IdempotencyKey: "a45:rollback",
+	}); err != nil {
+		t.Fatalf("record rollback receipt: %v", err)
+	}
+
+	status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/revocation/rogue-certificates", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("rogue listing = %d %s", status, body)
+	}
+	var posture struct {
+		Findings []struct {
+			Fingerprint string `json:"fingerprint"`
+			InstalledOn []struct {
+				TargetID string `json:"target_id"`
+				Model    string `json:"model"`
+			} `json:"installed_on"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &posture); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, finding := range posture.Findings {
+		if !strings.EqualFold(finding.Fingerprint, predecessor) {
+			continue
+		}
+		found = len(finding.InstalledOn) == 1 && finding.InstalledOn[0].TargetID == f.targetID && finding.InstalledOn[0].Model == "host_purge"
+	}
+	if !found {
+		t.Fatalf("rogue listing does not name the host target the rollback restored the adopted pair on: %s", body)
+	}
+
+	// Takedown of the restored pair queues the host purge for that fingerprint.
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/revocation/rogue-certificates/takedown", token, "a45-takedown-1",
+		map[string]any{"fingerprint": predecessor, "target_id": f.targetID, "reason": "the adopted pair must go"})
+	if status != http.StatusAccepted || !strings.Contains(string(body), `"destination":"endpoint.purge"`) ||
+		!strings.Contains(string(body), `"status":"purge_queued"`) || !strings.Contains(string(body), `"fingerprint":"`+predecessor+`"`) {
+		t.Fatalf("takedown of the restored pair = %d %s, want a queued purge for it", status, body)
+	}
+	// The leaf the rollback retired is no longer what the host serves: refused,
+	// naming the mismatch, and nothing queued.
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/revocation/rogue-certificates/takedown", token, "a45-takedown-2",
+		map[string]any{"fingerprint": f.fingerprint, "target_id": f.targetID, "reason": "stale"})
+	if status != http.StatusConflict || !strings.Contains(string(body), "last delivered leaf is not this fingerprint") {
+		t.Fatalf("takedown of the retired leaf = %d %s, want the host-mismatch refusal", status, body)
+	}
+}

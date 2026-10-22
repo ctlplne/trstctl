@@ -328,7 +328,7 @@ host operator must review that service boundary before installing the profile.
 ```
 
 In **Where credentials are installed**, select the exact host target, choose
-**Review host containment**, inspect the last delivered leaf, identity, target
+**Review host containment**, inspect the leaf the host serves (its last delivered leaf, or the pair a rollback restored), identity, target
 revision, enrolled agent and outage warning, enter an incident reason, then
 choose **Queue exact host stop**. This review is still available when the
 target is disabled: disabling its trstctl configuration does not stop a live

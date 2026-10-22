@@ -1272,7 +1272,8 @@ never live in the API process. What you can do end to end against the running bi
   certificate whose evaluation fails is counted in `policy_evaluation_errors`
   rather than read as clean. CT coverage depends on configured monitored
   domains/logs. Each finding with a fingerprint lists `installed_on`: the connector
-  targets trstctl delivered that leaf to and what can remove it there
+  targets trstctl delivered that leaf to, or restored it on by rollback (an
+  adopted predecessor), and what can remove it there
   (`host_purge` through the enrolled agent, `appliance_takedown` through a
   network relay for f5, kemp, netscaler and a10, or `none`).
   `POST /api/v1/revocation/rogue-certificates/takedown` (`trstctl-cli revocation

@@ -102,7 +102,8 @@ type rogueCertificateFinding struct {
 	// certificate violates (A42); each also appears in finding_types as
 	// customer_policy:<rule>.
 	PolicyViolations []rogueCertificatePolicyViolation `json:"policy_violations,omitempty"`
-	// InstalledOn lists the connector targets trstctl delivered this leaf to
+	// InstalledOn lists the connector targets trstctl delivered this leaf to,
+	// or restored it on by rollback (an adopted predecessor, A45),
 	// and the remediation each can execute (A43): host_purge through the
 	// enrolled agent, appliance_takedown through a network relay, or none.
 	InstalledOn  []rogueInstalledTarget `json:"installed_on,omitempty"`

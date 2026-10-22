@@ -146,7 +146,7 @@ func (a *API) takedownRogueCertificate(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, err
 			} else if !byName {
 				return 0, nil, errStatus(http.StatusConflict,
-					"trstctl never delivered this leaf to that target, so there is no installed object of its name to remove; nothing was queued")
+					"trstctl never delivered this leaf to that target nor restored it there by rollback, so there is no installed object of its name to remove; nothing was queued")
 			}
 		}
 		model, note := rogueRemediationModel(target)

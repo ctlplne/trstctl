@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Removing compromised material from a host (A49) reuses the containment
@@ -22,6 +23,25 @@ import (
 // is the host action: not a stop, but the overwrite and removal of the files
 // the target's own configuration names, plus the wipe of every rollback-ledger
 // snapshot carrying that fingerprint.
+
+// hostServedFingerprint is the leaf the enrolled host serves now: the last
+// completed deploy named by the host evidence, unless a later rollback restored
+// the predecessor (an adopted pre-trstctl pair, A45) on this same target. The
+// rollback result is the host's own signed statement of what it reinstalled,
+// so a purge or containment preview must name that pair, not the retired leaf.
+func (a *API) hostServedFingerprint(ctx context.Context, tenantID string, target store.DeploymentTarget, evidence store.HostDeployEvidence) (string, error) {
+	served := strings.ToLower(strings.TrimSpace(evidence.Fingerprint))
+	latest, found, err := a.store.LatestIdentityDeploymentReceipt(ctx, tenantID, evidence.IdentityID)
+	if err != nil || !found {
+		return served, err
+	}
+	route := strings.TrimSpace(orchestrator.DeploymentRoute(target))
+	if latest.Destination != orchestrator.DestinationConnectorRollback || latest.Status != "rolled_back" ||
+		(latest.Target != target.Name && latest.Target != route) || strings.TrimSpace(latest.Fingerprint) == "" {
+		return served, nil
+	}
+	return strings.ToLower(strings.TrimSpace(latest.Fingerprint)), nil
+}
 
 func (a *API) endpointPurgePlan(ctx context.Context, tenantID, targetID string) (endpointContainmentPreview, error) {
 	if err := a.validatePurgeExecutionReady(); err != nil {
@@ -51,6 +71,9 @@ func (a *API) endpointPurgePlan(ctx context.Context, tenantID, targetID string) 
 	if err != nil || assigned != evidence.AgentID {
 		return endpointContainmentPreview{}, errStatus(http.StatusConflict,
 			"the target no longer assigns the host agent that reported its last deployment; review target ownership first")
+	}
+	if evidence.Fingerprint, err = a.hostServedFingerprint(ctx, tenantID, target, evidence); err != nil {
+		return endpointContainmentPreview{}, err
 	}
 	owned, err := a.store.IdentityOwnsCertificateFingerprint(ctx, tenantID, evidence.IdentityID, evidence.Fingerprint)
 	if err != nil {
