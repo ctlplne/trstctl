@@ -829,6 +829,7 @@ func componentSchemas() map[string]*Schema {
 		"permitted_dns_names": {Type: "array", Items: str()},
 		"extended_key_usages": {Type: "array", Items: str()},
 		"replaces_id":         uuid(),
+		"key_algorithm":       str(),
 		"created_at":          timestamp(),
 		"horizon":             ref("CAAuthorityHorizon"),
 	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")

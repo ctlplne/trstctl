@@ -10524,6 +10524,19 @@ export const messages = {
     defaultMessage: "TTL days",
     description: "CA lifetime field label.",
   },
+  "caHierarchy.rootCeremony.keyAlgorithm": {
+    defaultMessage: "Root key algorithm",
+    description: "Select for the key family the signer mints for a new root CA ceremony.",
+  },
+  "caHierarchy.rootCeremony.defaultRequest": {
+    defaultMessage: "Default request: Trust Root CA, 2 approvals, {algorithm}.",
+    description: "Summary of the root ceremony request the console sends; {algorithm} is the selected key family.",
+  },
+  "caHierarchy.rootCeremony.keyAlgorithmHelp": {
+    defaultMessage:
+      "ECDSA-P256 is the classical default. An ML-DSA parameter set starts a post-quantum pilot hierarchy beside it: its intermediates issue classical and ML-DSA leaves, and OpenSSL 3.5 or newer verifies the chain, CRL and OCSP responses.",
+    description: "Help text under the root key algorithm select.",
+  },
   "caHierarchy.offline.rootCertPEM": {
     defaultMessage: "Offline root certificate PEM",
     description: "Field label for the imported public offline root certificate.",
@@ -24734,10 +24747,6 @@ export const messages = {
   "source.decrypted.plaintext.675dd9b983": {
     defaultMessage: "Decrypted plaintext",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.default.request.trust.root.ca.2.approvals.246b100b12": {
-    defaultMessage: "Default request: Trust Root CA, 2 approvals, ECDSA-P256.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.delete.dns.01.provider.config.d870732e81": {
     defaultMessage: "Delete DNS-01 provider config “",

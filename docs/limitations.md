@@ -3180,12 +3180,17 @@ than sending an operator looking for a credential that was never there.
   than trusting the sentence. Cost travels in the signed body on purpose — a
   cohort that negotiated but tripled handshake size is a different
   recommendation, and a report omitting cost would recommend an outage. Scope,
-  stated exactly: this is the EXPORT and the verdict rule, not the lab. Nothing
-  yet issues parallel classical/PQ pilot hierarchies or drives a cohort's
-  probes as a wave, so the report still has no live evidence to sign unless a
-  caller supplies it; the relay records handshake cost (`HandshakeMillis`,
-  `ChainBytes`) but no wave orchestration, canary-halt execution, or PQC lab
-  console view is built. The acceptance's end-to-end pilot is not demonstrated.
+  stated exactly: this is the EXPORT and the verdict rule, not the lab. Parallel
+  classical/PQ pilot hierarchies are served (A26/A27): a root or intermediate
+  ceremony whose `signature_algorithm` is `ml-dsa-44`, `ml-dsa-65` or
+  `ml-dsa-87` mints that key in the isolated signer, the authority issues
+  classical and pure ML-DSA leaves, and its CRL and OCSP responses carry its
+  ML-DSA signature, all beside the classical hierarchy. Nothing yet drives a
+  cohort's probes as a wave, so the report still has no live evidence to sign
+  unless a caller supplies it; the relay records handshake cost
+  (`HandshakeMillis`, `ChainBytes`) but no wave orchestration, canary-halt
+  execution, or PQC lab console view is built. The acceptance's end-to-end
+  pilot is not demonstrated.
 - Per-tenant silo isolation identifiers all key on the tenant ID (L4): a siloed
   tenant's Postgres schema, JetStream subject lane, and object-key prefix are
   each derived from the tenant's unique, immutable ID. The event LANE used to be
@@ -4932,10 +4937,15 @@ key in the CSR, and SCEP still cannot deliver its CMS-enveloped reply to
 a signature-only transport key, a protocol limit rather than a code gap.
 Stock SCEP clients (sscep) do not produce ML-DSA requests, so the SCEP
 proof is a Go-built pkiMessage against the served parser, not a stock
-client. One
-ceiling applies everywhere: the issuing CA key itself remains classical
-ECDSA-P256 (post-quantum keys are subject keys, not issuer keys, in the
-served path). Certificate-profile `allowed_key_algorithms` labels accept
+client. The
+platform (broker) issuing CA key remains classical ECDSA-P256; a signer-backed
+hierarchy authority can be post-quantum: `signature_algorithm` `ml-dsa-44`,
+`ml-dsa-65` or `ml-dsa-87` on a root or intermediate ceremony mints that key in
+the isolated signer (`HASH_NONE` carries the TBS for the pure signature), the
+authority issues classical and pure ML-DSA leaves under RFC 9881, signs its
+CRLs and OCSP responses with the same key, and OpenSSL 3.5+ verifies all three;
+a ceremony reviewed for `ecdsa-p256` cannot mint it, and a re-key stays in the
+predecessor's key family. Certificate-profile `allowed_key_algorithms` labels accept
 the post-quantum and hybrid names in every build — a pure label
 matches its exact inspected CSR algorithm, while a hybrid enrollment
 carries a classical subject key and stays governed by its classical family
@@ -4959,9 +4969,10 @@ reader and are refused for host-bound certificate migration and CA
 re-protection.
 A native OpenSSL 3.5 probe and a server capable of serving ML-DSA certificates
 are required for signed TLS readback; classical-only clients cannot be
-presented as PQC verification. The issuing CA key remains classical
-ECDSA-P256, so the leaf has an ML-DSA subject key but not a fully post-quantum
-certificate chain. Historical issuance-only runs have no retained host key or
+presented as PQC verification. Under the platform CA the leaf has an ML-DSA
+subject key over a classical chain; a requested identity that pins an ML-DSA
+hierarchy authority (`issuing_authority_source: private`,
+`issuing_authority_id`) gets a fully post-quantum chain. Historical issuance-only runs have no retained host key or
 predecessor and still report `rollback_unverified`. A profile requiring
 distinct issuance approval no longer refuses this path: the start is the
 approved operation. The first `POST /api/v1/pqc/migrations` records an

@@ -303,7 +303,11 @@ type CAAuthority struct {
 	PermittedDNSNames []string   `json:"permitted_dns_names"`
 	ExtendedKeyUsages []string   `json:"extended_key_usages"`
 	ReplacesID        *string    `json:"replaces_id,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
+	// KeyAlgorithm is the authority certificate's public-key family as the
+	// platform labels it (ecdsa-p256, ml-dsa-65, ...), read from the
+	// certificate itself.
+	KeyAlgorithm string    `json:"key_algorithm,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type CAAuthorityRotationIssuer struct {

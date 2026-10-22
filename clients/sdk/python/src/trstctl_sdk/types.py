@@ -2205,6 +2205,7 @@ CAAuthority = TypedDict(
         'extended_key_usages': list[str],
         'horizon': dict[str, Any],
         'id': str,
+        'key_algorithm': str,
         'kind': str,
         'max_path_len': int,
         'not_after': str,

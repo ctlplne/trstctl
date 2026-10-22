@@ -68,12 +68,14 @@ func purposeSpecDigest(spec CASpec) string {
 		MaxPathLen          int           `json:"max_path_len"`
 		EKUs                []string      `json:"ekus"`
 		TTL                 time.Duration `json:"ttl"`
+		KeyAlgorithm        string        `json:"key_algorithm,omitempty"`
 	}{
 		CommonName:          spec.CommonName,
 		PermittedDNSDomains: permittedDNSDomains,
 		MaxPathLen:          spec.MaxPathLen,
 		EKUs:                ekus,
 		TTL:                 spec.TTL,
+		KeyAlgorithm:        spec.KeyAlgorithm,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("hierarchy: canonical CA ceremony purpose: %v", err))
@@ -88,6 +90,10 @@ type CASpec struct {
 	MaxPathLen          int
 	EKUs                []string
 	TTL                 time.Duration
+	// KeyAlgorithm is the reviewed CA key family when it is not the classical
+	// default; it binds a ceremony's approvals to a post-quantum key so an
+	// approval reviewed for ecdsa-p256 cannot mint an ML-DSA authority.
+	KeyAlgorithm string
 }
 
 // Manager orchestrates the CA hierarchy. It holds live CA signing keys in memory

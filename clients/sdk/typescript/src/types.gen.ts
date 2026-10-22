@@ -9304,6 +9304,7 @@ export interface components {
             horizon?: components["schemas"]["CAAuthorityHorizon"];
             /** Format: uuid */
             id: string;
+            key_algorithm?: string;
             kind: string;
             max_path_len: number;
             /** Format: date-time */

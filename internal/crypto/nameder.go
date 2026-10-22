@@ -95,6 +95,10 @@ func publicKeyAlgorithmLabel(cert *x509.Certificate) string {
 	case ed25519.PublicKey:
 		return "ed25519"
 	}
+	if pub, pure, err := purePublicKeyOfCertificate(cert); err == nil && pure {
+		// "ML-DSA-65" -> "ml-dsa-65", the reviewed label of a post-quantum CA.
+		return strings.ToLower(string(pub.Algorithm))
+	}
 	if label := strings.ToLower(cert.PublicKeyAlgorithm.String()); label != "" && label != "unknown" && label != "0" {
 		return label
 	}

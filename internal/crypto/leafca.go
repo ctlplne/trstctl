@@ -826,7 +826,7 @@ func VerifyLeafSignedByCA(leafDER, caDER []byte) error {
 	if err != nil {
 		return fmt.Errorf("crypto: parse CA: %w", err)
 	}
-	return leaf.CheckSignatureFrom(ca)
+	return VerifyCertificateIssuedBy(leaf, ca)
 }
 
 // VerifyCertKeyMatchPEM reports whether a PEM certificate and a PEM private key form

@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/pluginhost/wasmgen"
+	"trstctl.com/trstctl/internal/pqc"
 	"trstctl.com/trstctl/internal/projections"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/ari"
@@ -145,7 +146,10 @@ func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, 
 		t.Fatalf("NewSignAuthorizer: %v", err)
 	}
 	t.Cleanup(authz.Destroy)
-	signerSrv, err := signing.NewPersistentServer(ks, signing.WithAuthorizer(authz))
+	// The same key families the binary's signer mints (cmd/trstctl-signer
+	// attaches the PQC key factory in every build), so a served proof can hold
+	// an ML-DSA CA key exactly where production does.
+	signerSrv, err := signing.NewPersistentServer(ks, signing.WithAuthorizer(authz), signing.WithKeyFactory(pqc.NewSignerKeyFactory()))
 	if err != nil {
 		t.Fatalf("new signer: %v", err)
 	}

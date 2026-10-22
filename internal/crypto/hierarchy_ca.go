@@ -136,7 +136,7 @@ func VerifyImportedOfflineRoot(certDER []byte, profile HierarchyCAProfile) (Issu
 	if err := verifyCAUsable(cert, "offline root"); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
-	if err := cert.CheckSignatureFrom(cert); err != nil {
+	if err := VerifyCertificateIssuedBy(cert, cert); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: offline root is not self-signed: %w", err)
 	}
 	if err := verifyImportedProfile(cert, profile); err != nil {
@@ -164,7 +164,7 @@ func VerifyOfflineSignedIntermediate(parentCertDER, certDER []byte, signerPublic
 	if err := verifyCAUsable(cert, "offline-signed intermediate"); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
-	if err := cert.CheckSignatureFrom(parent); err != nil {
+	if err := VerifyCertificateIssuedBy(cert, parent); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: intermediate is not signed by offline root: %w", err)
 	}
 	if err := verifyChildPathLen(parent, cert); err != nil {
@@ -218,14 +218,14 @@ func VerifyImportedCAChain(chainDER [][]byte, signerPublic PublicKey, profile Hi
 		return IssuedHierarchyCA{}, "", err
 	}
 	if len(certs) == 1 {
-		if err := certs[0].CheckSignatureFrom(certs[0]); err != nil {
+		if err := VerifyCertificateIssuedBy(certs[0], certs[0]); err != nil {
 			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported root is not self-signed: %w", err)
 		}
 		return hierarchyResultFromCert(certs[0]), "root", nil
 	}
 	for i := 0; i < len(certs)-1; i++ {
 		child, parent := certs[i], certs[i+1]
-		if err := child.CheckSignatureFrom(parent); err != nil {
+		if err := VerifyCertificateIssuedBy(child, parent); err != nil {
 			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain certificate %d is not signed by certificate %d: %w", i, i+1, err)
 		}
 		if err := verifyChildPathLen(parent, child); err != nil {
@@ -236,7 +236,7 @@ func VerifyImportedCAChain(chainDER [][]byte, signerPublic PublicKey, profile Hi
 		}
 	}
 	root := certs[len(certs)-1]
-	if err := root.CheckSignatureFrom(root); err != nil {
+	if err := VerifyCertificateIssuedBy(root, root); err != nil {
 		return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain root is not self-signed: %w", err)
 	}
 	return hierarchyResultFromCert(certs[0]), "intermediate", nil
@@ -265,7 +265,7 @@ func VerifyExistingCAIssuerChain(chainDER [][]byte) (IssuedHierarchyCA, error) {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer cannot sign another intermediate")
 	}
 	for i := 0; i < len(certs)-1; i++ {
-		if err := certs[i].CheckSignatureFrom(certs[i+1]); err != nil {
+		if err := VerifyCertificateIssuedBy(certs[i], certs[i+1]); err != nil {
 			return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer chain certificate %d is not signed by certificate %d: %w", i, i+1, err)
 		}
 		if err := verifyChildPathLen(certs[i+1], certs[i]); err != nil {
@@ -276,7 +276,7 @@ func VerifyExistingCAIssuerChain(chainDER [][]byte) (IssuedHierarchyCA, error) {
 		}
 	}
 	root := certs[len(certs)-1]
-	if err := root.CheckSignatureFrom(root); err != nil {
+	if err := VerifyCertificateIssuedBy(root, root); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: existing CA issuer root is not self-signed: %w", err)
 	}
 	return hierarchyResultFromCert(certs[0]), nil
@@ -447,7 +447,7 @@ func VerifyCrossSignedCA(issuerCertDER, targetCertDER, crossCertDER []byte) erro
 	if err := verifyCAUsable(cross, "imported cross-certificate"); err != nil {
 		return err
 	}
-	if err := cross.CheckSignatureFrom(issuer); err != nil {
+	if err := VerifyCertificateIssuedBy(cross, issuer); err != nil {
 		return fmt.Errorf("crypto: imported cross-certificate is not signed by the declared issuer: %w", err)
 	}
 	if !bytes.Equal(cross.RawSubject, target.RawSubject) || !bytes.Equal(cross.RawSubjectPublicKeyInfo, target.RawSubjectPublicKeyInfo) {
@@ -768,7 +768,7 @@ func verifyChildPathLen(parent, child *x509.Certificate) error {
 
 // ImportedCASignatureAlgorithms lists the reviewed public-key algorithms an
 // imported CA certificate may carry, as the platform labels them (A25).
-var ImportedCASignatureAlgorithms = []string{"ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "ed25519", "rsa-2048", "rsa-3072", "rsa-4096"}
+var ImportedCASignatureAlgorithms = []string{"ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "ed25519", "rsa-2048", "rsa-3072", "rsa-4096", "ml-dsa-44", "ml-dsa-65", "ml-dsa-87"}
 
 // ImportedCASignatureAlgorithmSupported reports whether a reviewed label is one
 // the import path verifies; the comparison is case-insensitive.
@@ -939,4 +939,32 @@ func caExtKeyUsage(names []string) ([]x509.ExtKeyUsage, []asn1.ObjectIdentifier,
 		custom = append(custom, oid)
 	}
 	return known, custom, nil
+}
+
+// SignerBackedCAKeyAlgorithm maps a reviewed CA signature_algorithm label to
+// the key the served signer mints for it: ecdsa-p256 (the default) or an
+// ML-DSA parameter set for a post-quantum hierarchy (RFC 9881, A26/A27).
+func SignerBackedCAKeyAlgorithm(label string) (Algorithm, error) {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "", "ecdsa-p256":
+		return ECDSAP256, nil
+	case "ml-dsa-44":
+		return Algorithm("ML-DSA-44"), nil
+	case "ml-dsa-65":
+		return Algorithm("ML-DSA-65"), nil
+	case "ml-dsa-87":
+		return Algorithm("ML-DSA-87"), nil
+	default:
+		return "", fmt.Errorf("crypto: signature_algorithm %q is not one the served signer path mints (ecdsa-p256, ml-dsa-44, ml-dsa-65, ml-dsa-87)", label)
+	}
+}
+
+// CertificateKeyAlgorithmLabel names a certificate's public-key algorithm with
+// the platform's labels (ecdsa-p256, ml-dsa-65, ...); empty for unparseable DER.
+func CertificateKeyAlgorithmLabel(der []byte) string {
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return ""
+	}
+	return publicKeyAlgorithmLabel(cert)
 }

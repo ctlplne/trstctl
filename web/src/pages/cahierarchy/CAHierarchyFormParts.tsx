@@ -6,7 +6,11 @@ export type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDom
 /** Reviewed key algorithms an imported (offline-held) CA may carry (A25). The
  * served signer still mints ECDSA-P256 only; these labels are what the import
  * path verifies against the certificate's actual key. */
-export const OFFLINE_CA_SIGNATURE_ALGORITHMS = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "Ed25519", "RSA-2048", "RSA-3072", "RSA-4096"] as const;
+export const OFFLINE_CA_SIGNATURE_ALGORITHMS = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "Ed25519", "RSA-2048", "RSA-3072", "RSA-4096", "ML-DSA-65"] as const;
+// The key families the served signer mints for a root or intermediate: the
+// classical default, or an ML-DSA parameter set for a post-quantum pilot
+// hierarchy that runs beside it.
+export const MANAGED_CA_KEY_ALGORITHMS = ["ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"] as const;
 
 export function LabeledSelect({
   children,

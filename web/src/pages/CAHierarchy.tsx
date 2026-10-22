@@ -42,7 +42,7 @@ import {
   managedIntermediateDefaultSpec,
 } from "./cahierarchy/CAHierarchyCeremonyParts";
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
-import { KeyValue, LabeledInput, LabeledSelect, OfflineSpecFields, type OfflineCAForm } from "./cahierarchy/CAHierarchyFormParts";
+import { KeyValue, LabeledInput, LabeledSelect, MANAGED_CA_KEY_ALGORITHMS, OfflineSpecFields, type OfflineCAForm } from "./cahierarchy/CAHierarchyFormParts";
 import { ExistingCAImportWorkflow, type ExistingCAForm } from "./cahierarchy/CAHierarchyExistingImportParts";
 import { CARekeyPanel } from "./cahierarchy/CAHierarchyRekeyParts";
 import { RetirementWorkspace } from "./cahierarchy/CAHierarchyRetirementParts";
@@ -107,15 +107,16 @@ function caWorkspaceTabFromSearchParam(value: string | null): CAWorkspaceTab {
   return caWorkspaceTabIDs.includes(value as CAWorkspaceTab) ? (value as CAWorkspaceTab) : "overview";
 }
 
+const rootCeremonySpec: NonNullable<CACeremonyStartRequest["spec"]> = {
+  common_name: "Trust Root CA",
+  max_path_len: 1,
+  signature_algorithm: "ECDSA-P256",
+  ttl_seconds: 315_360_000,
+};
 const rootCeremonyRequest: CACeremonyStartRequest = {
   operation: "create_root",
   threshold: 2,
-  spec: {
-    common_name: "Trust Root CA",
-    max_path_len: 1,
-    signature_algorithm: "ECDSA-P256",
-    ttl_seconds: 315_360_000,
-  },
+  spec: rootCeremonySpec,
 };
 
 const offlineRootDefaults: OfflineCAForm = {
@@ -162,6 +163,7 @@ export function CAHierarchy() {
   const externalCAList = useCapabilityExecution("F4", "listExternalCAs");
   const externalCAIssue = useCapabilityExecution("F4", "issueExternalCA");
   const [issuers, setIssuers] = useState<Issuer[]>([]);
+  const [rootKeyAlgorithm, setRootKeyAlgorithm] = useState<string>(MANAGED_CA_KEY_ALGORITHMS[0]);
   // R2: the served capability matrix. Null means it could not be read, and the
   // table says "unknown" rather than implying revocation is unavailable — an
   // absent answer and a negative answer are different facts.
@@ -387,7 +389,11 @@ export function CAHierarchy() {
   }
 
   async function startRootCeremony() {
-    await openCeremonyReview(rootCeremonyRequest, setCeremony, (message) => setCeremonyError(message || null), setCeremonyBusy);
+    const request: CACeremonyStartRequest = {
+      ...rootCeremonyRequest,
+      spec: { ...rootCeremonySpec, signature_algorithm: rootKeyAlgorithm },
+    };
+    await openCeremonyReview(request, setCeremony, (message) => setCeremonyError(message || null), setCeremonyBusy);
   }
 
   async function approveCeremony(id: string) {
@@ -964,12 +970,26 @@ export function CAHierarchy() {
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.managedIntermediate.sectionHelp")}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <LabeledSelect
+            id="root-ceremony-key-algorithm"
+            label={t("caHierarchy.rootCeremony.keyAlgorithm")}
+            value={rootKeyAlgorithm}
+            onChange={setRootKeyAlgorithm}
+          >
+            {MANAGED_CA_KEY_ALGORITHMS.map((algorithm) => (
+              <option key={algorithm} value={algorithm}>
+                {algorithm}
+              </option>
+            ))}
+          </LabeledSelect>
           <Button type="button" onClick={() => void startRootCeremony()} disabled={ceremonyBusy}>
             {translateNow("source.start.root.ceremony.01836ae713")}
           </Button>
-          <span className="text-sm text-muted-foreground">{translateNow("source.default.request.trust.root.ca.2.approvals.246b100b12")}</span>
         </div>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          {t("caHierarchy.rootCeremony.defaultRequest", { algorithm: rootKeyAlgorithm })} {t("caHierarchy.rootCeremony.keyAlgorithmHelp")}
+        </p>
         {activeAuthorityParents.length > 0 ? (
           <ManagedIntermediateCeremonyForm
             key={activeAuthorityParents.map((authority) => authority.id).join(",")}

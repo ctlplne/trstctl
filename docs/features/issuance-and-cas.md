@@ -201,6 +201,17 @@ profile. The server checks the public key, issuer chain and optional registered
 parent before consuming the ceremony. An already-held signer key uses the
 `import_existing_ca` ceremony above.
 
+A post-quantum pilot hierarchy runs beside the classical one through the same
+ceremonies: set `signature_algorithm` to `ml-dsa-44`, `ml-dsa-65` or `ml-dsa-87`
+on a root or intermediate spec and the signer mints that key (the ceremony
+purpose binds the key family, so approvals reviewed for `ecdsa-p256` cannot
+mint it). The authority issues classical and pure ML-DSA leaves under RFC 9881,
+its `/crl/{tenant}/authorities/{id}` and `/ocsp/{tenant}/authorities/{id}`
+responses carry its ML-DSA signature, each authority reports its
+`key_algorithm`, and OpenSSL 3.5 or newer verifies the chain, CRL and OCSP
+responses. Offline-root-signed intermediate CSRs and external-issuer import
+CSRs stay classical; a re-key keeps the predecessor's key family.
+
 CA renewal/re-key uses `ca-rekey-v2:<sha256-of-authority/spec/reason>` to create fresh signer-held
 CA material for the selected authority with the reviewed lifetime and profile.
 Online intermediate creation, external intermediate CSR signing, cross-signing,

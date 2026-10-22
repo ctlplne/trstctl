@@ -488,7 +488,11 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 			return err
 		}
 		var err error
-		signer, signerCreated, err = h.createOrBindSigner(ctx, handle)
+		keyAlgorithm, err := crypto.SignerBackedCAKeyAlgorithm(req.Spec.SignatureAlgorithm)
+		if err != nil {
+			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		signer, signerCreated, err = h.createOrBindSigner(ctx, handle, keyAlgorithm)
 		if err != nil {
 			return err
 		}
@@ -737,7 +741,11 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
-		childSigner, signerCreated, err = h.createOrBindSigner(ctx, handle)
+		keyAlgorithm, err := crypto.SignerBackedCAKeyAlgorithm(req.Spec.SignatureAlgorithm)
+		if err != nil {
+			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		childSigner, signerCreated, err = h.createOrBindSigner(ctx, handle, keyAlgorithm)
 		if err != nil {
 			return err
 		}
@@ -801,7 +809,10 @@ func (h *caHierarchyService) CreateOfflineIntermediateCSR(ctx context.Context, t
 	if err := h.store.ClaimCASignerHandle(ctx, tenantID, req.CeremonyID, handle); err != nil {
 		return api.CAIntermediateCSR{}, caHierarchyConflict(err)
 	}
-	signer, signerCreated, err := h.createOrBindSigner(ctx, handle)
+	if _, pure := crypto.PureX509Algorithm(mustSignerBackedKeyAlgorithm(req.Spec)); pure {
+		return api.CAIntermediateCSR{}, fmt.Errorf("%w: an offline-root-signed intermediate CSR uses a classical key; a post-quantum hierarchy starts from a signer-backed ML-DSA root", api.ErrCAHierarchyInvalid)
+	}
+	signer, signerCreated, err := h.createOrBindSigner(ctx, handle, crypto.ECDSAP256)
 	if err != nil {
 		return api.CAIntermediateCSR{}, err
 	}
@@ -997,13 +1008,18 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	// certificate — one parse per issuance (E2/V34). An expired issuer surfaces
 	// as a profile violation and keeps the invalid-hierarchy error surface.
 	profile.ClampTTLToIssuer = true
-	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, signer, req.CSRDER, time.Duration(req.TTLSeconds)*time.Second, profile)
+	// A pure ML-DSA subject (RFC 9881) takes the prepared post-quantum signer;
+	// a classical subject keeps the direct path. Either way the CA signer is
+	// the authority's own, so an ML-DSA authority issues either kind.
+	issuedLeaf, err := signSubjectLifecycleLeaf(ctx, caDER, signer, req.CSRDER, time.Duration(req.TTLSeconds)*time.Second, profile,
+		h.parseSubjectCSR, h.inspectHybridSubjectCSR, h.preparedSubjectLeafSigner)
 	if err != nil {
 		if crypto.IsLeafProfileViolation(err) {
 			return api.CAIssuedLeaf{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}
 		return api.CAIssuedLeaf{}, err
 	}
+	leafDER := issuedLeaf.DER
 	info, err := certinfo.Inspect(leafDER)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
@@ -1467,6 +1483,10 @@ func hierarchyPurpose(operation, parentID string, spec api.CASpec) (string, erro
 		TTL: time.Duration(spec.TTLSeconds) * time.Second,
 	}
 	switch operation {
+	case "create_root", "create_intermediate":
+		hs.KeyAlgorithm = signerBackedKeyAlgorithmLabel(spec)
+	}
+	switch operation {
 	case "create_root":
 		return libhierarchy.PurposeRoot(hs), nil
 	case "create_intermediate":
@@ -1663,12 +1683,21 @@ func validateSignerBackedCASpec(spec api.CASpec) error {
 	if err := validateCASpec(spec); err != nil {
 		return err
 	}
-	switch strings.ToLower(spec.SignatureAlgorithm) {
-	case "", "ecdsa-p256":
-		return nil
-	default:
-		return fmt.Errorf("%w: only ecdsa-p256 CA keys are supported by the served signer path", api.ErrCAHierarchyInvalid)
+	if _, err := crypto.SignerBackedCAKeyAlgorithm(spec.SignatureAlgorithm); err != nil {
+		return fmt.Errorf("%w: only ecdsa-p256 or an ML-DSA parameter set (ml-dsa-44, ml-dsa-65, ml-dsa-87) CA keys are minted by the served signer path", api.ErrCAHierarchyInvalid)
 	}
+	return nil
+}
+
+// signerBackedKeyAlgorithmLabel is the reviewed label as the ceremony purpose
+// binds it: empty for the classical default, so existing ceremony digests are
+// unchanged; the lower-cased ML-DSA parameter set otherwise.
+func signerBackedKeyAlgorithmLabel(spec api.CASpec) string {
+	label := strings.ToLower(strings.TrimSpace(spec.SignatureAlgorithm))
+	if label == "ecdsa-p256" {
+		return ""
+	}
+	return label
 }
 
 func (h *caHierarchyService) requirePendingCeremonyQuorum(ctx context.Context, tenantID, ceremonyID, purpose string) error {
@@ -1704,12 +1733,15 @@ func hierarchySignerHandle(ceremonyID string) string {
 	return hierarchySignerHandlePrefix + ceremonyID
 }
 
-func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle string) (*signing.RemoteSigner, bool, error) {
+func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle string, algorithm crypto.Algorithm) (*signing.RemoteSigner, bool, error) {
 	client := h.signer.Client()
 	if client == nil {
 		return nil, false, api.ErrCAHierarchyUnavailable
 	}
-	signer, err := client.GenerateDualControlKeyHandle(ctx, crypto.ECDSAP256, handle,
+	if algorithm == "" {
+		algorithm = crypto.ECDSAP256
+	}
+	signer, err := client.GenerateDualControlKeyHandle(ctx, algorithm, handle,
 		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.signAuthz)
 	if err == nil {
 		return signer, true, nil
@@ -1823,12 +1855,26 @@ func dnsSuffixWithin(name, suffix string) bool {
 }
 
 func authorityResponse(c store.CAAuthority) api.CAAuthority {
-	return api.CAAuthority{
+	out := api.CAAuthority{
 		ID: c.ID, TenantID: c.TenantID, ParentID: c.ParentID, CommonName: c.CommonName,
 		Kind: c.Kind, Status: c.Status, CertificatePEM: c.CertificatePEM, SignerHandle: c.SignerHandle,
 		Serial: c.Serial, NotAfter: c.NotAfter, MaxPathLen: c.MaxPathLen,
 		PermittedDNSNames: c.PermittedDNSNames, ExtendedKeyUsages: c.EKUs, ReplacesID: c.ReplacesID, CreatedAt: c.CreatedAt,
 	}
+	if der, err := firstCertDER(c.CertificatePEM); err == nil {
+		out.KeyAlgorithm = crypto.CertificateKeyAlgorithmLabel(der)
+	}
+	return out
+}
+
+// mustSignerBackedKeyAlgorithm resolves a spec label already accepted by
+// validateCASpec; an unmintable label falls back to the classical default.
+func mustSignerBackedKeyAlgorithm(spec api.CASpec) crypto.Algorithm {
+	alg, err := crypto.SignerBackedCAKeyAlgorithm(spec.SignatureAlgorithm)
+	if err != nil {
+		return crypto.ECDSAP256
+	}
+	return alg
 }
 
 func authorityRotationResponse(predecessor, successor store.CAAuthority) api.CAAuthorityRotation {

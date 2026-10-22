@@ -6546,6 +6546,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "key_algorithm": {
+            "type": "string"
+          },
           "kind": {
             "type": "string"
           },

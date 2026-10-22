@@ -418,18 +418,18 @@ func TestOfflineIntermediateCSRAppendFailureDestroysSigner(t *testing.T) {
 func TestDestroyedOfflineIntermediateSignerRequiresFreshCeremony(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	handle := hierarchySignerHandle("destroyed-csr-ceremony")
-	signer, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), handle)
+	signer, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), handle, crypto.ECDSAP256)
 	if err != nil || !created {
 		t.Fatalf("create ceremony signer = %v, created=%t", err, created)
 	}
 	if err := signer.Destroy(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = h.srv.caHierarchy.createOrBindSigner(context.Background(), handle)
+	_, _, err = h.srv.caHierarchy.createOrBindSigner(context.Background(), handle, crypto.ECDSAP256)
 	if !errors.Is(err, api.ErrCAHierarchyConflict) || !strings.Contains(err.Error(), "new ceremony") {
 		t.Fatalf("destroyed handle retry = %v; want actionable ceremony conflict", err)
 	}
-	fresh, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), hierarchySignerHandle("fresh-csr-ceremony"))
+	fresh, created, err := h.srv.caHierarchy.createOrBindSigner(context.Background(), hierarchySignerHandle("fresh-csr-ceremony"), crypto.ECDSAP256)
 	if err != nil || !created || fresh == nil {
 		t.Fatalf("fresh ceremony signer = %v, created=%t", err, created)
 	}

@@ -1593,6 +1593,7 @@ export interface CAAuthority {
   extended_key_usages?: string[];
   horizon?: CAAuthorityHorizon;
   id: string;
+  key_algorithm?: string;
   kind: string;
   max_path_len: number;
   not_after?: string;

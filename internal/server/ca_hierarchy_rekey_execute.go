@@ -98,7 +98,15 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 			}
 			return err
 		}
-		rekeySigner, signerCreated, err = h.createOrBindSigner(ctx, handle)
+		// A re-key stays in the predecessor's key family: an ML-DSA authority
+		// re-keys to a fresh ML-DSA key, a classical one to ECDSA-P256.
+		rekeyAlgorithm := crypto.ECDSAP256
+		if predecessorDER, err := firstCertDER(predecessor.CertificatePEM); err == nil {
+			if alg, err := crypto.SignerBackedCAKeyAlgorithm(crypto.CertificateKeyAlgorithmLabel(predecessorDER)); err == nil {
+				rekeyAlgorithm = alg
+			}
+		}
+		rekeySigner, signerCreated, err = h.createOrBindSigner(ctx, handle, rekeyAlgorithm)
 		if err != nil {
 			return err
 		}

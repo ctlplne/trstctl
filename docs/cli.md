@@ -696,6 +696,13 @@ cat > root-create.json <<'JSON'
 JSON
 trstctl-cli ca authorities create-root -f root-create.json
 
+# A post-quantum pilot root beside it: the same ceremony with an ML-DSA key family.
+cat > pq-root-ceremony.json <<'JSON'
+{"operation":"create_root","threshold":2,"spec":{"common_name":"Example PQ Pilot Root","ttl_seconds":315360000,"signature_algorithm":"ml-dsa-65","max_path_len":1,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca ceremonies start -f pq-root-ceremony.json
+# ... two approvals, then create-root with the same spec and ceremony_id.
+
 # Import an offline root, generate a signer-held intermediate CSR, sign it offline,
 # then import the signed intermediate.
 cat > offline-root-ceremony.json <<'JSON'
