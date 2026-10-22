@@ -1513,15 +1513,26 @@ func pqcCertificateRollbackJob(claim store.AgentJobResultClaim) bool {
 }
 
 func (a *agentService) recordAgentJobEvent(ctx context.Context, tenantID, eventType string, data map[string]any) {
-	if a.log == nil {
+	if a.log == nil && a.appendAuditEvent == nil {
 		return
 	}
 	body, err := json.Marshal(data)
 	if err != nil {
 		return
 	}
-	if _, err := a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: body}); err != nil && a.logger != nil {
-		a.logger.Error("agent job audit event could not be stored", slog.String("tenant_id", tenantID), slog.String("event_type", eventType))
+	// The identity, time and actor are fixed before the first attempt (A65), so a
+	// retry after an unacknowledged publish is the same JetStream message and the
+	// stream's duplicate window, not a second record, answers it.
+	event := events.Event{ID: events.NewID(), Type: eventType, TenantID: tenantID, Time: time.Now().UTC(), Data: body}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		event.Actor = &actor
+	}
+	appendEvent := a.appendAuditEvent
+	if appendEvent == nil {
+		appendEvent = a.log.Append
+	}
+	if _, err := appendEvent(ctx, event); err != nil {
+		a.queueAgentAuditRetry(ctx, event, err)
 	}
 }
 

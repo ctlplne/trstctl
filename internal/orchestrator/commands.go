@@ -104,6 +104,9 @@ const (
 	eventProfileEditApprovalRefused   = "profile.edit_approval.refused"
 	EventAuthzDecision                = "authz.decision"
 	DestinationConnectorRightSize     = "connector.right_size"
+	// DestinationAgentAuditRetry re-appends an agent audit event whose first
+	// publish was not acknowledged, under its original ID (A65).
+	DestinationAgentAuditRetry = "agent.audit.retry"
 	// DestinationFleetReissuanceBatch is an internal, bounded worker command.
 	// Exactly one command is published for the durable cursor; later batches do
 	// not exist in the outbox until signed canary verification advances it.

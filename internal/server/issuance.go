@@ -286,6 +286,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.routeConnectorTest(ctx, m)
 	case orchestrator.DestinationConnectorRightSize:
 		return d.handleConnectorRightSize(ctx, m)
+	case orchestrator.DestinationAgentAuditRetry:
+		return d.handleAgentAuditRetry(ctx, m)
 	case "discovery.run":
 		relayOwned, err := d.discoveryRunRelayOwned(ctx, m)
 		if err != nil {

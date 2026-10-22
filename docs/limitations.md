@@ -2341,12 +2341,21 @@ reports. Unexpected fields or undeclared schema versions are refused. Privacy
 erasure cannot rewrite a signed terminal report: it refuses that rewrite rather
 than changing the bytes covered by the signature.
 
-Agent audit publication is best-effort after the operation's state change. If the
-event append fails, the server logs `agent job audit event could not be stored`
-with the tenant and event type, without the payload. Investigate that error and
-compare the job and retained receipt with the event history; a successful agent
-response alone does not establish that its audit event was retained. Publication
-does not automatically retry a missing event after the operation completes.
+Agent audit publication runs after the operation's state change, with the
+event's identity, time and actor fixed before the first attempt. If the event
+bus does not acknowledge the append, the server queues that same event, under
+the same identity, on the control-plane-only `agent.audit.retry` outbox
+destination and logs `agent job audit event queued for retry` with the tenant,
+event type and event ID, never the payload. The outbox dispatcher re-appends it
+with the outbox's usual backoff and attempt cap, and because the stream
+deduplicates message IDs within its 24-hour window, a publish whose
+acknowledgement was lost is not recorded twice. An append the log refuses for a
+deterministic reason (a payload the privacy schema does not declare, a missing
+tenant) is not retried: the server logs `agent job audit event could not be
+stored` with the reason. When either line appears, compare the job and retained
+receipt with the event history; a successful agent response alone does not
+establish that its audit event was retained, and a retry row that exhausts its
+attempts is visible as a failed outbox delivery on Operations.
 
 Anything that does not verify is refused fail-closed, with an
 `agent.job.receipt.rejected` audit event and a counter on Operations: unsigned,

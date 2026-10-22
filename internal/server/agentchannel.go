@@ -249,15 +249,18 @@ func (s *Server) OutOfProcessAgentCA() bool {
 type agentService struct {
 	tenantServiceCheck tenancy.ServiceCheck
 	// logger receives operator-facing refusals with routing metadata only.
-	logger       *slog.Logger
-	store        *store.Store
-	log          *events.Log
-	orch         *orchestrator.Orchestrator
-	idem         idempotentRunner
-	caSigner     crypto.DigestSigner
-	caCertDER    []byte
-	beatInterval time.Duration
-	metrics      *agentChannelMetrics
+	logger *slog.Logger
+	store  *store.Store
+	log    *events.Log
+	// appendAuditEvent is the audit append (A65); nil means log.Append. Tests
+	// substitute a failing one to prove the outbox retry.
+	appendAuditEvent func(context.Context, events.Event) (events.Event, error)
+	orch             *orchestrator.Orchestrator
+	idem             idempotentRunner
+	caSigner         crypto.DigestSigner
+	caCertDER        []byte
+	beatInterval     time.Duration
+	metrics          *agentChannelMetrics
 	// claimableJobKinds is the operator-enabled set of estate-touching job kinds
 	// agents may claim (A1). Empty means the fabric is served but hands out
 	// nothing — the honest default until an executor for a kind exists.

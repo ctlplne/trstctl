@@ -39,6 +39,12 @@ const (
 // caller can safely choose which command the producer identity means.
 var ErrConflictingEventIdentity = errors.New("events: conflicting event identity")
 
+// ErrPublish marks an append that reached the bus and was not acknowledged: the
+// envelope had already passed validation, so a producer may retry it under the
+// same ID and rely on the stream's duplicate window. Appends the log refuses
+// for a deterministic reason do not carry it.
+var ErrPublish = errors.New("events: publish not acknowledged")
+
 // DefaultSchemaVersion is defined in internal/eventspec (a NATS-free leaf) and
 // re-exported here so existing events.DefaultSchemaVersion references keep working.
 const DefaultSchemaVersion = eventspec.DefaultSchemaVersion
@@ -488,7 +494,7 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	}
 	ack, err := l.publishToActive(ctx, subject, payload, jetstream.WithMsgID(e.ID))
 	if err != nil {
-		return Event{}, fmt.Errorf("events: append: %w", err)
+		return Event{}, fmt.Errorf("events: append: %w: %w", ErrPublish, err)
 	}
 	if ack.Duplicate {
 		// The acknowledged source may finish cutover after the bounded publish
