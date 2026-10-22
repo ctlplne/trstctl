@@ -504,6 +504,9 @@ type Deps struct {
 	// LDAP configures served LDAP / Active Directory username-password bind login
 	// and group-to-role mapping. Run fills this from config.Auth.LDAP.
 	LDAP config.LDAP
+	// Kerberos configures served Kerberos/GSSAPI browser login (A79). Run
+	// fills this from config.Auth.Kerberos.
+	Kerberos config.Kerberos
 	// SCIM configures served SCIM 2.0 provisioning under /scim/v2. Run fills this
 	// from config.Auth.SCIM.
 	SCIM config.SCIM

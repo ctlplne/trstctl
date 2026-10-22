@@ -84,11 +84,14 @@ func TestAuthMethodsReportsOnlyMountedBrowserLoginRoutes(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("decode auth methods: %v", err)
 		}
-		if len(body) != 4 {
-			t.Fatalf("auth methods fields = %v, want only oidc/saml/ldap/provider_plane", body)
+		if len(body) != 5 {
+			t.Fatalf("auth methods fields = %v, want only oidc/saml/ldap/kerberos/provider_plane", body)
 		}
 		if _, ok := body["oidc"]; !ok {
 			t.Fatalf("auth methods fields = %v, missing oidc", body)
+		}
+		if _, ok := body["kerberos"]; !ok {
+			t.Fatalf("auth methods fields = %v, missing kerberos", body)
 		}
 		if _, ok := body["saml"]; !ok {
 			t.Fatalf("auth methods fields = %v, missing saml", body)
@@ -119,7 +122,7 @@ func TestAuthMethodsReportsOnlyMountedBrowserLoginRoutes(t *testing.T) {
 		if !body["provider_plane"] {
 			t.Fatalf("provider_plane = false, want true: %v", body)
 		}
-		if len(body) != 4 {
+		if len(body) != 5 {
 			t.Fatalf("auth methods leaked extra Provider metadata: %v", body)
 		}
 	})

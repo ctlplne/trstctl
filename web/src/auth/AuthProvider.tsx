@@ -20,6 +20,7 @@ interface AuthState {
   oidcAvailable: boolean;
   samlAvailable: boolean;
   ldapAvailable: boolean;
+  kerberosAvailable: boolean;
   preview: boolean;
   previewAvailable: boolean;
   startPreview: () => void;
@@ -43,6 +44,7 @@ const AuthContext = createContext<AuthState>({
   oidcAvailable: false,
   samlAvailable: false,
   ldapAvailable: false,
+  kerberosAvailable: false,
   preview: false,
   previewAvailable: false,
   startPreview: () => {},
@@ -67,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           oidcAvailable: false,
           samlAvailable: false,
           ldapAvailable: false,
+          kerberosAvailable: false,
           preview: true,
           previewAvailable: true,
         }
@@ -77,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           oidcAvailable: false,
           samlAvailable: false,
           ldapAvailable: false,
+          kerberosAvailable: false,
           preview: false,
           previewAvailable: previewAllowed,
         },
@@ -95,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       oidcAvailable: current.oidcAvailable,
       samlAvailable: current.samlAvailable,
       ldapAvailable: current.ldapAvailable,
+      kerberosAvailable: current.kerberosAvailable,
       preview: true,
       previewAvailable: true,
     }));
@@ -112,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         oidcAvailable: current.oidcAvailable,
         samlAvailable: current.samlAvailable,
         ldapAvailable: current.ldapAvailable,
+        kerberosAvailable: current.kerberosAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -136,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         oidcAvailable: current.oidcAvailable,
         samlAvailable: current.samlAvailable,
         ldapAvailable: current.ldapAvailable,
+        kerberosAvailable: current.kerberosAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -152,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Login-method discovery is public UI metadata, not the session
       // authority. A transient failure here must hide login actions safely,
       // but it must not evict an already-authenticated operator.
-      const methods = await api.authMethods().catch(() => ({ oidc: false, saml: false, ldap: false }));
+      const methods = await api.authMethods().catch(() => ({ oidc: false, saml: false, ldap: false, kerberos: false }));
       try {
         const user = await api.me();
         if (!active || previewRef.current) return;
@@ -165,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           oidcAvailable: methods.oidc,
           samlAvailable: methods.saml,
           ldapAvailable: methods.ldap,
+          kerberosAvailable: methods.kerberos ?? false,
           preview: false,
           previewAvailable: import.meta.env.DEV,
         });
@@ -180,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             oidcAvailable: methods.oidc,
             samlAvailable: methods.saml,
             ldapAvailable: methods.ldap,
+            kerberosAvailable: methods.kerberos ?? false,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -191,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             oidcAvailable: methods.oidc,
             samlAvailable: methods.saml,
             ldapAvailable: methods.ldap,
+            kerberosAvailable: methods.kerberos ?? false,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -213,6 +223,12 @@ export function useAuth(): AuthState {
 export function beginLogin(returnTo?: string) {
   const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
   window.location.assign(query ? `${loginURL}?${query}` : loginURL);
+}
+
+/** beginKerberosLogin sends the browser to the Negotiate-challenged login route (A79). */
+export function beginKerberosLogin(returnTo?: string) {
+  const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
+  window.location.assign(query ? `/auth/kerberos/login?${query}` : "/auth/kerberos/login");
 }
 
 /** beginSAMLLogin starts the configured SAML provider flow. */

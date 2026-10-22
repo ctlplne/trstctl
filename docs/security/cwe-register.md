@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1633 annotated sites across 26 rules. Each row is
+1635 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (356 sites)
+### G101 — CWE-798 Use of hardcoded credentials (358 sites)
 
 | Location | Reason |
 |---|---|
@@ -82,6 +82,7 @@ not this file.
 | `deploy/helm/helm_test.go:1498` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1529` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1531` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `ee/enterpriseauth/auth_kerberos_served_test.go:35` | fabricated fixture credential; the keytab is minted in-process (CWE-798) |
 | `ee/enterpriseauth/scim_bulk_served_test.go:35` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `ee/enterpriseauth/scim_subject_binding_served_test.go:38` | fabricated local fixture, not a credential (CWE-798) |
@@ -178,8 +179,8 @@ not this file.
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:2496` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:3229` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2568` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3301` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:389` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -201,6 +202,7 @@ not this file.
 | `internal/config/external_ca_test.go:58` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:75` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:99` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/kerberos_test.go:8` | fabricated fixture paths and identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/migrate_config_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/migrate_config_test.go:45` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -769,32 +771,32 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:993` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
-| `internal/api/auth.go:1004` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:1028` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:1035` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:1033` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
+| `internal/api/auth.go:1044` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:1068` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:1075` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:80` | request cookie for the local handler fixture (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:83` | request cookie for the local handler fixture (CWE-1004) |
-| `internal/api/auth_test.go:227` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:228` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:229` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:230` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:284` | explicit loopback-only plaintext development test (CWE-1004) |
-| `internal/api/auth_test.go:314` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:315` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:316` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:231` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:232` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:233` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:287` | explicit loopback-only plaintext development test (CWE-1004) |
 | `internal/api/auth_test.go:317` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:464` | test cookie against the test's own local server (CWE-1004) (mismatch) |
-| `internal/api/auth_test.go:484` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:485` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:512` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:513` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:542` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:563` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:610` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:971` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
-| `internal/api/auth_test.go:1014` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
+| `internal/api/auth_test.go:318` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:319` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:320` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:467` | test cookie against the test's own local server (CWE-1004) (mismatch) |
+| `internal/api/auth_test.go:487` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:488` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:515` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:516` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:545` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:566` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:613` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:974` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
+| `internal/api/auth_test.go:1017` | test double-submit CSRF cookie must be JavaScript-readable, with Secure and SameSite set. |
 | `internal/api/csrf_test.go:37` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:52` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:53` | test cookie against the test's own local server (CWE-1004) |
@@ -1048,7 +1050,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2561` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2660` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2663` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1308,7 +1310,7 @@ not this file.
 | `internal/cli/pcas_kem_envelope.go:67` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:2590` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:2662` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:353` | clean is confined to operator-approved local roots above (CWE-22) |
@@ -1446,9 +1448,9 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:1431` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:2587` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2664` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:1434` | operator-configured key file path (CWE-22) |
+| `internal/server/server.go:2590` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2667` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
@@ -1634,7 +1636,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2670` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2673` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

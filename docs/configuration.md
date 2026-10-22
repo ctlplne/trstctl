@@ -1188,6 +1188,23 @@ auth:
         roles: [admin]
 ```
 
+Example Kerberos / GSSAPI config (the browser presents its domain ticket; the
+keytab holds the HTTP service principal's keys exported from the KDC):
+
+```yaml
+auth:
+  kerberos:
+    enabled: true
+    keytab_file: /etc/trstctl/http.keytab
+    service_principal: HTTP/trstctl.example.com
+    realm: EXAMPLE.COM
+    session_secret_file: /var/lib/trstctl/kerberos-session.secret
+    tenant_mappings:
+      - subject: alice@EXAMPLE.COM
+        tenant_id: 11111111-1111-1111-1111-111111111111
+        roles: [admin]
+```
+
 Example LDAP / Active Directory config:
 
 ```yaml

@@ -260,7 +260,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Plugin isolation | First-party runs trusted in-process; third-party is WASM-sandboxed and signature-verified | [Plugin isolation](#plugin-isolation-first-party-in-process-third-party-sandboxed) |
 | Protocols: ACME/EST/SCEP/CMP/SPIFFE/SSH/TSA | Served end to end, each behind its own enable flag | [Protocols](#protocols) |
 | Revocation (OCSP/CRL) | Served, signed by the isolated signer | [Revocation](#revocation) |
-| Single sign-on detail | Served, including SAML single logout on the tenant plane; Kerberos/GSSAPI and NTLM not yet implemented | [Single sign-on](#single-sign-on) |
+| Single sign-on detail | Served, including SAML single logout and Kerberos/GSSAPI login on the tenant plane; NTLM not yet implemented | [Single sign-on](#single-sign-on) |
 | CA key custody / HSM / BYOK | Sealed local key store by default; six of six HSM/KMS backends served | [CA key custody](#ca-key-custody) |
 | Post-quantum cryptography | ML-DSA/ML-KEM/SLH-DSA available; compatibility-bounded proofs | [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms) |
 | PCAS KEM data re-wrap | Not built; the served route prepares successor keys but cannot migrate ciphertext | [PCAS KEM data re-wrap](#pcas-kem-data-re-wrap-not-built) |
@@ -4951,6 +4951,17 @@ sign-in has no single logout yet. LDAP / Active Directory serves username/passwo
 group search, and maps directory groups to tenant roles. It does not yet implement
 Kerberos/GSSAPI, NTLM, password-change flows, nested-group expansion, or directory
 writeback. API/CI access still uses scoped API tokens.
+Kerberos/GSSAPI browser login is served (`auth.kerberos`, Enterprise SSO):
+`GET /auth/kerberos/login` answers with a Negotiate challenge, the SPNEGO
+ticket the browser presents is verified against the service keytab
+(`keytab_file`, optionally pinned to `service_principal` and `realm`) inside
+the cryptography boundary, and the principal (`user@REALM`) maps to a tenant
+through `tenant_mappings` by subject, or by Active Directory PAC group SID
+when the KDC is AD; a ticket under another key, an expired or replayed one,
+or a principal that maps to no tenant is refused. The console offers it as
+"Continue with Kerberos"; browsers negotiate only for hosts they trust for
+integrated authentication, so the console host must be in that zone. Built
+and proven against a local MIT KDC; NTLM is not served.
 
 ## CA key custody
 

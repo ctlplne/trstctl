@@ -24,7 +24,7 @@ import (
 // supplies this factory. Core provides the durable browser-session issuer.
 func Build(d editionseam.TenantAuthDeps) (editionseam.TenantAuthConfig, error) {
 	var out editionseam.TenantAuthConfig
-	if (d.SAML.Enabled || d.LDAP.Enabled) && d.NewSessionIssuer == nil {
+	if (d.SAML.Enabled || d.LDAP.Enabled || d.Kerberos.Enabled) && d.NewSessionIssuer == nil {
 		return out, errors.New("enterprise auth requires the core browser-session issuer")
 	}
 	var err error
@@ -33,6 +33,10 @@ func Build(d editionseam.TenantAuthDeps) (editionseam.TenantAuthConfig, error) {
 		return out, err
 	}
 	out.LDAP, err = buildLDAPAuthConfig(d.LDAP, d.Secure, d.NewSessionIssuer)
+	if err != nil {
+		return out, err
+	}
+	out.Kerberos, err = buildKerberosAuthConfig(d.Kerberos, d.Secure, d.NewSessionIssuer)
 	if err != nil {
 		return out, err
 	}

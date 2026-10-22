@@ -46,6 +46,10 @@ const (
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
+	// kerberosHandler is the SPNEGO login handler, built once from the
+	// configured hook (A79).
+	kerberosOnce        sync.Once
+	kerberosHandler     http.Handler
 	guardedPatterns     map[string]bool
 	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
 	tenantServiceCheck  tenancy.ServiceCheck
@@ -717,6 +721,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		}
 		if a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil {
 			mux.HandleFunc("POST /auth/ldap/login", a.authLDAPLogin)
+		}
+		if a.auth.KerberosEnabled || a.auth.KerberosLogin != nil {
+			mux.HandleFunc("GET /auth/kerberos/login", a.authKerberosLogin)
 		}
 		mux.HandleFunc("GET /auth/me", a.authMe)
 		mux.HandleFunc("POST /auth/logout", a.authLogout)

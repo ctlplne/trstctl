@@ -93,7 +93,7 @@ func buildBrowserAuthWithSCIM(d Deps) (options []api.Option, scimConfig *api.SCI
 	var extra editionseam.TenantAuthConfig
 	if d.TenantAuthFactory != nil {
 		deps := editionseam.TenantAuthDeps{
-			SAML: d.SAML, LDAP: d.LDAP, SCIM: d.SCIM, Secure: d.SecurityHeaders.TLS,
+			SAML: d.SAML, LDAP: d.LDAP, Kerberos: d.Kerberos, SCIM: d.SCIM, Secure: d.SecurityHeaders.TLS,
 			NewSessionIssuer: func(secret []byte, ttl time.Duration) *auth.SessionIssuer {
 				return newBrowserSessionIssuer(secret, ttl, d.Store)
 			},
@@ -123,6 +123,11 @@ func buildBrowserAuthWithSCIM(d Deps) (options []api.Option, scimConfig *api.SCI
 		base = extra.LDAP
 	} else if extra.LDAP != nil {
 		mergeLDAPAuthConfig(base, extra.LDAP)
+	}
+	if base == nil {
+		base = extra.Kerberos
+	} else if extra.Kerberos != nil {
+		mergeKerberosAuthConfig(base, extra.Kerberos)
 	}
 	if base != nil {
 		options = append(options, api.WithAuth(*base))
@@ -268,6 +273,18 @@ func mergeLDAPAuthConfig(dst, src *api.AuthConfig) {
 	dst.LDAPEnabled = src.LDAPEnabled
 	dst.VerifyLDAPLogin = src.VerifyLDAPLogin
 	dst.ResolveLDAPTenant = src.ResolveLDAPTenant
+	if dst.LoginRedirect == "" {
+		dst.LoginRedirect = src.LoginRedirect
+	}
+	if dst.Sessions == nil {
+		dst.Sessions = src.Sessions
+	}
+}
+
+func mergeKerberosAuthConfig(dst, src *api.AuthConfig) {
+	dst.KerberosEnabled = src.KerberosEnabled
+	dst.KerberosLogin = src.KerberosLogin
+	dst.ResolveKerberosTenant = src.ResolveKerberosTenant
 	if dst.LoginRedirect == "" {
 		dst.LoginRedirect = src.LoginRedirect
 	}

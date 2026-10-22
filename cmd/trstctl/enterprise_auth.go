@@ -8,7 +8,7 @@ import (
 )
 
 func requireTenantAuthAttachment(cfg *config.Config, deps *server.Deps) error {
-	if (cfg.Auth.SAML.Enabled || cfg.Auth.LDAP.Enabled || cfg.Auth.SCIM.Enabled) && deps.TenantAuthFactory == nil {
+	if (cfg.Auth.SAML.Enabled || cfg.Auth.LDAP.Enabled || cfg.Auth.Kerberos.Enabled || cfg.Auth.SCIM.Enabled) && deps.TenantAuthFactory == nil {
 		return server.ErrEnterpriseSSORequired
 	}
 	return nil

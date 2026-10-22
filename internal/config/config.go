@@ -394,6 +394,7 @@ type Auth struct {
 	OIDC      OIDC      `json:"oidc"`
 	SAML      SAML      `json:"saml"`
 	LDAP      LDAP      `json:"ldap"`
+	Kerberos  Kerberos  `json:"kerberos"`
 	SCIM      SCIM      `json:"scim"`
 	ABAC      ABAC      `json:"abac"`
 	APITokens APITokens `json:"api_tokens,omitempty"`
@@ -594,6 +595,77 @@ type SAML struct {
 	DefaultTenant  string          `json:"default_tenant,omitempty"`
 	// AllowDefaultTenant opts into the DefaultTenant fallback. Off by default.
 	AllowDefaultTenant bool `json:"allow_default_tenant,omitempty"`
+}
+
+// Kerberos configures served Kerberos/GSSAPI browser login (A79): the binary
+// mounts GET /auth/kerberos/login, answers it with a Negotiate challenge, and
+// verifies the SPNEGO ticket the browser presents against the service keytab
+// inside the cryptography boundary. It is OFF by default and fails closed at
+// startup when the keytab, session secret or tenant mapping is incomplete.
+// A Kerberos ticket carries no groups unless the KDC is Active Directory and
+// includes a PAC, whose group SIDs then map through tenant_mappings[].group.
+type Kerberos struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// KeytabFile holds the service principal's keys (HTTP/<host>@REALM)
+	// exported from the KDC. It is read at startup; keep it mode 0600.
+	KeytabFile string `json:"keytab_file,omitempty"`
+	// ServicePrincipal pins which keytab principal the ticket must name; empty
+	// accepts any principal the keytab holds.
+	ServicePrincipal string `json:"service_principal,omitempty"`
+	// Realm, when set, admits only clients authenticated by that realm.
+	Realm string `json:"realm,omitempty"`
+	// MaxClockSkew bounds ticket and authenticator time checks; empty uses the
+	// Kerberos default of five minutes.
+	MaxClockSkew      string          `json:"max_clock_skew,omitempty"`
+	SessionSecretFile string          `json:"session_secret_file,omitempty"`
+	SessionTTL        string          `json:"session_ttl,omitempty"`
+	LoginRedirect     string          `json:"login_redirect,omitempty"`
+	TenantMappings    []TenantMapping `json:"tenant_mappings,omitempty"`
+	DefaultRoles      []string        `json:"default_roles,omitempty"`
+	DefaultTenant     string          `json:"default_tenant,omitempty"`
+	// AllowDefaultTenant opts into the DefaultTenant fallback. Off by default.
+	AllowDefaultTenant bool `json:"allow_default_tenant,omitempty"`
+}
+
+// ValidateEnabled reports Kerberos configuration problems as if the block were enabled.
+func (k Kerberos) ValidateEnabled() error { return errors.Join(k.validate()...) }
+
+// SessionTTLDuration parses the Kerberos-backed browser session lifetime.
+func (k Kerberos) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(k.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(k.SessionTTL)
+}
+
+// MaxClockSkewDuration parses max_clock_skew; empty means the library default.
+func (k Kerberos) MaxClockSkewDuration() (time.Duration, error) {
+	if strings.TrimSpace(k.MaxClockSkew) == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(k.MaxClockSkew)
+}
+
+func (k Kerberos) validate() []error {
+	var errs []error
+	if strings.TrimSpace(k.KeytabFile) == "" {
+		errs = append(errs, errors.New("auth.kerberos.keytab_file is required when auth.kerberos.enabled is true"))
+	}
+	if strings.TrimSpace(k.SessionSecretFile) == "" {
+		errs = append(errs, errors.New("auth.kerberos.session_secret_file is required when auth.kerberos.enabled is true"))
+	}
+	if d, err := k.SessionTTLDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.kerberos.session_ttl %q is invalid: %w", k.SessionTTL, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.kerberos.session_ttl must be positive"))
+	}
+	if d, err := k.MaxClockSkewDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.kerberos.max_clock_skew %q is invalid: %w", k.MaxClockSkew, err))
+	} else if d < 0 {
+		errs = append(errs, errors.New("auth.kerberos.max_clock_skew must not be negative"))
+	}
+	errs = append(errs, validateTenantMappings("auth.kerberos", k.TenantMappings, "", k.AllowDefaultTenant, k.DefaultTenant)...)
+	return errs
 }
 
 // LDAP configures served LDAP / Active Directory browser login (IAM-03):
@@ -4004,6 +4076,9 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	if c.Auth.SAML.Enabled {
 		errs = append(errs, c.Auth.SAML.validate()...)
+	}
+	if c.Auth.Kerberos.Enabled {
+		errs = append(errs, c.Auth.Kerberos.validate()...)
 	}
 	if c.Auth.LDAP.Enabled {
 		errs = append(errs, c.Auth.LDAP.validate()...)

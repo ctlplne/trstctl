@@ -769,6 +769,10 @@ export const messages = {
     description: "Login heading when no browser sign-in method is available.",
   },
   "auth.saml.action": { defaultMessage: "Continue with SAML", description: "Starts the configured SAML browser sign-in flow." },
+  "auth.kerberos.action": {
+    defaultMessage: "Continue with Kerberos",
+    description: "Starts the Kerberos/GSSAPI browser sign-in, which the browser negotiates with its domain ticket.",
+  },
   "auth.ldap.username": { defaultMessage: "Directory username", description: "LDAP browser login username label." },
   "auth.ldap.password": { defaultMessage: "Password", description: "LDAP browser login password label." },
   "auth.ldap.action": { defaultMessage: "Sign in with LDAP", description: "Submits directory credentials to the configured LDAP verifier." },

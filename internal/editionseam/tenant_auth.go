@@ -16,6 +16,7 @@ type TenantAuthFactory func(TenantAuthDeps) (TenantAuthConfig, error)
 type TenantAuthDeps struct {
 	SAML             config.SAML
 	LDAP             config.LDAP
+	Kerberos         config.Kerberos
 	SCIM             config.SCIM
 	Secure           bool
 	NewSessionIssuer func([]byte, time.Duration) *auth.SessionIssuer
@@ -27,7 +28,8 @@ type TenantAuthDeps struct {
 	SAMLEncryptionKeyPKCS8 []byte
 }
 type TenantAuthConfig struct {
-	SAML *api.AuthConfig
-	LDAP *api.AuthConfig
-	SCIM *api.SCIMConfig
+	SAML     *api.AuthConfig
+	LDAP     *api.AuthConfig
+	Kerberos *api.AuthConfig
+	SCIM     *api.SCIMConfig
 }

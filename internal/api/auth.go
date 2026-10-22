@@ -140,6 +140,15 @@ type AuthConfig struct {
 	VerifySAMLLogoutRequest    func(r *http.Request) (auth.SAMLLogoutRequest, error)
 	SAMLLogoutResponseRedirect func(requestID, relayState string) (string, error)
 
+	// KerberosEnabled and KerberosLogin serve Kerberos/GSSAPI browser login
+	// (A79). KerberosLogin wraps a continuation in the SPNEGO negotiation: the
+	// returned handler challenges with Negotiate, verifies the ticket behind
+	// the cryptography boundary, and calls next with the verified claims.
+	// Production wires enterpriseauth.KerberosVerifier.
+	KerberosEnabled       bool
+	KerberosLogin         func(next func(http.ResponseWriter, *http.Request, auth.Claims)) http.Handler
+	ResolveKerberosTenant func(auth.Claims) (tenantID string, roles []string, err error)
+
 	LDAPEnabled bool
 	// VerifyLDAPLogin binds the supplied directory credentials and returns normalized
 	// claims with directory groups. Production wires enterpriseauth.LDAPVerifier.Verify.
@@ -167,6 +176,7 @@ type authMethodsResponse struct {
 	OIDC          bool `json:"oidc"`
 	SAML          bool `json:"saml"`
 	LDAP          bool `json:"ldap"`
+	Kerberos      bool `json:"kerberos"`
 	ProviderPlane bool `json:"provider_plane"`
 }
 
@@ -182,6 +192,7 @@ func (a *API) authMethods(w http.ResponseWriter, _ *http.Request) {
 		methods.OIDC = a.auth.OIDCEnabled || a.auth.Exchange != nil || a.auth.VerifyIDToken != nil
 		methods.SAML = a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil
 		methods.LDAP = a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil
+		methods.Kerberos = a.auth.KerberosEnabled || a.auth.KerberosLogin != nil
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	a.writeJSON(w, http.StatusOK, methods)
@@ -572,6 +583,35 @@ func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.issueLoginSession(w, r, claims, tenantID, roles)
+}
+
+// authKerberosLogin serves GET /auth/kerberos/login (A79): the SPNEGO
+// negotiation runs behind the cryptography boundary; once the ticket verifies,
+// the principal is mapped to a tenant and the normal browser session is minted,
+// honoring a local return_to like the other login routes.
+func (a *API) authKerberosLogin(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil || a.auth.KerberosLogin == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "Kerberos login is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
+	a.kerberosOnce.Do(func() {
+		a.kerberosHandler = a.auth.KerberosLogin(func(w http.ResponseWriter, r *http.Request, claims auth.Claims) {
+			resolve := a.auth.ResolveKerberosTenant
+			if resolve == nil {
+				resolve = a.auth.ResolveTenant
+			}
+			tenantID, roles, err := a.resolveLoginTenantWith(claims, resolve)
+			if err != nil {
+				a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
+				return
+			}
+			a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, safeLoginReturnPath(r.URL.Query().Get("return_to")), nil)
+		})
+	})
+	a.kerberosHandler.ServeHTTP(w, r)
 }
 
 func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, clearCookies ...string) {

@@ -1350,6 +1350,8 @@ export interface AuthMethods {
   oidc: boolean;
   saml: boolean;
   ldap: boolean;
+  /** Kerberos/GSSAPI browser login is mounted (A79); absent on older servers. */
+  kerberos?: boolean;
   /** Boolean-only public preflight. Provider identity, license, and customer
    * metadata remain inside the separately authenticated Provider plane. */
   provider_plane: boolean;

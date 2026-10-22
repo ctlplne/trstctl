@@ -728,7 +728,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       protocols, Plugins: pluginCfg,
-		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
+		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, Kerberos: cfg.Auth.Kerberos, SCIM: cfg.Auth.SCIM,
 		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek,
 		// A1/V2: without this assignment the sealed keyring never ran in production.
 		TransitKeyringDir:           cfg.Transit.KeyringDir,
