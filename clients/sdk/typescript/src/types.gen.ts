@@ -8574,6 +8574,8 @@ export interface components {
             capabilities_reported_at?: string;
             /** @enum {string} */
             capability_source: "reported" | "server_census";
+            claim_quota?: number;
+            claim_quota_reached?: boolean;
             discovery_capabilities: components["schemas"]["AgentDiscoveryCapability"][];
             enrollment_proxy: components["schemas"]["AgentEnrollmentProxyStatus"];
             /** Format: uuid */
@@ -8581,6 +8583,7 @@ export interface components {
             inventory_report_path: string;
             /** Format: date-time */
             last_seen_at?: string;
+            live_claims?: components["schemas"]["AgentLiveClaim"][];
             name: string;
             offboard_reason?: string;
             /** Format: date-time */
@@ -8671,6 +8674,13 @@ export interface components {
         AgentList: {
             agents: components["schemas"]["Agent"][];
             next_cursor?: string;
+        };
+        AgentLiveClaim: {
+            attempt: number;
+            job_id: number;
+            kind: string;
+            /** Format: date-time */
+            lease_expires_at: string;
         };
         AgentOffboardRequest: {
             reason?: string;

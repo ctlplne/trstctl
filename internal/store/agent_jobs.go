@@ -964,3 +964,64 @@ func (s *Store) StampOutboxAgentRole(ctx context.Context, tenantID string, outbo
 	}
 	return stamped, nil
 }
+
+// AgentLiveClaim is one job an agent holds under an unexpired lease (A67): the
+// per-agent drill-down behind the aggregate claimed count on Operations.
+type AgentLiveClaim struct {
+	JobID          int64
+	Destination    string
+	Attempt        int
+	ClaimExpiresAt time.Time
+}
+
+// LiveAgentClaims lists, keyed by agent row id, the jobs each agent in the
+// tenant holds under an unexpired lease. Identity and lease bookkeeping only;
+// never a payload.
+func (s *Store) LiveAgentClaims(ctx context.Context, tenantID string, now time.Time) (map[string][]AgentLiveClaim, error) {
+	out := map[string][]AgentLiveClaim{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT claimed_by_agent_id::text, id, destination, claim_attempts, claim_expires_at
+			   FROM outbox
+			  WHERE tenant_id = $1
+			    AND claimed_by_agent_id IS NOT NULL
+			    AND claim_completed_at IS NULL
+			    AND delivered_at IS NULL
+			    AND claim_expires_at > $2
+			  ORDER BY claim_expires_at, id`, tenantID, now.UTC())
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var agentID string
+			var claim AgentLiveClaim
+			if err := rows.Scan(&agentID, &claim.JobID, &claim.Destination, &claim.Attempt, &claim.ClaimExpiresAt); err != nil {
+				return err
+			}
+			out[agentID] = append(out[agentID], claim)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CountLiveAgentClaims is the per-agent quota's denominator (A66): how many
+// leases this one agent holds right now.
+func (s *Store) CountLiveAgentClaims(ctx context.Context, tenantID, agentID string, now time.Time) (int, error) {
+	var held int
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*)::int
+			   FROM outbox
+			  WHERE tenant_id = $1
+			    AND claimed_by_agent_id = $2::uuid
+			    AND claim_completed_at IS NULL
+			    AND delivered_at IS NULL
+			    AND claim_expires_at > $3`, tenantID, agentID, now.UTC()).Scan(&held)
+	})
+	return held, err
+}

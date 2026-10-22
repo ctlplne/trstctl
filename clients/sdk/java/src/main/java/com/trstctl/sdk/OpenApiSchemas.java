@@ -103,6 +103,7 @@ public final class OpenApiSchemas {
       "AgentJobReceipts",
       "AgentJobRedemptions",
       "AgentList",
+      "AgentLiveClaim",
       "AgentOffboardRequest",
       "AgentOffboardResponse",
       "AgentPresence",

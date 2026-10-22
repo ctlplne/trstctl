@@ -310,6 +310,62 @@ describe("agent fleet surface", () => {
     expect(screen.getByText(/has not reported its own executors/)).toBeInTheDocument();
   });
 
+  it("attributes each live claim to its agent and shows the per-agent quota", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "relay-agent-2",
+        name: "busy-relay",
+        status: "active",
+        roles: ["network"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-06T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [{ kind: "revocation.probe", connectors: [], enable_flags: ["--relay-claim"] }],
+        capability_source: "server_census",
+        live_claims: [
+          { job_id: 41, kind: "revocation.probe", attempt: 1, lease_expires_at: "2026-10-06T07:02:00Z" },
+          { job_id: 42, kind: "connector.deploy", attempt: 2, lease_expires_at: "2026-10-06T07:03:00Z" },
+        ],
+        claim_quota: 2,
+        claim_quota_reached: true,
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "busy-relay" });
+    expect(screen.getByText("Live claims")).toBeInTheDocument();
+    expect(screen.getByText(/job 41, attempt 1, lease until/)).toBeInTheDocument();
+    expect(screen.getByText(/job 42, attempt 2, lease until/)).toBeInTheDocument();
+    expect(screen.getByText(/Holding 2 of 2 allowed at once/)).toBeInTheDocument();
+    expect(screen.getByText(/At quota: new claims are withheld/)).toBeInTheDocument();
+  });
+
+  it("says when no per-agent quota is configured and nothing is leased", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "relay-agent-3",
+        name: "idle-relay",
+        status: "active",
+        roles: ["network"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-06T07:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [],
+        capability_source: "server_census",
+        live_claims: [],
+        claim_quota: 0,
+        claim_quota_reached: false,
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "idle-relay" });
+    expect(screen.getByText("No job is leased to this agent right now.")).toBeInTheDocument();
+    expect(screen.getByText(/No per-agent quota is configured/)).toBeInTheDocument();
+  });
+
   it("renders heartbeat, service, and queue evidence in the selected console time zone", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {

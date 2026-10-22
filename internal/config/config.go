@@ -2320,6 +2320,12 @@ type AgentChannel struct {
 	// dropped rather than honored, so naming ca.issue here does not move
 	// CA-adjacent effects onto a host.
 	ClaimableJobKinds []string `json:"claimable_job_kinds,omitempty"`
+	// MaxLiveClaimsPerAgent caps how many leases ONE agent may hold at once (A66).
+	// The shared agent bulkhead bounds the channel; this bounds the blast radius
+	// of a single agent that claims everything and finishes nothing. At the cap
+	// the channel withholds new claims until a lease completes, fails or lapses.
+	// Zero, the default, means no per-agent quota.
+	MaxLiveClaimsPerAgent int `json:"max_live_claims_per_agent,omitempty"`
 }
 
 // HeartbeatIntervalDuration parses the agent channel's next-beat hint. An empty value
@@ -2795,6 +2801,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 	// is env-settable; this closes the gap rather than leaving a compose file to
 	// set a variable nothing reads.
 	setCSV(getenv, "TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS", &a.ClaimableJobKinds)
+	setInt(getenv, "TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT", &a.MaxLiveClaimsPerAgent)
 }
 
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
@@ -4023,6 +4030,9 @@ func validateServedSurfaces(c *Config) []error {
 		}
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
+		}
+		if c.AgentChannel.MaxLiveClaimsPerAgent < 0 {
+			errs = append(errs, errors.New("agent_channel.max_live_claims_per_agent must be zero (no quota) or a positive count"))
 		}
 		if public := c.AgentChannel.PublicAddress; public != "" {
 			host, port, err := net.SplitHostPort(public)

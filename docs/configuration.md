@@ -2164,6 +2164,7 @@ interrupts agent claims and application-certificate delivery.
 | `TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE` | `data/ca/agent-ca.crt` | Where the agent CA certificate is persisted, so an agent's pinned signer key does not change on restart. The shipped container sets `WORKDIR /`, so this default resolves to the persistent `/data/ca/agent-ca.crt`; Compose and Helm also set that absolute path explicitly. |
 | `TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL` | `30s` | Next-beat hint returned to agents. |
 | `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` | empty | Comma-separated, explicit allowlist of estate-touching jobs agents may claim. Empty fails closed. |
+| `TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT` | `0` (no quota) | Most leases one agent may hold at once. At the cap the channel withholds new claims for that agent until a lease completes, fails or lapses; the Agents page shows the held count against it. The shared agent bulkhead still bounds the channel as a whole. |
 
 **Which work agents may claim.** `agent_channel.claimable_job_kinds`, or its
 comma-separated `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` environment form,
@@ -2181,6 +2182,15 @@ doing it. Anything outside that list is dropped even if you write it here, so
 control plane's own effects. `GET /api/v1/operations/jobs` and the Operations
 console show what is waiting, what an agent holds, and how long the oldest job has
 waited.
+
+**How much one agent may hold.** `agent_channel.max_live_claims_per_agent`, or
+`TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT`, caps the unexpired leases a
+single agent may hold at once. At the cap the channel withholds new claims for
+that agent until one of its leases completes, fails or lapses; below it a claim
+batch is trimmed to the slots left. Zero, the default, sets no per-agent quota
+and leaves the shared agent bulkhead as the only cap. The Agents page shows each
+agent's live claims against the quota, so a withheld claim is visible there
+rather than inferred from a queue that stops moving.
 
 The evaluation Compose stack enables only `discovery.run`, `endpoint.verify`, and
 `connector.test`, matching the safe actions its blank-stack console offers. It does

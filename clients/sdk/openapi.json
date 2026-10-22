@@ -3671,6 +3671,12 @@
             ],
             "type": "string"
           },
+          "claim_quota": {
+            "type": "integer"
+          },
+          "claim_quota_reached": {
+            "type": "boolean"
+          },
           "discovery_capabilities": {
             "items": {
               "$ref": "#/components/schemas/AgentDiscoveryCapability"
@@ -3690,6 +3696,12 @@
           "last_seen_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "live_claims": {
+            "items": {
+              "$ref": "#/components/schemas/AgentLiveClaim"
+            },
+            "type": "array"
           },
           "name": {
             "type": "string"
@@ -4027,6 +4039,30 @@
         },
         "required": [
           "agents"
+        ],
+        "type": "object"
+      },
+      "AgentLiveClaim": {
+        "properties": {
+          "attempt": {
+            "type": "integer"
+          },
+          "job_id": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lease_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind",
+          "attempt",
+          "lease_expires_at"
         ],
         "type": "object"
       },

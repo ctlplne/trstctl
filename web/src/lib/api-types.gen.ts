@@ -890,11 +890,14 @@ export interface ActiveActiveIssuancePlan {
 export interface Agent {
   capabilities_reported_at?: string;
   capability_source: "reported" | "server_census";
+  claim_quota?: number;
+  claim_quota_reached?: boolean;
   discovery_capabilities: AgentDiscoveryCapability[];
   enrollment_proxy: AgentEnrollmentProxyStatus;
   id: string;
   inventory_report_path: string;
   last_seen_at?: string;
+  live_claims?: AgentLiveClaim[];
   name: string;
   offboard_reason?: string;
   offboarded_at?: string;
@@ -984,6 +987,13 @@ export interface AgentJobRedemptions {
 export interface AgentList {
   agents: Agent[];
   next_cursor?: string;
+}
+
+export interface AgentLiveClaim {
+  attempt: number;
+  job_id: number;
+  kind: string;
+  lease_expires_at: string;
 }
 
 export interface AgentOffboardRequest {

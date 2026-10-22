@@ -13951,6 +13951,30 @@ export const messages = {
     defaultMessage: "Missing flags:",
     description: "A62: prefix before the enabling flags a self-reported job kind lacks.",
   },
+  "agents.claims.heading": {
+    defaultMessage: "Live claims",
+    description: "A67: heading for the jobs this agent currently holds under a lease on the Agents detail pane.",
+  },
+  "agents.claims.none": {
+    defaultMessage: "No job is leased to this agent right now.",
+    description: "A67: empty live-claims list.",
+  },
+  "agents.claims.lease": {
+    defaultMessage: "job {job}, attempt {attempt}, lease until {until}",
+    description: "A67: one live claim's job id, attempt and lease expiry.",
+  },
+  "agents.claims.quota": {
+    defaultMessage: "Holding {held} of {quota} allowed at once (agent_channel.max_live_claims_per_agent).",
+    description: "A66: the per-agent claim quota beside the live claims.",
+  },
+  "agents.claims.noQuota": {
+    defaultMessage: "No per-agent quota is configured; the shared agent bulkhead is the only cap.",
+    description: "A66: shown when agent_channel.max_live_claims_per_agent is unset.",
+  },
+  "agents.claims.quotaReached": {
+    defaultMessage: "At quota: new claims are withheld until a lease completes or lapses.",
+    description: "A66: warning when the agent holds as many leases as the quota allows.",
+  },
   "agents.endpointDiscovery.heading": {
     defaultMessage: "Endpoint discovery",
     description: "Heading for the served endpoint discovery capability panel on an agent detail view.",

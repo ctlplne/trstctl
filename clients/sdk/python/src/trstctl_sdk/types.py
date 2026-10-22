@@ -1214,11 +1214,14 @@ Agent = TypedDict(
     {
         'capabilities_reported_at': str,
         'capability_source': str,
+        'claim_quota': int,
+        'claim_quota_reached': bool,
         'discovery_capabilities': list[dict[str, Any]],
         'enrollment_proxy': dict[str, Any],
         'id': str,
         'inventory_report_path': str,
         'last_seen_at': str,
+        'live_claims': list[dict[str, Any]],
         'name': str,
         'offboard_reason': str,
         'offboarded_at': str,
@@ -1344,6 +1347,17 @@ AgentList = TypedDict(
     {
         'agents': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+AgentLiveClaim = TypedDict(
+    'AgentLiveClaim',
+    {
+        'attempt': int,
+        'job_id': int,
+        'kind': str,
+        'lease_expires_at': str,
     },
     total=False,
 )

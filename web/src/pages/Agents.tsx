@@ -945,6 +945,33 @@ function AgentDetail({ agent }: { agent: Agent }) {
           </dd>
           {agent.roles?.some((role) => role === "host" || role === "network") ? (
             <>
+              <dt className="font-medium text-muted-foreground">{t("agents.claims.heading")}</dt>
+              <dd>
+                {(agent.live_claims ?? []).length === 0 ? (
+                  <span className="text-xs text-muted-foreground">{t("agents.claims.none")}</span>
+                ) : (
+                  <ul className="grid gap-1">
+                    {(agent.live_claims ?? []).map((claim) => (
+                      <li key={"claim-" + claim.job_id}>
+                        <span className="font-mono text-xs">{claim.kind}</span>{" "}
+                        <span className="text-xs text-muted-foreground">
+                          {t("agents.claims.lease", {
+                            job: String(claim.job_id),
+                            attempt: String(claim.attempt),
+                            until: claim.lease_expires_at ? formatAgentTime(claim.lease_expires_at) : "?",
+                          })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {(agent.claim_quota ?? 0) > 0
+                    ? t("agents.claims.quota", { held: String((agent.live_claims ?? []).length), quota: String(agent.claim_quota) })
+                    : t("agents.claims.noQuota")}
+                </span>
+                {agent.claim_quota_reached ? <span className="block text-xs text-status-warning">{t("agents.claims.quotaReached")}</span> : null}
+              </dd>
               <dt className="font-medium text-muted-foreground">{t("agents.executors.reportedHeading")}</dt>
               <dd>
                 {agent.capability_source === "reported" && agent.reported_capabilities ? (

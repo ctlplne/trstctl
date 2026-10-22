@@ -265,6 +265,8 @@ type agentService struct {
 	// agents may claim (A1). Empty means the fabric is served but hands out
 	// nothing — the honest default until an executor for a kind exists.
 	claimableJobKinds map[string]bool
+	// maxLiveClaims is the per-agent lease quota (A66); zero means none.
+	maxLiveClaims int
 	// outbox completes a job's delivery through the orchestrator so the dispatch
 	// lease predicate and the destination's circuit accounting both run (AN-6).
 	outbox *orchestrator.Outbox

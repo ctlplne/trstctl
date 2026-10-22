@@ -363,6 +363,9 @@ type Deps struct {
 	// dropped: an operator cannot move the control plane's own effects onto a host
 	// by naming them here.
 	AgentClaimableJobKinds []string
+	// AgentMaxLiveClaimsPerAgent caps the leases one agent may hold at once (A66);
+	// zero means no per-agent quota beyond the shared bulkhead.
+	AgentMaxLiveClaimsPerAgent int
 	// LifecycleLeafValidity is the reference leaf lifetime the CA calendar (H5)
 	// measures a parent authority's remaining horizon against, so it can say
 	// "this parent can no longer issue a full-length leaf" before anyone notices
@@ -1630,6 +1633,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithAgentEnrollment(ea), api.WithAgentEnrollmentConnection(d.AgentChannelPublicAddress, d.AgentChannelServerName),
 		api.WithAgentEnrollmentRenewal(d.EnableAgentChannel && s.agentCASigner != nil && len(s.agentCACertDER) > 0),
 		api.WithAgentHeartbeatInterval(d.AgentHeartbeatInterval),
+		api.WithAgentClaimQuota(d.AgentMaxLiveClaimsPerAgent),
 		api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),
@@ -2266,6 +2270,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// A1: nothing is claimable until an operator enables a kind AND an
 		// agent-side executor for it exists. Empty is the honest default.
 		claimableJobKinds: AgentClaimableJobKinds(d.AgentClaimableJobKinds),
+		maxLiveClaims:     d.AgentMaxLiveClaimsPerAgent,
 		outbox:            s.outbox,
 		// The redemption resolver seals with the SAME KEK and tenant custody the
 		// issuance dispatcher sealed with — constructed from the same Deps, so

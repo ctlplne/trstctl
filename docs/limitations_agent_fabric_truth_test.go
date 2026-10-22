@@ -24,6 +24,7 @@ func TestLimitationsAgentFabricClaimsStayCurrent(t *testing.T) {
 		"agent-side executors are not served",
 		"signed result receipts are not served",
 		"automatic rollback is not served",
+		"attribution of each live claim on the Agents page remain unserved",
 	} {
 		if strings.Contains(strings.ToLower(flat), strings.ToLower(stale)) {
 			t.Errorf("limitations.md retains obsolete AUD-23 claim %q", stale)
@@ -36,7 +37,8 @@ func TestLimitationsAgentFabricClaimsStayCurrent(t *testing.T) {
 		"Agent-signed result receipts are served and verified",
 		"Automatic rollback is served when a target explicitly sets",
 		"Aggregate waiting and claimed counts are served on Operations",
-		"Per-agent claim quotas beyond the shared agent bulkhead and attribution of each live claim on the Agents page remain unserved",
+		"Each agent's live claims are attributed on the Agents page and in `GET /api/v1/agents`",
+		"`agent_channel.max_live_claims_per_agent` caps how many leases one agent may hold at once",
 	} {
 		if !strings.Contains(flat, current) {
 			t.Errorf("limitations.md does not state the current AUD-23 boundary %q", current)

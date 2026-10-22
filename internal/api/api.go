@@ -89,6 +89,7 @@ type API struct {
 	agentConnection         agentEnrollmentConnection
 	agentRenewalReady       bool
 	agentHeartbeatInterval  time.Duration
+	agentClaimQuota         int
 	agentEnroller           BootstrapEnroller
 	agentEnrollmentObserver func(result string)
 	rateLimiter             RateLimiter
@@ -230,6 +231,7 @@ type config struct {
 	agentConnection             agentEnrollmentConnection
 	agentRenewalReady           bool
 	agentHeartbeatInterval      time.Duration
+	agentClaimQuota             int
 	agentEnroller               BootstrapEnroller
 	agentEnrollmentObserver     func(result string)
 	rateLimiter                 RateLimiter
@@ -546,6 +548,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		agentConnection:             cfg.agentConnection,
 		agentRenewalReady:           cfg.agentRenewalReady,
 		agentHeartbeatInterval:      cfg.agentHeartbeatInterval,
+		agentClaimQuota:             cfg.agentClaimQuota,
 		agentEnroller:               cfg.agentEnroller,
 		agentEnrollmentObserver:     cfg.agentEnrollmentObserver,
 		rateLimiter:                 cfg.rateLimiter,

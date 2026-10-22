@@ -5425,8 +5425,13 @@ func componentSchemas() map[string]*Schema {
 		"capability_source":         {Type: "string", Enum: []string{"reported", "server_census"}},
 		"capabilities_reported_at":  timestamp(),
 		"reported_executor_version": str(),
-		"workload_api":              ref("AgentWorkloadAPIStatus"),
-		"enrollment_proxy":          ref("AgentEnrollmentProxyStatus"),
+		// A66/A67: the jobs this agent holds under an unexpired lease and the
+		// per-agent quota (0 = none) the channel enforces on new claims.
+		"live_claims":         {Type: "array", Items: ref("AgentLiveClaim")},
+		"claim_quota":         {Type: "integer"},
+		"claim_quota_reached": {Type: "boolean"},
+		"workload_api":        ref("AgentWorkloadAPIStatus"),
+		"enrollment_proxy":    ref("AgentEnrollmentProxyStatus"),
 	}, "id", "name", "status", "presence", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "capability_source", "workload_api", "enrollment_proxy")
 	// B3: whether this host serves the SPIFFE Workload API for its own workloads.
 	agentWorkloadAPIStatus := object(map[string]*Schema{
@@ -5461,6 +5466,12 @@ func componentSchemas() map[string]*Schema {
 		"missing_flags": {Type: "array", Items: str()},
 		"enabled":       {Type: "boolean"},
 	}, "kind", "connectors", "missing_flags", "enabled")
+	agentLiveClaim := object(map[string]*Schema{
+		"job_id":           {Type: "integer"},
+		"kind":             str(),
+		"attempt":          {Type: "integer"},
+		"lease_expires_at": timestamp(),
+	}, "job_id", "kind", "attempt", "lease_expires_at")
 	agentList := object(map[string]*Schema{
 		"agents":      {Type: "array", Items: ref("Agent")},
 		"next_cursor": str(),
@@ -6695,6 +6706,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentEnrollmentProxyStatus":               agentEnrollmentProxyStatus,
 		"AgentRelayCapability":                     agentRelayCapability,
 		"AgentReportedCapability":                  agentReportedCapability,
+		"AgentLiveClaim":                           agentLiveClaim,
 		"AgentList":                                agentList,
 		"EnrollmentTokenRequest":                   enrollmentTokenReq,
 		"EnrollmentToken":                          enrollmentToken,

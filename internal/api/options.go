@@ -137,6 +137,13 @@ func WithAgentHeartbeatInterval(interval time.Duration) Option {
 	return func(c *config) { c.agentHeartbeatInterval = interval }
 }
 
+// WithAgentClaimQuota gives the REST read model the per-agent lease quota the
+// channel enforces (A66), so the Agents page can say "holding N of M" and why a
+// claim is withheld. Zero means no quota.
+func WithAgentClaimQuota(quota int) Option {
+	return func(c *config) { c.agentClaimQuota = quota }
+}
+
 // WithAgentEnrollmentObserver records aggregate bootstrap-enrollment outcomes for
 // fleet rollout observability. The observer receives a low-cardinality result
 // label ("success" or "failed") and must not depend on per-agent identifiers.

@@ -207,6 +207,24 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 	// vantage said "connector.deploy may go to either role", and the per-row
 	// demand stamped at enqueue says which role THIS deploy needs. Both gates
 	// read the same certificate.
+	// A66: a per-agent quota caps what one agent may hold at once. The shared
+	// bulkhead bounds the channel; this bounds the blast radius of one agent
+	// that claims everything and finishes nothing. Zero means no quota, and the
+	// Agents page shows the held count against the quota so a withheld claim is
+	// visible rather than a mystery.
+	if a.maxLiveClaims > 0 {
+		held, err := a.store.CountLiveAgentClaims(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), time.Now().UTC())
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "live claim count is unavailable")
+		}
+		remaining := a.maxLiveClaims - held
+		if remaining <= 0 {
+			return &transport.ClaimJobsResponse{NextPollSeconds: agentJobPollSeconds}, nil
+		}
+		if remaining < limit {
+			limit = remaining
+		}
+	}
 	claimed, err := a.store.ClaimAgentJobs(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), kinds, info.Roles, limit, lease, time.Now().UTC())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "claim agent jobs: %v", err)

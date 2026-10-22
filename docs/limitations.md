@@ -2398,9 +2398,14 @@ the estate.
 
 Agent-signed result receipts are served and verified against the same certificate
 that authenticated the mTLS channel. Aggregate waiting and claimed counts are served
-on Operations, together with verified/refused receipt totals. Per-agent claim quotas
-beyond the shared agent bulkhead and attribution of each live claim on the Agents page
-remain unserved; aggregate queue health must not be mistaken for that missing drill-down.
+on Operations, together with verified/refused receipt totals. Each agent's live
+claims are attributed on the Agents page and in `GET /api/v1/agents` (`live_claims`:
+job id, kind, attempt and lease expiry, read from the ledger's unexpired leases, never
+a payload). `agent_channel.max_live_claims_per_agent` caps how many leases one agent
+may hold at once; at the cap the channel withholds new claims until a lease completes,
+fails or lapses, and the Agents page says so (`claim_quota`, `claim_quota_reached`).
+Unset is the shipped default and means the shared agent bulkhead is the only cap: the
+quota is an operator choice, not something the server infers from fleet size.
 
 ### Served status vocabulary: what each status claims
 

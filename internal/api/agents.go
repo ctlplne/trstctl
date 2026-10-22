@@ -126,7 +126,15 @@ type agentResponse struct {
 	CapabilitiesReportedAt  *string `json:"capabilities_reported_at,omitempty"`
 	ReportedExecutorVersion string  `json:"reported_executor_version,omitempty"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
-	WorkloadAPI agentWorkloadAPIStatus `json:"workload_api"`
+	// LiveClaims are the jobs this agent holds under an unexpired lease (A67):
+	// job id, kind, attempt and lease expiry from the ledger, never a payload.
+	LiveClaims []agentLiveClaimResponse `json:"live_claims"`
+	// ClaimQuota is the per-agent lease cap the channel enforces (A66); zero
+	// means none beyond the shared bulkhead. ClaimQuotaReached says new claims
+	// are being withheld until a lease completes, fails or lapses.
+	ClaimQuota        int                    `json:"claim_quota"`
+	ClaimQuotaReached bool                   `json:"claim_quota_reached"`
+	WorkloadAPI       agentWorkloadAPIStatus `json:"workload_api"`
 	// EnrollmentProxy is this certificate-bound relay's measured A4 topology
 	// and health. It is evidence only; no capability is granted from the report.
 	EnrollmentProxy agentEnrollmentProxyStatus `json:"enrollment_proxy"`
@@ -441,6 +449,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		RoleSource:            agentRoleSourceCertificate,
 		RelayCapabilities:     agentRelayCapabilities(a.Roles),
 		ReportedCapabilities:  agentReportedCapabilities(a),
+		LiveClaims:            []agentLiveClaimResponse{},
 		CapabilitySource:      agentCapabilitySourceServerCensus,
 		WorkloadAPI:           agentWorkloadAPIFor(a),
 		EnrollmentProxy:       agentEnrollmentProxyFor(a),
@@ -477,7 +486,41 @@ func (a *API) agentResponse(ag store.Agent) agentResponse {
 }
 
 func (a *API) agentResponseAt(ag store.Agent, evaluatedAt time.Time) agentResponse {
-	return toAgentResponseAt(ag, evaluatedAt, a.agentHeartbeatInterval)
+	out := toAgentResponseAt(ag, evaluatedAt, a.agentHeartbeatInterval)
+	out.ClaimQuota = a.agentClaimQuota
+	return out
+}
+
+// agentLiveClaimResponse is one lease an agent holds right now (A67).
+type agentLiveClaimResponse struct {
+	JobID          int64  `json:"job_id"`
+	Kind           string `json:"kind"`
+	Attempt        int    `json:"attempt"`
+	LeaseExpiresAt string `json:"lease_expires_at"`
+}
+
+// attachLiveClaims fills each agent's live claims from the ledger's unexpired
+// leases (A67) and says whether the per-agent quota (A66) is reached.
+func (a *API) attachLiveClaims(ctx context.Context, tenantID string, items []agentResponse, now time.Time) error {
+	if len(items) == 0 {
+		return nil
+	}
+	held, err := a.store.LiveAgentClaims(ctx, tenantID, now)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		claims := make([]agentLiveClaimResponse, 0, len(held[items[i].ID]))
+		for _, claim := range held[items[i].ID] {
+			claims = append(claims, agentLiveClaimResponse{
+				JobID: claim.JobID, Kind: claim.Destination, Attempt: claim.Attempt,
+				LeaseExpiresAt: claim.ClaimExpiresAt.UTC().Format(time.RFC3339),
+			})
+		}
+		items[i].LiveClaims = claims
+		items[i].ClaimQuotaReached = a.agentClaimQuota > 0 && len(claims) >= a.agentClaimQuota
+	}
+	return nil
 }
 
 // listAgents returns the tenant's in-network agents (F3). The web first-run
@@ -513,6 +556,10 @@ func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
 	evaluatedAt := time.Now().UTC()
 	for _, ag := range agents {
 		items = append(items, a.agentResponseAt(ag, evaluatedAt))
+	}
+	if err := a.attachLiveClaims(r.Context(), tenantID, items, evaluatedAt); err != nil {
+		a.writeError(w, err)
+		return
 	}
 	next := ""
 	if len(agents) == limit {
