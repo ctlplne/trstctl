@@ -1512,21 +1512,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	if err != nil {
 		return nil, nil, err
 	}
-	if scimConfig != nil && scimConfig.NewWriteback != nil {
-		// A73: tokens that name a directory endpoint write local member
-		// changes back; the orchestrator queues the rows, the licensed
-		// worker delivers them.
-		var tenants []string
-		for _, tok := range scimConfig.Tokens {
-			if strings.TrimSpace(tok.WritebackEndpoint) != "" {
-				tenants = append(tenants, tok.TenantID)
-			}
-		}
-		if len(tenants) > 0 {
-			s.orch.EnableSCIMWriteback(tenants)
-			s.scimWriteback = scimConfig.NewWriteback(api.SCIMWritebackDeps{Store: d.Store, Orchestrator: s.orch, HTTPClient: d.AuthHTTPClient})
-		}
-	}
+	s.attachSCIMWriteback(d, scimConfig)
 	defaults = append(defaults, authOptions...)
 	// Effect-free review evidence is a platform primitive, not a native-secret-
 	// store feature. Wire the KEK's keyed-digest seam even when that optional API
@@ -4462,4 +4448,24 @@ func (s *Server) recordRenewalDeferral(ctx context.Context, now time.Time, reaso
 			Type: "lifecycle.renewal.deferred", TenantID: tenant, Data: payload,
 		})
 	}
+}
+
+// attachSCIMWriteback wires directory writeback (A73): tokens that name a
+// directory endpoint write local member changes back; the orchestrator queues
+// the rows, the licensed worker delivers them.
+func (s *Server) attachSCIMWriteback(d Deps, scimConfig *api.SCIMConfig) {
+	if scimConfig == nil || scimConfig.NewWriteback == nil {
+		return
+	}
+	var tenants []string
+	for _, tok := range scimConfig.Tokens {
+		if strings.TrimSpace(tok.WritebackEndpoint) != "" {
+			tenants = append(tenants, tok.TenantID)
+		}
+	}
+	if len(tenants) == 0 {
+		return
+	}
+	s.orch.EnableSCIMWriteback(tenants)
+	s.scimWriteback = scimConfig.NewWriteback(api.SCIMWritebackDeps{Store: d.Store, Orchestrator: s.orch, HTTPClient: d.AuthHTTPClient})
 }

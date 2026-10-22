@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -18,6 +19,7 @@ import (
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -31,6 +33,10 @@ type scimWritebackTarget struct {
 	Endpoint         string
 	SubjectAttribute string
 	bearer           *secret.Buffer
+	// client is the SSRF-bounded outbound client for this endpoint: the
+	// safe client for a real directory, the loopback client only for the
+	// loopback endpoints configuration validation admits.
+	client *http.Client
 }
 
 // scimWriteback delivers scim.writeback rows (A73): it reads the member's
@@ -42,17 +48,39 @@ type scimWritebackTarget struct {
 type scimWriteback struct {
 	deps    api.SCIMWritebackDeps
 	targets map[string]scimWritebackTarget
-	client  *http.Client
 }
 
-const scimWritebackMaxResponse = 1 << 20
+const (
+	scimWritebackMaxResponse = 1 << 20
+	scimWritebackTimeout     = 15 * time.Second
+)
 
 func newSCIMWriteback(deps api.SCIMWritebackDeps, targets map[string]scimWritebackTarget) *scimWriteback {
-	client := deps.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
+	for tenantID, target := range targets {
+		switch {
+		case deps.HTTPClient != nil:
+			target.client = deps.HTTPClient
+		case scimWritebackLoopback(target.Endpoint):
+			target.client = netsec.InsecureLoopbackClient(scimWritebackTimeout)
+		default:
+			target.client = netsec.SafeClient(scimWritebackTimeout)
+		}
+		targets[tenantID] = target
 	}
-	return &scimWriteback{deps: deps, targets: targets, client: client}
+	return &scimWriteback{deps: deps, targets: targets}
+}
+
+func scimWritebackLoopback(endpoint string) bool {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // scimWritebackRefused is a definite refusal: retrying would not change it.
@@ -206,7 +234,7 @@ func (w *scimWriteback) call(ctx context.Context, target scimWritebackTarget, me
 	if body != nil {
 		req.Header.Set("Content-Type", scim.ContentType)
 	}
-	resp, err := w.client.Do(req)
+	resp, err := target.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("enterpriseauth: directory %s %s: transport failure", method, path)
 	}

@@ -97,19 +97,7 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 		if err != nil {
 			return api.LifecycleAutomationPlan{}, err
 		}
-		source := "not_due"
-		explanation := "No renewal is due yet."
-		switch {
-		case strings.HasPrefix(reason, lifecycleUpstreamARIRenewalReasonPrefix):
-			source = "ari"
-			explanation = "The upstream CA renewal window is open."
-		case strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix):
-			source = "ari"
-			explanation = "The CA renewal window is open."
-		case strings.HasPrefix(reason, lifecycleFixedRenewalReasonPrefix):
-			source = "fixed_deadline"
-			explanation = "The configured renewal deadline has arrived."
-		}
+		source, explanation := lifecycleRenewalSourceFor(reason)
 		blockers := []string{}
 		if row.DeliveryUnverified {
 			due = false
@@ -161,4 +149,18 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 		})
 	}
 	return plan, nil
+}
+
+// lifecycleRenewalSourceFor names the renewal source and its operator-facing
+// explanation for a sweep reason; an empty reason is not due.
+func lifecycleRenewalSourceFor(reason string) (source, explanation string) {
+	switch {
+	case strings.HasPrefix(reason, lifecycleUpstreamARIRenewalReasonPrefix):
+		return "ari", "The upstream CA renewal window is open."
+	case strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix):
+		return "ari", "The CA renewal window is open."
+	case strings.HasPrefix(reason, lifecycleFixedRenewalReasonPrefix):
+		return "fixed_deadline", "The configured renewal deadline has arrived."
+	}
+	return "not_due", "No renewal is due yet."
 }
