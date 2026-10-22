@@ -260,7 +260,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Plugin isolation | First-party runs trusted in-process; third-party is WASM-sandboxed and signature-verified | [Plugin isolation](#plugin-isolation-first-party-in-process-third-party-sandboxed) |
 | Protocols: ACME/EST/SCEP/CMP/SPIFFE/SSH/TSA | Served end to end, each behind its own enable flag | [Protocols](#protocols) |
 | Revocation (OCSP/CRL) | Served, signed by the isolated signer | [Revocation](#revocation) |
-| Single sign-on detail | Served; Kerberos/GSSAPI, NTLM, and SLO not yet implemented | [Single sign-on](#single-sign-on) |
+| Single sign-on detail | Served, including SAML single logout on the tenant plane; Kerberos/GSSAPI and NTLM not yet implemented | [Single sign-on](#single-sign-on) |
 | CA key custody / HSM / BYOK | Sealed local key store by default; six of six HSM/KMS backends served | [CA key custody](#ca-key-custody) |
 | Post-quantum cryptography | ML-DSA/ML-KEM/SLH-DSA available; compatibility-bounded proofs | [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms) |
 | PCAS KEM data re-wrap | Not built; the served route prepares successor keys but cannot migrate ciphertext | [PCAS KEM data re-wrap](#pcas-kem-data-re-wrap-not-built) |
@@ -4934,7 +4934,19 @@ shared by replicas), advertises its certificate in the SP metadata with
 `use="encryption"`, and decrypts `EncryptedAssertion` elements inside the
 cryptography boundary; an IdP that honors the metadata then never sends the
 assertion in the clear. Without the file, assertions are accepted in plaintext
-as before. It does not yet expose SLO/logout propagation. LDAP / Active Directory serves username/password bind at
+as before. Single logout is served (`auth.saml.single_logout` with
+`auth.saml.slo_url`): a sign-out from trstctl revokes the local session and
+then hands the browser a signed LogoutRequest for the IdP's SingleLogoutService
+(the console follows the `logout_url` that `POST /auth/logout` returns); the
+IdP's LogoutResponse at `/auth/saml/slo` must answer that browser's own
+request. An IdP-initiated LogoutRequest at the same route is verified against
+the IdP metadata (signature, destination, issuer, freshness), every session of
+that NameID in the tenant the SAML mapping resolves is revoked, and the IdP
+receives a Success LogoutResponse; a NameID the mapping cannot place in a
+tenant signs nothing out and is refused, and a tenant SAML login that
+overrides the subject with `subject_attribute` is matched by that subject, so
+an IdP that names only the NameID then ends nothing. The provider plane's SAML
+sign-in has no single logout yet. LDAP / Active Directory serves username/password bind at
 `POST /auth/ldap/login`, supports direct-bind or service-account user search plus
 group search, and maps directory groups to tenant roles. It does not yet implement
 Kerberos/GSSAPI, NTLM, password-change flows, nested-group expansion, or directory

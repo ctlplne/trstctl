@@ -19,14 +19,19 @@ import (
 
 // Claims are the verified, relevant fields of an OIDC id_token.
 type Claims struct {
-	Subject   string
-	SID       string
-	Email     string
-	Issuer    string
-	Audience  string
-	Nonce     string
-	ExpiresAt int64
-	IssuedAt  int64
+	Subject string
+	SID     string
+	// SAMLNameID and SAMLSessionIndex come only from a verified SAML assertion
+	// (A78): the NameID even when subject_attribute overrides Subject, and the
+	// AuthnStatement's SessionIndex, so sign-out can name the IdP session.
+	SAMLNameID       string
+	SAMLSessionIndex string
+	Email            string
+	Issuer           string
+	Audience         string
+	Nonce            string
+	ExpiresAt        int64
+	IssuedAt         int64
 	// Tenant is the value of the verifier's configured tenant claim
 	// (OIDCVerifier.TenantClaim), extracted from the id_token during Verify, or ""
 	// when no tenant claim is configured or the token does not carry it. It is the

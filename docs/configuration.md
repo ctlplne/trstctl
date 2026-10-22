@@ -1175,6 +1175,10 @@ auth:
     # Optional: sealed RSA identity advertised for assertion encryption; created on
     # first start (needs secrets.kek_file). Omit to accept plaintext assertions.
     sp_key_file: /var/lib/trstctl/saml-sp-encryption.sealed
+    # Optional single logout: the IdP metadata must declare a SingleLogoutService
+    # (HTTP-Redirect); register slo_url with the IdP as this SP's logout service.
+    single_logout: true
+    slo_url: https://trstctl.example.com/auth/saml/slo
     session_secret_file: /var/lib/trstctl/saml-session.secret
     tenant_claim: tenant
     groups_claim: groups

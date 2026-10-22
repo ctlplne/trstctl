@@ -1725,10 +1725,16 @@ export function firstCertificateIdentityRequest(input: Omit<IssueCertificateInpu
  * request inputs are the OpenAPI-generated request bodies (OwnerRequest,
  * IssuerRequest, IdentityRequest, TransitionRequest) so a mutation cannot send a
  * field the server does not accept — the same contract guarantee as the responses. */
+/** LogoutResult is returned when the identity provider must also end its
+ * session (SAML single logout): the browser follows logout_url. */
+export interface LogoutResult {
+  logout_url?: string;
+}
+
 export interface Api {
   me(): Promise<Me>;
   authMethods(): Promise<AuthMethods>;
-  logout(): Promise<void>;
+  logout(): Promise<LogoutResult | void>;
   /** Server-derived product posture for the current principal. Source paths and QA evidence never cross this boundary. */
   capabilities(): Promise<CapabilityView>;
   editions(): Promise<EditionsInfo>;

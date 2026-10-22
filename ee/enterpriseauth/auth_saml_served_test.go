@@ -3,8 +3,12 @@
 package enterpriseauth
 
 import (
+	"bytes"
+	"compress/flate"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"html"
@@ -20,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
 	crewjamsamlsp "github.com/crewjam/saml/samlsp"
 
@@ -222,6 +227,100 @@ type mockSAMLIdP struct {
 	// binding (A76), keyed by the opaque artifact the browser carried.
 	artifacts map[string][]byte
 	resolves  int
+	key       any
+	cert      *x509.Certificate
+	// logoutRequests counts the SP-initiated LogoutRequests the IdP consumed
+	// (A78); lastLogoutNameID is the NameID the last one named.
+	logoutRequests   int
+	lastLogoutNameID string
+}
+
+// serveSLO is the IdP's single logout service (A78): it consumes the SP's
+// redirect-binding LogoutRequest and answers with a signed LogoutResponse
+// redirect to the SP's SLO URL, as a real IdP would.
+func (m *mockSAMLIdP) serveSLO(w http.ResponseWriter, r *http.Request) {
+	raw, err := base64.StdEncoding.DecodeString(r.URL.Query().Get("SAMLRequest"))
+	if err != nil {
+		http.Error(w, "bad SAMLRequest", http.StatusBadRequest)
+		return
+	}
+	inflated, err := io.ReadAll(flate.NewReader(bytes.NewReader(raw)))
+	if err != nil {
+		http.Error(w, "bad SAMLRequest", http.StatusBadRequest)
+		return
+	}
+	var req saml.LogoutRequest
+	if err := xml.Unmarshal(inflated, &req); err != nil || req.NameID == nil {
+		http.Error(w, "bad LogoutRequest", http.StatusBadRequest)
+		return
+	}
+	m.logoutRequests++
+	m.lastLogoutNameID = req.NameID.Value
+	sloURL := m.spSLOURL()
+	resp := saml.LogoutResponse{ID: fmt.Sprintf("id-idp-logout-response-%d", m.logoutRequests), InResponseTo: req.ID, Version: "2.0",
+		IssueInstant: time.Now().UTC(), Destination: sloURL, Issuer: &saml.Issuer{Value: m.idp.Metadata().EntityID},
+		Status: saml.Status{StatusCode: saml.StatusCode{Value: saml.StatusSuccess}}}
+	doc := etree.NewDocument()
+	doc.SetRoot(resp.Element())
+	unsigned, err := doc.WriteToBytes()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	signed, err := samltest.SignEnvelopedXML(m.key, m.cert, unsigned)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// The redirect binding carries DEFLATE-compressed, base64-encoded XML.
+	var deflated bytes.Buffer
+	compressor, err := flate.NewWriter(&deflated, flate.BestCompression)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if _, err := compressor.Write(signed); err != nil || compressor.Close() != nil {
+		http.Error(w, "deflate", http.StatusInternalServerError)
+		return
+	}
+	query := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(deflated.Bytes())}}
+	if rs := r.URL.Query().Get("RelayState"); rs != "" {
+		query.Set("RelayState", rs)
+	}
+	http.Redirect(w, r, sloURL+"?"+query.Encode(), http.StatusFound) // #nosec G710 -- test IdP redirects to the SP's own SLO URL read from its metadata (CWE-601)
+}
+
+// spSLOURL reads the SP's SingleLogoutService location from its live metadata.
+func (m *mockSAMLIdP) spSLOURL() string {
+	descriptor, err := m.GetServiceProvider(nil, m.spEntityID)
+	if err != nil {
+		return ""
+	}
+	for _, sp := range descriptor.SPSSODescriptors {
+		for _, slo := range sp.SingleLogoutServices {
+			return slo.Location
+		}
+	}
+	return ""
+}
+
+// idpInitiatedLogoutForm builds the signed LogoutRequest a real IdP posts to
+// the SP's SLO URL when the user signs out elsewhere (A78).
+func (m *mockSAMLIdP) idpInitiatedLogoutForm(t *testing.T, nameID string) (string, url.Values) {
+	t.Helper()
+	sloURL := m.spSLOURL()
+	req := saml.LogoutRequest{ID: "id-idp-initiated-logout-1", Version: "2.0", IssueInstant: time.Now().UTC(), Destination: sloURL,
+		Issuer: &saml.Issuer{Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:entity", Value: m.idp.Metadata().EntityID},
+		NameID: &saml.NameID{Format: string(saml.EmailAddressNameIDFormat), Value: nameID}}
+	raw, err := req.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed, err := samltest.SignEnvelopedXML(m.key, m.cert, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sloURL, url.Values{"SAMLRequest": {base64.StdEncoding.EncodeToString(signed)}, "RelayState": {"idp-rs"}}
 }
 
 // serveSSO answers an AuthnRequest the way the IdP library does for the POST
@@ -311,6 +410,8 @@ func newMockSAMLIdP(t *testing.T) *mockSAMLIdP {
 			m.serveSSO(w, r)
 		case "/artifact":
 			m.serveArtifactResolve(w, r)
+		case "/slo":
+			m.serveSLO(w, r)
 		case "/idp-init":
 			m.idp.ServeIDPInitiated(w, r, m.spEntityID, "")
 		default:
@@ -320,11 +421,13 @@ func newMockSAMLIdP(t *testing.T) *mockSAMLIdP {
 	t.Cleanup(m.srv.Close)
 	metadataURL := mustParseSAMLURL(t, m.srv.URL+"/metadata")
 	ssoURL := mustParseSAMLURL(t, m.srv.URL+"/sso")
+	m.key, m.cert = key, cert
 	m.idp = &saml.IdentityProvider{
 		Certificate:             cert,
 		Key:                     key,
 		MetadataURL:             metadataURL,
 		SSOURL:                  ssoURL,
+		LogoutURL:               mustParseSAMLURL(t, m.srv.URL+"/slo"),
 		ServiceProviderProvider: m,
 		SessionProvider:         m,
 	}
@@ -616,4 +719,154 @@ func TestServedSAMLEncryptedAssertionIsDecryptedBehindTheBoundary(t *testing.T) 
 		t.Fatalf("encrypted-assertion login landed on %q, want /", got)
 	}
 	assertAuthMeTenant(t, baseURL, jar, tenantA)
+}
+
+// A78: a sign-out from trstctl also ends the IdP session (SP-initiated single
+// logout), and a LogoutRequest from the IdP ends the user's trstctl sessions
+// (IdP-initiated), each answered the way the SAML profile expects.
+func TestServedSAMLSingleLogoutPropagatesBothWays(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	const tenantA = "11111111-1111-1111-1111-111111111111"
+	dsn := serverTestPostgresDSN(t)
+	st, err := store.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	resetServerTestStore(t, st)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	baseURL := "http://" + ln.Addr().String()
+	idp := newMockSAMLIdP(t)
+	samlCfg := config.SAML{
+		Enabled: true, EntityID: baseURL + "/auth/saml/metadata", MetadataURL: baseURL + "/auth/saml/metadata",
+		ACSURL: baseURL + "/auth/saml/acs", IDPMetadataXML: idp.metadataXML(t),
+		SingleLogout: true, SLOURL: baseURL + "/auth/saml/slo",
+		SessionSecretFile: t.TempDir() + "/session.secret", SessionTTL: "1h", LoginRedirect: "/",
+		TenantClaim: "tenant", GroupsClaim: "groups", EmailAttribute: "email",
+		TenantMappings: []config.TenantMapping{{Subject: "alice@example.test", TenantID: tenantA, Roles: []string{"admin"}}},
+	}
+	idp.spEntityID = samlCfg.EntityID
+	idp.spMetadataURL = samlCfg.MetadataURL
+	idp.registerUser("alice", "alice@example.test", "alice@example.test", tenantA, []string{"admins"})
+	srv := buildSAMLServer(t, ctx, dsn, samlCfg)
+	defer func() { _ = srv.Shutdown(context.Background()) }()
+	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = httpSrv.Serve(ln) }()
+	defer func() { _ = httpSrv.Close() }()
+
+	resp, err := http.Get(baseURL + "/auth/saml/metadata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(metadata), "SingleLogoutService") {
+		t.Fatalf("SP metadata declares no SingleLogoutService: %s", metadata)
+	}
+
+	// SP-initiated: sign in, sign out, follow the IdP logout, land on the SP.
+	jar, _ := cookiejar.New(nil)
+	idp.nextUser = "alice"
+	assertSAMLSPInitiatedSession(t, baseURL, jar, tenantA)
+	client := noFollowClient(jar)
+	logoutReq, _ := http.NewRequest(http.MethodPost, baseURL+"/auth/logout", nil)
+	logoutReq.Header.Set("X-CSRF-Token", csrfCookieValue(t, jar, baseURL))
+	resp, err = client.Do(logoutReq)
+	if err != nil {
+		t.Fatalf("POST /auth/logout: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	var logout struct {
+		LogoutURL string `json:"logout_url"`
+	}
+	if resp.StatusCode != http.StatusOK || json.Unmarshal(body, &logout) != nil || !strings.HasPrefix(logout.LogoutURL, idp.srv.URL+"/slo?") {
+		t.Fatalf("POST /auth/logout for a SAML session = %d %s, want 200 with the IdP logout_url", resp.StatusCode, body)
+	}
+	assertAuthMeUnauthorized(t, baseURL, jar)
+	resp, err = client.Get(logout.LogoutURL)
+	if err != nil {
+		t.Fatalf("GET IdP SLO: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || idp.logoutRequests != 1 || idp.lastLogoutNameID != "alice@example.test" {
+		t.Fatalf("IdP SLO = %d (requests %d, nameID %q), want the SP's LogoutRequest consumed", resp.StatusCode, idp.logoutRequests, idp.lastLogoutNameID)
+	}
+	back := resp.Header.Get("Location")
+	resp, err = client.Get(back)
+	if err != nil {
+		t.Fatalf("GET SP SLO with the LogoutResponse: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/" {
+		t.Fatalf("SP SLO with the IdP's LogoutResponse = %d → %q, want 302 to the login page", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	// A LogoutResponse replayed to a browser that started no sign-out is refused.
+	fresh, _ := cookiejar.New(nil)
+	resp, err = noFollowClient(fresh).Get(back)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("replayed LogoutResponse without the browser's logout context = %d, want 400", resp.StatusCode)
+	}
+
+	// IdP-initiated: a live session ends when the IdP posts a LogoutRequest.
+	jar2, _ := cookiejar.New(nil)
+	idp.nextUser = "alice"
+	assertSAMLSPInitiatedSession(t, baseURL, jar2, tenantA)
+	sloURL, form := idp.idpInitiatedLogoutForm(t, "alice@example.test")
+	resp, err = noFollowClient(nil).PostForm(sloURL, form)
+	if err != nil {
+		t.Fatalf("POST IdP-initiated LogoutRequest: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || !strings.HasPrefix(resp.Header.Get("Location"), idp.srv.URL+"/slo?") || !strings.Contains(resp.Header.Get("Location"), "SAMLResponse=") {
+		t.Fatalf("IdP-initiated logout = %d → %q, want a LogoutResponse redirect to the IdP", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	assertAuthMeUnauthorized(t, baseURL, jar2)
+	// A NameID the mapping cannot place in a tenant signs nothing out.
+	sloURL, form = idp.idpInitiatedLogoutForm(t, "nobody@example.test")
+	resp, err = noFollowClient(nil).PostForm(sloURL, form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("IdP-initiated logout for an unmapped user = %d, want 403", resp.StatusCode)
+	}
+}
+
+func csrfCookieValue(t *testing.T, jar http.CookieJar, baseURL string) string {
+	t.Helper()
+	u, _ := url.Parse(baseURL)
+	for _, c := range jar.Cookies(u) {
+		if strings.Contains(c.Name, "csrf") {
+			return c.Value
+		}
+	}
+	t.Fatal("no CSRF cookie after login")
+	return ""
+}
+
+func assertAuthMeUnauthorized(t *testing.T, baseURL string, jar http.CookieJar) {
+	t.Helper()
+	resp, err := (&http.Client{Jar: jar}).Get(baseURL + "/auth/me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("GET /auth/me after logout = %d, want 401", resp.StatusCode)
+	}
 }

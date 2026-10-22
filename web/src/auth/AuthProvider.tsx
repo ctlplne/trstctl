@@ -120,7 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setState((current) => ({ ...current, error: null }));
     try {
-      await api.logout();
+      const result = await api.logout();
+      if (result && typeof result === "object" && result.logout_url) {
+        // SAML single logout: the local session is already revoked; the IdP
+        // session ends when the browser follows its logout service.
+        window.location.assign(result.logout_url);
+        return;
+      }
       bindFirstCertificatePrincipal(null);
       setAuthenticatedBrowserTenantID(null);
       setState((current) => ({

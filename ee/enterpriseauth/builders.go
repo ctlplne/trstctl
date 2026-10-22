@@ -60,6 +60,8 @@ func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byt
 		NewArtifactResolver: samlArtifactResolver,
 		EncryptionCertDER:   encryptionCertDER,
 		EncryptionKeyPKCS8:  encryptionKeyPKCS8,
+		SingleLogout:        s.SingleLogout,
+		SLOURL:              s.SLOURL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("server: configure SAML SP: %w", err)
@@ -97,12 +99,17 @@ func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byt
 			}
 			return redirect.URL, redirect.RequestID, nil
 		},
-		VerifySAMLResponse: verifier.Verify,
-		ResolveSAMLTenant:  mapper.ResolveTenant,
-		SAMLMetadata:       verifier.MetadataXML,
-		Sessions:           sessions,
-		LoginRedirect:      s.LoginRedirect,
-		Secure:             secure,
+		VerifySAMLResponse:         verifier.Verify,
+		ResolveSAMLTenant:          mapper.ResolveTenant,
+		SAMLSingleLogout:           s.SingleLogout,
+		SAMLLogoutRedirect:         verifier.LogoutRedirect,
+		VerifySAMLLogoutResponse:   verifier.VerifyLogoutResponse,
+		VerifySAMLLogoutRequest:    verifier.VerifyLogoutRequest,
+		SAMLLogoutResponseRedirect: verifier.LogoutResponseRedirect,
+		SAMLMetadata:               verifier.MetadataXML,
+		Sessions:                   sessions,
+		LoginRedirect:              s.LoginRedirect,
+		Secure:                     secure,
 	}
 	return cfg, nil
 }

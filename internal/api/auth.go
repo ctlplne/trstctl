@@ -129,6 +129,16 @@ type AuthConfig struct {
 	ResolveSAMLTenant func(auth.Claims) (tenantID string, roles []string, err error)
 	// SAMLMetadata returns the SP metadata document served at /auth/saml/metadata.
 	SAMLMetadata func() ([]byte, error)
+	// SAMLSingleLogout and the four hooks below serve SAML single logout (A78).
+	// SAMLLogoutRedirect builds the SP-initiated LogoutRequest redirect for a
+	// SAML-born session and returns its request ID; VerifySAMLLogoutResponse
+	// checks the IdP's answer against that ID; VerifySAMLLogoutRequest validates
+	// an IdP-initiated LogoutRequest; SAMLLogoutResponseRedirect answers it.
+	SAMLSingleLogout           bool
+	SAMLLogoutRedirect         func(nameID, sessionIndex, relayState string) (redirectURL, requestID string, err error)
+	VerifySAMLLogoutResponse   func(r *http.Request, requestID string) error
+	VerifySAMLLogoutRequest    func(r *http.Request) (auth.SAMLLogoutRequest, error)
+	SAMLLogoutResponseRedirect func(requestID, relayState string) (string, error)
 
 	LDAPEnabled bool
 	// VerifyLDAPLogin binds the supplied directory credentials and returns normalized
@@ -511,7 +521,7 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
-	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, returnTo, nil, clearCookies...)
+	a.issueLoginSessionWithBindings(w, r, claims, tenantID, roles, returnTo, nil, &auth.SAMLSessionBinding{NameID: claims.SAMLNameID, SessionIndex: claims.SAMLSessionIndex}, clearCookies...)
 }
 
 func (a *API) authSAMLMetadata(w http.ResponseWriter, _ *http.Request) {
@@ -569,12 +579,22 @@ func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims a
 }
 
 func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, returnTo string, binding *auth.OIDCSessionBinding, clearCookies ...string) {
+	a.issueLoginSessionWithBindings(w, r, claims, tenantID, roles, returnTo, binding, nil, clearCookies...)
+}
+
+// issueLoginSessionWithBindings mints the browser session, remembering the IdP
+// session binding the login path verified: OIDC (back-channel logout) or SAML
+// (single logout, A78). A SAML binding without a NameID issues a plain session.
+func (a *API) issueLoginSessionWithBindings(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, returnTo string, binding *auth.OIDCSessionBinding, samlBinding *auth.SAMLSessionBinding, clearCookies ...string) {
 	var token string
 	var err error
-	if binding == nil {
-		token, err = a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
-	} else {
+	switch {
+	case binding != nil:
 		token, err = a.auth.Sessions.IssueOIDCContext(r.Context(), claims.Subject, tenantID, claims.Email, roles, *binding)
+	case samlBinding != nil && samlBinding.NameID != "":
+		token, err = a.auth.Sessions.IssueSAMLContext(r.Context(), claims.Subject, tenantID, claims.Email, roles, *samlBinding)
+	default:
+		token, err = a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
 	}
 	if err != nil {
 		if errors.Is(err, auth.ErrOIDCSessionLoggedOut) {
@@ -686,11 +706,15 @@ func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
 	if !a.enforceCSRF(w, r) {
 		return
 	}
+	var samlSession *auth.Session
 	if a.auth != nil && a.auth.Sessions != nil {
 		if cookie, err := r.Cookie(a.browserSessionCookieName()); err == nil {
 			session, err := a.auth.Sessions.VerifyForLogoutContext(r.Context(), cookie.Value)
 			if err == nil {
 				err = a.auth.Sessions.RevokeContext(r.Context(), session.TenantID, session.ID)
+				if err == nil && session.SAMLNameID != "" {
+					samlSession = &session
+				}
 			}
 			if err != nil && !errors.Is(err, auth.ErrSessionInvalid) &&
 				!errors.Is(err, auth.ErrSessionExpired) && !errors.Is(err, auth.ErrSessionNotFound) {
@@ -701,7 +725,109 @@ func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	a.clearCookie(w, a.browserSessionCookieName())
 	a.clearCookie(w, csrfCookieName)
+	// A78: a SAML-born session is also ended at the IdP. The local session is
+	// already revoked above; the browser is handed the IdP's single logout
+	// redirect, and the IdP's LogoutResponse lands on /auth/saml/slo.
+	if samlSession != nil && a.auth.SAMLSingleLogout && a.auth.SAMLLogoutRedirect != nil {
+		relayState, err := auth.RandomState()
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		logoutURL, requestID, err := a.auth.SAMLLogoutRedirect(samlSession.SAMLNameID, samlSession.SAMLSessionIndex, relayState)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadGateway, "SAML logout request could not be built; the local session is signed out"))
+			return
+		}
+		a.setTransientCookie(w, samlLogoutStateCookieName, relayState)
+		a.setTransientCookie(w, samlLogoutRequestIDCookieName, requestID)
+		a.writeJSON(w, http.StatusOK, map[string]string{"logout_url": logoutURL})
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+const (
+	samlLogoutStateCookieName     = "trstctl_saml_logout_state"
+	samlLogoutRequestIDCookieName = "trstctl_saml_logout_request_id"
+)
+
+// authSAMLSLO is the SP's single logout service (A78). A SAMLResponse answers
+// this browser's own sign-out (SP-initiated): it must match the request this
+// browser started, and then the browser lands on the login page. A SAMLRequest
+// is the IdP ending the user's sessions (IdP-initiated): it is verified against
+// the IdP metadata, every session of that NameID in the tenant the SAML mapping
+// resolves is revoked, and the IdP receives a LogoutResponse.
+func (a *API) authSAMLSLO(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil || !a.auth.SAMLSingleLogout || a.auth.VerifySAMLLogoutResponse == nil || a.auth.VerifySAMLLogoutRequest == nil {
+		a.writeProblem(w, problem.New(http.StatusNotFound, "SAML single logout is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxSAMLResponseBytes)
+	if err := r.ParseForm(); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid SAML logout message"))
+		return
+	}
+	switch {
+	case r.Form.Get("SAMLResponse") != "":
+		stateCookie, err := r.Cookie(samlLogoutStateCookieName)
+		requestCookie, reqErr := r.Cookie(samlLogoutRequestIDCookieName)
+		if err != nil || reqErr != nil || stateCookie.Value == "" || requestCookie.Value == "" || stateCookie.Value != r.Form.Get("RelayState") {
+			a.writeError(w, errStatus(http.StatusBadRequest, "SAML logout response does not belong to a sign-out this browser started"))
+			return
+		}
+		if err := a.auth.VerifySAMLLogoutResponse(r, requestCookie.Value); err != nil {
+			a.writeError(w, errStatus(http.StatusUnauthorized, "SAML logout response verification failed"))
+			return
+		}
+		a.clearCookie(w, samlLogoutStateCookieName)
+		a.clearCookie(w, samlLogoutRequestIDCookieName)
+		a.clearCookie(w, a.browserSessionCookieName())
+		a.clearCookie(w, csrfCookieName)
+		redirect := a.auth.LoginRedirect
+		if redirect == "" {
+			redirect = "/"
+		}
+		http.Redirect(w, r, redirect, http.StatusFound)
+	case r.Form.Get("SAMLRequest") != "":
+		logout, err := a.auth.VerifySAMLLogoutRequest(r)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusUnauthorized, "SAML logout request verification failed"))
+			return
+		}
+		resolve := a.auth.ResolveSAMLTenant
+		if resolve == nil {
+			resolve = a.auth.ResolveTenant
+		}
+		tenantID, _, err := a.resolveLoginTenantWith(auth.Claims{Subject: logout.NameID, Issuer: logout.Issuer, SAMLNameID: logout.NameID}, resolve)
+		if err != nil {
+			a.writeProblem(w, problem.New(http.StatusForbidden, "the SAML logout request names a user that maps to no tenant; nothing was signed out"))
+			return
+		}
+		if a.auth.Sessions != nil {
+			if err := a.auth.Sessions.RevokeSubjectContext(r.Context(), tenantID, logout.NameID); err != nil {
+				a.writeError(w, errStatus(http.StatusServiceUnavailable, "session revocation is not confirmed; the identity provider may retry"))
+				return
+			}
+		}
+		if a.auth.SAMLLogoutResponseRedirect == nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		responseURL, err := a.auth.SAMLLogoutResponseRedirect(logout.ID, r.Form.Get("RelayState"))
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadGateway, "the sessions are signed out but the SAML logout response could not be built"))
+			return
+		}
+		a.clearCookie(w, a.browserSessionCookieName())
+		a.clearCookie(w, csrfCookieName)
+		http.Redirect(w, r, responseURL, http.StatusFound)
+	default:
+		a.writeError(w, errStatus(http.StatusBadRequest, "the SAML logout message carries neither SAMLRequest nor SAMLResponse"))
+	}
 }
 
 func preferredWebLocale(acceptLanguage string) string {

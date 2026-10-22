@@ -27,13 +27,15 @@ func TestSAMLDisabledNeedsNoConfig(t *testing.T) {
 
 func TestSAMLEnabledFailsClosed(t *testing.T) {
 	cases := map[string]func(*SAML){
-		"missing entity id":        func(s *SAML) { s.EntityID = "" },
-		"missing metadata url":     func(s *SAML) { s.MetadataURL = "" },
-		"missing acs url":          func(s *SAML) { s.ACSURL = "" },
-		"missing session secret":   func(s *SAML) { s.SessionSecretFile = "" },
-		"missing idp metadata":     func(s *SAML) { s.IDPMetadataXML = ""; s.IDPMetadataFile = "" },
-		"non-https public acs":     func(s *SAML) { s.ACSURL = "http://app.example.com/auth/saml/acs" },
-		"unknown response binding": func(s *SAML) { s.ResponseBinding = "redirect" },
+		"missing entity id":             func(s *SAML) { s.EntityID = "" },
+		"missing metadata url":          func(s *SAML) { s.MetadataURL = "" },
+		"missing acs url":               func(s *SAML) { s.ACSURL = "" },
+		"missing session secret":        func(s *SAML) { s.SessionSecretFile = "" },
+		"missing idp metadata":          func(s *SAML) { s.IDPMetadataXML = ""; s.IDPMetadataFile = "" },
+		"non-https public acs":          func(s *SAML) { s.ACSURL = "http://app.example.com/auth/saml/acs" },
+		"unknown response binding":      func(s *SAML) { s.ResponseBinding = "redirect" },
+		"single logout without slo url": func(s *SAML) { s.SingleLogout = true },
+		"non-https public slo url":      func(s *SAML) { s.SingleLogout = true; s.SLOURL = "http://app.example.com/auth/saml/slo" },
 		"no tenant mapping at all": func(s *SAML) {
 			s.TenantClaim = ""
 			s.ClaimIsTenant = false

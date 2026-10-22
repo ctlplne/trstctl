@@ -12,6 +12,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	dsig "github.com/russellhaering/goxmldsig"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,6 +48,12 @@ type Config struct {
 	// slice may be wiped after construction. Both empty means plaintext only.
 	EncryptionCertDER  []byte
 	EncryptionKeyPKCS8 []byte
+	// SingleLogout enables SAML single logout (A78): SLOURL is this SP's
+	// single logout service (absolute), where the IdP sends LogoutRequest and
+	// LogoutResponse messages, and the IdP metadata must declare a
+	// SingleLogoutService with the HTTP-Redirect binding.
+	SingleLogout bool
+	SLOURL       string
 }
 
 // Response bindings an SP may ask the IdP for.
@@ -77,6 +84,17 @@ type Assertion struct {
 	Subject    string
 	Issuer     string
 	Attributes map[string][]string
+	// SessionIndex is the IdP session handle from the AuthnStatement (A78);
+	// empty when the IdP sent none.
+	SessionIndex string
+}
+
+// LogoutRequest is a verified IdP-initiated LogoutRequest (A78).
+type LogoutRequest struct {
+	ID           string
+	Issuer       string
+	NameID       string
+	SessionIndex string
 }
 
 // ServiceProvider verifies SAML responses for one configured IdP.
@@ -84,7 +102,11 @@ type ServiceProvider struct {
 	sp       *saml.ServiceProvider
 	artifact bool
 	decrypts bool
+	slo      bool
 }
+
+// SingleLogout reports whether this SP propagates sign-out to the IdP (A78).
+func (p *ServiceProvider) SingleLogout() bool { return p.slo }
 
 // ArtifactBinding reports whether this SP asks the IdP for the artifact
 // response binding.
@@ -153,7 +175,23 @@ func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
 		}
 		sp.Certificate = cert
 		sp.Key = key
+		// With a key on hand, sign what the SP sends (AuthnRequest, LogoutRequest,
+		// LogoutResponse) so an IdP that requires signed messages accepts them.
+		sp.SignatureMethod = dsig.RSASHA256SignatureMethod
 		out.decrypts = true
+	}
+	if cfg.SingleLogout {
+		sloURL, err := parseAbsoluteURL(cfg.SLOURL, "slo_url")
+		if err != nil {
+			return nil, err
+		}
+		sp.SloURL = sloURL
+		// The SP's own SLO endpoint takes both bindings; the metadata lists it.
+		sp.LogoutBindings = []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding}
+		if sp.GetSLOBindingLocation(saml.HTTPRedirectBinding) == "" {
+			return nil, errors.New("samlsp: single logout needs a SingleLogoutService with the HTTP-Redirect binding in the IdP metadata; none is declared")
+		}
+		out.slo = true
 	}
 	if strings.EqualFold(strings.TrimSpace(cfg.ResponseBinding), ResponseBindingArtifact) {
 		endpoint := sp.GetArtifactBindingLocation(saml.SOAPBinding)
@@ -256,6 +294,12 @@ func normalizeAssertion(a *saml.Assertion) Assertion {
 	out := Assertion{Issuer: a.Issuer.Value, Attributes: map[string][]string{}}
 	if a.Subject != nil && a.Subject.NameID != nil {
 		out.Subject = a.Subject.NameID.Value
+	}
+	for _, stmt := range a.AuthnStatements {
+		if stmt.SessionIndex != "" {
+			out.SessionIndex = stmt.SessionIndex
+			break
+		}
 	}
 	for _, stmt := range a.AttributeStatements {
 		for _, attr := range stmt.Attributes {

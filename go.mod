@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.53.4
 	github.com/aws/smithy-go v1.27.1
+	github.com/beevik/etree v1.6.0
 	github.com/cloudflare/circl v1.6.3
 	github.com/crewjam/saml v0.5.1
 	github.com/go-asn1-ber/asn1-ber v1.5.7
@@ -26,6 +27,7 @@ require (
 	github.com/nats-io/nuid v1.0.1
 	github.com/open-policy-agent/opa v1.21.1
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
+	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/smallstep/pkcs7 v0.2.1
 	github.com/spiffe/spire-plugin-sdk v1.15.1
 	github.com/tetratelabs/wazero v1.12.0
@@ -52,7 +54,6 @@ require (
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.29 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.29 // indirect
-	github.com/beevik/etree v1.6.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
@@ -90,7 +91,6 @@ require (
 	github.com/oklog/run v1.2.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
-	github.com/russellhaering/goxmldsig v1.6.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
 	github.com/tchap/go-patricia/v2 v2.3.3 // indirect

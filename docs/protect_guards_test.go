@@ -2546,7 +2546,7 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 	requireAllContained(t, "SEC-004", "bootstrapApi.ts transport and logout", bootstrapClient,
 		`import { createPreviewAwareApi, req } from "./apiTransport"`,
 		"createPreviewAwareApi<BootstrapApi>({",
-		`req<void>("/auth/logout", { method: "POST" })`,
+		`req<LogoutResult | void>("/auth/logout", { method: "POST" })`,
 	)
 	for _, want := range []string{
 		"function readCookie(name: string)",

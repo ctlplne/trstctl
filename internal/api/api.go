@@ -710,6 +710,10 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 			// the handler resolves it and refuses artifacts when the binding is off.
 			mux.HandleFunc("GET /auth/saml/acs", a.authSAMLACS)
 			mux.HandleFunc("GET /auth/saml/metadata", a.authSAMLMetadata)
+			if a.auth.SAMLSingleLogout {
+				mux.HandleFunc("GET /auth/saml/slo", a.authSAMLSLO)
+				mux.HandleFunc("POST /auth/saml/slo", a.authSAMLSLO)
+			}
 		}
 		if a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil {
 			mux.HandleFunc("POST /auth/ldap/login", a.authLDAPLogin)

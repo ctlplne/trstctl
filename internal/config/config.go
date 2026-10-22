@@ -560,6 +560,15 @@ type SAML struct {
 	// deployment KEK (secrets.kek_file is required), and shared by replicas.
 	// Unset, assertions are accepted in plaintext as before.
 	SPKeyFile string `json:"sp_key_file,omitempty"`
+	// SingleLogout enables SAML single logout (A78): a sign-out from trstctl
+	// sends a LogoutRequest to the IdP's SingleLogoutService (which its
+	// metadata must declare with the HTTP-Redirect binding) and consumes its
+	// LogoutResponse at SLOURL; an IdP-initiated LogoutRequest at SLOURL ends
+	// this user's sessions in the tenant the SAML mapping resolves and is
+	// answered with a LogoutResponse. SLOURL is the externally reachable
+	// /auth/saml/slo URL registered with the IdP.
+	SingleLogout bool   `json:"single_logout,omitempty"`
+	SLOURL       string `json:"slo_url,omitempty"`
 	// SessionSecretFile persists the HMAC secret that signs browser sessions.
 	SessionSecretFile string `json:"session_secret_file,omitempty"`
 	// SessionTTL is the lifetime of a session cookie. Empty defaults to 12h.
@@ -4718,8 +4727,11 @@ func (s SAML) validate() []error {
 	if strings.TrimSpace(s.IDPMetadataFile) == "" && strings.TrimSpace(s.IDPMetadataXML) == "" {
 		errs = append(errs, errors.New("auth.saml requires idp_metadata_file or idp_metadata_xml (the IdP signing metadata) when enabled"))
 	}
+	if s.SingleLogout {
+		req(s.SLOURL, "slo_url")
+	}
 	for _, e := range []struct{ v, name string }{
-		{s.EntityID, "entity_id"}, {s.MetadataURL, "metadata_url"}, {s.ACSURL, "acs_url"},
+		{s.EntityID, "entity_id"}, {s.MetadataURL, "metadata_url"}, {s.ACSURL, "acs_url"}, {s.SLOURL, "slo_url"},
 	} {
 		if strings.TrimSpace(e.v) == "" {
 			continue

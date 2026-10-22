@@ -33,6 +33,27 @@ type Session struct {
 	Email     string   `json:"email,omitempty"`
 	Roles     []string `json:"roles,omitempty"`
 	ExpiresAt int64    `json:"exp"`
+	// SAMLNameID and SAMLSessionIndex are the IdP's handle on a SAML-born
+	// session (A78): a sign-out from trstctl then carries them to the IdP's
+	// single logout service so the IdP session ends too. Empty on every other
+	// login path. They ride the signed cookie; the row stores no copy.
+	SAMLNameID       string `json:"saml_name_id,omitempty"`
+	SAMLSessionIndex string `json:"saml_session_index,omitempty"`
+}
+
+// SAMLSessionBinding is the IdP-side identity of a SAML login (A78).
+type SAMLSessionBinding struct {
+	NameID       string
+	SessionIndex string
+}
+
+// SAMLLogoutRequest is a verified IdP-initiated LogoutRequest (A78): the
+// session(s) the IdP wants closed, named the way the IdP knows them.
+type SAMLLogoutRequest struct {
+	ID           string
+	Issuer       string
+	NameID       string
+	SessionIndex string
 }
 
 type sessionCookie struct {
@@ -247,7 +268,24 @@ func (s *SessionIssuer) IssueOIDCContext(ctx context.Context, subject, tenantID,
 	return s.issueContext(ctx, subject, tenantID, email, roles, &binding)
 }
 
+// IssueSAMLContext mints a session that remembers the IdP's NameID and
+// SessionIndex (A78), so a later sign-out can propagate to the IdP.
+func (s *SessionIssuer) IssueSAMLContext(ctx context.Context, subject, tenantID, email string, roles []string, binding SAMLSessionBinding) (string, error) {
+	if binding.NameID == "" || subject == "" {
+		return "", ErrSessionInvalid
+	}
+	return s.issueContextWithSAML(ctx, subject, tenantID, email, roles, &binding)
+}
+
 func (s *SessionIssuer) issueContext(ctx context.Context, subject, tenantID, email string, roles []string, binding *OIDCSessionBinding) (string, error) {
+	return s.issueContextFull(ctx, subject, tenantID, email, roles, binding, nil)
+}
+
+func (s *SessionIssuer) issueContextWithSAML(ctx context.Context, subject, tenantID, email string, roles []string, saml *SAMLSessionBinding) (string, error) {
+	return s.issueContextFull(ctx, subject, tenantID, email, roles, nil, saml)
+}
+
+func (s *SessionIssuer) issueContextFull(ctx context.Context, subject, tenantID, email string, roles []string, binding *OIDCSessionBinding, saml *SAMLSessionBinding) (string, error) {
 	now := s.now()
 	id, err := randomSessionID()
 	if err != nil {
@@ -258,6 +296,9 @@ func (s *SessionIssuer) issueContext(ctx context.Context, subject, tenantID, ema
 	session := Session{
 		ID: id, Subject: subject, TenantID: tenantID, Email: email, Roles: append([]string(nil), roles...),
 		ExpiresAt: expiresAt.Unix(),
+	}
+	if saml != nil {
+		session.SAMLNameID, session.SAMLSessionIndex = saml.NameID, saml.SessionIndex
 	}
 	stored := session
 	stored.ID = storedID
