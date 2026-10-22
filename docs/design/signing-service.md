@@ -202,7 +202,11 @@ produced it, and (for RSA) a padding scheme, mirroring the platform's
 signing-options type. Signing a digest (not a raw message) is the canonical
 signer operation — it matches `crypto.Signer`/HSM semantics and is what X.509
 CSR and certificate signing require — so the signer is a thin, audited front
-to the single crypto boundary.
+to the single crypto boundary. The one exception is `HASH_NONE`: a pure
+signature family (ML-DSA, SLH-DSA) signs the message itself, and an RFC 9881
+certificate, CRL or OCSP signature covers the whole TBS, so that request
+carries the TBS bytes (bounded by a message cap) and a classical key refuses
+it.
 
 ### 5.4 Limits and resource bounds
 

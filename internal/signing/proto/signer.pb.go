@@ -124,6 +124,12 @@ const (
 	Hash_HASH_SHA256      Hash = 1
 	Hash_HASH_SHA384      Hash = 2
 	Hash_HASH_SHA512      Hash = 3
+	// HASH_NONE carries the whole message in SignRequest.digest and asks for a
+	// pure signature over it. Only a post-quantum signature key (ML-DSA,
+	// SLH-DSA) accepts it: RFC 9881 X.509 signatures cover the full
+	// TBSCertificate, so a classical pre-hash would not verify. Bounded by the
+	// signer's message cap; a classical key refuses it.
+	Hash_HASH_NONE Hash = 4
 )
 
 // Enum value maps for Hash.
@@ -133,12 +139,14 @@ var (
 		1: "HASH_SHA256",
 		2: "HASH_SHA384",
 		3: "HASH_SHA512",
+		4: "HASH_NONE",
 	}
 	Hash_value = map[string]int32{
 		"HASH_UNSPECIFIED": 0,
 		"HASH_SHA256":      1,
 		"HASH_SHA384":      2,
 		"HASH_SHA512":      3,
+		"HASH_NONE":        4,
 	}
 )
 
@@ -3769,12 +3777,13 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x12\x18\n" +
 	"\x14ALGORITHM_LICENSED_5\x10\v\x12\x18\n" +
 	"\x14ALGORITHM_LICENSED_6\x10\f\x12\x18\n" +
-	"\x14ALGORITHM_LICENSED_7\x10\r*O\n" +
+	"\x14ALGORITHM_LICENSED_7\x10\r*^\n" +
 	"\x04Hash\x12\x14\n" +
 	"\x10HASH_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vHASH_SHA256\x10\x01\x12\x0f\n" +
 	"\vHASH_SHA384\x10\x02\x12\x0f\n" +
-	"\vHASH_SHA512\x10\x03*X\n" +
+	"\vHASH_SHA512\x10\x03\x12\r\n" +
+	"\tHASH_NONE\x10\x04*X\n" +
 	"\n" +
 	"RSAPadding\x12\x1b\n" +
 	"\x17RSA_PADDING_UNSPECIFIED\x10\x00\x12\x18\n" +

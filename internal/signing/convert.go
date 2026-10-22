@@ -13,6 +13,10 @@ import (
 const (
 	// maxDigestLen bounds an accepted digest (SHA-512 is 64 bytes).
 	maxDigestLen = 64
+	// maxPureMessageLen bounds a HASH_NONE request: the whole TBS of a
+	// certificate, CRL or OCSP response crosses the boundary for a pure
+	// post-quantum signature. A CRL with many entries fits well inside it.
+	maxPureMessageLen = 256 << 10
 	// maxSignOperationIDLen bounds journal AAD and request parsing. Durable
 	// control-plane IDs are short UUID-derived strings.
 	maxSignOperationIDLen = 256
@@ -96,6 +100,9 @@ func hashFromProto(h signerpb.Hash) (crypto.Hash, int, error) {
 		return crypto.SHA384, 48, nil
 	case signerpb.Hash_HASH_SHA512:
 		return crypto.SHA512, 64, nil
+	case signerpb.Hash_HASH_NONE:
+		// The message itself is signed; its length is bounded separately.
+		return crypto.HashNone, 0, nil
 	default:
 		return "", 0, status.Errorf(codes.InvalidArgument, "unsupported hash %v", h)
 	}
@@ -114,6 +121,8 @@ func hashToProto(h crypto.Hash) signerpb.Hash {
 		return signerpb.Hash_HASH_SHA384
 	case crypto.SHA512:
 		return signerpb.Hash_HASH_SHA512
+	case crypto.HashNone:
+		return signerpb.Hash_HASH_NONE
 	default: // crypto.SHA256 and the empty default
 		return signerpb.Hash_HASH_SHA256
 	}
@@ -416,15 +425,21 @@ func validateSignRequest(req *signerpb.SignRequest) error {
 	if len(req.GetDigest()) == 0 {
 		return status.Error(codes.InvalidArgument, "missing digest")
 	}
-	if len(req.GetDigest()) > maxDigestLen {
-		return status.Errorf(codes.InvalidArgument, "digest too long: %d bytes", len(req.GetDigest()))
-	}
 	if len(req.GetOperationId()) > maxSignOperationIDLen {
 		return status.Errorf(codes.InvalidArgument, "operation id too long: %d bytes", len(req.GetOperationId()))
 	}
 	_, wantLen, err := hashFromProto(req.GetHash())
 	if err != nil {
 		return err
+	}
+	if req.GetHash() == signerpb.Hash_HASH_NONE {
+		if len(req.GetDigest()) > maxPureMessageLen {
+			return status.Errorf(codes.InvalidArgument, "message too long for a pure signature: %d bytes", len(req.GetDigest()))
+		}
+		return nil
+	}
+	if len(req.GetDigest()) > maxDigestLen {
+		return status.Errorf(codes.InvalidArgument, "digest too long: %d bytes", len(req.GetDigest()))
 	}
 	if len(req.GetDigest()) != wantLen {
 		return status.Errorf(codes.InvalidArgument, "digest length %d does not match hash %v", len(req.GetDigest()), req.GetHash())

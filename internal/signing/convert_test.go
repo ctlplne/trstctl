@@ -116,3 +116,26 @@ func TestValidateSignRequest(t *testing.T) {
 		}
 	}
 }
+
+// HASH_NONE (pure-message signing for RFC 9881 ML-DSA certificates) maps to
+// crypto.HashNone, carries the whole message bounded by the message cap, and
+// leaves every digest rule for the hashed forms untouched.
+func TestPureMessageHashConversionAndValidation(t *testing.T) {
+	h, n, err := hashFromProto(signerpb.Hash_HASH_NONE)
+	if err != nil || h != crypto.HashNone || n != 0 {
+		t.Fatalf("hashFromProto(HASH_NONE) = %v,%d,%v", h, n, err)
+	}
+	if hashToProto(crypto.HashNone) != signerpb.Hash_HASH_NONE {
+		t.Fatal("hashToProto(HashNone) != HASH_NONE")
+	}
+	handle := &signerpb.KeyHandle{Id: "x"}
+	if err := validateSignRequest(&signerpb.SignRequest{Handle: handle, Digest: make([]byte, 4096), Hash: signerpb.Hash_HASH_NONE}); err != nil {
+		t.Fatalf("a 4 KiB pure message was refused: %v", err)
+	}
+	if err := validateSignRequest(&signerpb.SignRequest{Handle: handle, Digest: make([]byte, maxPureMessageLen+1), Hash: signerpb.Hash_HASH_NONE}); err == nil {
+		t.Fatal("a pure message above the cap was accepted")
+	}
+	if err := validateSignRequest(&signerpb.SignRequest{Handle: handle, Digest: make([]byte, 4096), Hash: signerpb.Hash_HASH_SHA256}); err == nil {
+		t.Fatal("a 4 KiB body was accepted as a SHA-256 digest")
+	}
+}

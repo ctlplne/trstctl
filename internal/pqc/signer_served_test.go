@@ -108,3 +108,55 @@ func devSignerArgs(extra ...string) []string {
 	}
 	return append([]string{"--allow-insecure-dev-nonlinux"}, extra...)
 }
+
+// TestSignerBinarySignsPureMLDSAMessageOverUDS: an RFC 9881 certificate, CRL
+// or OCSP signature covers the whole TBS, so the isolated signer must sign a
+// multi-kilobyte message itself (HASH_NONE) with a held ML-DSA key, and the
+// signature must verify over exactly those bytes. A classical key over the
+// same socket refuses the request.
+func TestSignerBinarySignsPureMLDSAMessageOverUDS(t *testing.T) {
+	bin := buildSigner(t)
+	// A short socket path: a Unix socket name has a 104-byte limit on macOS and
+	// t.TempDir carries the test name.
+	dir, err := os.MkdirTemp("", "pqc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	socket := filepath.Join(dir, "s.sock")
+	ctx := context.Background()
+	client, stop, err := signing.StartChild(ctx, bin, socket, devSignerArgs()...)
+	if err != nil {
+		t.Fatalf("StartChild: %v", err)
+	}
+	defer stop()
+	defer func() { _ = client.Close() }()
+
+	message := make([]byte, 6*1024)
+	for i := range message {
+		message[i] = byte(i * 7)
+	}
+	signer, err := client.GenerateLicensedKeyHandle(ctx, protoFromAlgorithm(MLDSA65), MLDSA65, "", nil, signing.PurposeGeneric)
+	if err != nil {
+		t.Fatalf("GenerateKey(ML-DSA-65): %v", err)
+	}
+	sig, err := signer.SignDigest(message, crypto.SignOptions{Hash: crypto.HashNone})
+	if err != nil {
+		t.Fatalf("pure-message SignDigest: %v", err)
+	}
+	if err := Verify(signer.Public(), message, sig); err != nil {
+		t.Fatalf("verify pure ML-DSA signature over the full message: %v", err)
+	}
+	tampered := append([]byte(nil), message...)
+	tampered[100] ^= 1
+	if err := Verify(signer.Public(), tampered, sig); err == nil {
+		t.Fatal("signature verified over a modified message")
+	}
+	classical, err := client.GenerateKey(ctx, crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("GenerateKey(ECDSA): %v", err)
+	}
+	if _, err := classical.SignDigest(message, crypto.SignOptions{Hash: crypto.HashNone}); err == nil {
+		t.Fatal("a classical key accepted a pure-message request")
+	}
+}

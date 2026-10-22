@@ -308,6 +308,13 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	if err := held.constraints.check(req); err != nil {
 		return nil, err
 	}
+	// A pure-message request is only meaningful for a key family that signs
+	// the message itself (ML-DSA, SLH-DSA). A classical key would sign
+	// arbitrary bytes as if they were a digest, so it refuses (RFC 9881).
+	if req.GetHash() == signerpb.Hash_HASH_NONE && !crypto.PureMessageSignatureAlgorithm(held.signer.Algorithm()) {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"pure-message signing needs a post-quantum signature key; this key is %s", held.signer.Algorithm())
+	}
 	// Dual-control gate (RED-003): a key marked requireAuth refuses every Sign that
 	// does not carry a valid authorization token over the exact signing tuple, so
 	// socket access alone cannot coerce a crown-jewel key into signing arbitrary

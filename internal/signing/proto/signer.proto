@@ -173,6 +173,12 @@ enum Hash {
   HASH_SHA256 = 1;
   HASH_SHA384 = 2;
   HASH_SHA512 = 3;
+  // HASH_NONE carries the whole message in SignRequest.digest and asks for a
+  // pure signature over it. Only a post-quantum signature key (ML-DSA,
+  // SLH-DSA) accepts it: RFC 9881 X.509 signatures cover the full
+  // TBSCertificate, so a classical pre-hash would not verify. Bounded by the
+  // signer's message cap; a classical key refuses it.
+  HASH_NONE = 4;
 }
 
 // RSAPadding mirrors internal/crypto.RSAPadding; ignored for non-RSA keys.

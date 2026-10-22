@@ -4650,7 +4650,8 @@ rather than starving the rest of the control plane.
 OCSP responses and CRLs are signed through the out-of-process signer: the
 signing op crosses the single isolated cryptography path using the same
 signer-held CA key the leaf path uses, so the CA private key never
-materializes in the control plane — only the digest crosses. Every query
+materializes in the control plane — only the digest crosses (for an ML-DSA
+authority, the TBS bytes the pure signature covers). Every query
 is tenant-scoped. Each published CRL emits a `ca.crl.published` event that
 carries the CRL DER artifact metadata, parent/base CRL number, revoked
 count, and validity window, so the published-CRL read model is rebuilt
