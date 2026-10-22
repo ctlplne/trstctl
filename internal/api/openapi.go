@@ -5019,6 +5019,10 @@ func componentSchemas() map[string]*Schema {
 		// dispatched_ring / dispatch_round are the live dispatch state.
 		"soak_seconds":    {Type: "integer"},
 		"dispatched_ring": str(), "dispatch_round": {Type: "integer"},
+		// functional_checks (A71): the live round's post-upgrade self-checks.
+		"functional_checks": object(map[string]*Schema{
+			"pending": {Type: "integer"}, "passed": {Type: "integer"}, "failed": {Type: "integer"},
+		}, "pending", "passed", "failed"),
 		"guidance": str(),
 		// observe_only is always serialized but NOT in the required list: the
 		// golden ratchet correctly refuses newly-required properties, and a

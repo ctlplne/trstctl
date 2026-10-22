@@ -244,7 +244,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
-| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade`; each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. A successful host-generated renewal uses the v2 statement, which also binds the installed certificate fingerprint plus origin, storage, exportability, and generator; the projected custody event is replayable. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the changed listener — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
@@ -2397,7 +2397,8 @@ control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `connector.right_size`, `cmdb.sync`,
-`mdm.sync`, `ticket.sync`, and `agent.upgrade` —
+`mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (the
+post-upgrade functional check every polling agent answers, A71) —
 all have shipped executors. Enabling a kind exposes that already-built executor; it
 does not turn a placeholder into work.
 Anything outside that allowlist is dropped even if an operator names it in
@@ -3178,9 +3179,19 @@ than sending an operator looking for a credential that was never there.
   dispatched (the reason says until when; an agent that stops heartbeating
   during the soak is silence and halts); zero, the default, advances a verified
   ring at once, so the 10-minute grace is the only wait unless an operator asks
-  for a soak; and the verification remains a health signal
-  (running the target build, answering the control plane), not a functional
-  check of the agent's work.
+  for a soak. Verification is more than a health signal: the first sweep that
+  sees an agent on the target build queues it an `agent.self_check` job pinned
+  to that agent (enabled together with `agent.upgrade`), and the new binary
+  claims it, exercises what an upgrade can break without stopping the process
+  — that it is the build the campaign targets, that a host executor's exec
+  profile still names roots and commands that exist on the machine, that the
+  relay's plugin runtime loaded — and reports a signed receipt naming each
+  check. The agent verifies only once that receipt says every check passed; a
+  failed check halts the ring with its own reason, and a check unanswered
+  past the grace is silence. The campaign view and console tally the live
+  round's checks. The check is bounded on purpose: it proves the agent still
+  works as a job executor, not that every connector it carries deploys
+  correctly on this estate.
 - Provider console (L3 + AUD-58): the web app has a `/provider` route — a
   console for the provider's own staff, separate from the tenant plane. It lists
   customer tenants with their lifecycle state and drives the `/provider/v1` API

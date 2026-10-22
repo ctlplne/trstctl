@@ -244,7 +244,7 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 	kinds := map[string]bool{}
 	for _, s := range shipped {
 		kinds[s.Kind] = true
-		if len(s.Flags) == 0 {
+		if len(s.Flags) == 0 && !s.Unconditional {
 			t.Errorf("shipped kind %q needs a flag and must name it, or it reads as coverage that is not running", s.Kind)
 		}
 		// Connector work must name its connectors; a revocation probe drives

@@ -1054,6 +1054,7 @@ export interface AgentUpgradeCampaign {
   current_ring?: string;
   dispatch_round?: number;
   dispatched_ring?: string;
+  functional_checks?: { failed: number; passed: number; pending: number };
   guidance: string;
   halted_at_ring?: string;
   id?: string;

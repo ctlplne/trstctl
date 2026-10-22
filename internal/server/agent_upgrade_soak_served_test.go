@@ -46,6 +46,12 @@ func TestServedUpgradeCampaignSoaksAVerifiedRingBeforeTheNextOne(t *testing.T) {
 	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
 		t.Fatal(err)
 	}
+	// A71: the sweep above queued the agent's functional self-check; the
+	// agent answers it, and only the next sweep may verify the ring.
+	passSelfChecks(t, h)
+	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
+		t.Fatal(err)
+	}
 	view := readCampaign(t, h, tok)
 	if view.Status != fleet.StateRunning || view.CurrentRing != "canary" || !strings.HasPrefix(view.Reason, "Soaking: the canary ring verified") || view.SoakSeconds != 3600 {
 		t.Fatalf("after verification inside the soak = status %q ring %q reason %q soak %d; want running at canary, soaking", view.Status, view.CurrentRing, view.Reason, view.SoakSeconds)
@@ -80,6 +86,12 @@ func TestServedUpgradeCampaignSoaksAVerifiedRingBeforeTheNextOne(t *testing.T) {
 	if err := h.store.UpsertAgent(t.Context(), fixedEarly); err != nil {
 		t.Fatal(err)
 	}
+	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
+		t.Fatal(err)
+	}
+	// A71: the sweep above queued the agent's functional self-check; the
+	// agent answers it, and only the next sweep may verify the ring.
+	passSelfChecks(t, h)
 	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
 		t.Fatal(err)
 	}

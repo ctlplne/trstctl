@@ -98,7 +98,8 @@ var agentJobKindAllowlist = map[string]bool{
 	// enabling the kind does not make binary replacement fleet-claimable —
 	// it makes it possible for the agents a campaign names. The agent side
 	// has its own -self-upgrade opt-in on top of this one.
-	agentJobKindUpgrade: true,
+	agentJobKindUpgrade:      true,
+	relay.KindAgentSelfCheck: true,
 	// I2: relay-executed CMDB read. The relay observes; the reconcile — and
 	// its never-overwrite-an-attestation rule — stays in the control plane.
 	agentJobKindCMDBSync: true,
@@ -447,6 +448,13 @@ func AgentClaimableJobKinds(configured []string) map[string]bool {
 		if kind != "" && agentJobKindAllowlist[kind] {
 			out[kind] = true
 		}
+	}
+	// A71: enabling self-upgrade enables the functional self-check that
+	// verifies it. The check redeems nothing, names no connector and is
+	// pinned to one agent per row; asking an operator to enable it apart from
+	// the upgrade would only make "verified" quietly mean less.
+	if out[agentJobKindUpgrade] {
+		out[relay.KindAgentSelfCheck] = true
 	}
 	return out
 }

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -171,6 +172,9 @@ func (s *Store) AgentsInRing(ctx context.Context, tenantID, ring string) ([]Agen
 type UpgradeDispatchStatus struct {
 	AgentID      string
 	DispatchedAt time.Time
+	// JobKey is the dispatched upgrade job's outbox key; the functional
+	// self-check that follows it is keyed from it (A71).
+	JobKey string
 	// ReceiptOutcome is the outcome field of the newest signature-verified
 	// receipt for the dispatched job: 'executed', 'failed', or '' when no
 	// verified receipt exists. Rejected receipts are excluded on purpose — a
@@ -188,7 +192,7 @@ func (s *Store) AgentUpgradeDispatchStatuses(ctx context.Context, tenantID, camp
 	var out []UpgradeDispatchStatus
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT d.agent_id::text, d.dispatched_at,
+			`SELECT d.agent_id::text, d.dispatched_at, d.job_key,
 			        coalesce(r.outcome, ''), coalesce(a.version, ''), a.last_seen_at
 			   FROM agent_upgrade_dispatches d
 			   LEFT JOIN outbox o
@@ -212,7 +216,7 @@ func (s *Store) AgentUpgradeDispatchStatuses(ctx context.Context, tenantID, camp
 		defer rows.Close()
 		for rows.Next() {
 			var st UpgradeDispatchStatus
-			if err := rows.Scan(&st.AgentID, &st.DispatchedAt, &st.ReceiptOutcome,
+			if err := rows.Scan(&st.AgentID, &st.DispatchedAt, &st.JobKey, &st.ReceiptOutcome,
 				&st.AgentVersion, &st.AgentLastSeen); err != nil {
 				return err
 			}
@@ -249,6 +253,75 @@ func (s *Store) UnassignedUpgradeCandidates(ctx context.Context, tenantID string
 			out = append(out, a)
 		}
 		return rows.Err()
+	})
+	return out, err
+}
+
+// AgentSelfCheckStatus is one post-upgrade functional check (A71) as the sweep
+// reads it: when it was queued and the outcome of its newest signature-verified
+// receipt ('executed', 'failed', or ” while unanswered).
+type AgentSelfCheckStatus struct {
+	DispatchedAt time.Time
+	Outcome      string
+}
+
+// AgentSelfCheckStatus reads the self-check queued under the given outbox key.
+// Rejected receipts are excluded on purpose: a claim whose signature did not
+// check out is not evidence of anything.
+func (s *Store) AgentSelfCheckStatus(ctx context.Context, tenantID, key string) (AgentSelfCheckStatus, bool, error) {
+	var out AgentSelfCheckStatus
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT o.created_at, coalesce(r.outcome, '')
+			   FROM outbox o
+			   LEFT JOIN LATERAL (
+			        SELECT outcome FROM agent_job_receipts r
+			         WHERE r.tenant_id = o.tenant_id AND r.job_id = o.id AND r.state = 'verified'
+			         ORDER BY r.attempt DESC, r.observed_at DESC
+			         LIMIT 1
+			   ) r ON true
+			  WHERE o.tenant_id = $1 AND o.destination = $2 AND o.idempotency_key = $3`,
+			tenantID, AgentSelfCheckDestination, key).Scan(&out.DispatchedAt, &out.Outcome)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		found = err == nil
+		return err
+	})
+	return out, found, err
+}
+
+// AgentSelfCheckDestination is the outbox destination of the post-upgrade
+// functional check (A71); the relay package names the same kind.
+const AgentSelfCheckDestination = "agent.self_check"
+
+// AgentSelfCheckSummary counts the functional checks queued under keys with
+// the given prefix: still unanswered, passed, failed.
+type AgentSelfCheckSummary struct {
+	Pending int `json:"pending"`
+	Passed  int `json:"passed"`
+	Failed  int `json:"failed"`
+}
+
+// AgentSelfCheckSummaryByPrefix summarizes one campaign round's (or ring's)
+// functional checks for the campaign view.
+func (s *Store) AgentSelfCheckSummaryByPrefix(ctx context.Context, tenantID, prefix string) (AgentSelfCheckSummary, error) {
+	var out AgentSelfCheckSummary
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FILTER (WHERE coalesce(r.outcome, '') = ''),
+			        count(*) FILTER (WHERE r.outcome = 'executed'),
+			        count(*) FILTER (WHERE r.outcome = 'failed')
+			   FROM outbox o
+			   LEFT JOIN LATERAL (
+			        SELECT outcome FROM agent_job_receipts r
+			         WHERE r.tenant_id = o.tenant_id AND r.job_id = o.id AND r.state = 'verified'
+			         ORDER BY r.attempt DESC, r.observed_at DESC
+			         LIMIT 1
+			   ) r ON true
+			  WHERE o.tenant_id = $1 AND o.destination = $2 AND o.idempotency_key LIKE $3`,
+			tenantID, AgentSelfCheckDestination, prefix+"%").Scan(&out.Pending, &out.Passed, &out.Failed)
 	})
 	return out, err
 }

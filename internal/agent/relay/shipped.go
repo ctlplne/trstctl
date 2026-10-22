@@ -34,6 +34,10 @@ type ShippedJobKind struct {
 	// Roles are the certificate-bound agent roles the server permits to claim
 	// this kind. The API filters the advertised census using the same values.
 	Roles []string
+	// Unconditional marks a kind every polling agent claims whatever its
+	// flags (A71's self-check): there is no flag to name because nothing
+	// switches it off, and the census guard accepts that in place of one.
+	Unconditional bool
 }
 
 // ShippedJobKinds is what this build performs.
@@ -138,6 +142,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Connectors: []string{"envoy"},
 			Flags:      []string{"--relay-claim"},
 			Roles:      []string{mtls.AgentRoleHost},
+		},
+		{
+			// A71: the post-upgrade functional check. Every agent answers it,
+			// whichever role it holds; it redeems nothing and names no
+			// connector, and the campaign pins each one to the agent it asks.
+			Kind:          KindAgentSelfCheck,
+			Roles:         []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+			Unconditional: true,
 		},
 		{
 			// R1: revocation distribution-point health. It carries no credential

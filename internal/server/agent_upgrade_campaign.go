@@ -128,11 +128,25 @@ func (s *Server) stepDispatchingCampaign(
 			// failure.
 			outcome.Failed++
 		case st.AgentVersion == c.TargetVersion:
-			// The health signal that matters: the agent is RUNNING the target
-			// build and the control plane has heard from it. An executed
-			// receipt alone is only "staged"; the version report is the proof
-			// the new build came back up.
-			outcome.Verified++
+			// The agent is RUNNING the target build and the control plane has
+			// heard from it. An executed receipt alone is only "staged"; the
+			// version report is the proof the new build came back up — and
+			// A71 asks one more thing of it: the functional self-check it is
+			// queued the first time it is seen here, which it must pass.
+			state, err := s.functionalCheck(ctx, tenantID, c, ring, st.AgentID, selfCheckKeyForDispatch(st.JobKey), cutoff)
+			if err != nil {
+				return err
+			}
+			switch state {
+			case checkPassed:
+				outcome.Verified++
+			case checkFailed:
+				outcome.CheckFailed++
+			case checkPending:
+				waiting = true
+			}
+			// checkSilent: on the target build but never answered its check
+			// within the grace; Silent() counts it.
 		case st.DispatchedAt.After(cutoff):
 			// Dispatched recently, no verdict yet: downloading, restarting, or
 			// simply not polling this second. Mid-grace is not evidence.
@@ -143,13 +157,13 @@ func (s *Server) stepDispatchingCampaign(
 		// the most likely shape of a bad build, and Silent() computes it from
 		// the counts above.
 	}
-	if outcome.Failed == 0 && waiting {
+	if outcome.Failed == 0 && outcome.CheckFailed == 0 && waiting {
 		// No failures and at least one agent still inside its grace: wait. A
 		// failure short-circuits the wait — one signed "failed" is enough and
 		// the rest of the ring cannot un-fail it.
 		return nil
 	}
-	if outcome.Failed == 0 && outcome.Silent() == 0 {
+	if outcome.Failed == 0 && outcome.CheckFailed == 0 && outcome.Silent() == 0 {
 		// A70: every dispatched agent is on the target build. Before the next
 		// ring, the campaign's soak window must pass with the ring still
 		// healthy: a build that came up and degrades minutes later must not
@@ -188,11 +202,11 @@ func (s *Server) stepDispatchingCampaign(
 // pre-dispatch mode, where something else moves agents onto the version and
 // this loop only gates.
 //
-// Verification is "the agent came back and reported the target version, and
-// has been seen since". That is a genuine post-upgrade health signal — an
-// agent that took a bad build and cannot start never reports it — but it is
-// NOT a functional check of the agent's work, and the docs say so rather than
-// letting "verified" imply more than it proves.
+// Verification is "the agent came back and reported the target version, has
+// been seen since, and passed the functional self-check queued for it" (A71).
+// The version report is a genuine post-upgrade health signal — an agent that
+// took a bad build and cannot start never reports it — and the self-check is
+// what makes verified mean the agent still does its work.
 func (s *Server) stepObserveOnlyCampaign(
 	ctx context.Context, tenantID string, c store.AgentUpgradeCampaign,
 	ring fleet.Ring, agents []store.Agent,
@@ -203,7 +217,18 @@ func (s *Server) stepObserveOnlyCampaign(
 	for _, a := range agents {
 		switch {
 		case a.Version == c.TargetVersion:
-			outcome.Verified++
+			state, err := s.functionalCheck(ctx, tenantID, c, ring, a.ID, selfCheckKeyForRing(c.ID, ring, a.ID), cutoff)
+			if err != nil {
+				return err
+			}
+			switch state {
+			case checkPassed:
+				outcome.Verified++
+			case checkFailed:
+				outcome.CheckFailed++
+			case checkPending:
+				waiting = true
+			}
 		case a.LastSeenAt != nil && a.LastSeenAt.After(cutoff):
 			// Seen recently but still on the old version: it is mid-upgrade,
 			// not failed. Counting it against the ring now would halt every
@@ -211,10 +236,10 @@ func (s *Server) stepObserveOnlyCampaign(
 			waiting = true
 		}
 	}
-	if waiting {
+	if waiting && outcome.CheckFailed == 0 {
 		return nil
 	}
-	if outcome.Failed == 0 && outcome.Silent() == 0 {
+	if outcome.Failed == 0 && outcome.CheckFailed == 0 && outcome.Silent() == 0 {
 		// A70, observe-only: the soak clock starts when the campaign entered
 		// this ring (its last state change); an agent not seen within the grace
 		// during the soak is silence.

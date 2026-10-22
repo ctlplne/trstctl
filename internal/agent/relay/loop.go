@@ -99,6 +99,9 @@ func ClaimableKinds() []string {
 		KindMDMSync,
 		KindTicketSync,
 		KindTrustDistribute,
+		// A71: the post-upgrade functional check; every polling agent answers
+		// the one pinned to it.
+		KindAgentSelfCheck,
 		// B2: host-generated renewal. Asked for by every agent and granted only
 		// to host-role ones — the vantage gate is the server's, not the agent's,
 		// which is why this list is not split by role. A network relay asking
@@ -190,7 +193,9 @@ func RunOnceSelfUpgradeOnly(ctx context.Context, ch Channel, selfUp *SelfUpgrade
 	if selfUp == nil {
 		return 0, errors.New("relay: self-upgrade loop needs a SelfUpgrade config")
 	}
-	jobs, err := ch.ClaimJobs(ctx, []string{KindAgentUpgrade}, limit, leaseSeconds)
+	// A71: the post-upgrade self-check is claimed beside the upgrade itself,
+	// so the same agent that took the order answers whether it still works.
+	jobs, err := ch.ClaimJobs(ctx, []string{KindAgentUpgrade, KindAgentSelfCheck}, limit, leaseSeconds)
 	if err != nil {
 		return 0, fmt.Errorf("relay: claim: %w", err)
 	}
@@ -243,8 +248,9 @@ func RunOnceWithSelfUpgradeAndHostRollback(
 	kinds := ClaimableKinds()
 	if len(hostProfile.AllowedRoots) == 0 && hostRollback != nil {
 		// A host with no exec profile may still manage its co-resident Envoy
-		// posture. Do not claim file/exec work it cannot perform.
-		kinds = []string{KindPQCPosture, KindPQCPostureRollback}
+		// posture. Do not claim file/exec work it cannot perform — but it
+		// still answers its post-upgrade self-check (A71).
+		kinds = []string{KindPQCPosture, KindPQCPostureRollback, KindAgentSelfCheck}
 	}
 	if selfUp != nil {
 		kinds = append(kinds, KindAgentUpgrade)
@@ -275,6 +281,10 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// the one kind whose executor is about to replace this process.
 	if job.Kind == KindAgentUpgrade {
 		return runSelfUpgrade(ctx, ch, selfUp, job)
+	}
+	// A71: the functional check after an upgrade redeems nothing either.
+	if job.Kind == KindAgentSelfCheck {
+		return runSelfCheck(ctx, ch, hostProfile, plugins, selfUp, job)
 	}
 	// A revocation probe carries a different payload and needs no credential at
 	// all — it reads public distribution points. Routing it before the deploy

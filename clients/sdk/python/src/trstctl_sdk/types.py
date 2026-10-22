@@ -1458,6 +1458,7 @@ AgentUpgradeCampaign = TypedDict(
         'current_ring': str,
         'dispatch_round': int,
         'dispatched_ring': str,
+        'functional_checks': dict[str, Any],
         'guidance': str,
         'halted_at_ring': str,
         'id': str,

@@ -72,6 +72,15 @@ export function UpgradeCampaignPanel() {
           </p>
         ) : null
       ) : null}
+      {data?.active && data.functional_checks ? (
+        <p className="text-caption text-muted-foreground">
+          {translateNow("fleet.upgrade.functionalChecks", {
+            passed: String(data.functional_checks.passed),
+            pending: String(data.functional_checks.pending),
+            failed: String(data.functional_checks.failed),
+          })}
+        </p>
+      ) : null}
       <p className="text-caption text-muted-foreground">{translateNow("source.fleet.upgrade.rings.a5fl000004", { value1: ringSummary })}</p>
       <ul className="space-y-1 text-sm">
         {Object.entries(data?.versions ?? {}).map(([version, n]) => (

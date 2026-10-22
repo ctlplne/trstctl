@@ -5,6 +5,7 @@ package server
 import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"time"
 
 	"encoding/json"
 	"net/http"
@@ -29,6 +30,12 @@ type campaignView struct {
 	Rings        map[string]int `json:"rings"`
 	Versions     map[string]int `json:"versions"`
 	SoakSeconds  int            `json:"soak_seconds"`
+	// FunctionalChecks is the live round's self-check tally (A71).
+	FunctionalChecks *struct {
+		Pending int `json:"pending"`
+		Passed  int `json:"passed"`
+		Failed  int `json:"failed"`
+	} `json:"functional_checks"`
 }
 
 func readCampaign(t *testing.T, h *servedHarness, tok string) campaignView {
@@ -121,6 +128,12 @@ func TestServedStagedUpgradeHaltsOnCanaryFailureAndResumesThere(t *testing.T) {
 	}
 
 	// Now the canary verifies and the rollout moves on.
+	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
+		t.Fatal(err)
+	}
+	// A71: the sweep above queued the agent's functional self-check; the
+	// agent answers it, and only the next sweep may verify the ring.
+	passSelfChecks(t, h)
 	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
 		t.Fatal(err)
 	}
@@ -299,18 +312,30 @@ func TestServedDispatchingCampaignDispatchesAndGatesOnReceipts(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// The version report arrives on a heartbeat, so the agent is seen now;
+	// an agent on the target build that nobody has heard from is silence.
 	upgraded := canary
-	upgraded.Version = "2.0.0"
+	seen := time.Now().UTC()
+	upgraded.Version, upgraded.LastSeenAt = "2.0.0", &seen
 	if err := h.store.UpsertAgent(t.Context(), upgraded); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
 		t.Fatal(err)
 	}
+	// A71: the sweep above queued the agent's functional self-check; the
+	// agent answers it, and only the next sweep may verify the ring.
+	passSelfChecks(t, h)
+	if err := h.srv.RunAgentUpgradeCampaignOnce(t.Context(), h.tenant); err != nil {
+		t.Fatal(err)
+	}
 	view = readCampaign(t, h, tok)
-	if view.Status == fleet.StateHalted || view.CurrentRing == "canary" {
-		t.Fatalf("after the retry verified: status=%q ring=%q; the campaign must advance past "+
-			"canary", view.Status, view.CurrentRing)
+	// The sweep that verifies the canary also enters the (empty) early ring,
+	// which halts there on the same or the next sweep; what must not happen
+	// is a halt AT the canary or a campaign still waiting on it.
+	if (view.Status == fleet.StateHalted && view.HaltedAtRing == "canary") || view.CurrentRing == "canary" {
+		t.Fatalf("after the retry verified: status=%q ring=%q halted_at=%q reason=%q; the campaign must advance past "+
+			"canary", view.Status, view.CurrentRing, view.HaltedAtRing, view.Reason)
 	}
 }
 
@@ -366,5 +391,50 @@ func TestServedDispatchedSilenceHaltsAfterGrace(t *testing.T) {
 	}
 	if !strings.Contains(view.Reason, "never reported") {
 		t.Fatalf("halt reason %q does not say the agents were silent", view.Reason)
+	}
+}
+
+// passSelfChecks answers every queued functional self-check (A71) as the
+// agent would after a good upgrade: a signature-verified executed receipt for
+// each row pinned to it that has no verified receipt yet.
+func passSelfChecks(t *testing.T, h *servedHarness) {
+	t.Helper()
+	type row struct {
+		id    int64
+		agent string
+	}
+	var rows []row
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		result, err := tx.Query(t.Context(),
+			`SELECT o.id, a.name FROM outbox o
+			   JOIN agents a ON a.tenant_id = o.tenant_id AND a.id = o.required_agent_id
+			  WHERE o.tenant_id = $1 AND o.destination = $2
+			    AND NOT EXISTS (SELECT 1 FROM agent_job_receipts r WHERE r.tenant_id = o.tenant_id AND r.job_id = o.id AND r.state = 'verified')`,
+			h.tenant, store.AgentSelfCheckDestination)
+		if err != nil {
+			return err
+		}
+		defer result.Close()
+		for result.Next() {
+			var r row
+			if err := result.Scan(&r.id, &r.agent); err != nil {
+				return err
+			}
+			rows = append(rows, r)
+		}
+		return result.Err()
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("no functional self-check was queued for the agent on the target build")
+	}
+	for _, r := range rows {
+		if err := h.store.RecordAgentJobReceipt(t.Context(), h.tenant, store.AgentJobReceipt{
+			JobID: r.id, Attempt: 1, Agent: r.agent, Kind: store.AgentSelfCheckDestination,
+			Outcome: "executed", State: "verified",
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

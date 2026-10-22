@@ -4269,6 +4269,25 @@
           "dispatched_ring": {
             "type": "string"
           },
+          "functional_checks": {
+            "properties": {
+              "failed": {
+                "type": "integer"
+              },
+              "passed": {
+                "type": "integer"
+              },
+              "pending": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "pending",
+              "passed",
+              "failed"
+            ],
+            "type": "object"
+          },
           "guidance": {
             "type": "string"
           },

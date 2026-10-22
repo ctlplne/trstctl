@@ -30348,6 +30348,11 @@ export const messages = {
       "Required for a host member. Leave empty for a network appliance: its relay installs the successor, and the appliance has no trust store to write.",
     description: "Hint under the trust anchor path field of a migration plan member.",
   },
+  "fleet.upgrade.functionalChecks": {
+    defaultMessage:
+      "Functional self-checks this round: {passed} passed, {pending} pending, {failed} failed. An agent on the target build verifies only once its check passed.",
+    description: "Upgrade campaign panel: the post-upgrade self-check tally of the live round.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;

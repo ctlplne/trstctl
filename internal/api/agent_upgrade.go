@@ -11,6 +11,7 @@ import (
 	"fmt"
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type upgradeCampaignBody struct {
@@ -56,13 +57,20 @@ type upgradeCampaignResponse struct {
 	DispatchRound  int    `json:"dispatch_round,omitempty"`
 	// SoakSeconds is the campaign's per-ring soak window; the reason says when
 	// a soaking ring may advance.
-	SoakSeconds int    `json:"soak_seconds"`
-	Guidance    string `json:"guidance"`
+	SoakSeconds int `json:"soak_seconds"`
+	// FunctionalChecks summarizes the post-upgrade self-checks (A71) of the
+	// live dispatch round (or the current ring, observe-only): an agent on the
+	// target build is verified only once its check passed.
+	FunctionalChecks *store.AgentSelfCheckSummary `json:"functional_checks,omitempty"`
+	Guidance         string                       `json:"guidance"`
 }
 
 const upgradeGuidance = "A staged rollout halts AUTOMATICALLY when a ring fails: one unhealthy " +
 	"agent is enough, and so is silence — an agent that took an upgrade and stopped answering is " +
-	"the most likely shape of a bad build, so it is never scored as a success. Resuming restarts " +
+	"the most likely shape of a bad build, so it is never scored as a success. An agent that came " +
+	"back on the target build is verified only once it passed the functional self-check queued " +
+	"for it (its exec profile still resolves, its plugins loaded, it claims and signs over the " +
+	"channel); a failed check halts the ring too. Resuming restarts " +
 	"at the ring that halted, not past it; skipping ahead would leave the agents whose failure " +
 	"stopped the rollout on the broken build while the campaign reported success. Pause gates " +
 	"dispatch, not just the button. An empty ring halts too: an unassigned canary proves nothing, " +
@@ -94,6 +102,11 @@ func (a *API) getUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		out.ObserveOnly = len(c.ArtifactsJSON) == 0
 		out.DispatchedRing, out.DispatchRound = c.DispatchedRing, c.DispatchRound
 		out.SoakSeconds = c.SoakSeconds
+		if prefix := selfCheckPrefixForCampaign(c); prefix != "" {
+			if summary, err := a.store.AgentSelfCheckSummaryByPrefix(r.Context(), tenantID, prefix); err == nil {
+				out.FunctionalChecks = &summary
+			}
+		}
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -238,4 +251,21 @@ func (a *API) autoAssignAgentRings(w http.ResponseWriter, r *http.Request) {
 		out.Assigned = len(plan.Canary) + len(plan.Early) + len(plan.Broad)
 		return http.StatusOK, out, nil
 	})
+}
+
+// selfCheckPrefixForCampaign is the outbox-key prefix of the campaign's live
+// functional checks (A71): the dispatch round's, or the current ring's for an
+// observe-only campaign. It mirrors the keys the sweep derives.
+func selfCheckPrefixForCampaign(c store.AgentUpgradeCampaign) string {
+	if len(c.ArtifactsJSON) > 0 {
+		if c.DispatchedRing == "" {
+			return ""
+		}
+		return fmt.Sprintf("agent-upgrade:%s:%d:", c.ID, c.DispatchRound)
+	}
+	ring := c.CurrentRing
+	if ring == "" {
+		ring = string(fleet.Rings[0])
+	}
+	return fmt.Sprintf("agent-selfcheck:%s:%s:", c.ID, ring)
 }

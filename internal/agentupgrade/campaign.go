@@ -58,6 +58,10 @@ type RingOutcome struct {
 	Verified int
 	// Failed is how many returned a receipt saying they are not healthy.
 	Failed int
+	// CheckFailed is how many came back on the target build and then failed
+	// their functional self-check (A71): running and answering, but not
+	// working. Scored apart from Failed so the halt names what to look at.
+	CheckFailed int
 }
 
 // Silent reports agents that neither verified nor failed.
@@ -67,7 +71,7 @@ type RingOutcome struct {
 // anything but unresolved is how a rollout proceeds over a fleet it has already
 // broken.
 func (r RingOutcome) Silent() int {
-	n := r.Dispatched - r.Verified - r.Failed
+	n := r.Dispatched - r.Verified - r.Failed - r.CheckFailed
 	if n < 0 {
 		return 0
 	}
@@ -108,6 +112,16 @@ func Advance(state string, outcome RingOutcome) Decision {
 				"Halted: %d of %d agents in the %s ring reported an unhealthy upgrade. The rollout "+
 					"stopped here rather than carrying a bad build to the rest of the fleet.",
 				outcome.Failed, outcome.Dispatched, outcome.Ring),
+		}
+	}
+	if outcome.CheckFailed > 0 {
+		return Decision{
+			NextState: StateHalted,
+			Reason: fmt.Sprintf(
+				"Halted: %d of %d agents in the %s ring came up on the target build but failed the "+
+					"functional self-check. Running and answering is not working; the agent's job "+
+					"history names the check that failed.",
+				outcome.CheckFailed, outcome.Dispatched, outcome.Ring),
 		}
 	}
 	if silent := outcome.Silent(); silent > 0 {
