@@ -103,6 +103,7 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
         project: "my-project",
         location: "global",
         bearer_token_ref: "secret://connectors/gcp-bearer-token",
+        certificate_map_entry: "web-map/web-entry",
       };
     default:
       return { credential_ref: `secret://connectors/${name || "connector"}`, host: "edge-1.internal" };

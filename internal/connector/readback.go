@@ -90,6 +90,9 @@ var readbackCapableFamilies = []string{
 	// ErrReadbackNotConfigured rather than a clean readback (A44).
 	"fortigate",
 	"paloalto",
+	// gcp-certificate-manager answers for targets that name a certificate map
+	// entry: the entry says which certificate it serves (A58).
+	"gcp-certificate-manager",
 }
 
 // CanReadback reports whether a family can be asked what it has installed.

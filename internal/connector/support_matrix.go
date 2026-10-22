@@ -157,13 +157,22 @@ var supportMatrix = []SupportRow{
 	},
 	{
 		Family:      "gcp-certificate-manager",
-		APIContract: "Google Cloud Certificate Manager certificates.patch REST API",
+		APIContract: "Google Cloud Certificate Manager certificates and certificateMapEntries REST API",
 		ProvenOperations: []string{
-			"deploy: patch a self-managed certificate and private key with updateMask=self_managed",
+			"deploy: patch a self-managed certificate and private key with updateMask=self_managed; with " +
+				"certificate_map_entry the deploy instead creates a fingerprint-named certificate and points " +
+				"the map entry at it, leaving the predecessor in the project",
+			"rollback: re-point the certificate map entry at a previously created fingerprint-named " +
+				"certificate, uploading nothing (targets with certificate_map_entry only); a predecessor the " +
+				"project no longer holds fails rather than reporting success",
+			"readback: report the certificate the map entry points at (targets with certificate_map_entry only)",
 			"completion: poll the returned long-running operation until it succeeds or reaches a bounded failure",
 		},
 		KnownLimits: []string{
-			"no rollback: the connector does not retain and restore a predecessor Certificate Manager resource",
+			"a target without certificate_map_entry patches the target-named certificate in place, so no " +
+				"predecessor survives and its rollback is refused as not configured",
+			"rollback executes in the control plane, the family's shipped vantage; objects accumulate one " +
+				"certificate per deploy and nothing prunes them",
 			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
 				"relay proof, or control-plane refusal",
 		},

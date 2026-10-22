@@ -29,6 +29,11 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		ParityGateRelayExecutionProof,
 		ParityGateCPPathRefusal,
 	}
+	missingRelayImplementationWithRebind := []ParityGate{
+		ParityGateDeviceProof,
+		ParityGateRelayExecutionProof,
+		ParityGateCPPathRefusal,
+	}
 	want := map[string]struct {
 		migrated    bool
 		retained    bool
@@ -70,10 +75,12 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// PostgreSQL, and MySQL currently execute on host agents; the cloud
 		// stores execute in the control plane. Those are honest runtime facts,
 		// not permission to remove them from E1's accepted denominator.
-		"envoy":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
-		"aws-acm":                 {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
-		"azure-keyvault":          {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
-		"gcp-certificate-manager": {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"envoy":          {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"aws-acm":        {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"azure-keyvault": {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		// A58: the GCP connector re-binds a certificate map entry and reads
+		// it back, so those two gates are met; relay execution is not.
+		"gcp-certificate-manager": {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementationWithRebind},
 		"postgresql":              {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
 		"mysql":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
 	}

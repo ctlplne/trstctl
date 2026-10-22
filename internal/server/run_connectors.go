@@ -255,6 +255,10 @@ type nativeTargetConfig struct {
 	BearerTokenRef     string `json:"bearer_token_ref,omitempty"`
 	APIVersion         string `json:"api_version,omitempty"`
 	PollInterval       string `json:"poll_interval,omitempty"`
+	// CertificateMapEntry ("map/entry") makes gcp-certificate-manager deploys
+	// fingerprint-named and bound, which is what makes the target
+	// rollback-capable (A58).
+	CertificateMapEntry string `json:"certificate_map_entry,omitempty"`
 }
 
 func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name string, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
@@ -496,6 +500,11 @@ func buildCloudHTTPConnector(name string, target nativeTargetConfig, require fun
 			destroy = append(destroy, d)
 		}
 		options := []gcpcm.Option{gcpcm.WithEndpoint(target.Endpoint)}
+		if entry, err := gcpcm.ParseCertificateMapEntry(target.CertificateMapEntry); err != nil {
+			return nil, nil, err
+		} else if entry.Map != "" {
+			options = append(options, gcpcm.WithCertificateMapEntry(entry))
+		}
 		if target.PollInterval != "" {
 			interval, err := time.ParseDuration(target.PollInterval)
 			if err != nil || interval <= 0 {
@@ -710,7 +719,7 @@ var nativeTargetFields = map[string]map[string]bool{
 	"paloalto":                fields("endpoint", "api_key_ref"),
 	"aws-acm":                 fields("endpoint", "region", "access_key_id", "secret_access_key_ref", "session_token_ref"),
 	"azure-keyvault":          fields("endpoint", "bearer_token_ref", "api_version"),
-	"gcp-certificate-manager": fields("endpoint", "project", "location", "bearer_token_ref", "poll_interval"),
+	"gcp-certificate-manager": fields("endpoint", "project", "location", "bearer_token_ref", "poll_interval", "certificate_map_entry"),
 }
 
 func validateNativeTarget(name string, target nativeTargetConfig) error {
@@ -777,6 +786,9 @@ func validateNativeTarget(name string, target nativeTargetConfig) error {
 	case "gcp-certificate-manager":
 		if !require(target.Endpoint, target.Project, target.Location, target.BearerTokenRef) {
 			return fmt.Errorf("connector: gcp-certificate-manager requires endpoint/project/location/bearer_token_ref")
+		}
+		if _, err := gcpcm.ParseCertificateMapEntry(target.CertificateMapEntry); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("connector: unknown target schema %q", name)

@@ -495,6 +495,54 @@ func (r *Registry) Preview(ctx context.Context, p DeployPayload) (Preview, error
 	return RunPreview(ctx, c, ops, p.Target)
 }
 
+// Rollback constructs the same tenant-scoped target connector a deployment
+// would use and runs its re-bind. The payload carries no certificate or key:
+// the predecessor is named by fingerprint and must already be installed on
+// the target (A58, the control-plane execution of a cloud family's re-bind).
+func (r *Registry) Rollback(ctx context.Context, p DeployPayload, rb Rollback) (RollbackResult, error) {
+	if r == nil {
+		return RollbackResult{}, fmt.Errorf("connector: registry is not configured")
+	}
+	if p.TenantID == "" || p.Connector == "" || p.Target == "" {
+		return RollbackResult{}, fmt.Errorf("connector: rollback requires tenant, connector, and target name")
+	}
+	if len(p.CertPEM) != 0 || len(p.KeyPEM) != 0 {
+		return RollbackResult{}, fmt.Errorf("connector: rollback payload must not contain certificate or private-key material")
+	}
+	r.mu.RLock()
+	c := r.connectors[p.Connector]
+	factory := r.factories[p.Connector]
+	opsFor := r.opsFor
+	r.mu.RUnlock()
+	if c == nil && factory == nil {
+		return RollbackResult{}, fmt.Errorf("connector: no connector registered as %q", p.Connector)
+	}
+	var (
+		ops     Ops
+		cleanup func()
+		err     error
+	)
+	if factory != nil {
+		c, ops, cleanup, err = factory(ctx, p)
+		if err != nil {
+			return RollbackResult{}, fmt.Errorf("connector: build rollback target %q: %w", p.Connector, err)
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
+	} else if opsFor != nil {
+		ops = opsFor(p.Connector)
+	}
+	if c == nil {
+		return RollbackResult{}, fmt.Errorf("connector: factory returned no connector for %q", p.Connector)
+	}
+	if ops == nil {
+		return RollbackResult{}, fmt.Errorf("connector: no ops configured for %q", p.Connector)
+	}
+	_, result, err := RunRollbackWithResult(ctx, c, ops, rb)
+	return result, err
+}
+
 // Handle decodes a deploy payload and runs the named connector. It is the body
 // of the outbox handler (AN-6): wire it as
 // outbox.HandlerFunc(func(ctx, m) error { return reg.Handle(ctx, m.Payload) }).

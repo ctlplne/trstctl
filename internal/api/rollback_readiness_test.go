@@ -17,16 +17,22 @@ func TestRollbackReadinessMirrorsTheRollbackRouteRefusals(t *testing.T) {
 		ready  bool
 		reason string
 	}{
-		"family without rollback":                       {rollbackReadinessInputs{Family: "cisco"}, "none", false, "no executable rollback"},
-		"host target never deployed":                    {rollbackReadinessInputs{Family: "nginx", HostRollback: true}, "host", false, "no successful enrolled host-agent deploy"},
-		"host target deployed once":                     {rollbackReadinessInputs{Family: "nginx", HostRollback: true, HostEvidenceFound: true, HostIdentityID: "id-1", HostFingerprint: "ff"}, "host", false, "second successful deploy"},
-		"host target with retained predecessor":         {rollbackReadinessInputs{Family: "nginx", HostRollback: true, HostEvidenceFound: true, HostIdentityID: "id-1", HostFingerprint: "ff", HostPredecessorFingerprint: "ee", PredecessorKnown: true}, "host", true, ""},
-		"host predecessor revoked":                      {rollbackReadinessInputs{Family: "nginx", HostRollback: true, HostEvidenceFound: true, HostIdentityID: "id-1", HostFingerprint: "ff", HostPredecessorFingerprint: "ee", PredecessorKnown: true, PredecessorRevoked: true}, "host", false, "revoked"},
-		"fortigate without bind_to":                     {rollbackReadinessInputs{Family: "fortigate", Rebind: true, Config: []byte(`{"endpoint":"https://fgt"}`)}, "re-bind", false, "bind_to"},
-		"paloalto without commit_admin":                 {rollbackReadinessInputs{Family: "paloalto", Rebind: true, Config: []byte(`{"ssl_tls_profile":"web"}`)}, "re-bind", false, "commit_admin"},
-		"f5 with no bound identity":                     {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`)}, "re-bind", false, "no identity is bound"},
-		"f5 bound identity without predecessor":         {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1"}, "re-bind", false, "no predecessor certificate"},
-		"f5 predecessor never deployed through trstctl": {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1", PredecessorKnown: true, PredecessorFingerprint: "ee", PredecessorSerial: "7"}, "re-bind", false, "never delivered"},
+		"family without rollback":                        {rollbackReadinessInputs{Family: "cisco"}, "none", false, "no executable rollback"},
+		"cisco says why":                                 {rollbackReadinessInputs{Family: "cisco"}, "none", false, "uploads and installs the credential together"},
+		"aws-acm says why":                               {rollbackReadinessInputs{Family: "aws-acm"}, "none", false, "keeps no previous version"},
+		"azure-keyvault says why":                        {rollbackReadinessInputs{Family: "azure-keyvault"}, "none", false, "serves the newest"},
+		"plugin family says why":                         {rollbackReadinessInputs{Family: "acme-corp-wasm"}, "none", false, "no rollback entrypoint"},
+		"gcp without certificate_map_entry":              {rollbackReadinessInputs{Family: "gcp-certificate-manager", Rebind: true, Config: []byte(`{"project":"p"}`)}, "re-bind", false, "names no certificate_map_entry"},
+		"gcp with certificate_map_entry and no identity": {rollbackReadinessInputs{Family: "gcp-certificate-manager", Rebind: true, Config: []byte(`{"certificate_map_entry":"m/e"}`)}, "re-bind", false, "no identity is bound"},
+		"host target never deployed":                     {rollbackReadinessInputs{Family: "nginx", HostRollback: true}, "host", false, "no successful enrolled host-agent deploy"},
+		"host target deployed once":                      {rollbackReadinessInputs{Family: "nginx", HostRollback: true, HostEvidenceFound: true, HostIdentityID: "id-1", HostFingerprint: "ff"}, "host", false, "second successful deploy"},
+		"host target with retained predecessor":          {rollbackReadinessInputs{Family: "nginx", HostRollback: true, HostEvidenceFound: true, HostIdentityID: "id-1", HostFingerprint: "ff", HostPredecessorFingerprint: "ee", PredecessorKnown: true}, "host", true, ""},
+		"host predecessor revoked":                       {rollbackReadinessInputs{Family: "nginx", HostRollback: true, HostEvidenceFound: true, HostIdentityID: "id-1", HostFingerprint: "ff", HostPredecessorFingerprint: "ee", PredecessorKnown: true, PredecessorRevoked: true}, "host", false, "revoked"},
+		"fortigate without bind_to":                      {rollbackReadinessInputs{Family: "fortigate", Rebind: true, Config: []byte(`{"endpoint":"https://fgt"}`)}, "re-bind", false, "bind_to"},
+		"paloalto without commit_admin":                  {rollbackReadinessInputs{Family: "paloalto", Rebind: true, Config: []byte(`{"ssl_tls_profile":"web"}`)}, "re-bind", false, "commit_admin"},
+		"f5 with no bound identity":                      {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`)}, "re-bind", false, "no identity is bound"},
+		"f5 bound identity without predecessor":          {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1"}, "re-bind", false, "no predecessor certificate"},
+		"f5 predecessor never deployed through trstctl":  {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1", PredecessorKnown: true, PredecessorFingerprint: "ee", PredecessorSerial: "7"}, "re-bind", false, "never delivered"},
 		"f5 ready": {rollbackReadinessInputs{Family: "f5", Rebind: true, Config: []byte(`{}`), BoundIdentityID: "id-1", PredecessorKnown: true, PredecessorFingerprint: "ee", PredecessorSerial: "7", PredecessorDeliveredHere: true}, "re-bind", true, ""},
 	} {
 		t.Run(name, func(t *testing.T) {

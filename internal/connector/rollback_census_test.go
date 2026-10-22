@@ -83,10 +83,10 @@ func familiesDeclaringRollback(t *testing.T) map[string]bool {
 		if !entry.IsDir() {
 			continue
 		}
-		family := entry.Name()
-		files, err := filepath.Glob(filepath.Join(family, "*.go"))
+		family := familyForPackageDir(entry.Name())
+		files, err := filepath.Glob(filepath.Join(entry.Name(), "*.go"))
 		if err != nil {
-			t.Fatalf("glob %s: %v", family, err)
+			t.Fatalf("glob %s: %v", entry.Name(), err)
 		}
 		for _, file := range files {
 			if strings.HasSuffix(file, "_test.go") {
@@ -106,6 +106,24 @@ func familiesDeclaringRollback(t *testing.T) map[string]bool {
 		}
 	}
 	return out
+}
+
+// familyForPackageDir maps a connector package directory to the family name
+// its Connector.Name() reports and every census is keyed by. Most packages
+// are named after their family; the cloud stores and the JVM keystore are
+// not.
+func familyForPackageDir(dir string) string {
+	switch dir {
+	case "acm":
+		return "aws-acm"
+	case "azurekv":
+		return "azure-keyvault"
+	case "gcpcm":
+		return "gcp-certificate-manager"
+	case "javakeystore":
+		return "java-keystore"
+	}
+	return dir
 }
 
 // The object name is derived from the fingerprint, and that derivation is what

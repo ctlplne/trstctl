@@ -272,20 +272,11 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 	case orchestrator.DestinationIncidentMigrationRevoke:
 		return d.handleIncidentMigrationRevoke(ctx, m)
 	case orchestrator.DestinationConnectorRollback:
-		// Relay-executed kinds. This dispatcher sweeps every "connector." row
-		// (see outboxDispatchFamilies) and does not filter on
-		// required_agent_role, so without this case the default branch below
-		// returns a hard error, the row burns its attempt budget, and it lands
-		// in status='failed' — where ClaimAgentJobs, which requires 'pending',
-		// can never see it. The work is dead-lettered before any relay has a
-		// chance to claim it, while the API has already told the operator it is
-		// queued.
-		//
-		// DeferDelivery is attempt-budget-neutral: it proves no receiver I/O
-		// began, so the row re-pends indefinitely and stays claimable by the
-		// agent that is actually supposed to run it.
-		return orchestrator.DeferDelivery(fmt.Errorf(
-			"server: %s executes on a relay, not the control plane", m.Destination))
+		// Agent-executed rows are deferred so they stay claimable; a
+		// control_plane row (a cloud store's re-bind, A58) runs here. See
+		// routeConnectorRollback for why deferral, not failure, is the only
+		// safe answer for the rows this process does not own.
+		return d.routeConnectorRollback(ctx, m)
 	case "connector.test":
 		return d.routeConnectorTest(ctx, m)
 	case orchestrator.DestinationConnectorRightSize:

@@ -126,9 +126,18 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 			return ConnectorRollbackQueued{}, errors.New("orchestrator: a host rollback needs the exact enrolled agent id that retained the predecessor")
 		}
 	case connector.CanRollback(req.Connector):
-		req.RequiredAgentRole = "network"
 		if req.RequiredAgentID != "" {
 			return ConnectorRollbackQueued{}, errors.New("orchestrator: an appliance re-bind cannot be pinned to a host agent")
+		}
+		// A family whose shipped vantage is the control plane (the cloud
+		// certificate stores, A58) re-binds from the control plane's own
+		// egress-guarded client, exactly where its deploys run. The row is
+		// stamped control_plane so no agent can claim it; the outbox
+		// dispatcher executes it. Appliance families stay relay work.
+		if vantage, shipped := connector.ShippedTargetVantage(req.Connector); shipped && vantage == connector.VantageControlPlane {
+			req.RequiredAgentRole = string(connector.VantageControlPlane)
+		} else {
+			req.RequiredAgentRole = "network"
 		}
 	default:
 		return ConnectorRollbackQueued{}, connector.ErrRollbackUnsupported

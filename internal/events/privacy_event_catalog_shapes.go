@@ -314,10 +314,11 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"connector":"","target":"","fingerprint":"","detail":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/fingerprint", "/detail"}}), true
 	case "connector.rollback.requested":
-		return shape(`{"connector":"","target":"","target_id":"","identity_id":"","target_config":{"key":""},"predecessor_fingerprint":"","predecessor_serial":"","successor_fingerprint":"","reason":"","requested_by":"","required_agent_id":"","required_agent_role":""}`,
+		return shape(`{"connector":"","target":"","target_id":"","identity_id":"","target_config":{"key":""},"predecessor_fingerprint":"","allow_legacy_object":true,"predecessor_serial":"","successor_fingerprint":"","reason":"","requested_by":"","required_agent_id":"","required_agent_role":""}`,
 			catalogPrivacyShapeOptions{
 				Optional: []string{
 					"/target_id", "/identity_id", "/target_config", "/predecessor_serial",
+					"/allow_legacy_object",
 					"/successor_fingerprint", "/reason", "/requested_by", "/required_agent_id",
 					"/required_agent_role",
 				},

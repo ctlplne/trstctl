@@ -108,7 +108,11 @@ func rollbackReadinessFrom(in rollbackReadinessInputs) rollbackReadiness {
 		out.Ready = true
 		return out
 	default:
-		return rollbackReadiness{Model: "none", Reason: "this connector family has no executable rollback route"}
+		reason := "this connector family has no executable rollback route"
+		if why := connector.RollbackUnsupportedReason(in.Family); why != "" {
+			reason += ": " + why
+		}
+		return rollbackReadiness{Model: "none", Reason: reason}
 	}
 }
 
@@ -116,12 +120,17 @@ func rollbackReadinessFrom(in rollbackReadinessInputs) rollbackReadiness {
 // configure before its deploys become fingerprint-named and re-bindable.
 func rebindBindingMissing(family string, config json.RawMessage) string {
 	var fields struct {
-		BindTo        string `json:"bind_to"`
-		SSLTLSProfile string `json:"ssl_tls_profile"`
-		CommitAdmin   string `json:"commit_admin"`
+		BindTo              string `json:"bind_to"`
+		SSLTLSProfile       string `json:"ssl_tls_profile"`
+		CommitAdmin         string `json:"commit_admin"`
+		CertificateMapEntry string `json:"certificate_map_entry"`
 	}
 	_ = json.Unmarshal(config, &fields)
 	switch family {
+	case "gcp-certificate-manager":
+		if strings.TrimSpace(fields.CertificateMapEntry) == "" {
+			return "this gcp-certificate-manager target names no certificate_map_entry (\"<map>/<entry>\"); its deploys patch the target-named certificate in place and leave no predecessor to re-bind"
+		}
 	case "fortigate":
 		if strings.TrimSpace(fields.BindTo) == "" {
 			return "this fortigate target names no bind_to (admin or ssl-vpn); its deploys install in place under the target name and leave no predecessor to re-bind"

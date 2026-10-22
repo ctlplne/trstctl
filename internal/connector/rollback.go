@@ -176,6 +176,36 @@ var rollbackCapableFamilies = []string{
 	// ErrRollbackNotConfigured rather than success (A44).
 	"fortigate",
 	"paloalto",
+	// gcp-certificate-manager re-binds only when the target names a
+	// certificate map entry (certificate_map_entry): deploys then create
+	// fingerprint-named Certificate resources and point the entry at them, so
+	// the predecessor stays in the project. A target without one patches the
+	// target-named certificate in place and its Rollback answers
+	// ErrRollbackNotConfigured (A58). Its work executes in the control plane,
+	// the family's shipped vantage, never on a relay.
+	"gcp-certificate-manager",
+}
+
+// RollbackUnsupportedReason explains, per family, why a connector that is in
+// neither census can roll back: the honest answer is a property of the
+// target's API, not an unfinished feature, and an operator refused during an
+// incident deserves the reason rather than a bare status (A58).
+func RollbackUnsupportedReason(name string) string {
+	if CanExecuteRollback(name) {
+		return ""
+	}
+	switch name {
+	case "cisco":
+		return "Cisco's API exposes one call that uploads and installs the credential together, with no way to address an already-installed object, so there is no re-bind; re-uploading the predecessor key would need a key the control plane no longer holds"
+	case "aws-acm":
+		return "AWS Certificate Manager re-imports in place under one certificate ARN and keeps no previous version, so the predecessor leaves the account on renewal; restoring it would mean re-uploading its key, which the control plane no longer holds. Re-pointing a load balancer or distribution at another ARN is outside this connector"
+	case "azure-keyvault":
+		return "Azure Key Vault keeps every imported version but serves the newest to consumers that read by name, and exposes no call that makes an older version current; re-pointing consumers at a version is outside this connector"
+	}
+	if _, shipped := ShippedTargetVantage(name); !shipped {
+		return "signed WASM connector plugins export deploy only; the plugin ABI has no rollback entrypoint, so the control plane cannot ask a plugin to re-bind or restore"
+	}
+	return "this family's API cannot address an installed object separately from uploading one"
 }
 
 // hostRollbackCapableFamilies is the generated/cross-checked census of native

@@ -59,10 +59,10 @@ func familiesDeclaringMethod(t *testing.T, method string) map[string]bool {
 		if !entry.IsDir() {
 			continue
 		}
-		family := entry.Name()
-		files, err := filepath.Glob(filepath.Join(family, "*.go"))
+		family := familyForPackageDir(entry.Name())
+		files, err := filepath.Glob(filepath.Join(entry.Name(), "*.go"))
 		if err != nil {
-			t.Fatalf("glob %s: %v", family, err)
+			t.Fatalf("glob %s: %v", entry.Name(), err)
 		}
 		for _, file := range files {
 			if strings.HasSuffix(file, "_test.go") {

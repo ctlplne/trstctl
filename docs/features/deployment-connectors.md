@@ -356,6 +356,21 @@ receipt says so (`rolled_back_to_legacy_object`) and does not claim the
 object's contents were re-read. A host agent adopts the pair it finds installed
 before its first deploy to a target as its retained predecessor.
 
+**Cloud stores and rollback.** A `gcp-certificate-manager` target that names a
+`certificate_map_entry` deploys each renewal as a new fingerprint-named
+Certificate resource and points the map entry at it, so the predecessor stays
+in the project and the served rollback route re-points the entry back to it
+without uploading a key; the rollback executes on the control plane's outbox
+worker, where that family's deploys also run, and its receipt reads
+`rolled_back` the same way an agent's would. A target without the map entry
+patches the named certificate in place and its rollback is refused as not
+configured. `aws-acm` and `azure-keyvault` have no executable rollback, and the
+refusal and the destination's `rollback_readiness` say why: ACM re-imports in
+place under one ARN and keeps no previous version, and Key Vault serves the
+newest version by name with no call that makes an older one current. Objects
+accumulate one certificate per deploy on a map-entry target and nothing prunes
+them.
+
 **Take down a rogue object on an appliance.** For f5, kemp, netscaler and a10,
 `connector.takedown` lets a network relay delete the fingerprint-named
 certificate and key objects a deploy installed, under the same credential
@@ -817,7 +832,7 @@ instead of being ignored:
 | `paloalto` | `endpoint`, `api_key_ref`; optional `ssl_tls_profile` with `commit_admin` makes imports fingerprint-named, points the shared SSL/TLS service profile at them with a partial commit, and makes the target rollback-capable |
 | `aws-acm` | `endpoint`, `region`, `access_key_id`, `secret_access_key_ref`; optional `session_token_ref` |
 | `azure-keyvault` | `endpoint`, `bearer_token_ref`; optional `api_version` |
-| `gcp-certificate-manager` | `endpoint`, `project`, `location`, `bearer_token_ref`; optional `poll_interval` |
+| `gcp-certificate-manager` | `endpoint`, `project`, `location`, `bearer_token_ref`; optional `poll_interval`; optional `certificate_map_entry` (`<map>/<entry>`) makes deploys create fingerprint-named certificates bound through that map entry and the target rollback-capable (target name 50 characters or fewer) |
 
 ### Host-executed keys
 

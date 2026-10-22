@@ -248,7 +248,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. A successful host-generated renewal uses the v2 statement, which also binds the installed certificate fingerprint plus origin, storage, exportability, and generator; the projected custody event is replayable. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the changed listener — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
-| Connector rollback | Served through two honest execution models. **f5, kemp, netscaler, a10** re-bind a fingerprint-named object already on the appliance, and **fortigate** (`bind_to`) and **paloalto** (`ssl_tls_profile` + `commit_admin`) do the same when the target names the binding to move. All 14 host connectors restore the one encrypted predecessor bundle retained only by the exact enrolled host agent, run the connector reload, and reverify the listener when configured. Deploy and rollback share a serialized per-target lane. Unsupported cloud/appliance/plugin routes return `409` and write no rollback-shaped receipt. Automatic rollback after `verify_failed` is opt-in per target; manual rollback uses the same job and signed transcript | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
+| Connector rollback | Served through two honest execution models. **f5, kemp, netscaler, a10** re-bind a fingerprint-named object already on the appliance, and **fortigate** (`bind_to`), **paloalto** (`ssl_tls_profile` + `commit_admin`) and **gcp-certificate-manager** (`certificate_map_entry`, executed on the control plane where that family's deploys run) do the same when the target names the binding to move. All 14 host connectors restore the one encrypted predecessor bundle retained only by the exact enrolled host agent, run the connector reload, and reverify the listener when configured. Deploy and rollback share a serialized per-target lane. **aws-acm, azure-keyvault, cisco** and plugin-backed routes have no executable rollback by their APIs' design; the route returns `409` naming that reason, the destination's `rollback_readiness` says the same, and no rollback-shaped receipt is written. A re-bind target without its binding is refused at request time. Automatic rollback after `verify_failed` is opt-in per target; manual rollback uses the same job and signed transcript | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | CA migration waves (H2) | Served for internally issued X.509 identities on host-agent connectors: read-only assessment, reviewed exact-authority manifest, durable trust-before-leaf waves, signed trust/live gates, pause/resume, halt, and newest-first rollback | [Migration waves](#conditional-partial-and-residual-boundaries) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
@@ -1036,13 +1036,18 @@ never live in the API process. What you can do end to end against the running bi
   seven appliance rows distinguish faithful management-API doubles from the six
   rows that have only ordinary connector tests. A guard fails if a version claim
   appears, and all thirteen rows explicitly say no external target was tested.
-  Rollback, restated honestly after that work: cisco, fortigate and paloalto CANNOT
-  re-bind, and it is a property of their APIs rather than an unfinished feature.
-  Each exposes a single call that both uploads and installs the credential, with no
-  way to address an already-installed object, so the only available "rollback" would
-  be re-uploading the predecessor key — which the control plane no longer holds after
-  B1. They are correctly absent from the rollback census and their tests pin that
-  absence in both directions.
+  Rollback, restated honestly after that work: cisco CANNOT re-bind, and it is a
+  property of its API rather than an unfinished feature. It exposes a single call
+  that both uploads and installs the credential, with no way to address an
+  already-installed object, so the only available "rollback" would be re-uploading
+  the predecessor key — which the control plane no longer holds after B1. fortigate
+  and paloalto re-bind only when the target names the binding to move (A44), and
+  the same is now true of gcp-certificate-manager through a certificate map entry
+  (A58). aws-acm and azure-keyvault stay absent from the census for the same kind
+  of reason: ACM re-imports in place under one ARN and keeps no previous version,
+  and Key Vault keeps versions but serves the newest by name with no call that
+  makes an older one current. The census tests pin each absence in both
+  directions and the refusal names the family's reason.
   `buildRunDeps` constructs the operator-selected production registry; strict
   target schemas bind endpoint/filesystem/process and same-tenant secret
   references before a served issue/deploy route can enqueue work.
@@ -2141,11 +2146,22 @@ names the binding to move: FortiGate `bind_to` (`admin` re-points
 `system.global` `admin-server-cert`, `ssl-vpn` re-points `vpn.ssl.settings`
 `servercert`) and PAN-OS `ssl_tls_profile` with `commit_admin` (the shared
 SSL/TLS service profile is set and a partial commit scoped to that administrator
-pushes only its own changes). A fortigate or paloalto target without that
-binding deploys in place under the target name as before and its rollback is
-refused as not configured, never reported as done. cisco does not implement
-re-bind and the census says so rather than offering a rollback that would
-return success having changed nothing. A rollback whose predecessor object is no longer on the appliance
+pushes only its own changes). One cloud store joins them (A58):
+**gcp-certificate-manager** with `certificate_map_entry` (`<map>/<entry>`)
+creates a fingerprint-named Certificate resource per deploy and points the map
+entry at it, so a rollback re-points the entry at the predecessor still in the
+project; because that family's deploys run on the control plane's
+egress-guarded client, its rollback row is stamped `control_plane`, no agent
+can claim it, and the outbox worker performs the re-bind and records the same
+`rolled_back` receipt an agent would. A fortigate, paloalto or GCP target
+without that binding deploys in place under the target name as before and its
+rollback is refused at request time as not configured, never reported as done.
+cisco does not implement re-bind and the census says so rather than offering a
+rollback that would return success having changed nothing; **aws-acm** (one ARN,
+re-imported in place, no previous version) and **azure-keyvault** (versions kept,
+newest always served by name, no call to make an older one current) are refused
+with those reasons on the route and in `rollback_readiness`. Plugin-backed
+connectors are refused because the plugin ABI exports deploy only. A rollback whose predecessor object is no longer on the appliance
 **fails**, with a distinct error, because reporting success there tells an
 operator that a bad certificate stopped serving traffic when it did not.
 

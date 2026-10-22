@@ -435,9 +435,9 @@ var servedConnectorCatalog = []connectorCatalogItem{
 	{Name: "iis", Kind: "windows", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous binding thumbprint"},
 	{Name: "postfix", Kind: "mail", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous Postfix/Dovecot certificate/key files"},
 	{Name: "traefik", Kind: "file/process", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous file-provider cert/key files"},
-	{Name: "aws-acm", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "repoint listener to previous ACM ARN"},
-	{Name: "azure-keyvault", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "reactivate prior certificate version"},
-	{Name: "gcp-certificate-manager", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "reattach prior certificate resource"},
+	{Name: "aws-acm", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "none: ACM re-imports in place under one ARN and keeps no previous version"},
+	{Name: "azure-keyvault", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "none: Key Vault serves the newest version and cannot make an older one current"},
+	{Name: "gcp-certificate-manager", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "re-point the certificate map entry at the prior fingerprint-named certificate (targets with certificate_map_entry)"},
 	{Name: "java-keystore", Kind: "keystore", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous keystore object"},
 	{Name: "postgresql", Kind: "database", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous server certificate/key files"},
 	{Name: "mysql", Kind: "database", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous server certificate/key files"},
@@ -839,8 +839,20 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		predecessor := resolvePredecessorCertificate(ctx, a.store, tenantID, identityID)
 		var rollbackRef string
 		if !connector.CanExecuteRollback(target.Type) {
-			return 0, nil, errStatus(http.StatusConflict,
-				"this connector family has no executable rollback route; no rollback receipt was recorded")
+			msg := "this connector family has no executable rollback route; no rollback receipt was recorded"
+			if why := connector.RollbackUnsupportedReason(target.Type); why != "" {
+				msg += ". " + why
+			}
+			return 0, nil, errStatus(http.StatusConflict, msg)
+		}
+		if connector.CanRollback(target.Type) && !connector.CanRollbackOnHost(target.Type) {
+			// A re-bind family whose target does not name the binding deploys
+			// in place and leaves nothing to re-bind; refuse here rather than
+			// queue work its executor would decline (the same refusal
+			// rollback_readiness reports).
+			if why := rebindBindingMissing(target.Type, target.Config); why != "" {
+				return 0, nil, errStatus(http.StatusConflict, why+"; no rollback was queued or recorded")
+			}
 		}
 		if a.orch == nil {
 			return 0, nil, errors.New("connector rollback orchestrator is not configured")
@@ -893,6 +905,13 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				" (fingerprint " + predecessor.Fingerprint + ") from that agent's encrypted local ledger. " +
 				"The predecessor key never passes through the control plane. " +
 				"The agent reloads the service and reverifies the configured listener; missing or mismatched local state fails closed."
+		} else if rollbackExecutesOnControlPlane(target.Type) {
+			statusReason = "rollback_queued_for_control_plane_execution"
+			rollbackRef = "queued for control-plane execution on " + target.Name +
+				": re-bind to the predecessor certificate serial " + predecessor.Serial +
+				" (fingerprint " + predecessor.Fingerprint + ") through the provider API, where this family's deploys also run. " +
+				"No key is uploaded. Whether that object still exists in the provider is verified when it runs; " +
+				"if it is gone the rollback fails rather than reporting success."
 		} else {
 			rollbackRef = "queued for enrolled network-relay execution on " + target.Name +
 				": re-bind to the predecessor certificate serial " + predecessor.Serial +
@@ -1734,6 +1753,17 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		out = append(out, item)
 	}
 	return out
+}
+
+// rollbackExecutesOnControlPlane reports whether a re-bind family's rollback
+// runs on the control plane's outbox worker (the cloud certificate stores,
+// A58) rather than on a network relay. It mirrors the orchestrator's routing.
+func rollbackExecutesOnControlPlane(family string) bool {
+	if !connector.CanRollback(family) {
+		return false
+	}
+	vantage, shipped := connector.ShippedTargetVantage(family)
+	return shipped && vantage == connector.VantageControlPlane
 }
 
 func replaySafetyLabel(safety connector.ReplaySafety) string {
