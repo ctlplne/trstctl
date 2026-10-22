@@ -149,6 +149,27 @@ func (s *Server) stepDispatchingCampaign(
 		// the rest of the ring cannot un-fail it.
 		return nil
 	}
+	if outcome.Failed == 0 && outcome.Silent() == 0 {
+		// A70: every dispatched agent is on the target build. Before the next
+		// ring, the campaign's soak window must pass with the ring still
+		// healthy: a build that came up and degrades minutes later must not
+		// reach the next ring first. An agent that stops heartbeating during
+		// the soak is silence, and silence halts.
+		var latest time.Time
+		for _, st := range statuses {
+			if st.DispatchedAt.After(latest) {
+				latest = st.DispatchedAt
+			}
+			if st.AgentLastSeen == nil || st.AgentLastSeen.Before(cutoff) {
+				outcome.Verified--
+			}
+		}
+		if outcome.Silent() == 0 {
+			if until, soaking := fleet.SoakPending(c.SoakSeconds, latest, time.Now().UTC()); soaking {
+				return s.recordSoak(ctx, tenantID, c, ring, until)
+			}
+		}
+	}
 	d := fleet.Advance(c.Status, outcome)
 	haltedAt := fleet.Ring("")
 	if d.NextState == fleet.StateHalted {
@@ -193,6 +214,21 @@ func (s *Server) stepObserveOnlyCampaign(
 	if waiting {
 		return nil
 	}
+	if outcome.Failed == 0 && outcome.Silent() == 0 {
+		// A70, observe-only: the soak clock starts when the campaign entered
+		// this ring (its last state change); an agent not seen within the grace
+		// during the soak is silence.
+		for _, a := range agents {
+			if a.LastSeenAt == nil || a.LastSeenAt.Before(cutoff) {
+				outcome.Verified--
+			}
+		}
+		if outcome.Silent() == 0 {
+			if until, soaking := fleet.SoakPending(c.SoakSeconds, c.UpdatedAt, time.Now().UTC()); soaking {
+				return s.recordSoak(ctx, tenantID, c, ring, until)
+			}
+		}
+	}
 	d := fleet.Advance(c.Status, outcome)
 	haltedAt := fleet.Ring("")
 	if d.NextState == fleet.StateHalted {
@@ -236,4 +272,19 @@ func (s *Server) RunAgentUpgradeCampaigns(ctx context.Context) {
 			sweep()
 		}
 	}
+}
+
+// recordSoak serves the soak as the campaign's reason exactly once per ring:
+// the operator reads when the ring may advance instead of a running campaign
+// that appears stuck. Later sweeps inside the window change nothing.
+func (s *Server) recordSoak(ctx context.Context, tenantID string, c store.AgentUpgradeCampaign, ring fleet.Ring, until time.Time) error {
+	reason := fleet.SoakReason(ring, until)
+	if c.Reason == reason {
+		return nil
+	}
+	s.logger.Info("agent upgrade ring soaking",
+		slog.String("tenant_id", tenantID), slog.String("campaign_id", c.ID),
+		slog.String("ring", string(ring)), slog.String("until", until.UTC().Format(time.RFC3339)))
+	return s.orch.AdvanceAgentUpgradeCampaign(ctx, tenantID, c.ID,
+		fleet.Decision{NextState: fleet.StateRunning, NextRing: ring, Reason: reason}, "")
 }

@@ -499,6 +499,9 @@ type AgentUpgradeCampaignOpened struct {
 	TargetVersion string           `json:"target_version"`
 	CreatedBy     string           `json:"created_by,omitempty"`
 	Artifacts     []fleet.Artifact `json:"artifacts,omitempty"`
+	// SoakSeconds is the per-ring soak window (A70); zero or absent advances a
+	// verified ring at once, which is what every campaign before it did.
+	SoakSeconds int `json:"soak_seconds,omitempty"`
 }
 
 // AgentUpgradeCampaignAdvanced records every state change, including the halt.
@@ -4554,7 +4557,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err != nil {
 			return err
 		}
-		return p.store.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.TargetVersion, pl.CreatedBy, artifacts, e.Time)
+		return p.store.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.TargetVersion, pl.CreatedBy, artifacts, pl.SoakSeconds, e.Time)
 	case EventAgentUpgradeRingDispatched:
 		var pl AgentUpgradeRingDispatched
 		if err := decode(e, &pl); err != nil {

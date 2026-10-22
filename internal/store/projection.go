@@ -145,7 +145,7 @@ func (s *Store) ApplyOwnerReattestationRequestedTx(
 }
 
 // ApplyAgentUpgradeCampaignOpenedTx projects agent.upgrade.campaign.opened (A5).
-func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, version, createdBy string, artifacts []byte, at time.Time) error {
+func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, version, createdBy string, artifacts []byte, soakSeconds int, at time.Time) error {
 	// Target-less ON CONFLICT DO NOTHING on purpose: besides the primary key the
 	// table has the one-active-campaign partial index. The command refuses a second
 	// open before appending (DP2-048), but a log that already carries such an
@@ -153,9 +153,9 @@ func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx
 	// absorbed, its id was never returned to a caller, and replaying the winner
 	// converges the same way.
 	_, err := tx.Exec(ctx,
-		`INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, created_by, artifacts, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
-		id, tenantID, version, createdBy, artifacts, at)
+		`INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, created_by, artifacts, soak_seconds, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+		id, tenantID, version, createdBy, artifacts, soakSeconds, at)
 	return err
 }
 

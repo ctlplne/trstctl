@@ -1464,6 +1464,7 @@ AgentUpgradeCampaign = TypedDict(
         'observe_only': bool,
         'reason': str,
         'rings': dict[str, Any],
+        'soak_seconds': int,
         'status': str,
         'target_version': str,
         'versions': dict[str, Any],
@@ -1475,6 +1476,7 @@ AgentUpgradeCampaignInput = TypedDict(
     'AgentUpgradeCampaignInput',
     {
         'artifacts': list[dict[str, Any]],
+        'soak_seconds': int,
         'target_version': str,
     },
     total=False,

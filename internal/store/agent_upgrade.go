@@ -31,19 +31,22 @@ type AgentUpgradeCampaign struct {
 	// the next sweep.
 	DispatchRound  int
 	DispatchedRing string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// SoakSeconds is how long a verified ring must stay healthy before the next
+	// ring is dispatched (A70). Zero advances at once.
+	SoakSeconds int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 const campaignCols = `id::text, tenant_id::text, target_version, status, current_ring,
 	halted_at_ring, reason, created_by, artifacts, coalesce(dispatch_round, 0),
-	coalesce(dispatched_ring, ''), created_at, updated_at`
+	coalesce(dispatched_ring, ''), created_at, updated_at, coalesce(soak_seconds, 0)`
 
 func scanCampaign(row pgx.Row) (AgentUpgradeCampaign, error) {
 	var c AgentUpgradeCampaign
 	err := row.Scan(&c.ID, &c.TenantID, &c.TargetVersion, &c.Status, &c.CurrentRing,
 		&c.HaltedAtRing, &c.Reason, &c.CreatedBy, &c.ArtifactsJSON, &c.DispatchRound,
-		&c.DispatchedRing, &c.CreatedAt, &c.UpdatedAt)
+		&c.DispatchedRing, &c.CreatedAt, &c.UpdatedAt, &c.SoakSeconds)
 	return c, err
 }
 

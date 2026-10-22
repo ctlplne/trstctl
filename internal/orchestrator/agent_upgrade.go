@@ -36,17 +36,20 @@ func (e *AgentUpgradeCampaignActiveError) Error() string {
 // rings on the versions the fleet reports while something else moves agents —
 // the only mode that existed before dispatch was built. With artifacts, the
 // sweep dispatches agent.upgrade jobs ring by ring and the fleet moves itself.
-func (o *Orchestrator) OpenAgentUpgradeCampaign(ctx context.Context, tenantID, targetVersion, createdBy string, artifacts []fleet.Artifact) (store.AgentUpgradeCampaign, error) {
+func (o *Orchestrator) OpenAgentUpgradeCampaign(ctx context.Context, tenantID, targetVersion, createdBy string, artifacts []fleet.Artifact, soakSeconds int) (store.AgentUpgradeCampaign, error) {
 	if strings.TrimSpace(targetVersion) == "" {
 		return store.AgentUpgradeCampaign{}, fmt.Errorf("orchestrator: an upgrade campaign needs a target version")
 	}
 	if err := fleet.ValidateArtifacts(artifacts); err != nil {
 		return store.AgentUpgradeCampaign{}, fmt.Errorf("orchestrator: %w", err)
 	}
+	if err := fleet.ValidateSoak(soakSeconds); err != nil {
+		return store.AgentUpgradeCampaign{}, fmt.Errorf("orchestrator: %w", err)
+	}
 	id := uuid.NewString()
 	payload, err := json.Marshal(projections.AgentUpgradeCampaignOpened{
 		ID: id, TargetVersion: strings.TrimSpace(targetVersion), CreatedBy: createdBy,
-		Artifacts: artifacts,
+		Artifacts: artifacts, SoakSeconds: soakSeconds,
 	})
 	if err != nil {
 		return store.AgentUpgradeCampaign{}, err

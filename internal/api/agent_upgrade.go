@@ -19,6 +19,9 @@ type upgradeCampaignBody struct {
 	// DISPATCHES: one downloadable build per platform, each pinned by its
 	// sha256. Omitted = observe-only, the pre-dispatch behavior.
 	Artifacts []fleet.Artifact `json:"artifacts,omitempty"`
+	// SoakSeconds keeps a verified ring under observation for this long before
+	// the next ring is dispatched (A70). Zero, the default, advances at once.
+	SoakSeconds int `json:"soak_seconds,omitempty"`
 }
 
 type ringAssignBody struct {
@@ -51,7 +54,10 @@ type upgradeCampaignResponse struct {
 	// which ring currently holds jobs and how many rounds have been sent.
 	DispatchedRing string `json:"dispatched_ring,omitempty"`
 	DispatchRound  int    `json:"dispatch_round,omitempty"`
-	Guidance       string `json:"guidance"`
+	// SoakSeconds is the campaign's per-ring soak window; the reason says when
+	// a soaking ring may advance.
+	SoakSeconds int    `json:"soak_seconds"`
+	Guidance    string `json:"guidance"`
 }
 
 const upgradeGuidance = "A staged rollout halts AUTOMATICALLY when a ring fails: one unhealthy " +
@@ -87,6 +93,7 @@ func (a *API) getUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		out.CurrentRing, out.HaltedAtRing, out.Reason = c.CurrentRing, c.HaltedAtRing, c.Reason
 		out.ObserveOnly = len(c.ArtifactsJSON) == 0
 		out.DispatchedRing, out.DispatchRound = c.DispatchedRing, c.DispatchRound
+		out.SoakSeconds = c.SoakSeconds
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -105,7 +112,10 @@ func (a *API) openUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		if err := fleet.ValidateArtifactSignatures(body.Artifacts, a.agentUpgradePublisherKey); err != nil {
 			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
 		}
-		c, err := a.orch.OpenAgentUpgradeCampaign(ctx, tenantID, body.TargetVersion, principalSubject(ctx), body.Artifacts)
+		if err := fleet.ValidateSoak(body.SoakSeconds); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		c, err := a.orch.OpenAgentUpgradeCampaign(ctx, tenantID, body.TargetVersion, principalSubject(ctx), body.Artifacts, body.SoakSeconds)
 		if err != nil {
 			var active *orchestrator.AgentUpgradeCampaignActiveError
 			if errors.As(err, &active) {
@@ -116,6 +126,7 @@ func (a *API) openUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		return http.StatusCreated, upgradeCampaignResponse{
 			ID: c.ID, TargetVersion: c.TargetVersion, Active: true, Status: c.Status,
 			ObserveOnly: len(body.Artifacts) == 0,
+			SoakSeconds: body.SoakSeconds,
 			Rings:       map[string]int{}, Versions: map[string]int{}, Guidance: upgradeGuidance,
 		}, nil
 	})

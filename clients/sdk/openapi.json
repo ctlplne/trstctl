@@ -4288,6 +4288,9 @@
           "rings": {
             "type": "object"
           },
+          "soak_seconds": {
+            "type": "integer"
+          },
           "status": {
             "enum": [
               "pending",
@@ -4320,6 +4323,9 @@
               "$ref": "#/components/schemas/UpgradeArtifact"
             },
             "type": "array"
+          },
+          "soak_seconds": {
+            "type": "integer"
           },
           "target_version": {
             "type": "string"

@@ -1060,6 +1060,7 @@ export interface AgentUpgradeCampaign {
   observe_only?: boolean;
   reason?: string;
   rings: Record<string, unknown>;
+  soak_seconds?: number;
   status?: "pending" | "running" | "halted" | "paused" | "complete";
   target_version?: string;
   versions: Record<string, unknown>;
@@ -1067,6 +1068,7 @@ export interface AgentUpgradeCampaign {
 
 export interface AgentUpgradeCampaignInput {
   artifacts?: UpgradeArtifact[];
+  soak_seconds?: number;
   target_version: string;
 }
 

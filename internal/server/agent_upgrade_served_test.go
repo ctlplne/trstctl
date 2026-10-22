@@ -28,6 +28,7 @@ type campaignView struct {
 	Reason       string         `json:"reason"`
 	Rings        map[string]int `json:"rings"`
 	Versions     map[string]int `json:"versions"`
+	SoakSeconds  int            `json:"soak_seconds"`
 }
 
 func readCampaign(t *testing.T, h *servedHarness, tok string) campaignView {

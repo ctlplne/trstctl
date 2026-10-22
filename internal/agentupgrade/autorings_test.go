@@ -33,8 +33,9 @@ func TestPlanAutoRingsPrefersFreshLongEnrolledCanariesAndFillsEveryRing(t *testi
 	if len(plan.Early) != 1 || plan.Early[0].AgentID != "a-mid" {
 		t.Fatalf("early = %+v, want the next fresh agent by enrollment age", plan.Early)
 	}
-	if len(plan.Broad) != 3 || plan.Broad[0].AgentID != "a-new" || plan.Broad[1].AgentID != "a-silent" || plan.Broad[2].AgentID != "a-never" {
-		t.Fatalf("broad = %+v, want the rest with silent agents last", plan.Broad)
+	// The silent agents come last, longest enrolled first among them.
+	if len(plan.Broad) != 3 || plan.Broad[0].AgentID != "a-new" || plan.Broad[1].AgentID != "a-never" || plan.Broad[2].AgentID != "a-silent" {
+		t.Fatalf("broad = %+v, want the rest with silent agents last, longest enrolled first", plan.Broad)
 	}
 	// Deterministic: the same input plans the same rings.
 	again, _ := fleet.PlanAutoRings(candidates, 0, 0, now, 90*time.Second)

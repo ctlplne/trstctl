@@ -8761,6 +8761,7 @@ export interface components {
             observe_only?: boolean;
             reason?: string;
             rings: Record<string, never>;
+            soak_seconds?: number;
             /** @enum {string} */
             status?: "pending" | "running" | "halted" | "paused" | "complete";
             target_version?: string;
@@ -8768,6 +8769,7 @@ export interface components {
         };
         AgentUpgradeCampaignInput: {
             artifacts?: components["schemas"]["UpgradeArtifact"][];
+            soak_seconds?: number;
             target_version: string;
         };
         AgentWorkloadAPIStatus: {

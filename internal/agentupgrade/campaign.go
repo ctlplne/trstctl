@@ -9,7 +9,10 @@
 // caller.
 package agentupgrade
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Ring names one stage of a rollout. Canary first, always.
 //
@@ -170,4 +173,36 @@ func Resume(state string, haltedAt Ring) (Decision, error) {
 // flowing is worse than no pause, because an operator believes they stopped it.
 func CanDispatch(state string) bool {
 	return state == StatePending || state == StateRunning
+}
+
+// MaxSoakSeconds bounds a per-ring soak window (A70) at seven days: a longer
+// one is a campaign nobody is watching, and the operator can pause instead.
+const MaxSoakSeconds = 7 * 24 * 60 * 60
+
+// ValidateSoak refuses a soak window the sweep could not honour.
+func ValidateSoak(seconds int) error {
+	if seconds < 0 {
+		return fmt.Errorf("agentupgrade: soak_seconds must be zero (advance at once) or positive")
+	}
+	if seconds > MaxSoakSeconds {
+		return fmt.Errorf("agentupgrade: soak_seconds %d exceeds the seven-day maximum", seconds)
+	}
+	return nil
+}
+
+// SoakReason is the sentence a soaking campaign serves while it waits.
+func SoakReason(ring Ring, until time.Time) string {
+	return fmt.Sprintf("Soaking: the %s ring verified and must stay healthy until %s before the next ring is dispatched.",
+		ring, until.UTC().Format(time.RFC3339))
+}
+
+// SoakPending reports whether a fully verified ring is still inside its soak
+// window: the window starts when the ring was dispatched (or entered) and
+// lasts soakSeconds. Zero means no window.
+func SoakPending(soakSeconds int, since, now time.Time) (time.Time, bool) {
+	if soakSeconds <= 0 || since.IsZero() {
+		return time.Time{}, false
+	}
+	until := since.Add(time.Duration(soakSeconds) * time.Second)
+	return until, now.Before(until)
 }

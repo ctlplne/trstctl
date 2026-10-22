@@ -5009,6 +5009,7 @@ func componentSchemas() map[string]*Schema {
 		// dispatches agent.upgrade jobs itself (artifacts were published).
 		"observe_only": {Type: "boolean"},
 		// dispatched_ring / dispatch_round are the live dispatch state.
+		"soak_seconds":    {Type: "integer"},
 		"dispatched_ring": str(), "dispatch_round": {Type: "integer"},
 		"guidance": str(),
 		// observe_only is always serialized but NOT in the required list: the
@@ -5027,6 +5028,9 @@ func componentSchemas() map[string]*Schema {
 	}, "os", "arch", "url", "sha256")
 	agentUpgradeCampaignInput := object(map[string]*Schema{
 		"target_version": str(),
+		// A70: seconds a verified ring stays under observation before the next
+		// ring dispatches; zero advances at once.
+		"soak_seconds": {Type: "integer"},
 		// artifacts turns the campaign from observe-only into one that
 		// dispatches: one build per platform. Omitted = observe-only. A named
 		// component ref, not an inline object: generated clients get a real

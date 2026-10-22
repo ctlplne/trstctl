@@ -21,7 +21,7 @@ func TestAgentUpgradeCampaignOpenedProjectionAbsorbsASecondActiveCampaign(t *tes
 	const winner, loser = "0dc00000-0000-4000-8000-000000000001", "0dc00000-0000-4000-8000-000000000002"
 	for _, id := range []string{winner, loser, loser} {
 		if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-			return st.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, tenantA, id, "2.0.0", "ops", []byte(`{}`), now)
+			return st.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, tenantA, id, "2.0.0", "ops", []byte(`{}`), 0, now)
 		}); err != nil {
 			t.Fatalf("project campaign %s: %v", id, err)
 		}

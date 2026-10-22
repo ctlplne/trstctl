@@ -230,7 +230,7 @@ func TestDualUniqueUpsertsConvergeUnderSimultaneousReplay(t *testing.T) {
 				tid := raceTenant(t, st, 19, r)
 				id := raceUUID(19, r)
 				return tid, id, func(ctx context.Context, tx pgx.Tx) error {
-					return st.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, tid, id, "1.2.3", "ops", []byte(`{}`), now)
+					return st.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, tid, id, "1.2.3", "ops", []byte(`{}`), 0, now)
 				}
 			}},
 		{name: "cmdb_reconcile_schedules", count: `SELECT count(*) FROM cmdb_reconcile_schedules WHERE tenant_id = $1::uuid`,

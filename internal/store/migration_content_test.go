@@ -1090,6 +1090,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
 	296: true, // TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus
+	297: true, // TestMigration0297GivesExistingCampaignsNoSoak
 	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
@@ -5854,5 +5855,39 @@ func seedADCSPostureContent(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 			r.tenantID, r.domain, r.template, r.severity, r.count); err != nil {
 			t.Fatalf("seed adcs posture %s/%s: %v", r.domain, r.template, err)
 		}
+	}
+}
+
+// A70: the soak column arrives with a zero default, so every campaign opened
+// before it keeps advancing a verified ring at once; nothing is reinterpreted.
+func TestMigration0297GivesExistingCampaignsNoSoak(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 297)
+	if target.noTx || target.name != "0297_agent_upgrade_soak.sql" {
+		t.Fatalf("migration 0297 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	campaignID := uuid(tenantA, 29701)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, status)
+		VALUES ($1, $2, '2.0.0', 'running')`, campaignID, tenantA); err != nil {
+		t.Fatalf("seed pre-0297 campaign: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var soak int
+	if err := pool.QueryRow(ctx, `SELECT soak_seconds FROM agent_upgrade_campaigns WHERE tenant_id=$1 AND id=$2`, tenantA, campaignID).Scan(&soak); err != nil {
+		t.Fatal(err)
+	}
+	if soak != 0 {
+		t.Fatalf("legacy campaign soak_seconds = %d, want 0", soak)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE agent_upgrade_campaigns SET soak_seconds = 600 WHERE tenant_id=$1 AND id=$2`, tenantA, campaignID); err != nil {
+		t.Fatalf("0297 refused a soak window: %v", err)
 	}
 }
