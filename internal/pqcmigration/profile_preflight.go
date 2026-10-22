@@ -91,6 +91,11 @@ func (s *pqcMigrationService) preflightPQCReissues(ctx context.Context, tenantID
 		if err := s.requireHostTLSProbeForMLDSA(ctx, tenantID, agentID, reissue.TargetAlgorithm, identity.Name); err != nil {
 			return nil, err
 		}
+		if hostAgent, err := s.store.GetAgent(ctx, tenantID, agentID); err == nil {
+			if err := api.RequireHostAgentProfileUsable(hostAgent, "PQC host migration of "+identity.Name); err != nil {
+				return nil, err
+			}
+		}
 		if _, err := s.store.GetOwner(ctx, tenantID, identity.OwnerID); err != nil {
 			return nil, err
 		}

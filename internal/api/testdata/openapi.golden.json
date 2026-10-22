@@ -3734,6 +3734,10 @@
           "reported_executor_version": {
             "type": "string"
           },
+          "reported_host_profile_error": {
+            "description": "The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded.",
+            "type": "string"
+          },
           "reported_host_tls_probe": {
             "type": "boolean"
           },

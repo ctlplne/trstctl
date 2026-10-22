@@ -2635,6 +2635,18 @@ than sending an operator looking for a credential that was never there.
   ML-DSA leaf; `reported_host_tls_probe` on the agent), so the run is not
   queued only to fail fifteen attempts; an agent that reports no census is
   admitted, and its own refusal phrase then names the cause in the finding.
+  The same census carries the binary's own reason when its host execution
+  profile could not be loaded (`reported_host_profile_error` on the agent;
+  for example a `tls_probe_openssl` that is a symbolic link, which the agent
+  refuses while naming the resolved path to pin): that relay claims no host
+  work, so a connector target deploy or an ML-DSA host migration bound to it
+  is refused with HTTP 409 naming the agent and the reason, instead of
+  waiting on a claim that never comes.
+  When the certificate was issued but the host could not install it, the
+  agent's receipt names the step that failed (the host sandbox refused the
+  write, the connector's configuration test refused the new pair, or the
+  reload action failed) and the finding carries that phrase; the underlying
+  error stays in the agent's own log on that host and is never served.
 - Signing history is verifiable after the fact: `GET
   /api/v1/code-signing/identities` (and `trstctl-cli code-signing identities`)
   lists recent signing operations with their identity kind (`managed` for a

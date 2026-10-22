@@ -128,6 +128,9 @@ type agentResponse struct {
 	// ReportedHostTLSProbe says whether the binary's host exec profile pins
 	// tls_probe_openssl (B6-1); absent until the binary has reported a census.
 	ReportedHostTLSProbe *bool `json:"reported_host_tls_probe,omitempty"`
+	// ReportedHostProfileError is the binary's own reason its host exec
+	// profile could not be loaded (B7); absent when it loaded.
+	ReportedHostProfileError string `json:"reported_host_profile_error,omitempty"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	// LiveClaims are the jobs this agent holds under an unexpired lease (A67):
 	// job id, kind, attempt and lease expiry from the ledger, never a payload.
@@ -370,6 +373,36 @@ func agentReportedHostTLSProbe(a store.Agent) *bool {
 	return &census.HostTLSProbe
 }
 
+// AgentReportedHostProfileError reads the census's host profile load error
+// (B7); empty until a census was reported or when the profile loaded.
+func AgentReportedHostProfileError(a store.Agent) string {
+	if a.ExecutorsReportedAt == nil || len(a.Executors) == 0 {
+		return ""
+	}
+	var census struct {
+		HostProfileError string `json:"host_profile_error"`
+	}
+	if err := json.Unmarshal(a.Executors, &census); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(census.HostProfileError)
+}
+
+// RequireHostAgentProfileUsable refuses work bound to a host agent whose
+// executor census says its host execution profile could not be loaded (B7):
+// that relay claims no host work, so the row would wait on a claim that never
+// comes and the operator would see only a timeout. An agent that reported no
+// census, or no error, is admitted.
+func RequireHostAgentProfileUsable(agent store.Agent, work string) error {
+	reason := AgentReportedHostProfileError(agent)
+	if reason == "" {
+		return nil
+	}
+	return ErrStatus(http.StatusConflict, fmt.Sprintf(
+		"%s is bound to host agent %s, whose host execution profile could not be loaded (%s); repair the profile and restart the agent first; nothing was queued or changed",
+		work, agent.Name, reason))
+}
+
 func agentReportedCapabilities(a store.Agent) []agentReportedCapabilityResponse {
 	if a.ExecutorsReportedAt == nil || len(a.Executors) == 0 {
 		return nil
@@ -482,6 +515,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		_ = json.Unmarshal(a.Executors, &census)
 		out.ReportedExecutorVersion = census.Version
 		out.ReportedHostTLSProbe = agentReportedHostTLSProbe(a)
+		out.ReportedHostProfileError = AgentReportedHostProfileError(a)
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}

@@ -8627,6 +8627,8 @@ export interface components {
             relay_capabilities: components["schemas"]["AgentRelayCapability"][];
             reported_capabilities?: components["schemas"]["AgentReportedCapability"][];
             reported_executor_version?: string;
+            /** @description The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded. */
+            reported_host_profile_error?: string;
             reported_host_tls_probe?: boolean;
             /** @enum {string} */
             role_source: "certificate" | "unreported";

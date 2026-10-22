@@ -677,7 +677,7 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		// A62: the binary's own executor census. A self-report over the
 		// authenticated channel that authorizes nothing; bounded here and in
 		// the projector so a heartbeat cannot carry arbitrary bulk.
-		census := &projections.AgentExecutorCensus{Version: strings.TrimSpace(req.Executors.Version), Kinds: []projections.AgentExecutorKind{}, HostTLSProbe: req.Executors.HostTLSProbe}
+		census := &projections.AgentExecutorCensus{Version: strings.TrimSpace(req.Executors.Version), Kinds: []projections.AgentExecutorKind{}, HostTLSProbe: req.Executors.HostTLSProbe, HostProfileError: strings.TrimSpace(req.Executors.HostProfileError)}
 		if census.Version == "" {
 			census.Version = strings.TrimSpace(req.Version)
 		}

@@ -739,6 +739,9 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err := requireDeploymentTargetEnabled(target); err != nil {
 			return 0, nil, err
 		}
+		if err := a.requireTargetHostProfileUsable(ctx, tenantID, target, "deploy to "+target.Name); err != nil {
+			return 0, nil, err
+		}
 		identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
 		if err != nil {
 			return 0, nil, err

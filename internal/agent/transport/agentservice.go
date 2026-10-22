@@ -125,6 +125,12 @@ type ExecutorReport struct {
 	// verify the served leaf (B6-1). The control plane refuses such a
 	// migration to a host that reports none instead of queuing attempts.
 	HostTLSProbe bool `json:"host_tls_probe,omitempty"`
+	// HostProfileError is the reason this host's exec profile could not be
+	// loaded, when it could not (B7): the relay then claims no host work, and
+	// the control plane refuses host deploys to it by name instead of letting
+	// them wait on a claim that never comes. Empty when the profile loaded or
+	// none was configured.
+	HostProfileError string `json:"host_profile_error,omitempty"`
 }
 
 // ExecutorKind is one shipped job kind as the binary itself reports it.

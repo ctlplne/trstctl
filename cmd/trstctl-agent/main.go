@@ -1361,16 +1361,26 @@ type channelAdapter struct {
 // executorCensus is what THIS binary ships and which enabling flags this
 // process was started without, so the console can show the enrolled binary's
 // own executor list rather than the server build's. It authorizes nothing.
-// hostProfilePinsTLSProbe reports whether this host's exec profile pins the
-// native TLS probe an ML-DSA host migration needs (B6-1). An unreadable
-// profile reports false; the relay loop refuses to start on it anyway.
-func hostProfilePinsTLSProbe(o agentOptions) bool {
+// hostProfileCensus loads the host exec profile the way the relay loop does
+// and reports whether it pins the native TLS probe and, when it cannot be
+// loaded, the bounded reason (B7), so a deploy bound to this host is refused
+// by name instead of waiting on a claim the relay will never make.
+func hostProfileCensus(o agentOptions) (pinsProbe bool, loadError string) {
 	if o.hostExecProfile == "" {
-		return false
+		return false, ""
 	}
 	loaded, err := relay.LoadHostProfile(o.hostExecProfile)
-	return err == nil && loaded.TLSProbeOpenSSL != ""
+	if err != nil {
+		reason := err.Error()
+		if len(reason) > hostProfileErrorLimit {
+			reason = reason[:hostProfileErrorLimit]
+		}
+		return false, reason
+	}
+	return loaded.TLSProbeOpenSSL != "", ""
 }
+
+const hostProfileErrorLimit = 512
 
 func executorCensus(o agentOptions) *transport.ExecutorReport {
 	set := map[string]bool{
@@ -1378,7 +1388,8 @@ func executorCensus(o agentOptions) *transport.ExecutorReport {
 		"--host-exec-profile": o.hostExecProfile != "",
 		"--host-rollback-dir": o.hostRollbackDir != "",
 	}
-	report := &transport.ExecutorReport{Version: buildinfo.Version(), Kinds: []transport.ExecutorKind{}, HostTLSProbe: hostProfilePinsTLSProbe(o)}
+	pinsProbe, profileError := hostProfileCensus(o)
+	report := &transport.ExecutorReport{Version: buildinfo.Version(), Kinds: []transport.ExecutorKind{}, HostTLSProbe: pinsProbe, HostProfileError: profileError}
 	for _, kind := range relay.ShippedJobKinds() {
 		missing := []string{}
 		for _, flag := range kind.Flags {

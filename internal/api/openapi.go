@@ -5460,11 +5460,12 @@ func componentSchemas() map[string]*Schema {
 		// A62: what the enrolled binary itself reported on its newest
 		// heartbeat, role-filtered the same way; capability_source says which
 		// list describes this agent.
-		"reported_capabilities":     {Type: "array", Items: ref("AgentReportedCapability")},
-		"capability_source":         {Type: "string", Enum: []string{"reported", "server_census"}},
-		"capabilities_reported_at":  timestamp(),
-		"reported_executor_version": str(),
-		"reported_host_tls_probe":   {Type: "boolean"},
+		"reported_capabilities":       {Type: "array", Items: ref("AgentReportedCapability")},
+		"capability_source":           {Type: "string", Enum: []string{"reported", "server_census"}},
+		"capabilities_reported_at":    timestamp(),
+		"reported_executor_version":   str(),
+		"reported_host_tls_probe":     {Type: "boolean"},
+		"reported_host_profile_error": {Type: "string", Description: "The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded."},
 		// A66/A67: the jobs this agent holds under an unexpired lease and the
 		// per-agent quota (0 = none) the channel enforces on new claims.
 		"live_claims":         {Type: "array", Items: ref("AgentLiveClaim")},

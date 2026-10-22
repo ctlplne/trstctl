@@ -2040,6 +2040,9 @@ type AgentExecutorCensus struct {
 	Kinds   []AgentExecutorKind `json:"kinds"`
 	// HostTLSProbe: the host exec profile pins tls_probe_openssl (B6-1).
 	HostTLSProbe bool `json:"host_tls_probe,omitempty"`
+	// HostProfileError: why the host exec profile could not be loaded (B7);
+	// empty when it loaded.
+	HostProfileError string `json:"host_profile_error,omitempty"`
 }
 
 // AgentExecutorKind is one job kind in an agent's self-reported census.
