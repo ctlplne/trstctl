@@ -5,9 +5,11 @@ package enterpriseauth
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/netsec"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
@@ -50,10 +52,12 @@ func buildSAMLAuthConfig(s config.SAML, secure bool, newSessionIssuer func([]byt
 		return nil, err
 	}
 	provider, err := cryptosamlsp.NewServiceProvider(cryptosamlsp.Config{
-		EntityID:       s.EntityID,
-		MetadataURL:    s.MetadataURL,
-		ACSURL:         s.ACSURL,
-		IDPMetadataXML: metadata,
+		EntityID:            s.EntityID,
+		MetadataURL:         s.MetadataURL,
+		ACSURL:              s.ACSURL,
+		IDPMetadataXML:      metadata,
+		ResponseBinding:     s.ResponseBinding,
+		NewArtifactResolver: samlArtifactResolver,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("server: configure SAML SP: %w", err)
@@ -242,4 +246,12 @@ func loadOrCreateNamedSessionSecret(field, path string) ([]byte, error) {
 		return nil, fmt.Errorf("server: session secret %q is too short (%d bytes); want >= 32", path, len(secret))
 	}
 	return secret, nil
+}
+
+// samlArtifactResolver is the back-channel client for SAML artifact
+// resolution (A76): the IdP's endpoint is operator-declared metadata, so it is
+// dialed under the same rule as every other configured endpoint (https, or
+// plain http on a loopback host only).
+func samlArtifactResolver(endpoint string) (*http.Client, error) {
+	return netsec.OutboundClientForEndpoint(endpoint, 10*time.Second)
 }

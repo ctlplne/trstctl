@@ -706,6 +706,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		if a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil {
 			mux.HandleFunc("GET /auth/saml/login", a.authSAMLLogin)
 			mux.HandleFunc("POST /auth/saml/acs", a.authSAMLACS)
+			// The artifact binding delivers an opaque SAMLart by redirect (A76);
+			// the handler resolves it and refuses artifacts when the binding is off.
+			mux.HandleFunc("GET /auth/saml/acs", a.authSAMLACS)
 			mux.HandleFunc("GET /auth/saml/metadata", a.authSAMLMetadata)
 		}
 		if a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil {

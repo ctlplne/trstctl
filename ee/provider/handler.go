@@ -107,7 +107,7 @@ func (h *handler) serveIdentityRoute(w http.ResponseWriter, r *http.Request) boo
 			h.saml.ServeLogin(w, r)
 		}
 		return true
-	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/auth/saml/acs":
+	case (r.Method == http.MethodPost || r.Method == http.MethodGet) && r.URL.Path == "/provider/v1/auth/saml/acs":
 		if h.saml == nil {
 			http.NotFound(w, r)
 		} else {

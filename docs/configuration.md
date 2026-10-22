@@ -928,6 +928,7 @@ Multi-token JSON configuration and a complete SAML block:
       "metadata_url": "https://trstctl.provider.example/provider/v1/auth/saml/metadata",
       "acs_url": "https://trstctl.provider.example/provider/v1/auth/saml/acs",
       "idp_metadata_file": "/etc/trstctl/provider-idp-metadata.xml",
+      "response_binding": "post",
       "session_secret_file": "/var/lib/trstctl/provider-saml-session.secret",
       "role_attribute": "groups",
       "admin_values": ["provider-admin"],
@@ -1167,6 +1168,9 @@ auth:
     metadata_url: https://trstctl.example.com/auth/saml/metadata
     acs_url: https://trstctl.example.com/auth/saml/acs
     idp_metadata_file: /etc/trstctl/idp-metadata.xml
+    # post (default) or artifact: with artifact the IdP's metadata must declare a
+    # SOAP ArtifactResolutionService, which the SP calls over the back-channel.
+    response_binding: post
     session_secret_file: /var/lib/trstctl/saml-session.secret
     tenant_claim: tenant
     groups_claim: groups

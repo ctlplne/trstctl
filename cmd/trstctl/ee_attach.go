@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	_ "trstctl.com/trstctl/ee"
 	eeauditcompliance "trstctl.com/trstctl/ee/auditcompliance"
@@ -34,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	eekmip "trstctl.com/trstctl/internal/kmip"
 	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/server"
@@ -357,6 +359,10 @@ func providerSAMLAuthenticator(
 	sp, err := cryptosamlsp.NewServiceProvider(cryptosamlsp.Config{
 		EntityID: cfg.Provider.SAML.EntityID, MetadataURL: cfg.Provider.SAML.MetadataURL,
 		ACSURL: cfg.Provider.SAML.ACSURL, IDPMetadataXML: metadata, RequireRequestCorrelation: true,
+		ResponseBinding: cfg.Provider.SAML.ResponseBinding,
+		NewArtifactResolver: func(endpoint string) (*http.Client, error) {
+			return netsec.OutboundClientForEndpoint(endpoint, 10*time.Second)
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("provider.saml: %w", err)

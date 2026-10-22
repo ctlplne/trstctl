@@ -4,7 +4,9 @@ package enterpriseauth
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"html"
 	"io"
 	"net"
@@ -14,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,6 +217,82 @@ type mockSAMLIdP struct {
 	nextUser      string
 	spEntityID    string
 	spMetadataURL string
+	// artifacts holds signed Response documents issued under the HTTP-Artifact
+	// binding (A76), keyed by the opaque artifact the browser carried.
+	artifacts map[string][]byte
+	resolves  int
+}
+
+// serveSSO answers an AuthnRequest the way the IdP library does for the POST
+// binding, and for the artifact binding hands the browser only an opaque
+// artifact while keeping the signed Response for the back-channel.
+func (m *mockSAMLIdP) serveSSO(w http.ResponseWriter, r *http.Request) {
+	req, err := saml.NewIdpAuthnRequest(m.idp, r)
+	if err != nil || req.Validate() != nil {
+		http.Error(w, "bad AuthnRequest", http.StatusBadRequest)
+		return
+	}
+	if req.Request.ProtocolBinding != saml.HTTPArtifactBinding {
+		m.idp.ServeSSO(w, r)
+		return
+	}
+	session := m.users[m.nextUser]
+	if session == nil {
+		http.Error(w, "no session", http.StatusUnauthorized)
+		return
+	}
+	if err := (saml.DefaultAssertionMaker{}).MakeAssertion(req, session); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := req.MakeResponse(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	form, err := req.PostBinding()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	raw, err := base64.StdEncoding.DecodeString(form.SAMLResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if m.artifacts == nil {
+		m.artifacts = map[string][]byte{}
+	}
+	artifact := fmt.Sprintf("AAQAA-mock-artifact-%d", len(m.artifacts)+1)
+	m.artifacts[artifact] = raw
+	query := url.Values{"SAMLart": {artifact}}
+	if req.RelayState != "" {
+		query.Set("RelayState", req.RelayState)
+	}
+	http.Redirect(w, r, req.ACSEndpoint.Location+"?"+query.Encode(), http.StatusFound) // #nosec G710 -- test IdP redirects to the ACS it read from the SP's own metadata (CWE-601)
+}
+
+// serveArtifactResolve answers the SP's SOAP ArtifactResolve with an
+// ArtifactResponse wrapping the signed Response issued for that artifact.
+func (m *mockSAMLIdP) serveArtifactResolve(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	resolveID := regexp.MustCompile(`ArtifactResolve[^>]*\sID="([^"]+)"`).FindSubmatch(body)
+	artifact := regexp.MustCompile(`<(?:samlp:)?Artifact>([^<]+)</(?:samlp:)?Artifact>`).FindSubmatch(body)
+	if r.Method != http.MethodPost || len(resolveID) != 2 || len(artifact) != 2 {
+		http.Error(w, "bad ArtifactResolve", http.StatusBadRequest)
+		return
+	}
+	response, ok := m.artifacts[string(artifact[1])]
+	if !ok {
+		http.Error(w, "unknown artifact", http.StatusNotFound)
+		return
+	}
+	delete(m.artifacts, string(artifact[1]))
+	m.resolves++
+	w.Header().Set("Content-Type", "text/xml")
+	_, _ = fmt.Fprintf(w, `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body>`+
+		`<samlp:ArtifactResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="id-artifact-response-%d" InResponseTo="%s" Version="2.0" IssueInstant="%s">`+
+		`<saml:Issuer>%s</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>%s</samlp:ArtifactResponse></soapenv:Body></soapenv:Envelope>`,
+		m.resolves, html.EscapeString(string(resolveID[1])), time.Now().UTC().Format(time.RFC3339), html.EscapeString(m.idp.Metadata().EntityID), response)
 }
 
 func newMockSAMLIdP(t *testing.T) *mockSAMLIdP {
@@ -228,7 +307,9 @@ func newMockSAMLIdP(t *testing.T) *mockSAMLIdP {
 		case "/metadata":
 			m.idp.ServeMetadata(w, r)
 		case "/sso":
-			m.idp.ServeSSO(w, r)
+			m.serveSSO(w, r)
+		case "/artifact":
+			m.serveArtifactResolve(w, r)
 		case "/idp-init":
 			m.idp.ServeIDPInitiated(w, r, m.spEntityID, "")
 		default:
@@ -277,7 +358,10 @@ func samlAttributeValues(values []string) []saml.AttributeValue {
 
 func (m *mockSAMLIdP) metadataXML(t *testing.T) string {
 	t.Helper()
-	data, err := xml.MarshalIndent(m.idp.Metadata(), "", "  ")
+	descriptor := m.idp.Metadata()
+	// A76: declare the SOAP artifact resolution service beside SSO.
+	descriptor.IDPSSODescriptors[0].ArtifactResolutionServices = []saml.Endpoint{{Binding: saml.SOAPBinding, Location: m.srv.URL + "/artifact"}}
+	data, err := xml.MarshalIndent(descriptor, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal IdP metadata: %v", err)
 	}
@@ -337,4 +421,96 @@ func buildSAMLServer(t *testing.T, ctx context.Context, dsn string, samlCfg conf
 		t.Fatalf("build control plane: %v", err)
 	}
 	return srv
+}
+
+// A76: with auth.saml.response_binding "artifact" the browser never carries the
+// signed assertion. The SP asks for the HTTP-Artifact result binding, the IdP
+// redirects the browser to the ACS with only an opaque SAMLart, and the served
+// binary resolves it over a back-channel SOAP call before minting the same
+// tenant session the POST binding mints.
+func TestServedSAMLArtifactBindingLoginResolvesOverTheBackChannel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	const tenantA = "11111111-1111-1111-1111-111111111111"
+	dsn := serverTestPostgresDSN(t)
+	st, err := store.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	resetServerTestStore(t, st)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	baseURL := "http://" + ln.Addr().String()
+	idp := newMockSAMLIdP(t)
+	samlCfg := config.SAML{
+		Enabled: true, EntityID: baseURL + "/auth/saml/metadata", MetadataURL: baseURL + "/auth/saml/metadata",
+		ACSURL: baseURL + "/auth/saml/acs", IDPMetadataXML: idp.metadataXML(t), ResponseBinding: "artifact",
+		SessionSecretFile: t.TempDir() + "/session.secret", SessionTTL: "1h", LoginRedirect: "/",
+		TenantClaim: "tenant", GroupsClaim: "groups", EmailAttribute: "email",
+		TenantMappings: []config.TenantMapping{{Subject: "alice@example.test", TenantID: tenantA, Roles: []string{"admin"}}},
+	}
+	idp.spEntityID = samlCfg.EntityID
+	idp.spMetadataURL = samlCfg.MetadataURL
+	idp.registerUser("alice", "alice@example.test", "alice@example.test", tenantA, []string{"admins"})
+	srv := buildSAMLServer(t, ctx, dsn, samlCfg)
+	defer func() { _ = srv.Shutdown(context.Background()) }()
+	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = httpSrv.Serve(ln) }()
+	defer func() { _ = httpSrv.Close() }()
+
+	jar, _ := cookiejar.New(nil)
+	client := noFollowClient(jar)
+	idp.nextUser = "alice"
+	const target = "/certificates?expiry=30d"
+	resp, err := client.Get(baseURL + "/auth/saml/login?return_to=" + url.QueryEscape(target))
+	if err != nil || resp.StatusCode != http.StatusFound {
+		t.Fatalf("GET /auth/saml/login = %v %v, want 302 to the IdP", resp, err)
+	}
+	idpURL := resp.Header.Get("Location")
+	_ = resp.Body.Close()
+	resp, err = client.Get(idpURL)
+	if err != nil {
+		t.Fatalf("GET IdP SSO: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("IdP SSO under the artifact binding = %d, want a 302 carrying SAMLart: %s", resp.StatusCode, body)
+	}
+	acs := resp.Header.Get("Location")
+	if !strings.Contains(acs, "SAMLart=") || strings.Contains(acs, "SAMLResponse=") {
+		t.Fatalf("IdP redirect = %q, want an opaque artifact and no assertion", acs)
+	}
+	resp, err = client.Get(acs)
+	if err != nil {
+		t.Fatalf("GET ACS with the artifact: %v", err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != target {
+		t.Fatalf("ACS with the artifact = %d → %q (%s), want 302 to %q", resp.StatusCode, resp.Header.Get("Location"), body, target)
+	}
+	if idp.resolves != 1 {
+		t.Fatalf("artifact resolutions = %d, want exactly one back-channel call", idp.resolves)
+	}
+	assertAuthMeTenant(t, baseURL, jar, tenantA)
+
+	// The same artifact cannot be replayed: the IdP has consumed it and the
+	// SP reports the failed resolution as a verification failure.
+	resp, err = client.Get(acs)
+	if err != nil {
+		t.Fatalf("replayed ACS: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("replayed artifact = %d, want a refusal", resp.StatusCode)
+	}
 }

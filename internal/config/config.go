@@ -546,6 +546,12 @@ type SAML struct {
 	IDPMetadataFile string `json:"idp_metadata_file,omitempty"`
 	// IDPMetadataXML is inline IdP metadata XML.
 	IDPMetadataXML string `json:"idp_metadata_xml,omitempty"`
+	// ResponseBinding is how the IdP returns the assertion: "post" (default) or
+	// "artifact", where the browser carries only an opaque artifact and the SP
+	// resolves it over a back-channel SOAP call to the IdP's artifact
+	// resolution service declared in its metadata (A76). That endpoint must be
+	// https, or plain http on a loopback host.
+	ResponseBinding string `json:"response_binding,omitempty"`
 	// SessionSecretFile persists the HMAC secret that signs browser sessions.
 	SessionSecretFile string `json:"session_secret_file,omitempty"`
 	// SessionTTL is the lifetime of a session cookie. Empty defaults to 12h.
@@ -1404,6 +1410,7 @@ type ProviderSAML struct {
 	ACSURL            string   `json:"acs_url,omitempty"`
 	IDPMetadataFile   string   `json:"idp_metadata_file,omitempty"`
 	IDPMetadataXML    string   `json:"idp_metadata_xml,omitempty"`
+	ResponseBinding   string   `json:"response_binding,omitempty"`
 	SessionSecretFile string   `json:"session_secret_file,omitempty"`
 	SessionTTL        string   `json:"session_ttl,omitempty"`
 	LoginRedirect     string   `json:"login_redirect,omitempty"`
@@ -3363,6 +3370,9 @@ func validateProviderConfig(c *Config) []error {
 		if ttl, err := saml.SessionTTLDuration(); err != nil || ttl <= 0 {
 			errs = append(errs, fmt.Errorf("provider.saml.session_ttl %q must be a positive Go duration", saml.SessionTTL))
 		}
+		if err := validateSAMLResponseBinding("provider.saml", saml.ResponseBinding); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	if scim := c.Provider.SCIM; scim.Enabled {
@@ -4715,8 +4725,20 @@ func (s SAML) validate() []error {
 	} else if d <= 0 {
 		errs = append(errs, errors.New("auth.saml.session_ttl must be positive"))
 	}
+	if err := validateSAMLResponseBinding("auth.saml", s.ResponseBinding); err != nil {
+		errs = append(errs, err)
+	}
 	errs = append(errs, validateTenantMappings("auth.saml", s.TenantMappings, s.TenantClaim, s.AllowDefaultTenant, s.DefaultTenant)...)
 	return errs
+}
+
+// validateSAMLResponseBinding admits "", "post" and "artifact" (A76).
+func validateSAMLResponseBinding(prefix, value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "post", "artifact":
+		return nil
+	}
+	return fmt.Errorf("%s.response_binding %q must be \"post\" or \"artifact\"", prefix, value)
 }
 
 func (l LDAP) validate() []error {

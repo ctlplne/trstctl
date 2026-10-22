@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/crewjam/saml"
 	crewjamsamlsp "github.com/crewjam/saml/samlsp"
@@ -28,6 +29,31 @@ type Config struct {
 	// of the caller-supplied request IDs. Provider workforce login enables this
 	// because the browser always starts at its SP login route.
 	RequireRequestCorrelation bool
+	// ResponseBinding is how the IdP returns the assertion: ResponseBindingPost
+	// (the default) or ResponseBindingArtifact, where the browser carries only
+	// an opaque artifact to the ACS and the SP resolves it over a back-channel
+	// SOAP call to the IdP's artifact resolution service (A76).
+	ResponseBinding string
+	// NewArtifactResolver builds the HTTP client used for that back-channel
+	// call, given the IdP's artifact resolution endpoint, so the caller's
+	// outbound network policy applies to it. Required with the artifact binding.
+	NewArtifactResolver func(endpoint string) (*http.Client, error)
+}
+
+// Response bindings an SP may ask the IdP for.
+const (
+	ResponseBindingPost     = "post"
+	ResponseBindingArtifact = "artifact"
+)
+
+// ValidResponseBinding reports whether value names a supported response
+// binding; empty means the default (POST).
+func ValidResponseBinding(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", ResponseBindingPost, ResponseBindingArtifact:
+		return true
+	}
+	return false
 }
 
 // Redirect is an SP-initiated login redirect plus the generated request ID.
@@ -46,8 +72,13 @@ type Assertion struct {
 
 // ServiceProvider verifies SAML responses for one configured IdP.
 type ServiceProvider struct {
-	sp *saml.ServiceProvider
+	sp       *saml.ServiceProvider
+	artifact bool
 }
+
+// ArtifactBinding reports whether this SP asks the IdP for the artifact
+// response binding.
+func (p *ServiceProvider) ArtifactBinding() bool { return p.artifact }
 
 // NewServiceProvider builds a SAML SP from operator configuration.
 func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
@@ -83,12 +114,35 @@ func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
 	if cfg.RequireRequestCorrelation {
 		sp.ValidateRequestID = validateRequiredRequestID
 	}
-	return &ServiceProvider{sp: sp}, nil
+	if !ValidResponseBinding(cfg.ResponseBinding) {
+		return nil, fmt.Errorf("samlsp: response_binding %q must be %q or %q", cfg.ResponseBinding, ResponseBindingPost, ResponseBindingArtifact)
+	}
+	out := &ServiceProvider{sp: sp}
+	if strings.EqualFold(strings.TrimSpace(cfg.ResponseBinding), ResponseBindingArtifact) {
+		endpoint := sp.GetArtifactBindingLocation(saml.SOAPBinding)
+		if endpoint == "" {
+			return nil, errors.New("samlsp: response_binding artifact needs an ArtifactResolutionService with the SOAP binding in the IdP metadata; none is declared")
+		}
+		if cfg.NewArtifactResolver == nil {
+			return nil, errors.New("samlsp: response_binding artifact needs an artifact resolver client")
+		}
+		client, err := cfg.NewArtifactResolver(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("samlsp: artifact resolution endpoint %q: %w", endpoint, err)
+		}
+		sp.HTTPClient = client
+		out.artifact = true
+	}
+	return out, nil
 }
 
 // LoginRedirect creates an HTTP-Redirect binding AuthnRequest to the IdP.
 func (p *ServiceProvider) LoginRedirect(relayState string) (Redirect, error) {
-	req, err := p.sp.MakeAuthenticationRequest(p.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, saml.HTTPPostBinding)
+	resultBinding := saml.HTTPPostBinding
+	if p.artifact {
+		resultBinding = saml.HTTPArtifactBinding
+	}
+	req, err := p.sp.MakeAuthenticationRequest(p.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, resultBinding)
 	if err != nil {
 		return Redirect{}, err
 	}
@@ -104,11 +158,19 @@ func (p *ServiceProvider) MetadataXML() ([]byte, error) {
 	return xml.MarshalIndent(p.sp.Metadata(), "", "  ")
 }
 
-// VerifyResponse parses, signature-verifies, and validates a POST-binding SAML
-// response from the ACS request.
+// VerifyResponse parses, signature-verifies, and validates the SAML response
+// from the ACS request: a POST-binding SAMLResponse, or, when this SP uses the
+// artifact binding, a SAMLart that it resolves over the back-channel first. An
+// artifact arriving at an SP that did not ask for the binding is refused.
 func (p *ServiceProvider) VerifyResponse(r *http.Request, possibleRequestIDs []string) (Assertion, error) {
 	if err := r.ParseForm(); err != nil {
 		return Assertion{}, err
+	}
+	if r.Form.Get("SAMLart") != "" && !p.artifact {
+		return Assertion{}, errors.New("samlsp: artifact binding is not enabled for this service provider")
+	}
+	if r.Form.Get("SAMLart") == "" && r.Form.Get("SAMLResponse") == "" {
+		return Assertion{}, errors.New("samlsp: the ACS request carries neither SAMLResponse nor SAMLart")
 	}
 	assertion, err := p.sp.ParseResponse(r, possibleRequestIDs)
 	if err != nil {

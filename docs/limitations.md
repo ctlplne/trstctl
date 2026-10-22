@@ -4920,8 +4920,15 @@ Azure AD, Okta, Ping, Google, Auth0, Keycloak, and similar providers. SAML serve
 SP-initiated login (`/auth/saml/login`), IdP-initiated login through the ACS
 (`/auth/saml/acs`), and SP metadata (`/auth/saml/metadata`). SAML assertion
 verification requires configured IdP metadata and accepts signed HTTP-POST binding
-responses; it does not yet expose artifact binding, encrypted assertion decryption,
-or SLO/logout propagation. LDAP / Active Directory serves username/password bind at
+responses, and the HTTP-Artifact binding (`auth.saml.response_binding: artifact`,
+also `provider.saml.response_binding`): the browser then carries only an opaque
+artifact to the ACS and the SP resolves it over a back-channel SOAP call to the
+IdP's artifact resolution service, dialed under the same endpoint rule as every
+configured URL (https, or plain http on a loopback host), so the signed response
+never transits the browser; an artifact arriving at an SP that did not ask for
+the binding is refused, and an IdP whose metadata declares no SOAP artifact
+resolution service fails startup. It does not yet expose encrypted assertion
+decryption or SLO/logout propagation. LDAP / Active Directory serves username/password bind at
 `POST /auth/ldap/login`, supports direct-bind or service-account user search plus
 group search, and maps directory groups to tenant roles. It does not yet implement
 Kerberos/GSSAPI, NTLM, password-change flows, nested-group expansion, or directory
