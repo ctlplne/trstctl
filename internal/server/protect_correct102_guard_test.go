@@ -39,15 +39,18 @@ import (
 // issuance.go, so the order check is scoped to the path every supported issuer uses.
 func mintServedLeafSource(t *testing.T) string {
 	t.Helper()
-	src, err := os.ReadFile("issuance.go")
+	// The served keygen mint lives in issuance_mint.go since the batch-6
+	// split; the selection wrapper delegates to the template mint, which is
+	// the function that orders profile validation before the CA call.
+	src, err := os.ReadFile("issuance_mint.go")
 	if err != nil {
-		t.Fatalf("CORRECT-102 anchor: cannot read issuance.go: %v", err)
+		t.Fatalf("CORRECT-102 anchor: cannot read issuance_mint.go: %v", err)
 	}
 	body := string(src)
-	const sig = "func (d *issuanceDispatcher) mintServedLeafMaterialForSelection("
+	const sig = "func (d *issuanceDispatcher) mintServedLeafMaterialFromTemplate("
 	start := strings.Index(body, sig)
 	if start < 0 {
-		t.Fatalf("CORRECT-102 anchor: mintServedLeafMaterialForSelection no longer exists in issuance.go (the served issuance seam moved); re-point this guard")
+		t.Fatalf("CORRECT-102 anchor: mintServedLeafMaterialFromTemplate no longer exists in issuance_mint.go (the served issuance seam moved); re-point this guard")
 	}
 	// The next top-level func declaration bounds this function's body.
 	rest := body[start+len(sig):]
