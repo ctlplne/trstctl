@@ -71,7 +71,30 @@ func (a *agentService) recordEndpointPurgeResult(ctx context.Context,
 			Fingerprint: queued.Fingerprint, Status: status, Attempts: req.Attempt,
 			Reason: result.State, Detail: string(detail), IdempotencyKey: queued.IdempotencyKey,
 		})
-	return err
+	if err != nil || status != servedstatus.ConnectorPurged || queued.IdentityID == nil {
+		return err
+	}
+	return a.closeDeployedStateAfterPurge(ctx, info.TenantID, *queued.IdentityID, queued.Fingerprint)
+}
+
+// closeDeployedStateAfterPurge moves an identity from deployed back to issued
+// once no target still serves the purged leaf (B5-3). The purged receipt
+// already drops the target from installed_on; this keeps the lifecycle
+// state honest for an identity whose material is served nowhere. An identity
+// still served by another target keeps its state.
+func (a *agentService) closeDeployedStateAfterPurge(ctx context.Context, tenantID, identityID, fingerprint string) error {
+	stillServed, err := a.store.DeliveredTargetsForFingerprint(ctx, tenantID, fingerprint)
+	if err != nil || len(stillServed) > 0 {
+		return err
+	}
+	ident, err := a.store.GetIdentity(ctx, tenantID, identityID)
+	if err != nil || ident.Status != string(orchestrator.StateDeployed) {
+		return err
+	}
+	if err := a.orch.TransitionAfterVerifiedPurge(ctx, tenantID, identityID); err != nil && !errors.Is(err, orchestrator.ErrInvalidTransition) {
+		return err
+	}
+	return nil
 }
 
 // recordEndpointPurgeFailure makes an agent's signed refusal visible on the

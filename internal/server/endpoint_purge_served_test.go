@@ -34,6 +34,14 @@ func TestServedPurgeRemovesInstalledMaterialThroughTheEnrolledHost(t *testing.T)
 		t.Fatalf("heartbeat: %v", err)
 	}
 	f := seedPurgeFixture(t, ctx, h, token, agentID)
+	// The real flow leaves the identity deployed once the host served the leaf; the
+	// fixture seeds the delivery receipt directly, so mirror that state here.
+	if ident, err := h.store.GetIdentity(ctx, h.tenant, f.identityID); err == nil {
+		ident.Status = "deployed"
+		if err := h.store.UpsertIdentity(ctx, ident); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// Preview names the exact leaf, agent and the purge capability.
 	status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/connectors/targets/"+f.targetID+"/purge/preview", token, nil)
@@ -113,6 +121,15 @@ func TestServedPurgeRemovesInstalledMaterialThroughTheEnrolledHost(t *testing.T)
 	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/connectors/deliveries/"+final.ID, token, nil)
 	if status != http.StatusOK || !strings.Contains(string(body), `"status":"purged"`) {
 		t.Fatalf("served receipt = %d %s", status, body)
+	}
+
+	// B5-3: the purged target no longer serves the leaf, so it leaves installed_on
+	// at once, and an identity served nowhere reads issued rather than deployed.
+	if served, err := h.store.DeliveredTargetsForFingerprint(ctx, h.tenant, f.fingerprint); err != nil || len(served) != 0 {
+		t.Fatalf("targets still serving the purged leaf = %+v err=%v; want none", served, err)
+	}
+	if ident, err := h.store.GetIdentity(ctx, h.tenant, f.identityID); err != nil || ident.Status != "issued" {
+		t.Fatalf("identity after purge = %+v err=%v; want issued (the certificate exists, nothing serves it)", ident.Status, err)
 	}
 
 	// A tampered report (digest of a different outcome) is refused.

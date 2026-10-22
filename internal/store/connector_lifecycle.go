@@ -1293,12 +1293,21 @@ func (s *Store) DeliveredTargetsForFingerprint(ctx context.Context, tenantID, fi
 	}
 	var out []DeliveredTarget
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT connector, target
-			  FROM connector_delivery_receipts
-			 WHERE tenant_id = $1 AND lower(fingerprint) = lower($2)
-			   AND ((destination = 'connector.deploy' AND status IN ('delivered', 'verified'))
-			     OR (destination = 'connector.rollback' AND status = 'rolled_back'))
-			 ORDER BY connector, target`, tenantID, fingerprint)
+		// B5-3: a target whose material was purged after its last delivery no
+		// longer serves this leaf; the purged receipt is newer than every
+		// delivery and the pair drops out of installed_on at once.
+		rows, err := tx.Query(ctx, `SELECT DISTINCT d.connector, d.target
+			  FROM connector_delivery_receipts d
+			 WHERE d.tenant_id = $1 AND lower(d.fingerprint) = lower($2)
+			   AND ((d.destination = 'connector.deploy' AND d.status IN ('delivered', 'verified'))
+			     OR (d.destination = 'connector.rollback' AND d.status = 'rolled_back'))
+			   AND NOT EXISTS (
+			     SELECT 1 FROM connector_delivery_receipts p
+			      WHERE p.tenant_id = d.tenant_id AND lower(p.fingerprint) = lower(d.fingerprint)
+			        AND p.connector = d.connector AND p.target = d.target
+			        AND p.destination = 'endpoint.purge' AND p.status = 'purged'
+			        AND p.updated_at >= d.updated_at)
+			 ORDER BY d.connector, d.target`, tenantID, fingerprint)
 		if err != nil {
 			return err
 		}

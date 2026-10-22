@@ -8102,6 +8102,10 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 			destination = "ca.issue"
 		} else if undeploy {
 			destination = "connector.rollback"
+			// B5-3: a host purge also completes the undeploy edge, as a removal.
+			if pl.SideEffect != nil && pl.SideEffect.Destination == "endpoint.purge" {
+				destination = "endpoint.purge"
+			}
 		}
 		if pl.SideEffect == nil || !pl.SideEffect.Completed ||
 			pl.SideEffect.Destination != destination ||

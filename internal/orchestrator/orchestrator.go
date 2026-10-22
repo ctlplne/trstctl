@@ -273,6 +273,16 @@ func (o *Orchestrator) TransitionAfterVerifiedRollback(ctx context.Context, tena
 		nil, "", "", nil, nil, nil, version, "connector.rollback", transitionOptions{verifiedRollback: true})
 }
 
+// TransitionAfterVerifiedPurge records that the enrolled host removed the
+// deployed material (B5-3). The certificate remains issued but is served
+// nowhere, so the identity reads issued, not deployed. Only the trusted
+// agent-result receiver may use this edge, and it queues no rollback: the
+// completed effect is the purge itself.
+func (o *Orchestrator) TransitionAfterVerifiedPurge(ctx context.Context, tenantID, identityID string) error {
+	return o.transition(ctx, tenantID, identityID, StateIssued, "host_material_purged",
+		nil, "", "", nil, nil, nil, nil, "endpoint.purge", transitionOptions{verifiedPurge: true})
+}
+
 // TransitionWithIdempotency moves an identity like Transition, but binds any
 // outbox side effect to the served request's Idempotency-Key. The generic HTTP
 // idempotency cache should normally catch a replay before this method is called;
@@ -370,6 +380,10 @@ type transitionOptions struct {
 	renewalAttempt   *store.RenewalAttempt
 	compromise       *EndpointContainmentRequest
 	verifiedRollback bool
+	// verifiedPurge is the host's signed statement that the deployed material was
+	// removed (B5-3): the identity is issued but served nowhere, and no rollback
+	// is queued or claimed.
+	verifiedPurge bool
 }
 
 // FailRenewalAttempt records the exact authenticated job attempt in the durable
@@ -426,9 +440,10 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		return fmt.Errorf("orchestrator: load identity %s: %w", identityID, err)
 	}
 	from := State(ident.Status)
-	if (from == StateDeployed && to == StateIssued) != option.verifiedRollback ||
-		(option.verifiedRollback && completedDestination != "connector.rollback") {
-		return errors.New("orchestrator: deployed-to-issued requires a verified host rollback")
+	if (from == StateDeployed && to == StateIssued) != (option.verifiedRollback || option.verifiedPurge) ||
+		(option.verifiedRollback && completedDestination != "connector.rollback") ||
+		(option.verifiedPurge && completedDestination != "endpoint.purge") {
+		return errors.New("orchestrator: deployed-to-issued requires a verified host rollback or purge")
 	}
 	if o.ownershipAttestationCadence > 0 && from == StateRequested && to == StateIssued &&
 		boundDeploymentTargetID(ident) != "" {
@@ -486,7 +501,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 
 	evType, ok := EventTypeFor(from, to)
-	if option.verifiedRollback {
+	if option.verifiedRollback || option.verifiedPurge {
+		// The deployed -> issued edge is reachable only through a verified host
+		// rollback or purge, never through the generic lifecycle mutation.
 		evType, ok = transitionEvents[edge{from, to}]
 	}
 	if !ok {
@@ -520,7 +537,8 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
 	sideEffectCompleted := completedDestination != ""
 	if completedDestination != "" {
-		if !hasSideEffect || sideEffectDest != completedDestination {
+		purgeCompletes := option.verifiedPurge && completedDestination == "endpoint.purge"
+		if !hasSideEffect || (sideEffectDest != completedDestination && !purgeCompletes) {
 			return fmt.Errorf("orchestrator: completed side effect %q does not satisfy %s -> %s", completedDestination, from, to)
 		}
 	}

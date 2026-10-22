@@ -5490,11 +5490,11 @@ removed by `POST /api/v1/connectors/targets/{id}/purge` (`endpoint.purge`): the
 exact enrolled agent proves the installed leaf, overwrites and removes the
 certificate and key files the target names, wipes the rollback ledger of that
 fingerprint and runs the bound stop action; only a `purged` receipt claims
-that. A purge does not move the identity's lifecycle state: it still reads
-`deployed`, because the lifecycle issued nothing new and the state machine has
-no post-purge state; the `purged` receipt and the empty listener are the
-evidence, and retiring or revoking the identity is the operator's separate
-next step. Appliance and cloud targets, java-keystore, IIS and Envoy are not covered:
+that. A `purged` receipt drops that target from the rogue listing's
+`installed_on` at once, and an identity whose leaf is then served by no target
+moves from `deployed` back to `issued` (the certificate exists; nothing serves
+it); an identity still served elsewhere keeps its state. Retiring or revoking
+the identity is the operator's separate next step. Appliance and cloud targets, java-keystore, IIS and Envoy are not covered:
 their material is not an addressable file on an enrolled host.
 
 **Configuring it.** Local post-deploy verification runs when a deployment target
