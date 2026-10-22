@@ -209,8 +209,22 @@ func SignOCSPResponseWithNonce(caCertDER []byte, caSigner DigestSigner, status, 
 	if !ok {
 		return nil, fmt.Errorf("crypto: invalid serial %q", serialHex)
 	}
-	adapter, err := newX509Signer(caSigner)
-	if err != nil {
+	// An ML-DSA CA signs the response data itself (RFC 9881): the library
+	// encodes the response under a throwaway classical key and the CA's pure
+	// signature replaces it.
+	_, pure := pureX509Signer(caSigner)
+	var adapter *x509Signer
+	if pure {
+		metaKey, metaAdapter, err := metadataSigner(caSigner)
+		if err != nil {
+			return nil, err
+		}
+		defer metaKey.Destroy()
+		adapter = metaAdapter
+		encoding := *caCert
+		encoding.PublicKey = adapter.Public()
+		caCert = &encoding
+	} else if adapter, err = newX509Signer(caSigner); err != nil {
 		return nil, err
 	}
 	extra, err := ocspNonceExtensions(nonce)
@@ -235,6 +249,11 @@ func SignOCSPResponseWithNonce(caCertDER []byte, caSigner DigestSigner, status, 
 	if err != nil {
 		return nil, fmt.Errorf("crypto: sign OCSP response: %w", err)
 	}
+	if pure {
+		if der, err = resignPureOCSPResponse(caSigner, der); err != nil {
+			return nil, fmt.Errorf("crypto: sign OCSP response: %w", err)
+		}
+	}
 	return der, nil
 }
 
@@ -248,8 +267,19 @@ func CreateOCSPResponderCertificate(caCertDER []byte, caSigner DigestSigner, res
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
 	}
-	caAdapter, err := newX509Signer(caSigner)
-	if err != nil {
+	_, pure := pureX509Signer(caSigner)
+	var caAdapter *x509Signer
+	if pure {
+		metaKey, metaAdapter, err := metadataSigner(caSigner)
+		if err != nil {
+			return nil, err
+		}
+		defer metaKey.Destroy()
+		caAdapter = metaAdapter
+		encoding := *caCert
+		encoding.PublicKey = caAdapter.Public()
+		caCert = &encoding
+	} else if caAdapter, err = newX509Signer(caSigner); err != nil {
 		return nil, err
 	}
 	if responderSigner == nil {
@@ -280,6 +310,11 @@ func CreateOCSPResponderCertificate(caCertDER []byte, caSigner DigestSigner, res
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, caCert, responderAdapter.Public(), caAdapter)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: create OCSP responder cert: %w", err)
+	}
+	if pure {
+		if der, err = completeOpaqueCertificate(caSigner, der, nil); err != nil {
+			return nil, fmt.Errorf("crypto: create OCSP responder cert: %w", err)
+		}
 	}
 	return der, nil
 }
@@ -394,8 +429,19 @@ func CreateCRLWithOptions(caCertDER []byte, caSigner DigestSigner, revoked []Rev
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
 	}
-	adapter, err := newX509Signer(caSigner)
-	if err != nil {
+	_, pure := pureX509Signer(caSigner)
+	var adapter *x509Signer
+	if pure {
+		metaKey, metaAdapter, err := metadataSigner(caSigner)
+		if err != nil {
+			return nil, err
+		}
+		defer metaKey.Destroy()
+		adapter = metaAdapter
+		encoding := *caCert
+		encoding.PublicKey = adapter.Public()
+		caCert = &encoding
+	} else if adapter, err = newX509Signer(caSigner); err != nil {
 		return nil, err
 	}
 	entries := make([]x509.RevocationListEntry, 0, len(revoked))
@@ -427,6 +473,11 @@ func CreateCRLWithOptions(caCertDER []byte, caSigner DigestSigner, revoked []Rev
 	der, err := x509.CreateRevocationList(rand.Reader, tmpl, caCert, adapter)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: sign CRL: %w", err)
+	}
+	if pure {
+		if der, err = resignPureSigned(caSigner, der); err != nil {
+			return nil, fmt.Errorf("crypto: sign CRL: %w", err)
+		}
 	}
 	return der, nil
 }
@@ -611,8 +662,26 @@ func ParseOCSPResponse(respDER, issuerDER []byte) (OCSPStatusInfo, error) {
 	if err != nil {
 		return OCSPStatusInfo{}, fmt.Errorf("crypto: parse issuer: %w", err)
 	}
-	resp, err := ocsp.ParseResponse(respDER, issuer)
+	purePub, pureIssuer, err := purePublicKeyOfCertificate(issuer)
 	if err != nil {
+		return OCSPStatusInfo{}, err
+	}
+	var resp *ocsp.Response
+	if pureIssuer {
+		// The library cannot verify ML-DSA: parse without an issuer, then check
+		// the embedded responder against the CA ourselves, or the CA's own
+		// pure signature over the response data.
+		if resp, err = ocsp.ParseResponse(respDER, nil); err != nil {
+			return OCSPStatusInfo{}, fmt.Errorf("crypto: parse OCSP response: %w", err)
+		}
+		if resp.Certificate != nil {
+			if err := VerifyCertificateIssuedBy(resp.Certificate, issuer); err != nil {
+				return OCSPStatusInfo{}, fmt.Errorf("crypto: bad OCSP signature: %w", err)
+			}
+		} else if err := VerifyPureSignature(purePub, resp.TBSResponseData, resp.Signature); err != nil {
+			return OCSPStatusInfo{}, fmt.Errorf("crypto: bad OCSP signature: %w", err)
+		}
+	} else if resp, err = ocsp.ParseResponse(respDER, issuer); err != nil {
 		return OCSPStatusInfo{}, fmt.Errorf("crypto: parse OCSP response: %w", err)
 	}
 	responder := issuer
@@ -657,7 +726,17 @@ func ParseCRL(crlDER, issuerDER []byte) (CRLInfo, error) {
 		if err != nil {
 			return CRLInfo{}, fmt.Errorf("crypto: parse issuer: %w", err)
 		}
-		if err := rl.CheckSignatureFrom(issuer); err != nil {
+		if purePub, pure, err := purePublicKeyOfCertificate(issuer); err != nil {
+			return CRLInfo{}, err
+		} else if pure {
+			var outer signedObject
+			if rest, err := asn1.Unmarshal(crlDER, &outer); err != nil || len(rest) != 0 {
+				return CRLInfo{}, errors.New("crypto: malformed CRL")
+			}
+			if err := verifyPureSigned(purePub, outer, rl.RawTBSRevocationList, rl.Signature); err != nil {
+				return CRLInfo{}, fmt.Errorf("crypto: CRL signature: %w", err)
+			}
+		} else if err := rl.CheckSignatureFrom(issuer); err != nil {
 			return CRLInfo{}, fmt.Errorf("crypto: CRL signature: %w", err)
 		}
 	}
@@ -690,7 +769,7 @@ func validateOCSPResponderCertificate(caCert, responder *x509.Certificate) error
 	if caCert == nil || responder == nil {
 		return errors.New("crypto: CA and OCSP responder certificates are required")
 	}
-	if err := responder.CheckSignatureFrom(caCert); err != nil {
+	if err := VerifyCertificateIssuedBy(responder, caCert); err != nil {
 		return fmt.Errorf("crypto: OCSP responder certificate signature: %w", err)
 	}
 	info := ocspResponderInfo(responder)

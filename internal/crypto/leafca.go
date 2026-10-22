@@ -217,6 +217,17 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 	if err := enforceLeafProfile(csr, ttl, prof); err != nil {
 		return IssuedLeaf{}, err
 	}
+	if _, pure := pureX509Signer(caSigner); pure {
+		// An ML-DSA issuer signs through the opaque builder (RFC 9881); the
+		// verified classical subject key rides along unchanged.
+		info, err := InspectCSR(csrDER)
+		if err != nil {
+			return IssuedLeaf{}, err
+		}
+		return signOpaqueLeafWithPreparation(caCertDER, caSigner, OpaqueLeafRequest{
+			Info: info, RawSubject: csr.RawSubject, SubjectPublicKeyInfoDER: csr.RawSubjectPublicKeyInfo,
+		}, ttl, prof, prepared)
+	}
 	adapter, err := newX509Signer(caSigner)
 	if err != nil {
 		return IssuedLeaf{}, err

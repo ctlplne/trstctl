@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1597 annotated sites across 26 rules. Each row is
+1601 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -796,7 +796,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (181 sites)
+### G204 — CWE-78 OS command injection (183 sites)
 
 | Location | Reason |
 |---|---|
@@ -874,6 +874,8 @@ not this file.
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:117` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
+| `internal/crypto/pqc_x509_test.go:61` | LookPath-resolved OpenSSL with fixed arguments |
+| `internal/crypto/pqc_x509_test.go:70` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/crypto/tlsprobe/openssl.go:106` | trusted absolute local executable; fixed verb/options; no shell or remote command. |
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
@@ -1628,13 +1630,14 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:228` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (6 sites)
+### G401 — CWE-328 Use of weak hash (7 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:421` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
-| `internal/crypto/leafca.go:664` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/opaque_x509.go:266` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/leafca.go:675` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/opaque_x509.go:271` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:115` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
 | `internal/crypto/uuidv5.go:21` | RFC 4122 UUIDv5 public identifier, not a security digest. |
@@ -1692,13 +1695,14 @@ not this file.
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (6 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (7 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
+| `internal/crypto/pqc_x509.go:6` | RFC 5280 4.2.1.2 method-1 key identifiers only (CWE-328) |
 | `internal/crypto/tsa.go:20` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:7` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
 | `internal/crypto/uuidv5.go:6` | RFC 4122 UUIDv5 uses SHA-1 only for a public identity label, never integrity (CWE-328). |

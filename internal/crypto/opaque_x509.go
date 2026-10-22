@@ -235,8 +235,13 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 	if rest, err := asn1.Unmarshal(req.SubjectPublicKeyInfoDER, &spki); err != nil || len(rest) != 0 {
 		return IssuedLeaf{}, errors.New("crypto: opaque leaf subject SPKI is malformed")
 	}
-	if len(spki.Algorithm.Parameters.FullBytes) != 0 || len(spki.PublicKey.Bytes) == 0 || spki.PublicKey.BitLength != len(spki.PublicKey.Bytes)*8 {
-		return IssuedLeaf{}, errors.New("crypto: opaque leaf subject SPKI must have absent parameters and an octet-aligned non-empty key")
+	if len(spki.PublicKey.Bytes) == 0 || spki.PublicKey.BitLength != len(spki.PublicKey.Bytes)*8 {
+		return IssuedLeaf{}, errors.New("crypto: opaque leaf subject SPKI must carry an octet-aligned non-empty key")
+	}
+	// A subject x509 understands (an ECDSA or RSA key under a post-quantum
+	// issuer) keeps its parameters; an opaque subject must have none.
+	if _, classical := x509.ParsePKIXPublicKey(req.SubjectPublicKeyInfoDER); classical != nil && len(spki.Algorithm.Parameters.FullBytes) != 0 {
+		return IssuedLeaf{}, errors.New("crypto: opaque leaf subject SPKI must have absent parameters")
 	}
 	// RawContent wins over the decoded fields during asn1.Marshal. Clear it so
 	// the validated algorithm/key fields above are what enter the certificate.
@@ -303,15 +308,11 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 		}
 	}
 
-	metadataKey, err := GenerateLockedKey(caSigner.Algorithm())
+	metadataKey, metadataAdapter, err := metadataSigner(caSigner)
 	if err != nil {
 		return IssuedLeaf{}, err
 	}
 	defer metadataKey.Destroy()
-	metadataAdapter, err := newX509Signer(metadataKey)
-	if err != nil {
-		return IssuedLeaf{}, err
-	}
 	metadataParent := *caCert
 	metadataParent.PublicKey = metadataAdapter.Public()
 	// x509.CreateCertificate is used only as the canonical RFC 5280 extension
@@ -321,38 +322,30 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 	if err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: build opaque leaf metadata: %w", err)
 	}
-	var cert opaqueCertificate
-	if rest, err := asn1.Unmarshal(metadataDER, &cert); err != nil || len(rest) != 0 {
-		return IssuedLeaf{}, errors.New("crypto: decode opaque leaf metadata certificate")
-	}
 	if len(req.RawSubject) > 0 {
 		var subject pkix.RDNSequence
 		if rest, err := asn1.Unmarshal(req.RawSubject, &subject); err != nil || len(rest) != 0 {
 			return IssuedLeaf{}, errors.New("crypto: opaque leaf subject is malformed")
 		}
+		var cert opaqueCertificate
+		if rest, err := asn1.Unmarshal(metadataDER, &cert); err != nil || len(rest) != 0 {
+			return IssuedLeaf{}, errors.New("crypto: decode opaque leaf metadata certificate")
+		}
 		cert.TBS.Subject = asn1.RawValue{FullBytes: append([]byte(nil), req.RawSubject...)}
+		cert.TBS.Raw = nil
+		if metadataDER, err = asn1.Marshal(cert); err != nil {
+			return IssuedLeaf{}, fmt.Errorf("crypto: marshal opaque leaf metadata: %w", err)
+		}
 	}
-	cert.TBS.PublicKey = spki
-	cert.TBS.Raw = nil
-	tbsDER, err := asn1.Marshal(cert.TBS)
-	if err != nil {
-		return IssuedLeaf{}, fmt.Errorf("crypto: marshal opaque TBSCertificate: %w", err)
-	}
-	cert.TBS.Raw = tbsDER
-	signature, err := signOpaqueTBS(caSigner, tbsDER)
+	der, err := completeOpaqueCertificate(caSigner, metadataDER, req.SubjectPublicKeyInfoDER)
 	if err != nil {
 		return IssuedLeaf{}, err
-	}
-	cert.SignatureValue = asn1.BitString{Bytes: signature, BitLength: len(signature) * 8}
-	der, err := asn1.Marshal(cert)
-	if err != nil {
-		return IssuedLeaf{}, fmt.Errorf("crypto: marshal opaque certificate: %w", err)
 	}
 	issued, err := x509.ParseCertificate(der)
 	if err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: parse issued opaque leaf: %w", err)
 	}
-	if err := issued.CheckSignatureFrom(caCert); err != nil {
+	if err := VerifyCertificateIssuedBy(issued, caCert); err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: issued opaque leaf failed verification (signer misbehaved): %w", err)
 	}
 	return IssuedLeaf{DER: der, ValidityAnchor: now}, nil
@@ -387,6 +380,10 @@ type opaqueValidity struct {
 }
 
 func signOpaqueTBS(signer DigestSigner, tbs []byte) ([]byte, error) {
+	if _, pure := pureX509Signer(signer); pure {
+		// RFC 9881: the ML-DSA signature covers the whole TBS, no pre-hash.
+		return signer.SignDigest(tbs, SignOptions{Hash: HashNone})
+	}
 	var h Hash
 	switch signer.Algorithm() {
 	case RSA2048, RSA3072, RSA4096, ECDSAP256:

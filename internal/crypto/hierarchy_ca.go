@@ -615,19 +615,47 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 	if profile.TTL <= 0 {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: CA TTL must be positive")
 	}
-	adapter, err := newX509Signer(signer)
-	if err != nil {
+	// A post-quantum issuer or subject (RFC 9881 ML-DSA) takes the opaque
+	// route: x509 encodes the body with throwaway classical material, then the
+	// real subject key and the issuer's ML-DSA signature replace it.
+	_, pureIssuer := pureX509Signer(signer)
+	_, pureSubject := PureX509Algorithm(subjectPublic.Algorithm)
+	var adapter *x509Signer
+	var err error
+	if pureIssuer {
+		metaKey, metaAdapter, metaErr := metadataSigner(signer)
+		if metaErr != nil {
+			return IssuedHierarchyCA{}, metaErr
+		}
+		defer metaKey.Destroy()
+		adapter = metaAdapter
+	} else if adapter, err = newX509Signer(signer); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
-	pub, err := parsePKIXPublicKey(subjectPublic)
-	if err != nil {
-		return IssuedHierarchyCA{}, err
+	var pub any
+	var ski, subjectSPKI []byte
+	if pureSubject {
+		if subjectSPKI, err = PureSubjectPublicKeyInfo(subjectPublic); err != nil {
+			return IssuedHierarchyCA{}, err
+		}
+		ski = pureSubjectKeyID(subjectPublic)
+		placeholder, keyErr := GenerateLockedKey(ECDSAP256)
+		if keyErr != nil {
+			return IssuedHierarchyCA{}, keyErr
+		}
+		defer placeholder.Destroy()
+		if pub, err = parsePKIXPublicKey(placeholder.Public()); err != nil {
+			return IssuedHierarchyCA{}, err
+		}
+	} else {
+		if pub, err = parsePKIXPublicKey(subjectPublic); err != nil {
+			return IssuedHierarchyCA{}, err
+		}
+		if ski, err = subjectKeyID(pub); err != nil {
+			return IssuedHierarchyCA{}, err
+		}
 	}
 	serial, err := randomSerial()
-	if err != nil {
-		return IssuedHierarchyCA{}, err
-	}
-	ski, err := subjectKeyID(pub)
 	if err != nil {
 		return IssuedHierarchyCA{}, err
 	}
@@ -656,25 +684,39 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 		tmpl.MaxPathLenZero = profile.MaxPathLen == 0
 	}
 	selfSigned := issuer == nil
+	verifyIssuer := issuer
 	if selfSigned {
 		issuer = tmpl
 		tmpl.AuthorityKeyId = ski
-	} else if len(issuer.SubjectKeyId) > 0 {
-		tmpl.AuthorityKeyId = issuer.SubjectKeyId
+	} else {
+		if len(issuer.SubjectKeyId) > 0 {
+			tmpl.AuthorityKeyId = issuer.SubjectKeyId
+		}
+		if pureIssuer {
+			// x509 wants the encoding key to match the parent's: hand it the
+			// throwaway public key; the real issuer still verifies below.
+			encodingIssuer := *issuer
+			encodingIssuer.PublicKey = adapter.Public()
+			issuer = &encodingIssuer
+		}
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, issuer, pub, adapter)
 	if err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: sign CA certificate: %w", err)
 	}
+	if pureIssuer || pureSubject {
+		if der, err = completeOpaqueCertificate(signer, der, subjectSPKI); err != nil {
+			return IssuedHierarchyCA{}, fmt.Errorf("crypto: sign CA certificate: %w", err)
+		}
+	}
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
 		return IssuedHierarchyCA{}, err
 	}
-	verifyIssuer := issuer
 	if selfSigned {
 		verifyIssuer = cert
 	}
-	if err := cert.CheckSignatureFrom(verifyIssuer); err != nil {
+	if err := VerifyCertificateIssuedBy(cert, verifyIssuer); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: issued CA failed verification: %w", err)
 	}
 	return IssuedHierarchyCA{
