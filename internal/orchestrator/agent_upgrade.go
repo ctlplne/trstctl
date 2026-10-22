@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -192,4 +193,37 @@ func (o *Orchestrator) AssignAgentUpgradeRing(ctx context.Context, tenantID, age
 	}
 	_, err = o.emit(ctx, projections.EventAgentUpgradeRingAssigned, tenantID, payload)
 	return err
+}
+
+// AutoAssignAgentUpgradeRings places every unassigned, in-service agent into a
+// rollout ring deterministically (A69): fresh, longest-enrolled agents become
+// the canary, the next share the early ring, the rest broad. Agents an operator
+// already placed are never moved. Each placement is the same
+// agent.upgrade.ring_assigned event a manual assignment emits, so the fleet's
+// history reads the same either way.
+func (o *Orchestrator) AutoAssignAgentUpgradeRings(ctx context.Context, tenantID string, canaryCount, earlyPercent int) (fleet.AutoAssignment, error) {
+	agents, err := o.store.UnassignedUpgradeCandidates(ctx, tenantID)
+	if err != nil {
+		return fleet.AutoAssignment{}, err
+	}
+	candidates := make([]fleet.RingCandidate, 0, len(agents))
+	for _, a := range agents {
+		candidates = append(candidates, fleet.RingCandidate{AgentID: a.ID, Name: a.Name, Version: a.Version, EnrolledAt: a.CreatedAt, LastSeenAt: a.LastSeenAt})
+	}
+	interval := o.agentHeartbeatInterval
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	plan, err := fleet.PlanAutoRings(candidates, canaryCount, earlyPercent, time.Now().UTC(), 3*interval)
+	if err != nil {
+		return fleet.AutoAssignment{}, err
+	}
+	for ring, members := range map[fleet.Ring][]fleet.RingCandidate{fleet.RingCanary: plan.Canary, fleet.RingEarly: plan.Early, fleet.RingBroad: plan.Broad} {
+		for _, member := range members {
+			if err := o.AssignAgentUpgradeRing(ctx, tenantID, member.AgentID, string(ring)); err != nil {
+				return fleet.AutoAssignment{}, fmt.Errorf("orchestrator: place %s in %s: %w", member.Name, ring, err)
+			}
+		}
+	}
+	return plan, nil
 }

@@ -4177,6 +4177,63 @@
         ],
         "type": "object"
       },
+      "AgentRingAutoAssignInput": {
+        "properties": {
+          "canary_count": {
+            "type": "integer"
+          },
+          "early_percent": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "AgentRingAutoAssignedAgent": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "AgentRingAutoAssignment": {
+        "properties": {
+          "assigned": {
+            "type": "integer"
+          },
+          "broad_count": {
+            "type": "integer"
+          },
+          "canary": {
+            "items": {
+              "$ref": "#/components/schemas/AgentRingAutoAssignedAgent"
+            },
+            "type": "array"
+          },
+          "early_count": {
+            "type": "integer"
+          },
+          "rule": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "canary",
+          "early_count",
+          "broad_count",
+          "assigned",
+          "rule"
+        ],
+        "type": "object"
+      },
       "AgentRingInput": {
         "properties": {
           "agent_id": {
@@ -40127,6 +40184,74 @@
           }
         ],
         "summary": "Place an agent in a rollout ring; empty unassigns and is never read as broad",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/agents/upgrade-rings/auto-assign": {
+      "post": {
+        "operationId": "autoAssignAgentUpgradeRings",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRingAutoAssignInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRingAutoAssignment"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Place every unassigned agent in a rollout ring deterministically: fresh, longest-enrolled agents become the canary; assigned agents are never moved",
         "x-trstctl-permission": "agents:write"
       }
     },

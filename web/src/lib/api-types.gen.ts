@@ -1026,6 +1026,24 @@ export interface AgentReportedCapability {
   missing_flags: string[];
 }
 
+export interface AgentRingAutoAssignInput {
+  canary_count?: number;
+  early_percent?: number;
+}
+
+export interface AgentRingAutoAssignedAgent {
+  agent_id: string;
+  name: string;
+}
+
+export interface AgentRingAutoAssignment {
+  assigned: number;
+  broad_count: number;
+  canary: AgentRingAutoAssignedAgent[];
+  early_count: number;
+  rule: string;
+}
+
 export interface AgentRingInput {
   agent_id: string;
   ring?: "canary" | "early" | "broad" | "";

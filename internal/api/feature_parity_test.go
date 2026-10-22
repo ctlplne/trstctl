@@ -280,8 +280,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// The key-compromise command adds one effect retry so a failed host
 	// containment or dead-lettered CA publication recovers on the same command.
 	// Secret sync adds one reconcile operation for a lost receiver result.
-	if len(out) != 511 {
-		t.Fatalf("OpenAPI operationIds = %d, want 508", len(out))
+	// A69 adds one deterministic ring placement operation beside the per-agent one.
+	if len(out) != 512 {
+		t.Fatalf("OpenAPI operationIds = %d, want 512", len(out))
 	}
 	return out
 }

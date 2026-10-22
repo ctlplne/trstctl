@@ -830,6 +830,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/upgrade-rings/auto-assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Place every unassigned agent in a rollout ring deterministically: fresh, longest-enrolled agents become the canary; assigned agents are never moved */
+        post: operations["autoAssignAgentUpgradeRings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{id}/cert-revocations": {
         parameters: {
             query?: never;
@@ -8709,6 +8726,22 @@ export interface components {
             enabled: boolean;
             kind: string;
             missing_flags: string[];
+        };
+        AgentRingAutoAssignInput: {
+            canary_count?: number;
+            early_percent?: number;
+        };
+        AgentRingAutoAssignedAgent: {
+            /** Format: uuid */
+            agent_id: string;
+            name: string;
+        };
+        AgentRingAutoAssignment: {
+            assigned: number;
+            broad_count: number;
+            canary: components["schemas"]["AgentRingAutoAssignedAgent"][];
+            early_count: number;
+            rule: string;
         };
         AgentRingInput: {
             /** Format: uuid */
@@ -19640,6 +19673,51 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    autoAssignAgentUpgradeRings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRingAutoAssignInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRingAutoAssignment"];
+                };
             };
             /** @description client error */
             "4XX": {

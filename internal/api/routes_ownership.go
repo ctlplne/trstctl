@@ -85,6 +85,7 @@ func (a *API) agentUpgradeRoutes() []route {
 		{method: "POST", path: "/api/v1/agents/upgrade-campaign/pause", opID: "pauseAgentUpgradeCampaign", summary: "Pause a rollout; this gates dispatch, not just the button", handler: a.campaignControl("pause"), resSchema: "AgentUpgradeCampaign", successCode: "200", mutation: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/agents/upgrade-campaign/resume", opID: "resumeAgentUpgradeCampaign", summary: "Resume at the ring that halted, never past it", handler: a.campaignControl("resume"), resSchema: "AgentUpgradeCampaign", successCode: "200", mutation: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/agents/upgrade-ring", opID: "assignAgentUpgradeRing", summary: "Place an agent in a rollout ring; empty unassigns and is never read as broad", handler: a.assignAgentRing, reqSchema: "AgentRingInput", successCode: "200", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/upgrade-rings/auto-assign", opID: "autoAssignAgentUpgradeRings", summary: "Place every unassigned agent in a rollout ring deterministically: fresh, longest-enrolled agents become the canary; assigned agents are never moved", handler: a.autoAssignAgentRings, reqSchema: "AgentRingAutoAssignInput", resSchema: "AgentRingAutoAssignment", successCode: "200", mutation: true, perm: authz.AgentsWrite},
 	}
 }
 

@@ -1412,6 +1412,36 @@ AgentReportedCapability = TypedDict(
     total=False,
 )
 
+AgentRingAutoAssignInput = TypedDict(
+    'AgentRingAutoAssignInput',
+    {
+        'canary_count': int,
+        'early_percent': int,
+    },
+    total=False,
+)
+
+AgentRingAutoAssignedAgent = TypedDict(
+    'AgentRingAutoAssignedAgent',
+    {
+        'agent_id': str,
+        'name': str,
+    },
+    total=False,
+)
+
+AgentRingAutoAssignment = TypedDict(
+    'AgentRingAutoAssignment',
+    {
+        'assigned': int,
+        'broad_count': int,
+        'canary': list[dict[str, Any]],
+        'early_count': int,
+        'rule': str,
+    },
+    total=False,
+)
+
 AgentRingInput = TypedDict(
     'AgentRingInput',
     {

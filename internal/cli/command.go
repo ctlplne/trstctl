@@ -485,6 +485,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"agents", "upgrade-campaign", "pause"}, Method: "POST", Path: "/api/v1/agents/upgrade-campaign/pause", Summary: "Pause a rollout; this gates dispatch, not just the button"},
 	{Name: []string{"agents", "upgrade-campaign", "resume"}, Method: "POST", Path: "/api/v1/agents/upgrade-campaign/resume", Summary: "Resume at the ring that halted, never past it"},
 	{Name: []string{"agents", "upgrade-ring"}, Method: "POST", Path: "/api/v1/agents/upgrade-ring", Body: bodyFile, Summary: "Place an agent in a rollout ring; empty unassigns"},
+	{Name: []string{"agents", "upgrade-rings", "auto"}, Method: "POST", Path: "/api/v1/agents/upgrade-rings/auto-assign", Body: bodyFile, Summary: "Place every unassigned agent in a rollout ring deterministically; assigned agents are never moved"},
 	{Name: []string{"brand", "show"}, Method: "GET", Path: "/api/v1/brand", Summary: "Resolve the white-label brand for this host"},
 	{Name: []string{"usage", "evidence"}, Method: "GET", Path: "/api/v1/provider/usage-evidence", Query: []string{"period_start", "period_end", "customer_id", "format"}, Summary: "Pull this tenancy's usage as signed invoice evidence; format=csv exports the table with the verdict on every row"},
 	{Name: []string{"graph", "crypto-readiness"}, Method: "GET", Path: "/api/v1/graph/crypto-readiness", Summary: "Sequence crypto assets for migration by observed dependency, not severity alone"},

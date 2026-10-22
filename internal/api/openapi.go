@@ -5037,6 +5037,18 @@ func componentSchemas() map[string]*Schema {
 		"agent_id": uuid(),
 		"ring":     {Type: "string", Enum: []string{"canary", "early", "broad", ""}},
 	}, "agent_id")
+	agentRingAutoAssignInput := object(map[string]*Schema{
+		"canary_count":  {Type: "integer"},
+		"early_percent": {Type: "integer"},
+	})
+	agentRingAutoAssignedAgent := object(map[string]*Schema{"agent_id": uuid(), "name": str()}, "agent_id", "name")
+	agentRingAutoAssignment := object(map[string]*Schema{
+		"canary":      {Type: "array", Items: ref("AgentRingAutoAssignedAgent")},
+		"early_count": {Type: "integer"},
+		"broad_count": {Type: "integer"},
+		"assigned":    {Type: "integer"},
+		"rule":        str(),
+	}, "canary", "early_count", "broad_count", "assigned", "rule")
 	mdmDeviceSchema := object(map[string]*Schema{
 		"mdm": {Type: "string", Enum: []string{"intune", "jamf"}},
 		// mdm_device_id is a plain string, not a uuid: it is whatever the MDM
@@ -7130,6 +7142,9 @@ func componentSchemas() map[string]*Schema {
 		"AgentUpgradeCampaignInput":                agentUpgradeCampaignInput,
 		"UpgradeArtifact":                          upgradeArtifactSchema,
 		"AgentRingInput":                           agentRingInput,
+		"AgentRingAutoAssignInput":                 agentRingAutoAssignInput,
+		"AgentRingAutoAssignedAgent":               agentRingAutoAssignedAgent,
+		"AgentRingAutoAssignment":                  agentRingAutoAssignment,
 		"MDMDevice":                                mdmDeviceSchema,
 		"MDMDeviceList":                            mdmDeviceListSchema,
 		"MDMPollSchedule":                          mdmPollScheduleSchema,

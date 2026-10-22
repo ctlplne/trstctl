@@ -3155,8 +3155,17 @@ than sending an operator looking for a credential that was never there.
   started with `--upgrade-publisher-key` refuses to stage an artifact that is
   the pinned bytes but not the pinned publisher's. With neither key pinned the
   digest is the only integrity control, which is the default. Ring assignment is
-  manual with no automatic canary selection; there is no per-ring soak window
-  beyond the 10-minute grace; and the verification remains a health signal
+  by hand per agent (`POST /api/v1/agents/upgrade-ring`) or by one deterministic
+  placement (`POST /api/v1/agents/upgrade-rings/auto-assign`, `trstctl agents
+  upgrade-rings auto`): unassigned in-service agents only, heartbeating ones
+  first, then longest enrolled, then by name; the first `canary_count` (default
+  one) become the canary, the next `early_percent` (default ten) the early ring,
+  the rest broad; every ring keeps at least one agent, an operator's own
+  placement is never moved, and a fleet with fewer than three unassigned agents
+  is refused rather than planned into an empty ring that would halt the
+  campaign. The rule is served with the result so it can be disagreed with
+  before the campaign starts. There is no per-ring soak window beyond the
+  10-minute grace; and the verification remains a health signal
   (running the target build, answering the control plane), not a functional
   check of the agent's work.
 - Provider console (L3 + AUD-58): the web app has a `/provider` route — a

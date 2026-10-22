@@ -177,3 +177,54 @@ func (a *API) assignAgentRing(w http.ResponseWriter, r *http.Request) {
 		return http.StatusOK, map[string]string{"agent_id": body.AgentID, "ring": body.Ring}, nil
 	})
 }
+
+type ringAutoAssignBody struct {
+	// CanaryCount is how many unassigned agents become the canary (default 1).
+	CanaryCount int `json:"canary_count,omitempty"`
+	// EarlyPercent is the share of the remaining agents placed in the early
+	// ring, rounded up so it is never empty (default 10, at most 90).
+	EarlyPercent int `json:"early_percent,omitempty"`
+}
+
+type ringAutoAssignedAgent struct {
+	AgentID string `json:"agent_id"`
+	Name    string `json:"name"`
+}
+
+type ringAutoAssignment struct {
+	Canary     []ringAutoAssignedAgent `json:"canary"`
+	EarlyCount int                     `json:"early_count"`
+	BroadCount int                     `json:"broad_count"`
+	Assigned   int                     `json:"assigned"`
+	// Rule says, in words, how the canary was chosen, so the operator can
+	// disagree with it before starting the campaign.
+	Rule string `json:"rule"`
+}
+
+const ringAutoAssignRule = "unassigned agents only; agents heartbeating within three intervals first, then longest enrolled, then by name; the first become the canary, the next share early, the rest broad; every ring keeps at least one agent"
+
+// autoAssignAgentRings places every unassigned agent deterministically (A69).
+func (a *API) autoAssignAgentRings(w http.ResponseWriter, r *http.Request) {
+	idem := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idem, func(ctx context.Context, tenantID string) (int, any, error) {
+		var body ringAutoAssignBody
+		if r.ContentLength != 0 {
+			if err := decodeJSON(r, &body); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+		}
+		plan, err := a.orch.AutoAssignAgentUpgradeRings(ctx, tenantID, body.CanaryCount, body.EarlyPercent)
+		if err != nil {
+			if errors.Is(err, fleet.ErrAutoRingsTooFew) {
+				return 0, nil, errStatus(http.StatusConflict, err.Error())
+			}
+			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
+		}
+		out := ringAutoAssignment{Canary: make([]ringAutoAssignedAgent, 0, len(plan.Canary)), EarlyCount: len(plan.Early), BroadCount: len(plan.Broad), Rule: ringAutoAssignRule}
+		for _, c := range plan.Canary {
+			out.Canary = append(out.Canary, ringAutoAssignedAgent{AgentID: c.AgentID, Name: c.Name})
+		}
+		out.Assigned = len(plan.Canary) + len(plan.Early) + len(plan.Broad)
+		return http.StatusOK, out, nil
+	})
+}

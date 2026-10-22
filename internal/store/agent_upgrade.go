@@ -219,3 +219,33 @@ func (s *Store) AgentUpgradeDispatchStatuses(ctx context.Context, tenantID, camp
 	})
 	return out, err
 }
+
+// UnassignedUpgradeCandidates lists the tenant's agents with no rollout ring
+// that are still in service (A69): identity, version, enrollment time and
+// last heartbeat, which is all the automatic placement needs. Offboarded
+// agents are never candidates; an operator's explicit assignment is never
+// revisited here.
+func (s *Store) UnassignedUpgradeCandidates(ctx context.Context, tenantID string) ([]Agent, error) {
+	var out []Agent
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, name, coalesce(version, ''), status, created_at, last_seen_at FROM agents
+			  WHERE tenant_id = $1 AND coalesce(upgrade_ring, '') = ''
+			    AND offboarded_at IS NULL AND lower(status) <> 'offboarded'
+			  ORDER BY created_at, id`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a Agent
+			if err := rows.Scan(&a.ID, &a.Name, &a.Version, &a.Status, &a.CreatedAt, &a.LastSeenAt); err != nil {
+				return err
+			}
+			a.TenantID = tenantID
+			out = append(out, a)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
