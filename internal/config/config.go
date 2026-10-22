@@ -629,6 +629,19 @@ type SCIMToken struct {
 	Name             string `json:"name,omitempty"`
 	TenantID         string `json:"tenant_id,omitempty"`
 	TokenFile        string `json:"token_file,omitempty"`
+	// WritebackEndpoint and WritebackTokenFile name the directory's own SCIM
+	// 2.0 endpoint and the bearer trstctl presents to it (A73). With both set,
+	// a change an operator makes in trstctl to a member this token provisioned
+	// (roles, offboarding) is written back to the directory's User. Both or
+	// neither; the endpoint must be https, or http to a loopback host.
+	WritebackEndpoint  string `json:"writeback_endpoint,omitempty"`
+	WritebackTokenFile string `json:"writeback_token_file,omitempty"`
+}
+
+// WritebackConfigured reports whether this token writes member changes back
+// to its directory.
+func (t SCIMToken) WritebackConfigured() bool {
+	return strings.TrimSpace(t.WritebackEndpoint) != "" || strings.TrimSpace(t.WritebackTokenFile) != ""
 }
 
 // ABAC configures the served attribute-based deny overlay. The Rego module must
@@ -4775,8 +4788,39 @@ func (s SCIM) validate() []error {
 		if strings.TrimSpace(tok.TokenFile) == "" {
 			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].token_file is required", i))
 		}
+		if tok.WritebackConfigured() {
+			errs = append(errs, validateSCIMWriteback(i, tok)...)
+		}
 	}
 	return errs
+}
+
+func validateSCIMWriteback(i int, tok SCIMToken) []error {
+	var errs []error
+	endpoint, tokenFile := strings.TrimSpace(tok.WritebackEndpoint), strings.TrimSpace(tok.WritebackTokenFile)
+	if endpoint == "" || tokenFile == "" {
+		errs = append(errs, fmt.Errorf("auth.scim.tokens[%d]: writeback_endpoint and writeback_token_file are set together", i))
+	}
+	if endpoint != "" {
+		parsed, err := url.Parse(endpoint)
+		switch {
+		case err != nil || parsed.Host == "":
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_endpoint must be an absolute URL", i))
+		case parsed.Scheme == "https":
+		case parsed.Scheme == "http" && isLoopbackHost(parsed.Hostname()):
+		default:
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_endpoint must use https (http is accepted only for a loopback host)", i))
+		}
+	}
+	return errs
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (a ABAC) validate() []error {

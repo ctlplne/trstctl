@@ -1118,6 +1118,14 @@ or DELETE; a successful provisioning response alone is insufficient evidence.
 Use a new idempotency key for each deliberate lifecycle change. Retry the same
 operation with its original key and body.
 
+Directory writeback (A73): a token may also name the directory's own SCIM 2.0
+endpoint with `writeback_endpoint` and `writeback_token_file` (both or neither;
+https, or http only to a loopback host). A role change or offboard an operator
+makes in trstctl to a member that token provisioned is then written to the
+directory's User (`active` and `roles`), read back, and recorded as
+`scim.writeback.recorded`. The outbound bearer is loaded at startup into locked
+memory; rotate it like the inbound token, by writing the file and restarting.
+
 The environment variables replace the token list as one complete single-token
 configuration. A mapping-only environment override fails validation when enabled;
 use the per-token config field for a multi-token deployment. Example:
@@ -1136,6 +1144,8 @@ auth:
       - name: entra-platform
         tenant_id: 33333333-3333-3333-3333-333333333333
         token_file: /etc/trstctl/scim/entra-platform.token
+        writeback_endpoint: https://directory.example.internal/scim/v2 # the directory's own SCIM server
+        writeback_token_file: /etc/trstctl/scim/entra-platform.writeback.token
 ```
 
 Example SAML config:

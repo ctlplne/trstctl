@@ -79,13 +79,16 @@ func buildOIDCAuth(o config.OIDC, secure bool, httpClient *http.Client) (api.Opt
 	return api.WithAuth(*cfg), nil
 }
 
-func buildBrowserAuth(d Deps) ([]api.Option, error) {
+// buildBrowserAuthWithSCIM builds the browser login options and also returns
+// the licensed SCIM configuration so the composition can attach its directory
+// writeback worker (A73).
+func buildBrowserAuthWithSCIM(d Deps) (options []api.Option, scimConfig *api.SCIMConfig, err error) {
 	if err := requireTenantAuthAttachment(d); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	oidcCfg, err := buildOIDCAuthConfig(d.OIDC, d.SecurityHeaders.TLS, d.AuthHTTPClient, d.Store, d.KEK, d.TenantCrypto)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var extra editionseam.TenantAuthConfig
 	if d.TenantAuthFactory != nil {
@@ -96,7 +99,7 @@ func buildBrowserAuth(d Deps) ([]api.Option, error) {
 			},
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	base := oidcCfg
@@ -110,14 +113,14 @@ func buildBrowserAuth(d Deps) ([]api.Option, error) {
 	} else if extra.LDAP != nil {
 		mergeLDAPAuthConfig(base, extra.LDAP)
 	}
-	var options []api.Option
 	if base != nil {
 		options = append(options, api.WithAuth(*base))
 	}
 	if extra.SCIM != nil {
 		options = append(options, api.WithSCIM(*extra.SCIM))
+		scimConfig = extra.SCIM
 	}
-	return options, nil
+	return options, scimConfig, nil
 }
 
 func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper, tenantCrypto ...tenantseal.Access) (*api.AuthConfig, error) {

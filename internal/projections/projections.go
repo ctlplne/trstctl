@@ -273,6 +273,10 @@ const (
 	EventPrivacyArchiveErasureAttested            = "privacy.archive_erasure.attested"
 	EventTenantMemberUpserted                     = "tenant.member.upserted"
 	EventTenantMemberOffboarded                   = "tenant.member.offboarded"
+	// EventSCIMWritebackRecorded is the audit record of one directory
+	// writeback (A73): what trstctl wrote to the directory's User for a
+	// member an operator changed here, and whether the readback agreed.
+	EventSCIMWritebackRecorded                    = "scim.writeback.recorded"
 	EventAPITokenCreated                          = "api_token.created"
 	EventAPITokenRevoked                          = "api_token.revoked"
 	EventHoneyTokenCreated                        = "honeytoken.created"
@@ -3606,6 +3610,21 @@ type TenantMemberUpserted struct {
 	Source      string              `json:"source,omitempty"`
 }
 
+// SCIMWritebackRecorded is the payload of scim.writeback.recorded (A73).
+type SCIMWritebackRecorded struct {
+	Subject         string   `json:"subject"`
+	UserName        string   `json:"user_name,omitempty"`
+	DirectoryUserID string   `json:"directory_user_id,omitempty"`
+	Change          string   `json:"change"`
+	Active          bool     `json:"active"`
+	Roles           []string `json:"roles,omitempty"`
+	// Status is written or refused; Detail is a closed phrase, never the
+	// directory's own words.
+	Status        string `json:"status"`
+	Detail        string `json:"detail,omitempty"`
+	SourceEventID string `json:"source_event_id,omitempty"`
+}
+
 // TenantMemberOffboarded is the payload of a tenant.member.offboarded event.
 type TenantMemberOffboarded struct {
 	SCIM              *store.SCIMIdentity `json:"scim,omitempty"`
@@ -4273,6 +4292,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPrivacyArchiveErasureAttested:            {1: true},
 	EventTenantMemberUpserted:                     {1: true, TenantMemberSCIMSchemaVersion: true},
 	EventTenantMemberOffboarded:                   {1: true, TenantMemberSCIMSchemaVersion: true},
+	EventSCIMWritebackRecorded:                    {1: true},
 	EventAPITokenCreated:                          {1: true},
 	EventAPITokenRevoked:                          {1: true},
 	EventHoneyTokenCreated:                        {1: true},
@@ -4601,6 +4621,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyAgentUpgradeRingAssignedTx(ctx, tx, e.TenantID, pl.AgentID, pl.Ring)
+	case EventSCIMWritebackRecorded:
+		// Audit evidence only (A73): the member row is the directory's and
+		// trstctl's shared truth already; nothing here changes a projection.
+		return nil
 	case EventIdentityRenewalPaused:
 		var pl IdentityRenewalPaused
 		if err := decode(e, &pl); err != nil {

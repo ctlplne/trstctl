@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
@@ -211,6 +212,9 @@ type issuanceDispatcher struct {
 	// accepted HTTP result is durable before the lifecycle makes tenant crypto
 	// unavailable, and runs only on the bounded outbox worker.
 	tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
+	// scimWriteback delivers scim.writeback rows (A73) through the licensed
+	// worker; nil refuses them as not configured.
+	scimWriteback api.SCIMWritebackHandler
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -278,6 +282,11 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleIncidentMigrationRevoke(ctx, m)
 	case orchestrator.DestinationMigrationApplianceIssue:
 		return d.handleMigrationApplianceIssue(ctx, m)
+	case orchestrator.DestinationSCIMWriteback:
+		if d.scimWriteback == nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: SCIM directory writeback is not configured"))
+		}
+		return d.scimWriteback.Deliver(ctx, m)
 	case orchestrator.DestinationConnectorRollback:
 		// Agent-executed rows are deferred so they stay claimable; a
 		// control_plane row (a cloud store's re-bind, A58) runs here. See

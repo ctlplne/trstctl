@@ -683,6 +683,7 @@ type Server struct {
 	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
 	outboxGC           *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler          orchestrator.Handler
+	scimWriteback      api.SCIMWritebackHandler
 	// secretIntegrations is the secret.sync/dynsecret outbox receiver; the
 	// served secret-sync reconciliation resolves it lazily because the API's
 	// secrets backend is built before the dispatcher.
@@ -1507,9 +1508,24 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// receives the live pool provider instead of permanently capturing the
 	// truthful-but-wrong served=false fallback during startup.
 	s.appendOperationalReadModels(d, &defaults)
-	authOptions, err := buildBrowserAuth(d)
+	authOptions, scimConfig, err := buildBrowserAuthWithSCIM(d)
 	if err != nil {
 		return nil, nil, err
+	}
+	if scimConfig != nil && scimConfig.NewWriteback != nil {
+		// A73: tokens that name a directory endpoint write local member
+		// changes back; the orchestrator queues the rows, the licensed
+		// worker delivers them.
+		var tenants []string
+		for _, tok := range scimConfig.Tokens {
+			if strings.TrimSpace(tok.WritebackEndpoint) != "" {
+				tenants = append(tenants, tok.TenantID)
+			}
+		}
+		if len(tenants) > 0 {
+			s.orch.EnableSCIMWriteback(tenants)
+			s.scimWriteback = scimConfig.NewWriteback(api.SCIMWritebackDeps{Store: d.Store, Orchestrator: s.orch, HTTPClient: d.AuthHTTPClient})
+		}
 	}
 	defaults = append(defaults, authOptions...)
 	// Effect-free review evidence is a platform primitive, not a native-secret-
@@ -2080,9 +2096,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback}
 	default:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback}
 	}
 	return nil
 }

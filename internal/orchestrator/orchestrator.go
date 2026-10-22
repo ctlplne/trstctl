@@ -96,7 +96,12 @@ type Orchestrator struct {
 	// configured bit distinguishes legacy embedded orchestrators (which did not
 	// supply this production concern) from a served agent channel whose explicit
 	// empty set must fail closed instead of admitting work nobody can claim.
-	claimableAgentJobKinds           map[string]struct{}
+	claimableAgentJobKinds map[string]struct{}
+	// scimWritebackTenants names the tenants whose SCIM token writes member
+	// changes back to the directory (A73); a change an operator makes to a
+	// directory-owned member in one of them queues a scim.writeback row in the
+	// same transaction as its event.
+	scimWritebackTenants             map[string]bool
 	claimableAgentJobKindsConfigured bool
 	// agentHeartbeatInterval is the served channel's next-beat hint. Discovery
 	// admission uses the same two-beat freshness window as Agents presence.

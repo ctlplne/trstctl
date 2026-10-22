@@ -114,6 +114,11 @@ func (o *Orchestrator) reconcileTenantMemberUpsertCommand(ctx context.Context, c
 						return err
 					}
 				}
+				// A73: the row is read before the projection applies, so it
+				// still says whether the directory owns this member.
+				if err := o.enqueueSCIMWritebackTx(barrierCtx, tx, retained, payload.Subject, "upsert"); err != nil {
+					return err
+				}
 				return o.proj.ApplyTx(barrierCtx, tx, retained)
 			})
 		})

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -239,4 +240,17 @@ func lockTenantMemberProjection(ctx context.Context, tx pgx.Tx, tenantID, subjec
 		return fmt.Errorf("store: lock tenant member projection: %w", err)
 	}
 	return nil
+}
+
+// TenantMemberDirectoryOwnedTx reports whether the member carries a SCIM
+// identity, which marks it as provisioned by the directory (A73).
+func (s *Store) TenantMemberDirectoryOwnedTx(ctx context.Context, tx pgx.Tx, tenantID, subject string) (bool, error) {
+	var owned bool
+	err := tx.QueryRow(ctx,
+		`SELECT scim_identity IS NOT NULL FROM tenant_members WHERE tenant_id = $1 AND subject = $2`,
+		tenantID, subject).Scan(&owned)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return owned, err
 }

@@ -273,6 +273,13 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/email", exact), privacyRule("/roles", opaque),
 		privacyRule("/source", opaque), privacyRule("/scim", clear),
 	)
+	scimWriteback := privacyRules(
+		privacyRule("/subject", exact), privacyRule("/user_name", token),
+		privacyRule("/directory_user_id", opaque), privacyRule("/change", opaque),
+		privacyRule("/active", opaque), privacyRule("/roles", opaque),
+		privacyRule("/status", opaque), privacyRule("/detail", clear),
+		privacyRule("/source_event_id", opaque),
+	)
 	tenantMemberOffboardSCIM := privacyRules(
 		privacyRule("/subject", exact), privacyRule("/reason", clear),
 		privacyRule("/offboarded_by", exact), privacyRule("/revoked_token_count", opaque),
@@ -863,6 +870,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		{EventIdentityCreated, 1}:                                    identityCreated,
 		{EventTenantMemberUpserted, 1}:                               tenantMember,
+		{EventSCIMWritebackRecorded, 1}:                              scimWriteback,
 		{EventTenantMemberUpserted, TenantMemberSCIMSchemaVersion}:   tenantMemberSCIM,
 		{EventTenantMemberOffboarded, TenantMemberSCIMSchemaVersion}: tenantMemberOffboardSCIM,
 		{EventTenantMemberOffboarded, 1}: privacyRules(
@@ -1553,6 +1561,7 @@ func privacyPayloadShape[T any]() events.PrivacyPayloadShape {
 func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	shapes := map[privacyEventPolicyKey]events.PrivacyPayloadShape{
 		{EventRestoreDrillRecorded, 1}:                                    privacyPayloadShape[RestoreDrillRecorded](),
+		{EventSCIMWritebackRecorded, 1}:                                   privacyPayloadShape[SCIMWritebackRecorded](),
 		{EventOwnerCreated, 1}:                                            privacyPayloadShape[privacyOwnerV1](),
 		{EventOwnerUpdated, 1}:                                            privacyPayloadShape[privacyOwnerV1](),
 		{EventOwnerCreated, OwnerDepthEventSchemaVersion}:                 privacyPayloadShape[OwnerCreated](),

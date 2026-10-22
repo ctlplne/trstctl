@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"trstctl.com/trstctl/internal/authz"
@@ -14,8 +15,13 @@ import (
 // owns protocol parsing and provisioning. Tokens alone never mount a handler.
 type SCIMConfig struct {
 	NewHandler func(SCIMConfig, SCIMHandlerDeps) http.Handler
-	Enabled    bool
-	Tokens     []SCIMToken
+	// NewWriteback builds the directory writeback worker (A73) when at least
+	// one token names a writeback endpoint; nil leaves local member changes
+	// unpushed, as before. The licensed implementation holds the outbound
+	// bearers; core only routes the outbox rows to it.
+	NewWriteback func(SCIMWritebackDeps) SCIMWritebackHandler
+	Enabled      bool
+	Tokens       []SCIMToken
 }
 
 type SCIMToken struct {
@@ -23,6 +29,21 @@ type SCIMToken struct {
 	Name             string
 	TenantID         string
 	TokenHash        string
+	// WritebackEndpoint is the directory's SCIM endpoint this token writes
+	// back to; empty means no writeback for its tenant.
+	WritebackEndpoint string
+}
+
+// SCIMWritebackDeps is what the writeback worker reads and records with.
+type SCIMWritebackDeps struct {
+	Store        *store.Store
+	Orchestrator *orchestrator.Orchestrator
+	HTTPClient   *http.Client
+}
+
+// SCIMWritebackHandler delivers one scim.writeback outbox row.
+type SCIMWritebackHandler interface {
+	Deliver(ctx context.Context, m orchestrator.Message) error
 }
 
 // SCIMHandlerDeps preserves the shared mutation spine and route-admission

@@ -253,7 +253,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
-| SCIM 2.0 + NHI inventory/posture | Tenant SCIM requires Enterprise SSO; SCIM Bulk served on both planes; directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
+| SCIM 2.0 + NHI inventory/posture | Tenant SCIM requires Enterprise SSO; SCIM Bulk served on both planes; directory writeback served to a SCIM-serving directory, never to a push-only IdP | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
 | AI / RCA / MCP surface | Served, off by default, air-gapped unless an operator opts in | [AI, RCA, and MCP surface](#ai-rca-and-mcp-surface) |
 | Secrets, identity frameworks, transit/KMIP | Served (six of six frameworks); Vault shim is a partial subset | [Secrets and identity frameworks](#secrets-and-identity-frameworks) |
 | RBAC / ABAC / OPA policy gates | Served, fail-closed, off by default | [Authorization policy gates](#authorization-policy-gates-and-abac-overlays-served-by-the-binary) |
@@ -3757,9 +3757,29 @@ a replay under the same `Idempotency-Key` returns the recorded response.
 Current SCIM limits are deliberate and fail closed: password management and
 password-change flows are not implemented; SCIM groups do not create new
 custom roles (a group's `displayName` or id must match a configured RBAC role
-such as `admin`, `operator`, `viewer`, `auditor`, or `ra-officer`). Directory
-writeback is not implemented. Token rotation is operator-managed: write a new
-token file and restart the control plane so the new hash loads.
+such as `admin`, `operator`, `viewer`, `auditor`, or `ra-officer`). Token
+rotation is operator-managed: write a new token file and restart the control
+plane so the new hash loads.
+
+Directory writeback (A73) is served when a token also names the directory's
+own SCIM 2.0 endpoint (`auth.scim.tokens[].writeback_endpoint` and
+`writeback_token_file`; the bearer stays in locked memory). A change an
+operator makes in trstctl to a member that token provisioned — a role grant
+or removal through `PUT /api/v1/access/members/{subject}`, or an offboard
+through `POST /api/v1/access/members/{subject}/offboard` — queues a
+`scim.writeback` outbox row in the same transaction as the member event. The
+worker finds the directory's User by the same attribute the token binds the
+login subject to (`userName`, or `externalId` when mapped), PATCHes `active`
+and the trstctl roles as the User's `roles`, reads the User back, and records
+`scim.writeback.recorded` with the verdict; a directory answer that disagrees
+with what was written is recorded as refused, a transport failure retries
+through the outbox, and the directory's own words never enter the event log.
+A change the directory itself pushed is never echoed back, and a member with
+no SCIM identity is never written. The directory must serve SCIM 2.0 for its
+own users (an identity broker, a SCIM-fronted directory, or an IdP whose SCIM
+API accepts writes); an IdP that only pushes outbound SCIM cannot be written
+to, and without a writeback endpoint local changes to directory-owned members
+still stand until the directory's next push, as before.
 
 ### Unified NHI inventory
 
