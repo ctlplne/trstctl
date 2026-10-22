@@ -308,6 +308,11 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"principal":"","key":"","reason":""}`), true
 	case "codesign.signed":
 		return shape(`{"principal":"","key":"","artifact_type":"","digest":""}`), true
+	case "ca.plugin_issued", "ca.plugin_failed", "ca.plugin_denied":
+		return shape(`{"plugin":"","detail":""}`, catalogPrivacyShapeOptions{Optional: []string{"/detail"}}), true
+	case "connector.plugin_deployed", "connector.plugin_failed", "connector.plugin_denied":
+		return shape(`{"connector":"","target":"","fingerprint":"","detail":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/fingerprint", "/detail"}}), true
 	case "connector.rollback.requested":
 		return shape(`{"connector":"","target":"","target_id":"","identity_id":"","target_config":{"key":""},"predecessor_fingerprint":"","predecessor_serial":"","successor_fingerprint":"","reason":"","requested_by":"","required_agent_id":"","required_agent_role":""}`,
 			catalogPrivacyShapeOptions{

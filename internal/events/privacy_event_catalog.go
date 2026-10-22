@@ -233,6 +233,21 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("codesign.signed",
 			catalogPrivacyRule("/principal", exact), catalogPrivacyRule("/key", opaque),
 			catalogPrivacyRule("/artifact_type", opaque), catalogPrivacyRule("/digest", opaque)),
+		// WASM plugin evidence (AN-2): the CA and connector plugin managers append
+		// these for every plugin issue/deploy outcome; under the production gate an
+		// unregistered type is refused and the evidence silently never lands.
+		entry("ca.plugin_issued", catalogPrivacyRule("/plugin", opaque), catalogPrivacyRule("/detail", clear)),
+		entry("ca.plugin_failed", catalogPrivacyRule("/plugin", opaque), catalogPrivacyRule("/detail", clear)),
+		entry("ca.plugin_denied", catalogPrivacyRule("/plugin", opaque), catalogPrivacyRule("/detail", clear)),
+		entry("connector.plugin_deployed",
+			catalogPrivacyRule("/connector", opaque), catalogPrivacyRule("/target", token),
+			catalogPrivacyRule("/fingerprint", opaque), catalogPrivacyRule("/detail", clear)),
+		entry("connector.plugin_failed",
+			catalogPrivacyRule("/connector", opaque), catalogPrivacyRule("/target", token),
+			catalogPrivacyRule("/fingerprint", opaque), catalogPrivacyRule("/detail", clear)),
+		entry("connector.plugin_denied",
+			catalogPrivacyRule("/connector", opaque), catalogPrivacyRule("/target", token),
+			catalogPrivacyRule("/fingerprint", opaque), catalogPrivacyRule("/detail", clear)),
 		entry("connector.rollback.requested",
 			catalogPrivacyRule("/connector", opaque), catalogPrivacyRule("/target", token),
 			catalogPrivacyRule("/target_id", opaque), catalogPrivacyRule("/identity_id", opaque),

@@ -3124,6 +3124,10 @@ type ResponseIntegrationDispatchedDestination struct {
 	Table                string `json:"table,omitempty"`
 	Channel              string `json:"channel,omitempty"`
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
+	// PrivateEgressCIDRs bounds a private-endpoint destination to the operator's
+	// declared egress ranges; the dispatch command carries them and the recorded
+	// event must keep them so replay reproduces the same egress decision.
+	PrivateEgressCIDRs []string `json:"private_egress_cidrs,omitempty"`
 }
 
 // AuditFeedDestinationConfigured is the standing tenant instruction. TokenRef

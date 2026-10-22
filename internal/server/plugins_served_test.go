@@ -235,6 +235,9 @@ func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 
 	cert := issueExternalCA(t, h, "reference-ca", "plugin-ca.served.test", "plugin-01-ca")
 	assertServedCert(t, cert, "reference-ca", "plugin-ca.served.test")
+	if !replayHasEvent(t, h.log, h.tenant, "ca.plugin_issued") {
+		t.Fatal("the signed reference CA plugin issued without ca.plugin_issued evidence on the served log")
+	}
 	if got := externalCAOutboxCount(t, h, "plugin-01-ca:external-ca:reference-ca"); got != 1 {
 		t.Fatalf("plugin CA ca.issue outbox rows = %d, want 1", got)
 	}

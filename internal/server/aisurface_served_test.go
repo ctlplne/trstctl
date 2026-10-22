@@ -115,8 +115,11 @@ func seedTenantAIData(t *testing.T, st *store.Store, log *events.Log, tenant, ow
 	}); err != nil {
 		t.Fatalf("seed crypto asset for %s: %v", tenant, err)
 	}
-	// An audit event in the log so the "what happened" (audit) evidence kind has a row.
-	if _, err := log.Append(ctx, events.Event{Type: "credential.renewal.failed", TenantID: tenant, Data: []byte(`{"owner":"` + ownerName + `","reason":"CA unreachable"}`)}); err != nil {
+	// An audit event in the log so the "what happened" (audit) evidence kind has a
+	// row: the product's own renewal-failure transition, under its registered v1
+	// privacy shape, so the seed passes the same gate as the binary.
+	if _, err := log.Append(ctx, events.Event{Type: "identity.renewal_failed", TenantID: tenant,
+		Data: []byte(`{"identity_id":"` + ownerName + `-identity","from":"renewing","to":"renewal_failed","reason":"CA unreachable"}`)}); err != nil {
 		t.Fatalf("seed event for %s: %v", tenant, err)
 	}
 }
@@ -331,7 +334,7 @@ func TestServedRCAGroundedAndCited(t *testing.T) {
 		t.Fatalf("decode answer: %v (body %s)", err, body)
 	}
 	// The "fail/renew" question plans the audit evidence kind, which the adapter answers
-	// from the event-log surface; the seeded credential.renewal.failed event is the
+	// from the event-log surface; the seeded identity.renewal_failed event is the
 	// grounding. The answer must be cited by a real log#<event-id> record.
 	if !ans.Sufficient || len(ans.Citations) == 0 {
 		t.Fatalf("expected a grounded, cited RCA answer; got %+v", ans)
